@@ -1,4 +1,5 @@
 #TODO: Add tests for different feature permutations
+#TODO: Add automation for benching w/ criterion
 
 name: master-pull
 run-name: CI/CD Pipeline to run on merge to master
@@ -43,4 +44,4 @@ jobs:
             - uses: actions-rs/cargo@v1
               with:
                 command: clippy
-                args: --no_deps --fix -- -D warnings
+                args: --no-deps --fix -- -D warnings
