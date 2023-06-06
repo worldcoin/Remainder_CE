@@ -1,0 +1,46 @@
+#TODO: Add tests for different feature permutations
+
+name: master-pull
+run-name: CI/CD Pipeline to run on merge to master
+on:
+    push:
+        branches: master
+    pull_request:
+        branches: master
+jobs:
+    check_and_test:
+        name: Check and Test Remainder
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - uses: actions-rs/toolchain@v1
+              with:
+                profile: minimal
+                toolchain: stable
+            - uses: actions-rs/cargo@v1
+              with:
+                command: check
+                args: --features parallel
+            - uses: actions-rs/cargo@v1
+              with:
+                command: test
+                args: --features parallel
+
+    fmt_and_lint:
+        name: Format and Lint Remainder
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - uses: actions-rs/toolchain@v1
+              with:
+                profile: minimal
+                toolchain: stable
+            - run: rustup compnent add rustfmt clippy
+            - uses: actions-rs/cargo@v1
+              with:
+                command: fmt
+                args: --all -- --check
+            - uses: actions-rs/cargo@v1
+              with:
+                command: clippy
+                args: --no_deps --fix -- -D warnings
