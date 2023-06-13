@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 ark-ff = "0.4.2"
 ark-poly = "0.4.2"
+ark-serialize = "0.4.2"
 ark-std = "0.4.0"
 criterion = "0.5.1"
 rayon = "1.7.0"
