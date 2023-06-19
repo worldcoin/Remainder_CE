@@ -1,6 +1,6 @@
 use std::{
     fmt::Debug,
-    iter::{FromFn, Zip},
+    iter::{FromFn, Zip, Cloned},
     marker::PhantomData,
     ops::{Range, RangeBounds},
     sync::Arc,
@@ -10,7 +10,7 @@ use std::{
 use ark_poly::DenseMultilinearExtension;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
-use itertools::Itertools;
+use itertools::{Itertools, repeat_n};
 
 use crate::FieldExt;
 
@@ -56,13 +56,13 @@ where
     }
 }
 
-impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, F> {
-    type Item = &'a F;
+impl<F: FieldExt> IntoIterator for DenseMle<F, F> {
+    type Item = F;
 
-    type IntoIter = std::slice::Iter<'a, F>;
+    type IntoIter = std::vec::IntoIter<F>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.mle.evaluations.as_slice().iter()
+        self.mle.evaluations.into_iter()
     }
 }
 
@@ -81,17 +81,17 @@ impl<F: FieldExt> FromIterator<F> for DenseMle<F, F> {
     }
 }
 
-impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, (F, F)> {
-    type Item = (&'a F, &'a F);
+//TODO!(Fix this so that it clones less)
+impl<F: FieldExt> IntoIterator for DenseMle<F, (F, F)> {
+    type Item = (F, F);
 
-    type IntoIter = Zip<std::slice::Iter<'a, F>, std::slice::Iter<'a, F>>;
+    type IntoIter = Zip<std::vec::IntoIter<F>, std::vec::IntoIter<F>>;
 
     fn into_iter(self) -> Self::IntoIter {
         let len = self.mle.evaluations.len() / 2;
 
-        self.mle.evaluations[..len]
-            .iter()
-            .zip(self.mle.evaluations[len..].iter())
+        self.mle.evaluations[..len].to_vec().into_iter()
+            .zip(self.mle.evaluations[len..].to_vec().into_iter())
     }
 }
 
@@ -108,6 +108,34 @@ impl<F: FieldExt> FromIterator<(F, F)> for DenseMle<F, (F, F)> {
         Self {
             mle: DenseMultilinearExtension::from_evaluations_vec(num_vars, vec),
             _marker: PhantomData,
+        }
+    }
+}
+
+impl<F: FieldExt> DenseMle<F, (F, F)> {
+    ///Gets an MleRef to the first element in the tuple
+    pub fn first<'a>(&'a self) -> DenseMleRef<'a, F> {
+        let num_vars = self.num_vars();
+
+        let len = self.mle.evaluations.len() / 2;
+
+        DenseMleRef {
+            mle: &self.mle,
+            claim: std::iter::once(Some(false)).chain(repeat_n(None, num_vars - 1)).collect_vec(),
+            range: 0..len,
+        }
+    }
+
+    ///Gets an MleRef to the second element in the tuple
+    pub fn second<'a>(&'a self) -> DenseMleRef<'a, F> {
+        let num_vars = self.num_vars();
+
+        let len = self.mle.evaluations.len() / 2;
+
+        DenseMleRef {
+            mle: &self.mle,
+            claim: std::iter::once(Some(true)).chain(repeat_n(None, num_vars - 1)).collect_vec(),
+            range: len..self.mle.evaluations.len(),
         }
     }
 }
