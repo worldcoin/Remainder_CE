@@ -39,7 +39,7 @@ where
     fn mle(&self) -> &Self::MultiLinearExtention;
 
     ///Gets default MleRef to be put into an expression
-    fn mle_ref<'a>(&'a self) -> Self::MleRef<'a>;
+    fn mle_ref(&'_ self) -> Self::MleRef<'_>;
 
     ///Constructor that creates an Mle given a MultiLinearExtention
     fn new(mle: Self::MultiLinearExtention) -> Self;

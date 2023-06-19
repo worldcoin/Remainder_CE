@@ -1,10 +1,8 @@
 use std::{
     fmt::Debug,
-    iter::{FromFn, Zip, Cloned},
+    iter::{Zip, Cloned},
     marker::PhantomData,
-    ops::{Range, RangeBounds},
-    sync::Arc,
-    vec::Drain,
+    ops::{Range},
 };
 
 use ark_poly::DenseMultilinearExtension;
@@ -36,7 +34,7 @@ where
         &self.mle
     }
 
-    fn mle_ref<'a>(&'a self) -> Self::MleRef<'a> {
+    fn mle_ref(&'_ self) -> Self::MleRef<'_> {
         DenseMleRef {
             mle: &self.mle,
             claim: (0..self.num_vars()).map(|_| None).collect(),
@@ -82,16 +80,16 @@ impl<F: FieldExt> FromIterator<F> for DenseMle<F, F> {
 }
 
 //TODO!(Fix this so that it clones less)
-impl<F: FieldExt> IntoIterator for DenseMle<F, (F, F)> {
+impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, (F, F)> {
     type Item = (F, F);
 
-    type IntoIter = Zip<std::vec::IntoIter<F>, std::vec::IntoIter<F>>;
+    type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
 
     fn into_iter(self) -> Self::IntoIter {
         let len = self.mle.evaluations.len() / 2;
 
-        self.mle.evaluations[..len].to_vec().into_iter()
-            .zip(self.mle.evaluations[len..].to_vec().into_iter())
+        self.mle.evaluations[..len].iter().cloned()
+            .zip(self.mle.evaluations[len..].iter().cloned())
     }
 }
 
@@ -114,8 +112,8 @@ impl<F: FieldExt> FromIterator<(F, F)> for DenseMle<F, (F, F)> {
 
 impl<F: FieldExt> DenseMle<F, (F, F)> {
     ///Gets an MleRef to the first element in the tuple
-    pub fn first<'a>(&'a self) -> DenseMleRef<'a, F> {
-        let num_vars = self.num_vars();
+    pub fn first(&'_ self) -> DenseMleRef<'_, F> {
+        let num_vars = self.mle.num_vars;
 
         let len = self.mle.evaluations.len() / 2;
 
@@ -127,8 +125,8 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
     }
 
     ///Gets an MleRef to the second element in the tuple
-    pub fn second<'a>(&'a self) -> DenseMleRef<'a, F> {
-        let num_vars = self.num_vars();
+    pub fn second(&'_ self) -> DenseMleRef<'_, F> {
+        let num_vars = self.mle.num_vars;
 
         let len = self.mle.evaluations.len() / 2;
 
@@ -167,7 +165,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<'a, F> {
 
     fn relabel_claim(&mut self, new_claim: &[Option<bool>]) {
         self.claim = new_claim
-            .into_iter()
+            .iter()
             .cloned()
             .chain(self.claim.drain(..))
             .collect();
