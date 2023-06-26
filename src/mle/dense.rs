@@ -272,10 +272,7 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec
-            
-            .into_iter()
-            .collect::<DenseMle<Fr, (Fr, Fr)>>();
+        let mle = tuple_vec.into_iter().collect::<DenseMle<Fr, (Fr, Fr)>>();
 
         let first = mle.first();
         let second = mle.second();

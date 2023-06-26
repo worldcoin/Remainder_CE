@@ -1,13 +1,8 @@
 //! An expression is a type which allows for expressing the definition of a GKR layer
 
-use std::{
-    ops::{Add, Mul, Neg, Sub},
-};
+use std::ops::{Add, Mul, Neg, Sub};
 
-use crate::{
-    mle::{dense::DenseMleRef},
-    FieldExt,
-};
+use crate::{mle::dense::DenseMleRef, FieldExt};
 
 ///TODO!(Genericise this over the MleRef Trait)
 ///Expression representing the relationship between the current layer and layers claims are being made on
