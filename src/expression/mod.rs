@@ -1,12 +1,11 @@
 //! An expression is a type which allows for expressing the definition of a GKR layer
 
 use std::{
-    cmp::max,
     ops::{Add, Mul, Neg, Sub},
 };
 
 use crate::{
-    mle::{dense::DenseMleRef, MleRef},
+    mle::{dense::DenseMleRef},
     FieldExt,
 };
 
@@ -33,6 +32,7 @@ pub enum Expression<'a, F: FieldExt> {
 impl<'a, F: FieldExt> Expression<'a, F> {
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
+    #[allow(clippy::too_many_arguments)]
     pub fn evaluate<T>(
         &self,
         constant: &impl Fn(F) -> T,
@@ -147,7 +147,7 @@ impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<'a, F> {
             Expression::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
             Expression::Selector(a, b) => f.debug_tuple("Selector").field(a).field(b).finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            Expression::Mle(mle_ref) => f.debug_struct("Mle").finish(),
+            Expression::Mle(_mle_ref) => f.debug_struct("Mle").finish(),
             Expression::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             Expression::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             Expression::Product(a, b) => f.debug_tuple("Product").field(a).field(b).finish(),
@@ -223,6 +223,6 @@ mod test {
 
         let expression = expression3.concat(expression);
 
-        assert_eq!(format!("{:?}", expression), "Selector(Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Constant(BigInt([1, 0, 0, 0])), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))")
+        assert_eq!(format!("{expression:?}"), "Selector(Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Constant(BigInt([1, 0, 0, 0])), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))")
     }
 }

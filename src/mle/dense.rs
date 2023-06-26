@@ -273,7 +273,7 @@ mod tests {
         ];
 
         let mle = tuple_vec
-            .clone()
+            
             .into_iter()
             .collect::<DenseMle<Fr, (Fr, Fr)>>();
 
@@ -311,7 +311,7 @@ mod tests {
 
         let mle: DenseMle<Fr, Fr> = DenseMle::new(DenseMultilinearExtension::from_evaluations_vec(
             log2(mle_vec.len()) as usize,
-            mle_vec.clone(),
+            mle_vec,
         ));
 
         let mut mle_ref: DenseMleRef<'_, Fr> = mle.mle_ref();
