@@ -144,6 +144,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
 }
 
 ///A [MleRef] that is dense
+#[derive(Clone, Debug)]
 pub struct DenseMleRef<'a, F: FieldExt> {
     mle: &'a DenseMultilinearExtension<F>,
     claim: Vec<Option<bool>>,
