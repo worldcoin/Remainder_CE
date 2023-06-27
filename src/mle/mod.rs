@@ -50,6 +50,9 @@ pub trait MleRef {
     ///Type of Mle that this is a reference to
     type Mle;
 
+    ///The Field Element this MleRef refers to
+    type F: FieldExt;
+
     ///Gets Mle that this is a reference to
     fn mle_owned(&self) -> Self::Mle;
 
@@ -57,8 +60,19 @@ pub trait MleRef {
     fn mle(&self) -> &Self::Mle;
 
     ///Get claim that this MleRef Represents
-    fn claim(&self) -> &[Option<bool>];
+    fn get_mle_indicies(&self) -> &[MleIndex<Self::F>];
 
     ///Moves the claim by adding the new_claims to the left of the originals
-    fn relabel_claim(&mut self, new_claims: &[Option<bool>]);
+    fn relabel_mle_indicies(&mut self, new_claims: &[MleIndex<Self::F>]);
+}
+
+///The Enum that represents the possible indicies for an MLE
+#[derive(Clone, Debug, PartialEq)]
+pub enum MleIndex<F: FieldExt> {
+    ///A Selector bit for fixed MLE access
+    Fixed(bool),
+    ///An unbound bit that iterates over the contents of the MLE
+    Iterated,
+    ///an index that has been bound to a random challenge by the sumcheck protocol
+    Bound(F),
 }

@@ -12,7 +12,7 @@ use itertools::{repeat_n, Itertools};
 
 use crate::FieldExt;
 
-use super::{Mle, MleRef};
+use super::{Mle, MleIndex, MleRef};
 
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 ///An [Mle] that is dense
@@ -36,7 +36,7 @@ where
     fn mle_ref(&'_ self) -> Self::MleRef<'_> {
         DenseMleRef {
             mle: &self.mle,
-            claim: (0..self.num_vars()).map(|_| None).collect(),
+            claim: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             range: 0..self.mle.evaluations.len(),
         }
     }
@@ -120,8 +120,8 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
 
         DenseMleRef {
             mle: &self.mle,
-            claim: std::iter::once(Some(false))
-                .chain(repeat_n(None, num_vars - 1))
+            claim: std::iter::once(MleIndex::Fixed(false))
+                .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             range: 0..len,
         }
@@ -135,8 +135,8 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
 
         DenseMleRef {
             mle: &self.mle,
-            claim: std::iter::once(Some(true))
-                .chain(repeat_n(None, num_vars - 1))
+            claim: std::iter::once(MleIndex::Fixed(true))
+                .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             range: len..self.mle.evaluations.len(),
         }
@@ -147,12 +147,13 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
 #[derive(Clone, Debug)]
 pub struct DenseMleRef<'a, F: FieldExt> {
     mle: &'a DenseMultilinearExtension<F>,
-    claim: Vec<Option<bool>>,
+    claim: Vec<MleIndex<F>>,
     range: Range<usize>,
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<'a, F> {
     type Mle = DenseMultilinearExtension<F>;
+    type F = F;
 
     fn mle_owned(&self) -> Self::Mle {
         let num_vars = log2(self.range.end - self.range.start) as usize;
@@ -167,11 +168,11 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<'a, F> {
         self.mle
     }
 
-    fn claim(&self) -> &[Option<bool>] {
+    fn get_mle_indicies(&self) -> &[MleIndex<Self::F>] {
         &self.claim
     }
 
-    fn relabel_claim(&mut self, new_claim: &[Option<bool>]) {
+    fn relabel_mle_indicies(&mut self, new_claim: &[MleIndex<F>]) {
         self.claim = new_claim
             .iter()
             .cloned()
@@ -258,7 +259,7 @@ mod tests {
 
         let mle_ref: DenseMleRef<'_, Fr> = mle.mle_ref();
 
-        assert!(mle_ref.claim == vec![None, None, None]);
+        assert!(mle_ref.claim == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]);
         assert!(mle_ref.mle.evaluations == mle_vec);
         assert!(mle_ref.range.eq(0..mle_vec.len()));
     }
@@ -277,8 +278,22 @@ mod tests {
         let first = mle.first();
         let second = mle.second();
 
-        assert!(first.claim == vec![Some(false), None, None]);
-        assert!(second.claim == vec![Some(true), None, None]);
+        assert!(
+            first.claim
+                == vec![
+                    MleIndex::Fixed(false),
+                    MleIndex::Iterated,
+                    MleIndex::Iterated
+                ]
+        );
+        assert!(
+            second.claim
+                == vec![
+                    MleIndex::Fixed(true),
+                    MleIndex::Iterated,
+                    MleIndex::Iterated
+                ]
+        );
 
         assert!(
             first.mle_owned().evaluations
@@ -313,8 +328,17 @@ mod tests {
 
         let mut mle_ref: DenseMleRef<'_, Fr> = mle.mle_ref();
 
-        mle_ref.relabel_claim(&[Some(true), Some(false)]);
+        mle_ref.relabel_mle_indicies(&[MleIndex::Fixed(true), MleIndex::Fixed(false)]);
 
-        assert!(mle_ref.claim == vec![Some(true), Some(false), None, None, None]);
+        assert!(
+            mle_ref.claim
+                == vec![
+                    MleIndex::Fixed(true),
+                    MleIndex::Fixed(false),
+                    MleIndex::Iterated,
+                    MleIndex::Iterated,
+                    MleIndex::Iterated
+                ]
+        );
     }
 }
