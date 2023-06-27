@@ -2,6 +2,8 @@
 
 use crate::{mle::MleIndex, FieldExt};
 
+type Claim<'a, F> = &'a [MleIndex<F>];
+
 ///A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
     ///The Mle that this Layer contains
@@ -26,10 +28,10 @@ pub trait Layer<F: FieldExt> {
     fn add_layer(&mut self, new_layer: impl Layer<F>);
 
     ///Get the claim that this layer makes on the next layer
-    fn get_claim(&self) -> Option<Vec<MleIndex<F>>>;
+    fn get_claim(&self) -> Option<Claim<F>>;
 
     ///Get the claims that this layer makes on other layers
-    fn get_all_claims(&self) -> Option<Vec<(usize, &[MleIndex<F>])>>;
+    fn get_all_claims(&self) -> Option<Vec<(usize, Claim<F>)>>;
 
     ///Get the master expression associated with this Layer
     fn get_expression(&self) -> Self::Expression;
