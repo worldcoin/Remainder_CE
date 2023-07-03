@@ -48,19 +48,9 @@ where
 }
 
 ///MleRef keeps track of an Mle and the fixed indicies of the Mle to be used in an expression
-pub trait MleRef: Clone {
+pub trait MleRef: Clone + Send + Sync {
     ///Type of Mle that this is a reference to
-    #[cfg(feature = "parallel")]
-    type Mle: IntoIterator<Item = Self::F>
-        + Index<usize, Output = Self::F>
-        + IntoParallelIterator<Item = Self::F, Iter = Self::Iterator>;
-
-    #[cfg(not(feature = "parallel"))]
-    type Mle: IntoIterator<Item = Self::F> + Index<usize, Output = Self::F>;
-
-    ///The Iterator that Mle yields
-    #[cfg(feature = "parallel")]
-    type Iterator: IndexedParallelIterator<Item = Self::F>;
+    type Mle: Index<usize, Output = Self::F>;
 
     ///The Field Element this MleRef refers to
     type F: FieldExt;
@@ -69,7 +59,7 @@ pub trait MleRef: Clone {
     fn mle_owned(&self) -> Self::Mle;
 
     ///Gets reference to Mle
-    fn mle(&self) -> &Self::Mle;
+    fn mle(&self) -> &[Self::F];
 
     ///Get claim that this MleRef Represents
     fn get_mle_indicies(&self) -> &[MleIndex<Self::F>];

@@ -161,14 +161,13 @@ pub struct DenseMleRef<'a, F: FieldExt> {
 impl<'a, F: FieldExt> MleRef for DenseMleRef<'a, F> {
     type Mle = Vec<F>;
     type F = F;
-    type Iterator = rayon::vec::IntoIter<F>;
 
     fn mle_owned(&self) -> Self::Mle {
         self.mle[self.range.clone()].to_vec()
     }
 
-    fn mle(&self) -> &'a Self::Mle {
-        self.mle
+    fn mle(&self) -> &[F] {
+        &self.mle[self.range.clone()]
     }
 
     fn get_mle_indicies(&self) -> &[MleIndex<Self::F>] {

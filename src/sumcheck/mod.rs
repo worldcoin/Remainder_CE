@@ -5,7 +5,9 @@ use std::f32::NEG_INFINITY;
 use ark_poly::MultilinearExtension;
 use ark_std::cfg_into_iter;
 use itertools::{repeat_n, Itertools};
-use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator, IntoParallelRefIterator};
+use rayon::prelude::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 use thiserror::Error;
 
 use crate::{expression::Expression, mle::MleRef, FieldExt};
@@ -13,7 +15,7 @@ use crate::{expression::Expression, mle::MleRef, FieldExt};
 #[derive(Error, Debug, Clone)]
 enum MleError {
     #[error("Passed list of Mles is empty")]
-    EmptyMleList
+    EmptyMleList,
 }
 
 pub(crate) fn fix_variables<F: FieldExt>(mle_ref: &mut impl MleRef, challenges: &[F]) {
@@ -24,74 +26,70 @@ pub(crate) fn prove_round<F: FieldExt>(expr: Expression<F>) -> Vec<F> {
     todo!()
 }
 
-//FUCK this needs to be re-written for high degree cases
-fn evaluate_mle_ref<F: FieldExt, Mle: MleRef<F = F, Mle = Vec<F>>>(
-    mle_refs: (Mle, Mle),
+//TODO!(This should be able to handle the case where there is no independent variable (e.g. we're iterating over a variable that doesn't effect this set of mle products))
+fn evaluate_mle_ref<F: FieldExt>(
+    mle_refs: &[impl MleRef<F = F>],
     degree: usize,
 ) -> Result<Vec<F>, MleError> {
     let eval_count = degree + 1;
+    let max_num_vars = mle_refs
+        .iter()
+        .map(|mle_ref| mle_ref.num_vars())
+        .max()
+        .ok_or(MleError::EmptyMleList)?;
 
-    // This MLE has been mutated so that it represents the evaluations where the first round bits are bound to random values.
-    // In other words it is the "bookkeeping table" referenced in theory
+    
+    //iterate across all pairs of evaluations
+    let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
+        #[cfg(feature = "parallel")]
+        || vec![F::zero(); eval_count],
+        #[cfg(not(feature = "parallel"))]
+        vec![F::zero(); eval_count],
+        |mut acc, index| {
+            //get the product of all evaluations over 0/1/..degree
+            let evals = mle_refs
+                .iter()
+                .map(|mle_ref| {
+                    let zero = F::zero();
+                    let index = if mle_ref.num_vars() < max_num_vars {
+                        let max = 1 << mle_ref.num_vars();
+                        (index * 2) % max
+                    } else {
+                        index * 2
+                    };
+                    let first = *mle_ref.mle().get(index).unwrap_or(&zero);
+                    let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
 
-    let (mle_ref_1, mle_ref_2) = mle_refs;
+                    let step = second - first;
 
-    let (mle_1, mle_2) = { (mle_ref_1.mle_owned(), mle_ref_2.mle_owned()) };
+                    let successors =
+                        std::iter::successors(Some(second + step), move |item| Some(*item + step));
+                    //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
+                    std::iter::once(first)
+                        .chain(std::iter::once(second))
+                        .chain(successors)
+                })
+                .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
+                .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
+                .unwrap();
 
-    let (difference, (bigger, bigger_num_vars), (smaller, smaller_num_vars)): (usize, (rayon::vec::IntoIter<F>, usize), (rayon::slice::Iter<F>, usize)) = if mle_1.len() > mle_2.len() {
-        (
-            mle_1.len() - mle_2.len(),
-            (mle_1.into_par_iter(), mle_ref_1.num_vars()),
-            (mle_2.par_iter(), mle_ref_2.num_vars()),
-        )
-    } else {
-        (
-            mle_2.len() - mle_1.len(),
-            (mle_2.into_par_iter(), mle_ref_2.num_vars()),
-            (mle_1.par_iter(), mle_ref_1.num_vars()),
-        )
-    };
+            acc.iter_mut()
+                .zip(evals)
+                .for_each(|(acc, eval)| *acc += eval);
+            acc
+        },
+    );
 
-    // let zero = F::zero();
-
-    // if bigger_num_vars != smaller_num_vars {
-    //     let difference_num_vars = bigger_num_vars - smaller_num_vars;
-    //     let smaller = smaller.chain(rayon::iter::repeatn(&zero, (difference as u32/2_u32.pow(difference_num_vars as u32)) as usize).into_par_iter());
-    //     let smaller = smaller.clone().chain(smaller);
-    // }
-
-    // let iter = cfg_into_iter!(mle_refs.0.mle_owned()).zip(cfg_into_iter!(mle_refs.1.mle_owned()));
-
-    // take all sets of two evaluations (get all evaluations across the boolean hypercube of V(0/1, b_1..b_i))
     #[cfg(feature = "parallel")]
-    let evaluations = bigger
-        .chunks(2).enumerate()
-        .map(|(index, evals)| {
-            let extra = if eval_count > 2 {
-                let first = &evals[0];
-                let second = evals.get(1).cloned().unwrap_or(F::zero());
-
-                let step = second - first;
-                //Iterator that represent extrapolations on the linear evaluations of X
-                Some(std::iter::successors(Some(second + step), move |item| {
-                    Some(step + item)
-                }))
-            } else {
-                None
-            };
-
-            evals.into_iter().chain(extra.into_iter().flatten())
-        })
-        .map(|evals| -> Box<dyn Iterator<Item = F> + Send> { Box::new(evals) })
-        .reduce(
-            || Box::new(repeat_n(F::zero(), eval_count)),
-            |sum, evals| Box::new(sum.zip(evals).map(|(sum, eval)| sum + eval)),
-        )
-        .collect_vec();
-
-    #[cfg(not(feature = "parallel"))]
-    todo!("Implement not!parallel for mle_evaluation");
-    //TODO!(not parallel feature)
+    let evals = evals.reduce(
+        || vec![F::zero(); eval_count],
+        |mut acc, partial| {
+            acc.iter_mut()
+                .zip(partial.into_iter())
+                .for_each(|(acc, partial)| *acc += partial);
+            acc
+        },
+    );
 
     todo!()
 }
