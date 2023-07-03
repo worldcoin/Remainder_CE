@@ -3,6 +3,8 @@
 use ark_poly::MultilinearExtension;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use core::fmt::Debug;
+use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator};
+use std::ops::Index;
 
 use crate::FieldExt;
 
@@ -30,7 +32,7 @@ where
         Self: 'a;
 
     ///Underlying MultiLinearExtention implementation
-    type MultiLinearExtention: MultilinearExtension<F>;
+    type MultiLinearExtention: IntoIterator<Item = F>;
 
     ///Gets underlying MultilinearExtention
     fn mle(&self) -> &Self::MultiLinearExtention;
@@ -46,9 +48,19 @@ where
 }
 
 ///MleRef keeps track of an Mle and the fixed indicies of the Mle to be used in an expression
-pub trait MleRef {
+pub trait MleRef: Clone {
     ///Type of Mle that this is a reference to
-    type Mle;
+    #[cfg(feature = "parallel")]
+    type Mle: IntoIterator<Item = Self::F>
+        + Index<usize, Output = Self::F>
+        + IntoParallelIterator<Item = Self::F, Iter = Self::Iterator>;
+
+    #[cfg(not(feature = "parallel"))]
+    type Mle: IntoIterator<Item = Self::F> + Index<usize, Output = Self::F>;
+
+    ///The Iterator that Mle yields
+    #[cfg(feature = "parallel")]
+    type Iterator: IndexedParallelIterator<Item = Self::F>;
 
     ///The Field Element this MleRef refers to
     type F: FieldExt;
@@ -64,6 +76,9 @@ pub trait MleRef {
 
     ///Moves the claim by adding the new_claims to the left of the originals
     fn relabel_mle_indicies(&mut self, new_claims: &[MleIndex<Self::F>]);
+
+    ///Number of variables the Mle this is a reference to is over
+    fn num_vars(&self) -> usize;
 }
 
 ///The Enum that represents the possible indicies for an MLE
@@ -73,6 +88,8 @@ pub enum MleIndex<F: FieldExt> {
     Fixed(bool),
     ///An unbound bit that iterates over the contents of the MLE
     Iterated,
+    ///An unbound bit where the particular b_i in the larger expression has been set
+    IndexedBit(usize),
     ///an index that has been bound to a random challenge by the sumcheck protocol
     Bound(F),
 }

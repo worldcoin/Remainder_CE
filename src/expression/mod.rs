@@ -2,7 +2,10 @@
 
 use std::ops::{Add, Mul, Neg, Sub};
 
-use crate::{mle::dense::DenseMleRef, FieldExt};
+use crate::{
+    mle::{dense::DenseMleRef, MleIndex},
+    FieldExt,
+};
 
 ///TODO!(Genericise this over the MleRef Trait)
 ///Expression representing the relationship between the current layer and layers claims are being made on
@@ -11,8 +14,8 @@ pub enum Expression<'a, F: FieldExt> {
     /// This is a constant polynomial
     Constant(F),
     /// This is a virtual selector
-    Selector(Box<Expression<'a, F>>, Box<Expression<'a, F>>),
-    /// This is a fixed column queried at a certain relative location
+    Selector(MleIndex<F>, Box<Expression<'a, F>>, Box<Expression<'a, F>>),
+    /// This is an MLE
     Mle(DenseMleRef<'a, F>),
     /// This is a negated polynomial
     Negated(Box<Expression<'a, F>>),
@@ -29,9 +32,9 @@ impl<'a, F: FieldExt> Expression<'a, F> {
     /// operations.
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate<T>(
-        &self,
+        &mut self,
         constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(T, T) -> T,
+        selector_column: &impl Fn(&mut MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(DenseMleRef<'a, F>) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
@@ -40,7 +43,8 @@ impl<'a, F: FieldExt> Expression<'a, F> {
     ) -> T {
         match self {
             Expression::Constant(scalar) => constant(*scalar),
-            Expression::Selector(a, b) => selector_column(
+            Expression::Selector(index, a, b) => selector_column(
+                index,
                 a.evaluate(
                     constant,
                     selector_column,
@@ -132,7 +136,7 @@ impl<'a, F: FieldExt> Expression<'a, F> {
 
     ///Concatonates two expressions together
     pub fn concat(self, lhs: Expression<'a, F>) -> Expression<'a, F> {
-        Expression::Selector(Box::new(self), Box::new(lhs))
+        Expression::Selector(MleIndex::Iterated, Box::new(self), Box::new(lhs))
     }
 }
 
@@ -140,7 +144,12 @@ impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<'a, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expression::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
-            Expression::Selector(a, b) => f.debug_tuple("Selector").field(a).field(b).finish(),
+            Expression::Selector(index, a, b) => f
+                .debug_tuple("Selector")
+                .field(index)
+                .field(a)
+                .field(b)
+                .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
             Expression::Mle(_mle_ref) => f.debug_struct("Mle").finish(),
             Expression::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
@@ -177,7 +186,7 @@ impl<'a, F: FieldExt> Sub for Expression<'a, F> {
 impl<'a, F: FieldExt> Mul for Expression<'a, F> {
     type Output = Expression<'a, F>;
     fn mul(self, rhs: Expression<'a, F>) -> Expression<'a, F> {
-        Expression::Sum(Box::new(self), Box::new(rhs))
+        Expression::Product(Box::new(self), Box::new(rhs))
     }
 }
 
@@ -201,10 +210,7 @@ mod test {
     fn test_expression_operators() {
         let expression1: Expression<Fr> = Expression::Constant(Fr::one());
 
-        let mle = DenseMle::<_, Fr>::new(DenseMultilinearExtension::from_evaluations_vec(
-            2,
-            vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
-        ));
+        let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
 
         let expression3 = Expression::Mle(mle.mle_ref());
 
@@ -218,6 +224,6 @@ mod test {
 
         let expression = expression3.concat(expression);
 
-        assert_eq!(format!("{expression:?}"), "Selector(Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Constant(BigInt([1, 0, 0, 0])), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))")
+        assert_eq!(format!("{expression:?}"), "Selector(Iterated, Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Constant(BigInt([1, 0, 0, 0])), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))")
     }
 }
