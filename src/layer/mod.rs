@@ -1,5 +1,7 @@
 //! A layer is a combination of multiple MLEs with an expression
 
+mod claims;
+
 use crate::{mle::MleIndex, FieldExt};
 
 type Claim<'a, F> = (&'a [MleIndex<F>], F);

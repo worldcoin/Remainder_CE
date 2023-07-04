@@ -63,10 +63,9 @@ fn evaluate_mle_ref<F: FieldExt>(
                     let step = second - first;
 
                     let successors =
-                        std::iter::successors(Some(second + step), move |item| Some(*item + step));
+                        std::iter::successors(Some(second), move |item| Some(*item + step));
                     //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
                     std::iter::once(first)
-                        .chain(std::iter::once(second))
                         .chain(successors)
                 })
                 .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
@@ -91,5 +90,27 @@ fn evaluate_mle_ref<F: FieldExt>(
         },
     );
 
-    todo!()
+    Ok(evals)
+}
+
+#[cfg(test)]
+mod tests {
+    ///test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
+    #[test]
+    fn test_linear_sum() {
+        todo!()
+    }
+
+    ///test whether evaluate_mle_ref correctly computes the evaluations for a product of MLEs
+    #[test]
+    fn test_quadratic_sum() {
+        todo!()
+    }
+
+    ///test whether evaluate_mle_ref correctly computes the evalutaions for a product of MLEs
+    /// where one of the MLEs is a log size step smaller than the other (e.g. V(b_1, b_2)*V(b_1))
+    #[test]
+    fn test_quadratic_sum_differently_sized_mles() {
+        todo!()
+    }
 }
