@@ -37,7 +37,7 @@ where
     fn mle_ref(&'_ self) -> Self::MleRef<'_> {
         DenseMleRef {
             mle: &self.mle,
-            claim: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
+            mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             range: 0..self.mle.len(),
             num_vars: self.num_vars,
         }
@@ -124,7 +124,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
 
         DenseMleRef {
             mle: &self.mle,
-            claim: std::iter::once(MleIndex::Fixed(false))
+            mle_indices: std::iter::once(MleIndex::Fixed(false))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             range: 0..len,
@@ -140,7 +140,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
 
         DenseMleRef {
             mle: &self.mle,
-            claim: std::iter::once(MleIndex::Fixed(true))
+            mle_indices: std::iter::once(MleIndex::Fixed(true))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             range: len..self.mle.len(),
@@ -153,7 +153,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
 #[derive(Clone, Debug)]
 pub struct DenseMleRef<'a, F: FieldExt> {
     mle: &'a Vec<F>,
-    claim: Vec<MleIndex<F>>,
+    mle_indices: Vec<MleIndex<F>>,
     range: Range<usize>,
     num_vars: usize,
 }
@@ -170,15 +170,15 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<'a, F> {
         &self.mle[self.range.clone()]
     }
 
-    fn get_mle_indicies(&self) -> &[MleIndex<Self::F>] {
-        &self.claim
+    fn get_mle_indices(&self) -> &[MleIndex<Self::F>] {
+        &self.mle_indices
     }
 
-    fn relabel_mle_indicies(&mut self, new_claim: &[MleIndex<F>]) {
-        self.claim = new_claim
+    fn relabel_mle_indices(&mut self, new_indices: &[MleIndex<F>]) {
+        self.mle_indices = new_indices
             .iter()
             .cloned()
-            .chain(self.claim.drain(..))
+            .chain(self.mle_indices.drain(..))
             .collect();
     }
 
@@ -260,7 +260,7 @@ mod tests {
 
         let mle_ref: DenseMleRef<'_, Fr> = mle.mle_ref();
 
-        assert!(mle_ref.claim == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]);
+        assert!(mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]);
         assert!(mle_ref.mle == &mle_vec);
         assert!(mle_ref.range.eq(0..mle_vec.len()));
     }
@@ -280,7 +280,7 @@ mod tests {
         let second = mle.second();
 
         assert!(
-            first.claim
+            first.mle_indices
                 == vec![
                     MleIndex::Fixed(false),
                     MleIndex::Iterated,
@@ -288,7 +288,7 @@ mod tests {
                 ]
         );
         assert!(
-            second.claim
+            second.mle_indices
                 == vec![
                     MleIndex::Fixed(true),
                     MleIndex::Iterated,
@@ -320,10 +320,10 @@ mod tests {
 
         let mut mle_ref: DenseMleRef<'_, Fr> = mle.mle_ref();
 
-        mle_ref.relabel_mle_indicies(&[MleIndex::Fixed(true), MleIndex::Fixed(false)]);
+        mle_ref.relabel_mle_indices(&[MleIndex::Fixed(true), MleIndex::Fixed(false)]);
 
         assert!(
-            mle_ref.claim
+            mle_ref.mle_indices
                 == vec![
                     MleIndex::Fixed(true),
                     MleIndex::Fixed(false),

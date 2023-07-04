@@ -26,7 +26,7 @@ where
     //TODO!(Define MLEable trait + derive)
     T: Send + Sync,
 {
-    ///MleRef keeps track of an Mle and the fixed indicies of the Mle to be used in an expression
+    ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
     type MleRef<'a>: MleRef
     where
         Self: 'a;
@@ -47,7 +47,7 @@ where
     fn num_vars(&self) -> usize;
 }
 
-///MleRef keeps track of an Mle and the fixed indicies of the Mle to be used in an expression
+///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
 pub trait MleRef: Clone + Send + Sync {
     ///Type of Mle that this is a reference to
     type Mle: Index<usize, Output = Self::F>;
@@ -62,16 +62,16 @@ pub trait MleRef: Clone + Send + Sync {
     fn mle(&self) -> &[Self::F];
 
     ///Get claim that this MleRef Represents
-    fn get_mle_indicies(&self) -> &[MleIndex<Self::F>];
+    fn get_mle_indices(&self) -> &[MleIndex<Self::F>];
 
     ///Moves the claim by adding the new_claims to the left of the originals
-    fn relabel_mle_indicies(&mut self, new_claims: &[MleIndex<Self::F>]);
+    fn relabel_mle_indices(&mut self, new_claims: &[MleIndex<Self::F>]);
 
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
 }
 
-///The Enum that represents the possible indicies for an MLE
+///The Enum that represents the possible indices for an MLE
 #[derive(Clone, Debug, PartialEq)]
 pub enum MleIndex<F: FieldExt> {
     ///A Selector bit for fixed MLE access
