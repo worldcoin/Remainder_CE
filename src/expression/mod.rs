@@ -2,32 +2,43 @@
 
 use std::ops::{Add, Mul, Neg, Sub};
 
+use thiserror::Error;
+
 use crate::{
     mle::{dense::DenseMleRef, MleIndex},
     FieldExt,
 };
 
+#[derive(Error, Debug, Clone)]
+///Error for handling the parsing and evaluation of expressions
+pub enum ExpressionError {
+    #[error("Product can only be used with Mles as children")]
+    TopLevelProduct,
+    #[error("")]
+    InvalidMleIndex,
+}
+
 ///TODO!(Genericise this over the MleRef Trait)
 ///Expression representing the relationship between the current layer and layers claims are being made on
 #[derive(Clone)]
-pub enum Expression<'a, F: FieldExt> {
+pub enum Expression<F: FieldExt> {
     /// This is a constant polynomial
     Constant(F),
     /// This is a virtual selector
-    Selector(MleIndex<F>, Box<Expression<'a, F>>, Box<Expression<'a, F>>),
+    Selector(MleIndex<F>, Box<Expression<F>>, Box<Expression<F>>),
     /// This is an MLE
-    Mle(DenseMleRef<'a, F>),
+    Mle(DenseMleRef<F>),
     /// This is a negated polynomial
-    Negated(Box<Expression<'a, F>>),
+    Negated(Box<Expression<F>>),
     /// This is the sum of two polynomials
-    Sum(Box<Expression<'a, F>>, Box<Expression<'a, F>>),
+    Sum(Box<Expression<F>>, Box<Expression<F>>),
     /// This is the product of two polynomials
-    Product(Box<Expression<'a, F>>, Box<Expression<'a, F>>),
+    Product(Box<Expression<F>>, Box<Expression<F>>),
     /// This is a scaled polynomial
-    Scaled(Box<Expression<'a, F>>, F),
+    Scaled(Box<Expression<F>>, F),
 }
 
-impl<'a, F: FieldExt> Expression<'a, F> {
+impl<F: FieldExt> Expression<F> {
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
     #[allow(clippy::too_many_arguments)]
@@ -35,7 +46,7 @@ impl<'a, F: FieldExt> Expression<'a, F> {
         &mut self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&mut MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(DenseMleRef<'a, F>) -> T,
+        mle_eval: &impl Fn(DenseMleRef<F>) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(T, T) -> T,
@@ -135,12 +146,12 @@ impl<'a, F: FieldExt> Expression<'a, F> {
     }
 
     ///Concatonates two expressions together
-    pub fn concat(self, lhs: Expression<'a, F>) -> Expression<'a, F> {
+    pub fn concat(self, lhs: Expression<F>) -> Expression<F> {
         Expression::Selector(MleIndex::Iterated, Box::new(self), Box::new(lhs))
     }
 }
 
-impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<'a, F> {
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expression::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
@@ -162,37 +173,37 @@ impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<'a, F> {
     }
 }
 
-impl<'a, F: FieldExt> Neg for Expression<'a, F> {
-    type Output = Expression<'a, F>;
+impl<F: FieldExt> Neg for Expression<F> {
+    type Output = Expression<F>;
     fn neg(self) -> Self::Output {
         Expression::Negated(Box::new(self))
     }
 }
 
-impl<'a, F: FieldExt> Add for Expression<'a, F> {
-    type Output = Expression<'a, F>;
-    fn add(self, rhs: Expression<'a, F>) -> Expression<'a, F> {
+impl<F: FieldExt> Add for Expression<F> {
+    type Output = Expression<F>;
+    fn add(self, rhs: Expression<F>) -> Expression<F> {
         Expression::Sum(Box::new(self), Box::new(rhs))
     }
 }
 
-impl<'a, F: FieldExt> Sub for Expression<'a, F> {
-    type Output = Expression<'a, F>;
-    fn sub(self, rhs: Expression<'a, F>) -> Expression<'a, F> {
+impl<F: FieldExt> Sub for Expression<F> {
+    type Output = Expression<F>;
+    fn sub(self, rhs: Expression<F>) -> Expression<F> {
         Expression::Sum(Box::new(self), Box::new(rhs.neg()))
     }
 }
 
-impl<'a, F: FieldExt> Mul for Expression<'a, F> {
-    type Output = Expression<'a, F>;
-    fn mul(self, rhs: Expression<'a, F>) -> Expression<'a, F> {
+impl<F: FieldExt> Mul for Expression<F> {
+    type Output = Expression<F>;
+    fn mul(self, rhs: Expression<F>) -> Expression<F> {
         Expression::Product(Box::new(self), Box::new(rhs))
     }
 }
 
-impl<'a, F: FieldExt> Mul<F> for Expression<'a, F> {
-    type Output = Expression<'a, F>;
-    fn mul(self, rhs: F) -> Expression<'a, F> {
+impl<F: FieldExt> Mul<F> for Expression<F> {
+    type Output = Expression<F>;
+    fn mul(self, rhs: F) -> Expression<F> {
         Expression::Scaled(Box::new(self), rhs)
     }
 }

@@ -27,9 +27,7 @@ where
     T: Send + Sync,
 {
     ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-    type MleRef<'a>: MleRef
-    where
-        Self: 'a;
+    type MleRef: MleRef;
 
     ///Underlying MultiLinearExtention implementation
     type MultiLinearExtention: IntoIterator<Item = F>;
@@ -38,7 +36,7 @@ where
     fn mle(&self) -> &Self::MultiLinearExtention;
 
     ///Gets default MleRef to be put into an expression
-    fn mle_ref(&'_ self) -> Self::MleRef<'_>;
+    fn mle_ref(&'_ self) -> Self::MleRef;
 
     ///Constructor that creates an Mle given a MultiLinearExtention
     fn new(mle: Self::MultiLinearExtention) -> Self;
@@ -69,6 +67,8 @@ pub trait MleRef: Clone + Send + Sync {
 
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
+
+    fn fix_variable(&mut self, challenge: Self::F);
 }
 
 ///The Enum that represents the possible indices for an MLE

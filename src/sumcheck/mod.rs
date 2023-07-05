@@ -1,16 +1,16 @@
 //! Contains cryptographic algorithms for going through the sumcheck protocol
 
-use std::f32::NEG_INFINITY;
+use std::{f32::NEG_INFINITY, iter::repeat, ops::{Neg, Add, Sub, Mul}};
 
 use ark_poly::MultilinearExtension;
 use ark_std::cfg_into_iter;
 use itertools::{repeat_n, Itertools};
 use rayon::prelude::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+    IndexedParallelIterator, IntoParallelIterator, ParallelIterator, IntoParallelRefIterator,
 };
 use thiserror::Error;
 
-use crate::{expression::Expression, mle::MleRef, FieldExt};
+use crate::{expression::{Expression, ExpressionError}, mle::{MleRef, MleIndex}, FieldExt};
 
 #[derive(Error, Debug, Clone)]
 enum MleError {
@@ -18,11 +18,94 @@ enum MleError {
     EmptyMleList,
 }
 
-pub(crate) fn fix_variables<F: FieldExt>(mle_ref: &mut impl MleRef, challenges: &[F]) {
+enum SumOrEvals<F: FieldExt> {
+    Sum(F),
+    Evals(Vec<F>),
+}
+
+impl<F: FieldExt> Neg for SumOrEvals<F> {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        match self {
+            SumOrEvals::Sum(sum) => SumOrEvals::Sum(sum.neg()),
+            SumOrEvals::Evals(evals) => SumOrEvals::Evals(evals.into_iter().map(|eval| eval.neg()).collect_vec())
+        }
+    }
+}
+
+impl<F: FieldExt> Add for SumOrEvals<F> {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        match self {
+            SumOrEvals::Sum(sum) => {
+                match rhs {
+                    SumOrEvals::Sum(rhs) => SumOrEvals::Sum(sum + rhs),
+                    SumOrEvals::Evals(rhs) => SumOrEvals::Evals(repeat(sum).zip(rhs.into_iter()).map(|(lhs, rhs)| lhs + rhs).collect_vec()),
+                }
+            },
+            SumOrEvals::Evals(evals) => {
+                match rhs {
+                    SumOrEvals::Sum(rhs) => SumOrEvals::Evals(evals.into_iter().zip(repeat(rhs)).map(|(lhs, rhs)| lhs + rhs).collect_vec()),
+                    SumOrEvals::Evals(rhs) => SumOrEvals::Evals(evals.into_iter().zip(rhs.into_iter()).map(|(lhs, rhs)| lhs + rhs).collect_vec()),
+                }
+            }
+        }
+    }
+}
+
+impl<F: FieldExt> Mul for SumOrEvals<F> {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
+        match self {
+            SumOrEvals::Sum(sum) => {
+                match rhs {
+                    SumOrEvals::Sum(rhs) => SumOrEvals::Sum(sum * rhs),
+                    SumOrEvals::Evals(rhs) => SumOrEvals::Evals(repeat(sum).zip(rhs.into_iter()).map(|(lhs, rhs)| lhs * rhs).collect_vec()),
+                }
+            },
+            SumOrEvals::Evals(evals) => {
+                match rhs {
+                    SumOrEvals::Sum(rhs) => SumOrEvals::Evals(evals.into_iter().zip(repeat(rhs)).map(|(lhs, rhs)| lhs * rhs).collect_vec()),
+                    SumOrEvals::Evals(rhs) => SumOrEvals::Evals(evals.into_iter().zip(rhs.into_iter()).map(|(lhs, rhs)| lhs * rhs).collect_vec()),
+                }
+            }
+        }
+    }
+}
+
+
+pub(crate) fn prove_round<F: FieldExt>(expr: Expression<F>) -> Vec<F> {
     todo!()
 }
 
-pub(crate) fn prove_round<F: FieldExt>(expr: Expression<F>) -> Vec<F> {
+pub(crate) fn prove_expr<F: FieldExt>(mut expr: Expression<F>, round_index: usize) -> Result<Vec<F>, ExpressionError> {
+    let max_degree = todo!();
+
+    let constant = |constant| {
+        Ok(SumOrEvals::Sum(constant))
+    };
+
+    let selector = |&mut index, a, b| {
+        match index {
+            MleIndex::IndexedBit(indexed_bit) => {
+
+                todo!()
+            },
+            MleIndex::Bound(coeff_raw) => {
+                let coeff = SumOrEvals::Sum(coeff_raw);
+                let coeff_neg = SumOrEvals::Sum(F::one()-coeff_raw);
+                let a: SumOrEvals<F> = a?;
+                let b: SumOrEvals<F> = b?;
+                // Ok(a.into_iter().zip(repeat(coeff)).map(|(eval, coeff)| eval * coeff).zip(
+                //     b.into_iter().zip(repeat(F::one() - coeff)).map(|(eval, coeff)| eval * coeff)
+                // ).map(|(a, b)| a + b).collect_vec())
+                Ok((a * coeff) + (b * coeff_neg))
+            },
+            _ => Err(ExpressionError::InvalidMleIndex)
+        }
+    };
+
+    let evaluations: Result<SumOrEvals<F>, ExpressionError> = expr.evaluate(&constant, &selector, todo!(), todo!(), todo!(), todo!(), todo!());
     todo!()
 }
 
