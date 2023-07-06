@@ -180,7 +180,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
             },
             ExpressionStandard::Mle(mle_ref) => {
                 if mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index)) {
-                    mle_ref.fix_variable(challenge);
+                    mle_ref.fix_variable(round_index, challenge);
                 }
             },
             ExpressionStandard::Negated(a) => a.fix_variable(round_index, challenge),
@@ -191,7 +191,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
             ExpressionStandard::Product(mle_refs) => {
                 for mle_ref in mle_refs {
                     if mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index)) {
-                        mle_ref.fix_variable(challenge);
+                        mle_ref.fix_variable(round_index, challenge);
                     }    
                 }
             },

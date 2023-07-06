@@ -187,7 +187,13 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
-    fn fix_variable(&mut self, challenge: Self::F) {
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) {
+        for mle_index in self.mle_indices.iter_mut() {
+            if *mle_index == MleIndex::IndexedBit(round_index) {
+                *mle_index = MleIndex::Bound(challenge);
+            }
+        }
+        
         let transform = |chunk: &[F]| {
             let zero = F::zero();
             let first = chunk[0];
