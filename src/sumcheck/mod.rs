@@ -18,6 +18,20 @@ enum MleError {
     EmptyMleList,
 }
 
+#[derive(Error, Debug, Clone)]
+enum VerifyError {
+    #[error("Failed sumcheck round")]
+    SumcheckBad,
+}
+#[derive(Error, Debug, Clone)]
+enum InterpError {
+    #[error("Too little evaluation points")]
+    EvalLessThanDegree,
+    #[error("No possible polynomial")]
+    NoInverse,
+}
+
+#[derive(Debug, PartialEq)]
 enum SumOrEvals<F: FieldExt> {
     Sum(F),
     Evals(Vec<F>),
@@ -267,24 +281,150 @@ fn evaluate_mle_ref<F: FieldExt>(
     }
 }
 
+fn evaluate_at_a_point<F: FieldExt>(
+    given_evals: Vec<F>, 
+    degree: usize,
+    point: F,
+) -> Result<F, InterpError> {
+    //need degree+1 evaluations to interpolate
+    if given_evals.len() < degree+1 {return Err(InterpError::EvalLessThanDegree)};
+    let eval = (0..degree+1).into_iter().map(
+        //create an iterator of everything except current value
+        |x| (0..x).into_iter().chain(x+1..degree+1).into_iter().map(
+            |x| F::from(x as u64)).fold(
+            //compute vector of (numerator, denominator)
+            vec![F::one(), F::one()],|acc, val| vec![acc[0] * (point - val), acc[1] * (F::from(x as u64) - val)]
+        )).enumerate().map(
+        //add up barycentric weight * current eval at point
+        |(x, y)|  { given_evals[x]*y[0]*y[1].inverse().unwrap() }
+    ).reduce(|x, y| x+y);
+    if eval.is_none() {Err(InterpError::NoInverse)} else {Ok(eval.unwrap())}
+}
+
+//returns the curr random challenge if verified correctly, otherwise verify error
+//can change this to take prev round random challenge, and then compute the new random challenge
+// fn verify_round<F: FieldExt>(
+//     prev_rand_challenge: F,
+//     curr_round_mle_refs: &[impl MleRef<F = F>],
+//     curr_degree: usize,
+//     prev_round_mle_refs: &[impl MleRef<F = F>],
+//     prev_degree: usize,
+// ) -> Result<F, VerifyError> {
+//     //should calculate new rand challenge from prev rand challenge instead with hash
+//     //what if two evals only? can we just do (h(r, g(0)), g(1)) since that's guaranrrntenteed?
+//     let new_rand_challenge = prev_rand_challenge;
+//     let prev_round_evals = evaluate_mle_ref(prev_round_mle_refs, prev_degree);
+//     let curr_round_evals = evaluate_mle_ref(curr_round_mle_refs, curr_degree).unwrap();
+//     let prev_at_r = evaluate_at_a_point(prev_round_evals.unwrap(), prev_degree, new_rand_challenge);
+//     let sum = curr_round_evals[0] + curr_round_evals[1];
+//     if sum == prev_at_r.unwrap() { Ok(new_rand_challenge) } else {Err(VerifyError::SumcheckBad)} 
+// }
+
 #[cfg(test)]
 mod tests {
+    use crate::mle::dense::*;
+    use crate::mle::*;
+    use ark_bn254::Fr;
+    use super::*;
+
+    ///test the evaluation at an arbitrary point, all positives
+    #[test]
+    fn eval_at_point_pos() {
+        //poly = 3x^2 + 5x + 9
+        let evals = vec![
+            Fr::from(9),
+            Fr::from(17),
+            Fr::from(31),
+        ];
+        let degree = 2;
+        let point = Fr::from(3);
+        let evald = evaluate_at_a_point(evals, degree, point);
+        assert_eq!(evald.unwrap(), Fr::from(3)*point*point + Fr::from(5)*point + Fr::from(9));
+    }
+
+    ///test the evaluation at an arbitrary point, neg numbers
+    #[test]
+    fn eval_at_point_neg() {
+        //poly = 2x^2 - 6x + 3
+        let evals = vec![
+            Fr::from(3),
+            Fr::from(-1),
+            Fr::from(-1),
+        ];
+        let degree = 2;
+        let point = Fr::from(3);
+        let evald = evaluate_at_a_point(evals, degree, point);
+        assert_eq!(evald.unwrap(), Fr::from(2)*point*point - Fr::from(6)*point + Fr::from(3));
+    }
+
     ///test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
     #[test]
     fn test_linear_sum() {
-        todo!()
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(4), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let res = evaluate_mle_ref(&[mle1.mle_ref()], true, 1);
+        let exp = SumOrEvals::Evals(vec![Fr::from(1), Fr::from(11)]);
+        assert_eq!(res.unwrap(), exp);
     }
 
     ///test whether evaluate_mle_ref correctly computes the evaluations for a product of MLEs
     #[test]
     fn test_quadratic_sum() {
-        todo!()
+        let mle_v1 = vec![
+            Fr::from(1),
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(3), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        
+        let mle_v2 = vec![
+            Fr::from(2),
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(5), 
+        ];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+        let res = evaluate_mle_ref(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
+        let exp = SumOrEvals::Evals(vec![Fr::from(4), Fr::from(15), Fr::from(32)]);
+        assert_eq!(res.unwrap(), exp);
     }
 
     ///test whether evaluate_mle_ref correctly computes the evalutaions for a product of MLEs
     /// where one of the MLEs is a log size step smaller than the other (e.g. V(b_1, b_2)*V(b_1))
     #[test]
     fn test_quadratic_sum_differently_sized_mles() {
-        todo!()
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(4), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        
+        let mle_v2 = vec![
+            Fr::from(2),
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(5), 
+        ];
+        //lol what is the expected behavior ; (
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+        let res = evaluate_mle_ref(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
+        println!("{:?}", res);
     }
 }
+

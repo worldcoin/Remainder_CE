@@ -218,6 +218,52 @@ mod tests {
     use ark_bn254::Fr;
 
     #[test]
+    fn fix_variable_twovars() {
+        let mle_vec = vec![
+            Fr::from(5),
+            Fr::from(2),
+            Fr::from(1),
+            Fr::from(3),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(1));
+
+        let mle_vec_exp = vec![
+            Fr::from(2),
+            Fr::from(3),
+        ];
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        assert_eq!(mle_ref.mle, mle_exp.mle);
+    }
+    #[test]
+
+    fn fix_variable_threevars() {
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(3));
+
+        let mle_vec_exp = vec![
+            Fr::from(6),
+            Fr::from(6),
+            Fr::from(9),
+            Fr::from(10),
+        ];
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        assert_eq!(mle_ref.mle, mle_exp.mle);
+    }
+
+    #[test]
     fn create_dense_mle_from_vec() {
         let mle_vec = vec![
             Fr::from(0),
