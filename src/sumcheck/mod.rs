@@ -77,6 +77,10 @@ pub(crate) fn prove_round<F: FieldExt>(expr: ExpressionStandard<F>) -> Vec<F> {
     todo!()
 }
 
+pub(crate) fn index_expression_bits<F: FieldExt>(mut expr: ExpressionStandard<F>) {
+
+}
+
 pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, round_index: usize, max_degree: usize) -> Result<Vec<F>, ExpressionError> {
     let constant = |constant| {
         Ok(SumOrEvals::Sum(constant))
@@ -138,9 +142,8 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, roun
     };
 
     let product = for <'a> |mle_refs: &'a mut [Exp::MleRef]| -> Result<SumOrEvals<F>, ExpressionError> {
-        // let independent_variable = mle_refs.iter().map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index))).reduce(|acc, item| acc & item).ok_or(ExpressionError::MleError)?;
+        let independent_variable = mle_refs.iter().map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index))).reduce(|acc, item| acc & item).ok_or(ExpressionError::MleError)?;
 
-        let independent_variable = true;
         evaluate_mle_ref(mle_refs, independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
     };
 
