@@ -60,7 +60,7 @@ pub trait MleRef: Clone + Send + Sync {
     fn mle(&self) -> &[Self::F];
 
     ///Get claim that this MleRef Represents
-    fn get_mle_indices(&self) -> &[MleIndex<Self::F>];
+    fn mle_indices(&self) -> &[MleIndex<Self::F>];
 
     ///Moves the claim by adding the new_claims to the left of the originals
     fn relabel_mle_indices(&mut self, new_claims: &[MleIndex<Self::F>]);

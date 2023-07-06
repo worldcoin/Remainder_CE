@@ -10,7 +10,7 @@ use rayon::prelude::{
 };
 use thiserror::Error;
 
-use crate::{expression::{ExpressionStandard, ExpressionError}, mle::{MleRef, MleIndex}, FieldExt};
+use crate::{expression::{ExpressionStandard, ExpressionError, Expression}, mle::{MleRef, MleIndex, dense::DenseMleRef}, FieldExt};
 
 #[derive(Error, Debug, Clone)]
 enum MleError {
@@ -73,17 +73,16 @@ impl<F: FieldExt> Mul for SumOrEvals<F> {
     }
 }
 
-
 pub(crate) fn prove_round<F: FieldExt>(expr: ExpressionStandard<F>) -> Vec<F> {
     todo!()
 }
 
-pub(crate) fn prove_expr<F: FieldExt>(mut expr: ExpressionStandard<F>, round_index: usize, max_degree: usize) -> Result<Vec<F>, ExpressionError> {
+pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, round_index: usize, max_degree: usize) -> Result<Vec<F>, ExpressionError> {
     let constant = |constant| {
         Ok(SumOrEvals::Sum(constant))
     };
 
-    let selector = |&mut index, a, b| {
+    let selector = |index: &mut MleIndex<F>, a, b| {
         match index {
             MleIndex::IndexedBit(indexed_bit) => {
                 match Ord::cmp(&round_index, &indexed_bit) {
@@ -109,6 +108,7 @@ pub(crate) fn prove_expr<F: FieldExt>(mut expr: ExpressionStandard<F>, round_ind
                 }
             },
             MleIndex::Bound(coeff_raw) => {
+                let coeff_raw = coeff_raw.clone();
                 let coeff = SumOrEvals::Sum(coeff_raw);
                 let coeff_neg = SumOrEvals::Sum(F::one()-coeff_raw);
                 let a: SumOrEvals<F> = a?;
@@ -120,11 +120,47 @@ pub(crate) fn prove_expr<F: FieldExt>(mut expr: ExpressionStandard<F>, round_ind
         }
     };
 
-    let evaluations: Result<SumOrEvals<F>, ExpressionError> = expr.evaluate(&constant, &selector, todo!(), todo!(), todo!(), todo!(), todo!());
-    todo!()
+    let mle_eval = |mle_ref: Exp::MleRef| {
+        let mle_indicies = mle_ref.mle_indices();
+        let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
+        evaluate_mle_ref(&[mle_ref], independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
+    };
+
+    let negated = |a: Result<_, _>| {
+        a.map(|a: SumOrEvals<F>| a.neg())
+    };
+
+    let sum = |a, b| {
+        let a = a?;
+        let b = b?;
+
+        Ok(a + b)
+    };
+
+    let product = |mle_refs: &[DenseMleRef<F>]| {
+        let independent_variable = mle_refs.iter().map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index))).reduce(|acc, item| acc & item).ok_or(ExpressionError::MleError)?;
+
+        evaluate_mle_ref(mle_refs, independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
+    };
+
+    let scaled = |a, scalar| {
+        let a = a?;
+        let scalar = SumOrEvals::Sum(scalar);
+
+        Ok(a * scalar)
+    };
+
+    let evaluations: Result<SumOrEvals<F>, ExpressionError> = expr.evaluate(&constant, &selector, &mle_eval, &negated, &sum, &product, &scaled);
+
+    let evaluations = evaluations?;
+
+    if let SumOrEvals::Evals(evaluations) = evaluations {
+        Ok(evaluations)
+    } else {
+        Err(ExpressionError::EvaluationError("Fails to evaluate to many evaluations"))
+    }
 }
 
-//TODO!(This should be able to handle the case where there is no independent variable (e.g. we're iterating over a variable that doesn't effect this set of mle products))
 fn evaluate_mle_ref<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
@@ -137,6 +173,7 @@ fn evaluate_mle_ref<F: FieldExt>(
         .ok_or(MleError::EmptyMleList)?;
 
     if independent_variable {
+        //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
         let eval_count = degree + 1;
 
         
@@ -193,40 +230,40 @@ fn evaluate_mle_ref<F: FieldExt>(
 
         Ok(SumOrEvals::Evals(evals))
     } else {
-        let evals = cfg_into_iter!((0..1 << (max_num_vars))).fold(
+        //There is no independent variable and we can sum over everything
+        let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
             #[cfg(feature = "parallel")]
             || F::zero(),
             #[cfg(not(feature = "parallel"))]
             F::zero(),
             |acc, index| {
                 //get the product of all evaluations over 0/1/..degree
-                let eval = mle_refs
+                let product = mle_refs
                     .iter()
                     .map(|mle_ref| {
-                        let zero = F::zero();
                         let index = if mle_ref.num_vars() < max_num_vars {
                             let max = 1 << mle_ref.num_vars();
                             index % max
                         } else {
                             index
                         };
-                        mle_ref.mle().get(index).unwrap_or(&zero)
-                    }).cloned()
+                        mle_ref.mle().get(index).cloned().unwrap_or(F::zero())
+                    })
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
 
-                acc + eval
+                acc + product
             },
         );
 
         #[cfg(feature = "parallel")]
-        let evals = evals.reduce(
+        let sum = partials.reduce(
             || F::zero(),
             |acc, partial| {
                 acc + partial
             },
         );
-        todo!()
+        Ok(SumOrEvals::Sum(sum))
     }
 }
 

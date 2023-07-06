@@ -171,7 +171,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         &self.mle[self.range.clone()]
     }
 
-    fn get_mle_indices(&self) -> &[MleIndex<Self::F>] {
+    fn mle_indices(&self) -> &[MleIndex<Self::F>] {
         &self.mle_indices
     }
 

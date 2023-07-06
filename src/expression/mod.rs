@@ -9,10 +9,14 @@ use crate::{
     FieldExt,
 };
 
+///trait that defines what an Expression needs to be able to do
+///TODO!(Fix to make this more general)
 pub trait Expression<F: FieldExt>: Debug + Sized {
-    type MleRef: MleRef;
+    ///The MleRef that this Expression contains
+    type MleRef: MleRef<F = F>;
 
     #[allow(clippy::too_many_arguments)]
+    ///Evaluate an expression and return a custom type
     fn evaluate<T>(
         &mut self,
         constant: &impl Fn(F) -> T,
@@ -20,22 +24,33 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
         mle_eval: &impl Fn(Self::MleRef) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(T, T) -> T,
+        product: &impl Fn(&[DenseMleRef<F>]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T;
 
+    ///Add two expressions together
     fn concat(self, lhs: Self) -> Self;
+
+    ///Fix the bit corresponding to `round_index` to `challenge` mutating the MleRefs
+    /// so they are accurate as Bookeeping Tables
+    fn fix_variable(&mut self, round_index: usize, challenge: F);
 }
 
 #[derive(Error, Debug, Clone)]
 ///Error for handling the parsing and evaluation of expressions
 pub enum ExpressionError {
-    #[error("Product can only be used with Mles as children")]
-    TopLevelProduct,
+    ///Error for when an InvalidMleIndex is found while evaluating an expression
+    /// TODO!(add some diagnoistics here)
     #[error("")]
     InvalidMleIndex,
+    ///Error for when Something unlikely goes wrong while evaluating an expression
+    /// TODO!(split this up into many error variants)
     #[error("Something went wrong while evaluating: {0}")]
-    EvaluationError(&'static str)
+    EvaluationError(&'static str),
+    ///Error that wraps an MleError
+    /// TODO!(Do we even need this?)
+    #[error("Something went wrong while evaluating the MLE")]
+    MleError
 }
 
 ///TODO!(Genericise this over the MleRef Trait)
@@ -52,8 +67,8 @@ pub enum ExpressionStandard<F: FieldExt> {
     Negated(Box<ExpressionStandard<F>>),
     /// This is the sum of two polynomials
     Sum(Box<ExpressionStandard<F>>, Box<ExpressionStandard<F>>),
-    /// This is the product of two polynomials
-    Product(Box<ExpressionStandard<F>>, Box<ExpressionStandard<F>>),
+    /// This is the product of some polynomials
+    Product(Vec<DenseMleRef<F>>),
     /// This is a scaled polynomial
     Scaled(Box<ExpressionStandard<F>>, F),
 }
@@ -70,7 +85,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         mle_eval: &impl Fn(DenseMleRef<F>) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(T, T) -> T,
+        product: &impl Fn(&[DenseMleRef<F>]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
@@ -130,26 +145,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 );
                 sum(a, b)
             }
-            ExpressionStandard::Product(a, b) => {
-                let a = a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                let b = b.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                product(a, b)
+            ExpressionStandard::Product(queries) => {
+                product(queries)
             }
             ExpressionStandard::Scaled(a, f) => {
                 let a = a.evaluate(
@@ -170,6 +167,47 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     fn concat(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
         ExpressionStandard::Selector(MleIndex::Iterated, Box::new(self), Box::new(lhs))
     }
+
+    fn fix_variable(&mut self, round_index: usize, challenge: F) {
+        match self {
+            ExpressionStandard::Selector(index, a, b) => {
+                if *index == MleIndex::IndexedBit(round_index) {
+                    *index = MleIndex::Bound(challenge);
+                } else {
+                    a.fix_variable(round_index, challenge);
+                    b.fix_variable(round_index, challenge);
+                }
+            },
+            ExpressionStandard::Mle(mle_ref) => {
+                if mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index)) {
+                    mle_ref.fix_variable(challenge);
+                }
+            },
+            ExpressionStandard::Negated(a) => a.fix_variable(round_index, challenge),
+            ExpressionStandard::Sum(a, b) => {
+                a.fix_variable(round_index, challenge);
+                b.fix_variable(round_index, challenge);
+            },
+            ExpressionStandard::Product(mle_refs) => {
+                for mle_ref in mle_refs {
+                    if mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index)) {
+                        mle_ref.fix_variable(challenge);
+                    }    
+                }
+            },
+            ExpressionStandard::Scaled(a, _) => {
+                a.fix_variable(round_index, challenge);
+            },
+            _ => ()
+        }
+    }
+}
+
+impl<F: FieldExt> ExpressionStandard<F> {
+    ///Create a product Expression that multiplies many MLEs together
+    pub fn products(product_list: Vec<DenseMleRef<F>>) -> Self {
+        Self::Product(product_list)
+    }
 }
 
 impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
@@ -186,7 +224,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
             ExpressionStandard::Mle(_mle_ref) => f.debug_struct("Mle").finish(),
             ExpressionStandard::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionStandard::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
-            ExpressionStandard::Product(a, b) => f.debug_tuple("Product").field(a).field(b).finish(),
+            ExpressionStandard::Product(a) => f.debug_tuple("Product").field(a).finish(),
             ExpressionStandard::Scaled(poly, scalar) => {
                 f.debug_tuple("Scaled").field(poly).field(scalar).finish()
             }
@@ -215,13 +253,6 @@ impl<F: FieldExt> Sub for ExpressionStandard<F> {
     }
 }
 
-impl<F: FieldExt> Mul for ExpressionStandard<F> {
-    type Output = ExpressionStandard<F>;
-    fn mul(self, rhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
-        ExpressionStandard::Product(Box::new(self), Box::new(rhs))
-    }
-}
-
 impl<F: FieldExt> Mul<F> for ExpressionStandard<F> {
     type Output = ExpressionStandard<F>;
     fn mul(self, rhs: F) -> ExpressionStandard<F> {
@@ -242,13 +273,15 @@ mod test {
     fn test_expression_operators() {
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
 
-        let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
+        let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]).mle_ref();
 
-        let expression3 = ExpressionStandard::Mle(mle.mle_ref());
+        let expression3 = ExpressionStandard::Mle(mle.clone());
 
         let expression = expression1.clone() + expression3.clone();
 
-        let expression = expression1.clone() * expression;
+        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle.clone()]);
+
+        let expression = expression_product + expression;
 
         let expression = expression1 - expression;
 
