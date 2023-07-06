@@ -3,7 +3,7 @@
 use std::{f32::NEG_INFINITY, iter::repeat, ops::{Neg, Add, Sub, Mul}};
 
 use ark_poly::MultilinearExtension;
-use ark_std::cfg_into_iter;
+use ark_std::{cfg_into_iter, rand::Rng};
 use itertools::{repeat_n, Itertools};
 use rayon::prelude::{
     IndexedParallelIterator, IntoParallelIterator, ParallelIterator, IntoParallelRefIterator,
@@ -18,7 +18,7 @@ enum MleError {
     EmptyMleList,
 }
 
-enum SumOrEvals<F: FieldExt> {
+pub(crate) enum SumOrEvals<F: FieldExt> {
     Sum(F),
     Evals(Vec<F>),
 }
@@ -73,15 +73,7 @@ impl<F: FieldExt> Mul for SumOrEvals<F> {
     }
 }
 
-pub(crate) fn prove_round<F: FieldExt>(expr: ExpressionStandard<F>) -> Vec<F> {
-    todo!()
-}
-
-pub(crate) fn index_expression_bits<F: FieldExt>(mut expr: ExpressionStandard<F>) {
-
-}
-
-pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, round_index: usize, max_degree: usize) -> Result<Vec<F>, ExpressionError> {
+pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: &mut Exp, round_index: usize, max_degree: usize) -> Result<SumOrEvals<F>, ExpressionError> {
     let constant = |constant| {
         Ok(SumOrEvals::Sum(constant))
     };
@@ -154,15 +146,8 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, roun
         Ok(a * scalar)
     };
 
-    let evaluations: Result<SumOrEvals<F>, ExpressionError> = expr.evaluate(&constant, &selector, &mle_eval, &negated, &sum, &product, &scaled);
+    expr.evaluate(&constant, &selector, &mle_eval, &negated, &sum, &product, &scaled)
 
-    let evaluations = evaluations?;
-
-    if let SumOrEvals::Evals(evaluations) = evaluations {
-        Ok(evaluations)
-    } else {
-        Err(ExpressionError::EvaluationError("Fails to evaluate to many evaluations"))
-    }
 }
 
 fn evaluate_mle_ref<F: FieldExt>(
@@ -266,8 +251,45 @@ fn evaluate_mle_ref<F: FieldExt>(
     }
 }
 
+fn dummy_sumcheck<F: FieldExt>(mut expr: ExpressionStandard<F>, max_degree: usize, rng: &mut impl Rng) {
+    let max_round = expr.index_mle_indices(0);
+    let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
+    let mut challenge: Option<F> = None;
+
+    for round_index in 0..max_round{
+        if let Some(challenge) = challenge {
+            expr.fix_variable(round_index - 1, challenge)
+        }
+
+        if let Ok(SumOrEvals::Evals(evaluations)) = evaluate_expr(&mut expr, round_index, max_degree){
+            dbg!(&evaluations);
+            dbg!(challenge);
+            messages.push((evaluations, challenge.clone()))
+        } else {
+            panic!();
+        };
+
+        challenge = Some(F::rand(rng));
+    }
+
+    expr.fix_variable(max_round - 1, challenge.unwrap());
+
+    if let Ok(SumOrEvals::Sum(final_sum)) = evaluate_expr(&mut expr, max_round, max_degree) {
+        dbg!(final_sum);
+    } else {
+        panic!();
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use ark_bn254::Fr;
+    use ark_std::test_rng;
+
+    use crate::{mle::{dense::DenseMle, Mle}, expression::ExpressionStandard};
+
+    use super::dummy_sumcheck;
+
     ///test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
     #[test]
     fn test_linear_sum() {
@@ -285,5 +307,29 @@ mod tests {
     #[test]
     fn test_quadratic_sum_differently_sized_mles() {
         todo!()
+    }
+
+    #[test]
+    fn test_dummy_sumcheck() {
+        let mut rng = test_rng();
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(3),
+            Fr::from(4),
+            Fr::from(5),
+            Fr::from(6),
+            Fr::from(7),
+        ];
+
+        let mle_new: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mle_2 = mle_new.clone();
+
+        let mle_ref_1 = mle_new.mle_ref();
+        let mle_ref_2 = mle_2.mle_ref();
+
+        let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        dummy_sumcheck(expression, 2, &mut rng)
     }
 }

@@ -1,6 +1,6 @@
 //! An expression is a type which allows for expressing the definition of a GKR layer
 
-use std::{ops::{Add, Mul, Neg, Sub}, fmt::Debug};
+use std::{ops::{Add, Mul, Neg, Sub}, fmt::Debug, cmp::max};
 
 use thiserror::Error;
 
@@ -218,6 +218,32 @@ impl<F: FieldExt> ExpressionStandard<F> {
     ///Create a product Expression that multiplies many MLEs together
     pub fn products(product_list: Vec<DenseMleRef<F>>) -> Self {
         Self::Product(product_list)
+    }
+
+    ///Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
+    /// Returns the max number of bits that are indexed
+    pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
+        match self {
+            ExpressionStandard::Selector(mle_index, a, b) => {
+                *mle_index = MleIndex::IndexedBit(curr_index);
+                let a_bits = a.index_mle_indices(curr_index + 1);
+                let b_bits = b.index_mle_indices(curr_index + 1);
+                max(a_bits, b_bits)
+            },
+            ExpressionStandard::Mle(mle_ref) => {
+                mle_ref.index_mle_indices(curr_index)
+            },
+            ExpressionStandard::Sum(a, b) => {
+                let a_bits = a.index_mle_indices(curr_index);
+                let b_bits = b.index_mle_indices(curr_index);
+                max(a_bits, b_bits)
+            },
+            ExpressionStandard::Product(mle_refs) => {
+                mle_refs.iter_mut().map(|mle_ref| mle_ref.index_mle_indices(curr_index)).reduce(|acc, new_index| max(acc, new_index)).unwrap_or(curr_index)
+            },
+            ExpressionStandard::Scaled(a, _) => a.index_mle_indices(curr_index),
+            _ => curr_index
+        }
     }
 }
 
