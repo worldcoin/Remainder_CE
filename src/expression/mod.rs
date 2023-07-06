@@ -18,10 +18,10 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     #[allow(clippy::too_many_arguments)]
     ///Evaluate an expression and return a custom type
     fn evaluate<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&mut MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(Self::MleRef) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        mle_eval: &impl Fn(&Self::MleRef) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(&[DenseMleRef<F>]) -> T,
@@ -69,7 +69,7 @@ pub enum ExpressionStandard<F: FieldExt> {
     Sum(Box<ExpressionStandard<F>>, Box<ExpressionStandard<F>>),
     /// This is the product of some polynomials
     Product(Vec<DenseMleRef<F>>),
-    /// This is a scaled polynomial
+    /// This is a scaled polynomial; Optionally a MleIndex to represent a fully bound mle that was this scalar
     Scaled(Box<ExpressionStandard<F>>, F),
 }
 
@@ -79,10 +79,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     /// operations.
     #[allow(clippy::too_many_arguments)]
     fn evaluate<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&mut MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(DenseMleRef<F>) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        mle_eval: &impl Fn(&DenseMleRef<F>) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(&[DenseMleRef<F>]) -> T,
@@ -111,7 +111,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                     scaled,
                 ),
             ),
-            ExpressionStandard::Mle(query) => mle_eval(query.clone()),
+            ExpressionStandard::Mle(query) => mle_eval(query),
             ExpressionStandard::Negated(a) => {
                 let a = a.evaluate(
                     constant,
@@ -189,16 +189,27 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 b.fix_variable(round_index, challenge);
             },
             ExpressionStandard::Product(mle_refs) => {
-                for mle_ref in mle_refs {
+                // let mut scalars: Vec<(usize, (F, Vec<MleIndex<F>>))> = vec![];
+                for (index, mle_ref) in mle_refs.into_iter().enumerate() {
                     if mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index)) {
                         mle_ref.fix_variable(round_index, challenge);
                     }    
                 }
+
+                // let new_scalar: Option<_> = scalars.into_iter().map(|(index, scalar)| {mle_refs.remove(index); scalar}).reduce(|acc, scalar| acc * scalar);
+
+                // if let Some((scalar, mle_indices)) = new_scalar {
+                //     if mle_refs.len() > 1 {
+                //         *self = ExpressionStandard::Scaled(Box::new(ExpressionStandard::Product(mle_refs.clone())), scalar, Some(mle_indices))
+                //     } else {
+                //         *self = ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(mle_refs[0].clone())), scalar, Some(mle_indices))
+                //     }
+                // }
             },
             ExpressionStandard::Scaled(a, _) => {
                 a.fix_variable(round_index, challenge);
             },
-            _ => ()
+            ExpressionStandard::Constant(_) => (),
         }
     }
 }

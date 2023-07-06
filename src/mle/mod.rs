@@ -68,7 +68,9 @@ pub trait MleRef: Clone + Send + Sync {
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
 
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F);
+    ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.
+    /// If the Mle is fully bound will return the evaluation of the fully bound Mle
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<(Self::F, Vec<MleIndex<Self::F>>)> ;
 }
 
 ///The Enum that represents the possible indices for an MLE

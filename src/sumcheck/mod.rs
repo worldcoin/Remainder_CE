@@ -77,12 +77,12 @@ pub(crate) fn prove_round<F: FieldExt>(expr: ExpressionStandard<F>) -> Vec<F> {
     todo!()
 }
 
-pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, round_index: usize, max_degree: usize) -> Result<Vec<F>, ExpressionError> {
+pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(expr: Exp, round_index: usize, max_degree: usize) -> Result<Vec<F>, ExpressionError> {
     let constant = |constant| {
         Ok(SumOrEvals::Sum(constant))
     };
 
-    let selector = |index: &mut MleIndex<F>, a, b| {
+    let selector = |index: &MleIndex<F>, a, b| {
         match index {
             MleIndex::IndexedBit(indexed_bit) => {
                 match Ord::cmp(&round_index, &indexed_bit) {
@@ -120,10 +120,14 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, roun
         }
     };
 
-    let mle_eval = |mle_ref: Exp::MleRef| {
+    let mle_eval = |mle_ref: &Exp::MleRef| {
         let mle_indicies = mle_ref.mle_indices();
         let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
-        evaluate_mle_ref(&[mle_ref], independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
+        evaluate_mle_ref(&[mle_ref.clone()], independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
+    };
+
+    let bound_mle = for<'a> |_mle_indices: &'a [MleIndex<F>], evaluation: F| -> Result<SumOrEvals<F>, ExpressionError>{
+        Ok(SumOrEvals::Sum(evaluation))
     };
 
     let negated = |a: Result<_, _>| {
@@ -137,9 +141,10 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, roun
         Ok(a + b)
     };
 
-    let product = |mle_refs: &[DenseMleRef<F>]| {
-        let independent_variable = mle_refs.iter().map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index))).reduce(|acc, item| acc & item).ok_or(ExpressionError::MleError)?;
+    let product = for <'a> |mle_refs: &'a [DenseMleRef<F>]| -> Result<SumOrEvals<F>, ExpressionError> {
+        // let independent_variable = mle_refs.iter().map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index))).reduce(|acc, item| acc & item).ok_or(ExpressionError::MleError)?;
 
+        let independent_variable = true;
         evaluate_mle_ref(mle_refs, independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
     };
 
@@ -257,12 +262,7 @@ fn evaluate_mle_ref<F: FieldExt>(
         );
 
         #[cfg(feature = "parallel")]
-        let sum = partials.reduce(
-            || F::zero(),
-            |acc, partial| {
-                acc + partial
-            },
-        );
+        let sum = partials.sum();
         Ok(SumOrEvals::Sum(sum))
     }
 }

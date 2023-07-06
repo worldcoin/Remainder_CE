@@ -187,7 +187,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) {
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<(F, Vec<MleIndex<F>>)> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
                 *mle_index = MleIndex::Bound(challenge);
@@ -211,6 +211,12 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         let new = self.mle().par_chunks(2).map(transform);
 
         self.mle = new.collect();
+
+        if self.mle.len() == 1 {
+            Some((self.mle[0], self.mle_indices.clone()))
+        } else {
+            None
+        }
     }
 }
 
