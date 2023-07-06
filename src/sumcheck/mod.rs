@@ -10,7 +10,7 @@ use rayon::prelude::{
 };
 use thiserror::Error;
 
-use crate::{expression::{ExpressionStandard, ExpressionError, Expression}, mle::{MleRef, MleIndex, dense::DenseMleRef}, FieldExt};
+use crate::{expression::{ExpressionStandard, ExpressionError, Expression}, mle::{MleRef, MleIndex, dense::{DenseMleRef, DenseMle}}, FieldExt};
 
 #[derive(Error, Debug, Clone)]
 enum MleError {
@@ -170,7 +170,11 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, roun
 
     if let SumOrEvals::Evals(evaluations) = evaluations {
         Ok(evaluations)
-    } else {
+    }
+    else if let SumOrEvals::Sum(evaluations) = evaluations {
+        Ok(vec![evaluations])
+    }
+    else {
         Err(ExpressionError::EvaluationError("Fails to evaluate to many evaluations"))
     }
 }
@@ -303,29 +307,48 @@ fn evaluate_at_a_point<F: FieldExt>(
 
 //returns the curr random challenge if verified correctly, otherwise verify error
 //can change this to take prev round random challenge, and then compute the new random challenge
-// fn verify_round<F: FieldExt>(
-//     prev_rand_challenge: F,
-//     curr_round_mle_refs: &[impl MleRef<F = F>],
-//     curr_degree: usize,
-//     prev_round_mle_refs: &[impl MleRef<F = F>],
-//     prev_degree: usize,
-// ) -> Result<F, VerifyError> {
-//     //should calculate new rand challenge from prev rand challenge instead with hash
-//     //what if two evals only? can we just do (h(r, g(0)), g(1)) since that's guaranrrntenteed?
-//     let new_rand_challenge = prev_rand_challenge;
-//     let prev_round_evals = evaluate_mle_ref(prev_round_mle_refs, prev_degree);
-//     let curr_round_evals = evaluate_mle_ref(curr_round_mle_refs, curr_degree).unwrap();
-//     let prev_at_r = evaluate_at_a_point(prev_round_evals.unwrap(), prev_degree, new_rand_challenge);
-//     let sum = curr_round_evals[0] + curr_round_evals[1];
-//     if sum == prev_at_r.unwrap() { Ok(new_rand_challenge) } else {Err(VerifyError::SumcheckBad)} 
-// }
+fn verify_round<F: FieldExt, Exp: Expression<F>>(
+    prev_rand_challenge: F,
+    round_index: usize,
+    max_degree: usize,
+    curr_round_expr: Exp,
+    prev_round_expr: Exp,
+) -> Result<F, VerifyError> {
+    todo!()
+}
 
 #[cfg(test)]
 mod tests {
+    use crate::expression::*;
     use crate::mle::dense::*;
     use crate::mle::*;
     use ark_bn254::Fr;
+    use ark_std::One;
     use super::*;
+
+   
+    ///test regular numerical evaluation, last round type beat
+    #[test]
+    fn eval_expr_nums() {
+        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+        let expression2: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::from(6));
+        let expressadd = expression1.clone() + expression2.clone();
+        let res = evaluate_expr(expressadd, 1, 1);
+        let exp = vec![Fr::from(7)];
+        assert_eq!(res.unwrap(), exp);
+    }
+
+    ///test mle * scalar
+    #[test]
+    fn eval_expr_mle_scalar() {
+        todo!()
+    }
+
+    ///test mle * mle
+    #[test]
+    fn eval_expr_mle_mle() {
+        todo!()
+    }
 
     ///test the evaluation at an arbitrary point, all positives
     #[test]
