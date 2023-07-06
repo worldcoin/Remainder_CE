@@ -193,7 +193,9 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
                 *mle_index = MleIndex::Bound(challenge);
             }
         }
-        
+
+        self.num_vars -= 1;
+
         let transform = |chunk: &[F]| {
             let zero = F::zero();
             let first = chunk[0];
