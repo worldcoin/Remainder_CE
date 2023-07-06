@@ -3,7 +3,7 @@
 use std::{f32::NEG_INFINITY, iter::repeat, ops::{Neg, Add, Sub, Mul}};
 
 use ark_poly::MultilinearExtension;
-use ark_std::cfg_into_iter;
+use ark_std::{cfg_into_iter, rand::Rng};
 use itertools::{repeat_n, Itertools};
 use rayon::prelude::{
     IndexedParallelIterator, IntoParallelIterator, ParallelIterator, IntoParallelRefIterator,
@@ -30,9 +30,7 @@ enum InterpError {
     #[error("No possible polynomial")]
     NoInverse,
 }
-
-#[derive(Debug, PartialEq)]
-enum SumOrEvals<F: FieldExt> {
+pub(crate) enum SumOrEvals<F: FieldExt> {
     Sum(F),
     Evals(Vec<F>),
 }
@@ -91,7 +89,7 @@ pub(crate) fn prove_round<F: FieldExt>(expr: ExpressionStandard<F>) -> Vec<F> {
     todo!()
 }
 
-pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, round_index: usize, max_degree: usize) -> Result<Vec<F>, ExpressionError> {
+pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: &mut Exp, round_index: usize, max_degree: usize) -> Result<SumOrEvals<F>, ExpressionError> {
     let constant = |constant| {
         Ok(SumOrEvals::Sum(constant))
     };
@@ -134,10 +132,10 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, roun
         }
     };
 
-    let mle_eval = |mle_ref: Exp::MleRef| {
+    let mle_eval = |mle_ref: &mut Exp::MleRef| {
         let mle_indicies = mle_ref.mle_indices();
         let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
-        evaluate_mle_ref(&[mle_ref], independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
+        evaluate_mle_ref(&[mle_ref.clone()], independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
     };
 
     let negated = |a: Result<_, _>| {
@@ -151,7 +149,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, roun
         Ok(a + b)
     };
 
-    let product = |mle_refs: &[DenseMleRef<F>]| {
+    let product = for <'a> |mle_refs: &'a mut [Exp::MleRef]| -> Result<SumOrEvals<F>, ExpressionError> {
         let independent_variable = mle_refs.iter().map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index))).reduce(|acc, item| acc & item).ok_or(ExpressionError::MleError)?;
 
         evaluate_mle_ref(mle_refs, independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
@@ -164,17 +162,11 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: Exp, roun
         Ok(a * scalar)
     };
 
-    let evaluations: Result<SumOrEvals<F>, ExpressionError> = expr.evaluate(&constant, &selector, &mle_eval, &negated, &sum, &product, &scaled);
-
-    let evaluations = evaluations?;
+    expr.evaluate(&constant, &selector, &mle_eval, &negated, &sum, &product, &scaled)
 
     if let SumOrEvals::Evals(evaluations) = evaluations {
         Ok(evaluations)
-    }
-    else if let SumOrEvals::Sum(evaluations) = evaluations {
-        Ok(vec![evaluations])
-    }
-    else {
+    } else {
         Err(ExpressionError::EvaluationError("Fails to evaluate to many evaluations"))
     }
 }
@@ -275,13 +267,38 @@ fn evaluate_mle_ref<F: FieldExt>(
         );
 
         #[cfg(feature = "parallel")]
-        let sum = partials.reduce(
-            || F::zero(),
-            |acc, partial| {
-                acc + partial
-            },
-        );
+        let sum = partials.sum();
         Ok(SumOrEvals::Sum(sum))
+    }
+}
+
+fn dummy_sumcheck<F: FieldExt>(mut expr: ExpressionStandard<F>, max_degree: usize, rng: &mut impl Rng) {
+    let max_round = expr.index_mle_indices(0);
+    let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
+    let mut challenge: Option<F> = None;
+
+    for round_index in 0..max_round{
+        if let Some(challenge) = challenge {
+            expr.fix_variable(round_index - 1, challenge)
+        }
+
+        if let Ok(SumOrEvals::Evals(evaluations)) = evaluate_expr(&mut expr, round_index, max_degree){
+            dbg!(&evaluations);
+            dbg!(challenge);
+            messages.push((evaluations, challenge.clone()))
+        } else {
+            panic!();
+        };
+
+        challenge = Some(F::rand(rng));
+    }
+
+    expr.fix_variable(max_round - 1, challenge.unwrap());
+
+    if let Ok(SumOrEvals::Sum(final_sum)) = evaluate_expr(&mut expr, max_round, max_degree) {
+        dbg!(final_sum);
+    } else {
+        panic!();
     }
 }
 
@@ -317,8 +334,15 @@ fn verify_round<F: FieldExt, Exp: Expression<F>>(
     todo!()
 }
 
+
 #[cfg(test)]
 mod tests {
+    use ark_bn254::Fr;
+    use ark_std::test_rng;
+
+    use crate::{mle::{dense::DenseMle, Mle}, expression::ExpressionStandard};
+
+    use super::dummy_sumcheck;
     use crate::expression::*;
     use crate::mle::dense::*;
     use crate::mle::*;
@@ -338,16 +362,27 @@ mod tests {
         assert_eq!(res.unwrap(), exp);
     }
 
-    ///test mle * scalar
-    #[test]
-    fn eval_expr_mle_scalar() {
-        todo!()
-    }
-
     ///test mle * mle
     #[test]
     fn eval_expr_mle_mle() {
-        todo!()
+        let mle_v1 = vec![
+            Fr::from(1),
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(3), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        
+        let mle_v2 = vec![
+            Fr::from(2),
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(5), 
+        ];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+        let res = evaluate_mle_ref(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
+        let exp = SumOrEvals::Evals(vec![Fr::from(4), Fr::from(15), Fr::from(32)]);
+        assert_eq!(res.unwrap(), exp);
     }
 
     ///test the evaluation at an arbitrary point, all positives
@@ -448,6 +483,30 @@ mod tests {
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
         let res = evaluate_mle_ref(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
         println!("{:?}", res);
+    }
+
+    #[test]
+    fn test_dummy_sumcheck() {
+        let mut rng = test_rng();
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(3),
+            Fr::from(4),
+            Fr::from(5),
+            Fr::from(6),
+            Fr::from(7),
+        ];
+
+        let mle_new: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mle_2 = mle_new.clone();
+
+        let mle_ref_1 = mle_new.mle_ref();
+        let mle_ref_2 = mle_2.mle_ref();
+
+        let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        dummy_sumcheck(expression, 2, &mut rng)
     }
 }
 

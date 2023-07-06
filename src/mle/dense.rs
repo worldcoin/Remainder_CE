@@ -39,7 +39,6 @@ where
         DenseMleRef {
             mle: self.mle.clone(),
             mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
-            range: 0..self.mle.len(),
             num_vars: self.num_vars,
         }
     }
@@ -128,7 +127,6 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
             mle_indices: std::iter::once(MleIndex::Fixed(false))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
-            range: 0..len,
             num_vars,
         }
     }
@@ -144,7 +142,6 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
             mle_indices: std::iter::once(MleIndex::Fixed(true))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
-            range: len..self.mle.len(),
             num_vars,
         }
     }
@@ -155,7 +152,6 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
 pub struct DenseMleRef<F: FieldExt> {
     mle: Vec<F>,
     mle_indices: Vec<MleIndex<F>>,
-    range: Range<usize>,
     num_vars: usize,
 }
 
@@ -164,11 +160,11 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
     type F = F;
 
     fn mle_owned(&self) -> Self::Mle {
-        self.mle[self.range.clone()].to_vec()
+        self.mle.clone()
     }
 
     fn mle(&self) -> &[F] {
-        &self.mle[self.range.clone()]
+        &self.mle
     }
 
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
@@ -187,13 +183,15 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) {
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<(F, Vec<MleIndex<F>>)> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
                 *mle_index = MleIndex::Bound(challenge);
             }
         }
-        
+
+        self.num_vars -= 1;
+
         let transform = |chunk: &[F]| {
             let zero = F::zero();
             let first = chunk[0];
@@ -208,6 +206,24 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         #[cfg(not(feature = "parallel"))]
         let new = self.mle().par_chunks(2).map(transform);
         self.mle = new.collect();
+
+        if self.mle.len() == 1 {
+            Some((self.mle[0], self.mle_indices.clone()))
+        } else {
+            None
+        }
+    }
+
+    fn index_mle_indices(&mut self, curr_index: usize) -> usize {
+        let mut new_indices = 0;
+        for mle_index in self.mle_indices.iter_mut() {
+            if *mle_index == MleIndex::Iterated {
+                *mle_index = MleIndex::IndexedBit(curr_index + new_indices);
+                new_indices += 1;
+            }
+        }
+
+        curr_index + new_indices
     }
 }
 
@@ -391,7 +407,6 @@ mod tests {
 
         assert!(mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]);
         assert!(mle_ref.mle == mle_vec);
-        assert!(mle_ref.range.eq(0..mle_vec.len()));
     }
 
     #[test]
@@ -427,9 +442,6 @@ mod tests {
 
         assert!(first.mle_owned() == vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(6)]);
         assert!(second.mle_owned() == vec![Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)]);
-
-        assert!(first.range.start == 0 && first.range.end == 4);
-        assert!(second.range.start == 4 && second.range.end == 8)
     }
 
     #[test]
