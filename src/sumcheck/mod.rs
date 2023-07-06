@@ -10,7 +10,7 @@ use rayon::prelude::{
 };
 use thiserror::Error;
 
-use crate::{expression::{Expression, ExpressionError}, mle::{MleRef, MleIndex}, FieldExt};
+use crate::{expression::{ExpressionStandard, ExpressionError}, mle::{MleRef, MleIndex}, FieldExt};
 
 #[derive(Error, Debug, Clone)]
 enum MleError {
@@ -74,13 +74,11 @@ impl<F: FieldExt> Mul for SumOrEvals<F> {
 }
 
 
-pub(crate) fn prove_round<F: FieldExt>(expr: Expression<F>) -> Vec<F> {
+pub(crate) fn prove_round<F: FieldExt>(expr: ExpressionStandard<F>) -> Vec<F> {
     todo!()
 }
 
-pub(crate) fn prove_expr<F: FieldExt>(mut expr: Expression<F>, round_index: usize) -> Result<Vec<F>, ExpressionError> {
-    let max_degree = todo!();
-
+pub(crate) fn prove_expr<F: FieldExt>(mut expr: ExpressionStandard<F>, round_index: usize, max_degree: usize) -> Result<Vec<F>, ExpressionError> {
     let constant = |constant| {
         Ok(SumOrEvals::Sum(constant))
     };
@@ -88,17 +86,34 @@ pub(crate) fn prove_expr<F: FieldExt>(mut expr: Expression<F>, round_index: usiz
     let selector = |&mut index, a, b| {
         match index {
             MleIndex::IndexedBit(indexed_bit) => {
-
-                todo!()
+                match Ord::cmp(&round_index, &indexed_bit) {
+                    std::cmp::Ordering::Less => {
+                        let a = a?;
+                        let b = b?;
+                        Ok(a + b)
+                    },
+                    std::cmp::Ordering::Equal => {
+                        let first = b?;
+                        let second = a?;
+                        if let (SumOrEvals::Sum(first), SumOrEvals::Sum(second)) = (first, second) {
+                            if max_degree == 1 {
+                                Ok(SumOrEvals::Evals(vec![first, second]))
+                            } else {
+                                Err(ExpressionError::EvaluationError("Expression has a degree > 1 when the round is on a selector bit"))
+                            }  
+                        } else {
+                            Err(ExpressionError::EvaluationError("Expression returns an Evals variant when the round is on a selector bit"))
+                        }
+                    },
+                    std::cmp::Ordering::Greater => Err(ExpressionError::InvalidMleIndex),
+                }
             },
             MleIndex::Bound(coeff_raw) => {
                 let coeff = SumOrEvals::Sum(coeff_raw);
                 let coeff_neg = SumOrEvals::Sum(F::one()-coeff_raw);
                 let a: SumOrEvals<F> = a?;
                 let b: SumOrEvals<F> = b?;
-                // Ok(a.into_iter().zip(repeat(coeff)).map(|(eval, coeff)| eval * coeff).zip(
-                //     b.into_iter().zip(repeat(F::one() - coeff)).map(|(eval, coeff)| eval * coeff)
-                // ).map(|(a, b)| a + b).collect_vec())
+
                 Ok((a * coeff) + (b * coeff_neg))
             },
             _ => Err(ExpressionError::InvalidMleIndex)
@@ -112,68 +127,107 @@ pub(crate) fn prove_expr<F: FieldExt>(mut expr: Expression<F>, round_index: usiz
 //TODO!(This should be able to handle the case where there is no independent variable (e.g. we're iterating over a variable that doesn't effect this set of mle products))
 fn evaluate_mle_ref<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
+    independent_variable: bool,
     degree: usize,
-) -> Result<Vec<F>, MleError> {
-    let eval_count = degree + 1;
+) -> Result<SumOrEvals<F>, MleError> {
     let max_num_vars = mle_refs
         .iter()
         .map(|mle_ref| mle_ref.num_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
-    
-    //iterate across all pairs of evaluations
-    let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
+    if independent_variable {
+        let eval_count = degree + 1;
+
+        
+        //iterate across all pairs of evaluations
+        let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
+            #[cfg(feature = "parallel")]
+            || vec![F::zero(); eval_count],
+            #[cfg(not(feature = "parallel"))]
+            vec![F::zero(); eval_count],
+            |mut acc, index| {
+                //get the product of all evaluations over 0/1/..degree
+                let evals = mle_refs
+                    .iter()
+                    .map(|mle_ref| {
+                        let zero = F::zero();
+                        let index = if mle_ref.num_vars() < max_num_vars {
+                            let max = 1 << mle_ref.num_vars();
+                            (index * 2) % max
+                        } else {
+                            index * 2
+                        };
+                        let first = *mle_ref.mle().get(index).unwrap_or(&zero);
+                        let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
+
+                        let step = second - first;
+
+                        let successors =
+                            std::iter::successors(Some(second), move |item| Some(*item + step));
+                        //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
+                        std::iter::once(first)
+                            .chain(successors)
+                    })
+                    .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
+                    .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
+                    .unwrap();
+
+                acc.iter_mut()
+                    .zip(evals)
+                    .for_each(|(acc, eval)| *acc += eval);
+                acc
+            },
+        );
+
         #[cfg(feature = "parallel")]
-        || vec![F::zero(); eval_count],
-        #[cfg(not(feature = "parallel"))]
-        vec![F::zero(); eval_count],
-        |mut acc, index| {
-            //get the product of all evaluations over 0/1/..degree
-            let evals = mle_refs
-                .iter()
-                .map(|mle_ref| {
-                    let zero = F::zero();
-                    let index = if mle_ref.num_vars() < max_num_vars {
-                        let max = 1 << mle_ref.num_vars();
-                        (index * 2) % max
-                    } else {
-                        index * 2
-                    };
-                    let first = *mle_ref.mle().get(index).unwrap_or(&zero);
-                    let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
+        let evals = evals.reduce(
+            || vec![F::zero(); eval_count],
+            |mut acc, partial| {
+                acc.iter_mut()
+                    .zip(partial.into_iter())
+                    .for_each(|(acc, partial)| *acc += partial);
+                acc
+            },
+        );
 
-                    let step = second - first;
+        Ok(SumOrEvals::Evals(evals))
+    } else {
+        let evals = cfg_into_iter!((0..1 << (max_num_vars))).fold(
+            #[cfg(feature = "parallel")]
+            || F::zero(),
+            #[cfg(not(feature = "parallel"))]
+            F::zero(),
+            |acc, index| {
+                //get the product of all evaluations over 0/1/..degree
+                let eval = mle_refs
+                    .iter()
+                    .map(|mle_ref| {
+                        let zero = F::zero();
+                        let index = if mle_ref.num_vars() < max_num_vars {
+                            let max = 1 << mle_ref.num_vars();
+                            index % max
+                        } else {
+                            index
+                        };
+                        mle_ref.mle().get(index).unwrap_or(&zero)
+                    }).cloned()
+                    .reduce(|acc, eval| acc * eval)
+                    .unwrap();
 
-                    let successors =
-                        std::iter::successors(Some(second), move |item| Some(*item + step));
-                    //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
-                    std::iter::once(first)
-                        .chain(successors)
-                })
-                .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
-                .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
-                .unwrap();
+                acc + eval
+            },
+        );
 
-            acc.iter_mut()
-                .zip(evals)
-                .for_each(|(acc, eval)| *acc += eval);
-            acc
-        },
-    );
-
-    #[cfg(feature = "parallel")]
-    let evals = evals.reduce(
-        || vec![F::zero(); eval_count],
-        |mut acc, partial| {
-            acc.iter_mut()
-                .zip(partial.into_iter())
-                .for_each(|(acc, partial)| *acc += partial);
-            acc
-        },
-    );
-
-    Ok(evals)
+        #[cfg(feature = "parallel")]
+        let evals = evals.reduce(
+            || F::zero(),
+            |acc, partial| {
+                acc + partial
+            },
+        );
+        todo!()
+    }
 }
 
 #[cfg(test)]

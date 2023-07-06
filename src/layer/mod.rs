@@ -2,7 +2,7 @@
 
 mod claims;
 
-use crate::{mle::MleIndex, FieldExt};
+use crate::{mle::MleIndex, FieldExt, expression::Expression};
 
 type Claim<'a, F> = (&'a [MleIndex<F>], F);
 
@@ -12,7 +12,7 @@ pub trait Layer<F: FieldExt> {
     type Mle;
 
     ///The Expression type that this Layer is defined by
-    type Expression;
+    type Expression: Expression<F>;
 
     ///The Message that this Layer "sends" to the verifier
     type ProverMessage;
