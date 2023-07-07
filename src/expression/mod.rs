@@ -28,6 +28,14 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
         scaled: &impl Fn(T, F) -> T,
     ) -> T;
 
+    /// Traverses the expression tree, similarly to `evaluate()`, but with a single
+    /// "observer" function which is called at each node. Also takes an immutable reference
+    /// to `self` rather than a mutable one (as in `evaluate()`).
+    fn traverse<T, E>(
+        &self,
+        observer_fn: &impl Fn(&ExpressionStandard<F>) -> Result<T, E>,
+    ) -> Result<T, E>;
+
     ///Add two expressions together
     fn concat(self, lhs: Self) -> Self;
 
@@ -163,7 +171,42 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         }
     }
 
-    ///Concatonates two expressions together
+    fn traverse<T, E>(
+        &self,
+        observer_fn: &impl Fn(&ExpressionStandard<F>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        match self {
+            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Negated(_) => {
+                observer_fn(self)
+            }
+            ExpressionStandard::Product(_) => {
+                observer_fn(self)
+            }
+            ExpressionStandard::Scaled(exp, _) => {
+                exp.traverse(observer_fn)
+            }
+            ExpressionStandard::Selector(_, lhs, rhs) => {
+                match lhs.traverse(observer_fn) {
+                    Err(e) => {
+                        return Err(e);
+                    }
+                    _ => {}
+                }
+                rhs.traverse(observer_fn)
+            }
+            ExpressionStandard::Sum(lhs, rhs) => {
+                match lhs.traverse(observer_fn) {
+                    Err(e) => {
+                        return Err(e);
+                    }
+                    _ => {}
+                }
+                rhs.traverse(observer_fn)
+            }
+        }
+    }
+
+    ///Concatenates two expressions together
     fn concat(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
         ExpressionStandard::Selector(MleIndex::Iterated, Box::new(self), Box::new(lhs))
     }

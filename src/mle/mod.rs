@@ -75,6 +75,13 @@ pub trait MleRef: Clone + Send + Sync {
     ///Mutate the MleIndices that are Iterated and turn them into IndexedBit with the bit index being determined from curr_index.
     /// Returns the curr_index + the number of IndexedBits now in the MleIndices
     fn index_mle_indices(&mut self, curr_index: usize) -> usize;
+
+    /// Get the current indices behind this MLE
+    fn get_mle_indices(&self) -> &[MleIndex<Self::F>];
+
+    /// The layer_id of the layer that this MLE belongs to
+    fn get_layer_id(&self) -> Option<usize>;
+
 }
 
 ///The Enum that represents the possible indices for an MLE

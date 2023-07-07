@@ -40,6 +40,7 @@ where
             mle: self.mle.clone(),
             mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             num_vars: self.num_vars,
+            layer_id: None,
         }
     }
 
@@ -128,6 +129,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             num_vars,
+            layer_id: None,
         }
     }
 
@@ -143,6 +145,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             num_vars,
+            layer_id: None,
         }
     }
 }
@@ -153,6 +156,7 @@ pub struct DenseMleRef<F: FieldExt> {
     mle: Vec<F>,
     mle_indices: Vec<MleIndex<F>>,
     num_vars: usize,
+    layer_id: Option<usize>,
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
@@ -168,6 +172,10 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
     }
 
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
+        &self.mle_indices
+    }
+
+    fn get_mle_indices(&self) -> &[MleIndex<Self::F>] {
         &self.mle_indices
     }
 
@@ -225,6 +233,11 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 
         curr_index + new_indices
     }
+
+    fn get_layer_id(&self) -> Option<usize> {
+        self.layer_id
+    }
+
 }
 
 #[cfg(test)]
