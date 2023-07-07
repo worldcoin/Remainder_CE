@@ -36,7 +36,7 @@ enum VerifyError {
 }
 #[derive(Error, Debug, Clone)]
 enum InterpError {
-    #[error("Too little evaluation points")]
+    #[error("Too few evaluation points")]
     EvalLessThanDegree,
     #[error("No possible polynomial")]
     NoInverse,
