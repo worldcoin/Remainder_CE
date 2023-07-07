@@ -323,6 +323,16 @@ fn evaluate_mle_ref<F: FieldExt>(
     }
 }
 
+fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>) {
+    let mut round_degree = 0;
+
+    let traverse = |expr| {
+        Ok(())
+    };
+
+    expr.traverse(&mut traverse)
+}
+
 fn dummy_sumcheck<F: FieldExt>(
     mut expr: ExpressionStandard<F>,
     mut max_degree: usize,
@@ -342,6 +352,7 @@ fn dummy_sumcheck<F: FieldExt>(
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
             messages.push((evaluations, challenge.clone()))
         } else {
+            dbg!((round_index, eval));
             panic!();
         };
 
@@ -590,6 +601,35 @@ mod tests {
         let mle_ref_2 = mle2.mle_ref();
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages, res_deg);
+        assert!(verifyres.is_ok());
+    }
+
+    #[test]
+    fn test_dummy_sumcheck_concat() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+
+        let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+
+        let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+
+        let expression = expression.clone().concat(expression);
         let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
         let verifyres = verify_sumcheck_messages(res_messages, res_deg);
         assert!(verifyres.is_ok());
