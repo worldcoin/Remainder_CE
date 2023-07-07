@@ -31,10 +31,10 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     /// Traverses the expression tree, similarly to `evaluate()`, but with a single
     /// "observer" function which is called at each node. Also takes an immutable reference
     /// to `self` rather than a mutable one (as in `evaluate()`).
-    fn traverse<T, E>(
+    fn traverse<E>(
         &self,
-        observer_fn: &impl Fn(&ExpressionStandard<F>) -> Result<T, E>,
-    ) -> Result<T, E>;
+        observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
+    ) -> Result<(), E>;
 
     ///Add two expressions together
     fn concat(self, lhs: Self) -> Self;
@@ -171,10 +171,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         }
     }
 
-    fn traverse<T, E>(
+    fn traverse<E>(
         &self,
-        observer_fn: &impl Fn(&ExpressionStandard<F>) -> Result<T, E>,
-    ) -> Result<T, E> {
+        observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
+    ) -> Result<(), E> {
         match self {
             ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Negated(_) => {
                 observer_fn(self)

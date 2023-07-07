@@ -4,7 +4,7 @@ mod claims;
 
 use crate::{FieldExt, expression::Expression};
 
-type Claim<'a, F> = (&'a [F], F);
+type Claim<F> = (Vec<F>, F);
 
 ///A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
