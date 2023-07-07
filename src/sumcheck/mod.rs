@@ -323,21 +323,51 @@ fn evaluate_mle_ref<F: FieldExt>(
     }
 }
 
-fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>) {
+fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize) -> usize {
     let mut round_degree = 0;
 
-    let traverse = |expr| {
+    let mut traverse = for<'a> |expr: &'a ExpressionStandard<F>| -> Result<(), ()> {
+        let round_degree = &mut round_degree;
+        match expr {
+            ExpressionStandard::Selector(mle_index, _, _) => {
+                if *mle_index == MleIndex::IndexedBit(curr_round) {
+                    *round_degree += 1;
+                }
+            },
+            ExpressionStandard::Mle(mle_ref) => {
+                let mle_indices = mle_ref.mle_indices();
+                for mle_index in mle_indices {
+                    if *mle_index == MleIndex::IndexedBit(curr_round) {
+                        *round_degree += 1;
+                        return Ok(());
+                    }    
+                }
+            },
+            ExpressionStandard::Product(mle_refs) => {
+                for mle_ref in mle_refs {
+                    let mle_indices = mle_ref.mle_indices();
+                    for mle_index in mle_indices {
+                        if *mle_index == MleIndex::IndexedBit(curr_round) {
+                            *round_degree += 1;
+                            break;
+                        }    
+                    }    
+                }
+            },
+            _ => {},
+        }
         Ok(())
     };
 
-    expr.traverse(&mut traverse)
+    expr.traverse(&mut traverse).unwrap();
+    dbg!((round_degree, curr_round));
+    round_degree
 }
 
 fn dummy_sumcheck<F: FieldExt>(
     mut expr: ExpressionStandard<F>,
-    mut max_degree: usize,
     rng: &mut impl Rng,
-) -> (Vec<(Vec<F>, Option<F>)>, usize) {
+) -> Vec<(Vec<F>, Option<F>)> {
     let max_round = expr.index_mle_indices(0);
     let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
     let mut challenge: Option<F> = None;
@@ -347,7 +377,9 @@ fn dummy_sumcheck<F: FieldExt>(
             expr.fix_variable(round_index - 1, challenge)
         }
 
-        let eval = evaluate_expr(&mut expr, round_index, max_degree);
+        let degree = get_round_degree(&expr, round_index);
+
+        let eval = evaluate_expr(&mut expr, round_index, degree);
 
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
             messages.push((evaluations, challenge.clone()))
@@ -361,8 +393,8 @@ fn dummy_sumcheck<F: FieldExt>(
 
     expr.fix_variable(max_round - 1, challenge.unwrap());
 
-    if let Ok(SumOrEvals::Sum(final_sum)) = evaluate_expr(&mut expr, max_round, max_degree) {
-        (messages, max_degree)
+    if let Ok(SumOrEvals::Sum(final_sum)) = evaluate_expr(&mut expr, max_round, 0) {
+        messages
     } else {
         panic!();
     }
@@ -372,14 +404,13 @@ fn dummy_sumcheck<F: FieldExt>(
 //can change this to take prev round random challenge, and then compute the new random challenge
 fn verify_sumcheck_messages<F: FieldExt>(
     messages: Vec<(Vec<F>, Option<F>)>,
-    degree: usize,
 ) -> Result<F, VerifyError> {
     let mut prev_evals = &messages[0].0;
     let mut chal = F::zero();
     for (evals, challenge) in messages.iter().skip(1) {
         let curr_evals = evals;
         chal = challenge.clone().unwrap();
-        let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), degree, challenge.unwrap())
+        let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), challenge.unwrap())
             .expect("could not evaluate at challenge point");
         if prev_at_r != curr_evals[0] + curr_evals[1] {
             return Err(VerifyError::SumcheckBad);
@@ -392,21 +423,17 @@ fn verify_sumcheck_messages<F: FieldExt>(
 ///use degree+1 evaluations to figure out the evaluation at some arbitrary point
 fn evaluate_at_a_point<F: FieldExt>(
     given_evals: Vec<F>,
-    degree: usize,
     point: F,
 ) -> Result<F, InterpError> {
     //need degree+1 evaluations to interpolate
-    if given_evals.len() < degree + 1 {
-        return Err(InterpError::EvalLessThanDegree);
-    };
-    let eval = (0..degree + 1)
+    let eval = (0..given_evals.len())
         .into_iter()
         .map(
             //create an iterator of everything except current value
             |x| {
                 (0..x)
                     .into_iter()
-                    .chain(x + 1..degree + 1)
+                    .chain(x + 1..given_evals.len())
                     .into_iter()
                     .map(|x| F::from(x as u64))
                     .fold(
@@ -458,7 +485,7 @@ mod tests {
         let evals = vec![Fr::from(9), Fr::from(17), Fr::from(31)];
         let degree = 2;
         let point = Fr::from(3);
-        let evald = evaluate_at_a_point(evals, degree, point);
+        let evald = evaluate_at_a_point(evals, point);
         assert_eq!(
             evald.unwrap(),
             Fr::from(3) * point * point + Fr::from(5) * point + Fr::from(9)
@@ -472,7 +499,7 @@ mod tests {
         let evals = vec![Fr::from(3), Fr::from(-1), Fr::from(-1)];
         let degree = 2;
         let point = Fr::from(3);
-        let evald = evaluate_at_a_point(evals, degree, point);
+        let evald = evaluate_at_a_point(evals, point);
         assert_eq!(
             evald.unwrap(),
             Fr::from(2) * point * point - Fr::from(6) * point + Fr::from(3)
@@ -556,8 +583,8 @@ mod tests {
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
         let expression = expression * Fr::from(5);
-        let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
-        let verifyres = verify_sumcheck_messages(res_messages, res_deg);
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
     }
 
@@ -574,8 +601,8 @@ mod tests {
         let mle_ref_2 = mle2.mle_ref();
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
-        let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
-        let verifyres = verify_sumcheck_messages(res_messages, res_deg);
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
     }
 
@@ -601,8 +628,8 @@ mod tests {
         let mle_ref_2 = mle2.mle_ref();
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
-        let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
-        let verifyres = verify_sumcheck_messages(res_messages, res_deg);
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
     }
 
@@ -630,8 +657,8 @@ mod tests {
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
 
         let expression = expression.clone().concat(expression);
-        let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
-        let verifyres = verify_sumcheck_messages(res_messages, res_deg);
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
     }
 }

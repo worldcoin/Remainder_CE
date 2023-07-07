@@ -188,21 +188,12 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
             ExpressionStandard::Product(_) => observer_fn(self),
             ExpressionStandard::Scaled(exp, _) => exp.traverse(observer_fn),
             ExpressionStandard::Selector(_, lhs, rhs) => {
-                match lhs.traverse(observer_fn) {
-                    Err(e) => {
-                        return Err(e);
-                    }
-                    _ => {}
-                }
+                observer_fn(self)?;
+                lhs.traverse(observer_fn)?;
                 rhs.traverse(observer_fn)
             }
             ExpressionStandard::Sum(lhs, rhs) => {
-                match lhs.traverse(observer_fn) {
-                    Err(e) => {
-                        return Err(e);
-                    }
-                    _ => {}
-                }
+                lhs.traverse(observer_fn)?;
                 rhs.traverse(observer_fn)
             }
         }
