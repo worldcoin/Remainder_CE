@@ -242,7 +242,8 @@ impl<F: FieldExt> ExpressionStandard<F> {
                 mle_refs.iter_mut().map(|mle_ref| mle_ref.index_mle_indices(curr_index)).reduce(|acc, new_index| max(acc, new_index)).unwrap_or(curr_index)
             },
             ExpressionStandard::Scaled(a, _) => a.index_mle_indices(curr_index),
-            _ => curr_index
+            ExpressionStandard::Negated(a) => a.index_mle_indices(curr_index),
+            ExpressionStandard::Constant(_) => curr_index
         }
     }
 }
