@@ -78,7 +78,7 @@ fn get_claims<'a, F: FieldExt>(layer: &'a impl Layer<F>) -> Result<Vec<(usize, C
                 let claimed_value = mle_ref.mle()[0];
 
                 // --- Construct the claim ---
-                let claim: Claim<'a, F> = (&fixed_mle_indices[..], claimed_value);
+                // let claim: Claim<'a, F> = (&fixed_mle_indices[..], claimed_value);
             }
             _ => {}
         }

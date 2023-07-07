@@ -46,7 +46,7 @@ where
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-pub trait MleRef: Clone + Send + Sync {
+pub trait MleRef: Debug + Clone + Send + Sync {
     ///Type of Mle that this is a reference to
     type Mle: Index<usize, Output = Self::F>;
 
@@ -70,7 +70,11 @@ pub trait MleRef: Clone + Send + Sync {
 
     ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.
     /// If the Mle is fully bound will return the evaluation of the fully bound Mle
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<(Self::F, Vec<MleIndex<Self::F>>)> ;
+    fn fix_variable(
+        &mut self,
+        round_index: usize,
+        challenge: Self::F,
+    ) -> Option<(Self::F, Vec<MleIndex<Self::F>>)>;
 
     ///Mutate the MleIndices that are Iterated and turn them into IndexedBit with the bit index being determined from curr_index.
     /// Returns the curr_index + the number of IndexedBits now in the MleIndices
@@ -81,7 +85,6 @@ pub trait MleRef: Clone + Send + Sync {
 
     /// The layer_id of the layer that this MLE belongs to
     fn get_layer_id(&self) -> Option<usize>;
-
 }
 
 ///The Enum that represents the possible indices for an MLE

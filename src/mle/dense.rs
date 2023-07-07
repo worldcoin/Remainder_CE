@@ -9,7 +9,7 @@ use ark_poly::DenseMultilinearExtension;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
-use rayon::{slice::ParallelSlice, prelude::ParallelIterator};
+use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use crate::FieldExt;
 
@@ -191,7 +191,11 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<(F, Vec<MleIndex<F>>)> {
+    fn fix_variable(
+        &mut self,
+        round_index: usize,
+        challenge: Self::F,
+    ) -> Option<(F, Vec<MleIndex<F>>)> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
                 *mle_index = MleIndex::Bound(challenge);
@@ -204,7 +208,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
             let zero = F::zero();
             let first = chunk[0];
             let second = chunk.get(1).unwrap_or(&zero);
-    
+
             first + (*second - first) * challenge
         };
 
@@ -237,7 +241,6 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
     fn get_layer_id(&self) -> Option<usize> {
         self.layer_id
     }
-
 }
 
 #[cfg(test)]
@@ -248,20 +251,12 @@ mod tests {
     #[test]
     ///test fixing variables in an mle with two variables
     fn fix_variable_twovars() {
-        let mle_vec = vec![
-            Fr::from(5),
-            Fr::from(2),
-            Fr::from(1),
-            Fr::from(3),
-        ];
+        let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(1));
 
-        let mle_vec_exp = vec![
-            Fr::from(2),
-            Fr::from(3),
-        ];
+        let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
         assert_eq!(mle_ref.mle, mle_exp.mle);
     }
@@ -282,12 +277,7 @@ mod tests {
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
 
-        let mle_vec_exp = vec![
-            Fr::from(6),
-            Fr::from(6),
-            Fr::from(9),
-            Fr::from(10),
-        ];
+        let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
         assert_eq!(mle_ref.mle, mle_exp.mle);
     }
@@ -312,10 +302,7 @@ mod tests {
         let mut next_mle_ref = next_mle.mle_ref();
         next_mle_ref.fix_variable(2, Fr::from(2));
 
-        let mle_vec_exp = vec![
-            Fr::from(6),
-            Fr::from(11),
-        ];
+        let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
         assert_eq!(next_mle_ref.mle, mle_exp.mle);
     }
@@ -343,9 +330,7 @@ mod tests {
         let mut next2_mle_ref = next2_mle.mle_ref();
         next2_mle_ref.fix_variable(3, Fr::from(4));
 
-        let mle_vec_exp = vec![
-            Fr::from(26),
-        ];
+        let mle_vec_exp = vec![Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
         assert_eq!(next2_mle_ref.mle, mle_exp.mle);
     }
@@ -418,7 +403,9 @@ mod tests {
 
         let mle_ref: DenseMleRef<Fr> = mle.mle_ref();
 
-        assert!(mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]);
+        assert!(
+            mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]
+        );
         assert!(mle_ref.mle == mle_vec);
     }
 

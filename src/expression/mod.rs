@@ -1,6 +1,10 @@
 //! An expression is a type which allows for expressing the definition of a GKR layer
 
-use std::{ops::{Add, Mul, Neg, Sub}, fmt::Debug, cmp::max};
+use std::{
+    cmp::max,
+    fmt::Debug,
+    ops::{Add, Mul, Neg, Sub},
+};
 
 use thiserror::Error;
 
@@ -58,7 +62,7 @@ pub enum ExpressionError {
     ///Error that wraps an MleError
     /// TODO!(Do we even need this?)
     #[error("Something went wrong while evaluating the MLE")]
-    MleError
+    MleError,
 }
 
 ///TODO!(Genericise this over the MleRef Trait)
@@ -68,7 +72,11 @@ pub enum ExpressionStandard<F: FieldExt> {
     /// This is a constant polynomial
     Constant(F),
     /// This is a virtual selector
-    Selector(MleIndex<F>, Box<ExpressionStandard<F>>, Box<ExpressionStandard<F>>),
+    Selector(
+        MleIndex<F>,
+        Box<ExpressionStandard<F>>,
+        Box<ExpressionStandard<F>>,
+    ),
     /// This is an MLE
     Mle(DenseMleRef<F>),
     /// This is a negated polynomial
@@ -153,9 +161,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 );
                 sum(a, b)
             }
-            ExpressionStandard::Product(queries) => {
-                product(queries)
-            }
+            ExpressionStandard::Product(queries) => product(queries),
             ExpressionStandard::Scaled(a, f) => {
                 let a = a.evaluate(
                     constant,
@@ -176,15 +182,11 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         observer_fn: &impl Fn(&ExpressionStandard<F>) -> Result<T, E>,
     ) -> Result<T, E> {
         match self {
-            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Negated(_) => {
-                observer_fn(self)
-            }
-            ExpressionStandard::Product(_) => {
-                observer_fn(self)
-            }
-            ExpressionStandard::Scaled(exp, _) => {
-                exp.traverse(observer_fn)
-            }
+            ExpressionStandard::Constant(_)
+            | ExpressionStandard::Mle(_)
+            | ExpressionStandard::Negated(_) => observer_fn(self),
+            ExpressionStandard::Product(_) => observer_fn(self),
+            ExpressionStandard::Scaled(exp, _) => exp.traverse(observer_fn),
             ExpressionStandard::Selector(_, lhs, rhs) => {
                 match lhs.traverse(observer_fn) {
                     Err(e) => {
@@ -220,27 +222,33 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                     a.fix_variable(round_index, challenge);
                     b.fix_variable(round_index, challenge);
                 }
-            },
+            }
             ExpressionStandard::Mle(mle_ref) => {
-                if mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index)) {
+                if mle_ref
+                    .mle_indices()
+                    .contains(&MleIndex::IndexedBit(round_index))
+                {
                     mle_ref.fix_variable(round_index, challenge);
                 }
-            },
+            }
             ExpressionStandard::Negated(a) => a.fix_variable(round_index, challenge),
             ExpressionStandard::Sum(a, b) => {
                 a.fix_variable(round_index, challenge);
                 b.fix_variable(round_index, challenge);
-            },
+            }
             ExpressionStandard::Product(mle_refs) => {
                 for mle_ref in mle_refs {
-                    if mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index)) {
+                    if mle_ref
+                        .mle_indices()
+                        .contains(&MleIndex::IndexedBit(round_index))
+                    {
                         mle_ref.fix_variable(round_index, challenge);
-                    }    
+                    }
                 }
-            },
+            }
             ExpressionStandard::Scaled(a, _) => {
                 a.fix_variable(round_index, challenge);
-            },
+            }
             ExpressionStandard::Constant(_) => (),
         }
     }
@@ -261,21 +269,21 @@ impl<F: FieldExt> ExpressionStandard<F> {
                 let a_bits = a.index_mle_indices(curr_index + 1);
                 let b_bits = b.index_mle_indices(curr_index + 1);
                 max(a_bits, b_bits)
-            },
-            ExpressionStandard::Mle(mle_ref) => {
-                mle_ref.index_mle_indices(curr_index)
-            },
+            }
+            ExpressionStandard::Mle(mle_ref) => mle_ref.index_mle_indices(curr_index),
             ExpressionStandard::Sum(a, b) => {
                 let a_bits = a.index_mle_indices(curr_index);
                 let b_bits = b.index_mle_indices(curr_index);
                 max(a_bits, b_bits)
-            },
-            ExpressionStandard::Product(mle_refs) => {
-                mle_refs.iter_mut().map(|mle_ref| mle_ref.index_mle_indices(curr_index)).reduce(|acc, new_index| max(acc, new_index)).unwrap_or(curr_index)
-            },
+            }
+            ExpressionStandard::Product(mle_refs) => mle_refs
+                .iter_mut()
+                .map(|mle_ref| mle_ref.index_mle_indices(curr_index))
+                .reduce(|acc, new_index| max(acc, new_index))
+                .unwrap_or(curr_index),
             ExpressionStandard::Scaled(a, _) => a.index_mle_indices(curr_index),
             ExpressionStandard::Negated(a) => a.index_mle_indices(curr_index),
-            ExpressionStandard::Constant(_) => curr_index
+            ExpressionStandard::Constant(_) => curr_index,
         }
     }
 }
@@ -283,7 +291,9 @@ impl<F: FieldExt> ExpressionStandard<F> {
 impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExpressionStandard::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
+            ExpressionStandard::Constant(scalar) => {
+                f.debug_tuple("Constant").field(scalar).finish()
+            }
             ExpressionStandard::Selector(index, a, b) => f
                 .debug_tuple("Selector")
                 .field(index)
@@ -343,7 +353,8 @@ mod test {
     fn test_expression_operators() {
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
 
-        let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]).mle_ref();
+        let mle =
+            DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]).mle_ref();
 
         let expression3 = ExpressionStandard::Mle(mle.clone());
 
