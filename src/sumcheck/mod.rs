@@ -229,10 +229,6 @@ fn evaluate_mle_ref<F: FieldExt>(
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
-    dbg!(&mle_refs[1]);
-    dbg!(degree);
-    dbg!(independent_variable);
-
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
         let eval_count = degree + 1;
@@ -255,7 +251,6 @@ fn evaluate_mle_ref<F: FieldExt>(
                         } else {
                             index * 2
                         };
-                        dbg!(index);
                         let first = *mle_ref.mle().get(index).unwrap_or(&zero);
                         let second = if mle_ref.num_vars() != 0 {
                             *mle_ref.mle().get(index + 1).unwrap_or(&zero)
@@ -345,8 +340,6 @@ fn dummy_sumcheck<F: FieldExt>(
         let eval = evaluate_expr(&mut expr, round_index, max_degree);
 
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
-            //dbg!(&evaluations);
-            //dbg!(challenge);
             messages.push((evaluations, challenge.clone()))
         } else {
             panic!();
@@ -358,7 +351,6 @@ fn dummy_sumcheck<F: FieldExt>(
     expr.fix_variable(max_round - 1, challenge.unwrap());
 
     if let Ok(SumOrEvals::Sum(final_sum)) = evaluate_expr(&mut expr, max_round, max_degree) {
-        dbg!(final_sum);
         (messages, max_degree)
     } else {
         panic!();
@@ -378,11 +370,9 @@ fn verify_sumcheck_messages<F: FieldExt>(
         chal = challenge.clone().unwrap();
         let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), degree, challenge.unwrap())
             .expect("could not evaluate at challenge point");
-        dbg!("?");
         if prev_at_r != curr_evals[0] + curr_evals[1] {
             return Err(VerifyError::SumcheckBad);
         };
-        dbg!("okay");
         prev_evals = curr_evals;
     }
     Ok(chal)
