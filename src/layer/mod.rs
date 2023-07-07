@@ -2,7 +2,7 @@
 
 mod claims;
 
-use crate::{FieldExt, expression::Expression};
+use crate::{expression::Expression, FieldExt};
 
 type Claim<F> = (Vec<F>, F);
 
