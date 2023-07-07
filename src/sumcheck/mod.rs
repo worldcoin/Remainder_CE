@@ -330,6 +330,7 @@ mod tests {
         let mle_ref_2 = mle_2.mle_ref();
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        let expression = expression * Fr::from(5);
         dummy_sumcheck(expression, 2, &mut rng)
     }
 }

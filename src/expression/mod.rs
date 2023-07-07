@@ -189,22 +189,11 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 b.fix_variable(round_index, challenge);
             },
             ExpressionStandard::Product(mle_refs) => {
-                // let mut scalars: Vec<(usize, (F, Vec<MleIndex<F>>))> = vec![];
-                for (index, mle_ref) in mle_refs.into_iter().enumerate() {
+                for mle_ref in mle_refs {
                     if mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index)) {
                         mle_ref.fix_variable(round_index, challenge);
                     }    
                 }
-
-                // let new_scalar: Option<_> = scalars.into_iter().map(|(index, scalar)| {mle_refs.remove(index); scalar}).reduce(|acc, scalar| acc * scalar);
-
-                // if let Some((scalar, mle_indices)) = new_scalar {
-                //     if mle_refs.len() > 1 {
-                //         *self = ExpressionStandard::Scaled(Box::new(ExpressionStandard::Product(mle_refs.clone())), scalar, Some(mle_indices))
-                //     } else {
-                //         *self = ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(mle_refs[0].clone())), scalar, Some(mle_indices))
-                //     }
-                // }
             },
             ExpressionStandard::Scaled(a, _) => {
                 a.fix_variable(round_index, challenge);

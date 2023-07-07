@@ -204,7 +204,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         let new = self.mle().par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.mle().par_chunks(2).map(transform);
+        let new = self.mle().chunks(2).map(transform);
 
         self.mle = new.collect();
 
