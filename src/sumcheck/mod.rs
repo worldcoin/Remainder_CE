@@ -10,7 +10,7 @@ use rayon::prelude::{
 };
 use thiserror::Error;
 
-use crate::{expression::{ExpressionStandard, ExpressionError, Expression}, mle::{MleRef, MleIndex, dense::DenseMleRef}, FieldExt};
+use crate::{expression::{ExpressionStandard, ExpressionError, Expression}, mle::{MleRef, MleIndex, dense::{DenseMleRef, DenseMle}}, FieldExt};
 
 #[derive(Error, Debug, Clone)]
 enum MleError {
@@ -18,6 +18,20 @@ enum MleError {
     EmptyMleList,
 }
 
+#[derive(Error, Debug, Clone)]
+enum VerifyError {
+    #[error("Failed sumcheck round")]
+    SumcheckBad,
+}
+#[derive(Error, Debug, Clone)]
+enum InterpError {
+    #[error("Too little evaluation points")]
+    EvalLessThanDegree,
+    #[error("No possible polynomial")]
+    NoInverse,
+}
+
+#[derive(PartialEq, Debug)]
 pub(crate) enum SumOrEvals<F: FieldExt> {
     Sum(F),
     Evals(Vec<F>),
@@ -71,6 +85,10 @@ impl<F: FieldExt> Mul for SumOrEvals<F> {
             }
         }
     }
+}
+
+pub(crate) fn prove_round<F: FieldExt>(expr: ExpressionStandard<F>) -> Vec<F> {
+    todo!()
 }
 
 pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: &mut Exp, round_index: usize, max_degree: usize) -> Result<SumOrEvals<F>, ExpressionError> {
@@ -135,7 +153,6 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(mut expr: &mut Exp,
 
     let product = for <'a> |mle_refs: &'a mut [Exp::MleRef]| -> Result<SumOrEvals<F>, ExpressionError> {
         let independent_variable = mle_refs.iter().map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index))).reduce(|acc, item| acc & item).ok_or(ExpressionError::MleError)?;
-
         evaluate_mle_ref(mle_refs, independent_variable, max_degree).map_err(|_| ExpressionError::MleError)
     };
 
@@ -251,7 +268,7 @@ fn evaluate_mle_ref<F: FieldExt>(
     }
 }
 
-fn dummy_sumcheck<F: FieldExt>(mut expr: ExpressionStandard<F>, max_degree: usize, rng: &mut impl Rng) {
+fn dummy_sumcheck<F: FieldExt>(mut expr: ExpressionStandard<F>, max_degree: usize, rng: &mut impl Rng) -> (Vec<(Vec<F>, Option<F>)>, usize) {
     let max_round = expr.index_mle_indices(0);
     let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
     let mut challenge: Option<F> = None;
@@ -262,8 +279,8 @@ fn dummy_sumcheck<F: FieldExt>(mut expr: ExpressionStandard<F>, max_degree: usiz
         }
 
         if let Ok(SumOrEvals::Evals(evaluations)) = evaluate_expr(&mut expr, round_index, max_degree){
-            dbg!(&evaluations);
-            dbg!(challenge);
+            //dbg!(&evaluations);
+            //dbg!(challenge);
             messages.push((evaluations, challenge.clone()))
         } else {
             panic!();
@@ -276,41 +293,173 @@ fn dummy_sumcheck<F: FieldExt>(mut expr: ExpressionStandard<F>, max_degree: usiz
 
     if let Ok(SumOrEvals::Sum(final_sum)) = evaluate_expr(&mut expr, max_round, max_degree) {
         dbg!(final_sum);
+        (messages, max_degree)
     } else {
         panic!();
     }
 }
 
+///returns the curr random challenge if verified correctly, otherwise verify error
+//can change this to take prev round random challenge, and then compute the new random challenge
+fn verify_sumcheck_messages<F: FieldExt>(messages: Vec<(Vec<F>, Option<F>)>, degree: usize) -> Result<F, VerifyError> {
+    let mut prev_evals = &messages[0].0;
+    let mut chal = F::zero();
+    for (evals, challenge) in messages.iter().skip(1) {
+        let curr_evals = evals;
+        chal = challenge.clone().unwrap();
+        let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), degree, challenge.unwrap()).expect("could not evaluate at challenge point");
+        if prev_at_r != curr_evals[0] + curr_evals[1] { return Err(VerifyError::SumcheckBad) };
+        prev_evals = curr_evals;
+    }
+    Ok(chal)
+}
+
+///use degree+1 evaluations to figure out the evaluation at some arbitrary point
+fn evaluate_at_a_point<F: FieldExt>(
+    given_evals: Vec<F>, 
+    degree: usize,
+    point: F,
+) -> Result<F, InterpError> {
+    //need degree+1 evaluations to interpolate
+    if given_evals.len() < degree + 1 { return Err(InterpError::EvalLessThanDegree) };
+    let eval = (0..degree + 1).into_iter().map(
+        //create an iterator of everything except current value
+        |x| (0..x).into_iter().chain(x + 1..degree + 1).into_iter().map(
+            |x| F::from(x as u64)).fold(
+            //compute vector of (numerator, denominator)
+            vec![F::one(), F::one()],|acc, val| vec![acc[0] * (point - val), acc[1] * (F::from(x as u64) - val)]
+        )).enumerate().map(
+        //add up barycentric weight * current eval at point
+        |(x, y)|  { given_evals[x] * y[0] * y[1].inverse().unwrap() }
+    ).reduce(|x, y| x + y);
+    if eval.is_none() { Err(InterpError::NoInverse) } else { Ok(eval.unwrap()) }
+}
+
+
+
+
 #[cfg(test)]
 mod tests {
     use ark_bn254::Fr;
     use ark_std::test_rng;
-
     use crate::{mle::{dense::DenseMle, Mle}, expression::ExpressionStandard};
+    use super::*;
+    use ark_std::One;
 
-    use super::dummy_sumcheck;
+   
+    ///test regular numerical evaluation, last round type beat
+    #[test]
+    fn eval_expr_nums() {
+        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+        let expression2: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::from(6));
+        let mut expressadd: ExpressionStandard<Fr> = expression1.clone() + expression2.clone();
+        let res = evaluate_expr(&mut expressadd, 1, 1);
+        let exp = SumOrEvals::Sum(Fr::from(7));
+        assert_eq!(res.unwrap(), exp);
+    }
+
+    ///test the evaluation at an arbitrary point, all positives
+    #[test]
+    fn eval_at_point_pos() {
+        //poly = 3x^2 + 5x + 9
+        let evals = vec![
+            Fr::from(9),
+            Fr::from(17),
+            Fr::from(31),
+        ];
+        let degree = 2;
+        let point = Fr::from(3);
+        let evald = evaluate_at_a_point(evals, degree, point);
+        assert_eq!(evald.unwrap(), Fr::from(3)*point*point + Fr::from(5)*point + Fr::from(9));
+    }
+
+    ///test the evaluation at an arbitrary point, neg numbers
+    #[test]
+    fn eval_at_point_neg() {
+        //poly = 2x^2 - 6x + 3
+        let evals = vec![
+            Fr::from(3),
+            Fr::from(-1),
+            Fr::from(-1),
+        ];
+        let degree = 2;
+        let point = Fr::from(3);
+        let evald = evaluate_at_a_point(evals, degree, point);
+        assert_eq!(evald.unwrap(), Fr::from(2)*point*point - Fr::from(6)*point + Fr::from(3));
+    }
 
     ///test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
     #[test]
     fn test_linear_sum() {
-        todo!()
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(4), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let res = evaluate_mle_ref(&[mle1.mle_ref()], true, 1);
+        let exp = SumOrEvals::Evals(vec![Fr::from(1), Fr::from(11)]);
+        assert_eq!(res.unwrap(), exp);
     }
 
     ///test whether evaluate_mle_ref correctly computes the evaluations for a product of MLEs
     #[test]
     fn test_quadratic_sum() {
-        todo!()
+        let mle_v1 = vec![
+            Fr::from(1),
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(3), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        
+        let mle_v2 = vec![
+            Fr::from(2),
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(5), 
+        ];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+        let res = evaluate_mle_ref(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
+        let exp = SumOrEvals::Evals(vec![Fr::from(4), Fr::from(15), Fr::from(32)]);
+        assert_eq!(res.unwrap(), exp);
     }
 
     ///test whether evaluate_mle_ref correctly computes the evalutaions for a product of MLEs
     /// where one of the MLEs is a log size step smaller than the other (e.g. V(b_1, b_2)*V(b_1))
     #[test]
     fn test_quadratic_sum_differently_sized_mles() {
-        todo!()
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(4), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        
+        let mle_v2 = vec![
+            Fr::from(2),
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(5), 
+        ];
+        //lol what is the expected behavior ; (
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+        let res = evaluate_mle_ref(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
+        println!("{:?}", res);
     }
 
     #[test]
-    fn test_dummy_sumcheck() {
+    fn test_dummy_sumcheck_1() {
         let mut rng = test_rng();
         let mle_vec = vec![
             Fr::from(0),
@@ -331,6 +480,69 @@ mod tests {
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
         let expression = expression * Fr::from(5);
-        dummy_sumcheck(expression, 2, &mut rng)
+        let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages, res_deg);
+        assert!(verifyres.is_ok());
     }
+
+    #[test]
+    fn test_dummy_sumcheck_2() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(1),
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(3), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        
+        let mle_v2 = vec![
+            Fr::from(2),
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(5), 
+        ];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+
+        let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages, res_deg);
+        assert!(verifyres.is_ok());
+    }
+
+    #[test]
+    fn test_dummy_sumcheck_3() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(2), 
+            Fr::from(0), 
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(4), 
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        
+        let mle_v2 = vec![
+            Fr::from(2),
+            Fr::from(3), 
+            Fr::from(1), 
+            Fr::from(5), 
+        ];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+
+        let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        let (res_messages, res_deg) = dummy_sumcheck(expression, 2, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages, res_deg);
+        assert!(verifyres.is_ok());
+}
+
 }

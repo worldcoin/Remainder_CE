@@ -204,8 +204,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         let new = self.mle().par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.mle().chunks(2).map(transform);
-
+        let new = self.mle().par_chunks(2).map(transform);
         self.mle = new.collect();
 
         if self.mle.len() == 1 {
@@ -232,6 +231,111 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 mod tests {
     use super::*;
     use ark_bn254::Fr;
+
+    #[test]
+    ///test fixing variables in an mle with two variables
+    fn fix_variable_twovars() {
+        let mle_vec = vec![
+            Fr::from(5),
+            Fr::from(2),
+            Fr::from(1),
+            Fr::from(3),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(1));
+
+        let mle_vec_exp = vec![
+            Fr::from(2),
+            Fr::from(3),
+        ];
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        assert_eq!(mle_ref.mle, mle_exp.mle);
+    }
+    #[test]
+    ///test fixing variables in an mle with three variables
+    fn fix_variable_threevars() {
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(3));
+
+        let mle_vec_exp = vec![
+            Fr::from(6),
+            Fr::from(6),
+            Fr::from(9),
+            Fr::from(10),
+        ];
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        assert_eq!(mle_ref.mle, mle_exp.mle);
+    }
+
+    #[test]
+    ///test nested fixing variables in an mle with three variables
+    fn fix_variable_nested() {
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(3));
+        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.mle);
+        let mut next_mle_ref = next_mle.mle_ref();
+        next_mle_ref.fix_variable(2, Fr::from(2));
+
+        let mle_vec_exp = vec![
+            Fr::from(6),
+            Fr::from(11),
+        ];
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        assert_eq!(next_mle_ref.mle, mle_exp.mle);
+    }
+
+    #[test]
+    ///test nested fixing all the wayyyy
+    fn fix_variable_full() {
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(3));
+        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.mle);
+        let mut next_mle_ref = next_mle.mle_ref();
+        next_mle_ref.fix_variable(2, Fr::from(2));
+        let next2_mle: DenseMle<Fr, Fr> = DenseMle::new(next_mle_ref.mle);
+        let mut next2_mle_ref = next2_mle.mle_ref();
+        next2_mle_ref.fix_variable(3, Fr::from(4));
+
+        let mle_vec_exp = vec![
+            Fr::from(26),
+        ];
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        assert_eq!(next2_mle_ref.mle, mle_exp.mle);
+    }
 
     #[test]
     fn create_dense_mle_from_vec() {
