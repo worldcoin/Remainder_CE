@@ -337,12 +337,17 @@ fn evaluate_mle_ref_product<F: FieldExt>(
     }
 }
 
+/// Returns the maximum degree of b_{curr_round} within an expression
+/// (and therefore the number of prover messages we need to send)
 fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize) -> usize {
+
+    // --- By default, all rounds have degree at least 1 ---
     let mut round_degree = 1;
 
     let mut traverse = for<'a> |expr: &'a ExpressionStandard<F>| -> Result<(), ()> {
         let round_degree = &mut round_degree;
         match expr {
+            // --- The only exception is within a product of MLEs
             ExpressionStandard::Product(mle_refs) => {
                 let mut product_round_degree: usize = 0;
                 for mle_ref in mle_refs {
@@ -436,16 +441,16 @@ fn verify_sumcheck_messages<F: FieldExt>(
     Ok(chal)
 }
 
-///use degree+1 evaluations to figure out the evaluation at some arbitrary point
+/// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
 fn evaluate_at_a_point<F: FieldExt>(
     given_evals: Vec<F>,
     point: F,
 ) -> Result<F, InterpError> {
-    //need degree+1 evaluations to interpolate
+    // Need degree + 1 evaluations to interpolate
     let eval = (0..given_evals.len())
         .into_iter()
         .map(
-            //create an iterator of everything except current value
+            // Create an iterator of everything except current value
             |x| {
                 (0..x)
                     .into_iter()
@@ -453,7 +458,7 @@ fn evaluate_at_a_point<F: FieldExt>(
                     .into_iter()
                     .map(|x| F::from(x as u64))
                     .fold(
-                        //compute vector of (numerator, denominator)
+                        // Compute vector of (numerator, denominator)
                         vec![F::one(), F::one()],
                         |acc, val| vec![acc[0] * (point - val), acc[1] * (F::from(x as u64) - val)],
                     )
@@ -461,7 +466,7 @@ fn evaluate_at_a_point<F: FieldExt>(
         )
         .enumerate()
         .map(
-            //add up barycentric weight * current eval at point
+            // Add up barycentric weight * current eval at point
             |(x, y)| given_evals[x] * y[0] * y[1].inverse().unwrap(),
         )
         .reduce(|x, y| x + y);
@@ -483,7 +488,7 @@ mod tests {
     use ark_std::test_rng;
     use ark_std::One;
 
-    ///test regular numerical evaluation, last round type beat
+    /// Test regular numerical evaluation, last round type beat
     #[test]
     fn eval_expr_nums() {
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
@@ -494,12 +499,11 @@ mod tests {
         assert_eq!(res.unwrap(), exp);
     }
 
-    ///test the evaluation at an arbitrary point, all positives
+    /// Test the evaluation at an arbitrary point, all positives
     #[test]
     fn eval_at_point_pos() {
         //poly = 3x^2 + 5x + 9
         let evals = vec![Fr::from(9), Fr::from(17), Fr::from(31)];
-        let degree = 2;
         let point = Fr::from(3);
         let evald = evaluate_at_a_point(evals, point);
         assert_eq!(
@@ -508,10 +512,10 @@ mod tests {
         );
     }
 
-    ///test the evaluation at an arbitrary point, neg numbers
+    /// Test the evaluation at an arbitrary point, neg numbers
     #[test]
     fn eval_at_point_neg() {
-        //poly = 2x^2 - 6x + 3
+        // poly = 2x^2 - 6x + 3
         let evals = vec![Fr::from(3), Fr::from(-1), Fr::from(-1)];
         let degree = 2;
         let point = Fr::from(3);
@@ -522,10 +526,10 @@ mod tests {
         );
     }
 
-    ///test the evaluation at an arbitrary point, more evals than degree
+    /// Test the evaluation at an arbitrary point, more evals than degree
     #[test]
     fn eval_at_point_more_than_degree() {
-        //poly = 3 + 10x
+        // poly = 3 + 10x
         let evals = vec![Fr::from(3), Fr::from(13), Fr::from(23)];
         let point = Fr::from(3);
         let evald = evaluate_at_a_point(evals, point);
@@ -535,7 +539,7 @@ mod tests {
         );
     }
 
-    ///test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
+    /// Test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
     #[test]
     fn test_linear_sum() {
         let mle_v1 = vec![
@@ -554,7 +558,7 @@ mod tests {
         assert_eq!(res.unwrap(), exp);
     }
 
-    ///test whether evaluate_mle_ref correctly computes the evaluations for a product of MLEs
+    /// Test whether evaluate_mle_ref correctly computes the evaluations for a product of MLEs
     #[test]
     fn test_quadratic_sum() {
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
@@ -567,8 +571,8 @@ mod tests {
         assert_eq!(res.unwrap(), exp);
     }
 
-    ///test whether evaluate_mle_ref correctly computes the evalutaions for a product of MLEs
-    /// where one of the MLEs is a log size step smaller than the other (e.g. V(b_1, b_2)*V(b_1))
+    /// Test whether evaluate_mle_ref correctly computes the evalutaions for a product of MLEs
+    /// where one of the MLEs is a log size step smaller than the other (e.g. V(b_1, b_2) * V(b_1))
     #[test]
     fn test_quadratic_sum_differently_sized_mles() {
         let mle_v1 = vec![
@@ -584,7 +588,7 @@ mod tests {
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
         let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-        //lol what is the expected behavior ; (
+        // lol what is the expected behavior ; (
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
         let res = evaluate_mle_ref_product(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
         println!("{:?}", res);
