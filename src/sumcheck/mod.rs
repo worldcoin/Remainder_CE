@@ -178,7 +178,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     let mle_eval = |mle_ref: &mut Exp::MleRef| {
         let mle_indicies = mle_ref.mle_indices();
         let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
-        evaluate_mle_ref(&[mle_ref.clone()], independent_variable, max_degree)
+        evaluate_mle_ref_product(&[mle_ref.clone()], independent_variable, max_degree)
             .map_err(|_| ExpressionError::MleError)
     };
 
@@ -202,7 +202,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
                 })
                 .reduce(|acc, item| acc | item)
                 .ok_or(ExpressionError::MleError)?;
-            evaluate_mle_ref(mle_refs, independent_variable, max_degree)
+            evaluate_mle_ref_product(mle_refs, independent_variable, max_degree)
                 .map_err(|_| ExpressionError::MleError)
         };
 
@@ -218,11 +218,17 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     )
 }
 
-fn evaluate_mle_ref<F: FieldExt>(
+/// Evaluates a product in the form factor V_1(x_1, ..., x_n) * V_2(y_1, ..., y_m) * ...
+/// @param mle_refs: The list of MLEs which are being multiplied together
+/// @param independent_variable: Whether there is an iterated variable (for this)
+///     sumcheck round) which we need to take into account
+fn evaluate_mle_ref_product<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
     degree: usize,
 ) -> Result<SumOrEvals<F>, MleError> {
+
+    // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
         .map(|mle_ref| mle_ref.num_vars())
@@ -234,6 +240,8 @@ fn evaluate_mle_ref<F: FieldExt>(
         let eval_count = degree + 1;
 
         //iterate across all pairs of evaluations
+        // TODO(ryancao): Does this still work if we have constant bits within the MLE???
+        // As in, the assumption is that the first bit within the MLEs are iterated, right??
         let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
             #[cfg(feature = "parallel")]
             || vec![F::zero(); eval_count],
@@ -291,28 +299,34 @@ fn evaluate_mle_ref<F: FieldExt>(
 
         Ok(SumOrEvals::Evals(evals))
     } else {
-        //There is no independent variable and we can sum over everything
+        // There is no independent variable and we can sum over everything
         let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
             #[cfg(feature = "parallel")]
             || F::zero(),
             #[cfg(not(feature = "parallel"))]
             F::zero(),
             |acc, index| {
-                //get the product of all evaluations over 0/1/..degree
+                // Go through each MLE within the product
                 let product = mle_refs
                     .iter()
+                    // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
+                        // --- TODO(ryancao): When does the "else" statement ever happen...? ---
                         let index = if mle_ref.num_vars() < max_num_vars {
+                            // max = 2^{num_vars}; index := index % 2^{num_vars}
                             let max = 1 << mle_ref.num_vars();
                             index % max
                         } else {
                             index
                         };
+                        // --- Access the MLE at that index. Pad with zeros ---
                         mle_ref.mle().get(index).cloned().unwrap_or(F::zero())
                     })
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
 
+                // --- Combine them into the accumulator ---
+                // Note that the accumulator stores g(0), g(1), ..., g(d - 1)
                 acc + product
             },
         );
@@ -324,34 +338,24 @@ fn evaluate_mle_ref<F: FieldExt>(
 }
 
 fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize) -> usize {
-    let mut round_degree = 0;
+    let mut round_degree = 1;
 
     let mut traverse = for<'a> |expr: &'a ExpressionStandard<F>| -> Result<(), ()> {
         let round_degree = &mut round_degree;
         match expr {
-            ExpressionStandard::Selector(mle_index, _, _) => {
-                if *mle_index == MleIndex::IndexedBit(curr_round) {
-                    *round_degree += 1;
-                }
-            },
-            ExpressionStandard::Mle(mle_ref) => {
-                let mle_indices = mle_ref.mle_indices();
-                for mle_index in mle_indices {
-                    if *mle_index == MleIndex::IndexedBit(curr_round) {
-                        *round_degree += 1;
-                        return Ok(());
-                    }    
-                }
-            },
             ExpressionStandard::Product(mle_refs) => {
+                let mut product_round_degree: usize = 0;
                 for mle_ref in mle_refs {
                     let mle_indices = mle_ref.mle_indices();
                     for mle_index in mle_indices {
                         if *mle_index == MleIndex::IndexedBit(curr_round) {
-                            *round_degree += 1;
+                            product_round_degree += 1;
                             break;
                         }    
                     }    
+                }
+                if *round_degree < product_round_degree {
+                    *round_degree = product_round_degree;
                 }
             },
             _ => {},
@@ -368,19 +372,31 @@ fn dummy_sumcheck<F: FieldExt>(
     mut expr: ExpressionStandard<F>,
     rng: &mut impl Rng,
 ) -> Vec<(Vec<F>, Option<F>)> {
+
+    // --- Does the bit indexing ---
     let max_round = expr.index_mle_indices(0);
+
+    // --- The prover messages to the verifier...? ---
     let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
     let mut challenge: Option<F> = None;
 
+    // --- Go through the rounds... ---
     for round_index in 0..max_round {
+
+        // --- First fix the variable representing the challenge from the last round ---
+        // (This doesn't happen for the first round)
         if let Some(challenge) = challenge {
             expr.fix_variable(round_index - 1, challenge)
         }
 
+        // --- Grabs the degree of univariate polynomial we are sending over ---
         let degree = get_round_degree(&expr, round_index);
 
+        // --- I assume this gives back the actual evaluation of the summation expression...? ---
         let eval = evaluate_expr(&mut expr, round_index, degree);
 
+        // --- Ahh yeah looks like it gives back g(0), g(1), ..., g(d - 1)
+        // --- where $d$ 
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
             messages.push((evaluations, challenge.clone()))
         } else {
@@ -520,7 +536,7 @@ mod tests {
             Fr::from(4),
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
-        let res = evaluate_mle_ref(&[mle1.mle_ref()], true, 1);
+        let res = evaluate_mle_ref_product(&[mle1.mle_ref()], true, 1);
         let exp = SumOrEvals::Evals(vec![Fr::from(1), Fr::from(11)]);
         assert_eq!(res.unwrap(), exp);
     }
@@ -533,7 +549,7 @@ mod tests {
 
         let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
-        let res = evaluate_mle_ref(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
+        let res = evaluate_mle_ref_product(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
         let exp = SumOrEvals::Evals(vec![Fr::from(4), Fr::from(15), Fr::from(32)]);
         assert_eq!(res.unwrap(), exp);
     }
@@ -557,7 +573,7 @@ mod tests {
         let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         //lol what is the expected behavior ; (
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
-        let res = evaluate_mle_ref(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
+        let res = evaluate_mle_ref_product(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
         println!("{:?}", res);
     }
 
