@@ -522,6 +522,19 @@ mod tests {
         );
     }
 
+    ///test the evaluation at an arbitrary point, more evals than degree
+    #[test]
+    fn eval_at_point_more_than_degree() {
+        //poly = 3 + 10x
+        let evals = vec![Fr::from(3), Fr::from(13), Fr::from(23)];
+        let point = Fr::from(3);
+        let evald = evaluate_at_a_point(evals, point);
+        assert_eq!(
+            evald.unwrap(),
+            Fr::from(3) + Fr::from(10)*point
+        );
+    }
+
     ///test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
     #[test]
     fn test_linear_sum() {
@@ -677,4 +690,32 @@ mod tests {
         let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
     }
+
+    #[test]
+    fn test_dummy_sumcheck_sum() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+
+        let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+
+        let expression = ExpressionStandard::Sum(Box::new(ExpressionStandard::Mle(mle_ref_1)), Box::new(ExpressionStandard::Mle(mle_ref_2)));
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
+    }
+
 }
