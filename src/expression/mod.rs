@@ -22,13 +22,13 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     #[allow(clippy::too_many_arguments)]
     ///Evaluate an expression and return a custom type
     fn evaluate<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&mut MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&mut Self::MleRef) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        mle_eval: &impl Fn(&Self::MleRef) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&mut [Self::MleRef]) -> T,
+        product: &impl Fn(&[Self::MleRef]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T;
 
@@ -95,13 +95,13 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     /// operations.
     #[allow(clippy::too_many_arguments)]
     fn evaluate<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&mut MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&mut DenseMleRef<F>) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        mle_eval: &impl Fn(&DenseMleRef<F>) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&mut [DenseMleRef<F>]) -> T,
+        product: &impl Fn(&[DenseMleRef<F>]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
