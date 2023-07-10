@@ -172,6 +172,8 @@ impl<F: FieldExt> Add for PartialSum<F> {
 
         let smaller = smaller * mult_factor;
 
+        dbg!(&smaller);
+
         PartialSum {
             sum_or_eval: larger.sum_or_eval + smaller.sum_or_eval,
             max_num_vars: larger.max_num_vars,
