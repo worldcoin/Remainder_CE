@@ -227,7 +227,6 @@ fn evaluate_mle_ref_product<F: FieldExt>(
     independent_variable: bool,
     degree: usize,
 ) -> Result<SumOrEvals<F>, MleError> {
-
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
@@ -240,8 +239,6 @@ fn evaluate_mle_ref_product<F: FieldExt>(
         let eval_count = degree + 1;
 
         //iterate across all pairs of evaluations
-        // TODO(ryancao): Does this still work if we have constant bits within the MLE???
-        // As in, the assumption is that the first bit within the MLEs are iterated, right??
         let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
             #[cfg(feature = "parallel")]
             || vec![F::zero(); eval_count],
@@ -311,7 +308,6 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                     .iter()
                     // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
-                        // --- TODO(ryancao): When does the "else" statement ever happen...? ---
                         let index = if mle_ref.num_vars() < max_num_vars {
                             // max = 2^{num_vars}; index := index % 2^{num_vars}
                             let max = 1 << mle_ref.num_vars();
@@ -340,7 +336,6 @@ fn evaluate_mle_ref_product<F: FieldExt>(
 /// Returns the maximum degree of b_{curr_round} within an expression
 /// (and therefore the number of prover messages we need to send)
 fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize) -> usize {
-
     // --- By default, all rounds have degree at least 1 ---
     let mut round_degree = 1;
 
@@ -356,14 +351,14 @@ fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize
                         if *mle_index == MleIndex::IndexedBit(curr_round) {
                             product_round_degree += 1;
                             break;
-                        }    
-                    }    
+                        }
+                    }
                 }
                 if *round_degree < product_round_degree {
                     *round_degree = product_round_degree;
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
         Ok(())
     };
@@ -377,7 +372,6 @@ fn dummy_sumcheck<F: FieldExt>(
     mut expr: ExpressionStandard<F>,
     rng: &mut impl Rng,
 ) -> Vec<(Vec<F>, Option<F>)> {
-
     // --- Does the bit indexing ---
     let max_round = expr.index_mle_indices(0);
 
@@ -387,7 +381,6 @@ fn dummy_sumcheck<F: FieldExt>(
 
     // --- Go through the rounds... ---
     for round_index in 0..max_round {
-
         // --- First fix the variable representing the challenge from the last round ---
         // (This doesn't happen for the first round)
         if let Some(challenge) = challenge {
@@ -401,7 +394,7 @@ fn dummy_sumcheck<F: FieldExt>(
         let eval = evaluate_expr(&mut expr, round_index, degree);
 
         // --- Ahh yeah looks like it gives back g(0), g(1), ..., g(d - 1)
-        // --- where $d$ 
+        // --- where $d$
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
             messages.push((evaluations, challenge.clone()))
         } else {
@@ -442,10 +435,7 @@ fn verify_sumcheck_messages<F: FieldExt>(
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
-fn evaluate_at_a_point<F: FieldExt>(
-    given_evals: Vec<F>,
-    point: F,
-) -> Result<F, InterpError> {
+fn evaluate_at_a_point<F: FieldExt>(given_evals: Vec<F>, point: F) -> Result<F, InterpError> {
     // Need degree + 1 evaluations to interpolate
     let eval = (0..given_evals.len())
         .into_iter()
@@ -533,10 +523,7 @@ mod tests {
         let evals = vec![Fr::from(3), Fr::from(13), Fr::from(23)];
         let point = Fr::from(3);
         let evald = evaluate_at_a_point(evals, point);
-        assert_eq!(
-            evald.unwrap(),
-            Fr::from(3) + Fr::from(10)*point
-        );
+        assert_eq!(evald.unwrap(), Fr::from(3) + Fr::from(10) * point);
     }
 
     /// Test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
@@ -575,12 +562,7 @@ mod tests {
     /// where one of the MLEs is a log size step smaller than the other (e.g. V(b_1, b_2) * V(b_1))
     #[test]
     fn test_quadratic_sum_differently_sized_mles() {
-        let mle_v1 = vec![
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(5),
-            Fr::from(6),
-        ];
+        let mle_v1 = vec![Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(6)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
         let mle_v2 = vec![Fr::from(2), Fr::from(8)];
@@ -740,13 +722,14 @@ mod tests {
         let mle_ref_1 = mle1.mle_ref();
         let mle_ref_2 = mle2.mle_ref();
 
-        let mut expression = ExpressionStandard::Sum(Box::new(ExpressionStandard::Mle(mle_ref_1)), Box::new(ExpressionStandard::Mle(mle_ref_2)));
+        let mut expression = ExpressionStandard::Sum(
+            Box::new(ExpressionStandard::Mle(mle_ref_1)),
+            Box::new(ExpressionStandard::Mle(mle_ref_2)),
+        );
         let evald = evaluate_expr(&mut expression, 2, 1);
         println!("hm {:?}", evald);
         // let res_messages = dummy_sumcheck(expression, &mut rng);
         // let verifyres = verify_sumcheck_messages(res_messages);
         // assert!(verifyres.is_ok());
     }
-
-
 }
