@@ -270,7 +270,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
             ExpressionStandard::Product(mle_refs) => mle_refs
                 .iter_mut()
                 .map(|mle_ref| mle_ref.index_mle_indices(curr_index))
-                .reduce(|acc, new_index| max(acc, new_index))
+                .reduce(max)
                 .unwrap_or(curr_index),
             ExpressionStandard::Scaled(a, _) => a.index_mle_indices(curr_index),
             ExpressionStandard::Negated(a) => a.index_mle_indices(curr_index),
@@ -337,7 +337,7 @@ mod test {
 
     use super::*;
     use ark_bn254::Fr;
-    use ark_poly::DenseMultilinearExtension;
+    
     use ark_std::One;
 
     #[test]

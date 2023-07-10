@@ -2,10 +2,9 @@ use std::{
     fmt::Debug,
     iter::{Cloned, Zip},
     marker::PhantomData,
-    ops::Range,
 };
 
-use ark_poly::DenseMultilinearExtension;
+
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
@@ -103,7 +102,7 @@ impl<F: FieldExt> FromIterator<(F, F)> for DenseMle<F, (F, F)> {
         let iter = iter.into_iter();
         let (mut first, second): (Vec<F>, Vec<F>) = iter.unzip();
 
-        first.extend(second.into_iter());
+        first.extend(second);
 
         let vec = first;
         let num_vars = log2(vec.len()) as usize;

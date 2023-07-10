@@ -1,23 +1,21 @@
 //! Contains cryptographic algorithms for going through the sumcheck protocol
 
 use std::{
-    f32::NEG_INFINITY,
     iter::repeat,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, Mul, Neg},
 };
 
 use ark_poly::MultilinearExtension;
 use ark_std::{cfg_into_iter, rand::Rng};
-use itertools::{repeat_n, Itertools};
+use itertools::{Itertools};
 use rayon::prelude::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+    IndexedParallelIterator, IntoParallelIterator, ParallelIterator,
 };
 use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
     mle::{
-        dense::{DenseMle, DenseMleRef},
         MleIndex, MleRef,
     },
     FieldExt,
@@ -68,7 +66,7 @@ impl<F: FieldExt> Add for SumOrEvals<F> {
                 SumOrEvals::Sum(rhs) => SumOrEvals::Sum(sum + rhs),
                 SumOrEvals::Evals(rhs) => SumOrEvals::Evals(
                     repeat(sum)
-                        .zip(rhs.into_iter())
+                        .zip(rhs)
                         .map(|(lhs, rhs)| lhs + rhs)
                         .collect_vec(),
                 ),
@@ -84,7 +82,7 @@ impl<F: FieldExt> Add for SumOrEvals<F> {
                 SumOrEvals::Evals(rhs) => SumOrEvals::Evals(
                     evals
                         .into_iter()
-                        .zip(rhs.into_iter())
+                        .zip(rhs)
                         .map(|(lhs, rhs)| lhs + rhs)
                         .collect_vec(),
                 ),
@@ -101,7 +99,7 @@ impl<F: FieldExt> Mul for SumOrEvals<F> {
                 SumOrEvals::Sum(rhs) => SumOrEvals::Sum(sum * rhs),
                 SumOrEvals::Evals(rhs) => SumOrEvals::Evals(
                     repeat(sum)
-                        .zip(rhs.into_iter())
+                        .zip(rhs)
                         .map(|(lhs, rhs)| lhs * rhs)
                         .collect_vec(),
                 ),
@@ -117,7 +115,7 @@ impl<F: FieldExt> Mul for SumOrEvals<F> {
                 SumOrEvals::Evals(rhs) => SumOrEvals::Evals(
                     evals
                         .into_iter()
-                        .zip(rhs.into_iter())
+                        .zip(rhs)
                         .map(|(lhs, rhs)| lhs * rhs)
                         .collect_vec(),
                 ),
@@ -126,12 +124,12 @@ impl<F: FieldExt> Mul for SumOrEvals<F> {
     }
 }
 
-pub(crate) fn prove_round<F: FieldExt>(expr: ExpressionStandard<F>) -> Vec<F> {
+pub(crate) fn prove_round<F: FieldExt>(_expr: ExpressionStandard<F>) -> Vec<F> {
     todo!()
 }
 
 pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
-    mut expr: &mut Exp,
+    expr: &mut Exp,
     round_index: usize,
     max_degree: usize,
 ) -> Result<SumOrEvals<F>, ExpressionError> {
@@ -139,7 +137,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
 
     let selector = |index: &mut MleIndex<F>, a, b| match index {
         MleIndex::IndexedBit(indexed_bit) => {
-            match Ord::cmp(&round_index, &indexed_bit) {
+            match Ord::cmp(&round_index, indexed_bit) {
                 std::cmp::Ordering::Less => {
                     let a = a?;
                     let b = b?;
@@ -164,7 +162,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
             }
         }
         MleIndex::Bound(coeff_raw) => {
-            let coeff_raw = coeff_raw.clone();
+            let coeff_raw = *coeff_raw;
             let coeff = SumOrEvals::Sum(coeff_raw);
             let coeff_neg = SumOrEvals::Sum(F::one() - coeff_raw);
             let a: SumOrEvals<F> = a?;
@@ -260,7 +258,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                         let second = if mle_ref.num_vars() != 0 {
                             *mle_ref.mle().get(index + 1).unwrap_or(&zero)
                         } else {
-                            first.clone()
+                            first
                         };
 
                         // let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
@@ -288,7 +286,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
             || vec![F::zero(); eval_count],
             |mut acc, partial| {
                 acc.iter_mut()
-                    .zip(partial.into_iter())
+                    .zip(partial)
                     .for_each(|(acc, partial)| *acc += partial);
                 acc
             },
@@ -396,7 +394,7 @@ fn dummy_sumcheck<F: FieldExt>(
         // --- Ahh yeah looks like it gives back g(0), g(1), ..., g(d - 1)
         // --- where $d$
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
-            messages.push((evaluations, challenge.clone()))
+            messages.push((evaluations, challenge))
         } else {
             dbg!((round_index, eval));
             panic!();
@@ -407,7 +405,7 @@ fn dummy_sumcheck<F: FieldExt>(
 
     expr.fix_variable(max_round - 1, challenge.unwrap());
 
-    if let Ok(SumOrEvals::Sum(final_sum)) = evaluate_expr(&mut expr, max_round, 0) {
+    if let Ok(SumOrEvals::Sum(_final_sum)) = evaluate_expr(&mut expr, max_round, 0) {
         messages
     } else {
         panic!();
@@ -423,7 +421,7 @@ fn verify_sumcheck_messages<F: FieldExt>(
     let mut chal = F::zero();
     for (evals, challenge) in messages.iter().skip(1) {
         let curr_evals = evals;
-        chal = challenge.clone().unwrap();
+        chal = (*challenge).unwrap();
         let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), challenge.unwrap())
             .expect("could not evaluate at challenge point");
         if prev_at_r != curr_evals[0] + curr_evals[1] {
@@ -438,14 +436,11 @@ fn verify_sumcheck_messages<F: FieldExt>(
 fn evaluate_at_a_point<F: FieldExt>(given_evals: Vec<F>, point: F) -> Result<F, InterpError> {
     // Need degree + 1 evaluations to interpolate
     let eval = (0..given_evals.len())
-        .into_iter()
         .map(
             // Create an iterator of everything except current value
             |x| {
                 (0..x)
-                    .into_iter()
                     .chain(x + 1..given_evals.len())
-                    .into_iter()
                     .map(|x| F::from(x as u64))
                     .fold(
                         // Compute vector of (numerator, denominator)
@@ -507,7 +502,7 @@ mod tests {
     fn eval_at_point_neg() {
         // poly = 2x^2 - 6x + 3
         let evals = vec![Fr::from(3), Fr::from(-1), Fr::from(-1)];
-        let degree = 2;
+        let _degree = 2;
         let point = Fr::from(3);
         let evald = evaluate_at_a_point(evals, point);
         assert_eq!(
@@ -703,7 +698,7 @@ mod tests {
     /// test dummy sumcheck against sum of two mles that are different sizes (doesn't work!!!)
     #[test]
     fn test_dummy_sumcheck_sum() {
-        let mut rng = test_rng();
+        let _rng = test_rng();
         let mle_v1 = vec![
             Fr::from(0),
             Fr::from(2),
