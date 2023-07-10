@@ -150,7 +150,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
     }
 }
 
-///A [MleRef] that is dense
+/// An [MleRef] that is dense
 #[derive(Clone, Debug)]
 pub struct DenseMleRef<F: FieldExt> {
     mle: Vec<F>,
@@ -191,17 +191,23 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
+
+    /// Ryan's note -- I assume this function updates the bookkeeping tables as
+    /// described by [Tha13]. 
     fn fix_variable(
         &mut self,
         round_index: usize,
         challenge: Self::F,
     ) -> Option<(F, Vec<MleIndex<F>>)> {
+
+        // --- Bind the current indexed bit to the challenge value ---
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
                 *mle_index = MleIndex::Bound(challenge);
             }
         }
 
+        // --- One fewer iterated bit to sumcheck through ---
         self.num_vars -= 1;
 
         let transform = |chunk: &[F]| {
@@ -209,16 +215,22 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
             let first = chunk[0];
             let second = chunk.get(1).unwrap_or(&zero);
 
+            // (1 - r) * V(i) + r * V(i + 1)
             first + (*second - first) * challenge
         };
 
+        // --- So this goes through and applies the formula from [Tha13], bottom ---
+        // --- of page 23 ---
         #[cfg(feature = "parallel")]
         let new = self.mle().par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
         let new = self.mle().par_chunks(2).map(transform);
+
+        // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.mle = new.collect();
 
+        // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.mle.len() == 1 {
             Some((self.mle[0], self.mle_indices.clone()))
         } else {
