@@ -40,6 +40,11 @@ enum InterpError {
     NoInverse,
 }
 
+/// Apparently this is for "going up the tree" -- Ryan
+/// I guess the idea is that either we're taking a summation over
+/// the single value stored in Sum(F), or that we have a bunch of 
+/// eval points (i.e. stored in Evals(Vec<F>)) giving us e.g.
+/// g(0), g(1), g(2), ...
 #[derive(PartialEq, Debug)]
 pub(crate) enum SumOrEvals<F: FieldExt> {
     Sum(F),
@@ -50,7 +55,9 @@ impl<F: FieldExt> Neg for SumOrEvals<F> {
     type Output = Self;
     fn neg(self) -> Self::Output {
         match self {
+            // --- Negation for a constant is just its negation ---
             SumOrEvals::Sum(sum) => SumOrEvals::Sum(sum.neg()),
+            // --- Negation for a bunch of eval points is just element-wise negation ---
             SumOrEvals::Evals(evals) => {
                 SumOrEvals::Evals(evals.into_iter().map(|eval| eval.neg()).collect_vec())
             }
@@ -63,7 +70,9 @@ impl<F: FieldExt> Add for SumOrEvals<F> {
     fn add(self, rhs: Self) -> Self {
         match self {
             SumOrEvals::Sum(sum) => match rhs {
+                // --- Sum(F) + Sum(F) --> Just add them ---
                 SumOrEvals::Sum(rhs) => SumOrEvals::Sum(sum + rhs),
+                // --- Sum(F) + Evals(Vec<F>) --> Distributed addition ---
                 SumOrEvals::Evals(rhs) => SumOrEvals::Evals(
                     repeat(sum)
                         .zip(rhs)
@@ -72,6 +81,7 @@ impl<F: FieldExt> Add for SumOrEvals<F> {
                 ),
             },
             SumOrEvals::Evals(evals) => match rhs {
+                // --- Evals(Vec<F>) + Sum(F) --> Distributed addition ---
                 SumOrEvals::Sum(rhs) => SumOrEvals::Evals(
                     evals
                         .into_iter()
@@ -79,6 +89,7 @@ impl<F: FieldExt> Add for SumOrEvals<F> {
                         .map(|(lhs, rhs)| lhs + rhs)
                         .collect_vec(),
                 ),
+                // --- Evals(Vec<F>) + Evals(Vec<F>) --> Zipped addition ---
                 SumOrEvals::Evals(rhs) => SumOrEvals::Evals(
                     evals
                         .into_iter()
@@ -91,6 +102,9 @@ impl<F: FieldExt> Add for SumOrEvals<F> {
     }
 }
 
+/// Same rules as addition. Scalar * scalar --> scalar,
+/// Scalar * vector --> distributed multiplication,
+/// Vector * vector --> Hadamard product
 impl<F: FieldExt> Mul for SumOrEvals<F> {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self {
@@ -128,6 +142,13 @@ pub(crate) fn prove_round<F: FieldExt>(_expr: ExpressionStandard<F>) -> Vec<F> {
     todo!()
 }
 
+/// Gives us an evaluation for an entire expression. Returns either a single
+/// value (e.g. if all variables are bound and/or the expression is just over
+/// a constant), or a vector of evals at 0, ..., deg - 1 for an expression
+/// where there are iterated variables.
+/// @param expr -- The actual expression to evaluate
+/// @param round_index -- The sumcheck round index, I think??
+/// @param max_degree -- The maximum degree of the `round_index`th variable
 pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     expr: &mut Exp,
     round_index: usize,
@@ -723,8 +744,8 @@ mod tests {
         );
         let evald = evaluate_expr(&mut expression, 2, 1);
         println!("hm {:?}", evald);
-        // let res_messages = dummy_sumcheck(expression, &mut rng);
-        // let verifyres = verify_sumcheck_messages(res_messages);
-        // assert!(verifyres.is_ok());
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
     }
 }
