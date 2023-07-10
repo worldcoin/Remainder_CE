@@ -719,7 +719,7 @@ mod tests {
     /// test dummy sumcheck against sum of two mles that are different sizes (doesn't work!!!)
     #[test]
     fn test_dummy_sumcheck_sum() {
-        let _rng = test_rng();
+        let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::from(0),
             Fr::from(2),
