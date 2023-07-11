@@ -1,9 +1,9 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
-use ark_poly::MultilinearExtension;
+
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use core::fmt::Debug;
-use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator};
+
 use std::ops::Index;
 
 use crate::FieldExt;
