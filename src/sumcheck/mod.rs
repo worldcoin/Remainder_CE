@@ -280,10 +280,47 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     let negated = |a: Result<_, _>| a.map(|a: PartialSum<F>| a.neg());
 
     let sum = |a, b| {
-        let a = a?;
-        let b = b?;
+        let a: PartialSum<F> = a?;
+        let b: PartialSum<F> = b?;
+        
+        let (mut first, first_num_vars) = (a.sum_or_eval, a.max_num_vars);
+        let (mut second, second_num_vars) = (b.sum_or_eval, b.max_num_vars);
 
-        Ok(a + b)
+        // println!("idkkkk {:?} {:?}", (first.clone(), first_num_vars.clone()), (second.clone(), second_num_vars.clone()));
+        
+        let (larger, smaller) = {
+            match Ord::cmp(&first_num_vars, &second_num_vars) {
+                Ordering::Less => {
+                    ((second, second_num_vars), (first, first_num_vars))
+                },
+                Ordering::Equal => {
+                    ((first, first_num_vars), (second, second_num_vars))
+                },
+                Ordering::Greater => {
+                    ((first, first_num_vars), (second, second_num_vars))
+                },
+            }
+        };
+
+        let diff = larger.1 - smaller.1;
+            
+            //this is probably more efficient than F::pow for small exponents
+            let mult_factor = (0..diff).fold(F::one(), |acc, _| {
+                acc * F::from(2_u64)
+            });
+
+        let val = {
+            match smaller.0 {
+                SumOrEvals::Sum(yes) => SumOrEvals::Sum(mult_factor*yes),
+                SumOrEvals::Evals(yes) => SumOrEvals::Evals(yes.iter().map(|x| *x*mult_factor).collect()),
+            }
+        };
+
+        // println!("dO we COME HERE \n {:?} \n {:?} \n {:?}", val, larger.0, mult_factor);
+
+            //let val = SumOrEvals::Sum(mult_factor).mul(*smaller.0);
+            Ok(PartialSum{sum_or_eval: val + larger.0, max_num_vars: larger.1})
+
     };
 
     let product =
@@ -493,12 +530,14 @@ fn dummy_sumcheck<F: FieldExt>(
 
         // --- I assume this gives back the actual evaluation of the summation expression...? ---
         let eval = evaluate_expr(&mut expr, round_index, degree);
+        println!("expression {:?}", eval);
 
         // --- Ahh yeah looks like it gives back g(0), g(1), ..., g(d - 1)
         // --- where $d$ 
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
             messages.push((evaluations, challenge.clone()))
         } else {
+            println!("what {:?}", eval);
             panic!();
         };
 
@@ -524,9 +563,12 @@ fn verify_sumcheck_messages<F: FieldExt>(
     let mut chal = F::zero();
     for (evals, challenge) in messages.iter().skip(1) {
         let curr_evals = evals;
+        dbg!(evals); 
         chal = challenge.clone().unwrap();
         let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), challenge.unwrap())
             .expect("could not evaluate at challenge point");
+        println!("hi {:?}", curr_evals[0] + curr_evals[1]);
+        println!("bye {:?}", prev_at_r);
         if prev_at_r != curr_evals[0] + curr_evals[1] {
             return Err(VerifyError::SumcheckBad);
         };
@@ -828,19 +870,50 @@ mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
-        let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
+        let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5),];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
         let mle_ref_1 = mle1.mle_ref();
         let mle_ref_2 = mle2.mle_ref();
 
-        let expression = ExpressionStandard::Mle(mle_ref_1) + ExpressionStandard::Mle(mle_ref_2);
-        // let evald = evaluate_expr(&mut expression, 2, 1);
-        // println!("hm {:?}", evald);
+        let mut expression = ExpressionStandard::Mle(mle_ref_1) + ExpressionStandard::Mle(mle_ref_2);
+        //let evald = evaluate_expr(&mut expression, 2, 1);
+        //println!("hm {:?}", evald);
         let res_messages = dummy_sumcheck(expression, &mut rng);
         let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
     }
+
+    /// test dummy sumcheck against sum of two mles that are different sizes (doesn't work!!!)
+    #[test]
+    fn test_dummy_sumcheck_sum_correct() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+
+        let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5), Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5),];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+
+        let mut expression = ExpressionStandard::Mle(mle_ref_1) + ExpressionStandard::Mle(mle_ref_2);
+        //let evald = evaluate_expr(&mut expression, 2, 1);
+        //println!("hm {:?}", evald);
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
+    }
+
 
 
 }
