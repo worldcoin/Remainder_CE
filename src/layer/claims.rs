@@ -77,11 +77,11 @@ fn get_claims<F: FieldExt>(
                 };
 
                 // --- Grab the actual value that the claim is supposed to evaluate to ---
-                if mle_ref.mle().len() != 1 {
+                if mle_ref.bookkeeping_table().len() != 1 {
                     return Err(LayerError::MleRefMleError);
                 }
                 // TODO(ryancao): Does this accidentally take ownership of that element?
-                let claimed_value = mle_ref.mle()[0];
+                let claimed_value = mle_ref.bookkeeping_table()[0];
 
                 // --- Construct the claim ---
                 let claim: Claim<F> = (fixed_mle_indices, claimed_value);

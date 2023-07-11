@@ -76,7 +76,7 @@ impl<F: FieldExt> DenseMle<F, F> {
 
     pub fn mle_ref(&self) -> DenseMleRef<F> {
         DenseMleRef {
-            mle: self.mle.clone(),
+            bookkeeping_table: self.mle.clone(),
             mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             num_vars: self.num_vars,
             layer_id: None,
@@ -130,7 +130,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         let len = self.mle.len() / 2;
 
         DenseMleRef {
-            mle: self.mle[0].to_vec(),
+            bookkeeping_table: self.mle[0].to_vec(),
             mle_indices: std::iter::once(MleIndex::Fixed(false))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
@@ -146,7 +146,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         let len = self.mle.len() / 2;
 
         DenseMleRef {
-            mle: self.mle[1].to_vec(),
+            bookkeeping_table: self.mle[1].to_vec(),
             mle_indices: std::iter::once(MleIndex::Fixed(true))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
@@ -159,7 +159,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
 /// An [MleRef] that is dense
 #[derive(Clone, Debug)]
 pub struct DenseMleRef<F: FieldExt> {
-    mle: Vec<F>,
+    bookkeeping_table: Vec<F>,
     mle_indices: Vec<MleIndex<F>>,
     num_vars: usize,
     layer_id: Option<usize>,
@@ -170,11 +170,11 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
     type F = F;
 
     fn mle_owned(&self) -> Self::Mle {
-        self.mle.clone()
+        self.bookkeeping_table.clone()
     }
 
-    fn mle(&self) -> &[F] {
-        &self.mle
+    fn bookkeeping_table(&self) -> &[F] {
+        &self.bookkeeping_table
     }
 
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
@@ -228,17 +228,17 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         // --- So this goes through and applies the formula from [Tha13], bottom ---
         // --- of page 23 ---
         #[cfg(feature = "parallel")]
-        let new = self.mle().par_chunks(2).map(transform);
+        let new = self.bookkeeping_table().par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
         let new = self.mle().par_chunks(2).map(transform);
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
-        self.mle = new.collect();
+        self.bookkeeping_table = new.collect();
 
         // --- Just returns the final value if we've collapsed the table into a single value ---
-        if self.mle.len() == 1 {
-            Some((self.mle[0], self.mle_indices.clone()))
+        if self.bookkeeping_table.len() == 1 {
+            Some((self.bookkeeping_table[0], self.mle_indices.clone()))
         } else {
             None
         }
@@ -276,7 +276,7 @@ mod tests {
 
         let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
-        assert_eq!(mle_ref.mle, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
     #[test]
     ///test fixing variables in an mle with three variables
@@ -297,7 +297,7 @@ mod tests {
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
-        assert_eq!(mle_ref.mle, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
     #[test]
@@ -316,13 +316,13 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
-        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.mle);
+        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.bookkeeping_table);
         let mut next_mle_ref = next_mle.mle_ref();
         next_mle_ref.fix_variable(2, Fr::from(2));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
-        assert_eq!(next_mle_ref.mle, mle_exp.mle);
+        assert_eq!(next_mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
     #[test]
@@ -341,16 +341,16 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
-        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.mle);
+        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.bookkeeping_table);
         let mut next_mle_ref = next_mle.mle_ref();
         next_mle_ref.fix_variable(2, Fr::from(2));
-        let next2_mle: DenseMle<Fr, Fr> = DenseMle::new(next_mle_ref.mle);
+        let next2_mle: DenseMle<Fr, Fr> = DenseMle::new(next_mle_ref.bookkeeping_table);
         let mut next2_mle_ref = next2_mle.mle_ref();
         next2_mle_ref.fix_variable(3, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
-        assert_eq!(next2_mle_ref.mle, mle_exp.mle);
+        assert_eq!(next2_mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
     #[test]
@@ -415,7 +415,7 @@ mod tests {
         assert!(
             mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]
         );
-        assert!(mle_ref.mle == mle_vec);
+        assert!(mle_ref.bookkeeping_table == mle_vec);
     }
 
     #[test]

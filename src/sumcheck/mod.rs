@@ -290,9 +290,9 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                         } else {
                             index * 2
                         };
-                        let first = *mle_ref.mle().get(index).unwrap_or(&zero);
+                        let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
                         let second = if mle_ref.num_vars() != 0 {
-                            *mle_ref.mle().get(index + 1).unwrap_or(&zero)
+                            *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
                         } else {
                             first
                         };
@@ -350,7 +350,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                             index
                         };
                         // --- Access the MLE at that index. Pad with zeros ---
-                        mle_ref.mle().get(index).cloned().unwrap_or(F::zero())
+                        mle_ref.bookkeeping_table().get(index).cloned().unwrap_or(F::zero())
                     })
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();

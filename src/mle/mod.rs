@@ -8,8 +8,10 @@ use std::ops::Index;
 
 use crate::FieldExt;
 
-///Contains default dense implementation of Mle
+/// Contains default dense implementation of Mle
 pub mod dense;
+/// Implementations for data structs found in the zero-knowledge decision tree circuit
+pub mod zkdt_structs;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
@@ -47,8 +49,8 @@ pub trait MleRef: Debug + Clone + Send + Sync {
     ///Gets Mle that this is a reference to
     fn mle_owned(&self) -> Self::Mle;
 
-    ///Gets reference to Mle
-    fn mle(&self) -> &[Self::F];
+    ///Gets reference to the current bookkeeping tables
+    fn bookkeeping_table(&self) -> &[Self::F];
 
     ///Get claim that this MleRef Represents
     fn mle_indices(&self) -> &[MleIndex<Self::F>];
