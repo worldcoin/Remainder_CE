@@ -2,7 +2,7 @@
 
 use std::{
     iter::repeat,
-    ops::{Add, Mul, Neg},
+    ops::{Add, Mul, Neg, Sub}, cmp::Ordering,
 };
 
 use ark_poly::MultilinearExtension;
@@ -40,15 +40,16 @@ enum InterpError {
     NoInverse,
 }
 
-/// Apparently this is for "going up the tree" -- Ryan
-/// I guess the idea is that either we're taking a summation over
-/// the single value stored in Sum(F), or that we have a bunch of 
-/// eval points (i.e. stored in Evals(Vec<F>)) giving us e.g.
-/// g(0), g(1), g(2), ...
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) enum SumOrEvals<F: FieldExt> {
     Sum(F),
     Evals(Vec<F>),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PartialSum<F: FieldExt> {
+    sum_or_eval: SumOrEvals<F>,
+    max_num_vars: usize
 }
 
 impl<F: FieldExt> Neg for SumOrEvals<F> {
@@ -102,41 +103,96 @@ impl<F: FieldExt> Add for SumOrEvals<F> {
     }
 }
 
-/// Same rules as addition. Scalar * scalar --> scalar,
-/// Scalar * vector --> distributed multiplication,
-/// Vector * vector --> Hadamard product
-impl<F: FieldExt> Mul for SumOrEvals<F> {
+impl<F: FieldExt> Mul<F> for SumOrEvals<F> {
     type Output = Self;
-    fn mul(self, rhs: Self) -> Self {
+    fn mul(self, rhs: F) -> Self {
         match self {
-            SumOrEvals::Sum(sum) => match rhs {
-                SumOrEvals::Sum(rhs) => SumOrEvals::Sum(sum * rhs),
-                SumOrEvals::Evals(rhs) => SumOrEvals::Evals(
-                    repeat(sum)
-                        .zip(rhs)
-                        .map(|(lhs, rhs)| lhs * rhs)
-                        .collect_vec(),
-                ),
-            },
-            SumOrEvals::Evals(evals) => match rhs {
-                SumOrEvals::Sum(rhs) => SumOrEvals::Evals(
+            SumOrEvals::Sum(sum) => SumOrEvals::Sum(sum * rhs),
+            SumOrEvals::Evals(evals) => SumOrEvals::Evals(
                     evals
                         .into_iter()
                         .zip(repeat(rhs))
                         .map(|(lhs, rhs)| lhs * rhs)
                         .collect_vec(),
                 ),
-                SumOrEvals::Evals(rhs) => SumOrEvals::Evals(
-                    evals
-                        .into_iter()
-                        .zip(rhs)
-                        .map(|(lhs, rhs)| lhs * rhs)
-                        .collect_vec(),
-                ),
-            },
         }
     }
 }
+
+impl<F: FieldExt> Mul<&F> for SumOrEvals<F> {
+    type Output = Self;
+    fn mul(self, rhs: &F) -> Self {
+        match self {
+            SumOrEvals::Sum(sum) => SumOrEvals::Sum(sum * rhs),
+            SumOrEvals::Evals(evals) =>
+                SumOrEvals::Evals(
+                    evals
+                        .into_iter()
+                        .zip(repeat(rhs))
+                        .map(|(lhs, rhs)| lhs * rhs)
+                        .collect_vec(),
+                ),
+        }
+    }
+}
+
+impl<F: FieldExt> Neg for PartialSum<F> {
+    type Output = Self;
+    fn neg(mut self) -> Self::Output {
+        self.sum_or_eval = self.sum_or_eval.neg();
+        self
+    }
+}
+
+impl<F: FieldExt> Add for PartialSum<F> {
+    type Output = Self;
+    fn add(mut self, rhs: Self) -> Self {
+        let (larger, smaller) = {
+            match Ord::cmp(&self.max_num_vars, &rhs.max_num_vars) {
+                Ordering::Less => {
+                    (rhs, self)
+                },
+                Ordering::Equal => {
+                    self.sum_or_eval = self.sum_or_eval + rhs.sum_or_eval;
+                    return self;
+                },
+                Ordering::Greater => {
+                    (self, rhs)
+                },
+            }
+        };
+
+        let diff = larger.max_num_vars - smaller.max_num_vars;
+
+        //this is probably more efficient than F::pow for small exponents
+        let mult_factor = (0..diff).fold(F::one(), |acc, _| {
+            acc * F::from(2_u64)
+        });
+        let smaller = smaller * mult_factor;
+
+        PartialSum {
+            sum_or_eval: larger.sum_or_eval + smaller.sum_or_eval,
+            max_num_vars: larger.max_num_vars,
+        }
+    }
+}
+
+impl<F: FieldExt> Mul<F> for PartialSum<F> {
+    type Output = Self;
+    fn mul(mut self, rhs: F) -> Self {
+        self.sum_or_eval = self.sum_or_eval * rhs;
+        self
+    }
+}
+
+impl<F: FieldExt> Mul<&F> for PartialSum<F> {
+    type Output = Self;
+    fn mul(mut self, rhs: &F) -> Self {
+        self.sum_or_eval = self.sum_or_eval * rhs;
+        self
+    }
+}
+
 
 pub(crate) fn prove_round<F: FieldExt>(_expr: ExpressionStandard<F>) -> Vec<F> {
     todo!()
@@ -154,9 +210,9 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     round_index: usize,
     max_degree: usize,
 ) -> Result<SumOrEvals<F>, ExpressionError> {
-    let constant = |constant| Ok(SumOrEvals::Sum(constant));
+    let constant = |constant| Ok(PartialSum {sum_or_eval: SumOrEvals::Sum(constant), max_num_vars: 0});
 
-    let selector = |index: &mut MleIndex<F>, a, b| match index {
+    let selector = |index: &MleIndex<F>, a, b| match index {
         MleIndex::IndexedBit(indexed_bit) => {
             match Ord::cmp(&round_index, indexed_bit) {
                 std::cmp::Ordering::Less => {
@@ -167,9 +223,34 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
                 std::cmp::Ordering::Equal => {
                     let first = b?;
                     let second = a?;
-                    if let (SumOrEvals::Sum(first), SumOrEvals::Sum(second)) = (first, second) {
+                    if let (PartialSum {sum_or_eval: SumOrEvals::Sum(mut first), max_num_vars: first_num_vars}, PartialSum{sum_or_eval: SumOrEvals::Sum(mut second), max_num_vars: second_num_vars}) = (first, second) {
                         if max_degree == 1 {
-                            Ok(SumOrEvals::Evals(vec![first, second]))
+                            let max_num_vars = {
+                                let (larger, smaller) = {
+                                    match Ord::cmp(&first_num_vars, &second_num_vars) {
+                                        Ordering::Less => {
+                                            ((&mut second, second_num_vars), (&mut first, first_num_vars))
+                                        },
+                                        Ordering::Equal => {
+                                            ((&mut first, first_num_vars), (&mut second, second_num_vars))
+                                        },
+                                        Ordering::Greater => {
+                                            ((&mut first, first_num_vars), (&mut second, second_num_vars))
+                                        },
+                                    }
+                                };
+                        
+                                let diff = larger.1 - smaller.1;
+                        
+                                //this is probably more efficient than F::pow for small exponents
+                                let mult_factor = (0..diff).fold(F::one(), |acc, _| {
+                                    acc * F::from(2_u64)
+                                });
+                        
+                                *smaller.0 *= mult_factor;
+                                larger.1
+                            };
+                            Ok(PartialSum {sum_or_eval: SumOrEvals::Evals(vec![first, second]), max_num_vars})
                         } else {
                             Err(ExpressionError::EvaluationError(
                                 "Expression has a degree > 1 when the round is on a selector bit",
@@ -182,36 +263,34 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
                 std::cmp::Ordering::Greater => Err(ExpressionError::InvalidMleIndex),
             }
         }
-        MleIndex::Bound(coeff_raw) => {
-            let coeff_raw = *coeff_raw;
-            let coeff = SumOrEvals::Sum(coeff_raw);
-            let coeff_neg = SumOrEvals::Sum(F::one() - coeff_raw);
-            let a: SumOrEvals<F> = a?;
-            let b: SumOrEvals<F> = b?;
+        MleIndex::Bound(coeff) => {
+            let coeff_neg = F::one() - coeff;
+            let a: PartialSum<F> = a?;
+            let b: PartialSum<F> = b?;
 
             Ok((a * coeff) + (b * coeff_neg))
         }
         _ => Err(ExpressionError::InvalidMleIndex),
     };
 
-    let mle_eval = |mle_ref: &mut Exp::MleRef| {
+    let mle_eval = |mle_ref: &Exp::MleRef| {
         let mle_indicies = mle_ref.mle_indices();
         let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
         evaluate_mle_ref_product(&[mle_ref.clone()], independent_variable, max_degree)
             .map_err(|_| ExpressionError::MleError)
     };
 
-    let negated = |a: Result<_, _>| a.map(|a: SumOrEvals<F>| a.neg());
+    let negated = |a: Result<_, _>| a.map(|a: PartialSum<F>| a.neg());
 
     let sum = |a, b| {
-        let a = a?;
-        let b = b?;
-
+        let a: PartialSum<F> = a?;
+        let b: PartialSum<F> = b?;
+        
         Ok(a + b)
     };
 
     let product =
-        for<'a> |mle_refs: &'a mut [Exp::MleRef]| -> Result<SumOrEvals<F>, ExpressionError> {
+        for<'a> |mle_refs: &'a [Exp::MleRef]| -> Result<PartialSum<F>, ExpressionError> {
             let independent_variable = mle_refs
                 .iter()
                 .map(|mle_ref| {
@@ -227,14 +306,13 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
 
     let scaled = |a, scalar| {
         let a = a?;
-        let scalar = SumOrEvals::Sum(scalar);
 
         Ok(a * scalar)
     };
 
-    expr.evaluate(
+    Ok(expr.evaluate(
         &constant, &selector, &mle_eval, &negated, &sum, &product, &scaled,
-    )
+    )?.sum_or_eval)
 }
 
 /// Evaluates a product in the form factor V_1(x_1, ..., x_n) * V_2(y_1, ..., y_m) * ...
@@ -245,13 +323,16 @@ fn evaluate_mle_ref_product<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
     degree: usize,
-) -> Result<SumOrEvals<F>, MleError> {
+) -> Result<PartialSum<F>, MleError> {
+
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
         .map(|mle_ref| mle_ref.num_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
+
+    let real_num_vars = if independent_variable {max_num_vars - 1} else {max_num_vars};
 
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
@@ -313,7 +394,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
             },
         );
 
-        Ok(SumOrEvals::Evals(evals))
+        Ok(PartialSum {sum_or_eval: SumOrEvals::Evals(evals), max_num_vars: real_num_vars})
     } else {
         // There is no independent variable and we can sum over everything
         let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
@@ -348,7 +429,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
 
         #[cfg(feature = "parallel")]
         let sum = partials.sum();
-        Ok(SumOrEvals::Sum(sum))
+        Ok(PartialSum {sum_or_eval: SumOrEvals::Sum(sum), max_num_vars: real_num_vars})
     }
 }
 
@@ -383,7 +464,6 @@ fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize
     };
 
     expr.traverse(&mut traverse).unwrap();
-    dbg!((round_degree, curr_round));
     round_degree
 }
 
@@ -417,7 +497,6 @@ fn dummy_sumcheck<F: FieldExt>(
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
             messages.push((evaluations, challenge))
         } else {
-            dbg!((round_index, eval));
             panic!();
         };
 
@@ -426,7 +505,7 @@ fn dummy_sumcheck<F: FieldExt>(
 
     expr.fix_variable(max_round - 1, challenge.unwrap());
 
-    if let Ok(SumOrEvals::Sum(_final_sum)) = evaluate_expr(&mut expr, max_round, 0) {
+    if let Ok(SumOrEvals::Sum(final_sum)) = evaluate_expr(&mut expr, max_round, 0) {
         messages
     } else {
         panic!();
@@ -442,7 +521,7 @@ fn verify_sumcheck_messages<F: FieldExt>(
     let mut chal = F::zero();
     for (evals, challenge) in messages.iter().skip(1) {
         let curr_evals = evals;
-        chal = (*challenge).unwrap();
+        chal = challenge.clone().unwrap();
         let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), challenge.unwrap())
             .expect("could not evaluate at challenge point");
         if prev_at_r != curr_evals[0] + curr_evals[1] {
@@ -523,7 +602,7 @@ mod tests {
     fn eval_at_point_neg() {
         // poly = 2x^2 - 6x + 3
         let evals = vec![Fr::from(3), Fr::from(-1), Fr::from(-1)];
-        let _degree = 2;
+        let degree = 2;
         let point = Fr::from(3);
         let evald = evaluate_at_a_point(evals, point);
         assert_eq!(
@@ -558,7 +637,7 @@ mod tests {
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let res = evaluate_mle_ref_product(&[mle1.mle_ref()], true, 1);
         let exp = SumOrEvals::Evals(vec![Fr::from(1), Fr::from(11)]);
-        assert_eq!(res.unwrap(), exp);
+        assert_eq!(res.unwrap().sum_or_eval, exp);
     }
 
     /// Test whether evaluate_mle_ref correctly computes the evaluations for a product of MLEs
@@ -571,7 +650,7 @@ mod tests {
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
         let res = evaluate_mle_ref_product(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
         let exp = SumOrEvals::Evals(vec![Fr::from(4), Fr::from(15), Fr::from(32)]);
-        assert_eq!(res.unwrap(), exp);
+        assert_eq!(res.unwrap().sum_or_eval, exp);
     }
 
     /// Test whether evaluate_mle_ref correctly computes the evalutaions for a product of MLEs
@@ -585,7 +664,7 @@ mod tests {
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
         let res = evaluate_mle_ref_product(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
         let exp = SumOrEvals::Evals(vec![Fr::from(12), Fr::from(72), Fr::from(168)]);
-        assert_eq!(res.unwrap(), exp);
+        assert_eq!(res.unwrap().sum_or_eval, exp);
     }
 
     /// test whether evaluate_mle_ref correctly computes the evalutaions for a product of MLEs
@@ -608,7 +687,7 @@ mod tests {
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
         let res = evaluate_mle_ref_product(&[mle1.mle_ref(), mle2.mle_ref()], true, 2);
         let exp = SumOrEvals::Evals(vec![Fr::from(1), Fr::from(45), Fr::from(139)]);
-        assert_eq!(res.unwrap(), exp);
+        assert_eq!(res.unwrap().sum_or_eval, exp);
     }
 
     /// test dummy sumcheck against verifier for product of the same mle
@@ -716,9 +795,9 @@ mod tests {
         assert!(verifyres.is_ok());
     }
 
-    /// test dummy sumcheck against sum of two mles that are different sizes (doesn't work!!!)
+    /// test dummy sumcheck for concatenated expr with different sized parts
     #[test]
-    fn test_dummy_sumcheck_sum() {
+    fn test_dummy_sumcheck_concat_diff_sizes() {
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::from(0),
@@ -738,14 +817,41 @@ mod tests {
         let mle_ref_1 = mle1.mle_ref();
         let mle_ref_2 = mle2.mle_ref();
 
-        let mut expression = ExpressionStandard::Sum(
-            Box::new(ExpressionStandard::Mle(mle_ref_1)),
-            Box::new(ExpressionStandard::Mle(mle_ref_2)),
-        );
-        let evald = evaluate_expr(&mut expression, 2, 1);
-        println!("hm {:?}", evald);
+        let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2.clone()]);
+
+        let expression = expression.clone().concat(ExpressionStandard::Mle(mle_ref_2));
         let res_messages = dummy_sumcheck(expression, &mut rng);
         let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
     }
+
+    /// test dummy sumcheck against sum of two mles that are different sizes
+    #[test]
+    fn test_dummy_sumcheck_sum() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+
+        let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5),];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+
+        let mut expression = ExpressionStandard::Sum(Box::new(ExpressionStandard::Mle(mle_ref_1)), Box::new(ExpressionStandard::Mle(mle_ref_2)));
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
+    }
+
+
 }
