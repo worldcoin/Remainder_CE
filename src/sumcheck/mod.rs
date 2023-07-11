@@ -243,6 +243,8 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
                                 let mult_factor = (0..diff).fold(F::one(), |acc, _| {
                                     acc * F::from(2_u64)
                                 });
+
+                                dbg!(&mult_factor);
                         
                                 *smaller.0 *= mult_factor;
                                 larger.1
@@ -329,7 +331,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
-    let max_num_vars = if independent_variable {max_num_vars - 1} else {max_num_vars};
+    let real_num_vars = if independent_variable {max_num_vars - 1} else {max_num_vars};
 
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
@@ -338,7 +340,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
         //iterate across all pairs of evaluations
         // TODO(ryancao): Does this still work if we have constant bits within the MLE???
         // As in, the assumption is that the first bit within the MLEs are iterated, right??
-        let evals = cfg_into_iter!((0..1 << (max_num_vars))).fold(
+        let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
             #[cfg(feature = "parallel")]
             || vec![F::zero(); eval_count],
             #[cfg(not(feature = "parallel"))]
@@ -393,7 +395,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
             },
         );
 
-        Ok(PartialSum {sum_or_eval: SumOrEvals::Evals(evals), max_num_vars})
+        Ok(PartialSum {sum_or_eval: SumOrEvals::Evals(evals), max_num_vars: real_num_vars})
     } else {
         // There is no independent variable and we can sum over everything
         let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
@@ -429,7 +431,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
 
         #[cfg(feature = "parallel")]
         let sum = partials.sum();
-        Ok(PartialSum {sum_or_eval: SumOrEvals::Sum(sum), max_num_vars})
+        Ok(PartialSum {sum_or_eval: SumOrEvals::Sum(sum), max_num_vars: real_num_vars})
     }
 }
 
