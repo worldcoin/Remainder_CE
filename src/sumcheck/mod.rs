@@ -283,44 +283,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
         let a: PartialSum<F> = a?;
         let b: PartialSum<F> = b?;
         
-        let (mut first, first_num_vars) = (a.sum_or_eval, a.max_num_vars);
-        let (mut second, second_num_vars) = (b.sum_or_eval, b.max_num_vars);
-
-        // println!("idkkkk {:?} {:?}", (first.clone(), first_num_vars.clone()), (second.clone(), second_num_vars.clone()));
-        
-        let (larger, smaller) = {
-            match Ord::cmp(&first_num_vars, &second_num_vars) {
-                Ordering::Less => {
-                    ((second, second_num_vars), (first, first_num_vars))
-                },
-                Ordering::Equal => {
-                    ((first, first_num_vars), (second, second_num_vars))
-                },
-                Ordering::Greater => {
-                    ((first, first_num_vars), (second, second_num_vars))
-                },
-            }
-        };
-
-        let diff = larger.1 - smaller.1;
-            
-            //this is probably more efficient than F::pow for small exponents
-            let mult_factor = (0..diff).fold(F::one(), |acc, _| {
-                acc * F::from(2_u64)
-            });
-
-        let val = {
-            match smaller.0 {
-                SumOrEvals::Sum(yes) => SumOrEvals::Sum(mult_factor*yes),
-                SumOrEvals::Evals(yes) => SumOrEvals::Evals(yes.iter().map(|x| *x*mult_factor).collect()),
-            }
-        };
-
-        // println!("dO we COME HERE \n {:?} \n {:?} \n {:?}", val, larger.0, mult_factor);
-
-            //let val = SumOrEvals::Sum(mult_factor).mul(*smaller.0);
-            Ok(PartialSum{sum_or_eval: val + larger.0, max_num_vars: larger.1})
-
+        Ok(a + b)
     };
 
     let product =
@@ -366,6 +329,8 @@ fn evaluate_mle_ref_product<F: FieldExt>(
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
+    let max_num_vars = if independent_variable {max_num_vars - 1} else {max_num_vars};
+
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
         let eval_count = degree + 1;
@@ -373,7 +338,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
         //iterate across all pairs of evaluations
         // TODO(ryancao): Does this still work if we have constant bits within the MLE???
         // As in, the assumption is that the first bit within the MLEs are iterated, right??
-        let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
+        let evals = cfg_into_iter!((0..1 << (max_num_vars))).fold(
             #[cfg(feature = "parallel")]
             || vec![F::zero(); eval_count],
             #[cfg(not(feature = "parallel"))]
@@ -511,6 +476,8 @@ fn dummy_sumcheck<F: FieldExt>(
 
     // --- Does the bit indexing ---
     let max_round = expr.index_mle_indices(0);
+
+    dbg!(&expr);
 
     // --- The prover messages to the verifier...? ---
     let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
@@ -854,6 +821,36 @@ mod tests {
         assert!(verifyres.is_ok());
     }
 
+    /// test dummy sumcheck for concatenated expr with different sized parts
+    #[test]
+    fn test_dummy_sumcheck_concat_diff_sizes() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+
+        let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+
+        let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2.clone()]);
+
+        let expression = expression.clone().concat(ExpressionStandard::Mle(mle_ref_2));
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
+    }
+
     /// test dummy sumcheck against sum of two mles that are different sizes (doesn't work!!!)
     #[test]
     fn test_dummy_sumcheck_sum() {
@@ -914,6 +911,53 @@ mod tests {
         assert!(verifyres.is_ok());
     }
 
+    #[test]
+    fn test_dummy_sumcheck_sum_constant() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
+        let mle_ref_1 = mle1.mle_ref();
 
+        let mut expression = ExpressionStandard::Mle(mle_ref_1) + ExpressionStandard::Constant(Fr::from(20));
+        //let evald = evaluate_expr(&mut expression, 2, 1);
+        //println!("hm {:?}", evald);
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
+    }
+
+    #[test]
+    fn test_dummy_sumcheck_scaled() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+
+        let mle_ref_1 = mle1.mle_ref();
+
+        let mut expression = ExpressionStandard::Mle(mle_ref_1) * Fr::from(20);
+        //let evald = evaluate_expr(&mut expression, 2, 1);
+        //println!("hm {:?}", evald);
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
+    }
 }
