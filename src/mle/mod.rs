@@ -24,22 +24,13 @@ where
     // + FromIterator<T>,
     F: FieldExt,
     //TODO!(Define MLEable trait + derive)
-    T: Send + Sync,
+    T: Send + Sync + MleAble<F>,
 {
     ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
     type MleRef: MleRef;
 
     ///Underlying MultiLinearExtention implementation
     type MultiLinearExtention: IntoIterator<Item = F>;
-
-    ///Gets underlying MultilinearExtention
-    fn mle(&self) -> &Self::MultiLinearExtention;
-
-    ///Gets default MleRef to be put into an expression
-    fn mle_ref(&'_ self) -> Self::MleRef;
-
-    ///Constructor that creates an Mle given a MultiLinearExtention
-    fn new(mle: Self::MultiLinearExtention) -> Self;
 
     ///Get number of variables of the Mle which is equivalent to the log_2 of the size of the MLE
     fn num_vars(&self) -> usize;
@@ -85,6 +76,14 @@ pub trait MleRef: Debug + Clone + Send + Sync {
 
     /// The layer_id of the layer that this MLE belongs to
     fn get_layer_id(&self) -> Option<usize>;
+}
+
+///Trait that allows a type to be serialized into an Mle, and yield MleRefs
+/// TODO!(add a derive MleAble macro that generates code for FromIterator, IntoIterator 
+/// and creates associated functions for yielding appropriate MleRefs)
+pub trait MleAble<F: FieldExt> {
+    ///The particular representation that is convienent for an MleAble, most of the time it will be a \[Vec<F>; Size\] array
+    type Repr: Send + Sync + Clone + Debug + CanonicalDeserialize + CanonicalSerialize;
 }
 
 ///The Enum that represents the possible indices for an MLE
