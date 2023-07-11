@@ -154,16 +154,22 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     round_index: usize,
     max_degree: usize,
 ) -> Result<SumOrEvals<F>, ExpressionError> {
+
+    // --- Constant evaluation is just Sum(k) ---
     let constant = |constant| Ok(SumOrEvals::Sum(constant));
 
     let selector = |index: &mut MleIndex<F>, a, b| match index {
         MleIndex::IndexedBit(indexed_bit) => {
             match Ord::cmp(&round_index, indexed_bit) {
+                // --- We haven't gotten to the indexed bit yet: just "combine" the two MLEs ---
                 std::cmp::Ordering::Less => {
                     let a = a?;
                     let b = b?;
                     Ok(a + b)
                 }
+                // --- We are exactly looking at the indexed bit: the two MLEs we're summing ---
+                // --- over should just be values. The result is that if you plug in 0, you get ---
+                // --- the first value, and if you plug in 1 you get the second ---
                 std::cmp::Ordering::Equal => {
                     let first = b?;
                     let second = a?;
@@ -179,6 +185,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
                         Err(ExpressionError::EvaluationError("Expression returns an Evals variant when the round is on a selector bit"))
                     }
                 }
+                // --- If we're past the evaluation round, we should not have an unbound selector ---
                 std::cmp::Ordering::Greater => Err(ExpressionError::InvalidMleIndex),
             }
         }
@@ -189,6 +196,8 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
             let a: SumOrEvals<F> = a?;
             let b: SumOrEvals<F> = b?;
 
+            // --- Just r * V[2i + 1] + (1 - r) * V[2i] ---
+            // --- (I.e. the selector formulation after the selector bit is bound to `r` above) ---
             Ok((a * coeff) + (b * coeff_neg))
         }
         _ => Err(ExpressionError::InvalidMleIndex),
@@ -197,12 +206,15 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     let mle_eval = |mle_ref: &mut Exp::MleRef| {
         let mle_indicies = mle_ref.mle_indices();
         let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
+        // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---
         evaluate_mle_ref_product(&[mle_ref.clone()], independent_variable, max_degree)
             .map_err(|_| ExpressionError::MleError)
     };
 
+    // --- Just invert ---
     let negated = |a: Result<_, _>| a.map(|a: SumOrEvals<F>| a.neg());
 
+    // --- Use the distributed/element-wise addition impl from earlier ---
     let sum = |a, b| {
         let a = a?;
         let b = b?;
@@ -210,6 +222,8 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
         Ok(a + b)
     };
 
+    // --- First see whether there are any iterated variables we should go over ---
+    // --- Then just call the `evaluate_mle_ref_product` function ---
     let product =
         for<'a> |mle_refs: &'a mut [Exp::MleRef]| -> Result<SumOrEvals<F>, ExpressionError> {
             let independent_variable = mle_refs
@@ -225,6 +239,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
                 .map_err(|_| ExpressionError::MleError)
         };
 
+    // --- Scalar is just distributed mult as defined earlier ---
     let scaled = |a, scalar| {
         let a = a?;
         let scalar = SumOrEvals::Sum(scalar);
@@ -354,6 +369,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
 
 /// Returns the maximum degree of b_{curr_round} within an expression
 /// (and therefore the number of prover messages we need to send)
+/// TODO(ryancao): Change this to take into account the beta polynomials
 fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize) -> usize {
     // --- By default, all rounds have degree at least 1 ---
     let mut round_degree = 1;
@@ -361,7 +377,7 @@ fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize
     let mut traverse = for<'a> |expr: &'a ExpressionStandard<F>| -> Result<(), ()> {
         let round_degree = &mut round_degree;
         match expr {
-            // --- The only exception is within a product of MLEs
+            // --- The only exception is within a product of MLEs ---
             ExpressionStandard::Product(mle_refs) => {
                 let mut product_round_degree: usize = 0;
                 for mle_ref in mle_refs {
@@ -433,18 +449,22 @@ fn dummy_sumcheck<F: FieldExt>(
     }
 }
 
-///returns the curr random challenge if verified correctly, otherwise verify error
-//can change this to take prev round random challenge, and then compute the new random challenge
+/// Returns the curr random challenge if verified correctly, otherwise verify error
+/// can change this to take prev round random challenge, and then compute the new random challenge
 fn verify_sumcheck_messages<F: FieldExt>(
     messages: Vec<(Vec<F>, Option<F>)>,
 ) -> Result<F, VerifyError> {
     let mut prev_evals = &messages[0].0;
     let mut chal = F::zero();
+
+    // --- Go through sumcheck messages + (FS-generated) challenges ---
     for (evals, challenge) in messages.iter().skip(1) {
         let curr_evals = evals;
         chal = (*challenge).unwrap();
+        // --- Evaluate the previous round's polynomial at the random challenge point, i.e. g_{i - 1}(r_i) ---
         let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), challenge.unwrap())
             .expect("could not evaluate at challenge point");
+        // --- It should equal g_i(0) + g_i(1) ---
         if prev_at_r != curr_evals[0] + curr_evals[1] {
             return Err(VerifyError::SumcheckBad);
         };
