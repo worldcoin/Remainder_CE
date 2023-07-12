@@ -7,50 +7,29 @@ use std::{
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
+use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use crate::FieldExt;
 
-use super::{Mle, MleIndex, MleRef};
+use super::{Mle, MleIndex, MleRef, MleAble};
 
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 ///An [Mle] that is dense
-pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug> {
-    mle: Vec<F>,
+pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> {
+    mle: T::Repr,
     num_vars: usize,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt, T> Mle<F, T> for DenseMle<F, T>
 where
-    T: Send + Sync + Clone + Debug,
+    T: Send + Sync + Clone + Debug + MleAble<F>,
 {
     type MleRef = DenseMleRef<F>;
 
     type MultiLinearExtention = Vec<F>;
-
-    fn mle(&self) -> &Self::MultiLinearExtention {
-        &self.mle
-    }
-
-    fn mle_ref(&'_ self) -> Self::MleRef {
-        DenseMleRef {
-            mle: self.mle.clone(),
-            mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
-            num_vars: self.num_vars,
-            layer_id: None,
-        }
-    }
-
-    fn new(mle: Self::MultiLinearExtention) -> Self {
-        let num_vars = log2(mle.len()) as usize;
-        Self {
-            mle,
-            num_vars,
-            _marker: PhantomData,
-        }
-    }
 
     fn num_vars(&self) -> usize {
         self.num_vars
@@ -81,8 +60,39 @@ impl<F: FieldExt> FromIterator<F> for DenseMle<F, F> {
     }
 }
 
+impl<F: FieldExt> MleAble<F> for F {
+    type Repr = Vec<F>;
+}
+
+impl<F: FieldExt> DenseMle<F, F> {
+    pub fn new(mle: Vec<F>) -> Self {
+        let num_vars = log2(mle.len()) as usize;
+        Self {
+            mle,
+            num_vars,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn mle_ref(&self) -> DenseMleRef<F> {
+        DenseMleRef {
+            mle: self.mle.clone(),
+            mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
+            num_vars: self.num_vars,
+            layer_id: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, From, Into)]
+struct Tuple2<F: FieldExt>((F, F));
+
+impl<F: FieldExt> MleAble<F> for Tuple2<F> {
+    type Repr = [Vec<F>; 2];
+}
+
 //TODO!(Fix this so that it clones less)
-impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, (F, F)> {
+impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, Tuple2<F>> {
     type Item = (F, F);
 
     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
@@ -90,32 +100,29 @@ impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, (F, F)> {
     fn into_iter(self) -> Self::IntoIter {
         let len = self.mle.len() / 2;
 
-        self.mle[..len]
+        self.mle[0]
             .iter()
             .cloned()
-            .zip(self.mle[len..].iter().cloned())
+            .zip(self.mle[1].iter().cloned())
     }
 }
 
-impl<F: FieldExt> FromIterator<(F, F)> for DenseMle<F, (F, F)> {
-    fn from_iter<T: IntoIterator<Item = (F, F)>>(iter: T) -> Self {
+impl<F: FieldExt> FromIterator<Tuple2<F>> for DenseMle<F, Tuple2<F>> {
+    fn from_iter<T: IntoIterator<Item = Tuple2<F>>>(iter: T) -> Self {
         let iter = iter.into_iter();
-        let (mut first, second): (Vec<F>, Vec<F>) = iter.unzip();
+        let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0.0, x.0.1)).unzip();
 
-        first.extend(second);
-
-        let vec = first;
-        let num_vars = log2(vec.len()) as usize;
+        let num_vars = log2(first.len() + second.len()) as usize;
 
         Self {
-            mle: vec,
+            mle: [first, second],
             num_vars,
             _marker: PhantomData,
         }
     }
 }
 
-impl<F: FieldExt> DenseMle<F, (F, F)> {
+impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     ///Gets an MleRef to the first element in the tuple
     pub fn first(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
@@ -123,7 +130,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
         let len = self.mle.len() / 2;
 
         DenseMleRef {
-            mle: self.mle[0..len].to_vec(),
+            mle: self.mle[0].to_vec(),
             mle_indices: std::iter::once(MleIndex::Fixed(false))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
@@ -139,7 +146,7 @@ impl<F: FieldExt> DenseMle<F, (F, F)> {
         let len = self.mle.len() / 2;
 
         DenseMleRef {
-            mle: self.mle[len..self.mle.len()].to_vec(),
+            mle: self.mle[1].to_vec(),
             mle_indices: std::iter::once(MleIndex::Fixed(true))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
@@ -380,20 +387,11 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec.into_iter().collect::<DenseMle<Fr, (Fr, Fr)>>();
+        let mle = tuple_vec.clone().into_iter().map(Tuple2::from).collect::<DenseMle<Fr, Tuple2<Fr>>>();
 
-        let mle_vec = vec![
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(4),
-            Fr::from(6),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(5),
-            Fr::from(7),
-        ];
+        let (first, second): (Vec<Fr>, Vec<_>) = tuple_vec.into_iter().unzip();
 
-        assert!(mle.mle == mle_vec);
+        assert!(mle.mle == [first, second]);
         assert!(mle.num_vars() == 3);
     }
 
@@ -429,7 +427,7 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec.into_iter().collect::<DenseMle<Fr, (Fr, Fr)>>();
+        let mle = tuple_vec.into_iter().map(Tuple2::from).collect::<DenseMle<Fr, Tuple2<Fr>>>();
 
         let first = mle.first();
         let second = mle.second();
