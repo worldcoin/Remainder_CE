@@ -15,6 +15,17 @@ use crate::FieldExt;
 use crate::layer::Claim;
 
 use super::{Mle, MleIndex, MleRef, MleAble};
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone)]
+
+/// Error for handling beta table updates
+pub enum BetaError {
+    #[error("claim index is 0, cannot take inverse")]
+    NoInverse,
+    #[error("not enough claims to compute beta table")]
+    NotEnoughClaims,
+}
 
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 ///An [Mle] that is dense
@@ -205,17 +216,22 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 
     fn initialize_beta(
         &mut self,
-        layer_challenges: &Claim<F>,
-    ) -> () {
-    
+        layer_claims: &Claim<F>,
+    ) -> Result<(), BetaError> {
+        
+        // check to see if there are enough claims given the number of indices in mle
+        if layer_claims.0.len() < self.mle_indices.len() {return Err(BetaError::NotEnoughClaims)};
+
+        // get the claims corresponding to the iterated indices of the mle
         let relevant_claims: Vec<(F, F)> = self.get_mle_indices()
         .iter()
         .enumerate()
         .filter(
             |x| *x.1 == MleIndex::Iterated
-        ).map(|x| (F::one() - layer_challenges.0[x.0], layer_challenges.0[x.0]))
+        ).map(|x| (F::one() - layer_claims.0[x.0], layer_claims.0[x.0]))
         .collect();
 
+        // construct the table, thaler 13
         let mut cur_table = vec![relevant_claims[0].0, relevant_claims[0].1];
         for i in 1..relevant_claims.len() {
             let mut firsthalf: Vec<F> = cur_table.iter().map(|x| *x * relevant_claims[i].0).collect();
@@ -224,23 +240,32 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
             cur_table = firsthalf;
         }
 
+        // mutate the current beta table
         self.beta_table = Some(cur_table);
+        Ok(())
     }
 
     fn beta_update(
         &mut self,
-        layer_challenges: &Claim<F>,
+        layer_claims: &Claim<F>,
         round_index: usize,
         challenge: Self::F,
-    ) -> () {
+    ) -> Result<(), BetaError> {
+
         let curr_beta = &self.beta_table;
-        let layer_chal = layer_challenges.0[round_index];
-        // add error and comment 
-        let layer_chal_inv = layer_chal.inverse().unwrap();
-        let mult_factor = layer_chal_inv * (challenge*layer_chal + (F::one()-challenge)*(F::one()-layer_chal));
+        let layer_claim = layer_claims.0[round_index];
+
+        // claim can never be 0, otherwise there is no inverse
+        let layer_claim_inv_potential = layer_claim.inverse();
+        if layer_claim_inv_potential.is_none() {return Err(BetaError::NoInverse)};
+        let layer_claim_inv = layer_claim_inv_potential.unwrap();
+
+        // update the beta table given round random challenge, thaler 13
+        let mult_factor = layer_claim_inv * (challenge*layer_claim + (F::one()-challenge)*(F::one()-layer_claim));
         let new_beta: Vec<F> = curr_beta.clone().unwrap().iter().skip(1).step_by(2).map(|x| *x*mult_factor).collect();
         self.beta_table = Some(new_beta);
-        
+        Ok(())
+
     }
 
     /// Ryan's note -- I assume this function updates the bookkeeping tables as
@@ -529,6 +554,7 @@ mod tests {
     }
 
     #[test]
+    /// init a small beta table
     fn beta_table_init_small() {
         let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
@@ -549,6 +575,7 @@ mod tests {
     }
 
     #[test]
+    /// update a small beta table
     fn beta_table_update_small() {
         let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
@@ -570,6 +597,7 @@ mod tests {
     }
 
     #[test]
+    /// update a beta table all the way
     fn beta_table_nested_update_small() {
         let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
@@ -593,6 +621,7 @@ mod tests {
     }
 
     #[test]
+    /// testing init a beta table with random claim indices
     fn beta_table_init() {
         let mut rng = test_rng();
         let mle_v = vec![
@@ -627,6 +656,7 @@ mod tests {
     }
 
     #[test]
+    /// testing update a beta table with random claim indices
     fn beta_table_bind() {
         let mut rng = test_rng();
         let mle_v = vec![

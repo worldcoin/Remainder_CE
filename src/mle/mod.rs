@@ -8,6 +8,7 @@ use std::ops::Index;
 
 use crate::FieldExt;
 use crate::layer::Claim;
+use crate::mle::dense::BetaError;
 
 ///Contains default dense implementation of Mle
 pub mod dense;
@@ -60,19 +61,19 @@ pub trait MleRef: Debug + Clone + Send + Sync {
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
 
-    /// Initialize beta table ha ha ha a
+    /// Initialize beta table 
     fn initialize_beta(
         &mut self,
-        layer_challenges: &Claim<Self::F>,
-    ) -> ();
+        layer_claims: &Claim<Self::F>,
+    ) -> Result<(), BetaError>;
 
-    /// Update the beta table blah blah
+    /// Update the beta table given random challenge at round j of sumcheck
     fn beta_update(
         &mut self,
-        layer_challenges: &Claim<Self::F>,
+        layer_claims: &Claim<Self::F>,
         round_index: usize,
         challenge: Self::F,
-    ) -> ();
+    ) -> Result<(), BetaError>;
 
     ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.
     /// If the Mle is fully bound will return the evaluation of the fully bound Mle
