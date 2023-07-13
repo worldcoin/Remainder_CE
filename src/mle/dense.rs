@@ -12,6 +12,7 @@ use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use crate::FieldExt;
+use crate::layer::Claim;
 
 use super::{Mle, MleIndex, MleRef, MleAble};
 
@@ -80,9 +81,11 @@ impl<F: FieldExt> DenseMle<F, F> {
             mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             num_vars: self.num_vars,
             layer_id: None,
+            beta_table: None,
         }
     }
 }
+
 
 #[derive(Debug, Clone, From, Into)]
 struct Tuple2<F: FieldExt>((F, F));
@@ -136,6 +139,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .collect_vec(),
             num_vars,
             layer_id: None,
+            beta_table: None,
         }
     }
 
@@ -152,6 +156,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .collect_vec(),
             num_vars,
             layer_id: None,
+            beta_table: None,
         }
     }
 }
@@ -163,6 +168,7 @@ pub struct DenseMleRef<F: FieldExt> {
     mle_indices: Vec<MleIndex<F>>,
     num_vars: usize,
     layer_id: Option<usize>,
+    beta_table: Option<Vec<F>>,
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
@@ -197,6 +203,45 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
+    fn initialize_beta(
+        &mut self,
+        layer_challenges: &Claim<F>,
+    ) -> () {
+    
+        let relevant_claims: Vec<(F, F)> = self.get_mle_indices()
+        .iter()
+        .enumerate()
+        .filter(
+            |x| *x.1 == MleIndex::Iterated
+        ).map(|x| (F::one() - layer_challenges.0[x.0], layer_challenges.0[x.0]))
+        .collect();
+
+        let mut cur_table = vec![relevant_claims[0].0, relevant_claims[0].1];
+        for i in 1..relevant_claims.len() {
+            let mut firsthalf: Vec<F> = cur_table.iter().map(|x| *x * relevant_claims[i].0).collect();
+            let secondhalf: Vec<F> = cur_table.iter().map(|x| *x * relevant_claims[i].1).collect();
+            firsthalf.extend(secondhalf.iter());
+            cur_table = firsthalf;
+        }
+
+        self.beta_table = Some(cur_table);
+    }
+
+    fn beta_update(
+        &mut self,
+        layer_challenges: &Claim<F>,
+        round_index: usize,
+        challenge: Self::F,
+    ) -> () {
+        let curr_beta = &self.beta_table;
+        let layer_chal = layer_challenges.0[round_index];
+        // add error and comment 
+        let layer_chal_inv = layer_chal.inverse().unwrap();
+        let mult_factor = layer_chal_inv * (challenge*layer_chal + (F::one()-challenge)*(F::one()-layer_chal));
+        let new_beta: Vec<F> = curr_beta.clone().unwrap().iter().skip(1).step_by(2).map(|x| *x*mult_factor).collect();
+        self.beta_table = Some(new_beta);
+        
+    }
 
     /// Ryan's note -- I assume this function updates the bookkeeping tables as
     /// described by [Tha13]. 
@@ -264,7 +309,12 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sumcheck::SumOrEvals;
     use ark_bn254::Fr;
+    use ark_ff::UniformRand;
+    use ark_std::test_rng;
+    use ark_std::One;
+    use ark_std::Zero;
 
     #[test]
     ///test fixing variables in an mle with two variables
@@ -316,13 +366,11 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
-        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.mle);
-        let mut next_mle_ref = next_mle.mle_ref();
-        next_mle_ref.fix_variable(2, Fr::from(2));
+        mle_ref.fix_variable(2, Fr::from(2));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
-        assert_eq!(next_mle_ref.mle, mle_exp.mle);
+        assert_eq!(mle_ref.mle, mle_exp.mle);
     }
 
     #[test]
@@ -341,16 +389,12 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
-        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.mle);
-        let mut next_mle_ref = next_mle.mle_ref();
-        next_mle_ref.fix_variable(2, Fr::from(2));
-        let next2_mle: DenseMle<Fr, Fr> = DenseMle::new(next_mle_ref.mle);
-        let mut next2_mle_ref = next2_mle.mle_ref();
-        next2_mle_ref.fix_variable(3, Fr::from(4));
+        mle_ref.fix_variable(2, Fr::from(2));
+        mle_ref.fix_variable(3, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
-        assert_eq!(next2_mle_ref.mle, mle_exp.mle);
+        assert_eq!(mle_ref.mle, mle_exp.mle);
     }
 
     #[test]
@@ -482,5 +526,136 @@ mod tests {
                     MleIndex::Iterated
                 ]
         );
+    }
+
+    #[test]
+    fn beta_table_init_small() {
+        let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
+        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
+        let mut mleref = mle.mle_ref();
+        mleref.initialize_beta(&layer_claims);
+
+        let (g1, g2,) = (Fr::from(3), Fr::from(4),);
+        let one = Fr::one();
+        let c0 = vec![
+            (one-g1)*(one-g2),
+            (g1)*(one-g2),
+            (one-g1)*(g2),
+            (g1)*(g2),
+        ];
+
+        assert_eq!(mleref.beta_table.unwrap(), c0);
+    }
+
+    #[test]
+    fn beta_table_update_small() {
+        let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
+        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
+        let mut mleref = mle.mle_ref();
+        mleref.initialize_beta(&layer_claims);
+
+        let (g1, g2,) = (Fr::from(3), Fr::from(4),);
+        let one = Fr::one();
+
+        let rchal = Fr::from(10);
+        let c1 = vec![
+            ((one-g1)*(one-rchal) + g1*rchal)*(one-g2),
+            ((one-g1)*(one-rchal) + g1*rchal)*(g2),
+        ];
+        mleref.beta_update(&layer_claims, 0, rchal);
+
+        assert_eq!(mleref.beta_table.unwrap(), c1);
+    }
+
+    #[test]
+    fn beta_table_nested_update_small() {
+        let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
+        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
+        let mut mleref = mle.mle_ref();
+        mleref.initialize_beta(&layer_claims);
+
+        let (g1, g2,) = (Fr::from(3), Fr::from(4),);
+        let one = Fr::one();
+
+        let rchal = Fr::from(10);
+        mleref.beta_update(&layer_claims, 0, rchal);
+
+        let rchal2 = Fr::from(133);
+        let c2 = vec![
+            ((one-g1)*(one-rchal) + g1*rchal)*((one-g2)*(one-rchal2) + g2*rchal2)
+        ];
+        mleref.beta_update(&layer_claims, 1, rchal2);
+
+        assert_eq!(mleref.beta_table.unwrap(), c2);
+    }
+
+    #[test]
+    fn beta_table_init() {
+        let mut rng = test_rng();
+        let mle_v = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
+        let layer_claims = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng)], Fr::one());
+        let mut mleref = mle.mle_ref();
+        mleref.initialize_beta(&layer_claims);
+
+        let (g1, g2, g3) = (layer_claims.0[0], layer_claims.0[1], layer_claims.0[2],);
+        let one = Fr::one();
+        let c0 = vec![
+            (one-g1)*(one-g2)*(one-g3),
+            (g1)*(one-g2)*(one-g3),
+            (one-g1)*(g2)*(one-g3),
+            (g1)*(g2)*(one-g3),
+            (one-g1)*(one-g2)*(g3),
+            (g1)*(one-g2)*(g3),
+            (one-g1)*(g2)*(g3),
+            (g1)*(g2)*(g3),
+        ];
+
+        assert_eq!(mleref.beta_table.unwrap(), c0);
+    }
+
+    #[test]
+    fn beta_table_bind() {
+        let mut rng = test_rng();
+        let mle_v = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
+        let layer_claims = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng)], Fr::one());
+        let mut mleref = mle.mle_ref();
+        mleref.initialize_beta(&layer_claims);
+
+        let (g1, g2, g3) = (layer_claims.0[0], layer_claims.0[1], layer_claims.0[2],);
+        let one = Fr::one();
+
+        let rchal = Fr::rand(&mut rng);
+        let c1 = vec![
+            ((one-g1)*(one-rchal) + g1*rchal)*(one-g2)*(one-g3),
+            ((one-g1)*(one-rchal) + g1*rchal)*(g2)*(one-g3),
+            ((one-g1)*(one-rchal) + g1*rchal)*(one-g2)*(g3),
+            ((one-g1)*(one-rchal) + g1*rchal)*(g2)*(g3),
+        ];
+        mleref.beta_update(&layer_claims, 0, rchal);
+
+        assert_eq!(mleref.beta_table.unwrap(), c1);
     }
 }

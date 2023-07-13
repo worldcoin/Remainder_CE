@@ -7,6 +7,7 @@ use core::fmt::Debug;
 use std::ops::Index;
 
 use crate::FieldExt;
+use crate::layer::Claim;
 
 ///Contains default dense implementation of Mle
 pub mod dense;
@@ -58,6 +59,20 @@ pub trait MleRef: Debug + Clone + Send + Sync {
 
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
+
+    /// Initialize beta table ha ha ha a
+    fn initialize_beta(
+        &mut self,
+        layer_challenges: &Claim<Self::F>,
+    ) -> ();
+
+    /// Update the beta table blah blah
+    fn beta_update(
+        &mut self,
+        layer_challenges: &Claim<Self::F>,
+        round_index: usize,
+        challenge: Self::F,
+    ) -> ();
 
     ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.
     /// If the Mle is fully bound will return the evaluation of the fully bound Mle
