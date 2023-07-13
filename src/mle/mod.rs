@@ -61,18 +61,13 @@ pub trait MleRef: Debug + Clone + Send + Sync {
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
 
+    /// Get the beta table
+    fn get_beta_table(&self) -> &Option<Vec<Self::F>>;
+
     /// Initialize beta table 
     fn initialize_beta(
         &mut self,
         layer_claims: &Claim<Self::F>,
-    ) -> Result<(), BetaError>;
-
-    /// Update the beta table given random challenge at round j of sumcheck
-    fn beta_update(
-        &mut self,
-        layer_claims: &Claim<Self::F>,
-        round_index: usize,
-        challenge: Self::F,
     ) -> Result<(), BetaError>;
 
     ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.

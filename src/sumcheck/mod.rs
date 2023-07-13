@@ -16,15 +16,18 @@ use thiserror::Error;
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
     mle::{
-        MleIndex, MleRef,
+        MleIndex, MleRef, dense::{DenseMle, DenseMleRef},
     },
     FieldExt,
+    layer::Claim,
 };
 
 #[derive(Error, Debug, Clone)]
 enum MleError {
     #[error("Passed list of Mles is empty")]
     EmptyMleList,
+    #[error("Beta table not yet initialized for Mle")]
+    NoBetaTable,
 }
 
 #[derive(Error, Debug, Clone)]
@@ -262,11 +265,17 @@ fn evaluate_mle_ref_product<F: FieldExt>(
     degree: usize,
 ) -> Result<SumOrEvals<F>, MleError> {
     // --- Gets the total number of iterated variables across all MLEs within this product ---
-    let max_num_vars = mle_refs
+    let (max_idx, max_num_vars) = mle_refs
         .iter()
         .map(|mle_ref| mle_ref.num_vars())
-        .max()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.cmp(b))
         .ok_or(MleError::EmptyMleList)?;
+
+    let max_mle_beta = mle_refs[max_idx].get_beta_table().as_ref().ok_or(MleError::NoBetaTable)?;
+    let beta_as_mle_ref: DenseMleRef<F> = DenseMle::new(max_mle_beta.clone()).mle_ref();
+    let beta_and_mle_refs = mle_refs.iter().collect_vec();
+    beta_and_mle_refs.push(&beta_as_mle_ref);
 
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
@@ -419,7 +428,7 @@ fn dummy_sumcheck<F: FieldExt>(
         // --- First fix the variable representing the challenge from the last round ---
         // (This doesn't happen for the first round)
         if let Some(challenge) = challenge {
-            expr.fix_variable(round_index - 1, challenge)
+            expr.fix_variable(round_index - 1, challenge);
         }
 
         // --- Grabs the degree of univariate polynomial we are sending over ---
@@ -634,6 +643,7 @@ mod tests {
     /// test dummy sumcheck against verifier for product of the same mle
     #[test]
     fn test_dummy_sumcheck_1() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
         let mut rng = test_rng();
         let mle_vec = vec![
             Fr::from(0),
@@ -649,8 +659,10 @@ mod tests {
         let mle_new: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mle_2 = mle_new.clone();
 
-        let mle_ref_1 = mle_new.mle_ref();
-        let mle_ref_2 = mle_2.mle_ref();
+        let mut mle_ref_1 = mle_new.mle_ref();
+        let mut mle_ref_2 = mle_2.mle_ref();
+        mle_ref_1.initialize_beta(&layer_claims);
+        mle_ref_2.initialize_beta(&layer_claims);
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
         let expression = expression * Fr::from(5);
@@ -662,6 +674,7 @@ mod tests {
     /// test dummy sumcheck against product of two diff mles
     #[test]
     fn test_dummy_sumcheck_2() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
         let mut rng = test_rng();
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
@@ -669,8 +682,10 @@ mod tests {
         let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
-        let mle_ref_1 = mle1.mle_ref();
-        let mle_ref_2 = mle2.mle_ref();
+        let mut mle_ref_1 = mle1.mle_ref();
+        let mut mle_ref_2 = mle2.mle_ref();
+        mle_ref_1.initialize_beta(&layer_claims);
+        mle_ref_2.initialize_beta(&layer_claims);
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
         let res_messages = dummy_sumcheck(expression, &mut rng);
@@ -681,6 +696,7 @@ mod tests {
     /// test dummy sumcheck against product of two mles diff sizes
     #[test]
     fn test_dummy_sumcheck_3() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::from(0),
@@ -697,8 +713,10 @@ mod tests {
         let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
-        let mle_ref_1 = mle1.mle_ref();
-        let mle_ref_2 = mle2.mle_ref();
+        let mut mle_ref_1 = mle1.mle_ref();
+        let mut mle_ref_2 = mle2.mle_ref();
+        mle_ref_1.initialize_beta(&layer_claims);
+        mle_ref_2.initialize_beta(&layer_claims);
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
         let res_messages = dummy_sumcheck(expression, &mut rng);
@@ -709,6 +727,7 @@ mod tests {
     /// test dummy sumcheck for concatenated expr
     #[test]
     fn test_dummy_sumcheck_concat() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::from(0),
@@ -725,13 +744,15 @@ mod tests {
         let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
-        let mle_ref_1 = mle1.mle_ref();
-        let mle_ref_2 = mle2.mle_ref();
+        let mut mle_ref_1 = mle1.mle_ref();
+        let mut mle_ref_2 = mle2.mle_ref();
+        mle_ref_1.initialize_beta(&layer_claims);
+        mle_ref_2.initialize_beta(&layer_claims);
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
 
         let expression = expression.clone().concat(expression);
-        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let res_messages = dummy_sumcheck( expression, &mut rng);
         let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
     }
@@ -739,6 +760,7 @@ mod tests {
     /// test dummy sumcheck against sum of two mles that are different sizes (doesn't work!!!)
     #[test]
     fn test_dummy_sumcheck_sum() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::from(0),
@@ -755,8 +777,10 @@ mod tests {
         let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
-        let mle_ref_1 = mle1.mle_ref();
-        let mle_ref_2 = mle2.mle_ref();
+        let mut mle_ref_1 = mle1.mle_ref();
+        let mut mle_ref_2 = mle2.mle_ref();
+        mle_ref_1.initialize_beta(&layer_claims);
+        mle_ref_2.initialize_beta(&layer_claims);
 
         let mut expression = ExpressionStandard::Sum(
             Box::new(ExpressionStandard::Mle(mle_ref_1)),

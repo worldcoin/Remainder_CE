@@ -11,6 +11,7 @@ use thiserror::Error;
 use crate::{
     mle::{dense::DenseMleRef, MleIndex, MleRef},
     FieldExt,
+    layer::Claim,
 };
 
 ///trait that defines what an Expression needs to be able to do
