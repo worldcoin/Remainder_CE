@@ -6,7 +6,10 @@ use crate::{
 
 // use itertools::Itertools;
 use crate::mle::MleRef;
+use crate::sumcheck::*;
 
+use ark_std::{cfg_iter, cfg_into_iter};
+use itertools::{izip, Itertools};
 use thiserror::Error;
 
 use super::{Claim, Layer};
@@ -104,6 +107,19 @@ fn get_claims<F: FieldExt>(
     Ok(indices.into_iter().zip(claims).collect())
 }
 
+/// Aggregate several claims into one
+fn aggregate_claims<F: FieldExt>(
+    claims: Vec<Claim<F>>,
+    mleref: &impl MleRef,
+    rchal: F,
+) -> Claim<F> {
+
+    let claim_indices: Vec<_> = claims.iter().map(|(claimidx, _)| claimidx.iter()).collect();
+    let r_star = izip!(claim_indices.iter()).map(|evals| evaluate_at_a_point(evals.collect_vec(), rchal));
+    dbg!()
+    todo!();
+}
+
 mod test {
 
     use crate::mle::{dense::DenseMle, Mle};
@@ -111,7 +127,10 @@ mod test {
     use super::*;
     use ark_bn254::Fr;
     use ark_std::One;
+    use ark_ff::UniformRand;
+    use ark_std::test_rng;
 
+    #[test]
     fn test_get_claim() {
         // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
@@ -124,5 +143,18 @@ mod test {
         let _expression = expression3.concat(expression);
 
         // TODO(ryancao): Need to create a layer and fix all the MLE variables...
+    }
+
+    #[test]
+    fn test_aggro_claim() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle_ref = mle1.mle_ref();
+        let claim1: Claim<Fr> = (vec![Fr::from(2), Fr::from(3)], Fr::from(14));
+        let claim2: Claim<Fr> = (vec![Fr::one(), Fr::from(7)], Fr::from(21));
+        
+
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mle_ref, Fr::from(10));
     }
 }
