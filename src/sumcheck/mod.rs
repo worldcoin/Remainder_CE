@@ -6,7 +6,7 @@ use std::{
 };
 
 use ark_poly::MultilinearExtension;
-use ark_std::{cfg_into_iter, rand::Rng};
+use ark_std::{cfg_into_iter, rand::Rng, cfg_iter};
 use itertools::{Itertools};
 use rayon::prelude::{
     IndexedParallelIterator, IntoParallelIterator, ParallelIterator,
@@ -28,6 +28,8 @@ enum MleError {
     EmptyMleList,
     #[error("Beta table not yet initialized for Mle")]
     NoBetaTable,
+    #[error("Layer does not have claims yet")]
+    NoClaim,
 }
 
 #[derive(Error, Debug, Clone)]
@@ -273,9 +275,8 @@ fn evaluate_mle_ref_product<F: FieldExt>(
         .ok_or(MleError::EmptyMleList)?;
 
     let max_mle_beta = mle_refs[max_idx].get_beta_table().as_ref().ok_or(MleError::NoBetaTable)?;
-    let beta_as_mle_ref: DenseMleRef<F> = DenseMle::new(max_mle_beta.clone()).mle_ref();
-    let beta_and_mle_refs = mle_refs.iter().collect_vec();
-    beta_and_mle_refs.push(&beta_as_mle_ref);
+    let beta_ref = DenseMle::new(max_mle_beta.clone()).mle_ref();
+
 
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
@@ -288,6 +289,25 @@ fn evaluate_mle_ref_product<F: FieldExt>(
             #[cfg(not(feature = "parallel"))]
             vec![F::zero(); eval_count],
             |mut acc, index| {
+                let zero = F::zero();
+                let index = if beta_ref.num_vars() < max_num_vars {
+                                let max = 1 << beta_ref.num_vars();
+                                (index * 2) % max
+                            } else {
+                                index * 2
+                            };
+                let first = *beta_ref.mle().get(index).unwrap_or(&zero);
+                let second = if beta_ref.num_vars() != 0 {
+                                    *beta_ref.mle().get(index + 1).unwrap_or(&zero)
+                                } else {
+                                    first
+                                };
+                let step = second - first;
+                let beta_successors = std::iter::successors(Some(first), move |item| Some(*item + step));
+
+
+
+
                 //get the product of all evaluations over 0/1/..degree
                 let evals = mle_refs
                     .iter()
@@ -313,7 +333,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                         let successors =
                             std::iter::successors(Some(second), move |item| Some(*item + step));
                         //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
-                        std::iter::once(first).chain(successors)
+                        std::iter::once(first).chain(successors).chain(beta_successors.clone())
                     })
                     .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
                     .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
@@ -411,6 +431,44 @@ fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize
     dbg!((round_degree, curr_round));
     round_degree
 }
+
+fn get_beta_for_product<F: FieldExt> (
+    mle_refs: &[impl MleRef<F = F>],
+) ->  Result<Vec<F>, MleError> {
+
+    let layer_claim = mle_refs[0].get_layer_claims();
+    let (layer_claims_idx, _) = (layer_claim.clone()).ok_or(MleError::NoBetaTable)?;
+    let relevant_claims: Vec<(F, F)> = mle_refs.iter()
+    .map(|mleref| {
+        mleref.get_mle_indices().iter().filter(
+            |mleindex| matches!(**mleindex, MleIndex::IndexedBit(_))
+        ).map(|index| {
+            if let MleIndex::IndexedBit(num) = index {
+                (F::one() - layer_claims_idx[*num], layer_claims_idx[*num])
+            }
+            else {
+                (F::one(), F::one())
+            }
+        })
+    }).flatten()
+    .collect();
+
+    let unique_claims: Vec<(F, F)> = relevant_claims.iter().unique().map(|item| *item).collect();
+
+    // construct the table, thaler 13
+        // TODO: make this parallelizable 
+    let (one_minus_r, r) = relevant_claims[0];
+    let mut cur_table = vec![one_minus_r, r];
+    for i in 1..relevant_claims.len() {
+        let (one_minus_r, r) = relevant_claims[i];
+        let mut firsthalf: Vec<F> = cur_table.iter().map(|eval| *eval * one_minus_r).collect();
+        let secondhalf: Vec<F> = cur_table.iter().map(|eval| *eval * r).collect();
+        firsthalf.extend(secondhalf.iter());
+        cur_table = firsthalf;
+    }
+    Ok(cur_table)
+}
+
 
 fn dummy_sumcheck<F: FieldExt>(
     mut expr: ExpressionStandard<F>,
@@ -570,6 +628,23 @@ mod tests {
         let evald = evaluate_at_a_point(evals, point);
         assert_eq!(evald.unwrap(), Fr::from(3) + Fr::from(10) * point);
     }
+
+    /// Small test for beta table because i can't do math
+    #[test]
+    fn small_beta_mle_eval() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
+        let mle_v1 = vec![
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let res = evaluate_mle_ref_product(&[mle1.mle_ref()], true, 1);
+        let exp = SumOrEvals::Evals(vec![Fr::from(1), Fr::from(11)]);
+        assert_eq!(res.unwrap(), exp);
+    }
+    
 
     /// Test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
     #[test]

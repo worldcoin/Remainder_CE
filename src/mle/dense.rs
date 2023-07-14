@@ -208,6 +208,10 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         &self.mle_indices
     }
 
+    fn get_layer_claims(&self) -> &Option<Claim<F>>{
+        &self.layer_claims
+    }
+
     fn get_beta_table(&self) -> &Option<Vec<Self::F>> {
         &self.beta_table
     }
@@ -237,10 +241,18 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         // get the claims corresponding to the iterated indices of the mle
         let relevant_claims: Vec<(F, F)> = self.mle_indices
         .iter()
-        .enumerate()
         .filter(
-            |(_, mleindex)| matches!(**mleindex, MleIndex::Iterated | MleIndex::IndexedBit(_))
-        ).map(|(index, _)| (F::one() - layer_claims_idx[index], layer_claims_idx[index]))
+            |mleindex| matches!(**mleindex, MleIndex::IndexedBit(_))
+        ).map(|index| {
+            if let MleIndex::IndexedBit(num) = index {
+                (F::one() - layer_claims_idx[*num], layer_claims_idx[*num])
+            }
+            // should never hit this anyway
+            else {
+                (F::one(), F::one())
+            }
+            
+        })
         .collect();
 
         // construct the table, thaler 13
@@ -581,6 +593,7 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
         let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
         let mut mleref = mle.mle_ref();
+        mleref.index_mle_indices(0);
         mleref.initialize_beta(&layer_claims);
 
         let (g1, g2,) = (Fr::from(3), Fr::from(4),);
@@ -602,6 +615,7 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
         let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
         let mut mleref = mle.mle_ref();
+        mleref.index_mle_indices(0);
         mleref.initialize_beta(&layer_claims);
 
         let (g1, g2,) = (Fr::from(3), Fr::from(4),);
@@ -624,6 +638,7 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
         let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
         let mut mleref = mle.mle_ref();
+        mleref.index_mle_indices(0);
         mleref.initialize_beta(&layer_claims);
 
         let (g1, g2,) = (Fr::from(3), Fr::from(4),);
@@ -658,6 +673,7 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
         let layer_claims = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng)], Fr::one());
         let mut mleref = mle.mle_ref();
+        mleref.index_mle_indices(0);
         mleref.initialize_beta(&layer_claims);
 
         let (g1, g2, g3) = (layer_claims.0[0], layer_claims.0[1], layer_claims.0[2],);
@@ -693,6 +709,7 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
         let layer_claims = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng)], Fr::one());
         let mut mleref = mle.mle_ref();
+        mleref.index_mle_indices(0);
         mleref.initialize_beta(&layer_claims);
 
         let (g1, g2, g3) = (layer_claims.0[0], layer_claims.0[1], layer_claims.0[2],);

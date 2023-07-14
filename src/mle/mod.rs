@@ -64,6 +64,9 @@ pub trait MleRef: Debug + Clone + Send + Sync {
     /// Get the beta table
     fn get_beta_table(&self) -> &Option<Vec<Self::F>>;
 
+    /// Get the layer claims
+    fn get_layer_claims(&self) -> &Option<Claim<Self::F>>;
+
     /// Initialize beta table 
     fn initialize_beta(
         &mut self,
