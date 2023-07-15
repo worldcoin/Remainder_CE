@@ -1,11 +1,11 @@
 use crate::FieldExt;
 use super::structs::*;
 
-use itertools::{Itertools};
+use itertools::{Itertools, repeat_n};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use std::collections::HashMap;
-use std::iter::zip;
+use std::iter::{zip};
 
 /*
 What's our plan here?
@@ -26,8 +26,8 @@ const TREE_HEIGHT: usize = 9;
 /// - Fourth element is the multiplicities of the tree nodes which were hit
 /// - Fifth element is the difference between the current attribute value and the node threshold
 fn generate_correct_path_and_permutation<F: FieldExt>(
-    decision_nodes: &Vec<DecisionNode<F>>, 
-    leaf_nodes: &Vec<LeafNode<F>>, 
+    decision_nodes: &Vec<DecisionNode<F>>,
+    leaf_nodes: &Vec<LeafNode<F>>,
     input_datum: &Vec<InputAttribute<F>>
 ) -> (Vec<DecisionNode<F>>, LeafNode<F>, Vec<F>, HashMap<F, u32>, Vec<F>) {
 
@@ -99,7 +99,7 @@ fn generate_16_bit_signed_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 }
 
 fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
-    
+
     // --- Ensure we can decompose in (positive) 16 bits ---
     assert!(value >= F::zero());
     assert!(value <= F::from(2_u32.pow(16) - 1));
@@ -121,7 +121,18 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 
 /// Need to generate dummy circuit inputs, starting with the input data
 /// Then get the path data and binary decomp stuff
-fn generate_dummy_data<F: FieldExt>() {
+fn generate_dummy_data<F: FieldExt>() -> (
+    Vec<Vec<F>>,                    // Input attribute indices
+    Vec<Vec<InputAttribute<F>>>,    // Input attributes
+    Vec<Vec<F>>,                    // Permuted input attribute indices
+    Vec<Vec<InputAttribute<F>>>,    // Permuted input attributes
+    Vec<Vec<DecisionNode<F>>>,      // Paths (decision node part only)
+    Vec<LeafNode<F>>,               // Paths (leaf node part only)
+    Vec<Vec<BinDecomp16Bit<F>>>,    // Binary decomp of differences
+    Vec<BinDecomp16Bit<F>>,         // Binary decomp of multiplicities
+    Vec<DecisionNode<F>>,           // Actual tree decision nodes
+    Vec<LeafNode<F>>,               // Actual tree leaf nodes
+) {
 
     // --- Grabbing the RNG with seed for deterministic outputs ---
     let seed: [u8; 32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
@@ -137,6 +148,7 @@ fn generate_dummy_data<F: FieldExt>() {
             F::from(x as u16)
         })
         .collect_vec();
+    let dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
 
     // --- Populate (NOTE that we have to permute later) ---
     for dummy_input in 0..NUM_DUMMY_INPUTS {
@@ -203,7 +215,7 @@ fn generate_dummy_data<F: FieldExt>() {
         }).collect_vec();
 
     // --- Collect correct leaf nodes ---
-    let dummy_leaf_nodes = dummy_auxiliaries
+    let dummy_leaf_node_paths = dummy_auxiliaries
         .clone()
         .into_iter()
         .map(|(_, x, _, _, _)| {
@@ -221,7 +233,7 @@ fn generate_dummy_data<F: FieldExt>() {
     // --- Compute multiplicities: just add the ones that are given in the returned map ---
     // TODO!(ryancao): Compute the binary decompositions
     let multiplicities: Vec<F> = vec![F::zero(); 2_u32.pow(TREE_HEIGHT as u32 + 1) as usize];
-    let dummy_multiplicities = dummy_auxiliaries
+    let dummy_multiplicities_bin_decomp = dummy_auxiliaries
         .clone()
         .into_iter()
         .fold(multiplicities, |prev_multiplicities, (_, _, _, new_multiplicities_map, _)| {
@@ -255,6 +267,19 @@ fn generate_dummy_data<F: FieldExt>() {
         .map(|(_, _, _, _, diffs)| {
             diffs.into_iter().map(|diff| {
                 generate_16_bit_signed_decomp(diff)
-            })
-        });
+            }).collect_vec()
+        }).collect_vec();
+
+    (
+        dummy_attr_idx_data,
+        dummy_input_data,
+        dummy_permutation_indices,
+        dummy_permuted_input_data,
+        dummy_decision_node_paths,
+        dummy_leaf_node_paths,
+        binary_decomp_diffs,
+        dummy_multiplicities_bin_decomp,
+        dummy_decision_nodes,
+        dummy_leaf_nodes
+    )
 }
