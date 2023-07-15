@@ -61,7 +61,7 @@ fn get_claims<F: FieldExt>(
                             let idx = if *one {
                                 F::from(1_u64)
                             } else {
-                                F::from(1_u64)
+                                F::from(0_u64)
                             };
                             fixed_mle_indices.push(idx);
                         }

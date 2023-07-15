@@ -10,8 +10,6 @@ use crate::FieldExt;
 
 /// Contains default dense implementation of Mle
 pub mod dense;
-/// Implementations for data structs found in the zero-knowledge decision tree circuit
-pub mod zkdt_structs;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.

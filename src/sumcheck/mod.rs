@@ -330,7 +330,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
 
         Ok(SumOrEvals::Evals(evals))
     } else {
-        // There is no independent variable and we can sum over everything
+        // There is no independent variable and we can simply sum over everything
         let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
             #[cfg(feature = "parallel")]
             || F::zero(),
@@ -410,11 +410,10 @@ fn dummy_sumcheck<F: FieldExt>(
     // --- Does the bit indexing ---
     let max_round = expr.index_mle_indices(0);
 
-    // --- The prover messages to the verifier...? ---
+    // --- The prover messages to the verifier ---
     let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
     let mut challenge: Option<F> = None;
 
-    // --- Go through the rounds... ---
     for round_index in 0..max_round {
         // --- First fix the variable representing the challenge from the last round ---
         // (This doesn't happen for the first round)
@@ -425,11 +424,9 @@ fn dummy_sumcheck<F: FieldExt>(
         // --- Grabs the degree of univariate polynomial we are sending over ---
         let degree = get_round_degree(&expr, round_index);
 
-        // --- I assume this gives back the actual evaluation of the summation expression...? ---
+        // --- Gives back the evaluations g(0), g(1), ..., g(d - 1) ---
         let eval = evaluate_expr(&mut expr, round_index, degree);
 
-        // --- Ahh yeah looks like it gives back g(0), g(1), ..., g(d - 1)
-        // --- where $d$
         if let Ok(SumOrEvals::Evals(evaluations)) = eval {
             messages.push((evaluations, challenge))
         } else {
