@@ -1,11 +1,12 @@
 use crate::FieldExt;
+use crate::mle::dense::DenseMle;
 use super::structs::*;
 
 use itertools::{Itertools, repeat_n};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use std::collections::HashMap;
-use std::iter::{zip};
+use std::iter::zip;
 
 /*
 What's our plan here?
@@ -261,7 +262,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
         }).collect_vec();
 
     // --- Compute the binary decompositions of the differences ---
-    let binary_decomp_diffs = dummy_auxiliaries
+    let dummy_binary_decomp_diffs = dummy_auxiliaries
         .clone()
         .into_iter()
         .map(|(_, _, _, _, diffs)| {
@@ -277,9 +278,122 @@ fn generate_dummy_data<F: FieldExt>() -> (
         dummy_permuted_input_data,
         dummy_decision_node_paths,
         dummy_leaf_node_paths,
-        binary_decomp_diffs,
+        dummy_binary_decomp_diffs,
         dummy_multiplicities_bin_decomp,
         dummy_decision_nodes,
         dummy_leaf_nodes
     )
+}
+
+/// Takes the above dummy data from `generate_dummy_data()` and converts
+/// into MLE form factor.
+fn generate_dummy_mles<F: FieldExt>() -> (
+    DenseMle<F, F>,
+    DenseMle<F, InputAttribute<F>>,
+    DenseMle<F, F>,
+    DenseMle<F, InputAttribute<F>>,
+    DenseMle<F, DecisionNode<F>>,
+    DenseMle<F, LeafNode<F>>,
+    DenseMle<F, BinDecomp16Bit<F>>,
+    DenseMle<F, BinDecomp16Bit<F>>,
+    DenseMle<F, DecisionNode<F>>,
+    DenseMle<F, LeafNode<F>>
+){
+
+    // --- First generate the dummy data ---
+    let (
+        dummy_attr_idx_data,
+        dummy_input_data,
+        dummy_permutation_indices,
+        dummy_permuted_input_data,
+        dummy_decision_node_paths,
+        dummy_leaf_node_paths,
+        dummy_binary_decomp_diffs,
+        dummy_multiplicities_bin_decomp,
+        dummy_decision_nodes,
+        dummy_leaf_nodes
+    ) = generate_dummy_data::<F>();
+
+    // --- Generate MLEs for each ---
+    // TODO!(ryancao): Change this into batched form
+    let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
+    let dummy_input_data_mle = dummy_input_data[0]
+        .clone()
+        .into_iter()
+        .map(InputAttribute::from)
+        .collect::<DenseMle<F, InputAttribute<F>>>();
+    let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
+    let dummy_permuted_input_data_mle = dummy_permuted_input_data[0]
+        .clone()
+        .into_iter()
+        .map(InputAttribute::from)
+        .collect::<DenseMle<F, InputAttribute<F>>>();
+    let dummy_decision_node_paths_mle = dummy_decision_node_paths[0]
+        .clone()
+        .into_iter()
+        .map(DecisionNode::from)
+        .collect::<DenseMle<F, DecisionNode<F>>>();
+    let dummy_leaf_node_paths_mle = vec![dummy_leaf_node_paths[0]]
+        .into_iter()
+        .map(LeafNode::from)
+        .collect::<DenseMle<F, LeafNode<F>>>();
+    let dummy_binary_decomp_diffs_mle = dummy_binary_decomp_diffs[0]
+        .clone()
+        .into_iter()
+        .map(BinDecomp16Bit::from)
+        .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
+    let dummy_multiplicities_bin_decomp_mle = vec![dummy_multiplicities_bin_decomp[0]]
+        .clone()
+        .into_iter()
+        .map(BinDecomp16Bit::from)
+        .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
+    let dummy_decision_nodes_mle = dummy_decision_nodes
+        .clone()
+        .into_iter()
+        .map(DecisionNode::from)
+        .collect::<DenseMle<F, DecisionNode<F>>>();
+    let dummy_leaf_nodes_mle = dummy_leaf_nodes
+        .clone()
+        .into_iter()
+        .map(LeafNode::from)
+        .collect::<DenseMle<F, LeafNode<F>>>();
+
+    (
+        dummy_attr_idx_data_mle,
+        dummy_input_data_mle,
+        dummy_permutation_indices_mle,
+        dummy_permuted_input_data_mle,
+        dummy_decision_node_paths_mle,
+        dummy_leaf_node_paths_mle,
+        dummy_binary_decomp_diffs_mle,
+        dummy_multiplicities_bin_decomp_mle,
+        dummy_decision_nodes_mle,
+        dummy_leaf_nodes_mle
+    )
+}
+
+// --- Create expressions using... testing modules? ---
+#[cfg(test)]
+mod tests {
+
+    use crate::{
+        expression::{ExpressionStandard},
+        mle::{dense::DenseMle, Mle},
+        sumcheck::{evaluate_expr, SumOrEvals},
+    };
+    use ark_bn254::Fr;
+    use ark_std::test_rng;
+    use ark_std::One;
+
+    /// Basic binary decomposition test
+    #[test]
+    fn eval_expr_nums() {
+        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+        let expression2: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::from(6));
+        let mut expressadd: ExpressionStandard<Fr> = expression1.clone() + expression2.clone();
+        let res = evaluate_expr(&mut expressadd, 1, 1);
+        let exp = SumOrEvals::Sum(Fr::from(7));
+        assert_eq!(res.unwrap(), exp);
+    }
+
 }

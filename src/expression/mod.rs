@@ -337,7 +337,6 @@ mod test {
 
     use super::*;
     use ark_bn254::Fr;
-    
     use ark_std::One;
 
     #[test]
