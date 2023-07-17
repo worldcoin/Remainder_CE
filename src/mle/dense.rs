@@ -6,7 +6,7 @@ use std::{
 
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::log2;
+use ark_std::{log2, cfg_iter, cfg_into_iter};
 use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
@@ -231,7 +231,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         let new = self.mle().par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.mle().par_chunks(2).map(transform);
+        let new = self.mle().chunks(2).map(transform);
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.mle = new.collect();

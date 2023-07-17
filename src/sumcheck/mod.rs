@@ -339,7 +339,6 @@ fn evaluate_mle_ref_product<F: FieldExt>(
     independent_variable: bool,
     degree: usize,
 ) -> Result<PartialSum<F>, MleError> {
-
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
