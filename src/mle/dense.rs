@@ -577,7 +577,9 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
 pub struct DenseMleRef<F: FieldExt> {
     bookkeeping_table: Vec<F>,
     mle_indices: Vec<MleIndex<F>>,
-    num_vars: usize,
+    /// Number of non-fixed variables within this MLE
+    /// (warning: this gets modified destructively DURING sumcheck)
+    pub num_vars: usize,
     layer_id: Option<usize>,
 }
 

@@ -62,11 +62,11 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
         *cur_multiplicity += 1;
 
         // --- Compute the difference ---
-        let diff = input_datum[attr_idx].attr_val - path_decision_nodes[current_node_idx].threshold;
+        let diff = input_datum[attr_idx].attr_val - decision_nodes[current_node_idx].threshold;
         diffs.push(diff);
 
         // --- Check if we should go left or right ---
-        if input_datum[attr_idx].attr_val > path_decision_nodes[current_node_idx].threshold {
+        if input_datum[attr_idx].attr_val > decision_nodes[current_node_idx].threshold {
             current_node_idx = current_node_idx * 2 + 2;
         } else {
             current_node_idx = current_node_idx * 2 + 1;
@@ -109,6 +109,7 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
     let binary_repr = format!("{:b}", value.into_bigint().as_ref()[0]);
 
     // --- Length must be 16, then parse as array of length 16 ---
+    dbg!(binary_repr);
     assert!(binary_repr.clone().len() == 16);
     let mut binary_repr_arr = [F::zero(); 16];
     for idx in 0..16 {
@@ -239,7 +240,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
         .into_iter()
         .fold(multiplicities, |prev_multiplicities, (_, _, _, new_multiplicities_map, _)| {
 
-            let mut new_multiplicities: Vec<F> = vec![];
+            let mut new_multiplicities: Vec<F> = prev_multiplicities.clone();
 
             // --- Just increment the current vector of multiplicities by the map at that index ---
             new_multiplicities_map.into_iter().for_each(|(tree_node_idx, multiplicity)| {
@@ -248,13 +249,13 @@ fn generate_dummy_data<F: FieldExt>() -> (
             });
 
             // --- Just add the corresponding terms ---
-            let updated_multiplicities = zip(prev_multiplicities, new_multiplicities)
-                .map(|(a, b)| {
-                    a + b
-                })
-                .collect_vec();
+            // let updated_multiplicities = zip(prev_multiplicities, new_multiplicities)
+            //     .map(|(a, b)| {
+            //         a + b
+            //     })
+            //     .collect_vec();
 
-            updated_multiplicities
+            new_multiplicities
         }).into_iter()
         .map(|multiplicity| {
             // --- Grab the binary decomp ---
@@ -385,6 +386,7 @@ mod tests {
     use ark_bn254::Fr;
     use ark_std::test_rng;
     use ark_std::One;
+    use ark_std::Zero;
 
     /// Basic binary decomposition test
     #[test]
@@ -403,18 +405,23 @@ mod tests {
         dummy_leaf_nodes_mle
     ) = generate_dummy_mles::<Fr>();
 
-        let one: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
-
         // --- Grab the bin decomp MLE ---
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
-        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0]);
+        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
-        let mut b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0], first_bin_decomp_bit_mle[0]]);
+        let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
-        // let res = evaluate_expr(&mut expressadd, 1, 1);
+
+        // --- We should get all zeros ---
+        let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
+        let all_zeros_mle = DenseMle::new(all_zeros);
+        let mut all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
+
+        let res = evaluate_expr(&mut b_minus_b_squared, 1, 2);
+        let other_res = evaluate_expr(&mut all_zeros_mle_expr, 1, 2);
+        assert_eq!(res.unwrap(), other_res.unwrap());
         // let exp = SumOrEvals::Sum(Fr::from(7));
         // assert_eq!(res.unwrap(), exp);
     }
-
 }
