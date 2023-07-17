@@ -49,9 +49,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
             label,
             elements
         );
-        for element in elements {
-            self.sponge.absorb(&element);
-        }
+        self.sponge.absorb(&elements);
         Ok(())
     }
 
