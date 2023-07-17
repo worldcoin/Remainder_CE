@@ -1,4 +1,4 @@
-//! A transcript that uses the Poseidon hash function; Useful for recursive proveing
+//! A transcript that uses the Poseidon hash function; Useful for recursive proving
 
 use ark_crypto_primitives::sponge::{
     poseidon::{
