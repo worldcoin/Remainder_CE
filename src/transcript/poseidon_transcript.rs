@@ -2,9 +2,9 @@
 
 use ark_crypto_primitives::sponge::{
     poseidon::{
-        find_poseidon_ark_and_mds, PoseidonConfig, PoseidonDefaultConfigField, PoseidonSponge,
+        find_poseidon_ark_and_mds, PoseidonConfig, PoseidonSponge,
     },
-    Absorb, CryptographicSponge, FieldBasedCryptographicSponge,
+    CryptographicSponge, FieldBasedCryptographicSponge,
 };
 use tracing::trace;
 
@@ -12,11 +12,11 @@ use crate::FieldExt;
 
 use super::{Transcript, TranscriptError};
 
-struct PoseidonTranscript<F: FieldExt + Absorb> {
+struct PoseidonTranscript<F: FieldExt> {
     sponge: PoseidonSponge<F>,
 }
 
-impl<F: FieldExt + Absorb> Transcript<F> for PoseidonTranscript<F> {
+impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
     fn new(label: &'static str) -> Self {
         trace!(module = "Transcript", label);
         //TODO!(This sucks, generating them anew every time is slow, stupid, and likely to lead to problems integrating with Marcin. Need to read these from somewhere. Touch base with Marcin on these constants)
@@ -74,7 +74,7 @@ impl<F: FieldExt + Absorb> Transcript<F> for PoseidonTranscript<F> {
 
 #[cfg(test)]
 mod test {
-    use ark_bn254::{Fr, FrConfig};
+    use ark_bn254::Fr;
     use ark_ff::One;
     use itertools::Itertools;
 
