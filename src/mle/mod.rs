@@ -1,6 +1,5 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use core::fmt::Debug;
 
@@ -79,7 +78,7 @@ pub trait MleRef: Debug + Clone + Send + Sync {
 }
 
 ///Trait that allows a type to be serialized into an Mle, and yield MleRefs
-/// TODO!(add a derive MleAble macro that generates code for FromIterator, IntoIterator 
+/// TODO!(add a derive MleAble macro that generates code for FromIterator, IntoIterator
 /// and creates associated functions for yielding appropriate MleRefs)
 pub trait MleAble<F: FieldExt> {
     ///The particular representation that is convienent for an MleAble, most of the time it will be a \[Vec<F>; Size\] array
