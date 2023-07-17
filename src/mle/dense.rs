@@ -4,16 +4,15 @@ use std::{
     marker::PhantomData,
 };
 
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::log2;
+use ark_std::{cfg_into_iter, cfg_iter, log2};
 use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use crate::FieldExt;
 
-use super::{Mle, MleIndex, MleRef, MleAble};
+use super::{Mle, MleAble, MleIndex, MleRef};
 
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 ///An [Mle] that is dense
@@ -100,17 +99,14 @@ impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, Tuple2<F>> {
     fn into_iter(self) -> Self::IntoIter {
         let len = self.mle.len() / 2;
 
-        self.mle[0]
-            .iter()
-            .cloned()
-            .zip(self.mle[1].iter().cloned())
+        self.mle[0].iter().cloned().zip(self.mle[1].iter().cloned())
     }
 }
 
 impl<F: FieldExt> FromIterator<Tuple2<F>> for DenseMle<F, Tuple2<F>> {
     fn from_iter<T: IntoIterator<Item = Tuple2<F>>>(iter: T) -> Self {
         let iter = iter.into_iter();
-        let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0.0, x.0.1)).unzip();
+        let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0 .1)).unzip();
 
         let num_vars = log2(first.len() + second.len()) as usize;
 
@@ -197,15 +193,13 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
-
     /// Ryan's note -- I assume this function updates the bookkeeping tables as
-    /// described by [Tha13]. 
+    /// described by [Tha13].
     fn fix_variable(
         &mut self,
         round_index: usize,
         challenge: Self::F,
     ) -> Option<(F, Vec<MleIndex<F>>)> {
-
         // --- Bind the current indexed bit to the challenge value ---
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
@@ -231,7 +225,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         let new = self.mle().par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.mle().par_chunks(2).map(transform);
+        let new = self.mle().chunks(2).map(transform);
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.mle = new.collect();
@@ -387,7 +381,11 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec.clone().into_iter().map(Tuple2::from).collect::<DenseMle<Fr, Tuple2<Fr>>>();
+        let mle = tuple_vec
+            .clone()
+            .into_iter()
+            .map(Tuple2::from)
+            .collect::<DenseMle<Fr, Tuple2<Fr>>>();
 
         let (first, second): (Vec<Fr>, Vec<_>) = tuple_vec.into_iter().unzip();
 
@@ -427,7 +425,10 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec.into_iter().map(Tuple2::from).collect::<DenseMle<Fr, Tuple2<Fr>>>();
+        let mle = tuple_vec
+            .into_iter()
+            .map(Tuple2::from)
+            .collect::<DenseMle<Fr, Tuple2<Fr>>>();
 
         let first = mle.first();
         let second = mle.second();
