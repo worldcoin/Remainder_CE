@@ -221,6 +221,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 }
             }
             ExpressionStandard::Mle(mle_ref, betatable) => {
+                // update the beta table whenever you fix variable
                 betatable.as_mut().unwrap().beta_update(round_index, challenge);
                 if mle_ref
                     .mle_indices()
@@ -235,7 +236,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 b.fix_variable(round_index, challenge);
             }
             ExpressionStandard::Product(mle_refs, betatable) => {
-                let mut table = betatable.as_mut().unwrap();
+                // update the beta table every time you fix variable
+                let table = betatable.as_mut().unwrap();
                 table.beta_update(round_index, challenge);
                 *betatable = Some(table.clone());
                 for mle_ref in mle_refs {
@@ -273,6 +275,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
             }
             ExpressionStandard::Mle(mle_ref, betatable) => {
                 let res = mle_ref.index_mle_indices(curr_index);
+                // initialize beta table after indexing
                 let init_table = Some(BetaTable::new(layer_claim, &[mle_ref.clone()]));
                 *betatable = init_table.clone();
                 res
@@ -288,6 +291,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
                 .map(|mle_ref| mle_ref.index_mle_indices(curr_index))
                 .reduce(max)
                 .unwrap_or(curr_index);
+                // we want to initialize the beta table after indexing
                 let init_table = Some(BetaTable::new(layer_claim, mle_refs));
                 *betatable = init_table;
                 res
