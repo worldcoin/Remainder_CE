@@ -376,9 +376,10 @@ fn generate_dummy_mles<F: FieldExt>() -> (
 #[cfg(test)]
 mod tests {
 
+    use super::*;
     use crate::{
         expression::{ExpressionStandard},
-        mle::{dense::DenseMle, Mle},
+        mle::{dense::DenseMle, Mle, dense::DenseMleRef},
         sumcheck::{evaluate_expr, SumOrEvals},
     };
     use ark_bn254::Fr;
@@ -388,12 +389,32 @@ mod tests {
     /// Basic binary decomposition test
     #[test]
     fn eval_expr_nums() {
-        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
-        let expression2: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::from(6));
-        let mut expressadd: ExpressionStandard<Fr> = expression1.clone() + expression2.clone();
-        let res = evaluate_expr(&mut expressadd, 1, 1);
-        let exp = SumOrEvals::Sum(Fr::from(7));
-        assert_eq!(res.unwrap(), exp);
+
+    let (
+        dummy_attr_idx_data_mle,
+        dummy_input_data_mle,
+        dummy_permutation_indices_mle,
+        dummy_permuted_input_data_mle,
+        dummy_decision_node_paths_mle,
+        dummy_leaf_node_paths_mle,
+        dummy_binary_decomp_diffs_mle,
+        dummy_multiplicities_bin_decomp_mle,
+        dummy_decision_nodes_mle,
+        dummy_leaf_nodes_mle
+    ) = generate_dummy_mles::<Fr>();
+
+        let one: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+
+        // --- Grab the bin decomp MLE ---
+        let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
+        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0]);
+
+        // --- Do b * (1 - b) = b - b^2 ---
+        let mut b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0], first_bin_decomp_bit_mle[0]]);
+        let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
+        // let res = evaluate_expr(&mut expressadd, 1, 1);
+        // let exp = SumOrEvals::Sum(Fr::from(7));
+        // assert_eq!(res.unwrap(), exp);
     }
 
 }

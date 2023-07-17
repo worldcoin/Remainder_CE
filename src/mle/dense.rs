@@ -495,24 +495,38 @@ impl<F: FieldExt> FromIterator<BinDecomp16Bit<F>> for DenseMle<F, BinDecomp16Bit
 impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
 
     /// Returns a list of MLERefs, one for each bit
-    pub fn node_id(&'_ self) -> DenseMleRef<F> {
+    /// TODO!(ryancao): Change this back to [DenseMleRef<F>; 16] and make it work!
+    pub fn mle_bit_refs(&'_ self) -> Vec<DenseMleRef<F>> {
         let num_vars = self.num_vars;
 
         // --- There are sixteen components to this MLE ---
         // TODO!(ryancao): Get rid of all the magic numbers
         let len = self.mle.len() / 16;
 
-        DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec(),
-            // --- [0, 0, b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: std::iter::once(MleIndex::Fixed(false))
-                .chain(std::iter::once(MleIndex::Fixed(false)))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 2))
-                .collect_vec(),
-            num_vars,
-            layer_id: None,
+        let mut ret: Vec<DenseMleRef<F>> = vec![];
+
+        for bit_idx in 0..15 {
+            let first_prefix = (bit_idx % 16) >= 8;
+            let second_prefix = (bit_idx % 8) >= 4;
+            let third_prefix = (bit_idx % 4) >= 2;
+            let fourth_prefix = (bit_idx % 2) >= 1;
+            let bit_mle_ref = DenseMleRef {
+                bookkeeping_table: self.mle[bit_idx].to_vec(),
+                // --- [0, 0, 0, 0, b_1, ..., b_n] ---
+                mle_indices: std::iter::once(MleIndex::Fixed(first_prefix))
+                    .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
+                    .chain(std::iter::once(MleIndex::Fixed(third_prefix)))
+                    .chain(std::iter::once(MleIndex::Fixed(fourth_prefix)))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars - 4))
+                    .collect_vec(),
+                num_vars,
+                layer_id: None,
+            };
+            ret.push(bit_mle_ref);
         }
+
+        ret
+
     }
 
     /// MleRef grabbing just the list of attribute IDs
