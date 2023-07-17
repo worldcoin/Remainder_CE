@@ -94,8 +94,6 @@ impl<F: FieldExt> DenseMle<F, F> {
             mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             num_vars: self.num_vars,
             layer_id: None,
-            beta_table: None,
-            layer_claims: None,
         }
     }
 }
@@ -153,8 +151,6 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .collect_vec(),
             num_vars,
             layer_id: None,
-            beta_table: None,
-            layer_claims: None,
         }
     }
 
@@ -171,8 +167,6 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .collect_vec(),
             num_vars,
             layer_id: None,
-            beta_table: None,
-            layer_claims: None,
         }
     }
 }
@@ -184,8 +178,6 @@ pub struct DenseMleRef<F: FieldExt> {
     mle_indices: Vec<MleIndex<F>>,
     num_vars: usize,
     layer_id: Option<usize>,
-    beta_table: Option<Vec<F>>,
-    layer_claims: Option<Claim<F>>,
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
@@ -208,14 +200,6 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         &self.mle_indices
     }
 
-    fn get_layer_claims(&self) -> &Option<Claim<F>>{
-        &self.layer_claims
-    }
-
-    fn get_beta_table(&self) -> &Option<Vec<Self::F>> {
-        &self.beta_table
-    }
-
     fn relabel_mle_indices(&mut self, new_indices: &[MleIndex<F>]) {
         self.mle_indices = new_indices
             .iter()
@@ -228,51 +212,6 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
-    fn initialize_beta(
-        &mut self,
-        layer_claims: &Claim<F>,
-    ) -> Result<(), BetaError> {
-
-        let (layer_claims_idx, _) = &layer_claims;
-        
-        // check to see if there are enough claims given the number of indices in mle
-        if layer_claims_idx.len() < self.mle_indices.len() {return Err(BetaError::NotEnoughClaims)};
-
-        // get the claims corresponding to the iterated indices of the mle
-        let relevant_claims: Vec<(F, F)> = self.mle_indices
-        .iter()
-        .filter(
-            |mleindex| matches!(**mleindex, MleIndex::IndexedBit(_))
-        ).map(|index| {
-            if let MleIndex::IndexedBit(num) = index {
-                (F::one() - layer_claims_idx[*num], layer_claims_idx[*num])
-            }
-            // should never hit this anyway
-            else {
-                (F::one(), F::one())
-            }
-            
-        })
-        .collect();
-
-        // construct the table, thaler 13
-        // TODO: make this parallelizable 
-        let (one_minus_r, r) = relevant_claims[0];
-        let mut cur_table = vec![one_minus_r, r];
-        for i in 1..relevant_claims.len() {
-            let (one_minus_r, r) = relevant_claims[i];
-            let mut firsthalf: Vec<F> = cur_table.iter().map(|eval| *eval * one_minus_r).collect();
-            let secondhalf: Vec<F> = cur_table.iter().map(|eval| *eval * r).collect();
-            firsthalf.extend(secondhalf.iter());
-            cur_table = firsthalf;
-        }
-
-        // mutate the current beta table
-        self.layer_claims = Some(layer_claims.clone());
-        self.beta_table = Some(cur_table);
-        Ok(())
-    }
-
     /// Ryan's note -- I assume this function updates the bookkeeping tables as
     /// described by [Tha13]. 
     fn fix_variable(
@@ -280,9 +219,6 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         round_index: usize,
         challenge: Self::F,
     ) -> Option<(F, Vec<MleIndex<F>>)> {
-
-        // update beta table
-        beta_update(self, round_index, challenge);
 
         // --- Bind the current indexed bit to the challenge value ---
         for mle_index in self.mle_indices.iter_mut() {
@@ -337,27 +273,6 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
     fn get_layer_id(&self) -> Option<usize> {
         self.layer_id
     }
-}
-
-fn beta_update<F: FieldExt>(
-    mle: &mut DenseMleRef<F>,
-    round_index: usize,
-    challenge: F,
-) -> Result<(), BetaError> {
-
-    let (layer_claims, _) = mle.layer_claims.as_ref().ok_or(BetaError::NoBetaTable)?;
-    let curr_beta = &mle.beta_table.as_ref().ok_or(BetaError::NoBetaTable);
-    let layer_claim = layer_claims[round_index];
-
-    // claim can never be 0, otherwise there is no inverse
-    let layer_claim_inv = layer_claim.inverse().ok_or(BetaError::NoInverse)?;
-
-    // update the beta table given round random challenge, thaler 13
-    let mult_factor = layer_claim_inv * (challenge*layer_claim + (F::one()-challenge)*(F::one()-layer_claim));
-    let new_beta: Vec<F> = curr_beta.clone().unwrap().iter().skip(1).step_by(2).map(|x| *x*mult_factor).collect();
-    mle.beta_table = Some(new_beta);
-    Ok(())
-
 }
 
 #[cfg(test)]
@@ -584,146 +499,5 @@ mod tests {
                     MleIndex::Iterated
                 ]
         );
-    }
-
-    #[test]
-    /// init a small beta table
-    fn beta_table_init_small() {
-        let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
-        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
-        let mut mleref = mle.mle_ref();
-        mleref.index_mle_indices(0);
-        mleref.initialize_beta(&layer_claims);
-
-        let (g1, g2,) = (Fr::from(3), Fr::from(4),);
-        let one = Fr::one();
-        let c0 = vec![
-            (one-g1)*(one-g2),
-            (g1)*(one-g2),
-            (one-g1)*(g2),
-            (g1)*(g2),
-        ];
-
-        assert_eq!(mleref.beta_table.unwrap(), c0);
-    }
-
-    #[test]
-    /// update a small beta table
-    fn beta_table_update_small() {
-        let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
-        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
-        let mut mleref = mle.mle_ref();
-        mleref.index_mle_indices(0);
-        mleref.initialize_beta(&layer_claims);
-
-        let (g1, g2,) = (Fr::from(3), Fr::from(4),);
-        let one = Fr::one();
-
-        let rchal = Fr::from(10);
-        let c1 = vec![
-            ((one-g1)*(one-rchal) + g1*rchal)*(one-g2),
-            ((one-g1)*(one-rchal) + g1*rchal)*(g2),
-        ];
-        mleref.fix_variable(0, rchal);
-
-        assert_eq!(mleref.beta_table.unwrap(), c1);
-    }
-
-    #[test]
-    /// update a beta table all the way
-    fn beta_table_nested_update_small() {
-        let mle_v = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
-        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
-        let mut mleref = mle.mle_ref();
-        mleref.index_mle_indices(0);
-        mleref.initialize_beta(&layer_claims);
-
-        let (g1, g2,) = (Fr::from(3), Fr::from(4),);
-        let one = Fr::one();
-
-        let rchal = Fr::from(10);
-        mleref.fix_variable(0, rchal);
-
-        let rchal2 = Fr::from(133);
-        let c2 = vec![
-            ((one-g1)*(one-rchal) + g1*rchal)*((one-g2)*(one-rchal2) + g2*rchal2)
-        ];
-        mleref.fix_variable(1, rchal2);
-
-        assert_eq!(mleref.beta_table.unwrap(), c2);
-    }
-
-    #[test]
-    /// testing init a beta table with random claim indices
-    fn beta_table_init() {
-        let mut rng = test_rng();
-        let mle_v = vec![
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(0),
-            Fr::from(3),
-            Fr::from(1),
-            Fr::from(4),
-        ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
-        let layer_claims = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng)], Fr::one());
-        let mut mleref = mle.mle_ref();
-        mleref.index_mle_indices(0);
-        mleref.initialize_beta(&layer_claims);
-
-        let (g1, g2, g3) = (layer_claims.0[0], layer_claims.0[1], layer_claims.0[2],);
-        let one = Fr::one();
-        let c0 = vec![
-            (one-g1)*(one-g2)*(one-g3),
-            (g1)*(one-g2)*(one-g3),
-            (one-g1)*(g2)*(one-g3),
-            (g1)*(g2)*(one-g3),
-            (one-g1)*(one-g2)*(g3),
-            (g1)*(one-g2)*(g3),
-            (one-g1)*(g2)*(g3),
-            (g1)*(g2)*(g3),
-        ];
-
-        assert_eq!(mleref.beta_table.unwrap(), c0);
-    }
-
-    #[test]
-    /// testing update a beta table with random claim indices
-    fn beta_table_bind() {
-        let mut rng = test_rng();
-        let mle_v = vec![
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(0),
-            Fr::from(3),
-            Fr::from(1),
-            Fr::from(4),
-        ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_v);
-        let layer_claims = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng)], Fr::one());
-        let mut mleref = mle.mle_ref();
-        mleref.index_mle_indices(0);
-        mleref.initialize_beta(&layer_claims);
-
-        let (g1, g2, g3) = (layer_claims.0[0], layer_claims.0[1], layer_claims.0[2],);
-        let one = Fr::one();
-
-        let rchal = Fr::rand(&mut rng);
-        let c1 = vec![
-            ((one-g1)*(one-rchal) + g1*rchal)*(one-g2)*(one-g3),
-            ((one-g1)*(one-rchal) + g1*rchal)*(g2)*(one-g3),
-            ((one-g1)*(one-rchal) + g1*rchal)*(one-g2)*(g3),
-            ((one-g1)*(one-rchal) + g1*rchal)*(g2)*(g3),
-        ];
-        mleref.fix_variable(0, rchal);
-
-        assert_eq!(mleref.beta_table.unwrap(), c1);
     }
 }

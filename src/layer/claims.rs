@@ -41,7 +41,7 @@ fn get_claims<F: FieldExt>(
 
     let mut observer_fn = |exp: &ExpressionStandard<F>| {
         match exp {
-            ExpressionStandard::Mle(mle_ref) => {
+            ExpressionStandard::Mle(mle_ref, _) => {
                 // --- First ensure that all the indices are fixed ---
                 let mle_indices = mle_ref.get_mle_indices();
 
@@ -116,7 +116,7 @@ mod test {
         // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
         let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
-        let expression3 = ExpressionStandard::Mle(mle.mle_ref());
+        let expression3 = ExpressionStandard::Mle(mle.mle_ref(), None);
         let expression = expression1.clone() + expression3.clone();
         // let expression = expression1.clone() * expression;
         let expression = expression1 - expression;

@@ -12,6 +12,7 @@ use crate::mle::dense::BetaError;
 
 ///Contains default dense implementation of Mle
 pub mod dense;
+pub mod beta;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
@@ -60,18 +61,6 @@ pub trait MleRef: Debug + Clone + Send + Sync {
 
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
-
-    /// Get the beta table
-    fn get_beta_table(&self) -> &Option<Vec<Self::F>>;
-
-    /// Get the layer claims
-    fn get_layer_claims(&self) -> &Option<Claim<Self::F>>;
-
-    /// Initialize beta table 
-    fn initialize_beta(
-        &mut self,
-        layer_claims: &Claim<Self::F>,
-    ) -> Result<(), BetaError>;
 
     ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.
     /// If the Mle is fully bound will return the evaluation of the fully bound Mle
