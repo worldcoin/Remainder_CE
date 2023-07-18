@@ -19,7 +19,7 @@ What's our plan here?
 // --- Constants ---
 const DUMMY_INPUT_LEN: usize = 1 << 5;
 const NUM_DUMMY_INPUTS: usize = 1 << 8;
-const TREE_HEIGHT: usize = 9;
+const TREE_HEIGHT: usize = 8;
 
 /// - First element is the decision path nodes
 /// - Second element is the final predicted leaf node
@@ -74,7 +74,7 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
     }
 
     // --- Leaf node indices are offset by 2^{TREE_HEIGHT} ---
-    let ret_leaf_node = leaf_nodes[current_node_idx - 2_u32.pow(TREE_HEIGHT as u32) as usize];
+    let ret_leaf_node = leaf_nodes[current_node_idx - (2_u32.pow(TREE_HEIGHT as u32) - 1) as usize];
 
     (path_decision_nodes, ret_leaf_node, permuted_access_indices, attr_num_hits, diffs)
 
@@ -82,11 +82,13 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
 
 fn generate_16_bit_signed_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 
+    let upper_bound = F::from(2_u32.pow(16) - 1);
+
     // --- Compute the sign bit ---
-    let sign_bit = if value >= F::zero() {F::zero()} else {F::one()};
+    let sign_bit = if value <= upper_bound {F::zero()} else {F::one()};
 
     // --- Convert to positive ---
-    let abs_value = if value >= F::zero() {value} else {value.neg()};
+    let abs_value = if value <= upper_bound {value} else {value.neg()};
 
     // --- Grab the unsigned representation... ---
     let mut unsigned_bit_decomp = generate_16_bit_unsigned_decomp(abs_value);
@@ -102,15 +104,14 @@ fn generate_16_bit_signed_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 
     // --- Ensure we can decompose in (positive) 16 bits ---
+    let upper_bound = F::from(2_u32.pow(16) - 1);
     assert!(value >= F::zero());
-    assert!(value <= F::from(2_u32.pow(16) - 1));
+    assert!(value <= upper_bound);
 
     // --- Grab the string repr ---
-    let binary_repr = format!("{:b}", value.into_bigint().as_ref()[0]);
+    let binary_repr = format!("{:0>16b}", value.into_bigint().as_ref()[0]);
 
     // --- Length must be 16, then parse as array of length 16 ---
-    dbg!(binary_repr);
-    assert!(binary_repr.clone().len() == 16);
     let mut binary_repr_arr = [F::zero(); 16];
     for idx in 0..16 {
         let char_repr = binary_repr.chars().nth(idx).unwrap();
@@ -161,7 +162,10 @@ fn generate_dummy_data<F: FieldExt>() -> (
         for _ in 0..DUMMY_INPUT_LEN {
             let input_attribute = InputAttribute {
                 attr_id: F::from(dummy_input as u16),
-                attr_val: F::from(rng.gen::<u16>()),
+                // Val can be anything from 0 to 1023
+                // attr_val: F::from(rng.gen_range(0..(2_u16.pow(10)) as u16)),
+                // attr_val: F::from(dummy_input as u16), // TODO!(ryancao): For debugging purposes only!
+                attr_val: F::one(),
             };
             single_attribute_copy.push(input_attribute);
             single_permuted_attribute_copy.push(input_attribute);
@@ -182,11 +186,13 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
     // --- Populate decision nodes ---
     // Note that attr_id can only be in [0, DUMMY_INPUT_LEN)
-    for idx in 0..(2_u32.pow(TREE_HEIGHT as u32)) - 1 {
+    for idx in 0..(2_u32.pow(TREE_HEIGHT as u32) - 1) {
         let decision_node = DecisionNode {
             node_id: F::from(idx as u16),
             attr_id: F::from(rng.gen_range(0..DUMMY_INPUT_LEN as u16)),
-            threshold: F::from(rng.gen::<u16>()),
+            // Same here; threshold is anything from 0 to 1023
+            threshold: F::from(rng.gen_range(0..(2_u16.pow(10)))),
+            // threshold: F::from(0), // TODO!(ryancao): For debugging purposes only!
         };
         dummy_decision_nodes.push(decision_node);
     }
@@ -240,6 +246,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
         .into_iter()
         .fold(multiplicities, |prev_multiplicities, (_, _, _, new_multiplicities_map, _)| {
 
+            // --- TODO!(ryancao): This is so bad lol ---
             let mut new_multiplicities: Vec<F> = prev_multiplicities.clone();
 
             // --- Just increment the current vector of multiplicities by the map at that index ---
@@ -247,13 +254,6 @@ fn generate_dummy_data<F: FieldExt>() -> (
                 let usize_tree_node_idx = tree_node_idx.into_bigint().as_ref()[0] as usize;
                 new_multiplicities[usize_tree_node_idx] += F::from(multiplicity);
             });
-
-            // --- Just add the corresponding terms ---
-            // let updated_multiplicities = zip(prev_multiplicities, new_multiplicities)
-            //     .map(|(a, b)| {
-            //         a + b
-            //     })
-            //     .collect_vec();
 
             new_multiplicities
         }).into_iter()
@@ -268,7 +268,9 @@ fn generate_dummy_data<F: FieldExt>() -> (
         .into_iter()
         .map(|(_, _, _, _, diffs)| {
             diffs.into_iter().map(|diff| {
-                generate_16_bit_signed_decomp(diff)
+                let ret = generate_16_bit_signed_decomp(diff);
+                check_signed_recomposition(diff, ret);
+                ret
             }).collect_vec()
         }).collect_vec();
 
@@ -284,6 +286,33 @@ fn generate_dummy_data<F: FieldExt>() -> (
         dummy_decision_nodes,
         dummy_leaf_nodes
     )
+}
+
+/// Gets the sign bit (0 for positive, 1 for negative) and abs value
+fn get_sign_bit_and_abs_value<F: FieldExt>(value: F) -> (F, F) {
+    let upper_bound = F::from(2_u32.pow(16) - 1);
+    let sign_bit = if value > upper_bound {F::one()} else {F::zero()};
+    let abs_value = if value > upper_bound {value.neg()} else {value};
+    return (sign_bit, abs_value);
+}
+
+/// Computes the recomposition of the bits within `decomp` and checks
+fn check_signed_recomposition<F: FieldExt>(actual_value: F, decomp: BinDecomp16Bit<F>) -> bool {
+    let (sign_bit, _) = get_sign_bit_and_abs_value(actual_value);
+    let mut total = F::zero();
+
+    // --- Perform recomposition of non-sign bits ---
+    for bit_idx in 1..16 {
+        let base = F::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
+        total += base * decomp.bits[bit_idx];
+    }
+    total = if sign_bit == F::one() {total.neg()} else {total};
+    if total != actual_value {
+        dbg!("RIP: Total = {:?}, actual_value = {:?}", total, actual_value);
+        panic!();
+        // return false;
+    }
+    true
 }
 
 /// Takes the above dummy data from `generate_dummy_data()` and converts
@@ -379,7 +408,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        expression::{ExpressionStandard},
+        expression::{ExpressionStandard, Expression},
         mle::{dense::DenseMle, Mle, dense::DenseMleRef},
         sumcheck::{evaluate_expr, SumOrEvals},
     };
@@ -388,22 +417,22 @@ mod tests {
     use ark_std::One;
     use ark_std::Zero;
 
-    /// Basic binary decomposition test
+    /// Basic "bits are binary" test
     #[test]
-    fn eval_expr_nums() {
+    fn dummy_bits_are_binary_test() {
 
-    let (
-        dummy_attr_idx_data_mle,
-        dummy_input_data_mle,
-        dummy_permutation_indices_mle,
-        dummy_permuted_input_data_mle,
-        dummy_decision_node_paths_mle,
-        dummy_leaf_node_paths_mle,
-        dummy_binary_decomp_diffs_mle,
-        dummy_multiplicities_bin_decomp_mle,
-        dummy_decision_nodes_mle,
-        dummy_leaf_nodes_mle
-    ) = generate_dummy_mles::<Fr>();
+        let (
+            dummy_attr_idx_data_mle,
+            dummy_input_data_mle,
+            dummy_permutation_indices_mle,
+            dummy_permuted_input_data_mle,
+            dummy_decision_node_paths_mle,
+            dummy_leaf_node_paths_mle,
+            dummy_binary_decomp_diffs_mle,
+            dummy_multiplicities_bin_decomp_mle,
+            dummy_decision_nodes_mle,
+            dummy_leaf_nodes_mle
+        ) = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLE ---
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
@@ -418,10 +447,136 @@ mod tests {
         let all_zeros_mle = DenseMle::new(all_zeros);
         let mut all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
 
+        // --- TODO!(ryancao): This is jank in the sense that we're just evaluating the first ---
+        // --- prover message and just ensuring that both of them are zero, but really we should ---
+        // --- be showing that all the evaluations match ---
         let res = evaluate_expr(&mut b_minus_b_squared, 1, 2);
         let other_res = evaluate_expr(&mut all_zeros_mle_expr, 1, 2);
         assert_eq!(res.unwrap(), other_res.unwrap());
-        // let exp = SumOrEvals::Sum(Fr::from(7));
-        // assert_eq!(res.unwrap(), exp);
+
+        // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
+    }
+
+    /// Binary recomposition test (showing that the binary recomposition of the
+    /// difference recomposes to equal the differences)
+    /// The original expression: (1 - b_s)(diff - abs_recomp) + b_s(diff + abs_recomp) = 0
+    /// The simplified expression: (diff - abs_recomp) + 2b_s(abs_recomp) = 0
+    #[test]
+    fn dummy_binary_recomp_test() {
+
+        let (
+            dummy_attr_idx_data_mle,
+            dummy_input_data_mle,
+            dummy_permutation_indices_mle,
+            dummy_permuted_input_data_mle,
+            dummy_decision_node_paths_mle,
+            dummy_leaf_node_paths_mle,
+            dummy_binary_decomp_diffs_mle,
+            dummy_multiplicities_bin_decomp_mle,
+            dummy_decision_nodes_mle,
+            dummy_leaf_nodes_mle
+        ) = generate_dummy_mles::<Fr>();
+
+        // --- Grab the bin decomp MLEs and associated expressions ---
+        let bin_decomp_mles: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
+        let mut bin_decomp_mle_exprs = vec![];
+        for bit_idx in 0..16 {
+            let cur_bit_mle_expr = ExpressionStandard::Mle(bin_decomp_mles[bit_idx].clone());
+            bin_decomp_mle_exprs.push(cur_bit_mle_expr);
+            dbg!(bin_decomp_mles[bit_idx].num_vars); // Should be 3 for path length/tree height
+        }
+
+        // --- Grab the things necessary to compute the diff (the permuted input and thresholds) ---
+        let threshold_mle: DenseMleRef<Fr> = dummy_decision_node_paths_mle.threshold();
+        let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone());
+        let permuted_input_values_mle: DenseMleRef<Fr> = dummy_permuted_input_data_mle.attr_val(threshold_mle.num_vars);
+        let permuted_input_values_mle_expr = ExpressionStandard::Mle(permuted_input_values_mle.clone());
+
+        // --- Need to just get diff ---
+        dbg!(permuted_input_values_mle.num_vars); // Should be 3
+        dbg!(threshold_mle.num_vars); // Should be 3
+        let diff_expr = permuted_input_values_mle_expr - threshold_mle_expr;
+
+        // --- We need `abs_recomp` and `b_s * abs_recomp` ---
+        let mut abs_recomp_expr_list = vec![];
+        let mut b_s_times_abs_recomp_expr_list = vec![];
+
+        for bit_idx in 1..16 {
+            // --- First compute b_s * coeff ---
+            let b_s_times_coeff = ExpressionStandard::Product(vec![bin_decomp_mles[bit_idx].clone(), bin_decomp_mles[0].clone()]);
+            let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
+
+            // --- Then compute (b_s * coeff) * 2^{bit_idx} ---
+            let base = Fr::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
+            let b_s_times_coeff_times_base = ExpressionStandard::Scaled(b_s_times_coeff_ptr, base);
+            b_s_times_abs_recomp_expr_list.push(b_s_times_coeff_times_base);
+
+            // --- Also compute just coeff * 2^{bit_idx} ---
+            let coeff_expr = ExpressionStandard::Mle(bin_decomp_mles[bit_idx].clone());
+            let coeff_expr_ptr = Box::new(coeff_expr);
+            let coeff_times_base = ExpressionStandard::Scaled(coeff_expr_ptr, base);
+            abs_recomp_expr_list.push(coeff_times_base);
+        }
+
+        assert!(abs_recomp_expr_list.len() == 15);
+        assert!(b_s_times_abs_recomp_expr_list.len() == 15);
+
+        // --- Combine all the elements in accumulation fashion ---
+        let abs_recomp_expr = abs_recomp_expr_list
+            .into_iter()
+            .reduce(|a, b| {
+                a + b
+            })
+            .unwrap();
+        let b_s_times_abs_recomp_expr = b_s_times_abs_recomp_expr_list
+            .into_iter()
+            .reduce(|a, b| {
+                a + b
+            })
+            .unwrap();
+
+        // --- Subtract the two, and (TODO!(ryancao)) ensure they have the same number of variables ---
+        let mut final_expr = 
+            diff_expr - abs_recomp_expr + b_s_times_abs_recomp_expr.clone() + b_s_times_abs_recomp_expr;
+
+        // --- We should get all zeros ---
+        let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(permuted_input_values_mle.num_vars as u32) as usize);
+        let all_zeros_mle = DenseMle::new(all_zeros);
+        let mut all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
+
+        let res = evaluate_expr(&mut final_expr, 1, 2);
+        let other_res = evaluate_expr(&mut all_zeros_mle_expr, 1, 2);
+        assert_eq!(res.unwrap(), other_res.unwrap());
+    }
+
+    /// Permutation test showing that the characteristic polynomial of the
+    /// initial inputs is equivalent to that of the permuted inputs.
+    /// What's the expression we actually need, and what are the terms?
+    /// - We need the packed inputs first, (attr_idx + r_1 * attr_id + r_2 * attr_val)
+    /// - Then we need the characteristic polynomial terms evaluated at `r_3`: r_3 - (attr_idx + r_1 * attr_id + r_2 * attr_val)
+    /// - Then we need to multiply all of them together in a binary product tree
+    #[test]
+    fn dummy_permutation_test() {
+
+        let (
+            dummy_attr_idx_data_mle,
+            dummy_input_data_mle,
+            dummy_permutation_indices_mle,
+            dummy_permuted_input_data_mle,
+            dummy_decision_node_paths_mle,
+            dummy_leaf_node_paths_mle,
+            dummy_binary_decomp_diffs_mle,
+            dummy_multiplicities_bin_decomp_mle,
+            dummy_decision_nodes_mle,
+            dummy_leaf_nodes_mle
+        ) = generate_dummy_mles::<Fr>();
+
+        // --- Get packed inputs first ---
+        let r1: Fr = test_rng().gen();
+        let r2: Fr = test_rng().gen();
+
+        // --- Multiply to do packing ---
+        // let dummy_attribute_idx_mleref = dummy_attr_idx_data_mle
+
     }
 }

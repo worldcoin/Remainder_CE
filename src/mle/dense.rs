@@ -243,7 +243,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
-        let len = self.mle.len() / 4;
+        // let len = self.mle.len() / 4;
 
         DenseMleRef {
             bookkeeping_table: self.mle[2].to_vec(),
@@ -253,7 +253,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 .chain(std::iter::once(MleIndex::Fixed(false)))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 2))
                 .collect_vec(),
-            num_vars,
+            num_vars: num_vars - 2,
             layer_id: None,
         }
     }
@@ -423,18 +423,22 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     }
 
     /// MleRef grabbing just the list of attribute values
-    pub fn attr_val(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
+    pub fn attr_val(&'_ self, num_vars: usize) -> DenseMleRef<F> {
 
-        // --- There are four components to this MLE ---
-        let len = self.mle.len() / 4;
+        // TODO!(ryancao): Make this actually do error-handling
+        assert!(self.num_vars >= num_vars);
+
+        // --- The length of the MLERef is just 2^{num_vars} ---
+        let len = 2_u32.pow(num_vars as u32) as usize;
 
         DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec(),
-            // --- [1, b_1, ..., b_n] ---
+            bookkeeping_table: self.mle[1].to_vec()[..len].to_vec(),
+            // --- [1, 0, ..., 0, b_1, ..., b_n] ---
+            // Note that the zeros are there to prefix all the things we chunked out
             // TODO!(ryancao): Does this give us the endian-ness we want???
             mle_indices: std::iter::once(MleIndex::Fixed(true))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
+                .chain(repeat_n(MleIndex::Fixed(false), self.num_vars - 1 - num_vars))
+                .chain(repeat_n(MleIndex::Iterated, num_vars))
                 .collect_vec(),
             num_vars,
             layer_id: None,
@@ -446,22 +450,6 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
 impl<F: FieldExt> MleAble<F> for BinDecomp16Bit<F> {
     type Repr = [Vec<F>; 16];
 }
-
-// TODO!(ryancao): Actually implement this correctly for PathNode<F>
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, PathNode<F>> {
-//     type Item = (F, F, F);
-
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         let len = self.mle.len() / 2;
-
-//         self.mle[0]
-//             .iter()
-//             .cloned()
-//             .zip(self.mle[1].iter().cloned())
-//     }
-// }
 
 /// Conversion from a list of `BinDecomp16Bit<F>`s into a DenseMle
 // TODO!(ryancao): Make this stuff derivable
@@ -505,7 +493,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
 
         let mut ret: Vec<DenseMleRef<F>> = vec![];
 
-        for bit_idx in 0..15 {
+        for bit_idx in 0..16 {
             let first_prefix = (bit_idx % 16) >= 8;
             let second_prefix = (bit_idx % 8) >= 4;
             let third_prefix = (bit_idx % 4) >= 2;
@@ -519,7 +507,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
                     .chain(std::iter::once(MleIndex::Fixed(fourth_prefix)))
                     .chain(repeat_n(MleIndex::Iterated, num_vars - 4))
                     .collect_vec(),
-                num_vars,
+                num_vars: num_vars - 4,
                 layer_id: None,
             };
             ret.push(bit_mle_ref);
@@ -527,46 +515,6 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
 
         ret
 
-    }
-
-    /// MleRef grabbing just the list of attribute IDs
-    pub fn attr_id(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
-
-        // --- There are four components to this MLE ---
-        let len = self.mle.len() / 4;
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec(),
-            // --- [0, 1, b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: std::iter::once(MleIndex::Fixed(false))
-                .chain(std::iter::once(MleIndex::Fixed(true)))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 2))
-                .collect_vec(),
-            num_vars,
-            layer_id: None,
-        }
-    }
-
-    /// MleRef grabbing just the list of thresholds
-    pub fn threshold(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
-
-        // --- There are four components to this MLE ---
-        let len = self.mle.len() / 4;
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[2].to_vec(),
-            // --- [1, 0, b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: std::iter::once(MleIndex::Fixed(true))
-                .chain(std::iter::once(MleIndex::Fixed(false)))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 2))
-                .collect_vec(),
-            num_vars,
-            layer_id: None,
-        }
     }
 }
 
