@@ -255,6 +255,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
             ExpressionStandard::Constant(_) => (),
         }
     }
+
 }
 
 impl<F: FieldExt> ExpressionStandard<F> {
