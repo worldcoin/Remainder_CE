@@ -12,7 +12,7 @@ pub struct FlatLayer<F: FieldExt> {
     round_index: usize,
 }
 
-impl<F: FieldExt> Layer<F> for FlatLayer<F> {
+impl<F: FieldExt> ConcreteLayer<F> for FlatLayer<F> {
     type Mle = DenseMle<F, F>;
 
     type Expression = ExpressionStandard<F>;

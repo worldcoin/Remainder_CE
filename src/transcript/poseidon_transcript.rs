@@ -1,9 +1,7 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
 
 use ark_crypto_primitives::sponge::{
-    poseidon::{
-        find_poseidon_ark_and_mds, PoseidonConfig, PoseidonSponge,
-    },
+    poseidon::{find_poseidon_ark_and_mds, PoseidonConfig, PoseidonSponge},
     CryptographicSponge, FieldBasedCryptographicSponge,
 };
 use tracing::trace;
@@ -12,7 +10,8 @@ use crate::FieldExt;
 
 use super::{Transcript, TranscriptError};
 
-struct PoseidonTranscript<F: FieldExt> {
+/// A transcript that uses the Poseidon hash function; Useful for recursive proving
+pub struct PoseidonTranscript<F: FieldExt> {
     sponge: PoseidonSponge<F>,
 }
 

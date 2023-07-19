@@ -8,6 +8,7 @@ use ark_ff::PrimeField;
 pub mod expression;
 pub mod layer;
 pub mod mle;
+pub mod prover;
 pub mod sumcheck;
 pub mod transcript;
 
