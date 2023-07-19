@@ -2,6 +2,7 @@ use std::{
     fmt::Debug,
     iter::{Cloned, Zip},
     marker::PhantomData,
+    cmp,
 };
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -404,18 +405,28 @@ impl<F: FieldExt> FromIterator<InputAttribute<F>> for DenseMle<F, InputAttribute
 impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
 
     /// MleRef grabbing just the list of attribute IDs
-    pub fn attr_id(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
+    pub fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
 
-        // --- There are four components to this MLE ---
-        let len = self.mle.len() / 2;
+        // --- Default to the entire (component of) the MLE ---
+        let num_vars = match num_vars {
+            Some(num) => num,
+            None => self.num_vars - 1,
+        };
+
+        // TODO!(ryancao): Make this actually do error-handling
+        assert!(num_vars <= self.num_vars - 1);
+
+        // --- The length of the MLERef is just 2^{num_vars} ---
+        let len = 2_u32.pow(num_vars as u32) as usize;
+        let concrete_len = cmp::min(len, self.mle[0].to_vec().len());
 
         DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec(),
-            // --- [0, b_1, ..., b_n] ---
+            bookkeeping_table: self.mle[0].to_vec()[..concrete_len].to_vec(),
+            // --- [0; 0, ..., 0; b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
             mle_indices: std::iter::once(MleIndex::Fixed(false))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
+                .chain(repeat_n(MleIndex::Fixed(false), self.num_vars - 1 - num_vars))
+                .chain(repeat_n(MleIndex::Iterated, num_vars))
                 .collect_vec(),
             num_vars,
             layer_id: None,
@@ -423,17 +434,24 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     }
 
     /// MleRef grabbing just the list of attribute values
-    pub fn attr_val(&'_ self, num_vars: usize) -> DenseMleRef<F> {
+    pub fn attr_val(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
+
+        // --- Default to the entire (component of) the MLE ---
+        let num_vars = match num_vars {
+            Some(num) => num,
+            None => self.num_vars - 1,
+        };
 
         // TODO!(ryancao): Make this actually do error-handling
-        assert!(self.num_vars >= num_vars);
+        assert!(num_vars <= self.num_vars - 1);
 
         // --- The length of the MLERef is just 2^{num_vars} ---
         let len = 2_u32.pow(num_vars as u32) as usize;
+        let concrete_len = cmp::min(len, self.mle[1].to_vec().len());
 
         DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec()[..len].to_vec(),
-            // --- [1, 0, ..., 0, b_1, ..., b_n] ---
+            bookkeeping_table: self.mle[1].to_vec()[..concrete_len].to_vec(),
+            // --- [1; 0, ..., 0; b_1, ..., b_n] ---
             // Note that the zeros are there to prefix all the things we chunked out
             // TODO!(ryancao): Does this give us the endian-ness we want???
             mle_indices: std::iter::once(MleIndex::Fixed(true))

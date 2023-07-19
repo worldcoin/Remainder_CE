@@ -32,6 +32,7 @@ pub struct BinDecomp16Bit<F: FieldExt> {
 /// b) The permuted input attributes, i.e. \bar{x}
 #[derive(Copy, Debug, Clone, From, Into)]
 pub struct InputAttribute<F: FieldExt> {
+    // pub attr_idx: F,
     pub attr_id: F,
     pub attr_val: F,
 }

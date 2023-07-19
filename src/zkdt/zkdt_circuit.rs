@@ -3,10 +3,10 @@ use crate::mle::dense::DenseMle;
 use super::structs::*;
 
 use itertools::{Itertools, repeat_n};
-use rand::{Rng, SeedableRng};
-use rand::rngs::StdRng;
+use rand::Rng;
 use std::collections::HashMap;
 use std::iter::zip;
+use ark_std::test_rng;
 
 /*
 What's our plan here?
@@ -24,19 +24,18 @@ const TREE_HEIGHT: usize = 8;
 /// - First element is the decision path nodes
 /// - Second element is the final predicted leaf node
 /// - Third element is the attributes used
-/// - Fourth element is the multiplicities of the tree nodes which were hit
-/// - Fifth element is the difference between the current attribute value and the node threshold
+/// - Fourth element is the difference between the current attribute value and the node threshold
 fn generate_correct_path_and_permutation<F: FieldExt>(
     decision_nodes: &Vec<DecisionNode<F>>,
     leaf_nodes: &Vec<LeafNode<F>>,
     input_datum: &Vec<InputAttribute<F>>
-) -> (Vec<DecisionNode<F>>, LeafNode<F>, Vec<F>, HashMap<F, u32>, Vec<F>) {
+) -> (Vec<DecisionNode<F>>, LeafNode<F>, Vec<F>, Vec<F>) {
 
     // --- Keep track of the path and permutation ---
     let mut path_decision_nodes: Vec<DecisionNode<F>> = vec![];
     let mut permuted_access_indices: Vec<F> = vec![];
 
-    // --- Keep track of how many times each tree node was used ---
+    // --- Keep track of how many times each attribute ID was used (to get the corresponding attribute idx) ---
     // Key: Tree node index (decision OR leaf node)
     // Value: Multiplicity
     let mut attr_num_hits: HashMap<F, u32> = HashMap::new();
@@ -55,11 +54,11 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
         // --- Assume that repeats are basically layered one after another ---
         let num_repeats = attr_num_hits.get(&decision_nodes[current_node_idx].attr_id).unwrap_or(&0);
         let offset = *num_repeats * (DUMMY_INPUT_LEN as u32);
-        permuted_access_indices.push(decision_nodes[current_node_idx].attr_id * F::from(offset));
+        permuted_access_indices.push(decision_nodes[current_node_idx].attr_id + F::from(offset));
 
-        // --- Adds a hit to the current node ---
-        let cur_multiplicity = attr_num_hits.entry(decision_nodes[current_node_idx].node_id).or_insert(0);
-        *cur_multiplicity += 1;
+        // --- Adds a hit to the current attribute ID ---
+        let num_attr_id_hits = attr_num_hits.entry(decision_nodes[current_node_idx].attr_id).or_insert(0);
+        *num_attr_id_hits += 1;
 
         // --- Compute the difference ---
         let diff = input_datum[attr_idx].attr_val - decision_nodes[current_node_idx].threshold;
@@ -76,7 +75,7 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
     // --- Leaf node indices are offset by 2^{TREE_HEIGHT} ---
     let ret_leaf_node = leaf_nodes[current_node_idx - (2_u32.pow(TREE_HEIGHT as u32) - 1) as usize];
 
-    (path_decision_nodes, ret_leaf_node, permuted_access_indices, attr_num_hits, diffs)
+    (path_decision_nodes, ret_leaf_node, permuted_access_indices, diffs)
 
 }
 
@@ -124,6 +123,9 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 
 /// Need to generate dummy circuit inputs, starting with the input data
 /// Then get the path data and binary decomp stuff
+/// TODO!(ryancao): add the attribute index field to `InputAttribute<F>`
+/// -- Actually, scratch the above: we might be getting rid of `attr_id`s
+/// altogether and replacing with `attr_idx` everywhere (as suggested by Ben!)
 fn generate_dummy_data<F: FieldExt>() -> (
     Vec<Vec<F>>,                    // Input attribute indices
     Vec<Vec<InputAttribute<F>>>,    // Input attributes
@@ -136,10 +138,6 @@ fn generate_dummy_data<F: FieldExt>() -> (
     Vec<DecisionNode<F>>,           // Actual tree decision nodes
     Vec<LeafNode<F>>,               // Actual tree leaf nodes
 ) {
-
-    // --- Grabbing the RNG with seed for deterministic outputs ---
-    let seed: [u8; 32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
 
     // --- Generate dummy input data ---
     let mut dummy_input_data: Vec<Vec<InputAttribute<F>>> = vec![];
@@ -154,18 +152,18 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
 
     // --- Populate (NOTE that we have to permute later) ---
-    for dummy_input in 0..NUM_DUMMY_INPUTS {
+    for _ in 0..NUM_DUMMY_INPUTS {
 
         // --- Generate a single copy of all the attributes ---
         let mut single_attribute_copy = vec![];
         let mut single_permuted_attribute_copy = vec![];
-        for _ in 0..DUMMY_INPUT_LEN {
+        for attr_id in 0..DUMMY_INPUT_LEN {
             let input_attribute = InputAttribute {
-                attr_id: F::from(dummy_input as u16),
+                attr_id: F::from(attr_id as u16),
                 // Val can be anything from 0 to 1023
-                // attr_val: F::from(rng.gen_range(0..(2_u16.pow(10)) as u16)),
+                attr_val: F::from(test_rng().gen_range(0..(2_u16.pow(12)) as u16)),
                 // attr_val: F::from(dummy_input as u16), // TODO!(ryancao): For debugging purposes only!
-                attr_val: F::one(),
+                // attr_val: F::one(),
             };
             single_attribute_copy.push(input_attribute);
             single_permuted_attribute_copy.push(input_attribute);
@@ -189,9 +187,9 @@ fn generate_dummy_data<F: FieldExt>() -> (
     for idx in 0..(2_u32.pow(TREE_HEIGHT as u32) - 1) {
         let decision_node = DecisionNode {
             node_id: F::from(idx as u16),
-            attr_id: F::from(rng.gen_range(0..DUMMY_INPUT_LEN as u16)),
+            attr_id: F::from(test_rng().gen_range(0..DUMMY_INPUT_LEN as u16)),
             // Same here; threshold is anything from 0 to 1023
-            threshold: F::from(rng.gen_range(0..(2_u16.pow(10)))),
+            threshold: F::from(test_rng().gen_range(0..(2_u16.pow(12)))),
             // threshold: F::from(0), // TODO!(ryancao): For debugging purposes only!
         };
         dummy_decision_nodes.push(decision_node);
@@ -201,7 +199,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     for idx in 2_u32.pow(TREE_HEIGHT as u32)..2_u32.pow(TREE_HEIGHT as u32 + 1) {
         let leaf_node = LeafNode {
             node_id: F::from(idx as u16),
-            node_val: F::from(rng.gen::<u64>()),
+            node_val: F::from(test_rng().gen::<u64>()),
         };
         dummy_leaf_nodes.push(leaf_node);
     }
@@ -218,7 +216,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_decision_node_paths = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(x, _, _, _, _)| {
+        .map(|(x, _, _, _)| {
             x
         }).collect_vec();
 
@@ -226,7 +224,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_leaf_node_paths = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, x, _, _, _)| {
+        .map(|(_, x, _, _)| {
             x
         }).collect_vec();
 
@@ -234,25 +232,25 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_permutation_indices = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, _, x, _, _)| {
+        .map(|(_, _, x, _)| {
             x
         }).collect_vec();
 
     // --- Compute multiplicities: just add the ones that are given in the returned map ---
-    // TODO!(ryancao): Compute the binary decompositions
-    let multiplicities: Vec<F> = vec![F::zero(); 2_u32.pow(TREE_HEIGHT as u32 + 1) as usize];
+    // TODO!(ryancao): Just use the paths already! The decision nodes are there!
+    let multiplicities: Vec<F> = vec![F::zero(); (2_u32.pow(TREE_HEIGHT as u32 + 1) - 1) as usize];
     let dummy_multiplicities_bin_decomp = dummy_auxiliaries
         .clone()
         .into_iter()
-        .fold(multiplicities, |prev_multiplicities, (_, _, _, new_multiplicities_map, _)| {
+        .fold(multiplicities, |prev_multiplicities, (path_decision_nodes, _, _, _)| {
 
             // --- TODO!(ryancao): This is so bad lol ---
             let mut new_multiplicities: Vec<F> = prev_multiplicities.clone();
 
-            // --- Just increment the current vector of multiplicities by the map at that index ---
-            new_multiplicities_map.into_iter().for_each(|(tree_node_idx, multiplicity)| {
-                let usize_tree_node_idx = tree_node_idx.into_bigint().as_ref()[0] as usize;
-                new_multiplicities[usize_tree_node_idx] += F::from(multiplicity);
+            // --- Just grab the node IDs from each decision node and add them to the multiplicities ---
+            path_decision_nodes.into_iter().for_each(|decision_node| {
+                let node_id = decision_node.node_id.into_bigint().as_ref()[0] as usize;
+                new_multiplicities[node_id] += F::one();
             });
 
             new_multiplicities
@@ -266,7 +264,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_binary_decomp_diffs = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, _, _, _, diffs)| {
+        .map(|(_, _, _, diffs)| {
             diffs.into_iter().map(|diff| {
                 let ret = generate_16_bit_signed_decomp(diff);
                 check_signed_recomposition(diff, ret);
@@ -489,7 +487,7 @@ mod tests {
         // --- Grab the things necessary to compute the diff (the permuted input and thresholds) ---
         let threshold_mle: DenseMleRef<Fr> = dummy_decision_node_paths_mle.threshold();
         let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone());
-        let permuted_input_values_mle: DenseMleRef<Fr> = dummy_permuted_input_data_mle.attr_val(threshold_mle.num_vars);
+        let permuted_input_values_mle: DenseMleRef<Fr> = dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars));
         let permuted_input_values_mle_expr = ExpressionStandard::Mle(permuted_input_values_mle.clone());
 
         // --- Need to just get diff ---
@@ -576,7 +574,12 @@ mod tests {
         let r2: Fr = test_rng().gen();
 
         // --- Multiply to do packing ---
-        // let dummy_attribute_idx_mleref = dummy_attr_idx_data_mle
+        let dummy_attribute_id_mleref = dummy_input_data_mle.attr_id(None);
+        let dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref);
+        let dummy_attribute_val_mleref = dummy_input_data_mle.attr_val(None);
+        let dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref);
+
+        // --- 
 
     }
 }
