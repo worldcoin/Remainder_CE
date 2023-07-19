@@ -184,7 +184,9 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
     // --- Populate decision nodes ---
     // Note that attr_id can only be in [0, DUMMY_INPUT_LEN)
-    for idx in 0..(2_u32.pow(TREE_HEIGHT as u32) - 1) {
+    let num_decision_nodes = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
+    let num_leaf_nodes = 2_u32.pow(TREE_HEIGHT as u32 - 1);
+    for idx in 0..num_decision_nodes {
         let decision_node = DecisionNode {
             node_id: F::from(idx as u16),
             attr_id: F::from(test_rng().gen_range(0..DUMMY_INPUT_LEN as u16)),
@@ -196,7 +198,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     }
 
     // --- Populate leaf nodes ---
-    for idx in 2_u32.pow(TREE_HEIGHT as u32)..2_u32.pow(TREE_HEIGHT as u32 + 1) {
+    for idx in num_decision_nodes..(num_decision_nodes + num_leaf_nodes) {
         let leaf_node = LeafNode {
             node_id: F::from(idx as u16),
             node_val: F::from(test_rng().gen::<u64>()),
