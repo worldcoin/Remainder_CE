@@ -20,6 +20,8 @@ What's our plan here?
 const DUMMY_INPUT_LEN: usize = 1 << 5;
 const NUM_DUMMY_INPUTS: usize = 1 << 8;
 const TREE_HEIGHT: usize = 8;
+const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
+const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
 
 /// - First element is the decision path nodes
 /// - Second element is the final predicted leaf node
@@ -73,7 +75,7 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
     }
 
     // --- Leaf node indices are offset by 2^{TREE_HEIGHT} ---
-    let ret_leaf_node = leaf_nodes[current_node_idx - (2_u32.pow(TREE_HEIGHT as u32) - 1) as usize];
+    let ret_leaf_node = leaf_nodes[current_node_idx - NUM_DECISION_NODES as usize];
 
     (path_decision_nodes, ret_leaf_node, permuted_access_indices, diffs)
 
@@ -184,9 +186,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
     // --- Populate decision nodes ---
     // Note that attr_id can only be in [0, DUMMY_INPUT_LEN)
-    let num_decision_nodes = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
-    let num_leaf_nodes = 2_u32.pow(TREE_HEIGHT as u32 - 1);
-    for idx in 0..num_decision_nodes {
+    for idx in 0..NUM_DECISION_NODES {
         let decision_node = DecisionNode {
             node_id: F::from(idx as u16),
             attr_id: F::from(test_rng().gen_range(0..DUMMY_INPUT_LEN as u16)),
@@ -198,7 +198,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     }
 
     // --- Populate leaf nodes ---
-    for idx in num_decision_nodes..(num_decision_nodes + num_leaf_nodes) {
+    for idx in NUM_DECISION_NODES..(NUM_DECISION_NODES + NUM_LEAF_NODES) {
         let leaf_node = LeafNode {
             node_id: F::from(idx as u16),
             node_val: F::from(test_rng().gen::<u64>()),
