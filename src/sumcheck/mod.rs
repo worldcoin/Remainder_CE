@@ -469,7 +469,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
 /// Returns the maximum degree of b_{curr_round} within an expression
 /// (and therefore the number of prover messages we need to send)
 /// TODO(ryancao): Change this to take into account the beta polynomials
-fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize) -> usize {
+pub fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize) -> usize {
     // --- By default, all rounds have degree at least 1 ---
     let mut round_degree = 1;
 
