@@ -9,8 +9,11 @@ use crate::mle::MleRef;
 use crate::sumcheck::*;
 
 use ark_std::{cfg_iter, cfg_into_iter};
-use itertools::{izip, Itertools};
+use itertools::{izip, multizip, Itertools};
 use thiserror::Error;
+use rayon::{prelude::{
+    IndexedParallelIterator, IntoParallelIterator, ParallelIterator,
+}, slice::ParallelSlice};
 
 use super::{Claim, Layer};
 
@@ -24,6 +27,8 @@ enum LayerError {
     LayerMleError,
     #[error("MLE within MleRef has multiple values within it")]
     MleRefMleError,
+    #[error("Empty list of claims cannot aggregate")]
+    ClaimAggroError,
 }
 
 ///Take in a layer that has completed the sumcheck protocol and return a list of claims on the next layer
@@ -104,14 +109,24 @@ fn get_claims<F: FieldExt>(layer: &impl Layer<F>) -> Result<Vec<(usize, Claim<F>
 /// Aggregate several claims into one
 fn aggregate_claims<F: FieldExt>(
     claims: Vec<Claim<F>>,
-    mleref: &impl MleRef,
     rchal: F,
 ) -> Claim<F> {
+   
+    let claim_vecs: Vec<_> = claims.clone().into_iter().map(|(claimidx, _)| claimidx).collect();
+    let val_vec: Vec<F> = claims.into_iter().map(|(_, val)| val).collect();
+    let numidx = claim_vecs[0].len();
 
-    let claim_indices: Vec<_> = claims.iter().map(|(claimidx, _)| claimidx.iter()).collect();
-    let r_star = izip!(claim_indices.iter()).map(|evals| evaluate_at_a_point(evals.collect_vec(), rchal));
-    dbg!()
-    todo!();
+    let rstar: Vec<F> = (0..numidx).into_iter().map(
+        |idx| {
+            let evals: Vec<F> = claim_vecs.iter().map(|claim| claim[idx]).collect();
+            dbg!(evals.clone());
+            evaluate_at_a_point(evals, rchal)
+            .unwrap()
+        }
+    ).collect();
+
+    let aggregate_val = evaluate_at_a_point(val_vec, rchal).unwrap();
+    (rstar, aggregate_val)
 }
 
 mod test {
@@ -141,14 +156,10 @@ mod test {
 
     #[test]
     fn test_aggro_claim() {
-        let mut rng = test_rng();
-        let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
-        let mle_ref = mle1.mle_ref();
         let claim1: Claim<Fr> = (vec![Fr::from(2), Fr::from(3)], Fr::from(14));
         let claim2: Claim<Fr> = (vec![Fr::one(), Fr::from(7)], Fr::from(21));
-        
-
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mle_ref, Fr::from(10));
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2],  Fr::from(10));
+        let exp: Claim<Fr> = (vec![Fr::from(-8), Fr::from(43)], Fr::from(84));
+        assert_eq!(res, exp);
     }
 }
