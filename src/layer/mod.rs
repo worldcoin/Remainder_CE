@@ -172,7 +172,7 @@ impl<F: FieldExt, A: LayerBuilder<F> + Clone, B: LayerBuilder<F> + Clone> LayerB
 {
     type Mle = (A::Mle, B::Mle);
 
-    type Successor = (A, B);
+    type Successor = (A::Successor, B::Successor);
 
     fn build_expression(&self) -> ExpressionStandard<F> {
         let first = self.first.build_expression();
@@ -181,9 +181,8 @@ impl<F: FieldExt, A: LayerBuilder<F> + Clone, B: LayerBuilder<F> + Clone> LayerB
     }
 
     fn next_layer(&self, id: usize) -> Self::Successor {
-        //TODO!(make these ingest their new ID)
-        // (self.first.clone(), self.second.clone())
-        todo!()
+        //I don't think this is correct... The selector bit is being ignored
+        (self.first.next_layer(id), self.second.next_layer(id))
     }
 
     fn get_mles(&self) -> &Self::Mle {
