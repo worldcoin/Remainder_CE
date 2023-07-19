@@ -1,9 +1,9 @@
 //!Module that orchestrates creating a GKR Proof
 
-use std::{ops::Range, vec::IntoIter};
+use std::{ops::Range, vec::IntoIter, collections::HashMap};
 
 use crate::{
-    layer::{GKRLayer, Layer, LayerBuilder, LayerError},
+    layer::{GKRLayer, Layer, LayerBuilder, LayerError, LayerId, Claim},
     transcript::Transcript,
     FieldExt,
 };
@@ -35,12 +35,17 @@ pub trait GKRCircuit<F: FieldExt> {
     fn synthesize(&mut self) -> Layers<F>;
 
     fn prove(&mut self, transcript: &mut impl Transcript<F>) -> Result<(), LayerError> {
-        let layers = self.synthesize();
+        let layers: Layers<F> = self.synthesize();
 
         //set up some claim tracking stuff
+        let mut curr_claim: Claim<F> = todo!();
+        let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
+
+        ///Output layers???
 
         for mut layer in layers.0.into_iter().rev() {
-            let init_evals = layer.start_sumcheck(todo!())?;
+            //Aggregate claims
+            let init_evals = layer.start_sumcheck(curr_claim)?;
             transcript
                 .append_field_elements("Initial Sumcheck evaluations", &init_evals)
                 .unwrap();
@@ -55,11 +60,18 @@ pub trait GKRCircuit<F: FieldExt> {
                     .unwrap();
             }
 
-            let claim = layer.get_claim()?;
             let other_claims = layer.get_all_claims()?;
 
             //Add the claims to the claim tracking state
+            for (layer_id,  claim) in other_claims {
+                if let Some(curr_claims) = claims.get_mut(&layer_id) {
+                    curr_claims.push(claim);
+                } else {
+                    claims.insert(layer_id, vec![claim]);
+                }
+            }
         }
+        
         //This needs to return the full sumcheck proof
         Ok(())
     }

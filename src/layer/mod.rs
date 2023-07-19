@@ -14,7 +14,7 @@ use crate::{
     FieldExt,
 };
 
-type Claim<F> = (Vec<F>, F);
+pub type Claim<F> = (Vec<F>, F);
 
 #[derive(Error, Debug, Clone)]
 pub enum LayerError {
@@ -22,8 +22,17 @@ pub enum LayerError {
     LayerNotReady,
     #[error("Error with underlying expression {0}")]
     ExpressionError(ExpressionError),
-    #[error("No challenge when round_index != 0")]
-    NoChallenge,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+///The location of a layer within the GKR circuit
+pub enum LayerId {
+    ///An Mle located in the input layer
+    Input,
+    ///An Mle that is an output
+    Output,
+    ///A layer within the GKR protocol, indexed by it's layer id
+    Layer(usize)
 }
 
 ///A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
@@ -64,7 +73,7 @@ pub trait Layer<F: FieldExt> {
     }
 
     ///Get the claims that this layer makes on other layers
-    fn get_all_claims(&self) -> Result<Vec<(usize, Claim<F>)>, LayerError> {
+    fn get_all_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
         todo!()
     }
 

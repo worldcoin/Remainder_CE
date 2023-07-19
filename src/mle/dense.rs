@@ -10,15 +10,16 @@ use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
-use crate::FieldExt;
+use crate::{FieldExt, layer::LayerId};
 
 use super::{Mle, MleAble, MleIndex, MleRef};
 
-#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Clone, Debug)]
 ///An [Mle] that is dense
 pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> {
     mle: T::Repr,
     num_vars: usize,
+    layer_id: Option<LayerId>,
     _marker: PhantomData<F>,
 }
 
@@ -32,6 +33,10 @@ where
 
     fn num_vars(&self) -> usize {
         self.num_vars
+    }
+
+    fn define_layer_id(&mut self, id: LayerId) {
+        self.layer_id = Some(id);
     }
 }
 
@@ -54,6 +59,7 @@ impl<F: FieldExt> FromIterator<F> for DenseMle<F, F> {
         Self {
             mle: evaluations,
             num_vars,
+            layer_id: None,
             _marker: PhantomData,
         }
     }
@@ -69,6 +75,7 @@ impl<F: FieldExt> DenseMle<F, F> {
         Self {
             mle,
             num_vars,
+            layer_id: None,
             _marker: PhantomData,
         }
     }
@@ -78,7 +85,7 @@ impl<F: FieldExt> DenseMle<F, F> {
             mle: self.mle.clone(),
             mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             num_vars: self.num_vars,
-            layer_id: None,
+            layer_id: self.layer_id.clone(),
         }
     }
 }
@@ -113,6 +120,7 @@ impl<F: FieldExt> FromIterator<Tuple2<F>> for DenseMle<F, Tuple2<F>> {
         Self {
             mle: [first, second],
             num_vars,
+            layer_id: None,
             _marker: PhantomData,
         }
     }
@@ -131,7 +139,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             num_vars,
-            layer_id: None,
+            layer_id: self.layer_id.clone(),
         }
     }
 
@@ -147,7 +155,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             num_vars,
-            layer_id: None,
+            layer_id: self.layer_id.clone(),
         }
     }
 }
@@ -158,7 +166,7 @@ pub struct DenseMleRef<F: FieldExt> {
     mle: Vec<F>,
     mle_indices: Vec<MleIndex<F>>,
     num_vars: usize,
-    layer_id: Option<usize>,
+    layer_id: Option<LayerId>,
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
@@ -250,8 +258,8 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         curr_index + new_indices
     }
 
-    fn get_layer_id(&self) -> Option<usize> {
-        self.layer_id
+    fn get_layer_id(&self) -> Option<LayerId> {
+        self.layer_id.clone()
     }
 }
 
