@@ -291,6 +291,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     };
 
     let mle_eval = |mle_ref: &Exp::MleRef| {
+        dbg!(mle_ref);
         let mle_indicies = mle_ref.mle_indices();
         let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
         // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---

@@ -27,8 +27,10 @@ enum LayerError {
     LayerMleError,
     #[error("MLE within MleRef has multiple values within it")]
     MleRefMleError,
-    #[error("Empty list of claims cannot aggregate")]
+    #[error("Error aggregating claims")]
     ClaimAggroError,
+    #[error("Should be evaluating to a sum")]
+    ExpressionEvalError,
 }
 
 ///Take in a layer that has completed the sumcheck protocol and return a list of claims on the next layer
@@ -106,27 +108,60 @@ fn get_claims<F: FieldExt>(layer: &impl Layer<F>) -> Result<Vec<(usize, Claim<F>
     Ok(indices.into_iter().zip(claims).collect())
 }
 
+fn compute_lx<F: FieldExt>(
+    expr: &mut ExpressionStandard<F>,
+    challenge: &Vec<F>,
+    num_claims: usize,
+) -> Result<Vec<F>, LayerError> {
+    //fix variable hella times
+    //evaluate expr on the mutated expr
+
+    let num_vars = expr.index_mle_indices(0);
+    let num_evals = num_vars*num_claims;
+    let lx_evals: Result<Vec<F>, LayerError> = cfg_into_iter!(0..num_evals)
+        .map(
+            |_idx| {
+                let fix_expr = expr.clone();
+                let mut fixed_expr = challenge.iter()
+                    .enumerate()
+                    .fold(
+                        fix_expr,
+                        |mut expr, (idx, chal_point)| {
+                            expr.fix_variable(idx, *chal_point); 
+                            expr
+                        });
+                let val = evaluate_expr(&mut fixed_expr, 0, 0).unwrap();
+                match val {
+                    SumOrEvals::Sum(evaluation) => Ok(evaluation),
+                    SumOrEvals::Evals(_) => Err(LayerError::ExpressionEvalError)
+                }
+            }
+        ).collect();
+    lx_evals
+}
+
 /// Aggregate several claims into one
 fn aggregate_claims<F: FieldExt>(
     claims: Vec<Claim<F>>,
+    expr: &mut ExpressionStandard<F>,
     rchal: F,
 ) -> Claim<F> {
    
-    let claim_vecs: Vec<_> = claims.clone().into_iter().map(|(claimidx, _)| claimidx).collect();
-    let val_vec: Vec<F> = claims.into_iter().map(|(_, val)| val).collect();
+    let claim_vecs: Vec<_> = cfg_into_iter!(claims.clone()).map(|(claimidx, _)| claimidx).collect();
     let numidx = claim_vecs[0].len();
 
-    let rstar: Vec<F> = (0..numidx).into_iter().map(
+    let rstar: Vec<F> = cfg_into_iter!(0..numidx).map(
         |idx| {
             let evals: Vec<F> = claim_vecs.iter().map(|claim| claim[idx]).collect();
-            dbg!(evals.clone());
-            evaluate_at_a_point(evals, rchal)
-            .unwrap()
+            evaluate_at_a_point(evals, rchal).unwrap()
         }
     ).collect();
 
-    let aggregate_val = evaluate_at_a_point(val_vec, rchal).unwrap();
-    (rstar, aggregate_val)
+    let lx = compute_lx(expr, &rstar, claims.len()).unwrap();
+
+    let claimed_val = evaluate_at_a_point(lx, rchal);
+
+    (rstar, claimed_val.unwrap())
 }
 
 mod test {
@@ -156,10 +191,26 @@ mod test {
 
     #[test]
     fn test_aggro_claim() {
+        let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle_ref = mle1.mle_ref();
+        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr_copy = expr.clone();
+
         let claim1: Claim<Fr> = (vec![Fr::from(2), Fr::from(3)], Fr::from(14));
         let claim2: Claim<Fr> = (vec![Fr::one(), Fr::from(7)], Fr::from(21));
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2],  Fr::from(10));
-        let exp: Claim<Fr> = (vec![Fr::from(-8), Fr::from(43)], Fr::from(84));
-        assert_eq!(res, exp);
+
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mut expr, Fr::from(10));
+
+        let fix_vars = vec![Fr::from(-8), Fr::from(43)];
+        expr_copy.index_mle_indices(0);
+        for i in 0..2 {
+            expr_copy.fix_variable(i, fix_vars[i]);
+        }
+        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        if let SumOrEvals::Sum(num) = expr_eval {
+            let exp: Claim<Fr> = (fix_vars, num);
+            assert_eq!(res, exp);
+        }
     }
 }
