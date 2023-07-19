@@ -110,19 +110,29 @@ fn get_claims<F: FieldExt>(layer: &impl Layer<F>) -> Result<Vec<(usize, Claim<F>
 
 fn compute_lx<F: FieldExt>(
     expr: &mut ExpressionStandard<F>,
-    challenge: &Vec<F>,
+    claim_vecs: Vec<Vec<F>>, 
+    claimed_vals: &mut Vec<F>,
     num_claims: usize,
+    num_idx: usize,
 ) -> Result<Vec<F>, LayerError> {
     //fix variable hella times
     //evaluate expr on the mutated expr
 
     let num_vars = expr.index_mle_indices(0);
     let num_evals = num_vars*num_claims;
-    let lx_evals: Result<Vec<F>, LayerError> = cfg_into_iter!(0..num_evals)
+    let next_evals: Result<Vec<F>, LayerError> = cfg_into_iter!(num_claims..num_evals)
         .map(
-            |_idx| {
+            |idx| {
+                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                .map(
+                    |claim_idx| {
+                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs).map(|claim| claim[claim_idx]).collect();
+                        evaluate_at_a_point(evals, F::from(idx as u64)).unwrap()
+                    }
+                ).collect();
+
                 let fix_expr = expr.clone();
-                let mut fixed_expr = challenge.iter()
+                let mut fixed_expr = new_chal.iter()
                     .enumerate()
                     .fold(
                         fix_expr,
@@ -137,7 +147,10 @@ fn compute_lx<F: FieldExt>(
                 }
             }
         ).collect();
-    lx_evals
+
+    claimed_vals.extend(&next_evals.unwrap());
+    let lx_evals = claimed_vals.clone();
+    Ok(lx_evals)
 }
 
 /// Aggregate several claims into one
@@ -146,20 +159,20 @@ fn aggregate_claims<F: FieldExt>(
     expr: &mut ExpressionStandard<F>,
     rchal: F,
 ) -> Claim<F> {
-   
-    let claim_vecs: Vec<_> = cfg_into_iter!(claims.clone()).map(|(claimidx, _)| claimidx).collect();
-    let numidx = claim_vecs[0].len();
 
-    let rstar: Vec<F> = cfg_into_iter!(0..numidx).map(
+    let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_into_iter!(claims.clone()).unzip();
+    let num_idx = claim_vecs[0].len();
+
+    let rstar: Vec<F> = cfg_into_iter!(0..num_idx).map(
         |idx| {
-            let evals: Vec<F> = claim_vecs.iter().map(|claim| claim[idx]).collect();
+            let evals: Vec<F> = cfg_into_iter!(&claim_vecs).map(|claim| claim[idx]).collect();
             evaluate_at_a_point(evals, rchal).unwrap()
         }
     ).collect();
 
-    let lx = compute_lx(expr, &rstar, claims.len()).unwrap();
+    let lx = compute_lx(expr, claim_vecs, &mut vals, claims.len(), num_idx).unwrap();
 
-    let claimed_val = evaluate_at_a_point(lx, rchal);
+    let claimed_val = evaluate_at_a_point(lx,rchal);
 
     (rstar, claimed_val.unwrap())
 }
