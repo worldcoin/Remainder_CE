@@ -213,4 +213,95 @@ mod test {
             assert_eq!(res, exp);
         }
     }
+
+    #[test]
+    fn test_aggro_claim_2() {
+        let mle_v1 = vec![
+            Fr::from(1), 
+            Fr::from(30), 
+            Fr::from(24), 
+            Fr::from(3), 
+            Fr::from(-1), 
+            Fr::from(0), 
+            Fr::from(92), 
+            Fr::from(3)
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle_ref = mle1.mle_ref();
+        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr_copy = expr.clone();
+
+        let claim1: Claim<Fr> = (vec![Fr::from(2), Fr::from(3), Fr::from(-1)], Fr::from(14));
+        let claim2: Claim<Fr> = (vec![Fr::one(), Fr::from(7), Fr::from(100)], Fr::from(21));
+        let claim3: Claim<Fr> = (vec![Fr::from(8), Fr::from(10), Fr::from(50)], Fr::one());
+
+        let rchal = Fr::from(-2);
+
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal);
+
+        let transpose1 = vec![Fr::from(2), Fr::one(), Fr::from(8)];
+        let transpose2 = vec![Fr::from(3), Fr::from(7), Fr::from(10)];
+        let transpose3 = vec![Fr::from(-1), Fr::from(100), Fr::from(50)];
+
+        let fix_vars: Vec<Fr> = vec![transpose1, transpose2, transpose3].into_iter().map(
+            |evals| 
+            evaluate_at_a_point(evals, rchal).unwrap()
+        ).collect();
+
+        expr_copy.index_mle_indices(0);
+        for i in 0..3 {
+            expr_copy.fix_variable(i, fix_vars[i]);
+        }
+        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        if let SumOrEvals::Sum(num) = expr_eval {
+            let exp: Claim<Fr> = (fix_vars, num);
+            assert_eq!(res, exp);
+        }
+    }
+
+    #[test]
+    fn test_aggro_claim_3() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::rand(&mut rng),
+            Fr::rand(&mut rng),
+            Fr::rand(&mut rng),
+            Fr::rand(&mut rng),
+            Fr::rand(&mut rng),
+            Fr::rand(&mut rng),
+            Fr::rand(&mut rng),
+            Fr::rand(&mut rng),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle_ref = mle1.mle_ref();
+        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr_copy = expr.clone();
+
+        let claim1: Claim<Fr> = (vec![Fr::from(2), Fr::from(3), Fr::from(-1)], Fr::from(14));
+        let claim2: Claim<Fr> = (vec![Fr::one(), Fr::from(7), Fr::from(100)], Fr::from(21));
+        let claim3: Claim<Fr> = (vec![Fr::from(8), Fr::from(10), Fr::from(50)], Fr::one());
+
+        let rchal = Fr::rand(&mut rng);
+
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal);
+
+        let transpose1 = vec![Fr::from(2), Fr::one(), Fr::from(8)];
+        let transpose2 = vec![Fr::from(3), Fr::from(7), Fr::from(10)];
+        let transpose3 = vec![Fr::from(-1), Fr::from(100), Fr::from(50)];
+
+        let fix_vars: Vec<Fr> = vec![transpose1, transpose2, transpose3].into_iter().map(
+            |evals| 
+            evaluate_at_a_point(evals, rchal).unwrap()
+        ).collect();
+
+        expr_copy.index_mle_indices(0);
+        for i in 0..3 {
+            expr_copy.fix_variable(i, fix_vars[i]);
+        }
+        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        if let SumOrEvals::Sum(num) = expr_eval {
+            let exp: Claim<Fr> = (fix_vars, num);
+            assert_eq!(res, exp);
+        }
+    }
 }
