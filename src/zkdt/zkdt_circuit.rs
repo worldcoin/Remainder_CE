@@ -173,9 +173,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
         for attr_id in 0..DUMMY_INPUT_LEN {
             let input_attribute = InputAttribute {
                 attr_id: F::from(attr_id as u16),
-                // Val can be anything from 0 to 1023
-                // attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)) as u16)),
-                attr_val: F::one(),
+                attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)) as u16)),
             };
             single_attribute_copy.push(input_attribute);
             // single_permuted_attribute_copy.push(input_attribute);
@@ -197,14 +195,10 @@ fn generate_dummy_data<F: FieldExt>() -> (
     // --- Populate decision nodes ---
     // Note that attr_id can only be in [0, DUMMY_INPUT_LEN)
     for idx in 0..NUM_DECISION_NODES {
-        let attr_id = F::from(rng.gen_range(0..DUMMY_INPUT_LEN as u16));
         let decision_node = DecisionNode {
             node_id: F::from(idx as u16),
-            attr_id: attr_id,
-            // Same here; threshold is anything from 0 to 1023
-            // threshold: F::from(rng.gen_range(0..(2_u16.pow(12)))),
-            threshold: F::zero(), // TODO!(ryancao): For debugging purposes only!
-            // threshold: attr_id,
+            attr_id: F::from(rng.gen_range(0..DUMMY_INPUT_LEN as u16)),
+            threshold: F::from(rng.gen_range(0..(2_u16.pow(12)))),
         };
         dummy_decision_nodes.push(decision_node);
     }
@@ -268,13 +262,11 @@ fn generate_dummy_data<F: FieldExt>() -> (
                 original_input_attributes.clone().into_iter()
                     .filter(|x| {
                         // --- Filter by duplicates, but remove them from the containing set ---
-                        if used_input_attributes_clone.contains(x) {
-                            if let Some(index) = used_input_attributes_clone.iter().position(|&y| y == *x) {
-                                used_input_attributes_clone.remove(index);
-                            }
+                        if let Some(index) = used_input_attributes_clone.iter().position(|&y| y == *x) {
+                            used_input_attributes_clone.remove(index);
                             return false;
                         }
-                        return true;
+                        true
                     })
             ).collect_vec();
 
