@@ -214,7 +214,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 .chain(std::iter::once(MleIndex::Fixed(false)))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 2))
                 .collect_vec(),
-            num_vars,
+            num_vars: num_vars - 2,
             layer_id: None,
         }
     }
@@ -234,7 +234,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 .chain(std::iter::once(MleIndex::Fixed(true)))
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 2))
                 .collect_vec(),
-            num_vars,
+            num_vars: num_vars - 2,
             layer_id: None,
         }
     }
