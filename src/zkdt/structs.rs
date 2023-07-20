@@ -30,7 +30,7 @@ pub struct BinDecomp16Bit<F: FieldExt> {
 /// Used for the following components of the (circuit) input:
 /// a) The actual input attributes, i.e. x
 /// b) The permuted input attributes, i.e. \bar{x}
-#[derive(Copy, Debug, Clone, From, Into)]
+#[derive(Copy, Debug, Clone, From, Into, PartialEq)]
 pub struct InputAttribute<F: FieldExt> {
     // pub attr_idx: F,
     pub attr_id: F,

@@ -19,23 +19,25 @@ What's our plan here?
 // --- Constants ---
 const DUMMY_INPUT_LEN: usize = 1 << 5;
 const NUM_DUMMY_INPUTS: usize = 1 << 8;
-const TREE_HEIGHT: usize = 8;
+const TREE_HEIGHT: usize = 9;
 const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
 
 /// - First element is the decision path nodes
 /// - Second element is the final predicted leaf node
-/// - Third element is the attributes used
-/// - Fourth element is the difference between the current attribute value and the node threshold
+/// - Third element is the difference between the current attribute value and the node threshold
+/// - Fourth element is the input attributes which were used during inference
+/// - Third element is the attributes used (deprecated)
 fn generate_correct_path_and_permutation<F: FieldExt>(
     decision_nodes: &Vec<DecisionNode<F>>,
     leaf_nodes: &Vec<LeafNode<F>>,
     input_datum: &Vec<InputAttribute<F>>
-) -> (Vec<DecisionNode<F>>, LeafNode<F>, Vec<F>, Vec<F>) {
+) -> (Vec<DecisionNode<F>>, LeafNode<F>, Vec<F>, Vec<InputAttribute<F>>) {
 
     // --- Keep track of the path and permutation ---
     let mut path_decision_nodes: Vec<DecisionNode<F>> = vec![];
-    let mut permuted_access_indices: Vec<F> = vec![];
+    let mut used_input_attributes: Vec<InputAttribute<F>> = vec![];
+    // let mut permuted_access_indices: Vec<F> = vec![];
 
     // --- Keep track of how many times each attribute ID was used (to get the corresponding attribute idx) ---
     // Key: Attribute ID
@@ -53,10 +55,13 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
         path_decision_nodes.push(decision_nodes[current_node_idx]);
         let attr_id = (decision_nodes[current_node_idx].attr_id.into_bigint()).as_ref()[0] as usize;
 
+        // --- Stores the current input attribute which is being used ---
+        used_input_attributes.push(input_datum[attr_id]);
+
         // --- Assume that repeats are basically layered one after another ---
-        let num_repeats = attr_num_hits.get(&decision_nodes[current_node_idx].attr_id).unwrap_or(&0);
-        let offset = *num_repeats * (DUMMY_INPUT_LEN as u32);
-        permuted_access_indices.push(decision_nodes[current_node_idx].attr_id + F::from(offset));
+        // let num_repeats = attr_num_hits.get(&decision_nodes[current_node_idx].attr_id).unwrap_or(&0);
+        // let offset = *num_repeats * (DUMMY_INPUT_LEN as u32);
+        // permuted_access_indices.push(decision_nodes[current_node_idx].attr_id + F::from(offset));
 
         // --- Adds a hit to the current attribute ID ---
         let num_attr_id_hits = attr_num_hits.entry(decision_nodes[current_node_idx].attr_id).or_insert(0);
@@ -79,7 +84,8 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
 
     // assert!(path_decision_nodes.len() == TREE_HEIGHT - 1);
 
-    (path_decision_nodes, ret_leaf_node, permuted_access_indices, diffs)
+    // (path_decision_nodes, ret_leaf_node, permuted_access_indices, diffs)
+    (path_decision_nodes, ret_leaf_node, diffs, used_input_attributes)
 
 }
 
@@ -131,9 +137,9 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 /// -- Actually, scratch the above: we might be getting rid of `attr_id`s
 /// altogether and replacing with `attr_idx` everywhere (as suggested by Ben!)
 fn generate_dummy_data<F: FieldExt>() -> (
-    Vec<Vec<F>>,                    // Input attribute indices
+    // Vec<Vec<F>>,                    // Input attribute indices
     Vec<Vec<InputAttribute<F>>>,    // Input attributes
-    Vec<Vec<F>>,                    // Permuted input attribute indices
+    // Vec<Vec<F>>,                    // Permuted input attribute indices
     Vec<Vec<InputAttribute<F>>>,    // Permuted input attributes
     Vec<Vec<DecisionNode<F>>>,      // Paths (decision node part only)
     Vec<LeafNode<F>>,               // Paths (leaf node part only)
@@ -148,7 +154,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
     // --- Generate dummy input data ---
     let mut dummy_input_data: Vec<Vec<InputAttribute<F>>> = vec![];
-    let mut dummy_permuted_input_data: Vec<Vec<InputAttribute<F>>> = vec![];
+    // let mut dummy_permuted_input_data: Vec<Vec<InputAttribute<F>>> = vec![];
 
     // --- Generate dummy input index data ---
     let dummy_attr_idx_data = (0..(DUMMY_INPUT_LEN * (TREE_HEIGHT - 1)))
@@ -158,32 +164,30 @@ fn generate_dummy_data<F: FieldExt>() -> (
         .collect_vec();
     let dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
 
-    // --- Populate (NOTE that we have to permute later) ---
+    // --- Populate (note that we have to permute later) ---
     for _ in 0..NUM_DUMMY_INPUTS {
 
         // --- Generate a single copy of all the attributes ---
         let mut single_attribute_copy = vec![];
-        let mut single_permuted_attribute_copy = vec![];
+        // let mut single_permuted_attribute_copy = vec![];
         for attr_id in 0..DUMMY_INPUT_LEN {
             let input_attribute = InputAttribute {
                 attr_id: F::from(attr_id as u16),
                 // Val can be anything from 0 to 1023
                 // attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)) as u16)),
-                // attr_val: F::from(dummy_input as u16), // TODO!(ryancao): For debugging purposes only!
-                // attr_val: F::from(attr_id as u32),
                 attr_val: F::one(),
             };
             single_attribute_copy.push(input_attribute);
-            single_permuted_attribute_copy.push(input_attribute);
+            // single_permuted_attribute_copy.push(input_attribute);
         }
 
         // --- Have to repeat attributes TREE_HEIGHT - 1 times ---
         let dummy_input_datum = single_attribute_copy.clone().into_iter().cycle().take(single_attribute_copy.len() * (TREE_HEIGHT - 1)).collect_vec();
-        let dummy_permuted_input_datum = single_permuted_attribute_copy.clone().into_iter().cycle().take(single_permuted_attribute_copy.len() * (TREE_HEIGHT - 1)).collect_vec();
+        // let dummy_permuted_input_datum = single_permuted_attribute_copy.clone().into_iter().cycle().take(single_permuted_attribute_copy.len() * (TREE_HEIGHT - 1)).collect_vec();
 
         // --- Add to final list ---
         dummy_input_data.push(dummy_input_datum);
-        dummy_permuted_input_data.push(dummy_permuted_input_datum);
+        // dummy_permuted_input_data.push(dummy_permuted_input_datum);
     }
 
     // --- Generate a dummy tree ---
@@ -239,11 +243,45 @@ fn generate_dummy_data<F: FieldExt>() -> (
         }).collect_vec();
 
     // --- Collect correct permutation indices ---
-    let dummy_permutation_indices = dummy_auxiliaries
+    // let dummy_permutation_indices = dummy_auxiliaries
+    //     .clone()
+    //     .into_iter()
+    //     .map(|(_, _, x, _)| {
+    //         x
+    //     }).collect_vec();
+
+    // --- Compute the actual permutations ---
+    let all_used_input_attributes = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, _, x, _)| {
-            x
+        .map(|(_, _, _, used_input_attributes)| {
+            used_input_attributes
+        })
+        .collect_vec();
+    let dummy_permuted_input_data = zip(all_used_input_attributes, dummy_input_data.clone())
+        .map(|(used_input_attributes, original_input_attributes)| {
+
+            let mut used_input_attributes_clone = used_input_attributes.clone();
+
+            // --- Basically need to create a new vector with input attributes ---
+            let ret = used_input_attributes.clone().into_iter().chain(
+                original_input_attributes.clone().into_iter()
+                    .filter(|x| {
+                        // --- Filter by duplicates, but remove them from the containing set ---
+                        if used_input_attributes_clone.contains(x) {
+                            if let Some(index) = used_input_attributes_clone.iter().position(|&y| y == *x) {
+                                used_input_attributes_clone.remove(index);
+                            }
+                            return false;
+                        }
+                        return true;
+                    })
+            ).collect_vec();
+
+            assert_eq!(ret.len(), original_input_attributes.len());
+
+            return ret;
+
         }).collect_vec();
 
     // --- Compute multiplicities: just add the ones that are given in the returned map ---
@@ -252,7 +290,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_multiplicities_bin_decomp = dummy_auxiliaries
         .clone()
         .into_iter()
-        .fold(multiplicities, |prev_multiplicities, (path_decision_nodes, _, _, _)| {
+        .fold(multiplicities, |prev_multiplicities, (path_decision_nodes, path_leaf_node, _, _)| {
 
             // --- TODO!(ryancao): This is so bad lol ---
             let mut new_multiplicities: Vec<F> = prev_multiplicities.clone();
@@ -262,6 +300,10 @@ fn generate_dummy_data<F: FieldExt>() -> (
                 let node_id = decision_node.node_id.into_bigint().as_ref()[0] as usize;
                 new_multiplicities[node_id] += F::one();
             });
+
+            // --- Count the leaf node as well! ---
+            let node_id = path_leaf_node.node_id.into_bigint().as_ref()[0] as usize;
+            new_multiplicities[node_id] += F::one();
 
             new_multiplicities
         }).into_iter()
@@ -274,7 +316,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_binary_decomp_diffs = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, _, _, diffs)| {
+        .map(|(_, _, diffs, _)| {
             diffs.into_iter().map(|diff| {
                 let ret = generate_16_bit_signed_decomp(diff);
                 check_signed_recomposition(diff, ret);
@@ -283,9 +325,9 @@ fn generate_dummy_data<F: FieldExt>() -> (
         }).collect_vec();
 
     (
-        dummy_attr_idx_data,
+        // dummy_attr_idx_data,
         dummy_input_data,
-        dummy_permutation_indices,
+        // dummy_permutation_indices,
         dummy_permuted_input_data,
         dummy_decision_node_paths,
         dummy_leaf_node_paths,
@@ -326,9 +368,9 @@ fn check_signed_recomposition<F: FieldExt>(actual_value: F, decomp: BinDecomp16B
 /// Takes the above dummy data from `generate_dummy_data()` and converts
 /// into MLE form factor.
 fn generate_dummy_mles<F: FieldExt>() -> (
-    DenseMle<F, F>,
+    // DenseMle<F, F>,
     DenseMle<F, InputAttribute<F>>,
-    DenseMle<F, F>,
+    // DenseMle<F, F>,
     DenseMle<F, InputAttribute<F>>,
     DenseMle<F, DecisionNode<F>>,
     DenseMle<F, LeafNode<F>>,
@@ -340,9 +382,9 @@ fn generate_dummy_mles<F: FieldExt>() -> (
 
     // --- First generate the dummy data ---
     let (
-        dummy_attr_idx_data,
+        // dummy_attr_idx_data,
         dummy_input_data,
-        dummy_permutation_indices,
+        // dummy_permutation_indices,
         dummy_permuted_input_data,
         dummy_decision_node_paths,
         dummy_leaf_node_paths,
@@ -354,13 +396,13 @@ fn generate_dummy_mles<F: FieldExt>() -> (
 
     // --- Generate MLEs for each ---
     // TODO!(ryancao): Change this into batched form
-    let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
+    // let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
     let dummy_input_data_mle = dummy_input_data[0]
         .clone()
         .into_iter()
         .map(InputAttribute::from)
         .collect::<DenseMle<F, InputAttribute<F>>>();
-    let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
+    // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
     let dummy_permuted_input_data_mle = dummy_permuted_input_data[0]
         .clone()
         .into_iter()
@@ -397,9 +439,9 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         .collect::<DenseMle<F, LeafNode<F>>>();
 
     (
-        dummy_attr_idx_data_mle,
+        // dummy_attr_idx_data_mle,
         dummy_input_data_mle,
-        dummy_permutation_indices_mle,
+        // dummy_permutation_indices_mle,
         dummy_permuted_input_data_mle,
         dummy_decision_node_paths_mle,
         dummy_leaf_node_paths_mle,
@@ -431,9 +473,9 @@ mod tests {
     fn dummy_bits_are_binary_test() {
         // --- First generate the dummy data ---
         let (
-            dummy_attr_idx_data,
+            // dummy_attr_idx_data,
             dummy_input_data,
-            dummy_permutation_indices,
+            // dummy_permutation_indices,
             dummy_permuted_input_data,
             dummy_decision_node_paths,
             dummy_leaf_node_paths,
@@ -473,9 +515,9 @@ mod tests {
     fn circuit_dummy_bits_are_binary_test() {
 
         let (
-            dummy_attr_idx_data_mle,
+            // dummy_attr_idx_data_mle,
             dummy_input_data_mle,
-            dummy_permutation_indices_mle,
+            // dummy_permutation_indices_mle,
             dummy_permuted_input_data_mle,
             dummy_decision_node_paths_mle,
             dummy_leaf_node_paths_mle,
@@ -513,9 +555,9 @@ mod tests {
     fn dummy_binary_recomp_test() {
         // --- First generate the dummy data ---
         let (
-            dummy_attr_idx_data,
+            // dummy_attr_idx_data,
             dummy_input_data,
-            dummy_permutation_indices,
+            // dummy_permutation_indices,
             dummy_permuted_input_data,
             dummy_decision_node_paths,
             dummy_leaf_node_paths,
@@ -583,9 +625,9 @@ mod tests {
     fn circuit_dummy_binary_recomp_test() {
 
         let (
-            dummy_attr_idx_data_mle,
+            // dummy_attr_idx_data_mle,
             dummy_input_data_mle,
-            dummy_permutation_indices_mle,
+            // dummy_permutation_indices_mle,
             dummy_permuted_input_data_mle,
             dummy_decision_node_paths_mle,
             dummy_leaf_node_paths_mle,
@@ -617,13 +659,13 @@ mod tests {
         // dbg!(permuted_input_values_mle_expr_eval);
 
         // --- Need to just get diff ---
-        // dbg!(permuted_input_values_mle.num_vars); // Should be 3
-        // dbg!(threshold_mle.num_vars); // Should be 3
+        dbg!(permuted_input_values_mle.num_vars); // Should be 3
+        dbg!(threshold_mle.num_vars); // Should be 3
         let mut diff_expr = permuted_input_values_mle_expr.clone() - threshold_mle_expr.clone();
         let permuted_input_values_mle_expr_eval = evaluate_expr(&mut permuted_input_values_mle_expr.clone(), 1, 2);
         let threshold_mle_expr_eval = evaluate_expr(&mut threshold_mle_expr.clone(), 1, 2);
-        // dbg!(permuted_input_values_mle_expr_eval);
-        // dbg!(threshold_mle_expr_eval);
+        dbg!(permuted_input_values_mle_expr_eval);
+        dbg!(threshold_mle_expr_eval);
 
 
         // --- We need `abs_recomp` and `b_s * abs_recomp` ---
@@ -646,11 +688,13 @@ mod tests {
             let b_s_times_coeff_times_base = ExpressionStandard::Scaled(b_s_times_coeff_ptr, base);
 
             // Debugging
-            let b_i_expr = ExpressionStandard::Mle(bin_decomp_mle.clone());
-            let b_i_expr_eval = evaluate_expr(&mut b_i_expr.clone(), 1, 1);
-            dbg!(bit_idx);
-            dbg!(bin_decomp_mle.clone().num_vars);
-            dbg!(b_i_expr_eval);
+            // let b_i_expr = ExpressionStandard::Mle(bin_decomp_mle.clone());
+            // let b_i_expr_eval = evaluate_expr(&mut b_i_expr.clone(), 1, 1);
+            // let b_s_times_coeff_times_base_eval = evaluate_expr(&mut b_s_times_coeff_times_base.clone(), 1, 2);
+            // dbg!(bit_idx);
+            // dbg!(bin_decomp_mle.clone().num_vars);
+            // dbg!(b_i_expr_eval);
+            // dbg!(b_s_times_coeff_times_base_eval);
 
             acc_expr + b_s_times_coeff_times_base
         });
@@ -667,6 +711,10 @@ mod tests {
             let coeff_expr_ptr = Box::new(coeff_expr);
             let coeff_times_base = ExpressionStandard::Scaled(coeff_expr_ptr, base);
 
+            // Debugging
+            let coeff_times_base_eval = evaluate_expr(&mut coeff_times_base.clone(), 1, 2);
+            dbg!(coeff_times_base_eval);
+
             acc_expr + coeff_times_base
         });
 
@@ -675,12 +723,12 @@ mod tests {
             diff_expr.clone() - abs_recomp_expr.clone() + b_s_times_abs_recomp_expr.clone() + b_s_times_abs_recomp_expr.clone();
 
         // --- Let's just see what the expressions give us... ---
-        // let diff_result = evaluate_expr(&mut diff_expr, 1, 2);
-        // let abs_recomp_expr_result = evaluate_expr(&mut abs_recomp_expr, 1, 2);
-        // let b_s_times_abs_recomp_expr_result = evaluate_expr(&mut b_s_times_abs_recomp_expr, 1, 2);
-        // dbg!(diff_result);
-        // dbg!(abs_recomp_expr_result);
-        // dbg!(b_s_times_abs_recomp_expr_result);
+        let diff_result = evaluate_expr(&mut diff_expr, 1, 2);
+        let abs_recomp_expr_result = evaluate_expr(&mut abs_recomp_expr, 1, 2);
+        let b_s_times_abs_recomp_expr_result = evaluate_expr(&mut b_s_times_abs_recomp_expr, 1, 2);
+        dbg!(diff_result);
+        dbg!(abs_recomp_expr_result);
+        dbg!(b_s_times_abs_recomp_expr_result);
 
         // --- We should get all zeros ---
         let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(permuted_input_values_mle.num_vars as u32) as usize);
@@ -702,9 +750,9 @@ mod tests {
     fn dummy_permutation_test() {
 
         let (
-            dummy_attr_idx_data_mle,
+            // dummy_attr_idx_data_mle,
             dummy_input_data_mle,
-            dummy_permutation_indices_mle,
+            // dummy_permutation_indices_mle,
             dummy_permuted_input_data_mle,
             dummy_decision_node_paths_mle,
             dummy_leaf_node_paths_mle,
