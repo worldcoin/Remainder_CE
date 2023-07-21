@@ -59,7 +59,6 @@ impl<F: FieldExt> Neg for SumOrEvals<F> {
             SumOrEvals::Sum(sum) => SumOrEvals::Sum(sum.neg()),
             // --- Negation for a bunch of eval points is just element-wise negation ---
             SumOrEvals::Evals(evals) => {
-                dbg!(&evals);
                 SumOrEvals::Evals(evals.into_iter().map(|eval| eval.neg()).collect_vec())
             }
         }
@@ -219,17 +218,6 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     let sum = |a, b| {
         let a = a?;
         let b: SumOrEvals<F> = b?;
-        dbg!(&a);
-        match &b {
-            SumOrEvals::Sum(k) => {
-                dbg!(F::zero() - k);
-            },
-            SumOrEvals::Evals(k) => {
-                for elem in k {
-                    dbg!(F::zero() - elem);
-                }
-            }
-        }
         Ok(a + b)
     };
 
@@ -420,7 +408,6 @@ pub fn dummy_sumcheck<F: FieldExt>(
 ) -> Vec<(Vec<F>, Option<F>)> {
     // --- Does the bit indexing ---
     let max_round = expr.index_mle_indices(0);
-    dbg!(max_round);
 
     // --- The prover messages to the verifier ---
     let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];

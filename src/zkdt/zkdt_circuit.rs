@@ -414,7 +414,7 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         .into_iter()
         .map(BinDecomp16Bit::from)
         .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
-    let dummy_multiplicities_bin_decomp_mle = vec![dummy_multiplicities_bin_decomp[0]]
+    let dummy_multiplicities_bin_decomp_mle = dummy_multiplicities_bin_decomp
         .clone()
         .into_iter()
         .map(BinDecomp16Bit::from)
@@ -575,7 +575,6 @@ mod tests {
 
         // --- Grab the bin decomp MLE ---
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_multiplicities_bin_decomp_mle.mle_bit_refs();
-        dbg!(&first_bin_decomp_bit_mle);
         let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
@@ -598,10 +597,9 @@ mod tests {
         // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
         let res = evaluate_expr(&mut b_minus_b_squared.clone(), 1, 2);
         assert_eq!(res.unwrap(), SumOrEvals::Sum(Fr::from(0)));
-        // dbg!(&b_minus_b_squared);
-        // let res_messages = dummy_sumcheck(b_minus_b_squared, &mut rng);
-        // let verify_res = verify_sumcheck_messages(res_messages);
-        // assert!(verify_res.is_ok());
+        let res_messages = dummy_sumcheck(b_minus_b_squared, &mut rng);
+        let verify_res = verify_sumcheck_messages(res_messages);
+        assert!(verify_res.is_ok());
     }
 
     /// Binary recomposition test (out of circuit)
