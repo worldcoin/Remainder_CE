@@ -414,7 +414,7 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         .into_iter()
         .map(BinDecomp16Bit::from)
         .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
-    let dummy_multiplicities_bin_decomp_mle = vec![dummy_multiplicities_bin_decomp[0]]
+    let dummy_multiplicities_bin_decomp_mle = dummy_multiplicities_bin_decomp
         .clone()
         .into_iter()
         .map(BinDecomp16Bit::from)
@@ -504,7 +504,7 @@ mod tests {
 
     /// Basic "bits are binary" test (for the diffs), but in circuit!
     #[test]
-    fn circuit_dummy_bits_are_binary_test() {
+    fn circuit_dummy_bits_are_binary_test_diff() {
 
         let mut rng = test_rng();
 
@@ -526,8 +526,11 @@ mod tests {
         let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
+        dbg!(&first_bin_decomp_bit_mle[0]);
         let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
+        //dbg!(&b_minus_b_squared);
+        
 
         // --- We should get all zeros ---
         let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
@@ -538,15 +541,66 @@ mod tests {
         // --- prover message and just ensuring that both of them are zero, but really we should ---
         // --- be showing that all the evaluations match ---
         let res = evaluate_expr(&mut b_minus_b_squared.clone(), 1, 2);
-        let other_res = evaluate_expr(&mut all_zeros_mle_expr.clone(), 1, 2);
-        assert_eq!(res.unwrap(), other_res.unwrap());
+        let exp = evaluate_expr(&mut all_zeros_mle_expr.clone(), 1, 2);
+        assert_eq!(res.unwrap(), exp.unwrap());
+        
 
         // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
+        // idk if this is actually how we should do this
+        let res = evaluate_expr(&mut b_minus_b_squared.clone(), 1, 2);
+        assert_eq!(res.unwrap(), SumOrEvals::Sum(Fr::from(0)));
+        
         let res_messages = dummy_sumcheck(b_minus_b_squared, &mut rng);
         
         let verify_res = verify_sumcheck_messages(res_messages);
         assert!(verify_res.is_ok());
+    }
 
+    /// basic "bits are binary" test (for multiplicities), but in circuit!
+    #[test]
+    fn circuit_dummy_bits_are_binary_test_multiplicities() {
+        let mut rng = test_rng();
+
+        let (
+            // dummy_attr_idx_data_mle,
+            dummy_input_data_mle,
+            // dummy_permutation_indices_mle,
+            dummy_permuted_input_data_mle,
+            dummy_decision_node_paths_mle,
+            dummy_leaf_node_paths_mle,
+            dummy_binary_decomp_diffs_mle,
+            dummy_multiplicities_bin_decomp_mle,
+            dummy_decision_nodes_mle,
+            dummy_leaf_nodes_mle
+        ) = generate_dummy_mles::<Fr>();
+
+        // --- Grab the bin decomp MLE ---
+        let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_multiplicities_bin_decomp_mle.mle_bit_refs();
+        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
+
+        // --- Do b * (1 - b) = b - b^2 ---
+        let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
+        let b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
+
+        // --- We should get all zeros ---x
+        let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
+        let all_zeros_mle = DenseMle::new(all_zeros);
+        let all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
+
+        // --- TODO!(ryancao): This is jank in the sense that we're just evaluating the first ---
+        // --- prover message and just ensuring that both of them are zero, but really we should ---
+        // --- be showing that all the evaluations match ---
+        let res = evaluate_expr(&mut b_minus_b_squared.clone(), 1, 2);
+        let exp = evaluate_expr(&mut all_zeros_mle_expr.clone(), 1, 2);
+        assert_eq!(res.unwrap(), exp.unwrap());
+        
+
+        // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
+        let res = evaluate_expr(&mut b_minus_b_squared.clone(), 1, 2);
+        assert_eq!(res.unwrap(), SumOrEvals::Sum(Fr::from(0)));
+        let res_messages = dummy_sumcheck(b_minus_b_squared, &mut rng);
+        let verify_res = verify_sumcheck_messages(res_messages);
+        assert!(verify_res.is_ok());
     }
 
     /// Binary recomposition test (out of circuit)

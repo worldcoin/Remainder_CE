@@ -183,8 +183,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     ) -> Result<(), E> {
         match self {
             ExpressionStandard::Constant(_)
-            | ExpressionStandard::Mle(_)
-            | ExpressionStandard::Negated(_) => observer_fn(self),
+            | ExpressionStandard::Mle(_) => observer_fn(self),
+            ExpressionStandard::Negated(exp) => exp.traverse(observer_fn),
             ExpressionStandard::Product(_) => observer_fn(self),
             ExpressionStandard::Scaled(exp, _) => exp.traverse(observer_fn),
             ExpressionStandard::Selector(_, lhs, rhs) => {

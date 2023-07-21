@@ -45,7 +45,7 @@ enum InterpError {
 /// the single value stored in Sum(F), or that we have a bunch of 
 /// eval points (i.e. stored in Evals(Vec<F>)) giving us e.g.
 /// g(0), g(1), g(2), ...
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) enum SumOrEvals<F: FieldExt> {
     Sum(F),
     Evals(Vec<F>),
@@ -217,8 +217,7 @@ pub(crate) fn evaluate_expr<F: FieldExt, Exp: Expression<F>>(
     // --- Use the distributed/element-wise addition impl from earlier ---
     let sum = |a, b| {
         let a = a?;
-        let b = b?;
-
+        let b: SumOrEvals<F> = b?;
         Ok(a + b)
     };
 
@@ -435,9 +434,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
             panic!();
         };
 
-        // challenge = Some(F::rand(rng));
-        challenge = Some(F::one() + F::one());
-        // challenge = Some(F::one());
+        challenge = Some(F::from(2_u64));
     }
 
     expr.fix_variable(max_round - 1, challenge.unwrap());
@@ -708,6 +705,67 @@ mod tests {
         let mle_ref_2 = mle2.mle_ref();
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
+    }
+
+    /// trying something
+    #[test]
+    fn worksforsomereason() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(1),
+            Fr::from(0),
+            Fr::from(1),
+            Fr::from(1),
+            Fr::from(1),
+            Fr::from(1),
+            Fr::from(1),
+            Fr::from(1),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle2: DenseMle<Fr, Fr> = mle1.clone();
+        let mle3: DenseMle<Fr, Fr> = mle1.clone();
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+        let mle_ref_3 = mle3.mle_ref();
+
+        let expression1 = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        let expression = ExpressionStandard::Sum(Box::new(ExpressionStandard::Mle(mle_ref_3)), Box::new(expression1));
+
+        let res_messages = dummy_sumcheck(expression, &mut rng);
+        let verifyres = verify_sumcheck_messages(res_messages);
+        assert!(verifyres.is_ok());
+    }
+
+
+    /// trying something
+    #[test]
+    fn pleasework() {
+        let mut rng = test_rng();
+        let mle_v1 = vec![
+            Fr::from(1),
+            Fr::from(0),
+            Fr::from(1),
+            Fr::from(1),
+            Fr::from(1),
+            Fr::from(1),
+            Fr::from(1),
+            Fr::from(1),
+        ];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle2: DenseMle<Fr, Fr> = mle1.clone();
+        let mle3: DenseMle<Fr, Fr> = mle1.clone();
+
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
+        let mle_ref_3 = mle3.mle_ref();
+
+        let expression1 = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+        let expression = ExpressionStandard::Sum(Box::new(ExpressionStandard::Mle(mle_ref_3)), Box::new(ExpressionStandard::Negated(Box::new(expression1))));
+
         let res_messages = dummy_sumcheck(expression, &mut rng);
         let verifyres = verify_sumcheck_messages(res_messages);
         assert!(verifyres.is_ok());
