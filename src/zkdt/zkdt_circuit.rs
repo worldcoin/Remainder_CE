@@ -452,7 +452,7 @@ mod tests {
     use crate::{
         expression::{ExpressionStandard, Expression},
         mle::{dense::DenseMle, Mle, dense::DenseMleRef},
-        sumcheck::{evaluate_expr, SumOrEvals},
+        sumcheck::{evaluate_expr, SumOrEvals, dummy_sumcheck, verify_sumcheck_messages},
     };
     use ark_bn254::Fr;
     use ark_std::test_rng;
@@ -506,6 +506,8 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test() {
 
+        let mut rng = test_rng();
+
         let (
             // dummy_attr_idx_data_mle,
             dummy_input_data_mle,
@@ -535,11 +537,16 @@ mod tests {
         // --- TODO!(ryancao): This is jank in the sense that we're just evaluating the first ---
         // --- prover message and just ensuring that both of them are zero, but really we should ---
         // --- be showing that all the evaluations match ---
-        let res = evaluate_expr(&mut b_minus_b_squared, 1, 2);
-        let other_res = evaluate_expr(&mut all_zeros_mle_expr, 1, 2);
+        let res = evaluate_expr(&mut b_minus_b_squared.clone(), 1, 2);
+        let other_res = evaluate_expr(&mut all_zeros_mle_expr.clone(), 1, 2);
         assert_eq!(res.unwrap(), other_res.unwrap());
 
         // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
+        let res_messages = dummy_sumcheck(b_minus_b_squared, &mut rng);
+        
+        let verify_res = verify_sumcheck_messages(res_messages);
+        assert!(verify_res.is_ok());
+
     }
 
     /// Binary recomposition test (out of circuit)

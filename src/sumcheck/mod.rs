@@ -28,7 +28,7 @@ enum MleError {
 }
 
 #[derive(Error, Debug, Clone)]
-enum VerifyError {
+pub enum VerifyError {
     #[error("Failed sumcheck round")]
     SumcheckBad,
 }
@@ -403,7 +403,8 @@ fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize
     round_degree
 }
 
-fn dummy_sumcheck<F: FieldExt>(
+/// Does a dummy version of sumcheck with a testing RNG
+pub fn dummy_sumcheck<F: FieldExt>(
     mut expr: ExpressionStandard<F>,
     rng: &mut impl Rng,
 ) -> Vec<(Vec<F>, Option<F>)> {
@@ -434,7 +435,9 @@ fn dummy_sumcheck<F: FieldExt>(
             panic!();
         };
 
-        challenge = Some(F::rand(rng));
+        // challenge = Some(F::rand(rng));
+        challenge = Some(F::one() + F::one());
+        // challenge = Some(F::one());
     }
 
     expr.fix_variable(max_round - 1, challenge.unwrap());
@@ -448,19 +451,26 @@ fn dummy_sumcheck<F: FieldExt>(
 
 /// Returns the curr random challenge if verified correctly, otherwise verify error
 /// can change this to take prev round random challenge, and then compute the new random challenge
-fn verify_sumcheck_messages<F: FieldExt>(
+pub fn verify_sumcheck_messages<F: FieldExt>(
     messages: Vec<(Vec<F>, Option<F>)>,
 ) -> Result<F, VerifyError> {
     let mut prev_evals = &messages[0].0;
     let mut chal = F::zero();
 
     // --- Go through sumcheck messages + (FS-generated) challenges ---
-    for (evals, challenge) in messages.iter().skip(1) {
+    for (round_idx, (evals, challenge)) in messages.iter().enumerate().skip(1) {
         let curr_evals = evals;
         chal = (*challenge).unwrap();
         // --- Evaluate the previous round's polynomial at the random challenge point, i.e. g_{i - 1}(r_i) ---
         let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), challenge.unwrap())
             .expect("could not evaluate at challenge point");
+
+        dbg!(round_idx);
+        dbg!(challenge.unwrap());
+        dbg!(prev_evals);
+        dbg!(F::zero() - curr_evals[0], curr_evals[1]);
+        dbg!(prev_at_r);
+
         // --- It should equal g_i(0) + g_i(1) ---
         if prev_at_r != curr_evals[0] + curr_evals[1] {
             return Err(VerifyError::SumcheckBad);
