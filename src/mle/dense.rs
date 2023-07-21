@@ -6,21 +6,22 @@ use std::{
 };
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::log2;
+use ark_std::{cfg_into_iter, cfg_iter, log2};
 use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
-use crate::{FieldExt, zkdt::structs::LeafNode};
-use super::{Mle, MleIndex, MleRef, MleAble};
+use crate::{{FieldExt, layer::LayerId}, zkdt::structs::LeafNode};
+use super::{Mle, MleAble, MleIndex, MleRef};
 
 use super::super::zkdt::structs::{DecisionNode, BinDecomp16Bit, InputAttribute};
 
-#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+#[derive(Clone, Debug)]
 ///An [Mle] that is dense
 pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> {
     mle: T::Repr,
     num_vars: usize,
+    layer_id: Option<LayerId>,
     _marker: PhantomData<F>,
 }
 
@@ -34,6 +35,10 @@ where
 
     fn num_vars(&self) -> usize {
         self.num_vars
+    }
+
+    fn define_layer_id(&mut self, id: LayerId) {
+        self.layer_id = Some(id);
     }
 }
 
@@ -56,6 +61,7 @@ impl<F: FieldExt> FromIterator<F> for DenseMle<F, F> {
         Self {
             mle: evaluations,
             num_vars,
+            layer_id: None,
             _marker: PhantomData,
         }
     }
@@ -71,6 +77,7 @@ impl<F: FieldExt> DenseMle<F, F> {
         Self {
             mle,
             num_vars,
+            layer_id: None,
             _marker: PhantomData,
         }
     }
@@ -80,7 +87,7 @@ impl<F: FieldExt> DenseMle<F, F> {
             bookkeeping_table: self.mle.clone(),
             mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             num_vars: self.num_vars,
-            layer_id: None,
+            layer_id: self.layer_id.clone(),
         }
     }
 }
@@ -101,23 +108,21 @@ impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, Tuple2<F>> {
     fn into_iter(self) -> Self::IntoIter {
         let len = self.mle.len() / 2;
 
-        self.mle[0]
-            .iter()
-            .cloned()
-            .zip(self.mle[1].iter().cloned())
+        self.mle[0].iter().cloned().zip(self.mle[1].iter().cloned())
     }
 }
 
 impl<F: FieldExt> FromIterator<Tuple2<F>> for DenseMle<F, Tuple2<F>> {
     fn from_iter<T: IntoIterator<Item = Tuple2<F>>>(iter: T) -> Self {
         let iter = iter.into_iter();
-        let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0.0, x.0.1)).unzip();
+        let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0 .1)).unzip();
 
         let num_vars = log2(first.len() + second.len()) as usize;
 
         Self {
             mle: [first, second],
             num_vars,
+            layer_id: None,
             _marker: PhantomData,
         }
     }
@@ -136,7 +141,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             num_vars,
-            layer_id: None,
+            layer_id: self.layer_id.clone(),
         }
     }
 
@@ -152,7 +157,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .chain(repeat_n(MleIndex::Iterated, num_vars - 1))
                 .collect_vec(),
             num_vars,
-            layer_id: None,
+            layer_id: self.layer_id.clone(),
         }
     }
 }
@@ -193,6 +198,7 @@ impl<F: FieldExt> FromIterator<DecisionNode<F>> for DenseMle<F, DecisionNode<F>>
             mle: [node_ids, attr_ids, thresholds],
             num_vars,
             _marker: PhantomData,
+            layer_id: None,
         }
     }
 }
@@ -296,6 +302,7 @@ impl<F: FieldExt> FromIterator<LeafNode<F>> for DenseMle<F, LeafNode<F>> {
             mle: [node_ids, node_vals],
             num_vars,
             _marker: PhantomData,
+            layer_id: None,
         }
     }
 }
@@ -373,6 +380,7 @@ impl<F: FieldExt> FromIterator<InputAttribute<F>> for DenseMle<F, InputAttribute
             mle: [attr_ids, attr_vals],
             num_vars,
             _marker: PhantomData,
+            layer_id: None,
         }
     }
 }
@@ -472,6 +480,7 @@ impl<F: FieldExt> FromIterator<BinDecomp16Bit<F>> for DenseMle<F, BinDecomp16Bit
             mle: ret,
             num_vars,
             _marker: PhantomData,
+            layer_id: None
         }
 
     }
@@ -526,7 +535,7 @@ pub struct DenseMleRef<F: FieldExt> {
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     pub num_vars: usize,
-    layer_id: Option<usize>,
+    layer_id: Option<LayerId>,
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
@@ -561,15 +570,13 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         self.num_vars
     }
 
-
     /// Ryan's note -- I assume this function updates the bookkeeping tables as
-    /// described by [Tha13]. 
+    /// described by [Tha13].
     fn fix_variable(
         &mut self,
         round_index: usize,
         challenge: Self::F,
     ) -> Option<(F, Vec<MleIndex<F>>)> {
-
         // --- Bind the current indexed bit to the challenge value ---
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
@@ -595,7 +602,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         let new = self.bookkeeping_table().par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.mle().par_chunks(2).map(transform);
+        let new = self.mle().chunks(2).map(transform);
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.bookkeeping_table = new.collect();
@@ -620,8 +627,8 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         curr_index + new_indices
     }
 
-    fn get_layer_id(&self) -> Option<usize> {
-        self.layer_id
+    fn get_layer_id(&self) -> Option<LayerId> {
+        self.layer_id.clone()
     }
 }
 
@@ -751,7 +758,11 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec.clone().into_iter().map(Tuple2::from).collect::<DenseMle<Fr, Tuple2<Fr>>>();
+        let mle = tuple_vec
+            .clone()
+            .into_iter()
+            .map(Tuple2::from)
+            .collect::<DenseMle<Fr, Tuple2<Fr>>>();
 
         let (first, second): (Vec<Fr>, Vec<_>) = tuple_vec.into_iter().unzip();
 
@@ -791,7 +802,10 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec.into_iter().map(Tuple2::from).collect::<DenseMle<Fr, Tuple2<Fr>>>();
+        let mle = tuple_vec
+            .into_iter()
+            .map(Tuple2::from)
+            .collect::<DenseMle<Fr, Tuple2<Fr>>>();
 
         let first = mle.first();
         let second = mle.second();

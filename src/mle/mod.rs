@@ -1,12 +1,11 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use core::fmt::Debug;
 
 use std::ops::Index;
 
-use crate::FieldExt;
+use crate::{FieldExt, layer::LayerId};
 
 /// Contains default dense implementation of Mle
 pub mod dense;
@@ -19,7 +18,8 @@ pub mod dense;
 /// you should always use the iterator adaptors IntoIterator and FromIterator, this is to ensure that the semantic ordering within T is always consistent.
 pub trait Mle<F, T>
 where
-    Self: Clone + Debug + CanonicalSerialize + CanonicalDeserialize,
+    Self: Clone + Debug,
+    //+ CanonicalSerialize + CanonicalDeserialize,
     // + IntoIterator<Item = T>
     // + FromIterator<T>,
     F: FieldExt,
@@ -34,6 +34,8 @@ where
 
     ///Get number of variables of the Mle which is equivalent to the log_2 of the size of the MLE
     fn num_vars(&self) -> usize;
+
+    fn define_layer_id(&mut self, id: LayerId);
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
@@ -75,11 +77,11 @@ pub trait MleRef: Debug + Clone + Send + Sync {
     fn get_mle_indices(&self) -> &[MleIndex<Self::F>];
 
     /// The layer_id of the layer that this MLE belongs to
-    fn get_layer_id(&self) -> Option<usize>;
+    fn get_layer_id(&self) -> Option<LayerId>;
 }
 
 ///Trait that allows a type to be serialized into an Mle, and yield MleRefs
-/// TODO!(add a derive MleAble macro that generates code for FromIterator, IntoIterator 
+/// TODO!(add a derive MleAble macro that generates code for FromIterator, IntoIterator
 /// and creates associated functions for yielding appropriate MleRefs)
 pub trait MleAble<F: FieldExt> {
     ///The particular representation that is convienent for an MleAble, most of the time it will be a \[Vec<F>; Size\] array
