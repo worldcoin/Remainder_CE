@@ -30,7 +30,7 @@ pub enum VerifyError {
     SumcheckBad,
 }
 #[derive(Error, Debug, Clone)]
-enum InterpError {
+pub enum InterpError {
     #[error("Too few evaluation points")]
     EvalLessThanDegree,
     #[error("No possible polynomial")]
@@ -581,7 +581,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
-fn evaluate_at_a_point<F: FieldExt>(given_evals: Vec<F>, point: F) -> Result<F, InterpError> {
+pub fn evaluate_at_a_point<F: FieldExt>(given_evals: Vec<F>, point: F) -> Result<F, InterpError> {
     // Need degree + 1 evaluations to interpolate
     let eval = (0..given_evals.len())
         .map(
