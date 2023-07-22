@@ -530,29 +530,17 @@ mod tests {
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
         //dbg!(&b_minus_b_squared);
         
-
-        // --- We should get all zeros ---
-        let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
-        let all_zeros_mle = DenseMle::new(all_zeros);
-        let mut all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref(), None);
-
-        // --- TODO!(ryancao): This is jank in the sense that we're just evaluating the first ---
-        // --- prover message and just ensuring that both of them are zero, but really we should ---
-        // --- be showing that all the evaluations match ---
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, 2);
-        let exp = compute_sumcheck_message(&mut all_zeros_mle_expr.clone(), 1, 2);
-        assert_eq!(res.unwrap(), exp.unwrap());
+        // --- Evaluating at V(0, 0, 0) --> 0 ---
+        let dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
+        let b_minus_b_squared_clone = b_minus_b_squared.clone();
+        b_minus_b_squared.index_mle_indices(0);
+        b_minus_b_squared.init_beta_tables(dummy_claim.clone());
         
-
         // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
         // idk if this is actually how we should do this
         let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, 2);
-        assert_eq!(res.unwrap(), SumOrEvals::Sum(Fr::from(0)));
-        
-        // --- Evaluating at V(0, 0, 0) --> 0 ---
-        let dummy_claim = (vec![Fr::zero(); 3], Fr::zero());
-        let res_messages = dummy_sumcheck(b_minus_b_squared, &mut rng, dummy_claim);
-        
+        assert_eq!(res.unwrap(), SumOrEvals::Evals(vec![Fr::zero(); 3]));
+        let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
         let verify_res = verify_sumcheck_messages(res_messages);
         assert!(verify_res.is_ok());
     }

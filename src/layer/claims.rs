@@ -120,12 +120,14 @@ fn compute_wlx<F: FieldExt>(
     claimed_vals: &mut Vec<F>,
     num_claims: usize,
     num_idx: usize,
+    prev_layer_claim: Claim<F>,
 ) -> Result<Vec<F>, LayerError> {
     //fix variable hella times
     //evaluate expr on the mutated expr
 
     // get the number of evaluations
     let num_vars = expr.index_mle_indices(0);
+    expr.init_beta_tables(prev_layer_claim);
     let num_evals = num_vars * num_claims;
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
@@ -178,6 +180,7 @@ fn aggregate_claims<F: FieldExt>(
     claims: Vec<Claim<F>>,
     expr: &mut ExpressionStandard<F>,
     rchal: F,
+    prev_layer_claim: Claim<F>,
 ) -> Result<Claim<F>, LayerError> {
 
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_into_iter!(claims.clone()).unzip();
@@ -195,7 +198,7 @@ fn aggregate_claims<F: FieldExt>(
     ).collect();
 
     // get the evals [W(l(0)), W(l(1)), ...]
-    let wlx = compute_wlx(expr, claim_vecs, &mut vals, claims.len(), num_idx).unwrap();
+    let wlx = compute_wlx(expr, claim_vecs, &mut vals, claims.len(), num_idx, prev_layer_claim).unwrap();
 
     // interpolate to get W(l(r)), that's the claimed value
     let claimed_val = evaluate_at_a_point(wlx,rchal);
@@ -231,6 +234,8 @@ mod test {
     /// Test claim aggregation small mle
     #[test]
     fn test_aggro_claim() {
+        let dummy_claim = (vec![Fr::from(0); 2], Fr::one());
+
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
@@ -240,10 +245,12 @@ mod test {
         let claim1: Claim<Fr> = (vec![Fr::from(3), Fr::from(3)], Fr::from(19));
         let claim2: Claim<Fr> = (vec![Fr::from(2), Fr::from(7)], Fr::from(34));
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mut expr, Fr::from(10)).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mut expr, Fr::from(10), dummy_claim.clone()).unwrap();
 
+        
         let fix_vars = vec![Fr::from(-7), Fr::from(43)];
         expr_copy.index_mle_indices(0);
+        expr_copy.init_beta_tables(dummy_claim);
         for i in 0..2 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
