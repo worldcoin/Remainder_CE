@@ -49,7 +49,7 @@ fn get_claims<F: FieldExt>(layer: &impl Layer<F>) -> Result<Vec<(LayerId, Claim<
 
     let mut observer_fn = |exp: &ExpressionStandard<F>| {
         match exp {
-            ExpressionStandard::Mle(mle_ref) => {
+            ExpressionStandard::Mle(mle_ref, _) => {
                 // --- First ensure that all the indices are fixed ---
                 let mle_indices = mle_ref.get_mle_indices();
 
@@ -157,7 +157,7 @@ fn compute_wlx<F: FieldExt>(
                             expr
                         }
                     );
-                let val = evaluate_expr(&mut fixed_expr, 0, 0).unwrap();
+                let val = compute_sumcheck_message(&mut fixed_expr, 0, 0).unwrap();
                 
                 // this has to be a sum--get the overall evaluation
                 match val {
@@ -218,7 +218,7 @@ mod test {
         // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
         let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
-        let expression3 = ExpressionStandard::Mle(mle.mle_ref());
+        let expression3 = ExpressionStandard::Mle(mle.mle_ref(), None);
         let expression = expression1.clone() + expression3.clone();
         // let expression = expression1.clone() * expression;
         let expression = expression1 - expression;
@@ -234,7 +234,7 @@ mod test {
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr = ExpressionStandard::Mle(mle_ref, None);
         let mut expr_copy = expr.clone();
 
         let claim1: Claim<Fr> = (vec![Fr::from(3), Fr::from(3)], Fr::from(19));
@@ -247,7 +247,7 @@ mod test {
         for i in 0..2 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
-        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
 
         if let SumOrEvals::Sum(num) = expr_eval {
             let exp: Claim<Fr> = (fix_vars, num);
@@ -266,7 +266,7 @@ mod test {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr = ExpressionStandard::Mle(mle_ref, None);
         let mut expr_copy = expr.clone();
 
 
@@ -281,7 +281,7 @@ mod test {
             for j in 0..2 {
                 exp.fix_variable( j, chals[i][j]);
             }
-            let expr_eval = evaluate_expr(&mut exp, 0, 0).unwrap();
+            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
             if let SumOrEvals::Sum(num) = expr_eval {
                 valchal.push(num);
             }
@@ -307,7 +307,7 @@ mod test {
         for i in 0..2 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
-        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
         if let SumOrEvals::Sum(num) = expr_eval {
             let exp: Claim<Fr> = (fix_vars, num);
             assert_eq!(res, exp);
@@ -330,7 +330,7 @@ mod test {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr = ExpressionStandard::Mle(mle_ref, None);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
@@ -344,7 +344,7 @@ mod test {
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
-            let expr_eval = evaluate_expr(&mut exp, 0, 0).unwrap();
+            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
             if let SumOrEvals::Sum(num) = expr_eval {
                 valchal.push(num);
             }
@@ -371,7 +371,7 @@ mod test {
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
-        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
         if let SumOrEvals::Sum(num) = expr_eval {
             let exp: Claim<Fr> = (fix_vars, num);
             assert_eq!(res, exp);
@@ -397,7 +397,7 @@ mod test {
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
-        let mut expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
+        let mut expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2], None);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
@@ -411,7 +411,7 @@ mod test {
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
-            let expr_eval = evaluate_expr(&mut exp, 0, 0).unwrap();
+            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
             if let SumOrEvals::Sum(num) = expr_eval {
                 valchal.push(num);
             }
@@ -438,7 +438,7 @@ mod test {
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
-        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
         if let SumOrEvals::Sum(num) = expr_eval {
             let exp: Claim<Fr> = (fix_vars, num);
             assert_ne!(res, exp);
@@ -462,7 +462,7 @@ mod test {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr = ExpressionStandard::Mle(mle_ref, None);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
@@ -476,7 +476,7 @@ mod test {
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
-            let expr_eval = evaluate_expr(&mut exp, 0, 0).unwrap();
+            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
             if let SumOrEvals::Sum(num) = expr_eval {
                 valchal.push(num);
             }
@@ -503,7 +503,7 @@ mod test {
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
-        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
         if let SumOrEvals::Sum(num) = expr_eval {
             let exp: Claim<Fr> = (fix_vars, num);
             assert_ne!(res, exp);
@@ -526,7 +526,7 @@ mod test {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr = ExpressionStandard::Mle(mle_ref, None);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
@@ -540,7 +540,7 @@ mod test {
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
-            let expr_eval = evaluate_expr(&mut exp, 0, 0).unwrap();
+            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
             if let SumOrEvals::Sum(num) = expr_eval {
                 valchal.push(num);
             }
@@ -567,7 +567,7 @@ mod test {
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
-        let expr_eval = evaluate_expr(&mut expr_copy, 0, 0).unwrap();
+        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
         if let SumOrEvals::Sum(num) = expr_eval {
             let exp: Claim<Fr> = (fix_vars, num);
             assert_ne!(res, exp);

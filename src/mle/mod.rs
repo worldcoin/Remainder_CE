@@ -6,9 +6,12 @@ use core::fmt::Debug;
 use std::ops::Index;
 
 use crate::{FieldExt, layer::LayerId};
+use crate::layer::Claim;
+use crate::mle::dense::BetaError;
 
 /// Contains default dense implementation of Mle
 pub mod dense;
+pub mod beta;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.

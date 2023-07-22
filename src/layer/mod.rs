@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
     mle::{Mle, MleAble, MleRef},
-    sumcheck::{evaluate_expr, get_round_degree, SumOrEvals},
+    sumcheck::{compute_sumcheck_message, get_round_degree, SumOrEvals},
     FieldExt,
 };
 
@@ -54,7 +54,7 @@ pub trait Layer<F: FieldExt> {
         let degree = get_round_degree(expression, round_index);
 
         let eval =
-            evaluate_expr(expression, round_index, degree).map_err(LayerError::ExpressionError)?;
+            compute_sumcheck_message(expression, round_index, degree).map_err(LayerError::ExpressionError)?;
 
         if let SumOrEvals::Evals(evals) = eval {
             Ok(evals)

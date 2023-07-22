@@ -13,8 +13,22 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use crate::{{FieldExt, layer::LayerId}, zkdt::structs::LeafNode};
 use super::{Mle, MleAble, MleIndex, MleRef};
+use crate::layer::Claim;
 
 use super::super::zkdt::structs::{DecisionNode, BinDecomp16Bit, InputAttribute};
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone)]
+
+/// Error for handling beta table updates
+pub enum BetaError {
+    #[error("claim index is 0, cannot take inverse")]
+    NoInverse,
+    #[error("not enough claims to compute beta table")]
+    NotEnoughClaims,
+    #[error("no initialized beta table")]
+    NoBetaTable,
+}
 
 #[derive(Clone, Debug)]
 ///An [Mle] that is dense
@@ -91,6 +105,7 @@ impl<F: FieldExt> DenseMle<F, F> {
         }
     }
 }
+
 
 #[derive(Debug, Clone, From, Into)]
 struct Tuple2<F: FieldExt>((F, F));
@@ -635,11 +650,17 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sumcheck::SumOrEvals;
     use ark_bn254::Fr;
+    use ark_ff::UniformRand;
+    use ark_std::test_rng;
+    use ark_std::One;
+    use ark_std::Zero;
 
     #[test]
     ///test fixing variables in an mle with two variables
     fn fix_variable_twovars() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
         let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
@@ -652,6 +673,7 @@ mod tests {
     #[test]
     ///test fixing variables in an mle with three variables
     fn fix_variable_threevars() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -674,6 +696,7 @@ mod tests {
     #[test]
     ///test nested fixing variables in an mle with three variables
     fn fix_variable_nested() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -687,18 +710,17 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
-        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.bookkeeping_table);
-        let mut next_mle_ref = next_mle.mle_ref();
-        next_mle_ref.fix_variable(2, Fr::from(2));
+        mle_ref.fix_variable(2, Fr::from(2));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
-        assert_eq!(next_mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
     #[test]
     ///test nested fixing all the wayyyy
     fn fix_variable_full() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4),], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -712,16 +734,12 @@ mod tests {
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
-        let next_mle: DenseMle<Fr, Fr> = DenseMle::new(mle_ref.bookkeeping_table);
-        let mut next_mle_ref = next_mle.mle_ref();
-        next_mle_ref.fix_variable(2, Fr::from(2));
-        let next2_mle: DenseMle<Fr, Fr> = DenseMle::new(next_mle_ref.bookkeeping_table);
-        let mut next2_mle_ref = next2_mle.mle_ref();
-        next2_mle_ref.fix_variable(3, Fr::from(4));
+        mle_ref.fix_variable(2, Fr::from(2));
+        mle_ref.fix_variable(3, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
-        assert_eq!(next2_mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
     #[test]
