@@ -234,7 +234,7 @@ mod test {
     /// Test claim aggregation small mle
     #[test]
     fn test_aggro_claim() {
-        let dummy_claim = (vec![Fr::from(0); 2], Fr::one());
+        let dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
@@ -265,6 +265,9 @@ mod test {
     /// Test claim aggregation on another small mle
     #[test]
     fn test_aggro_claim_2() {
+        let dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
+
+
         let mle_v1 = vec![
             Fr::from(1), 
             Fr::from(2), 
@@ -282,9 +285,11 @@ mod test {
         let chals3 = vec![Fr::from(3), Fr::from(1),];
         let chals = vec![&chals1, &chals2, &chals3];
         let mut valchal: Vec<Fr> = Vec::new();
+
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
+            exp.init_beta_tables(dummy_claim.clone());
             for j in 0..2 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -300,7 +305,7 @@ mod test {
 
         let rchal = Fr::from(-2);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
 
         let transpose1 = vec![Fr::from(1), Fr::from(2), Fr::from(3)];
         let transpose2 = vec![Fr::from(2), Fr::from(3), Fr::from(1)];
@@ -311,6 +316,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
+        expr_copy.init_beta_tables(dummy_claim);
         for i in 0..2 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
@@ -324,6 +330,7 @@ mod test {
     /// Test claim aggregation on random mle
     #[test]
     fn test_aggro_claim_3() {
+        let dummy_claim = (vec![Fr::one(); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -348,6 +355,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
+            exp.init_beta_tables(dummy_claim.clone());
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -363,7 +371,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -375,6 +383,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
+        expr_copy.init_beta_tables(dummy_claim);
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
@@ -388,6 +397,7 @@ mod test {
     /// Test claim aggregation on a RANDOM mle
     #[test]
     fn test_aggro_claim_4() {
+        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -415,6 +425,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
+            exp.init_beta_tables(dummy_claim.clone());
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -430,7 +441,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -442,6 +453,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
+        expr_copy.init_beta_tables(dummy_claim);
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
@@ -456,6 +468,7 @@ mod test {
     /// Make sure claim aggregation FAILS for a WRONG CLAIM!
     #[test]
     fn test_aggro_claim_negative_1() {
+        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -480,6 +493,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
+            exp.init_beta_tables(dummy_claim.clone());
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -495,7 +509,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -507,6 +521,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
+        expr_copy.init_beta_tables(dummy_claim);
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
@@ -520,6 +535,7 @@ mod test {
     /// Make sure claim aggregation fails for ANOTHER WRONG CLAIM!
     #[test]
     fn test_aggro_claim_negative_2() {
+        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -544,6 +560,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
+            exp.init_beta_tables(dummy_claim.clone());
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -559,7 +576,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -571,6 +588,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
+        expr_copy.init_beta_tables(dummy_claim);
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
