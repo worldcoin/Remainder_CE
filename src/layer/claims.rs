@@ -49,7 +49,7 @@ fn get_claims<F: FieldExt>(layer: &impl Layer<F>) -> Result<Vec<(LayerId, Claim<
 
     let mut observer_fn = |exp: &ExpressionStandard<F>| {
         match exp {
-            ExpressionStandard::Mle(mle_ref, _) => {
+            ExpressionStandard::Mle(mle_ref) => {
                 // --- First ensure that all the indices are fixed ---
                 let mle_indices = mle_ref.get_mle_indices();
 
@@ -127,7 +127,7 @@ fn compute_wlx<F: FieldExt>(
 
     // get the number of evaluations
     let num_vars = expr.index_mle_indices(0);
-    expr.init_beta_tables(prev_layer_claim);
+    // expr.init_beta_tables(prev_layer_claim);
     let num_evals = (num_vars) * (num_claims) * get_round_degree(&expr, 0);
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
@@ -222,7 +222,7 @@ mod test {
         // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
         let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
-        let expression3 = ExpressionStandard::Mle(mle.mle_ref(), None);
+        let expression3 = ExpressionStandard::Mle(mle.mle_ref());
         let expression = expression1.clone() + expression3.clone();
         // let expression = expression1.clone() * expression;
         let expression = expression1 - expression;
@@ -241,7 +241,7 @@ mod test {
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
         
-        let mut expr = ExpressionStandard::Mle(mle_ref, None);
+        let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(3), Fr::from(3)];
@@ -254,10 +254,7 @@ mod test {
             let mut exp = expr.clone();
             
             exp.index_mle_indices(0);
-            exp.init_beta_tables(dummy_claim.clone());
-            if let ExpressionStandard::Mle(mle, beta) = &exp {
-                dbg!(i, beta);
-            }
+            // exp.init_beta_tables(dummy_claim.clone());
             for j in 0..2 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -274,7 +271,7 @@ mod test {
         let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mut expr, Fr::from(10), dummy_claim.clone()).unwrap();
        
         expr_copy.index_mle_indices(0);
-        expr_copy.init_beta_tables(dummy_claim);
+        // expr_copy.init_beta_tables(dummy_claim);
         let fix_vars = vec![Fr::from(-7), Fr::from(43)];
         for i in 0..2 {
             expr_copy.fix_variable(i, fix_vars[i]);
@@ -301,7 +298,7 @@ mod test {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref, None);
+        let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
 
@@ -314,7 +311,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            exp.init_beta_tables(dummy_claim.clone());
+            // exp.init_beta_tables(dummy_claim.clone());
             for j in 0..2 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -341,7 +338,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        expr_copy.init_beta_tables(dummy_claim);
+        // expr_copy.init_beta_tables(dummy_claim);
         for i in 0..2 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
@@ -369,7 +366,7 @@ mod test {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref, None);
+        let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
@@ -380,7 +377,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            exp.init_beta_tables(dummy_claim.clone());
+            // exp.init_beta_tables(dummy_claim.clone());
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -408,7 +405,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        expr_copy.init_beta_tables(dummy_claim);
+        // expr_copy.init_beta_tables(dummy_claim);
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
@@ -439,7 +436,7 @@ mod test {
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
-        let mut expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2], None);
+        let mut expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
@@ -450,7 +447,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            exp.init_beta_tables(dummy_claim.clone());
+            // exp.init_beta_tables(dummy_claim.clone());
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -478,7 +475,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        expr_copy.init_beta_tables(dummy_claim);
+        // expr_copy.init_beta_tables(dummy_claim);
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
@@ -507,7 +504,7 @@ mod test {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref, None);
+        let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
@@ -518,7 +515,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            exp.init_beta_tables(dummy_claim.clone());
+            // exp.init_beta_tables(dummy_claim.clone());
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -546,7 +543,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        expr_copy.init_beta_tables(dummy_claim);
+        // expr_copy.init_beta_tables(dummy_claim);
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
@@ -574,7 +571,7 @@ mod test {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref, None);
+        let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
@@ -585,7 +582,7 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            exp.init_beta_tables(dummy_claim.clone());
+            // exp.init_beta_tables(dummy_claim.clone());
             for j in 0..3 {
                 exp.fix_variable( j, chals[i][j]);
             }
@@ -613,7 +610,7 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        expr_copy.init_beta_tables(dummy_claim);
+        // expr_copy.init_beta_tables(dummy_claim);
         for i in 0..3 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }

@@ -523,10 +523,10 @@ mod tests {
 
         // --- Grab the bin decomp MLE ---
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
-        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone(), None);
+        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
-        let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()], None);
+        let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
         //dbg!(&b_minus_b_squared);
         
@@ -534,11 +534,10 @@ mod tests {
         let dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
         let b_minus_b_squared_clone = b_minus_b_squared.clone();
         b_minus_b_squared.index_mle_indices(0);
-        b_minus_b_squared.init_beta_tables(dummy_claim.clone());
+        // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
         
-        // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
         // idk if this is actually how we should do this
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, 2);
+        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, 2);
         assert_eq!(res.unwrap(), SumOrEvals::Evals(vec![Fr::zero(); 3]));
         let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
         let verify_res = verify_sumcheck_messages(res_messages);
@@ -565,16 +564,16 @@ mod tests {
 
         // --- Grab the bin decomp MLE ---
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_multiplicities_bin_decomp_mle.mle_bit_refs();
-        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone(), None);
+        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
-        let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()], None);
+        let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
 
         // --- We should get all zeros ---x
         let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
         let all_zeros_mle = DenseMle::new(all_zeros);
-        let all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref(), None);
+        let all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
 
         // --- Evaluating at V(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) --> 0 ---
         let dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
@@ -582,14 +581,14 @@ mod tests {
         // --- Initialize beta tables manually ---
         let b_minus_b_squared_clone = b_minus_b_squared.clone();
         b_minus_b_squared.index_mle_indices(0);
-        b_minus_b_squared.init_beta_tables(dummy_claim.clone());
+        // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
 
         // let first_round_deg = get_round_degree(&b_minus_b_squared, 0);
         // dbg!(first_round_deg);
 
         // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, 3);
-        assert_eq!(res.unwrap(), SumOrEvals::Evals(vec![Fr::zero(); 4]));
+        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, 2);
+        assert_eq!(res.unwrap(), SumOrEvals::Evals(vec![Fr::zero(); 3]));
 
         let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
         let verify_res = verify_sumcheck_messages(res_messages);
@@ -689,9 +688,9 @@ mod tests {
 
         // --- Grab the things necessary to compute the diff (the permuted input and thresholds) ---
         let threshold_mle: DenseMleRef<Fr> = dummy_decision_node_paths_mle.threshold();
-        let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone(), None);
+        let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone());
         let permuted_input_values_mle: DenseMleRef<Fr> = dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars));
-        let permuted_input_values_mle_expr = ExpressionStandard::Mle(permuted_input_values_mle.clone(), None);
+        let permuted_input_values_mle_expr = ExpressionStandard::Mle(permuted_input_values_mle.clone());
 
         // --- For debugging ---
         // let threshold_mle_expr_eval = evaluate_expr(&mut threshold_mle_expr.clone(), 1, 2);
@@ -721,7 +720,7 @@ mod tests {
             .skip(1)
             .fold(b_s_initial_acc, |acc_expr, (bit_idx, bin_decomp_mle)| {
             // --- First compute b_s * coeff ---
-            let b_s_times_coeff = ExpressionStandard::Product(vec![bin_decomp_mle.clone(), sign_bit_mle.clone()], None);
+            let b_s_times_coeff = ExpressionStandard::Product(vec![bin_decomp_mle.clone(), sign_bit_mle.clone()]);
 
             let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
 
@@ -749,7 +748,7 @@ mod tests {
             .fold(abs_recomp_initial_acc, |acc_expr, (bit_idx, bin_decomp_mle)| {
             // --- Compute just coeff * 2^{bit_idx} ---
             let base = Fr::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
-            let coeff_expr = ExpressionStandard::Mle(bin_decomp_mle, None);
+            let coeff_expr = ExpressionStandard::Mle(bin_decomp_mle);
             let coeff_expr_ptr = Box::new(coeff_expr);
             let coeff_times_base = ExpressionStandard::Scaled(coeff_expr_ptr, base);
 
@@ -776,7 +775,7 @@ mod tests {
         let final_expr_clone = final_expr.clone();
 
         final_expr.index_mle_indices(0);
-        final_expr.init_beta_tables(dummy_claim.clone());
+        // final_expr.init_beta_tables(dummy_claim.clone());
 
         // dbg!(&final_expr);
 
@@ -826,9 +825,9 @@ mod tests {
 
         // --- Multiply to do packing ---
         let dummy_attribute_id_mleref = dummy_input_data_mle.attr_id(None);
-        let dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref, None);
+        let dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref);
         let dummy_attribute_val_mleref = dummy_input_data_mle.attr_val(None);
-        let dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref, None);
+        let dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref);
 
         // --- 
 

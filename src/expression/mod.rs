@@ -26,10 +26,10 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
         &mut self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&Self::MleRef, Option<&mut BetaTable<F>>) -> T,
+        mle_eval: &impl Fn(&Self::MleRef) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[Self::MleRef], Option<&mut BetaTable<F>>) -> T,
+        product: &impl Fn(&[Self::MleRef]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T;
 
@@ -82,13 +82,13 @@ pub enum ExpressionStandard<F: FieldExt> {
         Box<ExpressionStandard<F>>,
     ),
     /// This is an MLE
-    Mle(DenseMleRef<F>, Option<BetaTable<F>>),
+    Mle(DenseMleRef<F>),
     /// This is a negated polynomial
     Negated(Box<ExpressionStandard<F>>),
     /// This is the sum of two polynomials
     Sum(Box<ExpressionStandard<F>>, Box<ExpressionStandard<F>>),
     /// This is the product of some polynomials
-    Product(Vec<DenseMleRef<F>>, Option<BetaTable<F>>),
+    Product(Vec<DenseMleRef<F>>),
     /// This is a scaled polynomial; Optionally a MleIndex to represent a fully bound mle that was this scalar
     Scaled(Box<ExpressionStandard<F>>, F),
 }
@@ -102,10 +102,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         &mut self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, Option<&mut BetaTable<F>>) -> T,
+        mle_eval: &impl Fn(&DenseMleRef<F>) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[DenseMleRef<F>], Option<&mut BetaTable<F>>) -> T,
+        product: &impl Fn(&[DenseMleRef<F>]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
@@ -131,7 +131,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                     scaled,
                 ),
             ),
-            ExpressionStandard::Mle(query, table) => mle_eval(query, table.as_mut()),
+            ExpressionStandard::Mle(query) => mle_eval(query),
             ExpressionStandard::Negated(a) => {
                 let a = a.evaluate(
                     constant,
@@ -165,8 +165,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 );
                 sum(a, b)
             }
-            ExpressionStandard::Product(queries, table) => {
-                product(queries, table.as_mut())
+            ExpressionStandard::Product(queries) => {
+                product(queries)
             }
             ExpressionStandard::Scaled(a, f) => {
                 let a = a.evaluate(
@@ -189,9 +189,9 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     ) -> Result<(), E> {
         match self {
             ExpressionStandard::Constant(_)
-            | ExpressionStandard::Mle(_, _) => observer_fn(self),
+            | ExpressionStandard::Mle(_) => observer_fn(self),
             ExpressionStandard::Negated(exp) => observer_fn(exp),
-            ExpressionStandard::Product(_, _) => observer_fn(self),
+            ExpressionStandard::Product(_) => observer_fn(self),
             ExpressionStandard::Scaled(exp, _) => exp.traverse(observer_fn),
             ExpressionStandard::Selector(_, lhs, rhs) => {
                 observer_fn(self)?;
@@ -220,9 +220,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                     b.fix_variable(round_index, challenge);
                 }
             }
-            ExpressionStandard::Mle(mle_ref, betatable) => {
-                // update the beta table whenever you fix variable
-                let _ = betatable.as_mut().unwrap().beta_update(round_index, challenge);
+            ExpressionStandard::Mle(mle_ref) => {
                 if mle_ref
                     .mle_indices()
                     .contains(&MleIndex::IndexedBit(round_index))
@@ -235,11 +233,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 a.fix_variable(round_index, challenge);
                 b.fix_variable(round_index, challenge);
             }
-            ExpressionStandard::Product(mle_refs, betatable) => {
-                // update the beta table every time you fix variable
-                let table = betatable.as_mut().unwrap();
-                let _ = table.beta_update(round_index, challenge);
-                *betatable = Some(table.clone());
+            ExpressionStandard::Product(mle_refs) => {
                 for mle_ref in mle_refs {
                     if mle_ref
                         .mle_indices()
@@ -261,9 +255,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 impl<F: FieldExt> ExpressionStandard<F> {
     ///Create a product Expression that multiplies many MLEs together
     pub fn products(product_list: Vec<DenseMleRef<F>>) -> Self {
-        Self::Product(product_list, None)
+        Self::Product(product_list)
     }
 
+    /* 
     /// Initializes all beta tables within the current Expression
     pub fn init_beta_tables(&mut self, layer_claim: Claim<F>) {
         match self {
@@ -288,6 +283,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
             ExpressionStandard::Constant(_) => {},
         }
     }
+    */
 
     ///Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
     /// Returns the max number of bits that are indexed
@@ -299,7 +295,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
                 let b_bits = b.index_mle_indices(curr_index + 1);
                 max(a_bits, b_bits)
             }
-            ExpressionStandard::Mle(mle_ref, betatable) => {
+            ExpressionStandard::Mle(mle_ref) => {
                 mle_ref.index_mle_indices(curr_index)
             }
             ExpressionStandard::Sum(a, b) => {
@@ -307,7 +303,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
                 let b_bits = b.index_mle_indices(curr_index);
                 max(a_bits, b_bits)
             }
-            ExpressionStandard::Product(mle_refs, betatable) => {
+            ExpressionStandard::Product(mle_refs) => {
                 mle_refs
                 .iter_mut()
                 .map(|mle_ref| mle_ref.index_mle_indices(curr_index))
@@ -334,10 +330,10 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
                 .field(b)
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionStandard::Mle(_mle_ref, _) => f.debug_struct("Mle").finish(),
+            ExpressionStandard::Mle(_mle_ref) => f.debug_struct("Mle").finish(),
             ExpressionStandard::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionStandard::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
-            ExpressionStandard::Product(a, b) => f.debug_tuple("Product").field(a).field(b).finish(),
+            ExpressionStandard::Product(a) => f.debug_tuple("Product").field(a).finish(),
             ExpressionStandard::Scaled(poly, scalar) => {
                 f.debug_tuple("Scaled").field(poly).field(scalar).finish()
             }
@@ -388,7 +384,7 @@ mod test {
         let mle =
             DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]).mle_ref();
 
-        let expression3 = ExpressionStandard::Mle(mle.clone(), None);
+        let expression3 = ExpressionStandard::Mle(mle.clone());
 
         let expression = expression1.clone() + expression3.clone();
 
