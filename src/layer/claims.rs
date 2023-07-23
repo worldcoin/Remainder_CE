@@ -89,6 +89,7 @@ fn get_claims<F: FieldExt>(layer: &impl Layer<F>) -> Result<Vec<(LayerId, Claim<
                     return Err(LayerError::MleRefMleError);
                 }
                 // TODO(ryancao): Does this accidentally take ownership of that element?
+                // Answer: No, because F implements Copy
                 let claimed_value = mle_ref.bookkeeping_table()[0];
 
                 // --- Construct the claim ---
@@ -104,6 +105,7 @@ fn get_claims<F: FieldExt>(layer: &impl Layer<F>) -> Result<Vec<(LayerId, Claim<
         Ok(())
     };
 
+    // TODO!(ryancao): What the heck is this code doing?
     let _result = layerwise_expr.traverse(&mut observer_fn);
     if let result = Err(LayerError::ClaimMleIndexError) {
         return result;

@@ -629,6 +629,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
 
 /// Returns the curr random challenge if verified correctly, otherwise verify error
 /// can change this to take prev round random challenge, and then compute the new random challenge
+/// TODO!(ryancao): Change this to take in the expression as well and do the final sumcheck check
 pub fn verify_sumcheck_messages<F: FieldExt>(
     messages: Vec<(Vec<F>, Option<F>)>,
 ) -> Result<F, VerifyError> {
@@ -643,15 +644,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
         let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), challenge.unwrap())
             .expect("could not evaluate at challenge point");
 
-        dbg!(round_idx);
-        dbg!(challenge.unwrap());
-        dbg!(prev_evals);
-        dbg!(F::zero() - curr_evals[0], curr_evals[1]);
-        dbg!(prev_at_r);
-
-        // --- It should equal g_i(0) + g_i(1) ---
-        //  dbg!(prev_at_r);
-        //  dbg!(curr_evals);
+        // --- g_{i - 1}(r) should equal g_i(0) + g_i(1) ---
         if prev_at_r != curr_evals[0] + curr_evals[1] {
             return Err(VerifyError::SumcheckBad);
         };
