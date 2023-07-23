@@ -49,7 +49,6 @@ impl<F: FieldExt> BetaTable<F> {
     /// Construct a new beta table using claims and a product of mle refs
     pub fn new(layer_claim: Claim<F>, mle_refs: &[impl MleRef<F = F>]) -> Result<BetaTable<F>, BetaError> {
         let (layer_claims_idx, _) = &layer_claim;
-        dbg!(mle_refs);
         // --- We need to have indexed all the bits in the MLEs (i.e. ---
         // --- have called `index_mle_indices()` before calling this function) ---
         // TODO!(ryancao || vishady): Use iterators, or better yet just keep track of state

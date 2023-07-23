@@ -383,6 +383,9 @@ fn evaluate_mle_ref_product<F: FieldExt>(
     let beta_table = &betatable.table;
     let beta_ref = DenseMle::new(beta_table.clone()).mle_ref();
 
+    dbg!(&mle_refs);
+    dbg!(&beta_table);
+
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars_refs = mle_refs
         .iter()

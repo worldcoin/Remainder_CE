@@ -128,7 +128,7 @@ fn compute_wlx<F: FieldExt>(
     // get the number of evaluations
     let num_vars = expr.index_mle_indices(0);
     expr.init_beta_tables(prev_layer_claim);
-    let num_evals = num_vars * num_claims;
+    let num_evals = (num_vars) * (num_claims) * get_round_degree(&expr, 0);
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
     let next_evals: Result<Vec<F>, LayerError> = cfg_into_iter!(num_claims..num_evals)
@@ -200,6 +200,7 @@ fn aggregate_claims<F: FieldExt>(
     // get the evals [W(l(0)), W(l(1)), ...]
     let wlx = compute_wlx(expr, claim_vecs, &mut vals, claims.len(), num_idx, prev_layer_claim).unwrap();
 
+    dbg!(&wlx);
     // interpolate to get W(l(r)), that's the claimed value
     let claimed_val = evaluate_at_a_point(wlx,rchal);
 
@@ -239,18 +240,42 @@ mod test {
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
+        
         let mut expr = ExpressionStandard::Mle(mle_ref, None);
         let mut expr_copy = expr.clone();
 
-        let claim1: Claim<Fr> = (vec![Fr::from(3), Fr::from(3)], Fr::from(19));
-        let claim2: Claim<Fr> = (vec![Fr::from(2), Fr::from(7)], Fr::from(34));
+        let chals1 = vec![Fr::from(3), Fr::from(3)];
+        let chals2 = vec![Fr::from(2), Fr::from(7),];
+        let chals = vec![&chals1, &chals2];
+        
+        let mut valchal: Vec<Fr> = Vec::new();
+        for i in 0..2 {
+            
+            let mut exp = expr.clone();
+            
+            exp.index_mle_indices(0);
+            exp.init_beta_tables(dummy_claim.clone());
+            if let ExpressionStandard::Mle(mle, beta) = &exp {
+                dbg!(i, beta);
+            }
+            for j in 0..2 {
+                exp.fix_variable( j, chals[i][j]);
+            }
+            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
+            if let SumOrEvals::Sum(num) = expr_eval {
+                valchal.push(num);
+            }
+        }
+
+        dbg!(&valchal);
+        let claim1: Claim<Fr> = (chals1, valchal[0]);
+        let claim2: Claim<Fr> = (chals2, valchal[1]);
 
         let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mut expr, Fr::from(10), dummy_claim.clone()).unwrap();
-
-        
-        let fix_vars = vec![Fr::from(-7), Fr::from(43)];
+       
         expr_copy.index_mle_indices(0);
         expr_copy.init_beta_tables(dummy_claim);
+        let fix_vars = vec![Fr::from(-7), Fr::from(43)];
         for i in 0..2 {
             expr_copy.fix_variable(i, fix_vars[i]);
         }
