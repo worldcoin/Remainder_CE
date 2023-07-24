@@ -311,7 +311,7 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F>>(
 
     let mle_eval = 
         // for<'a, 'b> |mle_ref: &'a Exp::MleRef, beta_table: Option<&'b mut BetaTable<F>>| -> Result<PartialSum<F>, ExpressionError> {
-        for<'a, 'b> |mle_ref: &'a Exp::MleRef| -> Result<PartialSum<F>, ExpressionError> {
+        for<'a> |mle_ref: &'a Exp::MleRef| -> Result<PartialSum<F>, ExpressionError> {
         let mle_indicies = mle_ref.mle_indices();
         let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
         // include beta table

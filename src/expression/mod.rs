@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::{
     mle::{dense::DenseMleRef, MleIndex, MleRef, beta::*},
     FieldExt,
-    layer::Claim,
+    layer::Claim, sumcheck::compute_sumcheck_message,
 };
 
 ///trait that defines what an Expression needs to be able to do
@@ -41,12 +41,15 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
         observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
     ) -> Result<(), E>;
 
-    ///Add two expressions together
+    /// Add two expressions together
     fn concat(self, lhs: Self) -> Self;
 
-    ///Fix the bit corresponding to `round_index` to `challenge` mutating the MleRefs
+    /// Fix the bit corresponding to `round_index` to `challenge` mutating the MleRefs
     /// so they are accurate as Bookeeping Tables
     fn fix_variable(&mut self, round_index: usize, challenge: F);
+
+    /// Evaluates the current expression (as a multivariate function) at `challenges`
+    fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError>;
 }
 
 #[derive(Error, Debug, Clone)]
@@ -64,9 +67,14 @@ pub enum ExpressionError {
     /// TODO!(Do we even need this?)
     #[error("Something went wrong while evaluating the MLE")]
     MleError,
-    ///Error when there is no beta table!!!!!!
-    #[error("No beta table")]
-    BetaError,
+    // ///Error when there is no beta table!!!!!!
+    // #[error("No beta table")]
+    // BetaError,
+    #[error("Selector bit not bound before final evaluation gather")]
+    SelectorBitNotBoundError,
+    #[error("MLE ref with more than one element in its bookkeeping table")]
+    EvaluateNotFullyBoundError,
+
 }
 
 ///TODO!(Genericise this over the MleRef Trait)
@@ -94,6 +102,7 @@ pub enum ExpressionStandard<F: FieldExt> {
 }
 
 impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
+
     type MleRef = DenseMleRef<F>;
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
@@ -250,6 +259,79 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         }
     }
 
+    fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
+
+        // --- It's as simple as fixing all variables ---
+        challenges.into_iter().enumerate().for_each(|(round_idx, challenge)| {
+            self.fix_variable(round_idx, challenge);
+        });
+
+        // --- Traverse the expression and pick up all the evals ---
+        gather_combine_all_evals(self)
+    }
+
+}
+
+/// Helper function for `evaluate_expr` to traverse the expression and simply
+/// gather all of the evaluations, combining them as appropriate.
+/// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
+/// within. TODO!(ryancao): Make this not need to be mutable
+fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(expr: &mut Exp) -> Result<F, ExpressionError> {
+
+    let constant = |c| {Ok(c)};
+    let selector_column = |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
+        if let Err(e) = lhs {
+            return Err(e);
+        }
+        if let Err(e) = rhs {
+            return Err(e);
+        }
+        // --- Selector bit must be bound ---
+        if let MleIndex::Bound(val) = idx {
+            return Ok(*val * lhs.unwrap() + (F::one() - val) * rhs.unwrap());
+        }
+        Err(ExpressionError::SelectorBitNotBoundError)
+    };
+    let mle_eval = for<'a> |mle_ref: &'a Exp::MleRef| -> Result<F, ExpressionError> {
+        if mle_ref.bookkeeping_table().len() != 1 {
+            return Err(ExpressionError::EvaluateNotFullyBoundError);
+        }
+        Ok(mle_ref.bookkeeping_table()[0])
+    };
+    let negated = |a: Result<F, ExpressionError>| {
+        match a {
+            Err(e) => Err(e),
+            Ok(val) => Ok(val.neg()),
+        }
+    };
+    let sum = |lhs, rhs| {
+        if let Err(e) = lhs {
+            return Err(e);
+        }
+        if let Err(e) = rhs {
+            return Err(e);
+        }
+        Ok(lhs.unwrap() + rhs.unwrap())
+    };
+    let product = for<'a, 'b> |mle_refs: &'a [Exp::MleRef]| -> Result<F, ExpressionError> {
+        mle_refs.into_iter().fold(Ok(F::one()), |acc, new_mle_ref| {
+            // --- Accumulate either errors or multiply ---
+            if let Err(e) = acc {
+                return Err(e);
+            }
+            if new_mle_ref.bookkeeping_table().len() != 1 {
+                return Err(ExpressionError::EvaluateNotFullyBoundError)
+            }
+            Ok(acc.unwrap() * new_mle_ref.bookkeeping_table()[0])
+        })
+    };
+    let scaled = |a, scalar| {
+        if let Err(e) = a {
+            return Err(e);
+        }
+        Ok(a.unwrap() * scalar)
+    };
+    expr.evaluate(&constant, &selector_column, &mle_eval, &negated, &sum, &product, &scaled)
 }
 
 impl<F: FieldExt> ExpressionStandard<F> {
@@ -258,7 +340,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
         Self::Product(product_list)
     }
 
-    /* 
+    /*
     /// Initializes all beta tables within the current Expression
     pub fn init_beta_tables(&mut self, layer_claim: Claim<F>) {
         match self {
@@ -285,7 +367,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     }
     */
 
-    ///Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
+    /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
     /// Returns the max number of bits that are indexed
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {
