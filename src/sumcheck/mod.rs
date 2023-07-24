@@ -750,8 +750,8 @@ mod tests {
         mleexpr.index_mle_indices(0);
         // mleexpr.init_beta_tables(layer_claim);
 
-        let res = compute_sumcheck_message(&mut mleexpr, 1, 2);
-        let exp = SumOrEvals::Evals(vec![Fr::from(1), Fr::from(28), Fr::from(145)]);
+        let res = compute_sumcheck_message(&mut mleexpr, 1, 1);
+        let exp = SumOrEvals::Evals(vec![Fr::from(5), Fr::from(7)]);
         assert_eq!(res.unwrap(), exp);
     }
 
@@ -769,8 +769,8 @@ mod tests {
         expression.index_mle_indices(0);
         // expression.init_beta_tables(layer_claim);
 
-        let res = compute_sumcheck_message(&mut expression, 1, 3);
-        let exp = SumOrEvals::Evals(vec![Fr::from(-2), Fr::from(120), Fr::from(780), Fr::from(2320)]);
+        let res = compute_sumcheck_message(&mut expression, 1, 2);
+        let exp = SumOrEvals::Evals(vec![Fr::from(4), Fr::from(15), Fr::from(32)]);
         assert_eq!(res.unwrap(), exp);
     }
 
@@ -787,9 +787,9 @@ mod tests {
             Fr::from(0),
             Fr::from(2),
             Fr::from(0),
-            Fr::from(3),
+            Fr::from(3), 
             Fr::from(1),
-            Fr::from(4),
+            Fr::from(4), 
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
@@ -800,8 +800,8 @@ mod tests {
         expression.index_mle_indices(0);
         // expression.init_beta_tables(layer_claim);
 
-        let res = compute_sumcheck_message(&mut expression, 1, 3);
-        let exp = SumOrEvals::Evals(vec![Fr::from(-12), Fr::from(230), Fr::from(1740), Fr::from(5688)]);
+        let res = compute_sumcheck_message(&mut expression, 1, 2);
+        let exp = SumOrEvals::Evals(vec![Fr::from(1), Fr::from(45), Fr::from(139)]);
         assert_eq!(res.unwrap(), exp);
     }
 

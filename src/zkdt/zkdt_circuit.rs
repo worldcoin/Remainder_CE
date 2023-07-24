@@ -527,8 +527,10 @@ mod tests {
 
         // --- Do b * (1 - b) = b - b^2 ---
         let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
+        dbg!(&b_squared);
+        dbg!(&first_bin_decomp_bit_mle[0]);
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
-        //dbg!(&b_minus_b_squared);
+        dbg!(&b_minus_b_squared);
         
         // --- Evaluating at V(0, 0, 0) --> 0 ---
         let dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
@@ -537,8 +539,19 @@ mod tests {
         // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
         
         // idk if this is actually how we should do this
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, 2);
-        assert_eq!(res.unwrap(), SumOrEvals::Evals(vec![Fr::zero(); 3]));
+        let round_degree = get_round_degree(&b_minus_b_squared, 0);
+        dbg!(round_degree);
+        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree);
+
+        // --- Only first two values need to be zeros ---
+        match res.clone().unwrap() {
+            SumOrEvals::Sum(_) => panic!(),
+            SumOrEvals::Evals(vec) => {
+                assert_eq!(vec[0], Fr::zero());
+                assert_eq!(vec[1], Fr::zero());
+            }
+        }
+
         let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
         let verify_res = verify_sumcheck_messages(res_messages);
         assert!(verify_res.is_ok());
@@ -583,12 +596,18 @@ mod tests {
         b_minus_b_squared.index_mle_indices(0);
         // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
 
-        // let first_round_deg = get_round_degree(&b_minus_b_squared, 0);
-        // dbg!(first_round_deg);
+        let first_round_deg = get_round_degree(&b_minus_b_squared, 0);
 
-        // --- TODO!(ryancao): Actually sumchecking over all of these expressions ---
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, 2);
-        assert_eq!(res.unwrap(), SumOrEvals::Evals(vec![Fr::zero(); 3]));
+        // --- The first two elements in the sumcheck message should both be zero ---
+        // Afterwards there are no guarantees since we're doing a potentially non-linear interpolation
+        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, first_round_deg);
+        match res.clone().unwrap() {
+            SumOrEvals::Sum(_) => panic!(),
+            SumOrEvals::Evals(vec) => {
+                assert_eq!(vec[0], Fr::zero());
+                assert_eq!(vec[1], Fr::zero());
+            }
+        }
 
         let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
         let verify_res = verify_sumcheck_messages(res_messages);
@@ -763,6 +782,7 @@ mod tests {
             diff_expr.clone() - abs_recomp_expr.clone() + b_s_times_abs_recomp_expr.clone() + b_s_times_abs_recomp_expr.clone();
 
         // --- Let's just see what the expressions give us... ---
+        // Debugging
         // let diff_result = compute_sumcheck_message(&mut diff_expr, 1, 2);
         // let abs_recomp_expr_result = compute_sumcheck_message(&mut abs_recomp_expr, 1, 2);
         // let b_s_times_abs_recomp_expr_result = compute_sumcheck_message(&mut b_s_times_abs_recomp_expr, 1, 2);
@@ -770,25 +790,22 @@ mod tests {
         // dbg!(abs_recomp_expr_result);
         // dbg!(b_s_times_abs_recomp_expr_result);
 
-        let dummy_claim = (vec![Fr::one(); 3], Fr::zero());
+        // let dummy_claim = (vec![Fr::one(); 3], Fr::zero());
        
         let final_expr_clone = final_expr.clone();
 
         final_expr.index_mle_indices(0);
         // final_expr.init_beta_tables(dummy_claim.clone());
 
-        // dbg!(&final_expr);
-
+        // --- Only the first two evals should be zeros ---
         let res = compute_sumcheck_message(&mut final_expr, 1, 3);
-        let exp = SumOrEvals::Evals(vec![Fr::zero(); 4]);
         match res.clone().unwrap() {
             SumOrEvals::Sum(_) => {},
             SumOrEvals::Evals(evaluations) => {
-                dbg!(-evaluations[2]);
-                dbg!(-evaluations[3]);
+                assert_eq!(evaluations[0], Fr::zero());
+                assert_eq!(evaluations[1], Fr::zero());
             }
         }
-        assert_eq!(res.unwrap(), exp);
 
         // let res_messages = dummy_sumcheck(final_expr_clone, &mut rng, dummy_claim);
         // let verify_res = verify_sumcheck_messages(res_messages);
