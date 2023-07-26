@@ -44,15 +44,9 @@ where
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-pub trait MleRef: Debug + Clone + Send + Sync {
-    ///Type of Mle that this is a reference to
-    type Mle: Index<usize, Output = Self::F>;
-
+pub trait MleRef: Debug + Send + Sync {
     ///The Field Element this MleRef refers to
     type F: FieldExt;
-
-    ///Gets Mle that this is a reference to
-    fn mle_owned(&self) -> Self::Mle;
 
     ///Gets reference to the current bookkeeping tables
     fn bookkeeping_table(&self) -> &[Self::F];
@@ -72,7 +66,7 @@ pub trait MleRef: Debug + Clone + Send + Sync {
         &mut self,
         round_index: usize,
         challenge: Self::F,
-    ) -> Option<(Self::F, Vec<MleIndex<Self::F>>)>;
+    ) -> Option<Claim<Self::F>>;
 
     ///Mutate the MleIndices that are Iterated and turn them into IndexedBit with the bit index being determined from curr_index.
     /// Returns the curr_index + the number of IndexedBits now in the MleIndices

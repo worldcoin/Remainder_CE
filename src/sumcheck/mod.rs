@@ -215,7 +215,7 @@ pub(crate) fn prove_round<F: FieldExt>(_expr: ExpressionStandard<F>) -> Vec<F> {
 /// - Error::BetaError when the beta table has not been initialized
 /// - TODO!(ryancao || vishady) -- Error::NotIndexedError when ANY MLE is not
 ///     fully indexed.
-pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F>>(
+pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F, MleRef = Mle>, Mle: MleRef<F = F> + Clone>(
     expr: &mut Exp,
     round_index: usize,
     max_degree: usize,

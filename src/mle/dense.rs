@@ -645,12 +645,7 @@ pub struct DenseMleRef<F: FieldExt> {
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
-    type Mle = Vec<F>;
     type F = F;
-
-    fn mle_owned(&self) -> Self::Mle {
-        self.bookkeeping_table.clone()
-    }
 
     fn bookkeeping_table(&self) -> &[F] {
         &self.bookkeeping_table
@@ -682,7 +677,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         &mut self,
         round_index: usize,
         challenge: Self::F,
-    ) -> Option<(F, Vec<MleIndex<F>>)> {
+    ) -> Option<Claim<Self::F>> {
         // --- Bind the current indexed bit to the challenge value ---
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
@@ -715,7 +710,11 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
-            Some((self.bookkeeping_table[0], self.mle_indices.clone()))
+            Some((self.mle_indices.iter().map(|x| match x {
+                MleIndex::Bound(chal) => *chal,
+                MleIndex::Fixed(bit) => if *bit { F::one() } else { F::zero() },
+                _ => panic!("All bits should be bound!")
+            }).collect_vec(), self.bookkeeping_table[0]))
         } else {
             None
         }
@@ -936,8 +935,8 @@ mod tests {
                 ]
         );
 
-        assert!(first.mle_owned() == vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(6)]);
-        assert!(second.mle_owned() == vec![Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)]);
+        assert!(first.bookkeeping_table() == &[Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(6)]);
+        assert!(second.bookkeeping_table() == &[Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)]);
     }
 
     #[test]

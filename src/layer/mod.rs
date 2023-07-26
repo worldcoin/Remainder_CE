@@ -1,6 +1,6 @@
 //! A layer is a combination of multiple MLEs with an expression
 
-mod claims;
+pub mod claims;
 // mod gkr_layer;
 
 use std::marker::PhantomData;
@@ -29,8 +29,6 @@ pub enum LayerError {
 pub enum LayerId {
     ///An Mle located in the input layer
     Input,
-    ///An Mle that is an output
-    Output,
     ///A layer within the GKR protocol, indexed by it's layer id
     Layer(usize),
 }
@@ -41,7 +39,7 @@ pub trait Layer<F: FieldExt> {
     // type Expression: Expression<F>;
 
     ///Injest a claim, initialize beta tables, and do any other bookeeping that needs to be done before the sumcheck starts
-    fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<Vec<F>, LayerError> {
+    fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<(Vec<F>, usize), LayerError> {
         todo!()
     }
 
