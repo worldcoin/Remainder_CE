@@ -67,13 +67,8 @@ pub trait Layer<F: FieldExt> {
         }
     }
 
-    ///Get the claim that this layer makes on the next layer
-    fn get_claim(&self) -> Result<Claim<F>, LayerError> {
-        todo!()
-    }
-
     ///Get the claims that this layer makes on other layers
-    fn get_all_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
         todo!()
     }
 

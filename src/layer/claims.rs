@@ -210,6 +210,8 @@ fn aggregate_claims<F: FieldExt>(
     Ok((rstar, claimed_val.unwrap()))
 }
 
+
+#[cfg(test)]
 mod test {
 
     use crate::mle::{dense::DenseMle, Mle};
