@@ -10,8 +10,8 @@ pub mod layer;
 pub mod mle;
 pub mod prover;
 pub mod sumcheck;
-pub mod zkdt;
 pub mod transcript;
+pub mod zkdt;
 
 ///External definition of Field element trait, will remain an Alias for now
 pub trait FieldExt: PrimeField + Absorb {}

@@ -1,9 +1,9 @@
 //!Module that orchestrates creating a GKR Proof
 
-use std::{ops::Range, vec::IntoIter, collections::HashMap};
+use std::{collections::HashMap, ops::Range, vec::IntoIter};
 
 use crate::{
-    layer::{GKRLayer, Layer, LayerBuilder, LayerError, LayerId, Claim},
+    layer::{Claim, GKRLayer, Layer, LayerBuilder, LayerError, LayerId},
     transcript::Transcript,
     FieldExt,
 };
@@ -14,8 +14,8 @@ pub struct Layers<F: FieldExt>(Vec<Box<dyn Layer<F>>>);
 impl<F: FieldExt> Layers<F> {
     ///Add a layer to a list of layers
     pub fn add<B: LayerBuilder<F>, L: Layer<F> + 'static>(&mut self, new_layer: B) -> B::Successor {
-        let id = self.0.len();
-        let successor = new_layer.next_layer(id);
+        let id = LayerId::Layer(self.0.len());
+        let successor = new_layer.next_layer(id.clone(), None);
         let layer = L::new(new_layer, id);
         self.0.push(Box::new(layer));
         successor
@@ -23,11 +23,7 @@ impl<F: FieldExt> Layers<F> {
 
     ///Add a GKRLayer to a list of layers
     pub fn add_gkr<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor {
-        let id = self.0.len();
-        let successor = new_layer.next_layer(id);
-        let layer = GKRLayer::new(new_layer, id);
-        self.0.push(Box::new(layer));
-        successor
+        self.add::<_, GKRLayer<_>>(new_layer)
     }
 }
 
@@ -41,8 +37,7 @@ pub trait GKRCircuit<F: FieldExt> {
         let mut curr_claim: Claim<F> = todo!();
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
 
-        ///Output layers???
-
+        //Output layers???
         for mut layer in layers.0.into_iter().rev() {
             //Aggregate claims
             let init_evals = layer.start_sumcheck(curr_claim)?;
@@ -63,7 +58,7 @@ pub trait GKRCircuit<F: FieldExt> {
             let other_claims = layer.get_all_claims()?;
 
             //Add the claims to the claim tracking state
-            for (layer_id,  claim) in other_claims {
+            for (layer_id, claim) in other_claims {
                 if let Some(curr_claims) = claims.get_mut(&layer_id) {
                     curr_claims.push(claim);
                 } else {
@@ -71,7 +66,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
             }
         }
-        
+
         //This needs to return the full sumcheck proof
         Ok(())
     }

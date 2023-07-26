@@ -5,18 +5,18 @@ use std::{
     marker::PhantomData,
 };
 
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{cfg_into_iter, rand::Rng, cfg_iter};
-use itertools::{Itertools};
-use rayon::{prelude::{
-    IndexedParallelIterator, IntoParallelIterator, ParallelIterator,
-}, slice::ParallelSlice};
+use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
+use itertools::Itertools;
+use rayon::{
+    prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
+    slice::ParallelSlice,
+};
 
-use crate::FieldExt;
 use crate::layer::Claim;
+use crate::FieldExt;
 
-use super::{Mle, MleIndex, MleRef, MleAble};
+use super::{Mle, MleAble, MleIndex, MleRef};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -51,29 +51,30 @@ pub fn compute_new_beta_table<F: FieldExt>(
     round_index: usize,
     challenge: F,
 ) -> Result<Vec<F>, BetaError> {
-
     let (layer_claims, _) = &beta_table.layer_claim;
     let curr_beta = &beta_table.table.clone();
-    
+
     // --- This should always be true now, no? ---
     if beta_table.relevant_indices.contains(&round_index) {
         let layer_claim = layer_claims[round_index];
         let layer_claim_inv = layer_claim.inverse().ok_or(BetaError::NoInverse)?;
-        let mult_factor = layer_claim_inv * (challenge * layer_claim + (F::one() - challenge) * (F::one() - layer_claim));
+        let mult_factor = layer_claim_inv
+            * (challenge * layer_claim + (F::one() - challenge) * (F::one() - layer_claim));
 
-        let new_beta: Vec<F> = cfg_into_iter!(curr_beta.clone()).skip(1).step_by(2).map(|curr_eval| curr_eval * mult_factor).collect();
+        let new_beta: Vec<F> = cfg_into_iter!(curr_beta.clone())
+            .skip(1)
+            .step_by(2)
+            .map(|curr_eval| curr_eval * mult_factor)
+            .collect();
         return Ok(new_beta);
     }
-    
+
     Err(BetaError::IndexedBitNotFoundError)
 }
 
-
 impl<F: FieldExt> BetaTable<F> {
-
     /// Construct a new beta table using a single claim
     pub fn new(layer_claim: Claim<F>) -> Result<BetaTable<F>, BetaError> {
-
         let layer_claim_vars = &layer_claim.0;
         let (one_minus_r, r) = (layer_claim_vars[0], F::one() - layer_claim_vars[0]);
         let mut cur_table = vec![one_minus_r, r];
@@ -81,14 +82,20 @@ impl<F: FieldExt> BetaTable<F> {
         // TODO!(vishruti) make this parallelizable
         for i in 1..layer_claim_vars.len() {
             let (one_minus_r, r) = (layer_claim_vars[i], F::one() - layer_claim_vars[i]);
-            let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone()).map(|eval| eval * one_minus_r).collect();
+            let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone())
+                .map(|eval| eval * one_minus_r)
+                .collect();
             let secondhalf: Vec<F> = cfg_into_iter!(cur_table).map(|eval| eval * r).collect();
             firsthalf.extend(secondhalf.iter());
             cur_table = firsthalf;
         }
 
         let iterated_bit_indices = (0..layer_claim_vars.len()).into_iter().collect_vec();
-        Ok(BetaTable { layer_claim, table: cur_table, relevant_indices: iterated_bit_indices })
+        Ok(BetaTable {
+            layer_claim,
+            table: cur_table,
+            relevant_indices: iterated_bit_indices,
+        })
     }
 
     // /// Construct a new beta table using claims and a product of mle refs
@@ -141,12 +148,7 @@ impl<F: FieldExt> BetaTable<F> {
     // }
 
     /// Fix variable for a beta table
-    pub fn beta_update(
-        &mut self,
-        round_index: usize,
-        challenge: F,
-    ) -> Result<(), BetaError> {
-
+    pub fn beta_update(&mut self, round_index: usize, challenge: F) -> Result<(), BetaError> {
         // --- Use the pure function ---
         let new_beta = compute_new_beta_table(&self, round_index, challenge);
         match new_beta {
@@ -158,5 +160,4 @@ impl<F: FieldExt> BetaTable<F> {
             }
         }
     }
-
 }

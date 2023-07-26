@@ -5,13 +5,13 @@ use core::fmt::Debug;
 
 use std::ops::Index;
 
-use crate::{FieldExt, layer::LayerId};
 use crate::layer::Claim;
 use crate::mle::dense::BetaError;
+use crate::{layer::LayerId, FieldExt};
 
+pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
-pub mod beta;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
@@ -39,6 +39,8 @@ where
     fn num_vars(&self) -> usize;
 
     fn define_layer_id(&mut self, id: LayerId);
+
+    fn add_prefix_bits(&mut self, prefix: &[MleIndex<F>]);
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression

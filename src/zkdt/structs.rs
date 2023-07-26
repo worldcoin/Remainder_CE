@@ -3,7 +3,7 @@ use derive_more::{From, Into};
 
 /// --- Path nodes within the tree and in the path hint ---
 /// Used for the following components of the (circuit) input:
-/// a) 
+/// a)
 #[derive(Copy, Debug, Clone, From, Into)]
 pub struct DecisionNode<F: FieldExt> {
     pub node_id: F,

@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
-    mle::{Mle, MleAble, MleRef},
+    mle::{Mle, MleAble, MleIndex, MleRef},
     sumcheck::{compute_sumcheck_message, get_round_degree, SumOrEvals},
     FieldExt,
 };
@@ -32,7 +32,7 @@ pub enum LayerId {
     ///An Mle that is an output
     Output,
     ///A layer within the GKR protocol, indexed by it's layer id
-    Layer(usize)
+    Layer(usize),
 }
 
 ///A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
@@ -53,8 +53,8 @@ pub trait Layer<F: FieldExt> {
         // --- Grabs the degree of univariate polynomial we are sending over ---
         let degree = get_round_degree(expression, round_index);
 
-        let eval =
-            compute_sumcheck_message(expression, round_index, degree).map_err(LayerError::ExpressionError)?;
+        let eval = compute_sumcheck_message(expression, round_index, degree)
+            .map_err(LayerError::ExpressionError)?;
 
         if let SumOrEvals::Evals(evals) = eval {
             Ok(evals)
@@ -78,7 +78,7 @@ pub trait Layer<F: FieldExt> {
     }
 
     ///Gets the unique id of this layer
-    fn get_id(&self) -> usize;
+    fn get_id(&self) -> &LayerId;
 
     ///Get the master expression associated with this Layer
     fn get_expression(&self) -> &ExpressionStandard<F>;
@@ -87,19 +87,19 @@ pub trait Layer<F: FieldExt> {
     fn get_expression_mut(&mut self) -> &mut ExpressionStandard<F>;
 
     ///Create new ConcreteLayer from a LayerBuilder
-    fn new<L: LayerBuilder<F>>(builder: L, id: usize) -> Self
+    fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self
     where
         Self: Sized;
 }
 
 ///Default Layer abstraction
 pub struct GKRLayer<F: FieldExt> {
-    id: usize,
+    id: LayerId,
     expression: ExpressionStandard<F>,
 }
 
 impl<F: FieldExt> Layer<F> for GKRLayer<F> {
-    fn new<L: LayerBuilder<F>>(builder: L, id: usize) -> Self {
+    fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
         Self {
             id,
             expression: builder.build_expression(),
@@ -114,16 +114,13 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
         &mut self.expression
     }
 
-    fn get_id(&self) -> usize {
-        self.id
+    fn get_id(&self) -> &LayerId {
+        &self.id
     }
 }
 
 ///The builder type for a Layer
 pub trait LayerBuilder<F: FieldExt> {
-    ///The Mle(s) that this Layer makes claims on
-    type Mle;
-
     ///The layer that makes claims on this layer in the GKR protocol. The next layer in the GKR protocol
     type Successor;
 
@@ -131,15 +128,12 @@ pub trait LayerBuilder<F: FieldExt> {
     fn build_expression(&self) -> ExpressionStandard<F>;
 
     ///Generate the next layer
-    fn next_layer(&self, id: usize) -> Self::Successor;
-
-    ///Gets the MLEs that this layer builder will build it's expressions from
-    fn get_mles(&self) -> &Self::Mle;
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor;
 
     ///Concatonate two layers together
-    fn concat<Other: LayerBuilder<F> + Clone>(self, rhs: Other) -> ConcatLayer<F, Self, Other>
+    fn concat<Other: LayerBuilder<F>>(self, rhs: Other) -> ConcatLayer<F, Self, Other>
     where
-        Self: Clone,
+        Self: Sized,
     {
         ConcatLayer {
             first: self,
@@ -153,7 +147,7 @@ pub trait LayerBuilder<F: FieldExt> {
         T: Send + Sync + MleAble<F>,
         M: Mle<F, T>,
         EFn: Fn(&M) -> ExpressionStandard<F>,
-        S: LayerBuilder<F>,
+        S,
         LFn: Fn(&M, usize) -> S,
     >(
         mle: M,
@@ -170,17 +164,13 @@ pub trait LayerBuilder<F: FieldExt> {
 }
 
 ///The layerbuilder that represents two layers concatonated together
-pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F> + Clone, B: LayerBuilder<F> + Clone> {
+pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
     first: A,
     second: B,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, A: LayerBuilder<F> + Clone, B: LayerBuilder<F> + Clone> LayerBuilder<F>
-    for ConcatLayer<F, A, B>
-{
-    type Mle = (A::Mle, B::Mle);
-
+impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for ConcatLayer<F, A, B> {
     type Successor = (A::Successor, B::Successor);
 
     fn build_expression(&self) -> ExpressionStandard<F> {
@@ -189,17 +179,34 @@ impl<F: FieldExt, A: LayerBuilder<F> + Clone, B: LayerBuilder<F> + Clone> LayerB
         first.concat(second)
     }
 
-    fn next_layer(&self, id: usize) -> Self::Successor {
-        //I don't think this is correct... The selector bit is being ignored
-        (self.first.next_layer(id), self.second.next_layer(id))
-    }
-
-    fn get_mles(&self) -> &Self::Mle {
-        // (self.first.get_mles(), self.second.get_mles())
-        todo!()
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        (
+            self.first.next_layer(
+                id.clone(),
+                Some(
+                    prefix_bits
+                        .clone()
+                        .into_iter()
+                        .flatten()
+                        .chain(std::iter::once(MleIndex::Fixed(true)))
+                        .collect(),
+                ),
+            ),
+            self.second.next_layer(
+                id,
+                Some(
+                    prefix_bits
+                        .into_iter()
+                        .flatten()
+                        .chain(std::iter::once(MleIndex::Fixed(false)))
+                        .collect(),
+                ),
+            ),
+        )
     }
 }
 
+///A simple layer defined ad-hoc with two closures
 pub struct SimpleLayer<F: FieldExt, T: Send + Sync + MleAble<F>, M: Mle<F, T>, EFn, LFn> {
     mle: M,
     expression_builder: EFn,
@@ -212,23 +219,17 @@ impl<
         T: Send + Sync + MleAble<F>,
         M: Mle<F, T>,
         EFn: Fn(&M) -> ExpressionStandard<F>,
-        S: LayerBuilder<F>,
-        LFn: Fn(&M, usize) -> S,
+        S,
+        LFn: Fn(&M, LayerId, Option<Vec<MleIndex<F>>>) -> S,
     > LayerBuilder<F> for SimpleLayer<F, T, M, EFn, LFn>
 {
-    type Mle = M;
-
     type Successor = S;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
         (self.expression_builder)(&self.mle)
     }
 
-    fn next_layer(&self, id: usize) -> Self::Successor {
-        (self.layer_builder)(&self.mle, id)
-    }
-
-    fn get_mles(&self) -> &Self::Mle {
-        &self.mle
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        (self.layer_builder)(&self.mle, id, prefix_bits)
     }
 }
