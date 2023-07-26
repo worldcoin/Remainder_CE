@@ -122,7 +122,7 @@ fn compute_wlx<F: FieldExt>(
     claimed_vals: &mut Vec<F>,
     num_claims: usize,
     num_idx: usize,
-    prev_layer_claim: Claim<F>,
+    // prev_layer_claim: Claim<F>,
 ) -> Result<Vec<F>, LayerError> {
     //fix variable hella times
     //evaluate expr on the mutated expr
@@ -149,24 +149,14 @@ fn compute_wlx<F: FieldExt>(
                     }
                 ).collect();
 
-
                 // use fix_var to compute W(l(index))
-                let fix_expr = expr.clone();
-                let mut fixed_expr = new_chal.iter()
-                    .enumerate()
-                    .fold(
-                        fix_expr,
-                        |mut expr, (idx, chal_point)| {
-                            expr.fix_variable(idx, *chal_point); 
-                            expr
-                        }
-                    );
-                let val = compute_sumcheck_message(&mut fixed_expr, 0, 0).unwrap();
+                let mut fix_expr = expr.clone();
+                let eval_w_l = fix_expr.evaluate_expr(new_chal);
                 
                 // this has to be a sum--get the overall evaluation
-                match val {
-                    SumOrEvals::Sum(evaluation) => Ok(evaluation),
-                    SumOrEvals::Evals(_) => Err(LayerError::ExpressionEvalError)
+                match eval_w_l {
+                    Ok(evaluation) => Ok(evaluation),
+                    Err(_) => Err(LayerError::ExpressionEvalError)
                 }
             }
         ).collect();
@@ -182,7 +172,7 @@ fn aggregate_claims<F: FieldExt>(
     claims: Vec<Claim<F>>,
     expr: &mut ExpressionStandard<F>,
     rchal: F,
-    prev_layer_claim: Claim<F>,
+    // prev_layer_claim: Claim<F>,
 ) -> Result<Claim<F>, LayerError> {
 
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_into_iter!(claims.clone()).unzip();
@@ -200,7 +190,7 @@ fn aggregate_claims<F: FieldExt>(
     ).collect();
 
     // get the evals [W(l(0)), W(l(1)), ...]
-    let wlx = compute_wlx(expr, claim_vecs, &mut vals, claims.len(), num_idx, prev_layer_claim).unwrap();
+    let wlx = compute_wlx(expr, claim_vecs, &mut vals, claims.len(), num_idx).unwrap();
 
     dbg!(&wlx);
     // interpolate to get W(l(r)), that's the claimed value
@@ -256,34 +246,21 @@ mod test {
             let mut exp = expr.clone();
             
             exp.index_mle_indices(0);
-            // exp.init_beta_tables(dummy_claim.clone());
-            for j in 0..2 {
-                exp.fix_variable( j, chals[i][j]);
-            }
-            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
-            if let SumOrEvals::Sum(num) = expr_eval {
-                valchal.push(num);
-            }
+            let eval = exp.evaluate_expr((*chals[i]).clone());
+            valchal.push(eval.unwrap());
         }
 
         dbg!(&valchal);
         let claim1: Claim<Fr> = (chals1, valchal[0]);
         let claim2: Claim<Fr> = (chals2, valchal[1]);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mut expr, Fr::from(10), dummy_claim.clone()).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2], &mut expr, Fr::from(10)).unwrap();
        
         expr_copy.index_mle_indices(0);
-        // expr_copy.init_beta_tables(dummy_claim);
-        let fix_vars = vec![Fr::from(-7), Fr::from(43)];
-        for i in 0..2 {
-            expr_copy.fix_variable(i, fix_vars[i]);
-        }
-        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
-
-        if let SumOrEvals::Sum(num) = expr_eval {
-            let exp: Claim<Fr> = (fix_vars, num);
-            assert_eq!(res, exp);
-        }
+        let challenge_l_10 = vec![Fr::from(-7), Fr::from(43)]; // l(10), by hand
+        let eval_l_10 = expr_copy.evaluate_expr(challenge_l_10.clone()).unwrap();
+        let claim_l_10: Claim<Fr> = (challenge_l_10, eval_l_10);
+        assert_eq!(res, claim_l_10);
     }
 
     /// Test claim aggregation on another small mle
@@ -313,14 +290,8 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            // exp.init_beta_tables(dummy_claim.clone());
-            for j in 0..2 {
-                exp.fix_variable( j, chals[i][j]);
-            }
-            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
-            if let SumOrEvals::Sum(num) = expr_eval {
-                valchal.push(num);
-            }
+            let eval = exp.evaluate_expr((*chals[i]).clone());
+            valchal.push(eval.unwrap());
         }
 
         let claim1: Claim<Fr> = (chals1, valchal[0]);
@@ -329,7 +300,7 @@ mod test {
 
         let rchal = Fr::from(-2);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
 
         let transpose1 = vec![Fr::from(1), Fr::from(2), Fr::from(3)];
         let transpose2 = vec![Fr::from(2), Fr::from(3), Fr::from(1)];
@@ -340,15 +311,10 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        // expr_copy.init_beta_tables(dummy_claim);
-        for i in 0..2 {
-            expr_copy.fix_variable(i, fix_vars[i]);
-        }
-        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
-        if let SumOrEvals::Sum(num) = expr_eval {
-            let exp: Claim<Fr> = (fix_vars, num);
-            assert_eq!(res, exp);
-        }
+
+        let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
+        let claim_fixed_vars: Claim<Fr> = (fix_vars, eval_fixed_vars);
+        assert_eq!(res, claim_fixed_vars);
     }
 
     /// Test claim aggregation on random mle
@@ -379,14 +345,8 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            // exp.init_beta_tables(dummy_claim.clone());
-            for j in 0..3 {
-                exp.fix_variable( j, chals[i][j]);
-            }
-            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
-            if let SumOrEvals::Sum(num) = expr_eval {
-                valchal.push(num);
-            }
+            let eval = exp.evaluate_expr((*chals[i]).clone());
+            valchal.push(eval.unwrap());
         }
 
         let claim1: Claim<Fr> = (chals1, valchal[0]);
@@ -395,7 +355,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -408,14 +368,10 @@ mod test {
 
         expr_copy.index_mle_indices(0);
         // expr_copy.init_beta_tables(dummy_claim);
-        for i in 0..3 {
-            expr_copy.fix_variable(i, fix_vars[i]);
-        }
-        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
-        if let SumOrEvals::Sum(num) = expr_eval {
-            let exp: Claim<Fr> = (fix_vars, num);
-            assert_eq!(res, exp);
-        }
+
+        let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
+        let claim_fixed_vars: Claim<Fr> = (fix_vars, eval_fixed_vars);
+        assert_eq!(res, claim_fixed_vars);
     }
 
     /// Test claim aggregation on a RANDOM mle
@@ -449,14 +405,8 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            // exp.init_beta_tables(dummy_claim.clone());
-            for j in 0..3 {
-                exp.fix_variable( j, chals[i][j]);
-            }
-            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
-            if let SumOrEvals::Sum(num) = expr_eval {
-                valchal.push(num);
-            }
+            let eval = exp.evaluate_expr((*chals[i]).clone());
+            valchal.push(eval.unwrap());
         }
 
         let claim1: Claim<Fr> = (chals1, valchal[0]);
@@ -465,7 +415,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -477,15 +427,10 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        // expr_copy.init_beta_tables(dummy_claim);
-        for i in 0..3 {
-            expr_copy.fix_variable(i, fix_vars[i]);
-        }
-        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
-        if let SumOrEvals::Sum(num) = expr_eval {
-            let exp: Claim<Fr> = (fix_vars, num);
-            assert_ne!(res, exp);
-        }
+
+        let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
+        let claim_fixed_vars: Claim<Fr> = (fix_vars, eval_fixed_vars);
+        assert_ne!(res, claim_fixed_vars);
     }
 
 
@@ -517,14 +462,8 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            // exp.init_beta_tables(dummy_claim.clone());
-            for j in 0..3 {
-                exp.fix_variable( j, chals[i][j]);
-            }
-            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
-            if let SumOrEvals::Sum(num) = expr_eval {
-                valchal.push(num);
-            }
+            let eval = exp.evaluate_expr((*chals[i]).clone());
+            valchal.push(eval.unwrap());
         }
 
         let claim1: Claim<Fr> = (chals1, valchal[0]-Fr::one());
@@ -533,7 +472,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -545,15 +484,10 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        // expr_copy.init_beta_tables(dummy_claim);
-        for i in 0..3 {
-            expr_copy.fix_variable(i, fix_vars[i]);
-        }
-        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
-        if let SumOrEvals::Sum(num) = expr_eval {
-            let exp: Claim<Fr> = (fix_vars, num);
-            assert_ne!(res, exp);
-        }
+
+        let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
+        let claim_fixed_vars: Claim<Fr> = (fix_vars, eval_fixed_vars);
+        assert_ne!(res, claim_fixed_vars);
     }
 
     /// Make sure claim aggregation fails for ANOTHER WRONG CLAIM!
@@ -584,14 +518,8 @@ mod test {
         for i in 0..3 {
             let mut exp = expr.clone();
             exp.index_mle_indices(0);
-            // exp.init_beta_tables(dummy_claim.clone());
-            for j in 0..3 {
-                exp.fix_variable( j, chals[i][j]);
-            }
-            let expr_eval = compute_sumcheck_message(&mut exp, 0, 0).unwrap();
-            if let SumOrEvals::Sum(num) = expr_eval {
-                valchal.push(num);
-            }
+            let eval = exp.evaluate_expr((*chals[i]).clone());
+            valchal.push(eval.unwrap());
         }
 
         let claim1: Claim<Fr> = (chals1, valchal[0]);
@@ -600,7 +528,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal, dummy_claim.clone()).unwrap();
+        let res: Claim<Fr> = aggregate_claims(vec![claim1, claim2, claim3], &mut expr, rchal).unwrap();
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -612,14 +540,9 @@ mod test {
         ).collect();
 
         expr_copy.index_mle_indices(0);
-        // expr_copy.init_beta_tables(dummy_claim);
-        for i in 0..3 {
-            expr_copy.fix_variable(i, fix_vars[i]);
-        }
-        let expr_eval = compute_sumcheck_message(&mut expr_copy, 0, 0).unwrap();
-        if let SumOrEvals::Sum(num) = expr_eval {
-            let exp: Claim<Fr> = (fix_vars, num);
-            assert_ne!(res, exp);
-        }
+
+        let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
+        let claim_fixed_vars: Claim<Fr> = (fix_vars, eval_fixed_vars);
+        assert_ne!(res, claim_fixed_vars);
     }
 }
