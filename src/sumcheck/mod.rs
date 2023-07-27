@@ -283,14 +283,6 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F>>(
 
                         if (first_evals.len() == second_evals.len()) && first_evals.len() == 3 {
                             if max_degree == 2 {
-                                // let (first_0, first_1, first_2) = first;
-                                // let (second_0, second_1, second_2) = second;
-                                // [1, 2, 3] (2) , [4, 5, 6] (1)
-                                // [1, 10, 2*3 - 12]
-
-                                dbg!(&first_evals);
-                                dbg!(&second_evals);
-                                dbg!(&round_index);
 
                                 let first_evals = SumOrEvals::Evals(
                                     (0..3).map(
