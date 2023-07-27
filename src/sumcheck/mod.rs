@@ -608,8 +608,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
         } else {
             panic!();
         };
-
-        challenge = Some(F::from(2_u64));
+        challenge = Some(F::from(rng.gen::<u64>()));
     }
 
     messages
@@ -622,6 +621,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
 pub fn verify_sumcheck_messages<F: FieldExt>(
     messages: Vec<(Vec<F>, Option<F>)>,
     mut expression: ExpressionStandard<F>,
+    rng: &mut impl Rng,
 ) -> Result<F, VerifyError> {
     let mut prev_evals = &messages[0].0;
     let mut chal = F::zero();
@@ -651,7 +651,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     }
 
     // Round v, again Thaler book page 34
-    let final_chal = F::from(2_u64);
+    let final_chal = F::from(rng.gen::<u64>());
     challenges.push(final_chal);
 
     // uses the expression to make one single oracle query
@@ -835,7 +835,7 @@ mod tests {
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
         let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages, expression);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
@@ -855,7 +855,7 @@ mod tests {
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
         let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages, expression);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
@@ -884,7 +884,7 @@ mod tests {
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
         let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages, expression);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
@@ -908,7 +908,7 @@ mod tests {
         );
 
         let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages, expression);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
@@ -931,7 +931,7 @@ mod tests {
 
         let expression = expr2.concat(expression);
         let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages, expression);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
@@ -957,7 +957,7 @@ mod tests {
 
         let expression = expr2.concat(expression);
         let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages, expression);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
@@ -992,7 +992,7 @@ mod tests {
 
         let expression = expr2.concat(expression);
         let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages, expression);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
@@ -1024,7 +1024,7 @@ mod tests {
         );
 
         let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages, expression);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 }
