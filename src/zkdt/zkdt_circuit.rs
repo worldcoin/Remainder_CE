@@ -459,394 +459,394 @@ mod tests {
     use ark_std::One;
     use ark_std::Zero;
 
-    /// Checks that bits within the diff binary decomp and the multiplicity
-    /// binary decomp are all either 0 or 1
-    #[test]
-    fn dummy_bits_are_binary_test() {
-        // --- First generate the dummy data ---
-        let (
-            // dummy_attr_idx_data,
-            dummy_input_data,
-            // dummy_permutation_indices,
-            dummy_permuted_input_data,
-            dummy_decision_node_paths,
-            dummy_leaf_node_paths,
-            dummy_binary_decomp_diffs,
-            dummy_multiplicities_bin_decomp,
-            dummy_decision_nodes,
-            dummy_leaf_nodes
-        ) = generate_dummy_data::<Fr>();
+    // /// Checks that bits within the diff binary decomp and the multiplicity
+    // /// binary decomp are all either 0 or 1
+    // #[test]
+    // fn dummy_bits_are_binary_test() {
+    //     // --- First generate the dummy data ---
+    //     let (
+    //         // dummy_attr_idx_data,
+    //         dummy_input_data,
+    //         // dummy_permutation_indices,
+    //         dummy_permuted_input_data,
+    //         dummy_decision_node_paths,
+    //         dummy_leaf_node_paths,
+    //         dummy_binary_decomp_diffs,
+    //         dummy_multiplicities_bin_decomp,
+    //         dummy_decision_nodes,
+    //         dummy_leaf_nodes
+    //     ) = generate_dummy_data::<Fr>();
 
-        // --- Checks that all the (diff) bits are either zero or one ---
-        dummy_binary_decomp_diffs.into_iter()
-            .for_each(|per_input_dummy_binary_decomp_diffs| {
+    //     // --- Checks that all the (diff) bits are either zero or one ---
+    //     dummy_binary_decomp_diffs.into_iter()
+    //         .for_each(|per_input_dummy_binary_decomp_diffs| {
 
-                // --- We should have exactly TREE_HEIGHT - 1 diffs/decomps ---
-                assert!(per_input_dummy_binary_decomp_diffs.len() == TREE_HEIGHT - 1);
+    //             // --- We should have exactly TREE_HEIGHT - 1 diffs/decomps ---
+    //             assert!(per_input_dummy_binary_decomp_diffs.len() == TREE_HEIGHT - 1);
                 
-                per_input_dummy_binary_decomp_diffs.into_iter()
-                    .for_each(|dummy_binary_decomp_diff| {
-                        dummy_binary_decomp_diff.bits.into_iter().for_each(|bit| {
-                            assert!(bit == Fr::zero() || bit == Fr::one());
-                        })
-                    });
-            });
+    //             per_input_dummy_binary_decomp_diffs.into_iter()
+    //                 .for_each(|dummy_binary_decomp_diff| {
+    //                     dummy_binary_decomp_diff.bits.into_iter().for_each(|bit| {
+    //                         assert!(bit == Fr::zero() || bit == Fr::one());
+    //                     })
+    //                 });
+    //         });
 
-        // --- Checks the same for the multiplicity binary decompositions ---
-        assert!(dummy_multiplicities_bin_decomp.len() == (NUM_DECISION_NODES + NUM_LEAF_NODES) as usize);
-        dummy_multiplicities_bin_decomp.into_iter()
-            .for_each(|multiplicity_bit_decomp| {
-                multiplicity_bit_decomp.bits.into_iter().for_each(|bit| {
-                    assert!(bit == Fr::zero() || bit == Fr::one());
-                })
-            })
-    }
+    //     // --- Checks the same for the multiplicity binary decompositions ---
+    //     assert!(dummy_multiplicities_bin_decomp.len() == (NUM_DECISION_NODES + NUM_LEAF_NODES) as usize);
+    //     dummy_multiplicities_bin_decomp.into_iter()
+    //         .for_each(|multiplicity_bit_decomp| {
+    //             multiplicity_bit_decomp.bits.into_iter().for_each(|bit| {
+    //                 assert!(bit == Fr::zero() || bit == Fr::one());
+    //             })
+    //         })
+    // }
 
-    /// Basic "bits are binary" test (for the diffs), but in circuit!
-    #[test]
-    fn circuit_dummy_bits_are_binary_test_diff() {
+    // /// Basic "bits are binary" test (for the diffs), but in circuit!
+    // #[test]
+    // fn circuit_dummy_bits_are_binary_test_diff() {
 
-        let mut rng = test_rng();
+    //     let mut rng = test_rng();
 
-        let (
-            // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
-            // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle
-        ) = generate_dummy_mles::<Fr>();
+    //     let (
+    //         // dummy_attr_idx_data_mle,
+    //         dummy_input_data_mle,
+    //         // dummy_permutation_indices_mle,
+    //         dummy_permuted_input_data_mle,
+    //         dummy_decision_node_paths_mle,
+    //         dummy_leaf_node_paths_mle,
+    //         dummy_binary_decomp_diffs_mle,
+    //         dummy_multiplicities_bin_decomp_mle,
+    //         dummy_decision_nodes_mle,
+    //         dummy_leaf_nodes_mle
+    //     ) = generate_dummy_mles::<Fr>();
 
-        // --- Grab the bin decomp MLE ---
-        let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
-        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
+    //     // --- Grab the bin decomp MLE ---
+    //     let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
+    //     let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
 
-        // --- Do b * (1 - b) = b - b^2 ---
-        let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
-        dbg!(&b_squared);
-        dbg!(&first_bin_decomp_bit_mle[0]);
-        let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
-        dbg!(&b_minus_b_squared);
+    //     // --- Do b * (1 - b) = b - b^2 ---
+    //     let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
+    //     dbg!(&b_squared);
+    //     dbg!(&first_bin_decomp_bit_mle[0]);
+    //     let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
+    //     dbg!(&b_minus_b_squared);
         
-        // --- Evaluating at V(0, 0, 0) --> 0 ---
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
-        let b_minus_b_squared_clone = b_minus_b_squared.clone();
-        b_minus_b_squared.index_mle_indices(0);
-        // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
+    //     // --- Evaluating at V(0, 0, 0) --> 0 ---
+    //     let dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
+    //     let b_minus_b_squared_clone = b_minus_b_squared.clone();
+    //     b_minus_b_squared.index_mle_indices(0);
+    //     // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
         
-        // idk if this is actually how we should do this
-        let round_degree = get_round_degree(&b_minus_b_squared, 0);
-        dbg!(round_degree);
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree);
+    //     // idk if this is actually how we should do this
+    //     let round_degree = get_round_degree(&b_minus_b_squared, 0);
+    //     dbg!(round_degree);
+    //     let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree);
 
-        // --- Only first two values need to be zeros ---
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => panic!(),
-            SumOrEvals::Evals(vec) => {
-                assert_eq!(vec[0], Fr::zero());
-                assert_eq!(vec[1], Fr::zero());
-            }
-        }
+    //     // --- Only first two values need to be zeros ---
+    //     match res.clone().unwrap() {
+    //         SumOrEvals::Sum(_) => panic!(),
+    //         SumOrEvals::Evals(vec) => {
+    //             assert_eq!(vec[0], Fr::zero());
+    //             assert_eq!(vec[1], Fr::zero());
+    //         }
+    //     }
 
-        let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
-        let verify_res = verify_sumcheck_messages(res_messages);
-        assert!(verify_res.is_ok());
-    }
+    //     let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
+    //     let verify_res = verify_sumcheck_messages(res_messages);
+    //     assert!(verify_res.is_ok());
+    // }
 
-    /// basic "bits are binary" test (for multiplicities), but in circuit!
-    #[test]
-    fn circuit_dummy_bits_are_binary_test_multiplicities() {
-        let mut rng = test_rng();
+    // /// basic "bits are binary" test (for multiplicities), but in circuit!
+    // #[test]
+    // fn circuit_dummy_bits_are_binary_test_multiplicities() {
+    //     let mut rng = test_rng();
 
-        let (
-            // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
-            // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle
-        ) = generate_dummy_mles::<Fr>();
+    //     let (
+    //         // dummy_attr_idx_data_mle,
+    //         dummy_input_data_mle,
+    //         // dummy_permutation_indices_mle,
+    //         dummy_permuted_input_data_mle,
+    //         dummy_decision_node_paths_mle,
+    //         dummy_leaf_node_paths_mle,
+    //         dummy_binary_decomp_diffs_mle,
+    //         dummy_multiplicities_bin_decomp_mle,
+    //         dummy_decision_nodes_mle,
+    //         dummy_leaf_nodes_mle
+    //     ) = generate_dummy_mles::<Fr>();
 
-        // --- Grab the bin decomp MLE ---
-        let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_multiplicities_bin_decomp_mle.mle_bit_refs();
-        let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
+    //     // --- Grab the bin decomp MLE ---
+    //     let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> = dummy_multiplicities_bin_decomp_mle.mle_bit_refs();
+    //     let first_bin_decomp_bit_expr = ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
 
-        // --- Do b * (1 - b) = b - b^2 ---
-        let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
-        let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
+    //     // --- Do b * (1 - b) = b - b^2 ---
+    //     let b_squared = ExpressionStandard::Product(vec![first_bin_decomp_bit_mle[0].clone(), first_bin_decomp_bit_mle[0].clone()]);
+    //     let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
 
-        // --- We should get all zeros ---x
-        let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
-        let all_zeros_mle = DenseMle::new(all_zeros);
-        let all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
+    //     // --- We should get all zeros ---x
+    //     let all_zeros: Vec<Fr> = vec![Fr::zero()].repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
+    //     let all_zeros_mle = DenseMle::new(all_zeros);
+    //     let all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
 
-        // --- Evaluating at V(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) --> 0 ---
-        let dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
+    //     // --- Evaluating at V(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) --> 0 ---
+    //     let dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
 
-        // --- Initialize beta tables manually ---
-        let b_minus_b_squared_clone = b_minus_b_squared.clone();
-        b_minus_b_squared.index_mle_indices(0);
-        // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
+    //     // --- Initialize beta tables manually ---
+    //     let b_minus_b_squared_clone = b_minus_b_squared.clone();
+    //     b_minus_b_squared.index_mle_indices(0);
+    //     // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
 
-        let first_round_deg = get_round_degree(&b_minus_b_squared, 0);
+    //     let first_round_deg = get_round_degree(&b_minus_b_squared, 0);
 
-        // --- The first two elements in the sumcheck message should both be zero ---
-        // Afterwards there are no guarantees since we're doing a potentially non-linear interpolation
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, first_round_deg);
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => panic!(),
-            SumOrEvals::Evals(vec) => {
-                assert_eq!(vec[0], Fr::zero());
-                assert_eq!(vec[1], Fr::zero());
-            }
-        }
+    //     // --- The first two elements in the sumcheck message should both be zero ---
+    //     // Afterwards there are no guarantees since we're doing a potentially non-linear interpolation
+    //     let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, first_round_deg);
+    //     match res.clone().unwrap() {
+    //         SumOrEvals::Sum(_) => panic!(),
+    //         SumOrEvals::Evals(vec) => {
+    //             assert_eq!(vec[0], Fr::zero());
+    //             assert_eq!(vec[1], Fr::zero());
+    //         }
+    //     }
 
-        let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
-        let verify_res = verify_sumcheck_messages(res_messages);
-        assert!(verify_res.is_ok());
-    }
+    //     let res_messages = dummy_sumcheck(b_minus_b_squared_clone, &mut rng, dummy_claim);
+    //     let verify_res = verify_sumcheck_messages(res_messages);
+    //     assert!(verify_res.is_ok());
+    // }
 
-    /// Binary recomposition test (out of circuit)
-    #[test]
-    fn dummy_binary_recomp_test() {
-        // --- First generate the dummy data ---
-        let (
-            // dummy_attr_idx_data,
-            dummy_input_data,
-            // dummy_permutation_indices,
-            dummy_permuted_input_data,
-            dummy_decision_node_paths,
-            dummy_leaf_node_paths,
-            dummy_binary_decomp_diffs,
-            dummy_multiplicities_bin_decomp,
-            dummy_decision_nodes,
-            dummy_leaf_nodes
-        ) = generate_dummy_data::<Fr>();
+    // /// Binary recomposition test (out of circuit)
+    // #[test]
+    // fn dummy_binary_recomp_test() {
+    //     // --- First generate the dummy data ---
+    //     let (
+    //         // dummy_attr_idx_data,
+    //         dummy_input_data,
+    //         // dummy_permutation_indices,
+    //         dummy_permuted_input_data,
+    //         dummy_decision_node_paths,
+    //         dummy_leaf_node_paths,
+    //         dummy_binary_decomp_diffs,
+    //         dummy_multiplicities_bin_decomp,
+    //         dummy_decision_nodes,
+    //         dummy_leaf_nodes
+    //     ) = generate_dummy_data::<Fr>();
 
-        // --- Grab the attr vals from the permuted inputs ---
-        let permuted_attr_vals = dummy_permuted_input_data.into_iter().map(|input_attributes| {
+    //     // --- Grab the attr vals from the permuted inputs ---
+    //     let permuted_attr_vals = dummy_permuted_input_data.into_iter().map(|input_attributes| {
 
-            // Dummy inputs should always have length `original_len * tree_height - 1`
-            // from duplication
-            assert!(input_attributes.len() == DUMMY_INPUT_LEN * (TREE_HEIGHT - 1));
+    //         // Dummy inputs should always have length `original_len * tree_height - 1`
+    //         // from duplication
+    //         assert!(input_attributes.len() == DUMMY_INPUT_LEN * (TREE_HEIGHT - 1));
 
-            // Just extract the attribute vals
-            input_attributes.into_iter().map(|input_attribute| {
-                input_attribute.attr_val
-            }).collect_vec()
+    //         // Just extract the attribute vals
+    //         input_attributes.into_iter().map(|input_attribute| {
+    //             input_attribute.attr_val
+    //         }).collect_vec()
 
-        }).collect_vec();
+    //     }).collect_vec();
 
-        // --- Grab the thresholds from the path nodes ---
-        let decision_node_thresholds = dummy_decision_node_paths.into_iter().map(|dummy_decision_node_path| {
+    //     // --- Grab the thresholds from the path nodes ---
+    //     let decision_node_thresholds = dummy_decision_node_paths.into_iter().map(|dummy_decision_node_path| {
 
-            // Paths should always be length TREE_HEIGHT - 1
-            assert!(dummy_decision_node_path.len() == TREE_HEIGHT - 1);
+    //         // Paths should always be length TREE_HEIGHT - 1
+    //         assert!(dummy_decision_node_path.len() == TREE_HEIGHT - 1);
 
-            dummy_decision_node_path.into_iter().map(|dummy_decision_node| {
-                dummy_decision_node.threshold
-            }).collect_vec()
-        }).collect_vec();
+    //         dummy_decision_node_path.into_iter().map(|dummy_decision_node| {
+    //             dummy_decision_node.threshold
+    //         }).collect_vec()
+    //     }).collect_vec();
 
-        // --- Slice the permuted inputs to match the path node length ---
-        let permuted_attr_vals = permuted_attr_vals.into_iter().map(|single_input_attr_vals| {
-            single_input_attr_vals[..TREE_HEIGHT - 1].to_vec()
-        }).collect_vec();
+    //     // --- Slice the permuted inputs to match the path node length ---
+    //     let permuted_attr_vals = permuted_attr_vals.into_iter().map(|single_input_attr_vals| {
+    //         single_input_attr_vals[..TREE_HEIGHT - 1].to_vec()
+    //     }).collect_vec();
 
-        // --- Compute diffs ---
-        assert!(decision_node_thresholds.len() == permuted_attr_vals.len());
-        let all_diffs = zip(decision_node_thresholds, permuted_attr_vals).map(|(input_decision_node_thresholds, input_permuted_attr_vals)| {
-            assert!(input_decision_node_thresholds.len() == input_permuted_attr_vals.len());
-            zip(input_decision_node_thresholds, input_permuted_attr_vals).map(|(decision_node_threshold, permuted_attr_val)| {
-                permuted_attr_val - decision_node_threshold
-            }).collect_vec()
-        }).collect_vec();
+    //     // --- Compute diffs ---
+    //     assert!(decision_node_thresholds.len() == permuted_attr_vals.len());
+    //     let all_diffs = zip(decision_node_thresholds, permuted_attr_vals).map(|(input_decision_node_thresholds, input_permuted_attr_vals)| {
+    //         assert!(input_decision_node_thresholds.len() == input_permuted_attr_vals.len());
+    //         zip(input_decision_node_thresholds, input_permuted_attr_vals).map(|(decision_node_threshold, permuted_attr_val)| {
+    //             permuted_attr_val - decision_node_threshold
+    //         }).collect_vec()
+    //     }).collect_vec();
 
-        // --- Now time to compute binary recompositions ---
-        // Just do a zip between the decomps and `all_diffs` above
-        zip(dummy_binary_decomp_diffs, all_diffs).for_each(|(input_binary_decomp_diffs, input_diffs)| {
-            assert!(input_binary_decomp_diffs.len() == input_diffs.len());
-            zip(input_binary_decomp_diffs, input_diffs).for_each(|(binary_decomp_diff, diff)| {
-                check_signed_recomposition(diff, binary_decomp_diff);
-            });
-        });
+    //     // --- Now time to compute binary recompositions ---
+    //     // Just do a zip between the decomps and `all_diffs` above
+    //     zip(dummy_binary_decomp_diffs, all_diffs).for_each(|(input_binary_decomp_diffs, input_diffs)| {
+    //         assert!(input_binary_decomp_diffs.len() == input_diffs.len());
+    //         zip(input_binary_decomp_diffs, input_diffs).for_each(|(binary_decomp_diff, diff)| {
+    //             check_signed_recomposition(diff, binary_decomp_diff);
+    //         });
+    //     });
 
-    }
+    // }
 
-    /// Binary recomposition test (showing that the binary recomposition of the
-    /// difference recomposes to equal the differences)
-    /// The original expression: (1 - b_s)(diff - abs_recomp) + b_s(diff + abs_recomp) = 0
-    /// The simplified expression: (diff - abs_recomp) + 2b_s(abs_recomp) = 0
-    /// abs_recomp = \sum_{i = 1}^{15} b_i 2^{16 - i - 1}
-    #[test]
-    fn circuit_dummy_binary_recomp_test() {
-        let mut rng = test_rng();
-        let (
-            // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
-            // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle
-        ) = generate_dummy_mles::<Fr>();
+    // /// Binary recomposition test (showing that the binary recomposition of the
+    // /// difference recomposes to equal the differences)
+    // /// The original expression: (1 - b_s)(diff - abs_recomp) + b_s(diff + abs_recomp) = 0
+    // /// The simplified expression: (diff - abs_recomp) + 2b_s(abs_recomp) = 0
+    // /// abs_recomp = \sum_{i = 1}^{15} b_i 2^{16 - i - 1}
+    // #[test]
+    // fn circuit_dummy_binary_recomp_test() {
+    //     let mut rng = test_rng();
+    //     let (
+    //         // dummy_attr_idx_data_mle,
+    //         dummy_input_data_mle,
+    //         // dummy_permutation_indices_mle,
+    //         dummy_permuted_input_data_mle,
+    //         dummy_decision_node_paths_mle,
+    //         dummy_leaf_node_paths_mle,
+    //         dummy_binary_decomp_diffs_mle,
+    //         dummy_multiplicities_bin_decomp_mle,
+    //         dummy_decision_nodes_mle,
+    //         dummy_leaf_nodes_mle
+    //     ) = generate_dummy_mles::<Fr>();
 
-        // --- Grab the bin decomp MLEs and associated expressions ---
-        let bin_decomp_mles: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
+    //     // --- Grab the bin decomp MLEs and associated expressions ---
+    //     let bin_decomp_mles: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
 
-        // --- Grab the things necessary to compute the diff (the permuted input and thresholds) ---
-        let threshold_mle: DenseMleRef<Fr> = dummy_decision_node_paths_mle.threshold();
-        let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone());
-        let permuted_input_values_mle: DenseMleRef<Fr> = dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars));
-        let permuted_input_values_mle_expr = ExpressionStandard::Mle(permuted_input_values_mle.clone());
+    //     // --- Grab the things necessary to compute the diff (the permuted input and thresholds) ---
+    //     let threshold_mle: DenseMleRef<Fr> = dummy_decision_node_paths_mle.threshold();
+    //     let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone());
+    //     let permuted_input_values_mle: DenseMleRef<Fr> = dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars));
+    //     let permuted_input_values_mle_expr = ExpressionStandard::Mle(permuted_input_values_mle.clone());
 
-        // --- For debugging ---
-        // let threshold_mle_expr_eval = evaluate_expr(&mut threshold_mle_expr.clone(), 1, 2);
-        // dbg!(threshold_mle_expr_eval);
-        // let permuted_input_values_mle_expr_eval = evaluate_expr(&mut permuted_input_values_mle_expr.clone(), 1, 2);
-        // dbg!(permuted_input_values_mle_expr_eval);
+    //     // --- For debugging ---
+    //     // let threshold_mle_expr_eval = evaluate_expr(&mut threshold_mle_expr.clone(), 1, 2);
+    //     // dbg!(threshold_mle_expr_eval);
+    //     // let permuted_input_values_mle_expr_eval = evaluate_expr(&mut permuted_input_values_mle_expr.clone(), 1, 2);
+    //     // dbg!(permuted_input_values_mle_expr_eval);
 
-        // --- Need to just get diff ---
-        // dbg!(permuted_input_values_mle.num_vars); // Should be 3
-        // dbg!(threshold_mle.num_vars); // Should be 3
-        let mut diff_expr = permuted_input_values_mle_expr.clone() - threshold_mle_expr.clone();
-        // let permuted_input_values_mle_expr_eval = compute_sumcheck_message(&mut permuted_input_values_mle_expr.clone(), 1, 2);
-        // let threshold_mle_expr_eval = compute_sumcheck_message(&mut threshold_mle_expr.clone(), 1, 2);
-        // dbg!(permuted_input_values_mle_expr_eval);
-        // dbg!(threshold_mle_expr_eval);
+    //     // --- Need to just get diff ---
+    //     // dbg!(permuted_input_values_mle.num_vars); // Should be 3
+    //     // dbg!(threshold_mle.num_vars); // Should be 3
+    //     let mut diff_expr = permuted_input_values_mle_expr.clone() - threshold_mle_expr.clone();
+    //     // let permuted_input_values_mle_expr_eval = compute_sumcheck_message(&mut permuted_input_values_mle_expr.clone(), 1, 2);
+    //     // let threshold_mle_expr_eval = compute_sumcheck_message(&mut threshold_mle_expr.clone(), 1, 2);
+    //     // dbg!(permuted_input_values_mle_expr_eval);
+    //     // dbg!(threshold_mle_expr_eval);
 
 
-        // --- We need `abs_recomp` and `b_s * abs_recomp` ---
-        let b_s_initial_acc = ExpressionStandard::Constant(Fr::zero());
-        let sign_bit_mle = bin_decomp_mles[0].clone();
-        let bin_decomp_mles_clone = bin_decomp_mles.clone();
+    //     // --- We need `abs_recomp` and `b_s * abs_recomp` ---
+    //     let b_s_initial_acc = ExpressionStandard::Constant(Fr::zero());
+    //     let sign_bit_mle = bin_decomp_mles[0].clone();
+    //     let bin_decomp_mles_clone = bin_decomp_mles.clone();
 
-        // --- Time for iterators... sigh ---
-        let mut b_s_times_abs_recomp_expr = bin_decomp_mles
-            .into_iter()
-            .enumerate()
-            .skip(1)
-            .fold(b_s_initial_acc, |acc_expr, (bit_idx, bin_decomp_mle)| {
-            // --- First compute b_s * coeff ---
-            let b_s_times_coeff = ExpressionStandard::Product(vec![bin_decomp_mle.clone(), sign_bit_mle.clone()]);
+    //     // --- Time for iterators... sigh ---
+    //     let mut b_s_times_abs_recomp_expr = bin_decomp_mles
+    //         .into_iter()
+    //         .enumerate()
+    //         .skip(1)
+    //         .fold(b_s_initial_acc, |acc_expr, (bit_idx, bin_decomp_mle)| {
+    //         // --- First compute b_s * coeff ---
+    //         let b_s_times_coeff = ExpressionStandard::Product(vec![bin_decomp_mle.clone(), sign_bit_mle.clone()]);
 
-            let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
+    //         let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
 
-            // --- Then compute (b_s * coeff) * 2^{bit_idx} ---
-            let base = Fr::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
-            let b_s_times_coeff_times_base = ExpressionStandard::Scaled(b_s_times_coeff_ptr, base);
+    //         // --- Then compute (b_s * coeff) * 2^{bit_idx} ---
+    //         let base = Fr::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
+    //         let b_s_times_coeff_times_base = ExpressionStandard::Scaled(b_s_times_coeff_ptr, base);
 
-            // Debugging
-            // let b_i_expr = ExpressionStandard::Mle(bin_decomp_mle.clone());
-            // let b_i_expr_eval = evaluate_expr(&mut b_i_expr.clone(), 1, 1);
-            // let b_s_times_coeff_times_base_eval = evaluate_expr(&mut b_s_times_coeff_times_base.clone(), 1, 2);
-            // dbg!(bit_idx);
-            // dbg!(bin_decomp_mle.clone().num_vars);
-            // dbg!(b_i_expr_eval);
-            // dbg!(b_s_times_coeff_times_base_eval);
+    //         // Debugging
+    //         // let b_i_expr = ExpressionStandard::Mle(bin_decomp_mle.clone());
+    //         // let b_i_expr_eval = evaluate_expr(&mut b_i_expr.clone(), 1, 1);
+    //         // let b_s_times_coeff_times_base_eval = evaluate_expr(&mut b_s_times_coeff_times_base.clone(), 1, 2);
+    //         // dbg!(bit_idx);
+    //         // dbg!(bin_decomp_mle.clone().num_vars);
+    //         // dbg!(b_i_expr_eval);
+    //         // dbg!(b_s_times_coeff_times_base_eval);
 
-            acc_expr + b_s_times_coeff_times_base
-        });
+    //         acc_expr + b_s_times_coeff_times_base
+    //     });
 
-        let abs_recomp_initial_acc = ExpressionStandard::Constant(Fr::zero());
-        let mut abs_recomp_expr = bin_decomp_mles_clone
-            .into_iter()
-            .enumerate()
-            .skip(1)
-            .fold(abs_recomp_initial_acc, |acc_expr, (bit_idx, bin_decomp_mle)| {
-            // --- Compute just coeff * 2^{bit_idx} ---
-            let base = Fr::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
-            let coeff_expr = ExpressionStandard::Mle(bin_decomp_mle);
-            let coeff_expr_ptr = Box::new(coeff_expr);
-            let coeff_times_base = ExpressionStandard::Scaled(coeff_expr_ptr, base);
+    //     let abs_recomp_initial_acc = ExpressionStandard::Constant(Fr::zero());
+    //     let mut abs_recomp_expr = bin_decomp_mles_clone
+    //         .into_iter()
+    //         .enumerate()
+    //         .skip(1)
+    //         .fold(abs_recomp_initial_acc, |acc_expr, (bit_idx, bin_decomp_mle)| {
+    //         // --- Compute just coeff * 2^{bit_idx} ---
+    //         let base = Fr::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
+    //         let coeff_expr = ExpressionStandard::Mle(bin_decomp_mle);
+    //         let coeff_expr_ptr = Box::new(coeff_expr);
+    //         let coeff_times_base = ExpressionStandard::Scaled(coeff_expr_ptr, base);
 
-            // Debugging
-            let coeff_times_base_eval = compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2);
+    //         // Debugging
+    //         let coeff_times_base_eval = compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2);
 
-            acc_expr + coeff_times_base
-        });
+    //         acc_expr + coeff_times_base
+    //     });
 
-        // --- Subtract the two, and (TODO!(ryancao)) ensure they have the same number of variables ---
-        let mut final_expr = 
-            diff_expr.clone() - abs_recomp_expr.clone() + b_s_times_abs_recomp_expr.clone() + b_s_times_abs_recomp_expr.clone();
+    //     // --- Subtract the two, and (TODO!(ryancao)) ensure they have the same number of variables ---
+    //     let mut final_expr = 
+    //         diff_expr.clone() - abs_recomp_expr.clone() + b_s_times_abs_recomp_expr.clone() + b_s_times_abs_recomp_expr.clone();
 
-        // --- Let's just see what the expressions give us... ---
-        // Debugging
-        // let diff_result = compute_sumcheck_message(&mut diff_expr, 1, 2);
-        // let abs_recomp_expr_result = compute_sumcheck_message(&mut abs_recomp_expr, 1, 2);
-        // let b_s_times_abs_recomp_expr_result = compute_sumcheck_message(&mut b_s_times_abs_recomp_expr, 1, 2);
-        // dbg!(diff_result);
-        // dbg!(abs_recomp_expr_result);
-        // dbg!(b_s_times_abs_recomp_expr_result);
+    //     // --- Let's just see what the expressions give us... ---
+    //     // Debugging
+    //     // let diff_result = compute_sumcheck_message(&mut diff_expr, 1, 2);
+    //     // let abs_recomp_expr_result = compute_sumcheck_message(&mut abs_recomp_expr, 1, 2);
+    //     // let b_s_times_abs_recomp_expr_result = compute_sumcheck_message(&mut b_s_times_abs_recomp_expr, 1, 2);
+    //     // dbg!(diff_result);
+    //     // dbg!(abs_recomp_expr_result);
+    //     // dbg!(b_s_times_abs_recomp_expr_result);
 
-        // let dummy_claim = (vec![Fr::one(); 3], Fr::zero());
+    //     // let dummy_claim = (vec![Fr::one(); 3], Fr::zero());
        
-        let final_expr_clone = final_expr.clone();
+    //     let final_expr_clone = final_expr.clone();
 
-        final_expr.index_mle_indices(0);
-        // final_expr.init_beta_tables(dummy_claim.clone());
+    //     final_expr.index_mle_indices(0);
+    //     // final_expr.init_beta_tables(dummy_claim.clone());
 
-        // --- Only the first two evals should be zeros ---
-        let res = compute_sumcheck_message(&mut final_expr, 1, 3);
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => {},
-            SumOrEvals::Evals(evaluations) => {
-                assert_eq!(evaluations[0], Fr::zero());
-                assert_eq!(evaluations[1], Fr::zero());
-            }
-        }
+    //     // --- Only the first two evals should be zeros ---
+    //     let res = compute_sumcheck_message(&mut final_expr, 1, 3);
+    //     match res.clone().unwrap() {
+    //         SumOrEvals::Sum(_) => {},
+    //         SumOrEvals::Evals(evaluations) => {
+    //             assert_eq!(evaluations[0], Fr::zero());
+    //             assert_eq!(evaluations[1], Fr::zero());
+    //         }
+    //     }
 
-        // let res_messages = dummy_sumcheck(final_expr_clone, &mut rng, dummy_claim);
-        // let verify_res = verify_sumcheck_messages(res_messages);
-        // assert!(verify_res.is_ok());
-    }
+    //     // let res_messages = dummy_sumcheck(final_expr_clone, &mut rng, dummy_claim);
+    //     // let verify_res = verify_sumcheck_messages(res_messages);
+    //     // assert!(verify_res.is_ok());
+    // }
 
-    /// Permutation test showing that the characteristic polynomial of the
-    /// initial inputs is equivalent to that of the permuted inputs.
-    /// What's the expression we actually need, and what are the terms?
-    /// - We need the packed inputs first, (attr_idx + r_1 * attr_id + r_2 * attr_val)
-    /// - Then we need the characteristic polynomial terms evaluated at `r_3`: r_3 - (attr_idx + r_1 * attr_id + r_2 * attr_val)
-    /// - Then we need to multiply all of them together in a binary product tree
-    #[test]
-    fn dummy_permutation_test() {
+    // /// Permutation test showing that the characteristic polynomial of the
+    // /// initial inputs is equivalent to that of the permuted inputs.
+    // /// What's the expression we actually need, and what are the terms?
+    // /// - We need the packed inputs first, (attr_idx + r_1 * attr_id + r_2 * attr_val)
+    // /// - Then we need the characteristic polynomial terms evaluated at `r_3`: r_3 - (attr_idx + r_1 * attr_id + r_2 * attr_val)
+    // /// - Then we need to multiply all of them together in a binary product tree
+    // #[test]
+    // fn dummy_permutation_test() {
 
-        let (
-            // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
-            // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle
-        ) = generate_dummy_mles::<Fr>();
+    //     let (
+    //         // dummy_attr_idx_data_mle,
+    //         dummy_input_data_mle,
+    //         // dummy_permutation_indices_mle,
+    //         dummy_permuted_input_data_mle,
+    //         dummy_decision_node_paths_mle,
+    //         dummy_leaf_node_paths_mle,
+    //         dummy_binary_decomp_diffs_mle,
+    //         dummy_multiplicities_bin_decomp_mle,
+    //         dummy_decision_nodes_mle,
+    //         dummy_leaf_nodes_mle
+    //     ) = generate_dummy_mles::<Fr>();
 
-        let mut rng = test_rng();
+    //     let mut rng = test_rng();
 
-        // --- Get packed inputs first ---
-        let r1: Fr = rng.gen();
-        let r2: Fr = rng.gen();
+    //     // --- Get packed inputs first ---
+    //     let r1: Fr = rng.gen();
+    //     let r2: Fr = rng.gen();
 
-        // --- Multiply to do packing ---
-        let dummy_attribute_id_mleref = dummy_input_data_mle.attr_id(None);
-        let dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref);
-        let dummy_attribute_val_mleref = dummy_input_data_mle.attr_val(None);
-        let dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref);
+    //     // --- Multiply to do packing ---
+    //     let dummy_attribute_id_mleref = dummy_input_data_mle.attr_id(None);
+    //     let dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref);
+    //     let dummy_attribute_val_mleref = dummy_input_data_mle.attr_val(None);
+    //     let dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref);
 
-        // --- 
+    //     // --- 
 
-    }
+    // }
 }

@@ -119,7 +119,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     ) -> T {
         match self {
             ExpressionStandard::Constant(scalar) => constant(*scalar),
-            ExpressionStandard::Selector(index, a, b) => selector_column(
+            ExpressionStandard::Selector(index, a, b) => {
+                selector_column(
                 index,
                 a.evaluate(
                     constant,
@@ -139,7 +140,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                     product,
                     scaled,
                 ),
-            ),
+            )},
             ExpressionStandard::Mle(query) => mle_eval(query),
             ExpressionStandard::Negated(a) => {
                 let a = a.evaluate(
@@ -331,7 +332,7 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(expr: &mut Exp) -> 
         }
         Ok(a.unwrap() * scalar)
     };
-    expr.evaluate(&constant, &selector_column, &mle_eval, &negated, &sum, &product, &scaled)
+    expr.evaluate(&constant, &selector_column, &mle_eval, &negated, &sum, &product, &scaled,)
 }
 
 impl<F: FieldExt> ExpressionStandard<F> {

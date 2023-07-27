@@ -616,6 +616,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         }
 
         // --- One fewer iterated bit to sumcheck through ---
+        dbg!(&self, self.num_vars);
         self.num_vars -= 1;
 
         let transform = |chunk: &[F]| {
