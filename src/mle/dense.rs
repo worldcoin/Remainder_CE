@@ -823,9 +823,10 @@ mod tests {
         ];
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
-        mle_ref.fix_variable(1, Fr::from(3));
-        mle_ref.fix_variable(2, Fr::from(2));
-        mle_ref.fix_variable(3, Fr::from(4));
+        let _ = mle_ref.index_mle_indices(0);
+        mle_ref.fix_variable(0, Fr::from(3));
+        mle_ref.fix_variable(1, Fr::from(2));
+        mle_ref.fix_variable(2, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
