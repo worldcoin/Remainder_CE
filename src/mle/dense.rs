@@ -102,6 +102,7 @@ impl<F: FieldExt> DenseMle<F, F> {
             mle_indices: (0..self.num_vars()).map(|_| MleIndex::Iterated).collect(),
             num_vars: self.num_vars,
             layer_id: self.layer_id.clone(),
+            indexed: false,
         }
     }
 }
@@ -157,6 +158,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .collect_vec(),
             num_vars,
             layer_id: self.layer_id.clone(),
+            indexed: false,
         }
     }
 
@@ -173,6 +175,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .collect_vec(),
             num_vars,
             layer_id: self.layer_id.clone(),
+            indexed: false,
         }
     }
 }
@@ -237,6 +240,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 .collect_vec(),
             num_vars: num_vars - 2,
             layer_id: None,
+            indexed: false,
         }
     }
 
@@ -257,6 +261,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 .collect_vec(),
             num_vars: num_vars - 2,
             layer_id: None,
+            indexed: false,
         }
     }
 
@@ -277,6 +282,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 .collect_vec(),
             num_vars: num_vars - 2,
             layer_id: None,
+            indexed: false,
         }
     }
 }
@@ -340,6 +346,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
                 .collect_vec(),
             num_vars: num_vars - 1,
             layer_id: None,
+            indexed: false,
         }
     }
 
@@ -356,6 +363,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
                 .collect_vec(),
             num_vars: num_vars - 1,
             layer_id: None,
+            indexed: false,
         }
     }
 }
@@ -428,6 +436,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 .collect_vec(),
             num_vars,
             layer_id: None,
+            indexed: false,
         }
     }
 
@@ -458,6 +467,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 .collect_vec(),
             num_vars,
             layer_id: None,
+            indexed: false,
         }
     }
 }
@@ -531,6 +541,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
                     .collect_vec(),
                 num_vars: num_vars - 4,
                 layer_id: None,
+                indexed: false,
             };
             ret.push(bit_mle_ref);
         }
@@ -545,12 +556,13 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
 /// An [MleRef] that is dense
 #[derive(Clone, Debug)]
 pub struct DenseMleRef<F: FieldExt> {
-    bookkeeping_table: Vec<F>,
-    mle_indices: Vec<MleIndex<F>>,
+    pub bookkeeping_table: Vec<F>,
+    pub mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     pub num_vars: usize,
     layer_id: Option<LayerId>,
+    indexed: bool,
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
@@ -583,6 +595,10 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 
     fn num_vars(&self) -> usize {
         self.num_vars
+    }
+
+    fn indexed(&self) -> bool {
+        self.indexed
     }
 
     /// Ryan's note -- I assume this function updates the bookkeeping tables as
@@ -639,6 +655,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
             }
         }
 
+        self.indexed = true;
         curr_index + new_indices
     }
 

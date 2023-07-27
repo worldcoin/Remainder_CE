@@ -16,7 +16,7 @@ use rayon::{prelude::{
 use crate::FieldExt;
 use crate::layer::Claim;
 
-use super::{Mle, MleIndex, MleRef, MleAble};
+use super::{Mle, MleIndex, MleRef, MleAble, dense::{DenseMleRef, DenseMle}};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -24,8 +24,9 @@ use thiserror::Error;
 /// Beta table struct for a product of mle refs
 pub struct BetaTable<F: FieldExt> {
     layer_claim: Claim<F>,
-    pub table: Vec<F>,
+    pub table: DenseMleRef<F>,
     relevant_indices: Vec<usize>,
+    pub indexed: bool,
 }
 
 /// Error handling for beta table construction
@@ -53,7 +54,7 @@ pub fn compute_new_beta_table<F: FieldExt>(
 ) -> Result<Vec<F>, BetaError> {
 
     let (layer_claims, _) = &beta_table.layer_claim;
-    let curr_beta = &beta_table.table.clone();
+    let curr_beta = beta_table.table.bookkeeping_table().clone();
     
     // --- This should always be true now, no? ---
     if beta_table.relevant_indices.contains(&round_index) {
@@ -61,7 +62,7 @@ pub fn compute_new_beta_table<F: FieldExt>(
         let layer_claim_inv = layer_claim.inverse().ok_or(BetaError::NoInverse)?;
         let mult_factor = layer_claim_inv * (challenge * layer_claim + (F::one() - challenge) * (F::one() - layer_claim));
 
-        let new_beta: Vec<F> = cfg_into_iter!(curr_beta.clone()).skip(1).step_by(2).map(|curr_eval| curr_eval * mult_factor).collect();
+        let new_beta: Vec<F> = cfg_into_iter!(curr_beta.clone()).skip(1).step_by(2).map(|curr_eval| *curr_eval * mult_factor).collect();
         return Ok(new_beta);
     }
     
@@ -74,13 +75,13 @@ impl<F: FieldExt> BetaTable<F> {
     /// Construct a new beta table using a single claim
     pub fn new(layer_claim: Claim<F>) -> Result<BetaTable<F>, BetaError> {
 
-        let layer_claim_vars = &layer_claim.0;
-        let (one_minus_r, r) = (layer_claim_vars[0], F::one() - layer_claim_vars[0]);
+        let (layer_claim_vars, _) = &layer_claim;
+        let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
         let mut cur_table = vec![one_minus_r, r];
 
         // TODO!(vishruti) make this parallelizable
         for i in 1..layer_claim_vars.len() {
-            let (one_minus_r, r) = (layer_claim_vars[i], F::one() - layer_claim_vars[i]);
+            let (one_minus_r, r) = (F::one() - layer_claim_vars[i], layer_claim_vars[i]);
             let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone()).map(|eval| eval * one_minus_r).collect();
             let secondhalf: Vec<F> = cfg_into_iter!(cur_table).map(|eval| eval * r).collect();
             firsthalf.extend(secondhalf.iter());
@@ -88,7 +89,8 @@ impl<F: FieldExt> BetaTable<F> {
         }
 
         let iterated_bit_indices = (0..layer_claim_vars.len()).into_iter().collect_vec();
-        Ok(BetaTable { layer_claim, table: cur_table, relevant_indices: iterated_bit_indices })
+        let cur_table_mle_ref: DenseMleRef<F> = DenseMle::new(cur_table).mle_ref();
+        Ok(BetaTable { layer_claim, table: cur_table_mle_ref, relevant_indices: iterated_bit_indices, indexed: false })
     }
 
     // /// Construct a new beta table using claims and a product of mle refs
@@ -153,7 +155,13 @@ impl<F: FieldExt> BetaTable<F> {
             Err(e) => Err(e),
             Ok(new_beta_table) => {
                 // --- If we successfully compute the new beta table, update the internal representation ---
-                self.table = new_beta_table;
+                for mle_index in self.table.mle_indices.iter_mut() {
+                    if *mle_index == MleIndex::IndexedBit(round_index) {
+                        *mle_index = MleIndex::Bound(challenge);
+                    }
+                }
+                self.table.bookkeeping_table = new_beta_table;
+                self.table.num_vars -= 1;
                 Ok(())
             }
         }
