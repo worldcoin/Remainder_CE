@@ -28,6 +28,11 @@ impl<F: FieldExt> Layers<F> {
     pub fn add_gkr<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor {
         self.add::<_, GKRLayer<_>>(new_layer)
     }
+
+    ///Creates a new Layers
+    pub fn new() -> Self {
+        Self(vec![])
+    }
 }
 
 #[derive(Error, Debug, Clone)]
@@ -79,9 +84,6 @@ pub trait GKRCircuit<F: FieldExt> {
             }
         }
 
-        //set up some claim tracking stuff
-
-        //Output layers???
         let layer_sumcheck_proofs = layers.0.into_iter().rev().map(|mut layer| {
             //Aggregate claims
             let layer_id = layer.get_id().clone();
@@ -141,25 +143,47 @@ pub trait GKRCircuit<F: FieldExt> {
 #[cfg(test)]
 mod test {
     use ark_bn254::Fr;
+    use ark_std::One;
 
-    use crate::{transcript::poseidon_transcript::PoseidonTranscript, FieldExt};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle}, layer::{LayerBuilder, from_mle, SimpleLayer}, expression::ExpressionStandard};
 
     use super::{GKRCircuit, Layers};
 
-    struct TestCircuit {}
+    struct TestCircuit<F: FieldExt> {
+        mle: DenseMle<F, Tuple2<F>>
+    }
 
-    // impl<F: FieldExt> GKRCircuit<F> for TestCircuit {
-    //     // fn synthesize(&mut self) -> Layers<F> {
-    //     //     todo!()
-    //     // }
-    // }
+    impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
+        fn synthesize(&mut self) -> (Layers<F>, Vec<Box<dyn MleRef<F = F>>>) {
+            let mut layers = Layers::new();
 
-    //#[test]
+            let builder = from_mle(self.mle.clone(), |mle| {
+                ExpressionStandard::products(vec![mle.first(), mle.second()])
+            }, |mle, layer_id, prefix_bits| {
+                let mut output = mle.into_iter().map(|(first, second)| first * second).collect::<DenseMle<F, F>>();
+
+                output.define_layer_id(layer_id);
+                if let Some(prefix_bits) = prefix_bits {
+                    output.add_prefix_bits(&prefix_bits);
+                }
+
+                output
+            });
+
+            let output = layers.add_gkr(builder);
+            (layers, vec![Box::new(output.mle_ref())])
+        }
+    }
+
+    #[test]
     fn test_gkr() {
-        let mut circuit = TestCircuit {};
+        let mle = vec![(Fr::one(), Fr::one()), (Fr::one(), Fr::one())].into_iter().map(|x| x.into()).collect();
+        let mut circuit = TestCircuit::<Fr> {
+            mle
+        };
 
-        let transcript: PoseidonTranscript<Fr> = todo!();
+        let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("New Poseidon Test Transcript");
 
-        // circuit.prove(&mut transcript).unwrap();
+        circuit.prove(&mut transcript).unwrap();
     }
 }

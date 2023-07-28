@@ -134,25 +134,24 @@ pub trait LayerBuilder<F: FieldExt> {
             _marker: PhantomData,
         }
     }
+}
 
     ///Creates a simple layer from an mle, with closures for defining how the mle turns into an expression and a next layer
-    fn from_mle<
-        T: Send + Sync + MleAble<F>,
-        M: Mle<F, T>,
-        EFn: Fn(&M) -> ExpressionStandard<F>,
-        S,
-        LFn: Fn(&M, usize) -> S,
-    >(
-        mle: M,
-        expression_builder: EFn,
-        layer_builder: LFn,
-    ) -> SimpleLayer<F, T, M, EFn, LFn> {
-        SimpleLayer {
-            mle,
-            expression_builder,
-            layer_builder,
-            _marker: PhantomData,
-        }
+pub fn from_mle<
+    F: FieldExt,
+    M,
+    EFn: Fn(&M) -> ExpressionStandard<F>,
+    S,
+    LFn: Fn(&M, LayerId, Option<Vec<MleIndex<F>>>) -> S,
+>(
+    mle: M,
+    expression_builder: EFn,
+    layer_builder: LFn,
+) -> SimpleLayer<M, EFn, LFn> {
+    SimpleLayer {
+        mle,
+        expression_builder,
+        layer_builder,
     }
 }
 
@@ -200,21 +199,19 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
 }
 
 ///A simple layer defined ad-hoc with two closures
-pub struct SimpleLayer<F: FieldExt, T: Send + Sync + MleAble<F>, M: Mle<F, T>, EFn, LFn> {
+pub struct SimpleLayer<M, EFn, LFn> {
     mle: M,
     expression_builder: EFn,
     layer_builder: LFn,
-    _marker: PhantomData<(F, T)>,
 }
 
 impl<
         F: FieldExt,
-        T: Send + Sync + MleAble<F>,
-        M: Mle<F, T>,
+        M,
         EFn: Fn(&M) -> ExpressionStandard<F>,
         S,
         LFn: Fn(&M, LayerId, Option<Vec<MleIndex<F>>>) -> S,
-    > LayerBuilder<F> for SimpleLayer<F, T, M, EFn, LFn>
+    > LayerBuilder<F> for SimpleLayer<M, EFn, LFn>
 {
     type Successor = S;
 
@@ -224,5 +221,38 @@ impl<
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         (self.layer_builder)(&self.mle, id, prefix_bits)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use ark_bn254::Fr;
+    use ark_std::test_rng;
+    use rand::rngs::OsRng;
+
+    use crate::{mle::{dense::DenseMle, MleIndex}, expression::ExpressionStandard, sumcheck::{dummy_sumcheck, verify_sumcheck_messages}};
+
+    use super::{from_mle, GKRLayer, Layer, LayerId, LayerBuilder};
+
+    #[test]
+    fn build_simple_layer() {
+        let mut rng = test_rng();
+        let mle1 = DenseMle::<Fr, Fr>::new(vec![Fr::from(2), Fr::from(3), Fr::from(6), Fr::from(7)]);
+        let mle2 = DenseMle::<Fr, Fr>::new(vec![Fr::from(3), Fr::from(1), Fr::from(9), Fr::from(2)]);
+
+        let builder = from_mle((mle1, mle2), |(mle1, mle2)| {
+            ExpressionStandard::Mle(mle1.mle_ref()) + ExpressionStandard::Mle(mle2.mle_ref())
+        }, |(mle1, mle2), _, _: Option<Vec<MleIndex<Fr>>>| {
+            mle1.clone().into_iter().zip(mle2.clone().into_iter()).map(|(first, second)| first + second).collect::<DenseMle<_, _>>()
+        });
+
+        let next: DenseMle<Fr, Fr> = builder.next_layer(LayerId::Layer(0), None);
+
+        let layer = GKRLayer::new(builder, LayerId::Layer(0));
+
+        let sum = dummy_sumcheck(layer.expression, &mut rng, todo!());
+        verify_sumcheck_messages(sum, layer.expression, &mut OsRng).unwrap();
+
+        
     }
 }
