@@ -123,7 +123,7 @@ impl<F: FieldExt> DenseMle<F, F> {
 }
 
 #[derive(Debug, Clone, From, Into)]
-struct Tuple2<F: FieldExt>((F, F));
+pub(crate) struct Tuple2<F: FieldExt>((F, F)); //Changed to be public - @Agam
 
 impl<F: FieldExt> MleAble<F> for Tuple2<F> {
     type Repr = [Vec<F>; 2];
