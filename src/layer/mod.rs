@@ -3,7 +3,7 @@
 pub mod claims;
 // mod gkr_layer;
 
-use std::marker::PhantomData;
+use std::{marker::PhantomData};
 
 use thiserror::Error;
 
@@ -120,8 +120,8 @@ pub trait LayerBuilder<F: FieldExt> {
     ///Build the expression that will be sumchecked
     fn build_expression(&self) -> ExpressionStandard<F>;
 
-    ///Generate the next layer
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor;
+    ///Generate the next layer 
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor ;
 
     ///Concatonate two layers together
     fn concat<Other: LayerBuilder<F>>(self, rhs: Other) -> ConcatLayer<F, Self, Other>
@@ -154,6 +154,7 @@ pub fn from_mle<
         layer_builder,
     }
 }
+
 
 ///The layerbuilder that represents two layers concatonated together
 pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
