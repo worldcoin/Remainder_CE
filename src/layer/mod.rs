@@ -120,7 +120,7 @@ pub trait LayerBuilder<F: FieldExt> {
     ///Build the expression that will be sumchecked
     fn build_expression(&self) -> ExpressionStandard<F>;
 
-    ///Generate the next layer
+    ///Generate the next layer // No bind on the return type
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor;
 
     ///Concatonate two layers together

@@ -1,31 +1,28 @@
 use crate::FieldExt;
 use crate::layer::{LayerBuilder, LayerId};
-use crate::expression::{Expression, ExpressionStandard }; 
+use crate::expression::{ExpressionStandard }; 
 use crate::mle::{MleIndex, Mle};
 use crate::mle::dense::{DenseMle, Tuple2};
-struct ZKDTLayer<F:FieldExt> {
-    id: LayerId,
+
+struct ZKDTLayerBuilder<F:FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
-    expression: ExpressionStandard<F>,
 } 
 
-impl<F: FieldExt> LayerBuilder<F> for ZKDTLayer<F> { 
-    type Successor = ZKDTLayer<F>;
+impl<F: FieldExt> LayerBuilder<F> for ZKDTLayerBuilder<F> { 
+
+    type Successor = DenseMle<F, F>;
+    //a function that multiplies the parts of the tuple pair-wise
     fn build_expression(&self) -> ExpressionStandard<F> {
-        // Defines a build_expression function that multiplies the parts of the tuple pair-wise
-        return ExpressionStandard::products(vec![self.mle.first(), self.mle.second()]);
+        ExpressionStandard::products(vec![self.mle.first(), self.mle.second()])
     }
+
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         // Create flatmle from tuple mle
-        let flatMle: DenseMle<F, F> = self.mle.into_iter().map( |(first, second)| first * second).collect();
-        flatMle.add_prefix_bits(&prefix_bits.unwrap());
-        return ZKDTLayer {
-            id: id,
-            mle: flatMle,
-            expression: self.build_expression(),
-        };
-        
+        let mut flat_mle: DenseMle<F, F> = self.mle.into_iter().map( |(first, second)| first * second).collect();
+        flat_mle.add_prefix_bits(&prefix_bits.unwrap());
+        flat_mle
     }
+
 }
 
 
