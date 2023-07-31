@@ -197,10 +197,6 @@ impl<F: FieldExt> Mul<&F> for PartialSum<F> {
     }
 }
 
-pub(crate) fn prove_round<F: FieldExt>(_expr: ExpressionStandard<F>) -> Vec<F> {
-    todo!()
-}
-
 /// Gives us an evaluation for an entire expression. Returns either a single
 /// value (e.g. if all variables are bound and/or the expression is just over
 /// a constant), or a vector of evals at 0, ..., deg - 1 for an expression

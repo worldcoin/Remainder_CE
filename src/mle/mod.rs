@@ -41,7 +41,7 @@ where
 
     fn define_layer_id(&mut self, id: LayerId);
 
-    fn add_prefix_bits(&mut self, prefix: &[MleIndex<F>]);
+    fn add_prefix_bits(&mut self, prefix: Option<Vec<MleIndex<F>>>);
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression

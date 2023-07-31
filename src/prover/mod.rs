@@ -163,9 +163,7 @@ mod test {
                 let mut output = mle.into_iter().map(|(first, second)| first * second).collect::<DenseMle<F, F>>();
 
                 output.define_layer_id(layer_id);
-                if let Some(prefix_bits) = prefix_bits {
-                    output.add_prefix_bits(&prefix_bits);
-                }
+                output.add_prefix_bits(prefix_bits);
 
                 output
             });

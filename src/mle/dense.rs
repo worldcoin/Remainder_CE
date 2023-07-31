@@ -59,8 +59,8 @@ where
         self.layer_id = Some(id);
     }
 
-    fn add_prefix_bits(&mut self, prefix: &[MleIndex<F>]) {
-        self.prefix_bits = Some(prefix.to_vec());
+    fn add_prefix_bits(&mut self, prefix: Option<Vec<MleIndex<F>>>) {
+        self.prefix_bits = prefix;
     }
 }
 
