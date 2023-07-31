@@ -21,6 +21,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
         // Create flatmle from tuple mle
         let mut flat_mle: DenseMle<F, F> = self.mle.into_iter().map( |(first, second)| first * second).collect();
         flat_mle.add_prefix_bits(&prefix_bits.unwrap());
+        flat_mle.define_layer_id(id);
         flat_mle
     }
 
