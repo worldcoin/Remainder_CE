@@ -120,7 +120,7 @@ pub trait LayerBuilder<F: FieldExt> {
     ///Build the expression that will be sumchecked
     fn build_expression(&self) -> ExpressionStandard<F>;
 
-    ///Generate the next layer // Is it okay to have a dynamic return type here as to not bind it to the successor type?
+    ///Generate the next layer 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor ;
 
     ///Concatonate two layers together
