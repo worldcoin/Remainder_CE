@@ -59,6 +59,8 @@ pub trait MleRef: Debug + Send + Sync {
     // ///Moves the claim by adding the new_claims to the left of the originals
     // fn relabel_mle_indices(&mut self, new_claims: &[MleIndex<Self::F>]);
 
+    fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]);
+
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
 

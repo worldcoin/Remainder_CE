@@ -742,6 +742,10 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
     fn get_layer_id(&self) -> Option<LayerId> {
         self.layer_id.clone()
     }
+
+    fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {
+        self.mle_indices.append(&mut new_indices.to_vec());
+    }
 }
 
 #[cfg(test)]

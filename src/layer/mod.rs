@@ -1,6 +1,7 @@
 //! A layer is a combination of multiple MLEs with an expression
 
 pub mod claims;
+pub mod batched;
 // mod gkr_layer;
 
 use std::{marker::PhantomData};
