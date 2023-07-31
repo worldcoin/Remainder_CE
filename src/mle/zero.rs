@@ -1,4 +1,4 @@
-use itertools::Itertools;
+use itertools::{Itertools, repeat_n};
 
 use crate::{FieldExt, layer::{LayerId, Claim}};
 
@@ -17,7 +17,9 @@ pub struct ZeroMleRef<F: FieldExt> {
 
 impl<F: FieldExt> ZeroMleRef<F> {
     ///Creates a new ZERO MleRef
-    pub fn new(mle_indices: Vec<MleIndex<F>>, num_vars: usize, layer_id: LayerId) -> Self {
+    pub fn new(num_vars: usize, prefix_bits: Option<Vec<MleIndex<F>>>, layer_id: LayerId) -> Self {
+        let mle_indices = prefix_bits.into_iter().flatten().chain(repeat_n(MleIndex::Iterated, num_vars)).collect_vec();
+
         Self {
             mle_indices,
             num_vars,
