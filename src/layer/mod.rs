@@ -3,7 +3,7 @@
 pub mod claims;
 // mod gkr_layer;
 
-use std::{marker::PhantomData, any::Any};
+use std::{marker::PhantomData};
 
 use thiserror::Error;
 
