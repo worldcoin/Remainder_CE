@@ -52,7 +52,7 @@ fn get_claims<F: FieldExt>(layer: &impl Layer<F>) -> Result<Vec<(LayerId, Claim<
         match exp {
             ExpressionStandard::Mle(mle_ref) => {
                 // --- First ensure that all the indices are fixed ---
-                let mle_indices = mle_ref.get_mle_indices();
+                let mle_indices = mle_ref.mle_indices();
 
                 // --- This is super jank ---
                 let mut fixed_mle_indices: Vec<F> = vec![];

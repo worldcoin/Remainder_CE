@@ -640,7 +640,7 @@ pub struct DenseMleRef<F: FieldExt> {
     mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
-    pub num_vars: usize,
+    num_vars: usize,
     layer_id: Option<LayerId>,
 }
 
@@ -655,17 +655,13 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         &self.mle_indices
     }
 
-    fn get_mle_indices(&self) -> &[MleIndex<Self::F>] {
-        &self.mle_indices
-    }
-
-    fn relabel_mle_indices(&mut self, new_indices: &[MleIndex<F>]) {
-        self.mle_indices = new_indices
-            .iter()
-            .cloned()
-            .chain(self.mle_indices.drain(..))
-            .collect();
-    }
+    // fn relabel_mle_indices(&mut self, new_indices: &[MleIndex<F>]) {
+    //     self.mle_indices = new_indices
+    //         .iter()
+    //         .cloned()
+    //         .chain(self.mle_indices.drain(..))
+    //         .collect();
+    // }
 
     fn num_vars(&self) -> usize {
         self.num_vars
@@ -940,34 +936,34 @@ mod tests {
         assert!(second.bookkeeping_table() == &[Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)]);
     }
 
-    #[test]
-    fn relabel_claim_dense_mle() {
-        let mle_vec = vec![
-            Fr::from(0),
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(3),
-            Fr::from(4),
-            Fr::from(5),
-            Fr::from(6),
-            Fr::from(7),
-        ];
+    // #[test]
+    // fn relabel_claim_dense_mle() {
+    //     let mle_vec = vec![
+    //         Fr::from(0),
+    //         Fr::from(1),
+    //         Fr::from(2),
+    //         Fr::from(3),
+    //         Fr::from(4),
+    //         Fr::from(5),
+    //         Fr::from(6),
+    //         Fr::from(7),
+    //     ];
 
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+    //     let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
 
-        let mut mle_ref: DenseMleRef<Fr> = mle.mle_ref();
+    //     let mut mle_ref: DenseMleRef<Fr> = mle.mle_ref();
 
-        mle_ref.relabel_mle_indices(&[MleIndex::Fixed(true), MleIndex::Fixed(false)]);
+    //     mle_ref.relabel_mle_indices(&[MleIndex::Fixed(true), MleIndex::Fixed(false)]);
 
-        assert!(
-            mle_ref.mle_indices
-                == vec![
-                    MleIndex::Fixed(true),
-                    MleIndex::Fixed(false),
-                    MleIndex::Iterated,
-                    MleIndex::Iterated,
-                    MleIndex::Iterated
-                ]
-        );
-    }
+    //     assert!(
+    //         mle_ref.mle_indices
+    //             == vec![
+    //                 MleIndex::Fixed(true),
+    //                 MleIndex::Fixed(false),
+    //                 MleIndex::Iterated,
+    //                 MleIndex::Iterated,
+    //                 MleIndex::Iterated
+    //             ]
+    //     );
+    // }
 }

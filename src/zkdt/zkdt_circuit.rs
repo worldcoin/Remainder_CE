@@ -1,5 +1,5 @@
 use super::structs::*;
-use crate::mle::dense::DenseMle;
+use crate::mle::{MleRef, dense::DenseMle};
 use crate::FieldExt;
 
 use ark_std::test_rng;
@@ -647,7 +647,7 @@ mod tests {
 
         // --- We should get all zeros ---x
         let all_zeros: Vec<Fr> = vec![Fr::zero()]
-            .repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
+            .repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars() as u32) as usize);
         let all_zeros_mle = DenseMle::new(all_zeros);
         let all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
 
@@ -787,7 +787,7 @@ mod tests {
         let threshold_mle: DenseMleRef<Fr> = dummy_decision_node_paths_mle.threshold();
         let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone());
         let permuted_input_values_mle: DenseMleRef<Fr> =
-            dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars));
+            dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars()));
         let permuted_input_values_mle_expr =
             ExpressionStandard::Mle(permuted_input_values_mle.clone());
 
