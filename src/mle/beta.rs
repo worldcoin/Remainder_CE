@@ -69,6 +69,30 @@ pub fn compute_new_beta_table<F: FieldExt>(
     Err(BetaError::IndexedBitNotFoundError)
 }
 
+/// shut up
+pub fn beta_split<F: FieldExt>(
+    beta_mle_ref: &DenseMleRef<F>,
+) -> (DenseMleRef<F>, DenseMleRef<F>) {
+    let beta_bookkeep_first: Vec<F> = beta_mle_ref.bookkeeping_table().into_iter().enumerate().filter(
+        |&(i, _)| (i%4 == 0) | (i%4 == 1)
+    ).map(
+        |(_, v)| *v
+    ).collect();
+
+    let beta_bookkeep_second: Vec<F> = beta_mle_ref.bookkeeping_table().into_iter().enumerate().filter(
+        |&(i, _)| (i%4 == 2) | (i%4 == 3)
+    ).map(
+        |(_, v)| *v
+    ).collect();
+
+    let mut beta_first_mle_ref: DenseMleRef<F> = DenseMle::new(beta_bookkeep_first).mle_ref();
+    let mut beta_second_mle_ref: DenseMleRef<F> = DenseMle::new(beta_bookkeep_second).mle_ref();
+
+    beta_first_mle_ref.index_mle_indices(0);
+    beta_second_mle_ref.index_mle_indices(0);
+
+    (beta_first_mle_ref, beta_second_mle_ref)
+}
 
 impl<F: FieldExt> BetaTable<F> {
 
