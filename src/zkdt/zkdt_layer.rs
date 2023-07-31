@@ -4,11 +4,12 @@ use crate::expression::{ExpressionStandard };
 use crate::mle::{MleIndex, Mle};
 use crate::mle::dense::{DenseMle, Tuple2};
 
-struct ZKDTLayerBuilder<F:FieldExt> {
+
+struct ProductTreeBuilder<F:FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
 } 
 
-impl<F: FieldExt> LayerBuilder<F> for ZKDTLayerBuilder<F> { 
+impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> { 
 
     type Successor = DenseMle<F, F>;
     //a function that multiplies the parts of the tuple pair-wise
