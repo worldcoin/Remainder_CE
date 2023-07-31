@@ -24,7 +24,6 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
         flat_mle.define_layer_id(id);
         flat_mle
     }
-
 }
 
 

@@ -12,7 +12,7 @@ use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use super::{Mle, MleAble, MleIndex, MleRef};
-use crate::layer::Claim;
+use crate::{layer::Claim, expression::ExpressionStandard};
 use crate::{
     zkdt::structs::LeafNode,
     {layer::LayerId, FieldExt},
@@ -119,6 +119,11 @@ impl<F: FieldExt> DenseMle<F, F> {
             num_vars: self.num_vars,
             layer_id: self.layer_id.clone(),
         }
+    }
+
+    ///Splits the mle into a new mle with a tuple of size 2 as it's element
+    pub fn split(&self) -> DenseMle<F, Tuple2<F>> {
+        self.mle.chunks(2).map(|items| (items[0], items.get(1).cloned().unwrap_or(F::zero())).into()).collect()
     }
 }
 
@@ -642,6 +647,12 @@ pub struct DenseMleRef<F: FieldExt> {
     /// (warning: this gets modified destructively DURING sumcheck)
     num_vars: usize,
     layer_id: Option<LayerId>,
+}
+
+impl<F: FieldExt> DenseMleRef<F> {
+    pub fn expression(self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self)
+    }
 }
 
 impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {

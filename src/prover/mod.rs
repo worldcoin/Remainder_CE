@@ -142,15 +142,18 @@ pub trait GKRCircuit<F: FieldExt> {
 
 #[cfg(test)]
 mod test {
+    use std::cmp::max;
+
     use ark_bn254::Fr;
     use ark_std::One;
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle}, layer::{LayerBuilder, from_mle, SimpleLayer}, expression::ExpressionStandard};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer}, expression::ExpressionStandard};
 
     use super::{GKRCircuit, Layers};
 
     struct TestCircuit<F: FieldExt> {
-        mle: DenseMle<F, Tuple2<F>>
+        mle: DenseMle<F, Tuple2<F>>,
+        mle_2: DenseMle<F, Tuple2<F>>,
     }
 
     impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
@@ -168,16 +171,42 @@ mod test {
                 output
             });
 
-            let output = layers.add_gkr(builder);
-            (layers, vec![Box::new(output.mle_ref())])
+            let builder2 = from_mle(self.mle_2.clone(), |mle| {
+                mle.first().expression() + mle.second().expression()
+            }, |mle, layer_id, prefix_bits| {
+                let mut output = mle.into_iter().map(|(first, second)| first + second).collect::<DenseMle<F, F>>();
+
+                output.define_layer_id(layer_id);
+                output.add_prefix_bits(prefix_bits);
+
+                output
+            });
+
+            let builder3 = builder.concat(builder2);
+
+            let output = layers.add_gkr(builder3);
+
+            let builder4 = from_mle(output, |(mle1, mle2)| {
+                mle1.mle_ref().expression() - mle2.mle_ref().expression()
+            }, |(mle1, mle2), layer_id, prefix_bits| {
+                let num_vars = max(mle1.num_vars(), mle2.num_vars());
+
+                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+            });
+
+            let output = layers.add_gkr(builder4);
+
+            (layers, vec![Box::new(output)])
         }
     }
 
     #[test]
     fn test_gkr() {
-        let mle = vec![(Fr::one(), Fr::one()), (Fr::one(), Fr::one())].into_iter().map(|x| x.into()).collect();
+        let mle = vec![(Fr::from(2), Fr::from(8)), (Fr::from(7), Fr::from(3))].into_iter().map(|x| x.into()).collect();
+        let mle_2 = vec![(Fr::from(9), Fr::from(7)), (Fr::from(15), Fr::from(6))].into_iter().map(|x| x.into()).collect();
         let mut circuit = TestCircuit::<Fr> {
-            mle
+            mle,
+            mle_2
         };
 
         let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("New Poseidon Test Transcript");

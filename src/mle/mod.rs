@@ -5,6 +5,7 @@ use core::fmt::Debug;
 
 use std::ops::Index;
 
+use crate::expression::ExpressionStandard;
 use crate::layer::Claim;
 use crate::mle::dense::BetaError;
 use crate::{layer::LayerId, FieldExt};
