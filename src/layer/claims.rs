@@ -130,7 +130,7 @@ pub fn verify_aggragate_claim<F: FieldExt>(
     claims: &[Claim<F>],
     r_star: F,
     expr: &ExpressionStandard<F>,
-) -> Result<(), ClaimError> {
+) -> Result<Claim<F>, ClaimError> {
 
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
     let num_idx = claim_vecs[0].len();
@@ -141,9 +141,6 @@ pub fn verify_aggragate_claim<F: FieldExt>(
             return Err(ClaimError::ClaimAggroError);
         }
     }
-
-    // compute q(r_star)
-    let q_r_star = evaluate_at_a_point(&wlx, r_star);
 
     // compute r = l(r_star)
     let r: Vec<F> = cfg_into_iter!(0..num_idx)
@@ -157,13 +154,15 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 
     // check q(r_star) === W(r)
     let q_rstar = evaluate_at_a_point(&wlx, r_star).unwrap();
-    let w_r = expr.clone().evaluate_expr(r).unwrap();
+    let w_r = expr.clone().evaluate_expr(r.clone()).unwrap();
 
     if q_rstar != w_r {
         return Err(ClaimError::ClaimAggroError);
     }
 
-    Ok(())
+    let aggregated_claim: Claim<F> = (r, w_r);
+
+    Ok(aggregated_claim)
 }
 
 

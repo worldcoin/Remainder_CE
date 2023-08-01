@@ -712,6 +712,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     // First round:
     // For the first two evals, i.e. g_1(0), g_1(1), add them together.
     // This is the claimed sumcheck result from the prover.
+    // TODO!(ende): degree check?
     let _claimed_val = messages[0].0[0] + messages[0].0[1];
     let mut challenges = vec![];
 

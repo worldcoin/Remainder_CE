@@ -3,15 +3,21 @@
 pub mod claims;
 // mod gkr_layer;
 
-use std::{marker::PhantomData};
+use std::{marker::PhantomData, iter};
 
 use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
-    mle::{Mle, MleAble, MleIndex, MleRef},
-    sumcheck::{compute_sumcheck_message, get_round_degree, SumOrEvals},
+    mle::{
+        beta::{BetaError, BetaTable, evaluate_beta},
+        dense::{DenseMle, DenseMleRef},
+        MleIndex, MleRef,
+    },
+    sumcheck::{compute_sumcheck_message, get_round_degree, SumOrEvals, evaluate_at_a_point},
     FieldExt,
+    transcript::Transcript,
+    prover::SumcheckProof,
 };
 
 use self::claims::ClaimError;
@@ -24,8 +30,12 @@ pub enum LayerError {
     LayerNotReady,
     #[error("Error with underlying expression {0}")]
     ExpressionError(ExpressionError),
+    #[error("Error with aggregating curr layer")]
+    AggregationError(),
     #[error("Error with getting Claim {0}")]
-    ClaimError(ClaimError)
+    ClaimError(ClaimError),
+    #[error("Error with verifying layer")]
+    VerificationError(),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -39,12 +49,70 @@ pub enum LayerId {
 
 ///A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
+    type Transcript: Transcript<F>;
     ///The Expression type that this Layer is defined by
     // type Expression: Expression<F>;
 
     ///Injest a claim, initialize beta tables, and do any other bookeeping that needs to be done before the sumcheck starts
     fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<(Vec<F>, usize), LayerError> {
         todo!()
+    }
+
+    /// Verifies the sumcheck protocol
+    fn verify_rounds(
+        &mut self, 
+        claim: Claim<F>, 
+        sumcheck_rounds: Vec<Vec<F>>, 
+        transcript: &mut Self::Transcript, 
+        mut expression: ExpressionStandard<F>
+    ) -> Result<Claim<F>, LayerError>{
+
+        let mut challenges = vec![];
+        
+        // first round, see Thaler book page 34
+        let mut prev_evals = &sumcheck_rounds[0];
+        if prev_evals[0] + prev_evals[1] != claim.1 {
+            return Err(LayerError::VerificationError());
+        }
+
+        // round j, 1 < j < v
+        for curr_evals in sumcheck_rounds.iter().skip(1) {
+            let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+
+            let prev_at_r = evaluate_at_a_point(prev_evals, challenge).map_err(|err| LayerError::VerificationError())?;
+
+            if prev_at_r != curr_evals[0] + curr_evals[1] {
+                return Err(LayerError::VerificationError());
+            };
+
+            transcript
+            .append_field_elements("Sumcheck evaluations", &curr_evals)
+            .unwrap();
+
+            prev_evals = curr_evals;
+            challenges.push(challenge);
+        }
+        // final round v
+        let final_chal = transcript.get_challenge("Sumcheck challenge").unwrap();
+        challenges.push(final_chal);
+
+        // uses the expression to make one single oracle query
+        let mut beta = BetaTable::new(claim).unwrap();
+        let _ = expression.index_mle_indices(0);
+        let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
+        let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
+        let oracle_query = mle_bound * beta_bound;
+
+        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).map_err(|err| LayerError::VerificationError())?;
+        if oracle_query != prev_at_r {
+            return Err(LayerError::VerificationError());
+        }
+
+        transcript
+        .append_field_elements("Sumcheck evaluations", &prev_evals)
+        .unwrap();
+
+        return Err(LayerError::VerificationError());
     }
 
     ///Computes a round of the sumcheck protocol on this Layer
@@ -159,16 +227,19 @@ pub trait Layer<F: FieldExt> {
 }
 
 ///Default Layer abstraction
-pub struct GKRLayer<F: FieldExt> {
+pub struct GKRLayer<F: FieldExt, Tr: Transcript<F>> {
     id: LayerId,
     expression: ExpressionStandard<F>,
+    _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt> Layer<F> for GKRLayer<F> {
+impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
+    type Transcript = Tr;
     fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
         Self {
             id,
             expression: builder.build_expression(),
+            _marker: PhantomData,
         }
     }
 
@@ -304,7 +375,7 @@ mod test {
     use ark_std::test_rng;
     use rand::rngs::OsRng;
 
-    use crate::{mle::{dense::DenseMle, MleIndex}, expression::ExpressionStandard, sumcheck::{dummy_sumcheck, verify_sumcheck_messages}};
+    use crate::{mle::{dense::DenseMle, MleIndex}, expression::ExpressionStandard, sumcheck::{dummy_sumcheck, verify_sumcheck_messages}, transcript::poseidon_transcript::PoseidonTranscript};
 
     use super::{from_mle, GKRLayer, Layer, LayerId, LayerBuilder};
 
@@ -322,7 +393,7 @@ mod test {
 
         let next: DenseMle<Fr, Fr> = builder.next_layer(LayerId::Layer(0), None);
 
-        let layer = GKRLayer::new(builder, LayerId::Layer(0));
+        let layer = GKRLayer::<_, PoseidonTranscript<Fr>>::new(builder, LayerId::Layer(0));
 
         let sum = dummy_sumcheck(layer.expression, &mut rng, todo!());
         verify_sumcheck_messages(sum, layer.expression, todo!(), &mut OsRng).unwrap();
