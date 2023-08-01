@@ -98,7 +98,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             let layer_claim = aggregate_claims(layer_claims, layer.get_expression(), agg_chal).unwrap();
 
-            let (init_evals, rounds) = layer.start_sumcheck(layer_claim).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+            let (init_evals, rounds) = layer.start_sumcheck(layer_claim.0).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
             transcript
                 .append_field_elements("Initial Sumcheck evaluations", &init_evals)
                 .unwrap();

@@ -86,16 +86,20 @@ pub fn compute_new_beta_table<F: FieldExt>(
 
     Err(BetaError::IndexedBitNotFoundError)
 }
-/// shut up
+/// Splits the beta table by the second most significant bit when we have nested selectors 
+/// (the case where the selector bit is not the independent variable)
 pub fn beta_split<F: FieldExt>(
     beta_mle_ref: &DenseMleRef<F>,
 ) -> (DenseMleRef<F>, DenseMleRef<F>) {
+
+    // the first split is to take two, then skip two (0, 1 mod 4)
     let beta_bookkeep_first: Vec<F> = beta_mle_ref.bookkeeping_table().into_iter().enumerate().filter(
         |&(i, _)| (i%4 == 0) | (i%4 == 1)
     ).map(
         |(_, v)| *v
     ).collect();
 
+    // the other half -- (2, 3 mod 4)
     let beta_bookkeep_second: Vec<F> = beta_mle_ref.bookkeeping_table().into_iter().enumerate().filter(
         |&(i, _)| (i%4 == 2) | (i%4 == 3)
     ).map(
@@ -132,55 +136,6 @@ impl<F: FieldExt> BetaTable<F> {
         let cur_table_mle_ref: DenseMleRef<F> = DenseMle::new(cur_table).mle_ref();
         Ok(BetaTable { layer_claim, table: cur_table_mle_ref, relevant_indices: iterated_bit_indices, indexed: false })
     }
-
-    // /// Construct a new beta table using claims and a product of mle refs
-    // pub fn new(layer_claim: Claim<F>, mle_refs: &[impl MleRef<F = F>]) -> Result<BetaTable<F>, BetaError> {
-
-    //     let (layer_claims_idx, _) = &layer_claim;
-
-    //     // --- We need to have indexed all the bits in the MLEs (i.e. ---
-    //     // --- have called `index_mle_indices()` before calling this function) ---
-    //     // TODO!(ryancao || vishady): Use iterators, or better yet just keep track of state
-    //     for mle_ref in mle_refs {
-    //         for index in mle_ref.get_mle_indices() {
-    //             if let MleIndex::Iterated = index {
-    //                 return Err(BetaError::MleNotIndexedError);
-    //             }
-    //         }
-    //     }
-
-    //     let (relevant_idx, relevant_claims): (Vec<usize>, Vec<(usize, (F, F))>) = mle_refs.iter()
-    //     .map(|mleref| {
-    //     mleref.get_mle_indices().iter().filter(
-    //         // only want claims related to the indexed bits
-    //         |mleindex| matches!(**mleindex, MleIndex::IndexedBit(_))
-    //     ).map(|index| {
-    //         // will panic if there are not enough claims from the previous layer because of direct indexing
-    //         if let MleIndex::IndexedBit(num) = index {
-    //             (*num, (*num, (F::one() - layer_claims_idx[*num], layer_claims_idx[*num])))
-    //         } else { // should never hit this
-    //             (0, (0, (F::one(), F::one())))
-    //         }})
-    //         }).flatten()
-    //         .unzip();
-
-    //     let unique_idx: Vec<usize> = relevant_idx.iter().unique().map(|idx| *idx).collect();
-    //     let unique_claims: Vec<(F, F)> = relevant_claims.iter().unique().map(|(_, claim)| *claim).collect();
-
-    //     let (one_minus_r, r) = unique_claims[0];
-    //     let mut cur_table = vec![one_minus_r, r];
-
-    //     // TODO!(vishruti) make this parallelizable
-    //     for i in 1..unique_claims.len() {
-    //         let (one_minus_r, r) = unique_claims[i];
-    //         let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone()).map(|eval| eval * one_minus_r).collect();
-    //         let secondhalf: Vec<F> = cfg_into_iter!(cur_table).map(|eval| eval * r).collect();
-    //         firsthalf.extend(secondhalf.iter());
-    //         cur_table = firsthalf;
-    //     }
-
-    //     Ok(BetaTable { layer_claim, table: cur_table, relevant_indices: unique_idx })
-    // }
 
     /// Fix variable for a beta table
     pub fn beta_update(&mut self, round_index: usize, challenge: F) -> Result<(), BetaError> {

@@ -304,8 +304,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         match self {
             ExpressionStandard::Constant(scalar) => constant(*scalar, beta_mle_ref,),
             ExpressionStandard::Selector(index, a, b) => {
+                // need to check whether the selector bit is the current independent variable
                 if let MleIndex::IndexedBit(idx) = index {
                     match Ord::cmp(&round_index, idx) {
+                        // if not, need to split the beta table according to the beta_split function
                         std::cmp::Ordering::Less => {
                             let (beta_mle_first, beta_mle_second) = beta_split(beta_mle_ref);
                             selector_column(
@@ -334,6 +336,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                                 ),
                             )
                          }
+                         // otherwise, proceed normally
                         std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => { 
                             selector_column(
                                 index,   
@@ -528,33 +531,6 @@ impl<F: FieldExt> ExpressionStandard<F> {
     pub fn products(product_list: Vec<DenseMleRef<F>>) -> Self {
         Self::Product(product_list)
     }
-
-    /*
-    /// Initializes all beta tables within the current Expression
-    pub fn init_beta_tables(&mut self, layer_claim: Claim<F>) {
-        match self {
-            ExpressionStandard::Mle(mle_ref, beta_table) => {
-                let init_table = Some(BetaTable::new(layer_claim, &[mle_ref.clone()]).unwrap());
-                *beta_table = init_table.clone();
-            }
-            ExpressionStandard::Product(mle_refs, beta_table) => {
-                let init_table = Some(BetaTable::new(layer_claim, mle_refs).unwrap());
-                *beta_table = init_table;
-            }
-            ExpressionStandard::Selector(mle_index, a, b) => {
-                a.init_beta_tables(layer_claim.clone());
-                b.init_beta_tables(layer_claim);
-            }
-            ExpressionStandard::Sum(a, b) => {
-                a.init_beta_tables(layer_claim.clone());
-                b.init_beta_tables(layer_claim);
-            }
-            ExpressionStandard::Scaled(a, _) => a.init_beta_tables(layer_claim),
-            ExpressionStandard::Negated(a) => a.init_beta_tables(layer_claim),
-            ExpressionStandard::Constant(_) => {},
-        }
-    }
-    */
 
     /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
     /// Returns the max number of bits that are indexed
