@@ -259,8 +259,6 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F, MleRef = 
                 std::cmp::Ordering::Less => {
                     let a = a?;
                     let b = b?;
-                    dbg!(&a);
-                    dbg!(&b);
                     Ok(a + b)
                 }
                 // --- We are exactly looking at the indexed bit: the two MLEs we're summing ---
@@ -270,8 +268,6 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F, MleRef = 
                     let first = b?;
                     let second = a?;
 
-                    dbg!(&first);
-                    dbg!(&second);
                     if let (
                         PartialSum {
                             sum_or_eval: SumOrEvals::Evals(first_evals),

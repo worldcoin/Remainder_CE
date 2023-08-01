@@ -307,10 +307,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                 if let MleIndex::IndexedBit(idx) = index {
                     match Ord::cmp(&round_index, idx) {
                         std::cmp::Ordering::Less => {
-                            dbg!("HELLOOOOOOOO");
-
                             let (beta_mle_first, beta_mle_second) = beta_split(beta_mle_ref);
-    
                             selector_column(
                                 index,   
                                 a.evaluate_sumcheck(
@@ -336,10 +333,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                                     round_index,
                                 ),
                             )
-    
                          }
                         std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => { 
-    
                             selector_column(
                                 index,   
                                 a.evaluate_sumcheck(
@@ -365,11 +360,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                                     round_index,
                                 ),
                             )
-    
                         }
-
                 }
-                
                 }
                 else {
                     selector_column(
@@ -398,7 +390,6 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                         ),
                     )
                 }
-            
             },
             ExpressionStandard::Mle(query) => mle_eval(query, beta_mle_ref),
             ExpressionStandard::Negated(a) => {

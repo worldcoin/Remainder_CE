@@ -491,7 +491,7 @@ fn generate_dummy_mles<F: FieldExt>() -> (
     )
 }
 
-/* 
+
 // --- Create expressions using... testing modules? ---
 #[cfg(test)]
 mod tests {
@@ -499,16 +499,17 @@ mod tests {
     use super::*;
     use crate::{
         expression::{Expression, ExpressionStandard},
-        mle::{dense::DenseMle, dense::DenseMleRef, Mle},
+        mle::{dense::DenseMle, dense::DenseMleRef, Mle, MleRef, beta::BetaTable},
         sumcheck::{
             compute_sumcheck_message, dummy_sumcheck, get_round_degree, verify_sumcheck_messages,
             SumOrEvals,
-        },
+        }, layer::Claim,
     };
     use ark_bn254::Fr;
     use ark_std::test_rng;
     use ark_std::One;
     use ark_std::Zero;
+    use ark_std::UniformRand;
 
     /// Checks that bits within the diff binary decomp and the multiplicity
     /// binary decomp are all either 0 or 1
@@ -562,6 +563,9 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_diff() {
         let mut rng = test_rng();
+        let layer_claim: Claim<Fr> = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng),], Fr::zero());
+        let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
+        beta.table.index_mle_indices(0);
 
         let (
             // dummy_attr_idx_data_mle,
@@ -601,7 +605,7 @@ mod tests {
         // idk if this is actually how we should do this
         let round_degree = get_round_degree(&b_minus_b_squared, 0);
         dbg!(round_degree);
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree);
+        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree, &mut beta);
 
         // --- Only first two values need to be zeros ---
         match res.clone().unwrap() {
@@ -612,8 +616,8 @@ mod tests {
             }
         }
 
-        let res_messages = dummy_sumcheck(b_minus_b_squared_clone.clone(), &mut rng, dummy_claim);
-        let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, &mut rng);
+        let res_messages = dummy_sumcheck(b_minus_b_squared_clone.clone(), &mut rng, layer_claim.clone());
+        let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
 
@@ -621,6 +625,9 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_multiplicities() {
         let mut rng = test_rng();
+        let layer_claim: Claim<Fr> = (vec![Fr::rand(&mut rng); 12], Fr::zero());
+        let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
+        beta.table.index_mle_indices(0);
 
         let (
             // dummy_attr_idx_data_mle,
@@ -666,7 +673,7 @@ mod tests {
 
         // --- The first two elements in the sumcheck message should both be zero ---
         // Afterwards there are no guarantees since we're doing a potentially non-linear interpolation
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, first_round_deg);
+        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, first_round_deg, &mut beta);
         match res.clone().unwrap() {
             SumOrEvals::Sum(_) => panic!(),
             SumOrEvals::Evals(vec) => {
@@ -675,8 +682,8 @@ mod tests {
             }
         }
 
-        let res_messages = dummy_sumcheck(b_minus_b_squared_clone.clone(), &mut rng, dummy_claim);
-        let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, &mut rng);
+        let res_messages = dummy_sumcheck(b_minus_b_squared_clone.clone(), &mut rng, layer_claim.clone());
+        let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
 
@@ -770,6 +777,9 @@ mod tests {
     #[test]
     fn circuit_dummy_binary_recomp_test() {
         let mut rng = test_rng();
+        let layer_claim: Claim<Fr> = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng),], Fr::zero());
+        let mut beta = BetaTable::new(layer_claim).unwrap();
+        beta.table.index_mle_indices(0);
         let (
             // dummy_attr_idx_data_mle,
             dummy_input_data_mle,
@@ -854,7 +864,7 @@ mod tests {
 
                 // Debugging
                 let coeff_times_base_eval =
-                    compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2);
+                    compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2, &mut beta);
 
                     acc_expr + coeff_times_base
                 },
@@ -882,7 +892,7 @@ mod tests {
         // final_expr.init_beta_tables(dummy_claim.clone());
 
         // --- Only the first two evals should be zeros ---
-        let res = compute_sumcheck_message(&mut final_expr, 1, 3);
+        let res = compute_sumcheck_message(&mut final_expr, 1, 3, &mut beta);
         match res.clone().unwrap() {
             SumOrEvals::Sum(_) => {}
             SumOrEvals::Evals(evaluations) => {
@@ -932,4 +942,3 @@ mod tests {
         // ---
     }
 }
-*/
