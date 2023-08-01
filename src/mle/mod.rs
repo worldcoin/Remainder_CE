@@ -5,13 +5,15 @@ use core::fmt::Debug;
 
 use std::ops::Index;
 
-use crate::{FieldExt, layer::LayerId};
+use crate::expression::ExpressionStandard;
 use crate::layer::Claim;
 use crate::mle::dense::BetaError;
+use crate::{layer::LayerId, FieldExt};
 
+pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
-pub mod beta;
+pub mod zero;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
@@ -39,18 +41,14 @@ where
     fn num_vars(&self) -> usize;
 
     fn define_layer_id(&mut self, id: LayerId);
+
+    fn add_prefix_bits(&mut self, prefix: Option<Vec<MleIndex<F>>>);
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-pub trait MleRef: Debug + Clone + Send + Sync {
-    ///Type of Mle that this is a reference to
-    type Mle: Index<usize, Output = Self::F>;
-
+pub trait MleRef: Debug + Send + Sync {
     ///The Field Element this MleRef refers to
     type F: FieldExt;
-
-    ///Gets Mle that this is a reference to
-    fn mle_owned(&self) -> Self::Mle;
 
     ///Gets reference to the current bookkeeping tables
     fn bookkeeping_table(&self) -> &[Self::F];
@@ -58,8 +56,8 @@ pub trait MleRef: Debug + Clone + Send + Sync {
     ///Get claim that this MleRef Represents
     fn mle_indices(&self) -> &[MleIndex<Self::F>];
 
-    ///Moves the claim by adding the new_claims to the left of the originals
-    fn relabel_mle_indices(&mut self, new_claims: &[MleIndex<Self::F>]);
+    // ///Moves the claim by adding the new_claims to the left of the originals
+    // fn relabel_mle_indices(&mut self, new_claims: &[MleIndex<Self::F>]);
 
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
@@ -70,14 +68,11 @@ pub trait MleRef: Debug + Clone + Send + Sync {
         &mut self,
         round_index: usize,
         challenge: Self::F,
-    ) -> Option<(Self::F, Vec<MleIndex<Self::F>>)>;
+    ) -> Option<Claim<Self::F>>;
 
     ///Mutate the MleIndices that are Iterated and turn them into IndexedBit with the bit index being determined from curr_index.
     /// Returns the curr_index + the number of IndexedBits now in the MleIndices
     fn index_mle_indices(&mut self, curr_index: usize) -> usize;
-
-    /// Get the current indices behind this MLE
-    fn get_mle_indices(&self) -> &[MleIndex<Self::F>];
 
     /// The layer_id of the layer that this MLE belongs to
     fn get_layer_id(&self) -> Option<LayerId>;

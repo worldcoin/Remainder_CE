@@ -7,18 +7,20 @@ use std::{
 };
 
 use ark_poly::MultilinearExtension;
-use ark_std::{cfg_into_iter, rand::Rng, cfg_iter};
+use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
 use itertools::Itertools;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
+    layer::Claim,
     mle::{
-        MleIndex, MleRef, dense::{DenseMle, DenseMleRef}, beta::{BetaTable, BetaError},
+        beta::{BetaError, BetaTable},
+        dense::{DenseMle, DenseMleRef},
+        MleIndex, MleRef,
     },
     FieldExt,
-    layer::Claim,
 };
 
 #[derive(Error, Debug, Clone)]
@@ -50,7 +52,7 @@ pub enum InterpError {
 
 /// Apparently this is for "going up the tree" -- Ryan
 /// I guess the idea is that either we're taking a summation over
-/// the single value stored in Sum(F), or that we have a bunch of 
+/// the single value stored in Sum(F), or that we have a bunch of
 /// eval points (i.e. stored in Evals(Vec<F>)) giving us e.g.
 /// g(0), g(1), g(2), ...
 #[derive(PartialEq, Debug, Clone)]
@@ -200,25 +202,21 @@ impl<F: FieldExt> Mul<&F> for PartialSum<F> {
     }
 }
 
-pub(crate) fn prove_round<F: FieldExt>(_expr: ExpressionStandard<F>) -> Vec<F> {
-    todo!()
-}
-
 /// Gives us an evaluation for an entire expression. Returns either a single
 /// value (e.g. if all variables are bound and/or the expression is just over
 /// a constant), or a vector of evals at 0, ..., deg - 1 for an expression
 /// where there are iterated variables.
-/// 
+///
 /// # Arguments
 /// * `expr` - The actual expression to evaluate
 /// * `round_index` - The sumcheck round index, I think??
 /// * `max_degree` - The maximum degree of the `round_index`th variable
-/// 
+///
 /// # Errors
 /// - Error::BetaError when the beta table has not been initialized
 /// - TODO!(ryancao || vishady) -- Error::NotIndexedError when ANY MLE is not
 ///     fully indexed.
-pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F>>(
+pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F, MleRef = Mle>, Mle: MleRef<F = F> + Clone>(
     expr: &mut Exp,
     round_index: usize,
     max_degree: usize,
@@ -237,7 +235,7 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F>>(
         // let beta_eval = evaluate_mle_ref_product(&[beta_mle_ref.clone()], independent_variable, max_degree, None).unwrap();
         // dbg!(&beta_eval);
         let beta_bt = beta_mle_ref.bookkeeping_table();
-        let independent_variable = beta_mle_ref.get_mle_indices().contains(&MleIndex::IndexedBit(round_index));
+        let independent_variable = beta_mle_ref.mle_indices().contains(&MleIndex::IndexedBit(round_index));
         if independent_variable {
             let first = beta_bt.iter().step_by(2).fold(F::zero(), |elem, acc| elem + acc);
             let second = beta_bt.iter().skip(1).step_by(2).fold(F::zero(), |elem, acc| elem + acc);
@@ -438,7 +436,7 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F>>(
 /// @param mle_refs: The list of MLEs which are being multiplied together
 /// @param independent_variable: Whether there is an iterated variable (for this)
 ///     sumcheck round) which we need to take into account
-/// 
+///
 /// # Errors:
 /// - MleError::EmptyMleList -- when there are zero MLEs within the list
 /// - TODO!(ryancao || vishady): MleError::NotIndexedError -- when ANY MLE is not fully indexed
@@ -562,7 +560,6 @@ fn evaluate_mle_ref_product<F: FieldExt>(
             },
         );
 
-
         #[cfg(feature = "parallel")]
         let evals = evals.reduce(
             || vec![F::zero(); eval_count],
@@ -621,7 +618,11 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                             index
                         };
                         // --- Access the MLE at that index. Pad with zeros ---
-                        mle_ref.bookkeeping_table().get(index).cloned().unwrap_or(F::zero())
+                        mle_ref
+                            .bookkeeping_table()
+                            .get(index)
+                            .cloned()
+                            .unwrap_or(F::zero())
                     })
                     //.chain(std::iter::once(beta_idx))
                     .reduce(|acc, eval| acc * eval)
@@ -743,16 +744,8 @@ pub fn dummy_sumcheck<F: FieldExt>(
         //challenge = Some(F::one());
     }
 
-    expr.fix_variable(max_round - 1, challenge.unwrap());
-    beta_table.beta_update(max_round - 1, challenge.unwrap()).unwrap();
-
     messages
 
-    // if let Ok(SumOrEvals::Sum(final_sum)) = compute_sumcheck_message(&mut expr, max_round, 0, &mut beta_table.table) {
-    //     messages
-    // } else {
-    //     panic!();
-    // }
 }
 
 /// Returns the curr random challenge if verified correctly, otherwise verify error
@@ -760,12 +753,22 @@ pub fn dummy_sumcheck<F: FieldExt>(
 /// TODO!(ryancao): Change this to take in the expression as well and do the final sumcheck check
 pub fn verify_sumcheck_messages<F: FieldExt>(
     messages: Vec<(Vec<F>, Option<F>)>,
+    mut expression: ExpressionStandard<F>,
+    rng: &mut impl Rng,
 ) -> Result<F, VerifyError> {
     let mut prev_evals = &messages[0].0;
     let mut chal = F::zero();
 
+    // Thaler book page 34
+    // First round:
+    // For the first two evals, i.e. g_1(0), g_1(1), add them together.
+    // This is the claimed sumcheck result from the prover.
+    let _claimed_val = messages[0].0[0] + messages[0].0[1];
+    let mut challenges = vec![];
+
     // --- Go through sumcheck messages + (FS-generated) challenges ---
-    for (round_idx, (evals, challenge)) in messages.iter().enumerate().skip(1) {
+    // Round j, 1 < j < v
+    for (evals, challenge) in messages.iter().skip(1) {
         let curr_evals = evals;
         chal = (*challenge).unwrap();
         // --- Evaluate the previous round's polynomial at the random challenge point, i.e. g_{i - 1}(r_i) ---
@@ -781,7 +784,23 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
             return Err(VerifyError::SumcheckBad);
         };
         prev_evals = curr_evals;
+        challenges.push(chal);
     }
+
+    // Round v, again Thaler book page 34
+    let final_chal = F::from(rng.gen::<u64>());
+    challenges.push(final_chal);
+
+    // uses the expression to make one single oracle query
+    let _ = expression.index_mle_indices(0);
+    let oracle_query = expression.evaluate_expr(challenges).unwrap();
+
+    let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), final_chal)
+            .expect("could not evaluate at challenge point");
+    if oracle_query != prev_at_r {
+        return Err(VerifyError::SumcheckBad);
+    }
+
     Ok(chal)
 }
 
@@ -919,8 +938,6 @@ mod tests {
         assert_eq!(res.unwrap(), exp);
     }
 
-
-
     /// test whether evaluate_mle_ref correctly computes the evalutaions for a product of MLEs
     /// where one of the MLEs is a log size step smaller than the other (e.g. V(b_1, b_2)*V(b_1))
     #[test]
@@ -934,9 +951,9 @@ mod tests {
             Fr::from(0),
             Fr::from(2),
             Fr::from(0),
-            Fr::from(3), 
+            Fr::from(3),
             Fr::from(1),
-            Fr::from(4), 
+            Fr::from(4),
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
@@ -957,26 +974,20 @@ mod tests {
     fn test_dummy_sumcheck_1() {
         let layer_claims = (vec![Fr::from(1), Fr::from(-1)], Fr::one());
         let mut rng = test_rng();
-        let mle_vec = vec![
-            Fr::from(2),
-            Fr::from(3),
-            Fr::from(1), 
-            Fr::from(2),
-        ];
+        let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
 
         let mle_new: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
-        let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5),];
+        let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
         let mle_2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
         let mle_ref_1 = mle_new.mle_ref();
         let mle_ref_2 = mle_2.mle_ref();
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
-        let res_messages = dummy_sumcheck(expression, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
-
 
     /// test dummy sumcheck against product of two diff mles
     #[test]
@@ -993,8 +1004,8 @@ mod tests {
         let mle_ref_2 = mle2.mle_ref();
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
-        let res_messages = dummy_sumcheck(expression, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
@@ -1022,47 +1033,44 @@ mod tests {
         let mut mle_ref_2 = mle2.mle_ref();
 
         let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
-        let res_messages = dummy_sumcheck(expression, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
-     /// test dummy sumcheck against sum of two mles 
-     #[test]
-     fn test_dummy_sumcheck_sum_small() {
-         let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
-         let mut rng = test_rng();
-         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(1), Fr::from(2),];
-         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
- 
-         let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5),];
-         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
- 
-         let mut mle_ref_1 = mle1.mle_ref();
-         let mut mle_ref_2 = mle2.mle_ref();
- 
-         let mut expression = ExpressionStandard::Sum(
-             Box::new(ExpressionStandard::Mle(mle_ref_1)),
-             Box::new(ExpressionStandard::Mle(mle_ref_2)),
-         );
- 
-         let res_messages = dummy_sumcheck(expression, &mut rng, layer_claims);
-         let verifyres = verify_sumcheck_messages(res_messages);
-         assert!(verifyres.is_ok());
-     }
+    /// test dummy sumcheck against sum of two mles
+    #[test]
+    fn test_dummy_sumcheck_sum_small() {
+        let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
+        let mut rng = test_rng();
+        let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(1), Fr::from(2)];
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+
+        let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+
+        let mut mle_ref_1 = mle1.mle_ref();
+        let mut mle_ref_2 = mle2.mle_ref();
+
+        let mut expression = ExpressionStandard::Sum(
+            Box::new(ExpressionStandard::Mle(mle_ref_1)),
+            Box::new(ExpressionStandard::Mle(mle_ref_2)),
+        );
+
+        let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
+        assert!(verifyres.is_ok());
+    }
 
     /// test dummy sumcheck for concatenated expr SMALL
     #[test]
     fn test_dummy_sumcheck_concat() {
-        let layer_claims = (vec![Fr::from(1), Fr::from(2),], Fr::one());
+        let layer_claims = (vec![Fr::from(3), Fr::from(1), Fr::from(2)], Fr::one());
         let mut rng = test_rng();
-        let mle_v1 = vec![
-            Fr::from(1),
-            Fr::from(4),
-        ];
+        let mle_v1 = vec![Fr::from(5), Fr::from(2)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
-        let mle_v2 = vec![Fr::from(2), Fr::from(3),];
+        let mle_v2 = vec![Fr::from(2), Fr::from(3)];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
         let mle_ref_1 = mle1.mle_ref();
@@ -1072,25 +1080,23 @@ mod tests {
         let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
         let expression = expr2.concat(expression);
-        let res_messages = dummy_sumcheck( expression, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
     /// test dummy sumcheck for concatenated expr SMALL BUT LESS SMALL
     #[test]
     fn test_dummy_sumcheck_concat_2() {
-        let layer_claims = (vec![Fr::from(2), Fr::from(1), Fr::from(3),], Fr::one());
+        let layer_claims = (
+            vec![Fr::from(2), Fr::from(4), Fr::from(2), Fr::from(3)],
+            Fr::one(),
+        );
         let mut rng = test_rng();
-        let mle_v1 = vec![
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(3),
-            Fr::from(4),
-        ];
+        let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
-        let mle_v2 = vec![Fr::from(1), Fr::from(3),Fr::from(1), Fr::from(6),];
+        let mle_v2 = vec![Fr::from(1), Fr::from(3), Fr::from(1), Fr::from(6)];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
         let mle_ref_1 = mle1.mle_ref();
@@ -1100,16 +1106,18 @@ mod tests {
         let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
         let expression = expr2.concat(expression);
-        let res_messages = dummy_sumcheck( expression, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
 
-    /// test dummy sumcheck for concatenated expr 
+    /// test dummy sumcheck for concatenated expr
     #[test]
     fn test_dummy_sumcheck_concat_aggro() {
-
-        let layer_claims = (vec![Fr::from(2), Fr::from(4), Fr::from(2), Fr::from(3),], Fr::one());
+        let layer_claims = (
+            vec![Fr::from(2), Fr::from(4), Fr::from(2), Fr::from(3)],
+            Fr::one(),
+        );
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::from(1),
@@ -1123,7 +1131,7 @@ mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
-        let mle_v2 = vec![Fr::from(1), Fr::from(3),Fr::from(1), Fr::from(6),];
+        let mle_v2 = vec![Fr::from(1), Fr::from(3), Fr::from(1), Fr::from(6)];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
         let mle_ref_1 = mle1.mle_ref();
@@ -1133,12 +1141,12 @@ mod tests {
         let expr2 = expression.clone();
 
         let expression = expr2.concat(expression);
-        let res_messages = dummy_sumcheck( expression, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let res_messages = dummy_sumcheck(expression.clone(), &mut rng, layer_claims);
+
+        let verifyres = verify_sumcheck_messages(res_messages, expression, &mut rng);
         assert!(verifyres.is_ok());
     }
-
-    /// test dummy sumcheck for concatenated expr 
+   
     #[test]
     fn test_dummy_sumcheck_concat_aggro_aggro() {
 
@@ -1161,14 +1169,15 @@ mod tests {
 
         let expression = expr2.clone().concat(expression);
         let expression_aggro = expression.clone().concat(expr2);
-        let res_messages = dummy_sumcheck( expression_aggro, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let res_messages = dummy_sumcheck( expression_aggro.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression_aggro, &mut rng);
         assert!(verifyres.is_ok());
     }
 
     /// test dummy sumcheck for concatenated expr 
     #[test]
     fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
+
 
         let layer_claims = (vec![Fr::from(12190), Fr::from(28912), Fr::from(1), Fr::from(12901), Fr::from(65309)], Fr::one());
         let mut rng = test_rng();
@@ -1190,8 +1199,8 @@ mod tests {
         let expression = expr2.clone().concat(expression);
         let expression_aggro = expression.clone().concat(expr2.clone());
         let expression_aggro_aggro = expression_aggro.clone().concat(expr2);
-        let res_messages = dummy_sumcheck( expression_aggro_aggro, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let res_messages = dummy_sumcheck( expression_aggro_aggro.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression_aggro_aggro, &mut rng);
         assert!(verifyres.is_ok());
     }
    
@@ -1200,31 +1209,24 @@ mod tests {
         let layer_claims = (vec![Fr::from(2), Fr::from(1), Fr::from(10),], Fr::one());
         let mut rng = test_rng();
         let mle_v1 = vec![
-            Fr::from(1),
+            Fr::from(0),
             Fr::from(2),
-            Fr::from(-23),
-            Fr::from(-47),
-            Fr::from(5),
-            Fr::from(22),
-            Fr::from(31),
-            Fr::from(-4),
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
-        let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(-100), Fr::from(14),];
+        let mle_v2 = vec![Fr::from(5), Fr::from(1291),];
         let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
 
-        let mut mle_ref_1 = mle1.mle_ref();
-        let mut mle_ref_2 = mle2.mle_ref();
+        let mle_ref_1 = mle1.mle_ref();
+        let mle_ref_2 = mle2.mle_ref();
 
-        let mut expression = ExpressionStandard::Sum(
-            Box::new(ExpressionStandard::Mle(mle_ref_1)),
-            Box::new(ExpressionStandard::Mle(mle_ref_2)),
-        );
+        let expression = ExpressionStandard::Mle(mle_ref_1);
+        let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
-        let res_messages = dummy_sumcheck(expression, &mut rng, layer_claims);
-        let verifyres = verify_sumcheck_messages(res_messages);
+        let expression = expr2.clone().concat(expression);
+        let expression_aggro = expression.clone().concat(expr2);
+        let res_messages = dummy_sumcheck( expression_aggro.clone(), &mut rng, layer_claims);
+        let verifyres = verify_sumcheck_messages(res_messages, expression_aggro, &mut rng);
         assert!(verifyres.is_ok());
     }
-
 }

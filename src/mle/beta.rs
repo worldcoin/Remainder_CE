@@ -5,16 +5,16 @@ use std::{
     marker::PhantomData,
 };
 
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{cfg_into_iter, rand::Rng, cfg_iter};
-use itertools::{Itertools};
-use rayon::{prelude::{
-    IndexedParallelIterator, IntoParallelIterator, ParallelIterator,
-}, slice::ParallelSlice};
+use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
+use itertools::Itertools;
+use rayon::{
+    prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
+    slice::ParallelSlice,
+};
 
-use crate::FieldExt;
 use crate::layer::Claim;
+use crate::FieldExt;
 
 use super::{Mle, MleIndex, MleRef, MleAble, dense::{DenseMleRef, DenseMle}};
 use thiserror::Error;
@@ -52,7 +52,6 @@ pub fn compute_new_beta_table<F: FieldExt>(
     round_index: usize,
     challenge: F,
 ) -> Result<Vec<F>, BetaError> {
-
     let (layer_claims, _) = &beta_table.layer_claim;
     let curr_beta = beta_table.table.bookkeeping_table().clone();
     
@@ -60,15 +59,15 @@ pub fn compute_new_beta_table<F: FieldExt>(
     if beta_table.relevant_indices.contains(&round_index) {
         let layer_claim = layer_claims[round_index];
         let layer_claim_inv = layer_claim.inverse().ok_or(BetaError::NoInverse)?;
-        let mult_factor = layer_claim_inv * (challenge * layer_claim + (F::one() - challenge) * (F::one() - layer_claim));
+        let mult_factor = layer_claim_inv
+            * (challenge * layer_claim + (F::one() - challenge) * (F::one() - layer_claim));
 
         let new_beta: Vec<F> = cfg_into_iter!(curr_beta.clone()).skip(1).step_by(2).map(|curr_eval| *curr_eval * mult_factor).collect();
         return Ok(new_beta);
     }
-    
+
     Err(BetaError::IndexedBitNotFoundError)
 }
-
 /// shut up
 pub fn beta_split<F: FieldExt>(
     beta_mle_ref: &DenseMleRef<F>,
@@ -95,7 +94,6 @@ pub fn beta_split<F: FieldExt>(
 }
 
 impl<F: FieldExt> BetaTable<F> {
-
     /// Construct a new beta table using a single claim
     pub fn new(layer_claim: Claim<F>) -> Result<BetaTable<F>, BetaError> {
 
@@ -167,12 +165,7 @@ impl<F: FieldExt> BetaTable<F> {
     // }
 
     /// Fix variable for a beta table
-    pub fn beta_update(
-        &mut self,
-        round_index: usize,
-        challenge: F,
-    ) -> Result<(), BetaError> {
-
+    pub fn beta_update(&mut self, round_index: usize, challenge: F) -> Result<(), BetaError> {
         // --- Use the pure function ---
         let new_beta = compute_new_beta_table(&self, round_index, challenge);
         match new_beta {
@@ -190,5 +183,4 @@ impl<F: FieldExt> BetaTable<F> {
             }
         }
     }
-
 }
