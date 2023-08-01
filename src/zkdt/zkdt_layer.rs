@@ -1,8 +1,12 @@
+use ark_bn254::Fr;
+
 use crate::FieldExt;
-use crate::layer::{LayerBuilder, LayerId};
+use crate::layer::{LayerBuilder, LayerId, Layer};
 use crate::expression::{ExpressionStandard }; 
 use crate::mle::{MleIndex, Mle};
-use crate::mle::dense::{DenseMle, Tuple2};
+use crate::mle::dense::{DenseMle, Tuple2, DenseMleRef};
+
+use super::structs::BinDecomp16Bit;
 
 
 struct ProductTreeBuilder<F:FieldExt> {
@@ -26,6 +30,33 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
+
+struct BinaryDecompBuilder<F:FieldExt> {
+    mle: DenseMle<F, BinDecomp16Bit<F>>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
+    
+        type Successor = DenseMle<F, F>;
+        
+        // Returns an expression that checks if the bits are binary. 
+        fn build_expression(&self) -> ExpressionStandard<F> {
+            let decomp_bit_mle = self.mle.mle_bit_refs();
+            let b = ExpressionStandard::Mle(decomp_bit_mle[0].clone());
+
+            let b_squared = ExpressionStandard::Product(vec![
+                decomp_bit_mle[0].clone(),
+                decomp_bit_mle[0].clone(),
+            ]);
+             
+            // b * (1 - b) = b - b^2 
+            b - b_squared
+        }
+    
+        fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+            
+        }
+}
 
 
 
