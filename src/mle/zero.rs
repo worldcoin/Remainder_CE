@@ -13,6 +13,7 @@ pub struct ZeroMleRef<F: FieldExt> {
     num_vars: usize,
     layer_id: Option<LayerId>,
     zero: [F; 1],
+    indexed: bool,
 }
 
 impl<F: FieldExt> ZeroMleRef<F> {
@@ -24,7 +25,8 @@ impl<F: FieldExt> ZeroMleRef<F> {
             mle_indices,
             num_vars,
             layer_id: Some(layer_id),
-            zero: [F::zero()]
+            zero: [F::zero()],
+            indexed: false,
         }
     }
 }
@@ -34,6 +36,10 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
 
     fn bookkeeping_table(&self) -> &[Self::F] {
         &self.zero
+    }
+
+    fn indexed(&self) -> bool {
+        self.indexed
     }
     
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {

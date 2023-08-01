@@ -211,6 +211,6 @@ mod test {
 
         let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("New Poseidon Test Transcript");
 
-        circuit.prove(&mut transcript).unwrap();
-    }
-}
+         circuit.prove(&mut transcript).unwrap();
+     }
+ }

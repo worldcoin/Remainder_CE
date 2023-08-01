@@ -76,6 +76,9 @@ pub trait MleRef: Debug + Send + Sync {
 
     /// The layer_id of the layer that this MLE belongs to
     fn get_layer_id(&self) -> Option<LayerId>;
+
+    /// get whether mle has been indexed
+    fn indexed(&self) -> bool;
 }
 
 ///Trait that allows a type to be serialized into an Mle, and yield MleRefs

@@ -48,12 +48,12 @@ pub trait Layer<F: FieldExt> {
     }
 
     ///Computes a round of the sumcheck protocol on this Layer
-    fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
-        let expression = self.get_expression_mut();
-        expression.fix_variable(round_index - 1, challenge);
+     fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
+         let expression = self.get_expression_mut();
+         expression.fix_variable(round_index - 1, challenge);
 
-        // --- Grabs the degree of univariate polynomial we are sending over ---
-        let degree = get_round_degree(expression, round_index);
+         // --- Grabs the degree of univariate polynomial we are sending over ---
+         let degree = get_round_degree(expression, round_index);
 
         let eval = compute_sumcheck_message(expression, round_index, degree)
             .map_err(LayerError::ExpressionError)?;

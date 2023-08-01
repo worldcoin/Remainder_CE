@@ -34,6 +34,21 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
         scaled: &impl Fn(T, F) -> T,
     ) -> T;
 
+    #[allow(clippy::too_many_arguments)]
+    /// Evaluate an expression for sumcheck
+    fn evaluate_sumcheck<T>(
+        &mut self,
+        constant: &impl Fn(F, &DenseMleRef<F>) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        mle_eval: &impl Fn(&Self::MleRef, &DenseMleRef<F>) -> T,
+        negated: &impl Fn(T) -> T,
+        sum: &impl Fn(T, T) -> T,
+        product: &impl Fn(&[Self::MleRef], &DenseMleRef<F>) -> T,
+        scaled: &impl Fn(T, F) -> T,
+        beta_mle_ref: &DenseMleRef<F>,
+        round_index: usize,
+    ) -> T;
+
     /// Traverses the expression tree, similarly to `evaluate()`, but with a single
     /// "observer" function which is called at each node. Also takes an immutable reference
     /// to `self` rather than a mutable one (as in `evaluate()`).
@@ -118,8 +133,11 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     ) -> T {
         match self {
             ExpressionStandard::Constant(scalar) => constant(*scalar),
-            ExpressionStandard::Selector(index, a, b) => selector_column(
+            ExpressionStandard::Selector(index, a, b) => {
+                
+                selector_column(
                 index,
+                
                 a.evaluate(
                     constant,
                     selector_column,
@@ -138,7 +156,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                     product,
                     scaled,
                 ),
-            ),
+            )},
             ExpressionStandard::Mle(query) => mle_eval(query),
             ExpressionStandard::Negated(a) => {
                 let a = a.evaluate(
@@ -267,6 +285,179 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         // --- Traverse the expression and pick up all the evals ---
         gather_combine_all_evals(self)
     }
+
+    #[allow(clippy::too_many_arguments)]
+    fn evaluate_sumcheck<T>(
+        &mut self,
+        constant: &impl Fn(F, &DenseMleRef<F>) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        mle_eval: &impl Fn(&DenseMleRef<F>, &DenseMleRef<F>) -> T,
+        negated: &impl Fn(T) -> T,
+        sum: &impl Fn(T, T) -> T,
+        product: &impl Fn(&[DenseMleRef<F>], &DenseMleRef<F>) -> T,
+        scaled: &impl Fn(T, F) -> T,
+        beta_mle_ref: &DenseMleRef<F>,
+        round_index: usize,
+    ) -> T {
+        match self {
+            ExpressionStandard::Constant(scalar) => constant(*scalar, beta_mle_ref,),
+            ExpressionStandard::Selector(index, a, b) => {
+                if let MleIndex::IndexedBit(idx) = index {
+                    match Ord::cmp(&round_index, idx) {
+                        std::cmp::Ordering::Less => {
+                            dbg!("HELLOOOOOOOO");
+
+                            let (beta_mle_first, beta_mle_second) = beta_split(beta_mle_ref);
+    
+                            selector_column(
+                                index,   
+                                a.evaluate_sumcheck(
+                                    constant,
+                                    selector_column,
+                                    mle_eval,
+                                    negated,
+                                    sum,
+                                    product,
+                                    scaled,
+                                    &beta_mle_second,
+                                    round_index,
+                                ),
+                                b.evaluate_sumcheck(
+                                    constant,
+                                    selector_column,
+                                    mle_eval,
+                                    negated,
+                                    sum,
+                                    product,
+                                    scaled,
+                                    &beta_mle_first,
+                                    round_index,
+                                ),
+                            )
+    
+                         }
+                        std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => { 
+    
+                            selector_column(
+                                index,   
+                                a.evaluate_sumcheck(
+                                    constant,
+                                    selector_column,
+                                    mle_eval,
+                                    negated,
+                                    sum,
+                                    product,
+                                    scaled,
+                                    beta_mle_ref,
+                                    round_index,
+                                ),
+                                b.evaluate_sumcheck(
+                                    constant,
+                                    selector_column,
+                                    mle_eval,
+                                    negated,
+                                    sum,
+                                    product,
+                                    scaled,
+                                    beta_mle_ref,
+                                    round_index,
+                                ),
+                            )
+    
+                        }
+
+                }
+                
+                }
+                else {
+                    selector_column(
+                        index,   
+                        a.evaluate_sumcheck(
+                            constant,
+                            selector_column,
+                            mle_eval,
+                            negated,
+                            sum,
+                            product,
+                            scaled,
+                            beta_mle_ref,
+                            round_index,
+                        ),
+                        b.evaluate_sumcheck(
+                            constant,
+                            selector_column,
+                            mle_eval,
+                            negated,
+                            sum,
+                            product,
+                            scaled,
+                            beta_mle_ref,
+                            round_index,
+                        ),
+                    )
+                }
+            
+            },
+            ExpressionStandard::Mle(query) => mle_eval(query, beta_mle_ref),
+            ExpressionStandard::Negated(a) => {
+                let a = a.evaluate_sumcheck(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta_mle_ref,
+                    round_index,
+                );
+                negated(a)
+            }
+            ExpressionStandard::Sum(a, b) => {
+                let a = a.evaluate_sumcheck(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta_mle_ref,
+                    round_index,
+                );
+                let b = b.evaluate_sumcheck(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta_mle_ref,
+                    round_index,
+                );
+                sum(a, b)
+            }
+            ExpressionStandard::Product(queries) => {
+                product(queries, beta_mle_ref)
+            }
+            ExpressionStandard::Scaled(a, f) => {
+                let a = a.evaluate_sumcheck(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta_mle_ref,
+                    round_index,
+                );
+                scaled(a, *f)
+            }
+        }
+    }
+
 }
 
 /// Helper function for `evaluate_expr` to traverse the expression and simply

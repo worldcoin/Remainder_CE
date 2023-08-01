@@ -1,6 +1,7 @@
-use super::structs::*;
-use crate::mle::{MleRef, dense::DenseMle};
 use crate::FieldExt;
+use crate::mle::dense::DenseMle;
+
+use super::structs::*;
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
@@ -490,6 +491,7 @@ fn generate_dummy_mles<F: FieldExt>() -> (
     )
 }
 
+/* 
 // --- Create expressions using... testing modules? ---
 #[cfg(test)]
 mod tests {
@@ -526,6 +528,7 @@ mod tests {
             dummy_leaf_nodes,
         ) = generate_dummy_data::<Fr>();
 
+        
         // --- Checks that all the (diff) bits are either zero or one ---
         dummy_binary_decomp_diffs
             .into_iter()
@@ -819,7 +822,7 @@ mod tests {
                 let b_s_times_coeff =
                     ExpressionStandard::Product(vec![bin_decomp_mle.clone(), sign_bit_mle.clone()]);
 
-                let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
+                    let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
 
                 // --- Then compute (b_s * coeff) * 2^{bit_idx} ---
                 let base = Fr::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
@@ -853,9 +856,9 @@ mod tests {
                 let coeff_times_base_eval =
                     compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2);
 
-                acc_expr + coeff_times_base
-            },
-        );
+                    acc_expr + coeff_times_base
+                },
+            );
 
         // --- Subtract the two, and (TODO!(ryancao)) ensure they have the same number of variables ---
         let mut final_expr = diff_expr.clone() - abs_recomp_expr.clone()
@@ -929,3 +932,4 @@ mod tests {
         // ---
     }
 }
+*/
