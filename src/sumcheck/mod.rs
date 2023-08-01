@@ -773,7 +773,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
         let curr_evals = evals;
         chal = (*challenge).unwrap();
         // --- Evaluate the previous round's polynomial at the random challenge point, i.e. g_{i - 1}(r_i) ---
-        let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), challenge.unwrap())
+        let prev_at_r = evaluate_at_a_point(prev_evals, challenge.unwrap())
             .expect("could not evaluate at challenge point");
 
         dbg!(&prev_evals);
@@ -800,7 +800,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
     let oracle_query = mle_bound * beta_bound;
 
-    let prev_at_r = evaluate_at_a_point(prev_evals.to_vec(), final_chal)
+    let prev_at_r = evaluate_at_a_point(prev_evals, final_chal)
             .expect("could not evaluate at challenge point");
     if oracle_query != prev_at_r {
         dbg!("oh oh");
@@ -813,7 +813,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
-pub fn evaluate_at_a_point<F: FieldExt>(given_evals: Vec<F>, point: F) -> Result<F, InterpError> {
+pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &Vec<F>, point: F) -> Result<F, InterpError> {
     // Need degree + 1 evaluations to interpolate
     let eval = (0..given_evals.len())
         .map(
@@ -871,7 +871,7 @@ mod tests {
         //poly = 3x^2 + 5x + 9
         let evals = vec![Fr::from(9), Fr::from(17), Fr::from(31)];
         let point = Fr::from(3);
-        let evald = evaluate_at_a_point(evals, point);
+        let evald = evaluate_at_a_point(&evals, point);
         assert_eq!(
             evald.unwrap(),
             Fr::from(3) * point * point + Fr::from(5) * point + Fr::from(9)
@@ -885,7 +885,7 @@ mod tests {
         let evals = vec![Fr::from(3), Fr::from(-1), Fr::from(-1)];
         let degree = 2;
         let point = Fr::from(3);
-        let evald = evaluate_at_a_point(evals, point);
+        let evald = evaluate_at_a_point(&evals, point);
         assert_eq!(
             evald.unwrap(),
             Fr::from(2) * point * point - Fr::from(6) * point + Fr::from(3)
@@ -898,7 +898,7 @@ mod tests {
         // poly = 3 + 10x
         let evals = vec![Fr::from(3), Fr::from(13), Fr::from(23)];
         let point = Fr::from(3);
-        let evald = evaluate_at_a_point(evals, point);
+        let evald = evaluate_at_a_point(&evals, point);
         assert_eq!(evald.unwrap(), Fr::from(3) + Fr::from(10) * point);
     }
 
