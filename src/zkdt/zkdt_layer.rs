@@ -3,7 +3,7 @@ use ark_bn254::Fr;
 use crate::FieldExt;
 use crate::layer::{LayerBuilder, LayerId, Layer};
 use crate::expression::{ExpressionStandard }; 
-use crate::mle::{MleIndex, Mle};
+use crate::mle::{MleIndex, zero::ZeroMleRef, Mle, MleRef};
 use crate::mle::dense::{DenseMle, Tuple2, DenseMleRef};
 
 use super::structs::BinDecomp16Bit;
@@ -37,7 +37,7 @@ struct BinaryDecompBuilder<F:FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
     
-        type Successor = DenseMle<F, F>;
+        type Successor = ZeroMleRef<F>;
         
         // Returns an expression that checks if the bits are binary. 
         fn build_expression(&self) -> ExpressionStandard<F> {
@@ -54,7 +54,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
         }
     
         fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-            
+            ZeroMleRef::new(self.mle.num_vars(), prefix_bits, id)
         }
 }
 
