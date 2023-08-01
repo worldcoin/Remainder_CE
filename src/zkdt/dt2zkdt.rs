@@ -14,7 +14,7 @@ struct TreesInfo {
     trees: Vec<Node<f64>>,
     bias: f64,
     scale: f64,
-} 
+}
 
 type FlatTree<F> = (Vec<DecisionNode<F>>, Vec<LeafNode<F>>);
 /// Given a TreesInfo object representing a decision tree model operating on u32 samples, prepare
@@ -58,7 +58,10 @@ fn prepare_for_circuitization<F: FieldExt>(trees_info: &TreesInfo) -> (Vec<FlatT
 
     let mut flattened_trees: Vec<(Vec<DecisionNode<F>>, Vec<LeafNode<F>>)> = vec![];
     for qtree in qtrees {
-        flattened_trees.push((qtree.extract_decision_nodes::<F>(0), qtree.extract_leaf_nodes::<F>(0)));
+        flattened_trees.push((
+            qtree.extract_decision_nodes::<F>(0),
+            qtree.extract_leaf_nodes::<F>(0),
+        ));
     }
 
     (flattened_trees, max_depth, rescaling)
@@ -84,7 +87,6 @@ fn read_sample_array<F: FieldExt>(filename: &String) -> Result<Vec<Sample<F>>, R
     }
     Ok(samples)
 }
-
 
 /// Struct for representing a tree in recursive form
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -265,7 +267,11 @@ impl<T: Copy> Node<T> {
     }
 
     /// Helper function to extract_decision_nodes.
-    fn append_decision_nodes<F: FieldExt>(&self, root_id: u32, decision_nodes: &mut Vec<DecisionNode<F>>) {
+    fn append_decision_nodes<F: FieldExt>(
+        &self,
+        root_id: u32,
+        decision_nodes: &mut Vec<DecisionNode<F>>,
+    ) {
         if let Node::Internal {
             left,
             right,
@@ -298,7 +304,11 @@ impl Node<i32> {
             Node::Leaf { value } => {
                 leaf_nodes.push(LeafNode {
                     node_id: F::from(root_id),
-                    node_val: if *value >= 0 { F::from(*value as u32) } else { F::from(value.abs() as u32).neg() },
+                    node_val: if *value >= 0 {
+                        F::from(*value as u32)
+                    } else {
+                        F::from(value.abs() as u32).neg()
+                    },
                 });
             }
             Node::Internal { left, right, .. } => {
@@ -581,7 +591,11 @@ mod tests {
         // check that the quantized scores accumulated as expected
         let expected_score = trees_info.scale * (0.1 + 3.0) + trees_info.bias;
         let quant_score = (expected_score * rescaling) as i32;
-        let f_quant_score = if quant_score >= 0 { Fq::from(quant_score) } else { -Fq::from(quant_score.abs() as u32) };
+        let f_quant_score = if quant_score >= 0 {
+            Fq::from(quant_score)
+        } else {
+            -Fq::from(quant_score.abs() as u32)
+        };
         // just check that's it's close
         assert_eq!(f_quant_score, acc_score + Fq::from(1));
     }
