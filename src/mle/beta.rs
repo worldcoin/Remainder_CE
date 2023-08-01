@@ -46,6 +46,24 @@ pub enum BetaError {
     IndexedBitNotFoundError,
 }
 
+/// fully evaluate a beta table
+pub fn evaluate_beta<F: FieldExt>(
+    beta_table: &mut BetaTable<F>,
+    challenges: Vec<F>,
+) -> Result<F, BetaError> {
+    challenges
+    .into_iter()
+    .enumerate()
+    .for_each(|(round_idx, challenge)| {
+        let _ = beta_table.beta_update(round_idx, challenge);
+    });
+    let beta_bt = beta_table.table.bookkeeping_table();
+    if beta_bt.len() == 1 {
+        return Ok(beta_bt[0]);
+    }
+    Err(BetaError::BetaUpdateError)
+}
+
 /// `fix_variable` for a beta table.
 pub fn compute_new_beta_table<F: FieldExt>(
     beta_table: &BetaTable<F>,

@@ -51,7 +51,7 @@ pub trait Layer<F: FieldExt> {
          // --- Grabs the degree of univariate polynomial we are sending over ---
          let degree = get_round_degree(expression, round_index);
 
-        let eval = compute_sumcheck_message(expression, round_index, degree)
+        let eval = compute_sumcheck_message(expression, round_index, degree, todo!())
             .map_err(LayerError::ExpressionError)?;
 
         if let SumOrEvals::Evals(evals) = eval {
@@ -252,7 +252,7 @@ mod test {
         let layer = GKRLayer::new(builder, LayerId::Layer(0));
 
         let sum = dummy_sumcheck(layer.expression, &mut rng, todo!());
-        verify_sumcheck_messages(sum, layer.expression, &mut OsRng).unwrap();
+        verify_sumcheck_messages(sum, layer.expression, todo!(), &mut OsRng).unwrap();
 
         
     }
