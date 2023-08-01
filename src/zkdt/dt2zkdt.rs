@@ -23,6 +23,7 @@ type FlatTree<F> = (Vec<DecisionNode<F>>, Vec<LeafNode<F>>);
 /// 2. leaf values are symmetrically quantized to i32;
 /// 3. all trees are padded such that they are all perfect and of uniform depth (without modifying
 ///    the predictions of any tree);
+/// 4. the uniform depth is chosen to be 2^l + 1 for minimal l >= 0.
 /// The tree of the decision tree model is then "flattened" to a 2-tuple of type:
 ///   (Vec<DecisionNode>, Vec<LeafNode<i32>>).
 /// Both these vectors are ordered by the id attributes of their members.
@@ -49,11 +50,13 @@ fn prepare_for_circuitization<F: FieldExt>(trees_info: &TreesInfo) -> (Vec<FlatT
         .map(|tree: &Node<i32>| tree.depth(std::cmp::max))
         .max()
         .unwrap();
+    // FIXME how will Rust know that max_depth - 1 is still a u32?
+    let target_depth = next_power_of_two(max_depth - 1).unwrap() + 1;
     // we'll insert DecisionNodes with feature_index=0 and threshold=0 where needed
     let leaf_expander = |depth: u32, value: i32| Node::new_constant_tree(depth, 0, 0, value);
     let qtrees: Vec<Node<i32>> = qtrees
         .iter()
-        .map(|tree: &Node<i32>| tree.perfect_to_depth(max_depth, &leaf_expander))
+        .map(|tree: &Node<i32>| tree.perfect_to_depth(target_depth, &leaf_expander))
         .collect();
 
     let mut flattened_trees: Vec<(Vec<DecisionNode<F>>, Vec<LeafNode<F>>)> = vec![];
@@ -64,7 +67,7 @@ fn prepare_for_circuitization<F: FieldExt>(trees_info: &TreesInfo) -> (Vec<FlatT
         ));
     }
 
-    (flattened_trees, max_depth, rescaling)
+    (flattened_trees, target_depth, rescaling)
 }
 
 type Sample<F> = Vec<InputAttribute<F>>;
@@ -202,7 +205,7 @@ impl<T: Copy> Node<T> {
     }
 
     /// Return a new Node<T> instance which is perfect with the specified depth, given a function
-    /// `leaf_expander(depth, value)` that returns a subtree of height `depth` to replace the
+    /// `leaf_expander(depth, value)` that returns a subtree of depth `depth` to replace the
     /// premature Leaf with value `value`.
     /// Pre: depth >= self.depth()
     /// Post: self.is_perfect()
@@ -421,6 +424,26 @@ mod tests {
         Node::new_internal(0, 1, internal, right)
     }
 
+    /// Returns a skinny looking tree for testing.
+    /// Pre: target_depth >= 1.
+    ///        .
+    ///       / \
+    ///      .   -2.
+    ///     / \
+    ///    .   -2.
+    ///   / \
+    ///  1.  -2.
+    fn build_skinny_tree(target_depth: u32) -> Node<f64> {
+        let mut tree = Node::new_leaf(1.0);
+        let mut depth = 1;
+        while depth < target_depth {
+            let premature_leaf = Node::new_leaf(-2.0);
+            tree = Node::new_internal(1, 2, tree, premature_leaf);
+            depth += 1;
+        }
+        tree
+    }
+
     #[test]
     fn test_aggregate_values() {
         let tree = build_small_tree();
@@ -598,5 +621,19 @@ mod tests {
         };
         // just check that's it's close
         assert_eq!(f_quant_score, acc_score + Fq::from(1));
+    }
+
+    #[test]
+    fn test_prepare_for_circuitization_depth() {
+        // create a tree of depth 6
+        let tree = build_skinny_tree(6);
+        let trees_info = TreesInfo {
+            trees: vec![tree],
+            bias: 1.1,
+            scale: 6.6,
+        };
+        let (flattened_trees, depth, rescaling) = prepare_for_circuitization::<Fq>(&trees_info);
+        // check that the depth is now 2^l + 1 for minimal l, i.e. equal to 9.
+        assert_eq!(depth, 9);
     }
 }
