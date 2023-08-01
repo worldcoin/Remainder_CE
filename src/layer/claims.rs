@@ -117,7 +117,6 @@ pub fn aggregate_claims<F: FieldExt>(
     // get the evals [W(l(0)), W(l(1)), ...]
     let wlx = compute_wlx(&mut expr, claim_vecs, &mut vals, claims.len(), num_idx).unwrap();
 
-    dbg!(&wlx);
     // interpolate to get W(l(r)), that's the claimed value
     let claimed_val = evaluate_at_a_point(&wlx, rstar);
 

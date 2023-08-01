@@ -50,12 +50,18 @@ pub enum GKRError {
 ///A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
 pub struct SumcheckProof<F: FieldExt>(Vec<Vec<F>>);
 
+pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {
+    sumcheck_proof: SumcheckProof<F>,
+    layer: Box<dyn Layer<F, Transcript = Tr>>,
+    wlx_evaluations: Vec<F>,
+}
+
 ///All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
 pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     ///The sumcheck proof of each GKR Layer, along with the fully bound expression.
     /// 
     /// In reverse order (e.g. layer closest to the output layer is first)
-    pub layer_sumcheck_proofs: Vec<(SumcheckProof<F>, Box<dyn Layer<F, Transcript = Tr>>)>,
+    pub layer_sumcheck_proofs: Vec<LayerProof<F, Tr>>,
     pub output_layers: Vec<Box<dyn MleRef<F = F>>>
 }
 
@@ -103,7 +109,7 @@ pub trait GKRCircuit<F: FieldExt> {
             // for each layer check check claims are actually the first x values of init_evals
 
             // expression is used for the one oracle query
-            let (sumcheck_rounds, mut layer) = sumcheck_proof_single;
+            let LayerProof {sumcheck_proof: sumcheck_rounds, layer: mut layer, wlx_evaluations: _} = sumcheck_proof_single;
 
             let layer_id = layer.get_id().clone();
             let layer_claims = claims.get(&layer_id).ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
@@ -177,15 +183,15 @@ pub trait GKRCircuit<F: FieldExt> {
             let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
 
             // init_evals are the wlx from aggregate_claims
-            let (layer_claim, init_evals) = aggregate_claims(layer_claims, layer.get_expression(), agg_chal).unwrap();
+            let (layer_claim, wlx_evaluations) = aggregate_claims(layer_claims, layer.get_expression(), agg_chal).unwrap();
 
             // TODO!(ende) init_evals will probably come from aggregate_claims, i.e. the wlx values
-            let (_init_evals, rounds) = layer.start_sumcheck(layer_claim).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+            let (init_evals, rounds) = layer.start_sumcheck(layer_claim).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
             transcript
                 .append_field_elements("Initial Sumcheck evaluations", &init_evals)
                 .unwrap();
 
-            let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals)).chain((0..rounds).map(|round_index| {
+            let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals)).chain((1..=rounds).map(|round_index| {
                 let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
                 let evals = layer.prove_round(round_index, challenge)?;
                 transcript
@@ -209,7 +215,11 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
             }
 
-            Ok((sumcheck_rounds, layer))
+            Ok(LayerProof {
+                sumcheck_proof: sumcheck_rounds, 
+                layer,
+                wlx_evaluations,
+            })
         }).try_collect()?;
 
         let gkr_proof = GKRProof {
@@ -229,7 +239,7 @@ mod test {
     use ark_bn254::Fr;
     use ark_std::One;
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer}, expression::ExpressionStandard};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer, LayerId}, expression::ExpressionStandard};
 
     use super::{GKRCircuit, Layers};
 
@@ -285,8 +295,10 @@ mod test {
 
     #[test]
     fn test_gkr() {
-        let mle = vec![(Fr::from(2), Fr::from(8)), (Fr::from(7), Fr::from(3))].into_iter().map(|x| x.into()).collect();
-        let mle_2 = vec![(Fr::from(9), Fr::from(7)), (Fr::from(15), Fr::from(6))].into_iter().map(|x| x.into()).collect();
+        let mut mle: DenseMle<Fr, Tuple2<Fr>> = vec![(Fr::from(2), Fr::from(8)), (Fr::from(7), Fr::from(3))].into_iter().map(|x| x.into()).collect();
+        mle.define_layer_id(LayerId::Input);
+        let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = vec![(Fr::from(9), Fr::from(7)), (Fr::from(15), Fr::from(6))].into_iter().map(|x| x.into()).collect();
+        mle_2.define_layer_id(LayerId::Input);
         let mut circuit = TestCircuit::<Fr> {
             mle,
             mle_2
@@ -294,6 +306,6 @@ mod test {
 
         let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("New Poseidon Test Transcript");
 
-         circuit.prove(&mut transcript).unwrap();
+        circuit.prove(&mut transcript).unwrap();
      }
  }

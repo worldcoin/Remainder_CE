@@ -220,7 +220,7 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F, MleRef = 
     expr: &mut Exp,
     round_index: usize,
     max_degree: usize,
-    beta_table: &mut BetaTable<F>,
+    beta_table: &BetaTable<F>,
 ) -> Result<SumOrEvals<F>, ExpressionError> {
 
     // --- Constant evaluation is just Sum(k) ---
@@ -400,10 +400,6 @@ fn evaluate_mle_ref_product<F: FieldExt>(
     beta_ref: DenseMleRef<F>,
     beta_split: bool,
 ) -> Result<PartialSum<F>, MleError> {
-
-
-    dbg!(&beta_ref);
-    dbg!(&independent_variable);
 
     for mle_ref in mle_refs {
         if !mle_ref.indexed() {

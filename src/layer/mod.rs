@@ -36,6 +36,8 @@ pub enum LayerError {
     ClaimError(ClaimError),
     #[error("Error with verifying layer")]
     VerificationError(),
+    #[error("Beta Error {0}")]
+    BetaError(BetaError),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -55,7 +57,37 @@ pub trait Layer<F: FieldExt> {
 
     ///Injest a claim, initialize beta tables, and do any other bookeeping that needs to be done before the sumcheck starts
     fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<(Vec<F>, usize), LayerError> {
-        todo!()
+        let (max_round, beta) = {
+            let (expression, _) = self.mut_expression_and_beta();
+
+            let mut beta = BetaTable::new(claim).map_err(|err| LayerError::BetaError(err))?;
+
+            let max_round = std::cmp::max(expression.index_mle_indices(0), beta.table.index_mle_indices(0));
+            (max_round, beta)
+        };
+
+        self.set_beta(beta);
+
+        let (expression, beta) = self.mut_expression_and_beta();
+
+        let beta = beta.as_ref().unwrap();
+
+        let degree = get_round_degree(expression, 0);
+
+        let eval = compute_sumcheck_message(expression, 0, degree, &beta)
+            .map_err(LayerError::ExpressionError)?;
+
+        let out = if let SumOrEvals::Evals(evals) = eval {
+                Ok(evals)
+            } else {
+                Err(LayerError::ExpressionError(
+                    ExpressionError::EvaluationError(
+                        "Received a sum variant from evaluate expression before the final round",
+                    ),
+                ))
+            }?;
+
+        Ok((out, max_round))
     }
 
     /// Verifies the sumcheck protocol
@@ -117,13 +149,14 @@ pub trait Layer<F: FieldExt> {
 
     ///Computes a round of the sumcheck protocol on this Layer
      fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
-         let expression = self.get_expression_mut();
-         expression.fix_variable(round_index - 1, challenge);
+        let (expression, beta) = self.mut_expression_and_beta();
+        let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
+        expression.fix_variable(round_index - 1, challenge);
 
-         // --- Grabs the degree of univariate polynomial we are sending over ---
-         let degree = get_round_degree(expression, round_index);
+        // --- Grabs the degree of univariate polynomial we are sending over ---
+        let degree = get_round_degree(expression, round_index);
 
-        let eval = compute_sumcheck_message(expression, round_index, degree, todo!())
+        let eval = compute_sumcheck_message(expression, round_index, degree, beta)
             .map_err(LayerError::ExpressionError)?;
 
         if let SumOrEvals::Evals(evals) = eval {
@@ -218,7 +251,13 @@ pub trait Layer<F: FieldExt> {
     fn get_expression(&self) -> &ExpressionStandard<F>;
 
     ///Get the master expression associated with this Layer mutably
-    fn get_expression_mut(&mut self) -> &mut ExpressionStandard<F>;
+    fn mut_expression_and_beta(&mut self) -> (&mut ExpressionStandard<F>, &mut Option<BetaTable<F>>);
+
+    ///Initializes the beta table
+    fn set_beta(&mut self, beta: BetaTable<F>);
+
+    ///Get beta table
+    fn beta(&self) -> &Option<BetaTable<F>>;
 
     ///Create new ConcreteLayer from a LayerBuilder
     fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self
@@ -230,6 +269,7 @@ pub trait Layer<F: FieldExt> {
 pub struct GKRLayer<F: FieldExt, Tr: Transcript<F>> {
     id: LayerId,
     expression: ExpressionStandard<F>,
+    beta: Option<BetaTable<F>>,
     _marker: PhantomData<Tr>,
 }
 
@@ -239,6 +279,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         Self {
             id,
             expression: builder.build_expression(),
+            beta: None,
             _marker: PhantomData,
         }
     }
@@ -247,12 +288,20 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         &self.expression
     }
 
-    fn get_expression_mut(&mut self) -> &mut ExpressionStandard<F> {
-        &mut self.expression
+    fn mut_expression_and_beta(&mut self) -> (&mut ExpressionStandard<F>, &mut Option<BetaTable<F>>) {
+        (&mut self.expression, &mut self.beta)
     }
 
     fn get_id(&self) -> &LayerId {
         &self.id
+    }
+
+    fn set_beta(&mut self, beta: BetaTable<F>) {
+        self.beta = Some(beta);
+    }
+
+    fn beta(&self) -> &Option<BetaTable<F>> {
+        &self.beta
     }
 }
 
