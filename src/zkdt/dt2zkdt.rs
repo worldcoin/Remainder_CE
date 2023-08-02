@@ -50,7 +50,6 @@ fn prepare_for_circuitization<F: FieldExt>(trees_info: &TreesInfo) -> (Vec<FlatT
         .map(|tree: &Node<i32>| tree.depth(std::cmp::max))
         .max()
         .unwrap();
-    // FIXME how will Rust know that max_depth - 1 is still a u32?
     let target_depth = next_power_of_two(max_depth - 1).unwrap() + 1;
     // we'll insert DecisionNodes with feature_index=0 and threshold=0 where needed
     let leaf_expander = |depth: u32, value: i32| Node::new_constant_tree(depth, 0, 0, value);
@@ -72,13 +71,16 @@ fn prepare_for_circuitization<F: FieldExt>(trees_info: &TreesInfo) -> (Vec<FlatT
 
 type Sample<F> = Vec<InputAttribute<F>>;
 /// Read in the 2d array of u16s serialized in `npy` format from the filename specified, and return
-/// its conversion to Vec<Vec<InputAttribute>> where the attr_id of the InputAttribute is given by
+/// its conversion to Vec<Sample> where the attr_id of the InputAttribute is given by
 /// the column index of the value.
+/// Samples have a uniform number of InputAttributes, equal to the next_power_of_two of the number
+/// of columns in the numpy array.
 fn read_sample_array<F: FieldExt>(filename: &String) -> Result<Vec<Sample<F>>, ReadNpyError> {
     let input_arr: Array2<u16> = read_npy(filename)?;
+    let target_length = next_power_of_two(input_arr.shape()[1] as u32).unwrap();
     let mut samples: Vec<Vec<InputAttribute<F>>> = vec![];
     for row in input_arr.outer_iter() {
-        let sample = row
+        let mut sample: Sample<F> = row
             .iter()
             .enumerate()
             .map(|(index, value)| InputAttribute {
@@ -86,6 +88,16 @@ fn read_sample_array<F: FieldExt>(filename: &String) -> Result<Vec<Sample<F>>, R
                 attr_val: F::from(*value),
             })
             .collect();
+        
+        // pad the Sample with as many dummy attributes as required
+        let mut next_index = sample.len() as u32;
+        while next_index < target_length {
+            sample.push(InputAttribute {
+                attr_id: F::from(next_index),
+                attr_val: F::from(0_u32),
+            });
+            next_index += 1;
+        }
         samples.push(sample);
     }
     Ok(samples)
@@ -346,10 +358,14 @@ mod tests {
 
     #[test]
     fn test_read_sample_array() {
-        let filename = String::from("src/zkdt/test_qsamples.npy");
-        let result = read_sample_array::<Fq>(&filename);
-        match result {
-            Ok(result) => {}
+        let filename = String::from("src/zkdt/test_samples_10x6.npy");
+        let samples = read_sample_array::<Fq>(&filename);
+        match samples {
+            Ok(samples) => {
+                assert_eq!(samples.len(), 10);
+                // check that number of InputAttributes is the next power of two
+                assert_eq!(samples[0].len(), 8);
+            }
             Err(why) => {
                 panic!("{}", why);
             }
