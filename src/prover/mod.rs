@@ -67,6 +67,7 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
 
 ///A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
+    ///The transcript this circuit uses
     type Transcript: Transcript<F>;
     ///The forward pass, defining the layer relationships and generating the layers
     fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>);
@@ -190,7 +191,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 .append_field_elements("Initial Sumcheck evaluations", &init_evals)
                 .unwrap();
 
-            let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals)).chain((1..rounds).map(|round_index| {
+            let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals)).chain((1..=rounds).map(|round_index| {
                 let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
                 let evals = layer.prove_round(round_index, challenge)?;
                 transcript
@@ -305,12 +306,23 @@ mod test {
 
         match circuit.prove(&mut transcript) {
             Ok(proof) => {
+                let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("New Poseidon Test Transcript");
+                match circuit.verify(&mut transcript, proof) {
+                    Ok(_) => {
 
+                    },
+                    Err(err) => {
+                        println!("Verify failed! Error: {}", err);
+                        panic!();
+                    }
+                }
             },
             Err(err) => {
                 println!("Proof failed! Error: {}", err);
                 panic!();
             }
         }
+
+
      }
  }
