@@ -407,7 +407,7 @@ fn check_signed_recomposition<F: FieldExt>(actual_value: F, decomp: BinDecomp16B
 
 /// Takes the above dummy data from `generate_dummy_data()` and converts
 /// into MLE form factor.
-fn generate_dummy_mles<F: FieldExt>() -> (
+pub fn generate_dummy_mles<F: FieldExt>() -> (
     // DenseMle<F, F>,
     DenseMle<F, InputAttribute<F>>,
     // DenseMle<F, F>,
