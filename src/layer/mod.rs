@@ -28,15 +28,15 @@ pub type Claim<F> = (Vec<F>, F);
 pub enum LayerError {
     #[error("Layer isn't ready to prove")]
     LayerNotReady,
-    #[error("Error with underlying expression {0}")]
+    #[error("Error with underlying expression: {0}")]
     ExpressionError(ExpressionError),
     #[error("Error with aggregating curr layer")]
-    AggregationError(),
-    #[error("Error with getting Claim {0}")]
+    AggregationError,
+    #[error("Error with getting Claim: {0}")]
     ClaimError(ClaimError),
     #[error("Error with verifying layer")]
-    VerificationError(),
-    #[error("Beta Error {0}")]
+    VerificationError,
+    #[error("Beta Error: {0}")]
     BetaError(BetaError),
 }
 
@@ -104,17 +104,17 @@ pub trait Layer<F: FieldExt> {
         // first round, see Thaler book page 34
         let mut prev_evals = &sumcheck_rounds[0];
         if prev_evals[0] + prev_evals[1] != claim.1 {
-            return Err(LayerError::VerificationError());
+            return Err(LayerError::VerificationError);
         }
 
         // round j, 1 < j < v
         for curr_evals in sumcheck_rounds.iter().skip(1) {
             let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
 
-            let prev_at_r = evaluate_at_a_point(prev_evals, challenge).map_err(|err| LayerError::VerificationError())?;
+            let prev_at_r = evaluate_at_a_point(prev_evals, challenge).map_err(|err| LayerError::VerificationError)?;
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
-                return Err(LayerError::VerificationError());
+                return Err(LayerError::VerificationError);
             };
 
             transcript
@@ -135,16 +135,16 @@ pub trait Layer<F: FieldExt> {
         let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
         let oracle_query = mle_bound * beta_bound;
 
-        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).map_err(|err| LayerError::VerificationError())?;
+        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).map_err(|err| LayerError::VerificationError)?;
         if oracle_query != prev_at_r {
-            return Err(LayerError::VerificationError());
+            return Err(LayerError::VerificationError);
         }
 
         transcript
         .append_field_elements("Sumcheck evaluations", &prev_evals)
         .unwrap();
 
-        return Err(LayerError::VerificationError());
+        return Err(LayerError::VerificationError);
     }
 
     ///Computes a round of the sumcheck protocol on this Layer

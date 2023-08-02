@@ -109,7 +109,7 @@ pub trait GKRCircuit<F: FieldExt> {
             // for each layer check check claims are actually the first x values of init_evals
 
             // expression is used for the one oracle query
-            let LayerProof {sumcheck_proof: sumcheck_rounds, layer: mut layer, wlx_evaluations: _} = sumcheck_proof_single;
+            let LayerProof {sumcheck_proof, mut layer, wlx_evaluations} = sumcheck_proof_single;
 
             let layer_id = layer.get_id().clone();
             let layer_claims = claims.get(&layer_id).ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
@@ -121,14 +121,13 @@ pub trait GKRCircuit<F: FieldExt> {
 
             let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
 
-            let init_evals = &sumcheck_rounds.0[0];
-            let prev_claim = verify_aggragate_claim(init_evals, layer_claims, agg_chal, layer.get_expression()).map_err(|_err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), LayerError::AggregationError()))?;
+            let prev_claim = verify_aggragate_claim(&wlx_evaluations, layer_claims, agg_chal, layer.get_expression()).map_err(|_err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), LayerError::AggregationError))?;
 
             transcript
-            .append_field_elements("Initial Sumcheck evaluations", &init_evals)
+            .append_field_elements("Initial Sumcheck evaluations", &wlx_evaluations)
             .unwrap();
 
-            let _ = layer.verify_rounds(prev_claim, sumcheck_rounds.0, transcript, layer.get_expression().clone());
+            let _ = layer.verify_rounds(prev_claim, sumcheck_proof.0, transcript, layer.get_expression().clone());
 
             // verifier manipulates transcript same way as prover
             let other_claims = layer.get_claims().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
@@ -191,7 +190,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 .append_field_elements("Initial Sumcheck evaluations", &init_evals)
                 .unwrap();
 
-            let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals)).chain((1..=rounds).map(|round_index| {
+            let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals)).chain((1..rounds).map(|round_index| {
                 let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
                 let evals = layer.prove_round(round_index, challenge)?;
                 transcript
@@ -201,8 +200,6 @@ pub trait GKRCircuit<F: FieldExt> {
             })).try_collect().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
 
             let sumcheck_rounds = SumcheckProof(sumcheck_rounds);
-
-            let expression = layer.get_expression().clone();
 
             let other_claims = layer.get_claims().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
 
@@ -239,9 +236,9 @@ mod test {
     use ark_bn254::Fr;
     use ark_std::One;
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer, LayerId}, expression::ExpressionStandard};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer, LayerId, LayerError, claims::ClaimError}, expression::ExpressionStandard};
 
-    use super::{GKRCircuit, Layers};
+    use super::{GKRCircuit, Layers, GKRError};
 
     struct TestCircuit<F: FieldExt> {
         mle: DenseMle<F, Tuple2<F>>,
@@ -306,6 +303,14 @@ mod test {
 
         let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("New Poseidon Test Transcript");
 
-        circuit.prove(&mut transcript).unwrap();
+        match circuit.prove(&mut transcript) {
+            Ok(proof) => {
+
+            },
+            Err(err) => {
+                println!("Proof failed! Error: {}", err);
+                panic!();
+            }
+        }
      }
  }
