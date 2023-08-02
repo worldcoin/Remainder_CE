@@ -41,8 +41,6 @@ struct BinaryDecompBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
-
-   //
     // Returns an expression that checks if the bits are binary.
     fn build_expression(&self) -> ExpressionStandard<F> {
         let decomp_bit_mle = self.mle.mle_bit_refs();
@@ -85,16 +83,12 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 #[cfg(test)]
 mod tests { 
     use super::*;
-    use crate::expression::ExpressionStandard;
-    use crate::layer::LayerBuilder;
     use crate::mle::dense::DenseMle;
-    use crate::mle::Mle;
-    use crate::FieldExt;
     use ark_bn254::Fr;
-    use ark_ff::Zero;
+    use ark_std::log2;
 
     #[test]
-    fn test_product_tree_builder() {
+    fn test_product_tree_builder_next_layer() {
         let tuple_vec = vec![
             (Fr::from(0), Fr::from(1)),
             (Fr::from(2), Fr::from(3)),
@@ -108,7 +102,16 @@ mod tests {
             .map(Tuple2::from)
             .collect::<DenseMle<Fr, Tuple2<Fr>>>();
 
+        let builder = ProductTreeBuilder { mle };
+        let next_layer =  builder.next_layer(LayerId::Layer(0), None);
 
+        let expected_flat_mle_vec = vec![
+            Fr::from(0),
+            Fr::from(6),
+            Fr::from(20),
+            Fr::from(42),
+        ]; 
+        assert_eq!(next_layer.mle_ref().bookkeeping_table(), &expected_flat_mle_vec);    
     }
 
     #[test]
