@@ -1,3 +1,5 @@
+use std::slice::Chunks;
+
 use ark_bn254::Fr;
 
 use crate::expression::{ExpressionStandard, Expression};
@@ -39,29 +41,44 @@ struct BinaryDecompBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
+
+   //
     // Returns an expression that checks if the bits are binary.
     fn build_expression(&self) -> ExpressionStandard<F> {
         let decomp_bit_mle = self.mle.mle_bit_refs();
+        let mut expressions =
+         decomp_bit_mle.into_iter().map(|bit|  {
+            let b = ExpressionStandard::Mle(bit);
+            let b_squared = ExpressionStandard::Product(vec![bit.clone(), bit.clone()]);
+            b - b_squared
+         }
+        ).collect::<Vec<ExpressionStandard<F>>>();
+         
+        let chunk_and_concat = |expr: &[ExpressionStandard<F>]| {
+           let chunks = expr.chunks(2);
+           chunks.map(
+               |chunk| {
+                   chunk[0].clone().concat(chunk[1].clone())
+               }
+           ).collect::<Vec<ExpressionStandard<F>>>()
+        };
+     
+        let expr1 = chunk_and_concat(&expressions);
 
-        // Split the list of expressions into 8 chunks
-        let chunks = decomp_bit_mle.chunks(2);
+        let expr2 = chunk_and_concat(&expr1);
 
-        // Concatenate the two elements of each chunk and reduce it 4 times
+        let expr3 = chunk_and_concat(&expr2);
 
-        let final_expression = chunks.map(
-            |chunk| {
-                let first_b = ExpressionStandard::Mle(chunk[0].clone());
-                let second_b = ExpressionStandard::Mle(chunk[1].clone());
-                let first_squared = ExpressionStandard::Product(vec![chunk[0].clone(), chunk[0].clone()]);
-                let second_squared = ExpressionStandard::Product(vec![chunk[1].clone(), chunk[1].clone()]);
-                (first_b - first_squared).concat(second_b - second_squared)
-            }
-        ).reduce(|a, b| a.concat(b)).unwrap();
+        let expr4 = chunk_and_concat(&expr3);
 
-        final_expression
+        return expr4[0].clone().concat(expr4[1].clone());
     }
+
+
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         ZeroMleRef::new(self.mle.num_vars() + 4, prefix_bits, id)
     }
 }
+
+
