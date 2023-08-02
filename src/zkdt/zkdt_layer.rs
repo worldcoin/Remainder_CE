@@ -48,7 +48,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
         let decomp_bit_mle = self.mle.mle_bit_refs();
         let mut expressions =
          decomp_bit_mle.into_iter().map(|bit|  {
-            let b = ExpressionStandard::Mle(bit);
+            let b = ExpressionStandard::Mle(bit.clone());
             let b_squared = ExpressionStandard::Product(vec![bit.clone(), bit.clone()]);
             b - b_squared
          }
@@ -82,3 +82,38 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 }
 
 
+#[cfg(test)]
+mod tests { 
+    use super::*;
+    use crate::expression::ExpressionStandard;
+    use crate::layer::LayerBuilder;
+    use crate::mle::dense::DenseMle;
+    use crate::mle::Mle;
+    use crate::FieldExt;
+    use ark_bn254::Fr;
+    use ark_ff::Zero;
+
+    #[test]
+    fn test_product_tree_builder() {
+        let tuple_vec = vec![
+            (Fr::from(0), Fr::from(1)),
+            (Fr::from(2), Fr::from(3)),
+            (Fr::from(4), Fr::from(5)),
+            (Fr::from(6), Fr::from(7)),
+        ];
+
+        let mle = tuple_vec
+            .clone()
+            .into_iter()
+            .map(Tuple2::from)
+            .collect::<DenseMle<Fr, Tuple2<Fr>>>();
+
+
+    }
+
+    #[test]
+    fn test_binary_decomp_builder() {
+ 
+    }
+}
+        
