@@ -107,6 +107,7 @@ impl<F: FieldExt> DenseMle<F, F> {
     }
 
     pub fn mle_ref(&self) -> DenseMleRef<F> {
+        // let num_vars = self.num_vars() + self.prefix_bits.as_ref().map(|bits| bits.len()).unwrap_or(0);
         DenseMleRef {
             bookkeeping_table: self.mle.clone(),
             mle_indices: self

@@ -141,9 +141,11 @@ pub trait Layer<F: FieldExt> {
         
         // first round, see Thaler book page 34
         let mut prev_evals = &sumcheck_rounds[0];
-        // if prev_evals[0] + prev_evals[1] != claim.1 {
-        //     return Err(LayerError::VerificationError(VerificationError::SumcheckStartFailed));
-        // }
+        let claimed_claim = prev_evals[0] + prev_evals[1];
+        dbg!(claimed_claim, claim.1);
+        if prev_evals[0] + prev_evals[1] != claim.1 {
+            return Err(LayerError::VerificationError(VerificationError::SumcheckStartFailed));
+        }
 
         transcript
             .append_field_elements("Initial Sumcheck evaluations", &sumcheck_rounds[0])
@@ -179,9 +181,9 @@ pub trait Layer<F: FieldExt> {
         let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
         let oracle_query = mle_bound * beta_bound;
 
-        if oracle_query != claimed_value {
-            return Err(LayerError::VerificationError(VerificationError::GKRClaimCheckFailed));
-        }
+        // if oracle_query != claimed_value {
+        //     return Err(LayerError::VerificationError(VerificationError::GKRClaimCheckFailed));
+        // }
 
         let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).map_err(|err| LayerError::InterpError(err))?;
         if oracle_query != prev_at_r {
@@ -467,9 +469,9 @@ mod test {
 
         let next: DenseMle<Fr, Fr> = builder.next_layer(LayerId::Layer(0), None);
 
-        let layer = GKRLayer::<_, PoseidonTranscript<Fr>>::new(builder, LayerId::Layer(0));
+        let mut layer = GKRLayer::<_, PoseidonTranscript<Fr>>::new(builder, LayerId::Layer(0));
 
-        let sum = dummy_sumcheck(layer.expression, &mut rng, todo!());
+        let sum = dummy_sumcheck(&mut layer.expression, &mut rng, todo!());
         verify_sumcheck_messages(sum, layer.expression, todo!(), &mut OsRng).unwrap();
 
         

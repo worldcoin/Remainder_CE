@@ -616,7 +616,7 @@ mod tests {
             }
         }
 
-        let res_messages = dummy_sumcheck(b_minus_b_squared_clone.clone(), &mut rng, layer_claim.clone());
+        let res_messages = dummy_sumcheck(&mut b_minus_b_squared_clone.clone(), &mut rng, layer_claim.clone());
         let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
@@ -682,7 +682,7 @@ mod tests {
             }
         }
 
-        let res_messages = dummy_sumcheck(b_minus_b_squared_clone.clone(), &mut rng, layer_claim.clone());
+        let res_messages = dummy_sumcheck(&mut b_minus_b_squared_clone.clone(), &mut rng, layer_claim.clone());
         let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }

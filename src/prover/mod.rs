@@ -5,7 +5,7 @@ use std::{collections::HashMap, ops::Range, vec::IntoIter};
 use crate::{
     layer::{Claim, GKRLayer, Layer, LayerBuilder, LayerError, LayerId, claims::aggregate_claims, claims::verify_aggragate_claim},
     transcript::Transcript,
-    FieldExt, expression::ExpressionStandard, mle::MleRef, mle::MleIndex
+    FieldExt, expression::{ExpressionStandard, Expression}, mle::MleRef, mle::MleIndex
 };
 
 use itertools::Itertools;
@@ -72,7 +72,102 @@ pub trait GKRCircuit<F: FieldExt> {
     ///The forward pass, defining the layer relationships and generating the layers
     fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>);
 
-    /// Verifies the GKRProof produced by fn prove,
+    ///The backwards pass, creating the GKRProof
+    fn prove(&mut self, transcript: &mut Self::Transcript) -> Result<GKRProof<F, Self::Transcript>, GKRError> {
+        let (layers, mut output_layers) = self.synthesize();
+
+        let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
+
+        for output in output_layers.iter_mut() {
+            let mut claim = None;
+            let bits = output.index_mle_indices(0);
+            for bit in 0..bits {
+                let challenge = transcript.get_challenge("Setting Output Layer Claim").unwrap();
+                claim = output.fix_variable(bit, challenge);
+            }
+
+            let claim = claim.unwrap();
+            
+            let layer_id = output.get_layer_id().unwrap();
+
+            if let Some(curr_claims) = claims.get_mut(&layer_id) {
+                curr_claims.push(claim);
+            } else {
+                claims.insert(layer_id, vec![claim]);
+            }
+        }
+
+        let layer_sumcheck_proofs = layers.0.into_iter().rev().map(|mut layer| {
+            //Aggregate claims
+            let layer_id = layer.get_id().clone();
+            let layer_claims = claims.get(&layer_id).ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+
+            for claim in layer_claims {
+                transcript.append_field_elements("Claimed bits to be aggregated", &claim.0).unwrap();
+                transcript.append_field_element("Claimed value to be aggregated", claim.1).unwrap();
+            }
+
+            let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
+
+            // init_evals are the wlx from aggregate_claims
+            let (layer_claim, wlx_evaluations) = aggregate_claims(layer_claims, layer.get_expression(), agg_chal).unwrap();
+
+            transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations).unwrap();
+
+            // TODO!(ende) init_evals will probably come from aggregate_claims, i.e. the wlx values
+            let (init_evals, rounds) = layer.start_sumcheck(layer_claim).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+            transcript
+                .append_field_elements("Initial Sumcheck evaluations", &init_evals)
+                .unwrap();
+
+            let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals)).chain((1..rounds).map(|round_index| {
+                let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+                let evals = layer.prove_round(round_index, challenge)?;
+                transcript
+                    .append_field_elements("Sumcheck evaluations", &evals)
+                    .unwrap();
+                Ok::<_, LayerError>(evals)
+            })).try_collect().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+
+            let final_chal = transcript.get_challenge("Final Sumcheck challenge").unwrap();
+
+            let sumcheck_rounds = SumcheckProof(sumcheck_rounds);
+
+            let (expr, beta) = layer.mut_expression_and_beta();
+
+            expr.fix_variable(rounds - 1, final_chal);
+            beta.as_mut().map(|beta| beta.beta_update(rounds - 1, final_chal));
+
+            let other_claims = layer.get_claims().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+
+            dbg!(&other_claims);
+
+            //Add the claims to the claim tracking state
+            for (layer_id, claim) in other_claims {
+                if let Some(curr_claims) = claims.get_mut(&layer_id) {
+                    curr_claims.push(claim);
+                } else {
+                    claims.insert(layer_id, vec![claim]);
+                }
+            }
+
+            Ok(LayerProof {
+                sumcheck_proof: sumcheck_rounds, 
+                layer,
+                wlx_evaluations,
+            })
+        }).try_collect()?;
+
+        let gkr_proof = GKRProof {
+            layer_sumcheck_proofs,
+            output_layers
+        };
+
+        //This needs to return the full sumcheck proof
+        Ok(gkr_proof)
+    }
+
+        /// Verifies the GKRProof produced by fn prove,
     /// Derive randomness from constructing the Transcript from scratch
     fn verify(&mut self, transcript: &mut Self::Transcript, gkr_proof: GKRProof<F, Self::Transcript>) -> Result<(), GKRError> {
         let GKRProof{layer_sumcheck_proofs, output_layers} = gkr_proof;
@@ -133,6 +228,8 @@ pub trait GKRCircuit<F: FieldExt> {
             // verifier manipulates transcript same way as prover
             let other_claims = layer.get_claims().map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
 
+            dbg!(&other_claims);
+
             //Add the claims to the claim tracking state
             for (layer_id, claim) in other_claims {
                 if let Some(curr_claims) = claims.get_mut(&layer_id) {
@@ -144,94 +241,6 @@ pub trait GKRCircuit<F: FieldExt> {
             
         }
         Ok(())
-    }
-
-    ///The backwards pass, creating the GKRProof
-    fn prove(&mut self, transcript: &mut Self::Transcript) -> Result<GKRProof<F, Self::Transcript>, GKRError> {
-        let (layers, mut output_layers) = self.synthesize();
-
-        let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
-
-        for output in output_layers.iter_mut() {
-            let mut claim = None;
-            let bits = output.index_mle_indices(0);
-            for bit in 0..bits {
-                let challenge = transcript.get_challenge("Setting Output Layer Claim").unwrap();
-                claim = output.fix_variable(bit, challenge);
-            }
-
-            let claim = claim.unwrap();
-            
-            let layer_id = output.get_layer_id().unwrap();
-
-            if let Some(curr_claims) = claims.get_mut(&layer_id) {
-                curr_claims.push(claim);
-            } else {
-                claims.insert(layer_id, vec![claim]);
-            }
-        }
-
-        let layer_sumcheck_proofs = layers.0.into_iter().rev().map(|mut layer| {
-            //Aggregate claims
-            let layer_id = layer.get_id().clone();
-            let layer_claims = claims.get(&layer_id).ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
-
-            for claim in layer_claims {
-                transcript.append_field_elements("Claimed bits to be aggregated", &claim.0).unwrap();
-                transcript.append_field_element("Claimed value to be aggregated", claim.1).unwrap();
-            }
-
-            let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
-
-            // init_evals are the wlx from aggregate_claims
-            let (layer_claim, wlx_evaluations) = aggregate_claims(layer_claims, layer.get_expression(), agg_chal).unwrap();
-
-            transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations).unwrap();
-
-            // TODO!(ende) init_evals will probably come from aggregate_claims, i.e. the wlx values
-            let (init_evals, rounds) = layer.start_sumcheck(layer_claim).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
-            transcript
-                .append_field_elements("Initial Sumcheck evaluations", &init_evals)
-                .unwrap();
-
-            let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals)).chain((1..=rounds).map(|round_index| {
-                let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
-                let evals = layer.prove_round(round_index, challenge)?;
-                transcript
-                    .append_field_elements("Sumcheck evaluations", &evals)
-                    .unwrap();
-                Ok::<_, LayerError>(evals)
-            })).try_collect().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
-
-            transcript.get_challenge("Final Sumcheck challenge").unwrap();
-
-            let sumcheck_rounds = SumcheckProof(sumcheck_rounds);
-
-            let other_claims = layer.get_claims().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
-
-            //Add the claims to the claim tracking state
-            for (layer_id, claim) in other_claims {
-                if let Some(curr_claims) = claims.get_mut(&layer_id) {
-                    curr_claims.push(claim);
-                } else {
-                    claims.insert(layer_id, vec![claim]);
-                }
-            }
-
-            Ok(LayerProof {
-                sumcheck_proof: sumcheck_rounds, 
-                layer,
-                wlx_evaluations,
-            })
-        }).try_collect()?;
-
-        let gkr_proof = GKRProof {
-            layer_sumcheck_proofs,
-            output_layers
-        };
-
-        //This needs to return the full sumcheck proof
-        Ok(gkr_proof)
     }
 }
 
@@ -287,6 +296,19 @@ mod test {
             let builder4 = from_mle(output, |(mle1, mle2)| {
                 mle1.mle_ref().expression() - mle2.mle_ref().expression()
             }, |(mle1, mle2), layer_id, prefix_bits| {
+                let mut new_mle = mle1.clone().into_iter().zip(mle2.clone().into_iter()).map(|(first, second)| first - second).collect::<DenseMle<F, F>>();
+                new_mle.define_layer_id(layer_id.clone());
+                new_mle.add_prefix_bits(prefix_bits);
+                new_mle
+            });
+
+            let output = layers.add_gkr(builder4);
+
+            let builder4 = from_mle((output, self.mle_3.clone()), |(mle1, mle2)| {
+                mle1.mle_ref().expression() - mle2.mle_ref().expression()
+            }, |(mle1, mle2), layer_id, prefix_bits| {
+                let num_vars = max(mle1.num_vars(), mle2.num_vars());
+                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
             });
 
             let output = layers.add_gkr(builder4);
@@ -303,9 +325,9 @@ mod test {
 
         let mut mle: DenseMle<Fr, Tuple2<Fr>> = vec![(Fr::from(2), Fr::from(8)), (Fr::from(7), Fr::from(3))].into_iter().map(|x| x.into()).collect();
         mle.define_layer_id(LayerId::Input);
-        let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = vec![(Fr::from(9), Fr::from(7)), (Fr::from(15), Fr::from(6))].into_iter().map(|x| x.into()).collect();
+        let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = vec![(Fr::from(9), Fr::from(2)), (Fr::from(12), Fr::from(1))].into_iter().map(|x| x.into()).collect();
         mle_2.define_layer_id(LayerId::Input);
-        let mut mle_3 = DenseMle::<Fr, Fr>::new(vec![Fr::from(5), Fr::from(5)]);
+        let mut mle_3 = DenseMle::<Fr, Fr>::new(vec![Fr::from(5), Fr::from(8)]);
         mle_3.define_layer_id(LayerId::Input);
 
         let mut circuit = TestCircuit::<Fr> {
