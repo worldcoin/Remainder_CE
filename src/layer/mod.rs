@@ -14,7 +14,7 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         MleIndex, MleRef,
     },
-    sumcheck::{compute_sumcheck_message, get_round_degree, SumOrEvals, evaluate_at_a_point},
+    sumcheck::{compute_sumcheck_message, get_round_degree, SumOrEvals, evaluate_at_a_point, InterpError},
     FieldExt,
     transcript::Transcript,
     prover::SumcheckProof,
@@ -34,10 +34,24 @@ pub enum LayerError {
     AggregationError,
     #[error("Error with getting Claim: {0}")]
     ClaimError(ClaimError),
-    #[error("Error with verifying layer")]
-    VerificationError,
+    #[error("Error with verifying layer: {0}")]
+    VerificationError(VerificationError),
     #[error("Beta Error: {0}")]
     BetaError(BetaError),
+    #[error("InterpError: {0}")]
+    InterpError(InterpError)
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum VerificationError {
+    #[error("The sum of the first evaluations do not equal the claim")]
+    SumcheckStartFailed,
+    #[error("The sum of the current rounds evaluations do not equal the previous round at a random point")]
+    SumcheckFailed,
+    #[error("The final rounds evaluations at r do not equal the oracle query")]
+    FinalSumcheckFailed,
+    #[error("The Oracle query does not match the final claim")]
+    GKRClaimCheckFailed
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -90,68 +104,12 @@ pub trait Layer<F: FieldExt> {
         Ok((out, max_round))
     }
 
-    /// Verifies the sumcheck protocol
-    fn verify_rounds(
-        &mut self, 
-        claim: Claim<F>, 
-        sumcheck_rounds: Vec<Vec<F>>, 
-        transcript: &mut Self::Transcript, 
-        mut expression: ExpressionStandard<F>
-    ) -> Result<Claim<F>, LayerError>{
-
-        let mut challenges = vec![];
-        
-        // first round, see Thaler book page 34
-        let mut prev_evals = &sumcheck_rounds[0];
-        if prev_evals[0] + prev_evals[1] != claim.1 {
-            return Err(LayerError::VerificationError);
-        }
-
-        // round j, 1 < j < v
-        for curr_evals in sumcheck_rounds.iter().skip(1) {
-            let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
-
-            let prev_at_r = evaluate_at_a_point(prev_evals, challenge).map_err(|err| LayerError::VerificationError)?;
-
-            if prev_at_r != curr_evals[0] + curr_evals[1] {
-                return Err(LayerError::VerificationError);
-            };
-
-            transcript
-            .append_field_elements("Sumcheck evaluations", &curr_evals)
-            .unwrap();
-
-            prev_evals = curr_evals;
-            challenges.push(challenge);
-        }
-        // final round v
-        let final_chal = transcript.get_challenge("Sumcheck challenge").unwrap();
-        challenges.push(final_chal);
-
-        // uses the expression to make one single oracle query
-        let mut beta = BetaTable::new(claim).unwrap();
-        let _ = expression.index_mle_indices(0);
-        let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
-        let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
-        let oracle_query = mle_bound * beta_bound;
-
-        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).map_err(|err| LayerError::VerificationError)?;
-        if oracle_query != prev_at_r {
-            return Err(LayerError::VerificationError);
-        }
-
-        transcript
-        .append_field_elements("Sumcheck evaluations", &prev_evals)
-        .unwrap();
-
-        return Err(LayerError::VerificationError);
-    }
-
     ///Computes a round of the sumcheck protocol on this Layer
-     fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
+    fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
         let (expression, beta) = self.mut_expression_and_beta();
         let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
         expression.fix_variable(round_index - 1, challenge);
+        beta.beta_update(round_index - 1, challenge).map_err(LayerError::BetaError)?;
 
         // --- Grabs the degree of univariate polynomial we are sending over ---
         let degree = get_round_degree(expression, round_index);
@@ -168,6 +126,73 @@ pub trait Layer<F: FieldExt> {
                 ),
             ))
         }
+    }
+
+    /// Verifies the sumcheck protocol
+    fn verify_rounds(
+        &mut self, 
+        claim: Claim<F>, 
+        sumcheck_rounds: Vec<Vec<F>>, 
+        transcript: &mut Self::Transcript, 
+        mut expression: ExpressionStandard<F>
+    ) -> Result<(), LayerError>{
+
+        let mut challenges = vec![];
+        
+        // first round, see Thaler book page 34
+        let mut prev_evals = &sumcheck_rounds[0];
+        // if prev_evals[0] + prev_evals[1] != claim.1 {
+        //     return Err(LayerError::VerificationError(VerificationError::SumcheckStartFailed));
+        // }
+
+        transcript
+            .append_field_elements("Initial Sumcheck evaluations", &sumcheck_rounds[0])
+            .unwrap();
+
+        // round j, 1 < j < v
+        for curr_evals in sumcheck_rounds.iter().skip(1) {
+            let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+
+            let prev_at_r = evaluate_at_a_point(prev_evals, challenge).map_err(|err| LayerError::InterpError(err))?;
+
+            if prev_at_r != curr_evals[0] + curr_evals[1] {
+                return Err(LayerError::VerificationError(VerificationError::SumcheckFailed));
+            };
+
+            transcript
+            .append_field_elements("Sumcheck evaluations", &curr_evals)
+            .unwrap();
+
+            prev_evals = curr_evals;
+            challenges.push(challenge);
+        }
+        // final round v
+        let final_chal = transcript.get_challenge("Final Sumcheck challenge").unwrap();
+        challenges.push(final_chal);
+
+        let claimed_value = claim.1;
+
+        // uses the expression to make one single oracle query
+        let mut beta = BetaTable::new(claim).unwrap();
+        let _ = expression.index_mle_indices(0);
+        let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
+        let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
+        let oracle_query = mle_bound * beta_bound;
+
+        if oracle_query != claimed_value {
+            return Err(LayerError::VerificationError(VerificationError::GKRClaimCheckFailed));
+        }
+
+        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).map_err(|err| LayerError::InterpError(err))?;
+        if oracle_query != prev_at_r {
+            return Err(LayerError::VerificationError(VerificationError::FinalSumcheckFailed));
+        }
+
+        // transcript
+        // .append_field_elements("Sumcheck evaluations", &prev_evals)
+        // .unwrap();
+
+        Ok(())
     }
 
     ///Get the claims that this layer makes on other layers

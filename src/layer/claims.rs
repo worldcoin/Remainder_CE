@@ -119,7 +119,7 @@ pub fn aggregate_claims<F: FieldExt>(
 
     // interpolate to get W(l(r)), that's the claimed value
     let claimed_val = evaluate_at_a_point(&wlx, rstar);
-
+    
     Ok(((r, claimed_val.unwrap()), wlx))
 }
 
@@ -153,13 +153,8 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 
     // check q(r_star) === W(r)
     let q_rstar = evaluate_at_a_point(&wlx, r_star).unwrap();
-    let w_r = expr.clone().evaluate_expr(r.clone()).unwrap();
 
-    if q_rstar != w_r {
-        return Err(ClaimError::ClaimAggroError);
-    }
-
-    let aggregated_claim: Claim<F> = (r, w_r);
+    let aggregated_claim: Claim<F> = (r, q_rstar);
 
     Ok(aggregated_claim)
 }
@@ -216,7 +211,6 @@ mod test {
             valchal.push(eval.unwrap());
         }
 
-        dbg!(&valchal);
         let claim1: Claim<Fr> = (chals1, valchal[0]);
         let claim2: Claim<Fr> = (chals2, valchal[1]);
 
@@ -531,7 +525,10 @@ mod test {
         let rchal = Fr::from(-2);
 
         let (res, wlx) = aggregate_claims(&claims, &mut expr.clone(), rchal).unwrap();
-        expr.index_mle_indices(0);
+        let rounds = expr.index_mle_indices(0);
+        // for round in 0..rounds {
+        //     expr.fix
+        // }
         let verify_result = verify_aggragate_claim(&wlx, &claims, rchal, &expr).unwrap();
 
     }

@@ -425,7 +425,11 @@ fn evaluate_mle_ref_product<F: FieldExt>(
     //     max_num_vars
     // };
 
-    let real_num_vars = max_num_vars - 1;
+    let real_num_vars = if max_num_vars != 0 {
+        max_num_vars - 1
+    } else {
+        max_num_vars
+    };
 
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
@@ -710,6 +714,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     // This is the claimed sumcheck result from the prover.
     // TODO!(ende): degree check?
     let _claimed_val = messages[0].0[0] + messages[0].0[1];
+    dbg!((&_claimed_val, layer_claim.1));
     let mut challenges = vec![];
 
     // --- Go through sumcheck messages + (FS-generated) challenges ---

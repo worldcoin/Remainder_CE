@@ -80,8 +80,8 @@ pub trait GKRCircuit<F: FieldExt> {
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
 
         for output in output_layers.iter() {
-            let bits = output.num_vars();
             let mle_indices = output.mle_indices();
+            let bits = mle_indices.len();
             let mut claim_chal: Vec<F> = vec![];
             for bit in 0..bits {
                 let challenge = transcript.get_challenge("Setting Output Layer Claim").unwrap();
@@ -125,13 +125,13 @@ pub trait GKRCircuit<F: FieldExt> {
             let prev_claim = verify_aggragate_claim(&wlx_evaluations, layer_claims, agg_chal, layer.get_expression()).map_err(|_err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), LayerError::AggregationError))?;
 
             transcript
-            .append_field_elements("Initial Sumcheck evaluations", &wlx_evaluations)
+            .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
             .unwrap();
 
-            let _ = layer.verify_rounds(prev_claim, sumcheck_proof.0, transcript, layer.get_expression().clone());
+            layer.verify_rounds(prev_claim, sumcheck_proof.0, transcript, layer.get_expression().clone()).map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
 
             // verifier manipulates transcript same way as prover
-            let other_claims = layer.get_claims().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+            let other_claims = layer.get_claims().map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
 
             //Add the claims to the claim tracking state
             for (layer_id, claim) in other_claims {
@@ -161,6 +161,7 @@ pub trait GKRCircuit<F: FieldExt> {
             }
 
             let claim = claim.unwrap();
+            
             let layer_id = output.get_layer_id().unwrap();
 
             if let Some(curr_claims) = claims.get_mut(&layer_id) {
@@ -185,6 +186,8 @@ pub trait GKRCircuit<F: FieldExt> {
             // init_evals are the wlx from aggregate_claims
             let (layer_claim, wlx_evaluations) = aggregate_claims(layer_claims, layer.get_expression(), agg_chal).unwrap();
 
+            transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations).unwrap();
+
             // TODO!(ende) init_evals will probably come from aggregate_claims, i.e. the wlx values
             let (init_evals, rounds) = layer.start_sumcheck(layer_claim).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
             transcript
@@ -199,6 +202,8 @@ pub trait GKRCircuit<F: FieldExt> {
                     .unwrap();
                 Ok::<_, LayerError>(evals)
             })).try_collect().map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+
+            transcript.get_challenge("Final Sumcheck challenge").unwrap();
 
             let sumcheck_rounds = SumcheckProof(sumcheck_rounds);
 
@@ -236,6 +241,7 @@ mod test {
 
     use ark_bn254::Fr;
     use ark_std::One;
+    use tracing::Level;
 
     use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer, LayerId, LayerError, claims::ClaimError}, expression::ExpressionStandard};
 
@@ -244,6 +250,7 @@ mod test {
     struct TestCircuit<F: FieldExt> {
         mle: DenseMle<F, Tuple2<F>>,
         mle_2: DenseMle<F, Tuple2<F>>,
+        mle_3: DenseMle<F, F>,
     }
 
     impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
@@ -280,9 +287,6 @@ mod test {
             let builder4 = from_mle(output, |(mle1, mle2)| {
                 mle1.mle_ref().expression() - mle2.mle_ref().expression()
             }, |(mle1, mle2), layer_id, prefix_bits| {
-                let num_vars = max(mle1.num_vars(), mle2.num_vars());
-
-                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
             });
 
             let output = layers.add_gkr(builder4);
@@ -293,20 +297,29 @@ mod test {
 
     #[test]
     fn test_gkr() {
+        // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+        // tracing::subscriber::set_global_default(subscriber)
+        //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+
         let mut mle: DenseMle<Fr, Tuple2<Fr>> = vec![(Fr::from(2), Fr::from(8)), (Fr::from(7), Fr::from(3))].into_iter().map(|x| x.into()).collect();
         mle.define_layer_id(LayerId::Input);
         let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = vec![(Fr::from(9), Fr::from(7)), (Fr::from(15), Fr::from(6))].into_iter().map(|x| x.into()).collect();
         mle_2.define_layer_id(LayerId::Input);
+        let mut mle_3 = DenseMle::<Fr, Fr>::new(vec![Fr::from(5), Fr::from(5)]);
+        mle_3.define_layer_id(LayerId::Input);
+
         let mut circuit = TestCircuit::<Fr> {
             mle,
-            mle_2
+            mle_2,
+            mle_3
         };
 
-        let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("New Poseidon Test Transcript");
+        let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("GKR Prover Transcript");
 
         match circuit.prove(&mut transcript) {
             Ok(proof) => {
-                let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("New Poseidon Test Transcript");
+                println!("proof generated successfully!");
+                let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("GKR Verifier Transcript");
                 match circuit.verify(&mut transcript, proof) {
                     Ok(_) => {
 
