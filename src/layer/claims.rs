@@ -131,7 +131,6 @@ pub fn verify_aggragate_claim<F: FieldExt>(
     wlx: &Vec<F>,    // synonym for qx
     claims: &[Claim<F>],
     r_star: F,
-    expr: &ExpressionStandard<F>,
 ) -> Result<Claim<F>, ClaimError> {
 
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
@@ -532,7 +531,7 @@ mod test {
         // for round in 0..rounds {
         //     expr.fix
         // }
-        let verify_result = verify_aggragate_claim(&wlx, &claims, rchal, &expr).unwrap();
+        let verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
 
     }
 }

@@ -134,10 +134,10 @@ pub trait Layer<F: FieldExt> {
         claim: Claim<F>, 
         sumcheck_rounds: Vec<Vec<F>>, 
         transcript: &mut Self::Transcript, 
-        mut expression: ExpressionStandard<F>
     ) -> Result<(), LayerError>{
 
         let mut challenges = vec![];
+        let (expression, _) = self.mut_expression_and_beta();
         
         // first round, see Thaler book page 34
         let mut prev_evals = &sumcheck_rounds[0];

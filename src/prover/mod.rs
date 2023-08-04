@@ -217,13 +217,13 @@ pub trait GKRCircuit<F: FieldExt> {
 
             let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
 
-            let prev_claim = verify_aggragate_claim(&wlx_evaluations, layer_claims, agg_chal, layer.get_expression()).map_err(|_err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), LayerError::AggregationError))?;
+            let prev_claim = verify_aggragate_claim(&wlx_evaluations, layer_claims, agg_chal).map_err(|_err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), LayerError::AggregationError))?;
 
             transcript
             .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
             .unwrap();
 
-            layer.verify_rounds(prev_claim, sumcheck_proof.0, transcript, layer.get_expression().clone()).map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
+            layer.verify_rounds(prev_claim, sumcheck_proof.0, transcript).map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
 
             // verifier manipulates transcript same way as prover
             let other_claims = layer.get_claims().map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
