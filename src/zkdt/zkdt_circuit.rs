@@ -18,9 +18,9 @@ What's our plan here?
 */
 
 // --- Constants ---
-const DUMMY_INPUT_LEN: usize = 1 << 5;
+const DUMMY_INPUT_LEN: usize = 1 << 1; // was 1 << 5
 const NUM_DUMMY_INPUTS: usize = 1 << 8;
-const TREE_HEIGHT: usize = 9;
+const TREE_HEIGHT: usize = 2; // was 9
 const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
 
