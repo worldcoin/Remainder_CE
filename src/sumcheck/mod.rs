@@ -23,8 +23,8 @@ use crate::{
     FieldExt,
 };
 
-#[derive(Error, Debug, Clone)]
-enum MleError {
+#[derive(Error, Debug, Clone,PartialEq)]
+pub enum MleError {
     #[error("Passed list of Mles is empty")]
     EmptyMleList,
     #[error("Beta table not yet initialized for Mle")]
@@ -339,7 +339,7 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F, MleRef = 
         // dbg!(betatable);
         // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---
         evaluate_mle_ref_product(&[mle_ref.clone()], independent_variable, max_degree, beta_mle_ref.clone(), false)
-            .map_err(|_| ExpressionError::MleError)
+            .map_err(ExpressionError::MleError)
     };
 
     // --- Just invert ---
@@ -366,10 +366,10 @@ pub(crate) fn compute_sumcheck_message<F: FieldExt, Exp: Expression<F, MleRef = 
                         .contains(&MleIndex::IndexedBit(round_index))
                 })
                 .reduce(|acc, item| acc | item)
-                .ok_or(ExpressionError::MleError)?;
+                .ok_or(ExpressionError::MleError(MleError::EmptyMleList))?;
             // have to include the beta table and evaluate as a product
             evaluate_mle_ref_product(mle_refs, independent_variable, max_degree, beta_mle_ref.clone(), false)
-                .map_err(|_| ExpressionError::MleError)
+                .map_err(ExpressionError::MleError)
         };
 
     // --- Scalar is just distributed mult as defined earlier ---

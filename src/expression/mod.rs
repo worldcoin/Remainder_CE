@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::{
     layer::Claim,
     mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef},
-    sumcheck::compute_sumcheck_message,
+    sumcheck::{compute_sumcheck_message, MleError},
     FieldExt,
 };
 
@@ -81,8 +81,8 @@ pub enum ExpressionError {
     EvaluationError(&'static str),
     ///Error that wraps an MleError
     /// TODO!(Do we even need this?)
-    #[error("Something went wrong while evaluating the MLE")]
-    MleError,
+    #[error("Something went wrong while evaluating the MLE: {0}")]
+    MleError(MleError),
     // ///Error when there is no beta table!!!!!!
     // #[error("No beta table")]
     // BetaError,

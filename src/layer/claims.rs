@@ -1,6 +1,6 @@
 use crate::{
     expression::{Expression, ExpressionStandard},
-    mle::MleIndex,
+    mle::{MleIndex, beta::BetaTable},
     FieldExt,
 };
 
@@ -49,8 +49,9 @@ fn compute_wlx<F: FieldExt>(
 
     // get the number of evaluations
     let num_vars = expr.index_mle_indices(0);
+    let degree = get_round_degree(&expr, 0);
     // expr.init_beta_tables(prev_layer_claim);
-    let num_evals = (num_vars) * (num_claims) * get_round_degree(&expr, 0);
+    let num_evals = (num_vars) * (num_claims); //* degree;
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
     let next_evals: Result<Vec<F>, ClaimError> = cfg_into_iter!(num_claims..num_evals)
@@ -73,14 +74,23 @@ fn compute_wlx<F: FieldExt>(
                 dbg!(&expr);
 
                 // use fix_var to compute W(l(index))
-                let mut fix_expr = expr.clone();
-                let eval_w_l = fix_expr.evaluate_expr(new_chal);
+                // let mut fix_expr = expr.clone();
+                // let eval_w_l = fix_expr.evaluate_expr(new_chal);
+
+                let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
+                beta.table.index_mle_indices(0);
+                let eval = compute_sumcheck_message(expr, 0, degree, &beta).unwrap();
+                if let SumOrEvals::Evals(evals) = eval {
+                    Ok(evals[0] + evals[1])
+                } else {
+                    panic!()
+                }
                 
                 // this has to be a sum--get the overall evaluation
-                match eval_w_l {
-                    Ok(evaluation) => Ok(evaluation),
-                    Err(_) => Err(ClaimError::ExpressionEvalError)
-                }
+                // match eval_w_l {
+                //     Ok(evaluation) => Ok(evaluation),
+                //     Err(_) => Err(ClaimError::ExpressionEvalError)
+                // }
             }
         )
         .collect();
