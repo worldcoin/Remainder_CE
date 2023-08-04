@@ -14,6 +14,7 @@ pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
 pub mod zero;
+pub mod gate;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
