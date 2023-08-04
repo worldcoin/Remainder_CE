@@ -466,15 +466,9 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     let constant = |c| Ok(c);
     let selector_column =
         |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
-            if let Err(e) = lhs {
-                return Err(e);
-            }
-            if let Err(e) = rhs {
-                return Err(e);
-            }
             // --- Selector bit must be bound ---
             if let MleIndex::Bound(val) = idx {
-                return Ok(*val * lhs.unwrap() + (F::one() - val) * rhs.unwrap());
+                return Ok(*val * lhs? + (F::one() - val) * rhs?);
             }
             Err(ExpressionError::SelectorBitNotBoundError)
         };

@@ -65,9 +65,12 @@ fn compute_wlx<F: FieldExt>(
                             |claim| 
                             claim[claim_idx]
                         ).collect();
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
+                        res
                     }
                 ).collect();
+
+                dbg!(&expr);
 
                 // use fix_var to compute W(l(index))
                 let mut fix_expr = expr.clone();
