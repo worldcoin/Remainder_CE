@@ -1,6 +1,9 @@
-use itertools::{Itertools, repeat_n};
+use itertools::{repeat_n, Itertools};
 
-use crate::{FieldExt, layer::{LayerId, Claim}};
+use crate::{
+    layer::{Claim, LayerId},
+    FieldExt,
+};
 
 use super::{MleIndex, MleRef};
 
@@ -19,7 +22,11 @@ pub struct ZeroMleRef<F: FieldExt> {
 impl<F: FieldExt> ZeroMleRef<F> {
     ///Creates a new ZERO MleRef
     pub fn new(num_vars: usize, prefix_bits: Option<Vec<MleIndex<F>>>, layer_id: LayerId) -> Self {
-        let mle_indices = prefix_bits.into_iter().flatten().chain(repeat_n(MleIndex::Iterated, num_vars)).collect_vec();
+        let mle_indices = prefix_bits
+            .into_iter()
+            .flatten()
+            .chain(repeat_n(MleIndex::Iterated, num_vars))
+            .collect_vec();
 
         Self {
             mle_indices,
@@ -41,20 +48,16 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
     fn indexed(&self) -> bool {
         self.indexed
     }
-    
+
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
-       &self.mle_indices
+        &self.mle_indices
     }
 
     fn num_vars(&self) -> usize {
         self.num_vars
     }
 
-    fn fix_variable(
-        &mut self,
-        round_index: usize,
-        challenge: Self::F,
-    ) -> Option<Claim<Self::F>> {
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
                 *mle_index = MleIndex::Bound(challenge);
@@ -65,11 +68,23 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
-            Some((self.mle_indices.iter().map(|x| match x {
-                MleIndex::Bound(chal) => *chal,
-                MleIndex::Fixed(bit) => if *bit { F::one() } else { F::zero() },
-                _ => panic!("All bits should be bound!")
-            }).collect_vec(), F::zero()))
+            Some((
+                self.mle_indices
+                    .iter()
+                    .map(|x| match x {
+                        MleIndex::Bound(chal) => *chal,
+                        MleIndex::Fixed(bit) => {
+                            if *bit {
+                                F::one()
+                            } else {
+                                F::zero()
+                            }
+                        }
+                        _ => panic!("All bits should be bound!"),
+                    })
+                    .collect_vec(),
+                F::zero(),
+            ))
         } else {
             None
         }

@@ -12,7 +12,7 @@ use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use super::{Mle, MleAble, MleIndex, MleRef};
-use crate::{layer::Claim, expression::ExpressionStandard};
+use crate::{expression::ExpressionStandard, layer::Claim};
 use crate::{
     zkdt::structs::LeafNode,
     {layer::LayerId, FieldExt},
@@ -125,7 +125,10 @@ impl<F: FieldExt> DenseMle<F, F> {
 
     ///Splits the mle into a new mle with a tuple of size 2 as it's element
     pub fn split(&self) -> DenseMle<F, Tuple2<F>> {
-        self.mle.chunks(2).map(|items| (items[0], items.get(1).cloned().unwrap_or(F::zero())).into()).collect()
+        self.mle
+            .chunks(2)
+            .map(|items| (items[0], items.get(1).cloned().unwrap_or(F::zero())).into())
+            .collect()
     }
 }
 
@@ -697,11 +700,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 
     /// Ryan's note -- I assume this function updates the bookkeeping tables as
     /// described by [Tha13].
-    fn fix_variable(
-        &mut self,
-        round_index: usize,
-        challenge: Self::F,
-    ) -> Option<Claim<Self::F>> {
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>> {
         // --- Bind the current indexed bit to the challenge value ---
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
@@ -710,7 +709,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         }
 
         // --- One fewer iterated bit to sumcheck through ---
-//        dbg!(&self, self.num_vars);
+        //        dbg!(&self, self.num_vars);
         self.num_vars -= 1;
 
         let transform = |chunk: &[F]| {
@@ -735,11 +734,23 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
-            Some((self.mle_indices.iter().map(|x| match x {
-                MleIndex::Bound(chal) => *chal,
-                MleIndex::Fixed(bit) => if *bit { F::one() } else { F::zero() },
-                _ => panic!("All bits should be bound!")
-            }).collect_vec(), self.bookkeeping_table[0]))
+            Some((
+                self.mle_indices
+                    .iter()
+                    .map(|x| match x {
+                        MleIndex::Bound(chal) => *chal,
+                        MleIndex::Fixed(bit) => {
+                            if *bit {
+                                F::one()
+                            } else {
+                                F::zero()
+                            }
+                        }
+                        _ => panic!("All bits should be bound!"),
+                    })
+                    .collect_vec(),
+                self.bookkeeping_table[0],
+            ))
         } else {
             None
         }
@@ -963,7 +974,9 @@ mod tests {
         );
 
         assert!(first.bookkeeping_table() == &[Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(6)]);
-        assert!(second.bookkeeping_table() == &[Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)]);
+        assert!(
+            second.bookkeeping_table() == &[Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)]
+        );
     }
 
     // #[test]

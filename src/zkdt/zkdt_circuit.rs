@@ -1,5 +1,5 @@
-use crate::FieldExt;
 use crate::mle::dense::DenseMle;
+use crate::FieldExt;
 
 use super::structs::*;
 
@@ -394,11 +394,11 @@ fn check_signed_recomposition<F: FieldExt>(actual_value: F, decomp: BinDecomp16B
         total
     };
     if total != actual_value {
-        dbg!(
-            "RIP: Total = {:?}, actual_value = {:?}",
-            total,
-            actual_value
-        );
+        // dbg!(
+        //     "RIP: Total = {:?}, actual_value = {:?}",
+        //     total,
+        //     actual_value
+        // );
         panic!();
         // return false;
     }
@@ -491,7 +491,6 @@ fn generate_dummy_mles<F: FieldExt>() -> (
     )
 }
 
-
 // --- Create expressions using... testing modules? ---
 #[cfg(test)]
 mod tests {
@@ -499,17 +498,18 @@ mod tests {
     use super::*;
     use crate::{
         expression::{Expression, ExpressionStandard},
-        mle::{dense::DenseMle, dense::DenseMleRef, Mle, MleRef, beta::BetaTable},
+        layer::Claim,
+        mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, Mle, MleRef},
         sumcheck::{
             compute_sumcheck_message, dummy_sumcheck, get_round_degree, verify_sumcheck_messages,
             SumOrEvals,
-        }, layer::Claim,
+        },
     };
     use ark_bn254::Fr;
     use ark_std::test_rng;
     use ark_std::One;
-    use ark_std::Zero;
     use ark_std::UniformRand;
+    use ark_std::Zero;
 
     /// Checks that bits within the diff binary decomp and the multiplicity
     /// binary decomp are all either 0 or 1
@@ -529,7 +529,6 @@ mod tests {
             dummy_leaf_nodes,
         ) = generate_dummy_data::<Fr>();
 
-        
         // --- Checks that all the (diff) bits are either zero or one ---
         dummy_binary_decomp_diffs
             .into_iter()
@@ -563,7 +562,15 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_diff() {
         let mut rng = test_rng();
-        let layer_claim: Claim<Fr> = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng),], Fr::zero());
+        let layer_claim: Claim<Fr> = (
+            vec![
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+            ],
+            Fr::zero(),
+        );
         let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
         beta.table.index_mle_indices(0);
 
@@ -591,10 +598,10 @@ mod tests {
             first_bin_decomp_bit_mle[0].clone(),
             first_bin_decomp_bit_mle[0].clone(),
         ]);
-        dbg!(&b_squared);
-        dbg!(&first_bin_decomp_bit_mle[0]);
+        // dbg!(&b_squared);
+        // dbg!(&first_bin_decomp_bit_mle[0]);
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
-        dbg!(&b_minus_b_squared);
+        // dbg!(&b_minus_b_squared);
 
         // --- Evaluating at V(0, 0, 0) --> 0 ---
         let dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
@@ -604,8 +611,9 @@ mod tests {
 
         // idk if this is actually how we should do this
         let round_degree = get_round_degree(&b_minus_b_squared, 0);
-        dbg!(round_degree);
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree, &mut beta);
+        // dbg!(round_degree);
+        let res =
+            compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree, &mut beta);
 
         // --- Only first two values need to be zeros ---
         match res.clone().unwrap() {
@@ -616,8 +624,13 @@ mod tests {
             }
         }
 
-        let res_messages = dummy_sumcheck(&mut b_minus_b_squared_clone.clone(), &mut rng, layer_claim.clone());
-        let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
+        let res_messages = dummy_sumcheck(
+            &mut b_minus_b_squared_clone.clone(),
+            &mut rng,
+            layer_claim.clone(),
+        );
+        let verify_res =
+            verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
 
@@ -673,7 +686,12 @@ mod tests {
 
         // --- The first two elements in the sumcheck message should both be zero ---
         // Afterwards there are no guarantees since we're doing a potentially non-linear interpolation
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, first_round_deg, &mut beta);
+        let res = compute_sumcheck_message(
+            &mut b_minus_b_squared.clone(),
+            1,
+            first_round_deg,
+            &mut beta,
+        );
         match res.clone().unwrap() {
             SumOrEvals::Sum(_) => panic!(),
             SumOrEvals::Evals(vec) => {
@@ -682,8 +700,13 @@ mod tests {
             }
         }
 
-        let res_messages = dummy_sumcheck(&mut b_minus_b_squared_clone.clone(), &mut rng, layer_claim.clone());
-        let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
+        let res_messages = dummy_sumcheck(
+            &mut b_minus_b_squared_clone.clone(),
+            &mut rng,
+            layer_claim.clone(),
+        );
+        let verify_res =
+            verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
 
@@ -777,7 +800,15 @@ mod tests {
     #[test]
     fn circuit_dummy_binary_recomp_test() {
         let mut rng = test_rng();
-        let layer_claim: Claim<Fr> = (vec![Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng), Fr::rand(&mut rng),], Fr::zero());
+        let layer_claim: Claim<Fr> = (
+            vec![
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+            ],
+            Fr::zero(),
+        );
         let mut beta = BetaTable::new(layer_claim).unwrap();
         beta.table.index_mle_indices(0);
         let (
@@ -832,7 +863,7 @@ mod tests {
                 let b_s_times_coeff =
                     ExpressionStandard::Product(vec![bin_decomp_mle.clone(), sign_bit_mle.clone()]);
 
-                    let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
+                let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
 
                 // --- Then compute (b_s * coeff) * 2^{bit_idx} ---
                 let base = Fr::from(2_u32.pow((16 - (bit_idx + 1)) as u32));
@@ -866,9 +897,9 @@ mod tests {
                 let coeff_times_base_eval =
                     compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2, &mut beta);
 
-                    acc_expr + coeff_times_base
-                },
-            );
+                acc_expr + coeff_times_base
+            },
+        );
 
         // --- Subtract the two, and (TODO!(ryancao)) ensure they have the same number of variables ---
         let mut final_expr = diff_expr.clone() - abs_recomp_expr.clone()
