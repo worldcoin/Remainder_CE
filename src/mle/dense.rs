@@ -107,6 +107,7 @@ impl<F: FieldExt> DenseMle<F, F> {
     }
 
     pub fn mle_ref(&self) -> DenseMleRef<F> {
+        // let num_vars = self.num_vars() + self.prefix_bits.as_ref().map(|bits| bits.len()).unwrap_or(0);
         DenseMleRef {
             bookkeeping_table: self.mle.clone(),
             mle_indices: self
@@ -727,7 +728,7 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         let new = self.bookkeeping_table().par_chunks(2).map(transform);
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.mle().chunks(2).map(transform);
+        let new = self.bookkeeping_table().chunks(2).map(transform);
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.bookkeeping_table = new.collect();

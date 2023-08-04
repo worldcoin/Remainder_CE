@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::{
     layer::Claim,
     mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef},
-    sumcheck::compute_sumcheck_message,
+    sumcheck::{compute_sumcheck_message, MleError},
     FieldExt,
 };
 
@@ -81,8 +81,8 @@ pub enum ExpressionError {
     EvaluationError(&'static str),
     ///Error that wraps an MleError
     /// TODO!(Do we even need this?)
-    #[error("Something went wrong while evaluating the MLE")]
-    MleError,
+    #[error("Something went wrong while evaluating the MLE: {0}")]
+    MleError(MleError),
     // ///Error when there is no beta table!!!!!!
     // #[error("No beta table")]
     // BetaError,
@@ -466,15 +466,9 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     let constant = |c| Ok(c);
     let selector_column =
         |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
-            if let Err(e) = lhs {
-                return Err(e);
-            }
-            if let Err(e) = rhs {
-                return Err(e);
-            }
             // --- Selector bit must be bound ---
             if let MleIndex::Bound(val) = idx {
-                return Ok(*val * lhs.unwrap() + (F::one() - val) * rhs.unwrap());
+                return Ok(*val * lhs? + (F::one() - val) * rhs?);
             }
             Err(ExpressionError::SelectorBitNotBoundError)
         };

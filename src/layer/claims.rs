@@ -1,6 +1,6 @@
 use crate::{
     expression::{Expression, ExpressionStandard},
-    mle::MleIndex,
+    mle::{MleIndex, beta::BetaTable},
     FieldExt,
 };
 
@@ -49,8 +49,9 @@ fn compute_wlx<F: FieldExt>(
 
     // get the number of evaluations
     let num_vars = expr.index_mle_indices(0);
+    let degree = get_round_degree(&expr, 0);
     // expr.init_beta_tables(prev_layer_claim);
-    let num_evals = (num_vars) * (num_claims) * get_round_degree(&expr, 0);
+    let num_evals = (num_vars) * (num_claims); //* degree;
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
     let next_evals: Result<Vec<F>, ClaimError> = cfg_into_iter!(num_claims..num_evals)
@@ -65,19 +66,31 @@ fn compute_wlx<F: FieldExt>(
                             |claim| 
                             claim[claim_idx]
                         ).collect();
-                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
+                        res
                     }
                 ).collect();
 
+                dbg!(&expr);
+
                 // use fix_var to compute W(l(index))
-                let mut fix_expr = expr.clone();
-                let eval_w_l = fix_expr.evaluate_expr(new_chal);
+                // let mut fix_expr = expr.clone();
+                // let eval_w_l = fix_expr.evaluate_expr(new_chal);
+
+                let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
+                beta.table.index_mle_indices(0);
+                let eval = compute_sumcheck_message(expr, 0, degree, &beta).unwrap();
+                if let SumOrEvals::Evals(evals) = eval {
+                    Ok(evals[0] + evals[1])
+                } else {
+                    panic!()
+                }
                 
                 // this has to be a sum--get the overall evaluation
-                match eval_w_l {
-                    Ok(evaluation) => Ok(evaluation),
-                    Err(_) => Err(ClaimError::ExpressionEvalError)
-                }
+                // match eval_w_l {
+                //     Ok(evaluation) => Ok(evaluation),
+                //     Err(_) => Err(ClaimError::ExpressionEvalError)
+                // }
             }
         )
         .collect();
@@ -117,10 +130,9 @@ pub fn aggregate_claims<F: FieldExt>(
     // get the evals [W(l(0)), W(l(1)), ...]
     let wlx = compute_wlx(&mut expr, claim_vecs, &mut vals, claims.len(), num_idx).unwrap();
 
-    dbg!(&wlx);
     // interpolate to get W(l(r)), that's the claimed value
     let claimed_val = evaluate_at_a_point(&wlx, rstar);
-
+    
     Ok(((r, claimed_val.unwrap()), wlx))
 }
 
@@ -129,8 +141,7 @@ pub fn verify_aggragate_claim<F: FieldExt>(
     wlx: &Vec<F>,    // synonym for qx
     claims: &[Claim<F>],
     r_star: F,
-    expr: &ExpressionStandard<F>,
-) -> Result<(), ClaimError> {
+) -> Result<Claim<F>, ClaimError> {
 
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
     let num_idx = claim_vecs[0].len();
@@ -141,9 +152,6 @@ pub fn verify_aggragate_claim<F: FieldExt>(
             return Err(ClaimError::ClaimAggroError);
         }
     }
-
-    // compute q(r_star)
-    let q_r_star = evaluate_at_a_point(&wlx, r_star);
 
     // compute r = l(r_star)
     let r: Vec<F> = cfg_into_iter!(0..num_idx)
@@ -157,13 +165,10 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 
     // check q(r_star) === W(r)
     let q_rstar = evaluate_at_a_point(&wlx, r_star).unwrap();
-    let w_r = expr.clone().evaluate_expr(r).unwrap();
 
-    if q_rstar != w_r {
-        return Err(ClaimError::ClaimAggroError);
-    }
+    let aggregated_claim: Claim<F> = (r, q_rstar);
 
-    Ok(())
+    Ok(aggregated_claim)
 }
 
 
@@ -218,7 +223,6 @@ mod test {
             valchal.push(eval.unwrap());
         }
 
-        dbg!(&valchal);
         let claim1: Claim<Fr> = (chals1, valchal[0]);
         let claim2: Claim<Fr> = (chals2, valchal[1]);
 
@@ -533,8 +537,11 @@ mod test {
         let rchal = Fr::from(-2);
 
         let (res, wlx) = aggregate_claims(&claims, &mut expr.clone(), rchal).unwrap();
-        expr.index_mle_indices(0);
-        let verify_result = verify_aggragate_claim(&wlx, &claims, rchal, &expr).unwrap();
+        let rounds = expr.index_mle_indices(0);
+        // for round in 0..rounds {
+        //     expr.fix
+        // }
+        let verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
 
     }
 }
