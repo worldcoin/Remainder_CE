@@ -32,6 +32,32 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
+struct LeafNodePackingBuilder<F: FieldExt> {
+    mle: DenseMle<F, LeafNode<F>>,
+    r: F,
+    r_packing: F
+}
+
+impl<F: FieldExt> LayerBuilder<F> for LeafNodePackingBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    // expressions = r - (x.node_id + r_packing * x.node_val)
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.node_id()) + 
+        ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.node_val())), self.r_packing))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let mut flat_mle:DenseMle<F, F> = self.mle.into_iter().map(
+            |(node_id, node_val)| 
+            self.r - (node_id + self.r_packing * node_val)
+        ).collect();
+        flat_mle.add_prefix_bits(prefix_bits);
+        flat_mle.define_layer_id(id);
+        flat_mle
+    }
+}
+
 struct DecisionNodePackingBuilder<F: FieldExt> {
     mle: DenseMle<F, DecisionNode<F>>,
     r: F,
@@ -238,6 +264,42 @@ mod tests {
         // characteristic poly w packing: [3 - (0 + 5 * 0 + 4 * 1206 )], which is [-4821]
         println!("{:?}", dummy_decision_node_paths_mle);
         assert_eq!(next_layer_should_be, DenseMle::new(vec![Fr::from(-4821)]).mle_ref().bookkeeping_table);
+
+    }
+
+    #[test]
+    fn test_leaf_node_packing_builder() {
+
+        let (_,_, _, dummy_leaf_node_paths_mle, _, _, _, _) = generate_dummy_mles::<Fr>();
+
+        let (r, r_packing) = (Fr::from(3), Fr::from(5));
+        let input_packing_builder = LeafNodePackingBuilder{
+                                                                                            mle: dummy_leaf_node_paths_mle.clone(),
+                                                                                            r,
+                                                                                            r_packing
+                                                                                        };
+        let input_packed_expression = input_packing_builder.build_expression();
+        println!("layer expression: {:?}", input_packed_expression);
+
+        let next_layer = input_packing_builder.next_layer(LayerId::Layer(0), None);
+        let next_layer_should_be = dummy_leaf_node_paths_mle.node_id().bookkeeping_table
+                            .clone().iter()
+                            .zip(dummy_leaf_node_paths_mle.node_val().bookkeeping_table.clone().iter())
+                            .map(|(a, b)| {r - (a + &(r_packing * b))})
+                            .collect_vec();
+       
+        assert_eq!(next_layer.mle_ref().bookkeeping_table, next_layer_should_be);
+        println!("layer mle: {:?}", next_layer.mle_ref().bookkeeping_table);
+
+        // hand compute
+        // for this to pass, change the parameters into the following:
+        // const DUMMY_INPUT_LEN: usize = 1 << 1;
+        // const TREE_HEIGHT: usize = 2;
+        // the node_id: [2], its node_val is: 17299145535799709783. r = 3, r_packing = 5
+        // characteristic poly w packing: [3 - (2 + 5 * 17299145535799709783)], which is [-4821]
+
+        println!("{:?}", dummy_leaf_node_paths_mle);
+        assert_eq!(next_layer_should_be, DenseMle::new(vec![ Fr::from(3) - (Fr::from(2) + Fr::from(5) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
 
     }
 

@@ -351,20 +351,20 @@ impl<F: FieldExt> MleAble<F> for LeafNode<F> {
 }
 
 // TODO!(ryancao): Actually implement this correctly for LeafNode<F>
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, LeafNode<F>> {
-//     type Item = (F, F, F);
+impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, LeafNode<F>> {
+    type Item = (F, F);
 
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
+    type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
 
-//     fn into_iter(self) -> Self::IntoIter {
-//         let len = self.mle.len() / 2;
+    fn into_iter(self) -> Self::IntoIter {
+        let len = self.mle.len() / 2;
 
-//         self.mle[0]
-//             .iter()
-//             .cloned()
-//             .zip(self.mle[1].iter().cloned())
-//     }
-// }
+        self.mle[0]
+            .iter()
+            .cloned()
+            .zip(self.mle[1].iter().cloned())
+    }
+}
 
 /// Conversion from a list of `LeafNode<F>`s into a DenseMle
 impl<F: FieldExt> FromIterator<LeafNode<F>> for DenseMle<F, LeafNode<F>> {
