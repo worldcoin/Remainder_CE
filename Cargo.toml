@@ -25,5 +25,5 @@ tracing-subscriber = "0.3.17"
 [dev-dependencies]
 
 [features]
-default = ["parallel"]
+# default = ["parallel"]
 parallel = ["ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "ark-crypto-primitives/parallel"]
