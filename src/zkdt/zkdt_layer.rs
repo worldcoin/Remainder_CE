@@ -32,6 +32,100 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
+struct ExpoBuilder<F: FieldExt> {
+    packed_x: DenseMle<F, F>,
+    bin_decomp: BinDecomp16Bit<F>,
+    bit_index: usize,
+    r: F,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for ExpoBuilder<F> {
+    type Successor = (DenseMle<F, F>, DenseMle<F, F>);
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        let expression_1 = ExpressionStandard::Constant(self.r) - 
+                                                    (ExpressionStandard::Mle(self.packed_x.mle_ref()));
+
+        let curr_bit = self.bin_decomp.bits[self.bit_index];
+
+        let expression_2 = ExpressionStandard::Scaled(Box::new(expression_1.clone()), curr_bit) + 
+                                                    ExpressionStandard::Constant(F::one()) - ExpressionStandard::Constant(curr_bit);
+
+        expression_1.concat(expression_2)
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let mut r_minus_x: DenseMle<F, F> = self.packed_x.clone().into_iter().map(
+            |x| self.r - x
+        ).collect();
+        r_minus_x.add_prefix_bits(prefix_bits); 
+        r_minus_x.define_layer_id(id);
+
+        let b_ij = self.bin_decomp.bits[self.bit_index];
+
+        let mut prev_prod: DenseMle<F, F> = r_minus_x.clone().into_iter().map(
+            |r_minus_x| b_ij * r_minus_x + (F::one() - b_ij)
+        ).collect();
+
+        (r_minus_x, prev_prod)
+    }
+}
+
+struct ExpoBuilderRecurse<F: FieldExt> {
+    prev_expo: DenseMle<F, F>,
+    prev_prod: DenseMle<F, F>,
+    bin_decomp: BinDecomp16Bit<F>,
+    bit_index: usize,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderRecurse<F> {
+    type Successor = (DenseMle<F, F>, DenseMle<F, F>);
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        let expression_expo = ExpressionStandard::products(vec![self.prev_expo.mle_ref(), self.prev_expo.mle_ref()]);
+
+        let b_ij = self.bin_decomp.bits[self.bit_index];
+
+        // begin sus
+        let expo: DenseMle<F, F> = self.prev_expo.clone().into_iter().map(
+                |x| x * x
+            ).collect();
+
+        let prod: DenseMle<F, F> = self.prev_prod
+            .clone()
+            .into_iter()
+            .zip(expo.into_iter())
+            .map(
+                |(prev_prod, expo)| prev_prod * (b_ij * expo + (F::one() - b_ij))
+            ).collect();
+        // end sus
+
+        let expression_prod = ExpressionStandard::Mle(prod.mle_ref());
+
+        expression_expo.concat(expression_prod)
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let mut expo: DenseMle<F, F> = self.prev_expo.clone().into_iter().map(
+            |x| x * x
+        ).collect();
+        expo.add_prefix_bits(prefix_bits); 
+        expo.define_layer_id(id);
+
+        let b_ij = self.bin_decomp.bits[self.bit_index];
+
+        let mut prod: DenseMle<F, F> = self.prev_prod
+            .clone()
+            .into_iter()
+            .zip(expo.clone().into_iter())
+            .map(
+            |(prev_prod, expo)| prev_prod * (b_ij * expo + (F::one() - b_ij))
+        ).collect();
+
+        (expo, prod)
+    }
+}
+
 struct LeafNodePackingBuilder<F: FieldExt> {
     mle: DenseMle<F, LeafNode<F>>,
     r: F,
