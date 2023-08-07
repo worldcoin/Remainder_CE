@@ -503,7 +503,7 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
         Err(e) => Err(e),
         Ok(val) => Ok(val.neg()),
     };
-    let sum = |lhs, rhs| {
+    let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
         if let Err(e) = lhs {
             return Err(e);
         }

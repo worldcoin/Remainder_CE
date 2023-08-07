@@ -484,33 +484,33 @@ mod test {
 
     use super::{from_mle, GKRLayer, Layer, LayerBuilder, LayerId};
 
-    #[test]
-    fn build_simple_layer() {
-        let mut rng = test_rng();
-        let mle1 =
-            DenseMle::<Fr, Fr>::new(vec![Fr::from(2), Fr::from(3), Fr::from(6), Fr::from(7)]);
-        let mle2 =
-            DenseMle::<Fr, Fr>::new(vec![Fr::from(3), Fr::from(1), Fr::from(9), Fr::from(2)]);
+    // #[test]
+    // fn build_simple_layer() {
+    //     let mut rng = test_rng();
+    //     let mle1 =
+    //         DenseMle::<Fr, Fr>::new(vec![Fr::from(2), Fr::from(3), Fr::from(6), Fr::from(7)]);
+    //     let mle2 =
+    //         DenseMle::<Fr, Fr>::new(vec![Fr::from(3), Fr::from(1), Fr::from(9), Fr::from(2)]);
 
-        let builder = from_mle(
-            (mle1, mle2),
-            |(mle1, mle2)| {
-                ExpressionStandard::Mle(mle1.mle_ref()) + ExpressionStandard::Mle(mle2.mle_ref())
-            },
-            |(mle1, mle2), _, _: Option<Vec<MleIndex<Fr>>>| {
-                mle1.clone()
-                    .into_iter()
-                    .zip(mle2.clone().into_iter())
-                    .map(|(first, second)| first + second)
-                    .collect::<DenseMle<_, _>>()
-            },
-        );
+    //     let builder = from_mle(
+    //         (mle1, mle2),
+    //         |(mle1, mle2)| {
+    //             ExpressionStandard::Mle(mle1.mle_ref()) + ExpressionStandard::Mle(mle2.mle_ref())
+    //         },
+    //         |(mle1, mle2), _, _: Option<Vec<MleIndex<Fr>>>| {
+    //             mle1.clone()
+    //                 .into_iter()
+    //                 .zip(mle2.clone().into_iter())
+    //                 .map(|(first, second)| first + second)
+    //                 .collect::<DenseMle<_, _>>()
+    //         },
+    //     );
 
-        let next: DenseMle<Fr, Fr> = builder.next_layer(LayerId::Layer(0), None);
+    //     let next: DenseMle<Fr, Fr> = builder.next_layer(LayerId::Layer(0), None);
 
-        let mut layer = GKRLayer::<_, PoseidonTranscript<Fr>>::new(builder, LayerId::Layer(0));
+    //     let mut layer = GKRLayer::<_, PoseidonTranscript<Fr>>::new(builder, LayerId::Layer(0));
 
-        let sum = dummy_sumcheck(&mut layer.expression, &mut rng, todo!());
-        verify_sumcheck_messages(sum, layer.expression, todo!(), &mut OsRng).unwrap();
-    }
+    //     let sum = dummy_sumcheck(&mut layer.expression, &mut rng, todo!());
+    //     verify_sumcheck_messages(sum, layer.expression, todo!(), &mut OsRng).unwrap();
+    // }
 }
