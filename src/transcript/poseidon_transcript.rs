@@ -94,7 +94,7 @@ mod test {
                 == "20217826739391221062203418242768992766073309943336995961793742009429567399088"
         );
         transcript
-            .append_field_elements("Random crap Vec", &vec![Fr::one(), Fr::from(2)])
+            .append_field_elements("Random crap Vec", &[Fr::one(), Fr::from(2)])
             .unwrap();
         let outs = transcript
             .get_challenges("Random Challenges", 3)

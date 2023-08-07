@@ -633,7 +633,7 @@ mod test {
 
         let expression = expression1.clone() + expression3.clone();
 
-        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle.clone()]);
+        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
 
         let expression = expression_product + expression;
 
@@ -781,7 +781,7 @@ mod test {
         let challenge = vec![Fr::from(-1), Fr::from(7), Fr::from(3)];
         let eval = expression.evaluate_expr(challenge);
 
-        assert_eq!(eval.unwrap(), Fr::from((-1) * 149 + (1 - (-1)) * 5));
+        assert_eq!(eval.unwrap(), Fr::from(-149 + (1 - (-1)) * 5));
     }
 
     #[test]
@@ -808,9 +808,9 @@ mod test {
         let num_indices = expression_product.index_mle_indices(0);
         assert_eq!(num_indices, 2);
 
-        let eval_prod = expression_product.evaluate_expr(challenge.clone()).unwrap();
+        let eval_prod = expression_product.evaluate_expr(challenge).unwrap();
 
-        assert_eq!(eval_prod, Fr::from(eval_1 * eval_2));
+        assert_eq!(eval_prod, (eval_1 * eval_2));
         assert_eq!(eval_prod, Fr::from(11 * -17));
     }
 
@@ -822,7 +822,7 @@ mod test {
             DenseMle::<_, Fr>::new(vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)])
                 .mle_ref();
 
-        let expression_1 = ExpressionStandard::Mle(mle_1.clone());
+        let expression_1 = ExpressionStandard::Mle(mle_1);
 
         let mle_2 = DenseMle::<_, Fr>::new(vec![
             Fr::from(1),
@@ -836,7 +836,7 @@ mod test {
         ])
         .mle_ref();
 
-        let expression_2 = ExpressionStandard::Mle(mle_2.clone());
+        let expression_2 = ExpressionStandard::Mle(mle_2);
 
         let mut expression = expression_1 + expression_2;
         let num_indices = expression.index_mle_indices(0);
@@ -909,7 +909,7 @@ mod test {
 
         let expression = expression1.clone() + expression3.clone();
 
-        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle.clone()]);
+        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
 
         let expression = expression_product + expression;
 
@@ -924,6 +924,6 @@ mod test {
         let challenge = vec![Fr::from(2), Fr::from(3), Fr::from(4)];
         let eval = expression.evaluate_expr(challenge).unwrap();
 
-        assert_eq!(eval, Fr::from(-1 * ((1 - (24 * 24 - 23)) * 2) - 24 * 2));
+        assert_eq!(eval, Fr::from(-((1 - (24 * 24 - 23)) * 2) - 24 * 2));
     }
 }

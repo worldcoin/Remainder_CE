@@ -497,7 +497,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        expression::{Expression, ExpressionStandard},
+        expression::{ExpressionStandard},
         layer::Claim,
         mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, Mle, MleRef},
         sumcheck::{
@@ -519,15 +519,15 @@ mod tests {
         // --- First generate the dummy data ---
         let (
             // dummy_attr_idx_data,
-            dummy_input_data,
+            _dummy_input_data,
             // dummy_permutation_indices,
-            dummy_permuted_input_data,
-            dummy_decision_node_paths,
-            dummy_leaf_node_paths,
+            _dummy_permuted_input_data,
+            _dummy_decision_node_paths,
+            _dummy_leaf_node_paths,
             dummy_binary_decomp_diffs,
             dummy_multiplicities_bin_decomp,
-            dummy_decision_nodes,
-            dummy_leaf_nodes,
+            _dummy_decision_nodes,
+            _dummy_leaf_nodes,
         ) = generate_dummy_data::<Fr>();
 
         // --- Checks that all the (diff) bits are either zero or one ---
@@ -577,15 +577,15 @@ mod tests {
 
         let (
             // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
+            _dummy_input_data_mle,
             // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
+            _dummy_permuted_input_data_mle,
+            _dummy_decision_node_paths_mle,
+            _dummy_leaf_node_paths_mle,
             dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
+            _dummy_multiplicities_bin_decomp_mle,
+            _dummy_decision_nodes_mle,
+            _dummy_leaf_nodes_mle,
         ) = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLE ---
@@ -605,7 +605,7 @@ mod tests {
         // dbg!(&b_minus_b_squared);
 
         // --- Evaluating at V(0, 0, 0) --> 0 ---
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
+        let _dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
         let b_minus_b_squared_clone = b_minus_b_squared.clone();
         b_minus_b_squared.index_mle_indices(0);
         // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
@@ -641,15 +641,15 @@ mod tests {
 
         let (
             // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
+            _dummy_input_data_mle,
             // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle,
+            _dummy_permuted_input_data_mle,
+            _dummy_decision_node_paths_mle,
+            _dummy_leaf_node_paths_mle,
+            _dummy_binary_decomp_diffs_mle,
             dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
+            _dummy_decision_nodes_mle,
+            _dummy_leaf_nodes_mle,
         ) = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLE ---
@@ -669,10 +669,10 @@ mod tests {
         let all_zeros: Vec<Fr> = vec![Fr::zero()]
             .repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars() as u32) as usize);
         let all_zeros_mle = DenseMle::new(all_zeros);
-        let all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
+        let _all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
 
         // --- Evaluating at V(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) --> 0 ---
-        let dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
+        let _dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
 
         // --- Initialize beta tables manually ---
         let b_minus_b_squared_clone = b_minus_b_squared.clone();
@@ -709,15 +709,15 @@ mod tests {
         // --- First generate the dummy data ---
         let (
             // dummy_attr_idx_data,
-            dummy_input_data,
+            _dummy_input_data,
             // dummy_permutation_indices,
             dummy_permuted_input_data,
             dummy_decision_node_paths,
-            dummy_leaf_node_paths,
+            _dummy_leaf_node_paths,
             dummy_binary_decomp_diffs,
-            dummy_multiplicities_bin_decomp,
-            dummy_decision_nodes,
-            dummy_leaf_nodes,
+            _dummy_multiplicities_bin_decomp,
+            _dummy_decision_nodes,
+            _dummy_leaf_nodes,
         ) = generate_dummy_data::<Fr>();
 
         // --- Grab the attr vals from the permuted inputs ---
@@ -806,15 +806,15 @@ mod tests {
         beta.table.index_mle_indices(0);
         let (
             // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
+            _dummy_input_data_mle,
             // dummy_permutation_indices_mle,
             dummy_permuted_input_data_mle,
             dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
+            _dummy_leaf_node_paths_mle,
             dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
+            _dummy_multiplicities_bin_decomp_mle,
+            _dummy_decision_nodes_mle,
+            _dummy_leaf_nodes_mle,
         ) = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLEs and associated expressions ---
@@ -826,7 +826,7 @@ mod tests {
         let permuted_input_values_mle: DenseMleRef<Fr> =
             dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars()));
         let permuted_input_values_mle_expr =
-            ExpressionStandard::Mle(permuted_input_values_mle.clone());
+            ExpressionStandard::Mle(permuted_input_values_mle);
 
         // --- For debugging ---
         // let threshold_mle_expr_eval = evaluate_expr(&mut threshold_mle_expr.clone(), 1, 2);
@@ -837,7 +837,7 @@ mod tests {
         // --- Need to just get diff ---
         // dbg!(permuted_input_values_mle.num_vars); // Should be 3
         // dbg!(threshold_mle.num_vars); // Should be 3
-        let mut diff_expr = permuted_input_values_mle_expr.clone() - threshold_mle_expr.clone();
+        let diff_expr = permuted_input_values_mle_expr - threshold_mle_expr;
         // let permuted_input_values_mle_expr_eval = compute_sumcheck_message(&mut permuted_input_values_mle_expr.clone(), 1, 2);
         // let threshold_mle_expr_eval = compute_sumcheck_message(&mut threshold_mle_expr.clone(), 1, 2);
         // dbg!(permuted_input_values_mle_expr_eval);
@@ -849,12 +849,12 @@ mod tests {
         let bin_decomp_mles_clone = bin_decomp_mles.clone();
 
         // --- Time for iterators... sigh ---
-        let mut b_s_times_abs_recomp_expr = bin_decomp_mles.into_iter().enumerate().skip(1).fold(
+        let b_s_times_abs_recomp_expr = bin_decomp_mles.into_iter().enumerate().skip(1).fold(
             b_s_initial_acc,
             |acc_expr, (bit_idx, bin_decomp_mle)| {
                 // --- First compute b_s * coeff ---
                 let b_s_times_coeff =
-                    ExpressionStandard::Product(vec![bin_decomp_mle.clone(), sign_bit_mle.clone()]);
+                    ExpressionStandard::Product(vec![bin_decomp_mle, sign_bit_mle.clone()]);
 
                 let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
 
@@ -877,7 +877,7 @@ mod tests {
         );
 
         let abs_recomp_initial_acc = ExpressionStandard::Constant(Fr::zero());
-        let mut abs_recomp_expr = bin_decomp_mles_clone.into_iter().enumerate().skip(1).fold(
+        let abs_recomp_expr = bin_decomp_mles_clone.into_iter().enumerate().skip(1).fold(
             abs_recomp_initial_acc,
             |acc_expr, (bit_idx, bin_decomp_mle)| {
                 // --- Compute just coeff * 2^{bit_idx} ---
@@ -887,7 +887,7 @@ mod tests {
                 let coeff_times_base = ExpressionStandard::Scaled(coeff_expr_ptr, base);
 
                 // Debugging
-                let coeff_times_base_eval =
+                let _coeff_times_base_eval =
                     compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2, &mut beta);
 
                 acc_expr + coeff_times_base
@@ -895,9 +895,9 @@ mod tests {
         );
 
         // --- Subtract the two, and (TODO!(ryancao)) ensure they have the same number of variables ---
-        let mut final_expr = diff_expr.clone() - abs_recomp_expr.clone()
+        let mut final_expr = diff_expr - abs_recomp_expr
             + b_s_times_abs_recomp_expr.clone()
-            + b_s_times_abs_recomp_expr.clone();
+            + b_s_times_abs_recomp_expr;
 
         // --- Let's just see what the expressions give us... ---
         // Debugging
@@ -910,7 +910,7 @@ mod tests {
 
         // let dummy_claim = (vec![Fr::one(); 3], Fr::zero());
 
-        let final_expr_clone = final_expr.clone();
+        let _final_expr_clone = final_expr.clone();
 
         final_expr.index_mle_indices(0);
         // final_expr.init_beta_tables(dummy_claim.clone());
@@ -938,26 +938,26 @@ mod tests {
             // dummy_attr_idx_data_mle,
             dummy_input_data_mle,
             // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
+            _dummy_permuted_input_data_mle,
+            _dummy_decision_node_paths_mle,
+            _dummy_leaf_node_paths_mle,
+            _dummy_binary_decomp_diffs_mle,
+            _dummy_multiplicities_bin_decomp_mle,
+            _dummy_decision_nodes_mle,
+            _dummy_leaf_nodes_mle,
         ) = generate_dummy_mles::<Fr>();
 
         let mut rng = test_rng();
 
         // --- Get packed inputs first ---
-        let r1: Fr = rng.gen();
-        let r2: Fr = rng.gen();
+        let _r1: Fr = rng.gen();
+        let _r2: Fr = rng.gen();
 
         // --- Multiply to do packing ---
         let dummy_attribute_id_mleref = dummy_input_data_mle.attr_id(None);
-        let dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref);
+        let _dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref);
         let dummy_attribute_val_mleref = dummy_input_data_mle.attr_val(None);
-        let dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref);
+        let _dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref);
 
         // ---
     }

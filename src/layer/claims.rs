@@ -163,7 +163,7 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 mod tests {
 
     use crate::expression::Expression;
-    use crate::mle::{dense::DenseMle, Mle};
+    use crate::mle::{dense::DenseMle};
 
     use super::*;
     use ark_bn254::Fr;
@@ -189,7 +189,7 @@ mod tests {
     /// Test claim aggregation small mle
     #[test]
     fn test_aggro_claim() {
-        let dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
+        let _dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
@@ -228,7 +228,7 @@ mod tests {
     /// Test claim aggregation on another small mle
     #[test]
     fn test_aggro_claim_2() {
-        let dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
+        let _dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
@@ -277,7 +277,7 @@ mod tests {
     /// Test claim aggregation on random mle
     #[test]
     fn test_aggro_claim_3() {
-        let dummy_claim = (vec![Fr::one(); 3], Fr::from(0));
+        let _dummy_claim = (vec![Fr::one(); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -336,7 +336,7 @@ mod tests {
     /// Test claim aggregation on a RANDOM mle
     #[test]
     fn test_aggro_claim_4() {
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
+        let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![Fr::rand(&mut rng), Fr::rand(&mut rng)];
         let mle_v2 = vec![
@@ -394,7 +394,7 @@ mod tests {
     /// Make sure claim aggregation FAILS for a WRONG CLAIM!
     #[test]
     fn test_aggro_claim_negative_1() {
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
+        let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -452,7 +452,7 @@ mod tests {
     /// Make sure claim aggregation fails for ANOTHER WRONG CLAIM!
     #[test]
     fn test_aggro_claim_negative_2() {
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
+        let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -513,7 +513,7 @@ mod tests {
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
-        let mut expr_copy = expr.clone();
+        let _expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(1), Fr::from(2)];
         let chals2 = vec![Fr::from(2), Fr::from(3)];
@@ -535,8 +535,8 @@ mod tests {
 
         let rchal = Fr::from(-2);
 
-        let (res, wlx) = aggregate_claims(&claims, &mut expr.clone(), rchal).unwrap();
-        let rounds = expr.index_mle_indices(0);
-        let verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
+        let (_res, wlx) = aggregate_claims(&claims, &mut expr.clone(), rchal).unwrap();
+        let _rounds = expr.index_mle_indices(0);
+        let _verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
     }
 }

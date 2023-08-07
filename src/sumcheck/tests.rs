@@ -40,7 +40,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
         }
 
         // --- Grabs the degree of univariate polynomial we are sending over ---
-        let degree = get_round_degree(&expr, round_index);
+        let degree = get_round_degree(expr, round_index);
 
         // --- Gives back the evaluations g(0), g(1), ..., g(d - 1) ---
         let eval = compute_sumcheck_message(expr, round_index, degree, &mut beta_table);
@@ -141,7 +141,7 @@ fn get_dummy_claim<F: FieldExt>(
     } else {
         (0..num_vars).map(|_| F::rand(rng)).collect_vec()
     };
-    let eval = expression.evaluate_expr(challenges.clone()).unwrap();
+    let eval = expression.evaluate_expr(challenges).unwrap();
     let claim = match expression {
         ExpressionStandard::Mle(mle) => mle
             .mle_indices
@@ -183,7 +183,7 @@ fn eval_at_point_pos() {
 fn eval_at_point_neg() {
     // poly = 2x^2 - 6x + 3
     let evals = vec![Fr::from(3), Fr::from(-1), Fr::from(-1)];
-    let degree = 2;
+    let _degree = 2;
     let point = Fr::from(3);
     let evald = evaluate_at_a_point(&evals, point);
     assert_eq!(
@@ -367,8 +367,8 @@ fn test_dummy_sumcheck_3() {
         .collect::<DenseMle<Fr, Fr>>();
     let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
 
-    let mut mle_ref_1 = mle1.mle_ref();
-    let mut mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1.mle_ref();
+    let mle_ref_2 = mle2.mle_ref();
 
     let mut expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -394,8 +394,8 @@ fn test_dummy_sumcheck_sum_small() {
         .collect::<DenseMle<Fr, Fr>>();
     let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
 
-    let mut mle_ref_1 = mle1.mle_ref();
-    let mut mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1.mle_ref();
+    let mle_ref_2 = mle2.mle_ref();
 
     let mut expression = mle_ref_1.expression() + mle_ref_2.expression();
 
@@ -497,15 +497,15 @@ fn test_dummy_sumcheck_concat_aggro() {
     let mle_ref_2 = mle2.mle_ref();
 
     let mle_output = mle1
-        .clone()
+        
         .into_iter()
-        .zip(mle2.clone().into_iter().chain(mle2.clone().into_iter()))
+        .zip(mle2.clone().into_iter().chain(mle2.into_iter()))
         .map(|(first, second)| first * second)
-        .flat_map(|x| vec![x.clone(), x])
+        .flat_map(|x| vec![x, x])
         .collect::<DenseMle<Fr, Fr>>();
     let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
 
-    let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2.clone()]);
+    let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
     let expr2 = expression.clone();
 
     let mut expression = expr2.concat(expression);
@@ -535,7 +535,7 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat(expression);
-    let expression_aggro = expression.clone().concat(expr2);
+    let expression_aggro = expression.concat(expr2);
     let res_messages = dummy_sumcheck(
         &mut expression_aggro.clone(),
         &mut rng,
@@ -573,8 +573,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat(expression);
-    let expression_aggro = expression.clone().concat(expr2.clone());
-    let expression_aggro_aggro = expression_aggro.clone().concat(expr2);
+    let expression_aggro = expression.concat(expr2.clone());
+    let expression_aggro_aggro = expression_aggro.concat(expr2);
     let res_messages = dummy_sumcheck(
         &mut expression_aggro_aggro.clone(),
         &mut rng,
@@ -602,7 +602,7 @@ fn test_dummy_sumcheck_sum() {
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat(expression);
-    let expression_aggro = expression.clone().concat(expr2);
+    let expression_aggro = expression.concat(expr2);
     let res_messages = dummy_sumcheck(
         &mut expression_aggro.clone(),
         &mut rng,

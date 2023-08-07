@@ -306,13 +306,13 @@ mod test {
     use std::{cmp::max, time::Instant};
 
     use ark_bn254::Fr;
-    use ark_std::{cfg_into_iter, test_rng, One, UniformRand};
-    use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
-    use tracing::Level;
+    use ark_std::{test_rng, UniformRand};
+    use rayon::{prelude::ParallelIterator};
+    
 
     use crate::{
         expression::ExpressionStandard,
-        layer::{claims::ClaimError, from_mle, LayerBuilder, LayerError, LayerId, SimpleLayer},
+        layer::{from_mle, LayerBuilder, LayerId},
         mle::{
             dense::{DenseMle, Tuple2},
             zero::ZeroMleRef,
@@ -322,7 +322,7 @@ mod test {
         FieldExt,
     };
 
-    use super::{GKRCircuit, GKRError, Layers};
+    use super::{GKRCircuit, Layers};
 
     struct TestCircuit<F: FieldExt> {
         mle: DenseMle<F, Tuple2<F>>,
@@ -380,7 +380,7 @@ mod test {
                         .zip(mle2.clone().into_iter())
                         .map(|(first, second)| first - second)
                         .collect::<DenseMle<F, F>>();
-                    new_mle.define_layer_id(layer_id.clone());
+                    new_mle.define_layer_id(layer_id);
                     new_mle.add_prefix_bits(prefix_bits);
                     new_mle
                 },
@@ -446,13 +446,13 @@ mod test {
                         );
                     }
                     Err(err) => {
-                        println!("Verify failed! Error: {}", err);
+                        println!("Verify failed! Error: {err}");
                         panic!();
                     }
                 }
             }
             Err(err) => {
-                println!("Proof failed! Error: {}", err);
+                println!("Proof failed! Error: {err}");
                 panic!();
             }
         }

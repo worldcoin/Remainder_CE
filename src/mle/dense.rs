@@ -323,17 +323,17 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sumcheck::Evals;
+    
     use ark_bn254::Fr;
-    use ark_ff::UniformRand;
-    use ark_std::test_rng;
+    
+    
     use ark_std::One;
-    use ark_std::Zero;
+    
 
     #[test]
     ///test fixing variables in an mle with two variables
     fn fix_variable_twovars() {
-        let layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
         let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
         let mut mle_ref = mle.mle_ref();
@@ -346,7 +346,7 @@ mod tests {
     #[test]
     ///test fixing variables in an mle with three variables
     fn fix_variable_threevars() {
-        let layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -369,7 +369,7 @@ mod tests {
     #[test]
     ///test nested fixing variables in an mle with three variables
     fn fix_variable_nested() {
-        let layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -393,7 +393,7 @@ mod tests {
     #[test]
     ///test nested fixing all the wayyyy
     fn fix_variable_full() {
-        let layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
