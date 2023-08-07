@@ -6,6 +6,7 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
+use itertools::Itertools;
 use thiserror::Error;
 
 use crate::{
@@ -24,7 +25,7 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     #[allow(clippy::too_many_arguments)]
     ///Evaluate an expression and return a custom type
     fn evaluate<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(&Self::MleRef) -> T,
@@ -65,6 +66,8 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     fn fix_variable(&mut self, round_index: usize, challenge: F);
 
     /// Evaluates the current expression (as a multivariate function) at `challenges`
+    /// 
+    /// If the expression is already bound, this will check that the challenges match the already bound indices
     fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError>;
 }
 
@@ -90,6 +93,8 @@ pub enum ExpressionError {
     SelectorBitNotBoundError,
     #[error("MLE ref with more than one element in its bookkeeping table")]
     EvaluateNotFullyBoundError,
+    #[error("The bound indices of this expression don't match the indices passed in")]
+    EvaluateBoundIndicesDontMatch
 }
 
 ///TODO!(Genericise this over the MleRef Trait)
@@ -122,7 +127,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     /// operations.
     #[allow(clippy::too_many_arguments)]
     fn evaluate<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(&DenseMleRef<F>) -> T,
@@ -273,11 +278,35 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
         // --- It's as simple as fixing all variables ---
         challenges
-            .into_iter()
+            .iter()
             .enumerate()
-            .for_each(|(round_idx, challenge)| {
+            .for_each(|(round_idx, &challenge)| {
                 self.fix_variable(round_idx, challenge);
             });
+        
+        let mut observer_fn = |exp: &ExpressionStandard<F>| -> Result<(), ExpressionError> {
+            match exp {
+                ExpressionStandard::Mle(mle_ref) => {
+                    let indices = mle_ref.mle_indices().iter().filter_map(|index| match index {
+                        MleIndex::Bound(chal, index) => Some((*chal, index)),
+                        _ => None
+                    }).collect_vec();
+
+                    let start = *indices[0].1;
+                    let end = *indices[indices.len() - 1].1;
+
+                    let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
+                    
+                    if indices.as_slice() == &challenges[start..=end] {
+                        Ok(())
+                    } else {
+                        Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                    }
+                },
+                _ => Ok(())
+            }
+        };        
+        self.traverse(&mut observer_fn)?;
 
         // --- Traverse the expression and pick up all the evals ---
         gather_combine_all_evals(self)
@@ -450,7 +479,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
 /// within. TODO!(ryancao): Make this not need to be mutable
 fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
-    expr: &mut Exp,
+    expr: &Exp,
 ) -> Result<F, ExpressionError> {
     let constant = |c| Ok(c);
     let selector_column =

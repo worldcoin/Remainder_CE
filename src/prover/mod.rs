@@ -147,7 +147,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 let sumcheck_rounds = layer.prove_rounds(layer_claim, transcript).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
 
                 let other_claims = layer
-                    .claims()
+                    .get_claims()
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
 
                 //Add the claims to the claim tracking state
@@ -265,7 +265,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // verifier manipulates transcript same way as prover
             let other_claims = layer
-                .claims()
+                .get_claims()
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
 
             //Add the claims to the claim tracking state
