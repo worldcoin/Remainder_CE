@@ -33,47 +33,28 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
-/// Takes x, outputs tuple [ r-x, b_ij*(r-x) + (1-b_ij) ]
-/// which is [repeated squares, continued exponetiations]
+/// Takes x, outputs r-x
 /// first step in exponantiation
 struct ExpoBuilderInit<F: FieldExt> {
     packed_x: DenseMle<F, F>,
-    bin_decomp: BinDecomp16Bit<F>,
-    bit_index: usize,
     r: F,
 }
 
 impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderInit<F> {
-    type Successor = (DenseMle<F, F>, DenseMle<F, F>);
+    type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let expression_1 = ExpressionStandard::Constant(self.r) - 
-                                                    (ExpressionStandard::Mle(self.packed_x.mle_ref()));
-
-        let curr_bit = self.bin_decomp.bits[self.bit_index];
-
-        let expression_2 = ExpressionStandard::Scaled(Box::new(expression_1.clone()), curr_bit) + 
-                                                    ExpressionStandard::Constant(F::one()) - ExpressionStandard::Constant(curr_bit);
-
-        expression_1.concat(expression_2)
+        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.packed_x.mle_ref()))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let mut r_minus_x: DenseMle<F, F> = self.packed_x.clone().into_iter().map(
             |x| self.r - x
         ).collect();
-        r_minus_x.add_prefix_bits(prefix_bits.clone()); 
-        r_minus_x.define_layer_id(id.clone());
+        r_minus_x.add_prefix_bits(prefix_bits); 
+        r_minus_x.define_layer_id(id);
 
-        let b_ij = self.bin_decomp.bits[self.bit_index];
-
-        let mut prev_prod: DenseMle<F, F> = r_minus_x.clone().into_iter().map(
-            |r_minus_x| b_ij * r_minus_x + (F::one() - b_ij)
-        ).collect();
-        prev_prod.add_prefix_bits(prefix_bits); 
-        prev_prod.define_layer_id(id);
-
-        (r_minus_x, prev_prod)
+        r_minus_x
     }
 }
 
@@ -101,27 +82,27 @@ impl<F: FieldExt> LayerBuilder<F> for SquaringBuilder<F> {
 }
 
 struct ExpoBuilderBitExpo<F: FieldExt> {
-    bin_decomp: BinDecomp16Bit<F>,
+    bin_decomp: DenseMle<F, BinDecomp16Bit<F>>,
     bit_index: usize,
-    squared: DenseMle<F, F>,
+    r_minus_x_power: DenseMle<F, F>,
 }
 
-/// Takes squared (r-x_i)^j, outputs b_ij * (r-x_i)^k + (1-b_ij)
+/// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
 impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderBitExpo<F> {
     type Successor = DenseMle<F, F>;
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let b_ij = self.bin_decomp.bits[self.bit_index];
-        ExpressionStandard::Sum(Box::new(ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.squared.mle_ref())),
-                                                                     b_ij)),
-                                Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Constant(b_ij)))
+        let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
+        ExpressionStandard::Sum(Box::new(ExpressionStandard::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
+                                Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(b_ij)))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let b_ij = self.bin_decomp.bits[self.bit_index];
-        let mut bit_expoed: DenseMle<F, F> = self.squared
+        let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
+        let mut bit_expoed: DenseMle<F, F> = self.r_minus_x_power
             .clone()
             .into_iter()
+            .zip(b_ij.bookkeeping_table.clone().into_iter())
             .map(
-            |squared| (b_ij * squared + (F::one() - b_ij))
+            |(r_minus_x_power, b_ij_iter)| (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))
         ).collect();
 
         bit_expoed.add_prefix_bits(prefix_bits);
@@ -429,6 +410,77 @@ mod tests {
 
         println!("{:?}", dummy_leaf_node_paths_mle);
         assert_eq!(next_layer_should_be, DenseMle::new(vec![ Fr::from(3) - (Fr::from(2) + Fr::from(5) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
+
+    }
+
+    #[test]
+    fn test_expo_builder() {
+        // ExpoBuilderInit -> (SquaringBuilder -> ExpoBuilderBitExpo -> ExpoBuilderProduct ->)
+        let (_,_, dummy_decision_node_paths_mle, _, _, dummy_multiplicities_bin_decomp_mle, _, _) = generate_dummy_mles::<Fr>();
+        println!("node path {:?}", dummy_decision_node_paths_mle);
+        println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
+        let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
+        let input_packing_builder = DecisionNodePackingBuilder{
+            mle: dummy_decision_node_paths_mle.clone(),
+            r,
+            r_packings
+        };
+
+        let input_packed_expression = input_packing_builder.build_expression();
+        println!("layer expression: {:?}", input_packed_expression);
+
+        let next_layer = input_packing_builder.next_layer(LayerId::Layer(0), None);
+        println!("next layer mle: {:?}", next_layer);
+
+        let another_r = Fr::from(6);
+
+        // r-x
+        let r_minus_x_builder =  ExpoBuilderInit {
+            packed_x: next_layer,
+            r: another_r,
+        };
+        let _ = r_minus_x_builder.build_expression();
+        let mut r_minus_x = r_minus_x_builder.next_layer(LayerId::Layer(0), None);
+
+        // b_ij * (r-x) + (1 - b_ij), j = 0
+        let prev_prod_builder = ExpoBuilderBitExpo {
+            bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
+            bit_index: 0,
+            r_minus_x_power: r_minus_x.clone()
+        };
+        let _ = prev_prod_builder.build_expression();
+        let mut prev_prod = prev_prod_builder.next_layer(LayerId::Layer(0), None);
+
+        for i in 1..16 {
+            // (r-x)^2
+            let r_minus_x_square_builder = SquaringBuilder {
+                mle: r_minus_x
+            };
+            let _ = r_minus_x_square_builder.build_expression();
+            let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(0), None);
+
+            // b_ij * (r-x)^2 + (1 - b_ij), j = 1..15
+            let curr_prod_builder = ExpoBuilderBitExpo {
+                bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
+                bit_index: i,
+                r_minus_x_power: r_minus_x_square.clone()
+            };
+            let _ = curr_prod_builder.build_expression();
+            let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(0), None);
+
+            // PROD(b_ij * (r-x) + (1 - b_ij))
+            let prod_builder = ExpoBuilderProduct {
+                multiplier: curr_prod,
+                prev_prod
+            };
+            let _ = prod_builder.build_expression();
+            prev_prod = prod_builder.next_layer(LayerId::Layer(0), None);
+
+            r_minus_x = r_minus_x_square;
+
+        }
+
+        // assert something here
 
     }
 
