@@ -8,10 +8,9 @@ use std::{
 #[cfg(test)]
 pub(crate) mod tests;
 
-use ark_poly::MultilinearExtension;
 use ark_std::{cfg_into_iter};
 use itertools::Itertools;
-use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
 
 use crate::{
@@ -538,9 +537,5 @@ pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &Vec<F>, point: F) -> Resul
             |(x, y)| given_evals[x] * y[0] * y[1].inverse().unwrap(),
         )
         .reduce(|x, y| x + y);
-    if eval.is_none() {
-        Err(InterpError::NoInverse)
-    } else {
-        Ok(eval.unwrap())
-    }
+    eval.ok_or(InterpError::NoInverse)
 }

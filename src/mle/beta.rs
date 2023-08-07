@@ -1,3 +1,5 @@
+//!Module for dealing with the Beta equality function
+
 use std::{
     fmt::Debug,
 };

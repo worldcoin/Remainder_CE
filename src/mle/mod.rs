@@ -103,18 +103,12 @@ pub enum MleIndex<F: FieldExt> {
 impl<F: FieldExt> MleIndex<F> {
     ///Turns this MleIndex into an IndexedBit variant if it's an Iterated variant
     pub fn index_index(&mut self, bit: usize) {
-        match self {
-            MleIndex::Iterated => *self = Self::IndexedBit(bit),
-            _ => (),
-        }
+        if matches!(self, MleIndex::Iterated) { *self = Self::IndexedBit(bit) }
     }
 
     ///Bind an indexed bit to a challenge
     pub fn bind_index(&mut self, chal: F) {
-        match self {
-            MleIndex::IndexedBit(bit) => *self = Self::Bound(chal, *bit),
-            _ => (),
-        }
+        if let MleIndex::IndexedBit(bit) = self {*self = Self::Bound(chal, *bit)}
     }
 
     ///Evaluate this MleIndex

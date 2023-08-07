@@ -3,7 +3,6 @@
 use std::{collections::HashMap};
 
 use crate::{
-    expression::{Expression},
     layer::{
         claims::aggregate_claims, claims::verify_aggragate_claim, Claim, GKRLayer, Layer,
         LayerBuilder, LayerError, LayerId,
@@ -14,7 +13,7 @@ use crate::{
     FieldExt,
 };
 
-use derive_more::From;
+// use derive_more::From;
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -45,7 +44,14 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     }
 }
 
+impl<F: FieldExt, Tr: Transcript<F> + 'static> Default for Layers<F, Tr> {
+        fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Error, Debug, Clone)]
+///Errors relating to the proving of a GKR circuit
 pub enum GKRError {
     #[error("No claims were found for layer {0:?}")]
     ///No claims were found for layer
@@ -62,8 +68,14 @@ pub enum GKRError {
 }
 
 ///A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
-#[derive(Clone, Debug, From)]
+#[derive(Clone, Debug)]
 pub struct SumcheckProof<F: FieldExt>(Vec<Vec<F>>);
+
+impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
+    fn from(value: Vec<Vec<F>>) -> Self {
+        Self(value)
+    }
+}
 
 ///The proof for an individual GKR layer
 pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {

@@ -8,22 +8,28 @@ use crate::{
     FieldExt,
 };
 use ark_std::log2;
-use derive_more::{From, Into};
+// use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 
 /// --- Path nodes within the tree and in the path hint ---
 /// Used for the following components of the (circuit) input:
 /// a)
-#[derive(Copy, Debug, Clone, From, Into)]
+#[derive(Copy, Debug, Clone)]
 pub struct DecisionNode<F: FieldExt> {
+    ///The id of this node in the tree
     pub node_id: F,
+    ///The id of the attribute this node involves
     pub attr_id: F,
+    ///The treshold of this node
     pub threshold: F,
 }
 
-#[derive(Copy, Debug, Clone, From, Into)]
+#[derive(Copy, Debug, Clone)]
+///The Leafs of the tree
 pub struct LeafNode<F: FieldExt> {
+    ///The id of this leaf in the tree
     pub node_id: F,
+    ///The value of this leaf
     pub node_val: F,
 }
 
@@ -31,8 +37,11 @@ pub struct LeafNode<F: FieldExt> {
 /// Used for the following components of the (circuit) input:
 /// a) The binary decomposition of the path node hints (i.e. path_x.thr - x.val)
 /// b) The binary decomposition of the multiplicity coefficients $c_j$
-#[derive(Copy, Debug, Clone, From, Into)]
+#[derive(Copy, Debug, Clone)]
 pub struct BinDecomp16Bit<F: FieldExt> {
+    ///The 16 bits that make up this decomposition
+    /// 
+    /// Should all be 1 or 0
     pub bits: [F; 16],
 }
 
@@ -40,10 +49,12 @@ pub struct BinDecomp16Bit<F: FieldExt> {
 /// Used for the following components of the (circuit) input:
 /// a) The actual input attributes, i.e. x
 /// b) The permuted input attributes, i.e. \bar{x}
-#[derive(Copy, Debug, Clone, From, Into, PartialEq)]
+#[derive(Copy, Debug, Clone, PartialEq)]
 pub struct InputAttribute<F: FieldExt> {
     // pub attr_idx: F,
+    ///The attr id of this input
     pub attr_id: F,
+    ///The threshold value of this input
     pub attr_val: F,
 }
 

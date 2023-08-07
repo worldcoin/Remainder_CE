@@ -6,7 +6,7 @@ use std::{
 
 
 use ark_std::{log2};
-use derive_more::{From, Into};
+// use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
@@ -122,12 +122,18 @@ impl<F: FieldExt> DenseMle<F, F> {
     }
 }
 
-#[derive(Debug, Clone, From, Into)]
+#[derive(Debug, Clone)]
 ///Newtype around a tuple of field elements
 pub struct Tuple2<F: FieldExt>((F, F));
 
 impl<F: FieldExt> MleAble<F> for Tuple2<F> {
     type Repr = [Vec<F>; 2];
+}
+
+impl<F: FieldExt> From<(F, F)> for Tuple2<F> {
+    fn from(value: (F, F)) -> Self {
+        Self(value)
+    }
 }
 
 //TODO!(Fix this so that it clones less)
@@ -223,6 +229,7 @@ pub struct DenseMleRef<F: FieldExt> {
 }
 
 impl<F: FieldExt> DenseMleRef<F> {
+    ///Convienence function for wrapping this in an Expression
     pub fn expression(self) -> ExpressionStandard<F> {
         ExpressionStandard::Mle(self)
     }

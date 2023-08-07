@@ -1,5 +1,7 @@
+//!Utilities involving the claims a layer makes
+
 use crate::{
-    expression::{Expression, ExpressionStandard},
+    expression::{ExpressionStandard},
     mle::{beta::BetaTable},
     FieldExt,
 };
@@ -12,12 +14,12 @@ use ark_std::{cfg_into_iter, cfg_iter};
 
 use rayon::{
     prelude::{
-        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+        IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
     },
 };
 use thiserror::Error;
 
-use super::{Claim, Layer};
+use super::Claim;
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims
