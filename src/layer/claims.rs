@@ -1,6 +1,6 @@
 use crate::{
     expression::{Expression, ExpressionStandard},
-    mle::{MleIndex, beta::BetaTable},
+    mle::{beta::BetaTable, MleIndex},
     FieldExt,
 };
 
@@ -11,7 +11,9 @@ use crate::sumcheck::*;
 use ark_std::{cfg_into_iter, cfg_iter};
 use itertools::{izip, multizip, Itertools};
 use rayon::{
-    prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator, IntoParallelRefIterator},
+    prelude::{
+        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+    },
     slice::ParallelSlice,
 };
 use thiserror::Error;
@@ -34,7 +36,6 @@ pub enum ClaimError {
     ExpressionEvalError,
 }
 
-
 /// Compute evaluations of W(l(x))
 fn compute_wlx<F: FieldExt>(
     expr: &mut ExpressionStandard<F>,
@@ -55,44 +56,37 @@ fn compute_wlx<F: FieldExt>(
 
     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
     let next_evals: Result<Vec<F>, ClaimError> = cfg_into_iter!(num_claims..num_evals)
-        .map(
-            |idx| {
-                // get the challenge l(idx)
-                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                .map(
-                    |claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                        .map(
-                            |claim| 
-                            claim[claim_idx]
-                        ).collect();
-                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                        res
-                    }
-                ).collect();
+        .map(|idx| {
+            // get the challenge l(idx)
+            let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                .map(|claim_idx| {
+                    let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                        .map(|claim| claim[claim_idx])
+                        .collect();
+                    let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
+                    res
+                })
+                .collect();
 
-                dbg!(&expr);
+            // use fix_var to compute W(l(index))
+            // let mut fix_expr = expr.clone();
+            // let eval_w_l = fix_expr.evaluate_expr(new_chal);
 
-                // use fix_var to compute W(l(index))
-                // let mut fix_expr = expr.clone();
-                // let eval_w_l = fix_expr.evaluate_expr(new_chal);
-
-                let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
-                beta.table.index_mle_indices(0);
-                let eval = compute_sumcheck_message(expr, 0, degree, &beta).unwrap();
-                if let SumOrEvals::Evals(evals) = eval {
-                    Ok(evals[0] + evals[1])
-                } else {
-                    panic!()
-                }
-                
-                // this has to be a sum--get the overall evaluation
-                // match eval_w_l {
-                //     Ok(evaluation) => Ok(evaluation),
-                //     Err(_) => Err(ClaimError::ExpressionEvalError)
-                // }
+            let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
+            beta.table.index_mle_indices(0);
+            let eval = compute_sumcheck_message(expr, 0, degree, &beta).unwrap();
+            if let SumOrEvals::Evals(evals) = eval {
+                Ok(evals[0] + evals[1])
+            } else {
+                panic!()
             }
-        )
+
+            // this has to be a sum--get the overall evaluation
+            // match eval_w_l {
+            //     Ok(evaluation) => Ok(evaluation),
+            //     Err(_) => Err(ClaimError::ExpressionEvalError)
+            // }
+        })
         .collect();
 
     // concat this with the first k evaluations from the claims to get num_evals evaluations
@@ -132,17 +126,16 @@ pub fn aggregate_claims<F: FieldExt>(
 
     // interpolate to get W(l(r)), that's the claimed value
     let claimed_val = evaluate_at_a_point(&wlx, rstar);
-    
+
     Ok(((r, claimed_val.unwrap()), wlx))
 }
 
 /// verifies the claim aggregation
 pub fn verify_aggragate_claim<F: FieldExt>(
-    wlx: &Vec<F>,    // synonym for qx
+    wlx: &Vec<F>, // synonym for qx
     claims: &[Claim<F>],
     r_star: F,
 ) -> Result<Claim<F>, ClaimError> {
-
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
     let num_idx = claim_vecs[0].len();
 
@@ -155,13 +148,13 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 
     // compute r = l(r_star)
     let r: Vec<F> = cfg_into_iter!(0..num_idx)
-    .map(|idx| {
-        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-            .map(|claim| claim[idx])
-            .collect();
-        evaluate_at_a_point(&evals, r_star).unwrap()
-    })
-    .collect();
+        .map(|idx| {
+            let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                .map(|claim| claim[idx])
+                .collect();
+            evaluate_at_a_point(&evals, r_star).unwrap()
+        })
+        .collect();
 
     // check q(r_star) === W(r)
     let q_rstar = evaluate_at_a_point(&wlx, r_star).unwrap();
@@ -170,7 +163,6 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 
     Ok(aggregated_claim)
 }
-
 
 #[cfg(test)]
 mod test {
@@ -226,8 +218,10 @@ mod test {
         let claim1: Claim<Fr> = (chals1, valchal[0]);
         let claim2: Claim<Fr> = (chals2, valchal[1]);
 
-        let res = aggregate_claims(&[claim1, claim2], &mut expr, Fr::from(10)).unwrap().0;
-       
+        let res = aggregate_claims(&[claim1, claim2], &mut expr, Fr::from(10))
+            .unwrap()
+            .0;
+
         expr_copy.index_mle_indices(0);
         let challenge_l_10 = vec![Fr::from(-7), Fr::from(43)]; // l(10), by hand
         let eval_l_10 = expr_copy.evaluate_expr(challenge_l_10.clone()).unwrap();
@@ -265,7 +259,9 @@ mod test {
 
         let rchal = Fr::from(-2);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal).unwrap().0;
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+            .unwrap()
+            .0;
 
         let transpose1 = vec![Fr::from(1), Fr::from(2), Fr::from(3)];
         let transpose2 = vec![Fr::from(2), Fr::from(3), Fr::from(1)];
@@ -320,7 +316,9 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal).unwrap().0;
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+            .unwrap()
+            .0;
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -377,7 +375,9 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal).unwrap().0;
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+            .unwrap()
+            .0;
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -433,7 +433,9 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal).unwrap().0;
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+            .unwrap()
+            .0;
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -489,7 +491,9 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal).unwrap().0;
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+            .unwrap()
+            .0;
 
         let transpose1 = vec![Fr::from(-2), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(-192013), Fr::from(482), Fr::from(29014)];
@@ -509,7 +513,6 @@ mod test {
 
     #[test]
     fn test_verify_claim_aggro() {
-
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
         let mle_ref = mle1.mle_ref();
@@ -542,6 +545,5 @@ mod test {
         //     expr.fix
         // }
         let verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
-
     }
 }

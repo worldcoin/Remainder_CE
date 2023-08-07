@@ -65,11 +65,7 @@ pub trait MleRef: Debug + Send + Sync {
 
     ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.
     /// If the Mle is fully bound will return the evaluation of the fully bound Mle
-    fn fix_variable(
-        &mut self,
-        round_index: usize,
-        challenge: Self::F,
-    ) -> Option<Claim<Self::F>>;
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>>;
 
     ///Mutate the MleIndices that are Iterated and turn them into IndexedBit with the bit index being determined from curr_index.
     /// Returns the curr_index + the number of IndexedBits now in the MleIndices
@@ -100,5 +96,32 @@ pub enum MleIndex<F: FieldExt> {
     ///An unbound bit where the particular b_i in the larger expression has been set
     IndexedBit(usize),
     ///an index that has been bound to a random challenge by the sumcheck protocol
-    Bound(F),
+    Bound(F, usize),
+}
+
+impl<F: FieldExt> MleIndex<F> {
+    ///Turns this MleIndex into an IndexedBit variant if it's an Iterated variant
+    pub fn index_index(&mut self, bit: usize) {
+        match self {
+            MleIndex::Iterated => *self = Self::IndexedBit(bit),
+            _ => ()
+        }
+    }
+
+    ///Bind an indexed bit to a challenge
+    pub fn bind_index(&mut self, chal: F) {
+        match self {
+            MleIndex::IndexedBit(bit) => *self = Self::Bound(chal, *bit),
+            _ => ()
+        }
+    }
+
+    ///Evaluate this MleIndex
+    pub fn val(&self) -> Option<F> {
+        match self {
+            MleIndex::Fixed(bit) => if *bit {Some(F::one())} else {Some(F::zero())},
+            MleIndex::Bound(chal, _) => Some(*chal),
+            _ => None
+        }
+    }
 }
