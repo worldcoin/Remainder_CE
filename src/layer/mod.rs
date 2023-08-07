@@ -3,7 +3,7 @@
 pub mod claims;
 // mod gkr_layer;
 
-use std::{iter, marker::PhantomData};
+use std::{marker::PhantomData};
 
 use thiserror::Error;
 
@@ -13,7 +13,6 @@ use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
     mle::{
         beta::{evaluate_beta, BetaError, BetaTable},
-        dense::{DenseMle, DenseMleRef},
         MleIndex, MleRef,
     },
     prover::SumcheckProof,
@@ -130,7 +129,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         let (max_round, beta) = {
             let (expression, _) = self.mut_expression_and_beta();
 
-            let mut beta = BetaTable::new(claim).map_err(|err| LayerError::BetaError(err))?;
+            let mut beta = BetaTable::new(claim).map_err(LayerError::BetaError)?;
 
             let max_round = std::cmp::max(
                 expression.index_mle_indices(0),
@@ -147,7 +146,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
         let degree = get_round_degree(expression, 0);
 
-        let eval = compute_sumcheck_message(expression, 0, degree, &beta)
+        let eval = compute_sumcheck_message(expression, 0, degree, beta)
             .map_err(LayerError::ExpressionError)?;
 
         let Evals(out) = eval;
@@ -254,7 +253,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
 
             let prev_at_r = evaluate_at_a_point(prev_evals, challenge)
-                .map_err(|err| LayerError::InterpError(err))?;
+                .map_err(LayerError::InterpError)?;
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 return Err(LayerError::VerificationError(
@@ -263,7 +262,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             };
 
             transcript
-                .append_field_elements("Sumcheck evaluations", &curr_evals)
+                .append_field_elements("Sumcheck evaluations", curr_evals)
                 .unwrap();
 
             prev_evals = curr_evals;
@@ -283,7 +282,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let oracle_query = mle_bound * beta_bound;
 
         let prev_at_r = evaluate_at_a_point(prev_evals, final_chal)
-            .map_err(|err| LayerError::InterpError(err))?;
+            .map_err(LayerError::InterpError)?;
         if oracle_query != prev_at_r {
             return Err(LayerError::VerificationError(
                 VerificationError::FinalSumcheckFailed,
@@ -343,7 +342,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // TODO!(ryancao): What the heck is this code doing?
         layerwise_expr
             .traverse(&mut observer_fn)
-            .map_err(|err| LayerError::ClaimError(err))?;
+            .map_err(LayerError::ClaimError)?;
 
         Ok(indices.into_iter().zip(claims).collect())
     }

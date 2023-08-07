@@ -1,7 +1,6 @@
 use std::{cmp, marker::PhantomData};
 
 use crate::{
-    layer::LayerId,
     mle::{
         dense::{DenseMle, DenseMleRef},
         MleAble, MleIndex,
@@ -107,7 +106,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
-        let len = self.mle.len() / 4;
+        let _len = self.mle.len() / 4;
 
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
@@ -135,7 +134,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
-        let len = self.mle.len() / 4;
+        let _len = self.mle.len() / 4;
 
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
@@ -234,7 +233,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
-        let len = self.mle.len() / 2;
+        let _len = self.mle.len() / 2;
 
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
@@ -329,7 +328,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let num_vars = num_vars.unwrap_or(self.num_vars - 1);
 
         // TODO!(ryancao): Make this actually do error-handling
-        assert!(num_vars <= self.num_vars - 1);
+        assert!(num_vars < self.num_vars);
 
         // --- The length of the MLERef is just 2^{num_vars} ---
         let len = 2_u32.pow(num_vars as u32) as usize;
@@ -368,7 +367,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         };
 
         // TODO!(ryancao): Make this actually do error-handling
-        assert!(num_vars <= self.num_vars - 1);
+        assert!(num_vars < self.num_vars);
 
         // --- The length of the MLERef is just 2^{num_vars} ---
         let len = 2_u32.pow(num_vars as u32) as usize;

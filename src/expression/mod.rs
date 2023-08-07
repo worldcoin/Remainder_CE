@@ -10,9 +10,8 @@ use itertools::Itertools;
 use thiserror::Error;
 
 use crate::{
-    layer::Claim,
     mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef},
-    sumcheck::{compute_sumcheck_message, MleError},
+    sumcheck::{MleError},
     FieldExt,
 };
 
@@ -507,7 +506,7 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
         Ok(lhs? + rhs?)
     };
     let product = for<'a, 'b> |mle_refs: &'a [Exp::MleRef]| -> Result<F, ExpressionError> {
-        mle_refs.into_iter().fold(Ok(F::one()), |acc, new_mle_ref| {
+        mle_refs.iter().fold(Ok(F::one()), |acc, new_mle_ref| {
             // --- Accumulate either errors or multiply ---
             if new_mle_ref.bookkeeping_table().len() != 1 {
                 return Err(ExpressionError::EvaluateNotFullyBoundError);

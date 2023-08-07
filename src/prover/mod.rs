@@ -1,9 +1,9 @@
 //!Module that orchestrates creating a GKR Proof
 
-use std::{collections::HashMap, ops::Range, vec::IntoIter};
+use std::{collections::HashMap};
 
 use crate::{
-    expression::{Expression, ExpressionStandard},
+    expression::{Expression},
     layer::{
         claims::aggregate_claims, claims::verify_aggragate_claim, Claim, GKRLayer, Layer,
         LayerBuilder, LayerError, LayerId,

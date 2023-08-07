@@ -1,6 +1,6 @@
 use crate::{
     expression::{Expression, ExpressionStandard},
-    mle::{beta::BetaTable, MleIndex},
+    mle::{beta::BetaTable},
     FieldExt,
 };
 
@@ -9,16 +9,15 @@ use crate::mle::MleRef;
 use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
-use itertools::{izip, multizip, Itertools};
+
 use rayon::{
     prelude::{
         IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
     },
-    slice::ParallelSlice,
 };
 use thiserror::Error;
 
-use super::{Claim, Layer, LayerId};
+use super::{Claim, Layer};
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims
@@ -57,7 +56,7 @@ fn compute_wlx<F: FieldExt>(
 
     // get the number of evaluations
     let num_vars = expr.index_mle_indices(0);
-    let degree = get_round_degree(&expr, 0);
+    let degree = get_round_degree(expr, 0);
     // expr.init_beta_tables(prev_layer_claim);
     let num_evals = (num_vars) * (num_claims); //* degree;
 
@@ -70,8 +69,8 @@ fn compute_wlx<F: FieldExt>(
                     let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                         .map(|claim| claim[claim_idx])
                         .collect();
-                    let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                    res
+                    
+                    evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                 })
                 .collect();
 
@@ -100,7 +99,7 @@ pub fn aggregate_claims<F: FieldExt>(
     let mut expr = expr.clone();
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
 
-    if claims.len() < 1 {
+    if claims.is_empty() {
         return Err(ClaimError::ClaimAggroError);
     }
 
@@ -151,7 +150,7 @@ pub fn verify_aggragate_claim<F: FieldExt>(
         })
         .collect();
 
-    let q_rstar = evaluate_at_a_point(&wlx, r_star).unwrap();
+    let q_rstar = evaluate_at_a_point(wlx, r_star).unwrap();
 
     let aggregated_claim: Claim<F> = (r, q_rstar);
 

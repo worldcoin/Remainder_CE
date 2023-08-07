@@ -1,12 +1,11 @@
 use std::{
-    cmp,
     fmt::Debug,
     iter::{Cloned, Zip},
     marker::PhantomData,
 };
 
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{cfg_into_iter, cfg_iter, log2};
+
+use ark_std::{log2};
 use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
@@ -14,11 +13,10 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use super::{Mle, MleAble, MleIndex, MleRef};
 use crate::{expression::ExpressionStandard, layer::Claim};
 use crate::{
-    zkdt::structs::LeafNode,
     {layer::LayerId, FieldExt},
 };
 
-use super::super::zkdt::structs::{BinDecomp16Bit, DecisionNode, InputAttribute};
+
 #[derive(Clone, Debug)]
 ///An [Mle] that is dense
 pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> {

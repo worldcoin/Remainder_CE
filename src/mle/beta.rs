@@ -1,16 +1,12 @@
 use std::{
-    cmp::max,
     fmt::Debug,
-    iter::{Cloned, Zip},
-    marker::PhantomData,
 };
 
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
+
+use ark_std::{cfg_into_iter};
 use itertools::Itertools;
 use rayon::{
     prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-    slice::ParallelSlice,
 };
 
 use crate::layer::Claim;
@@ -18,7 +14,7 @@ use crate::FieldExt;
 
 use super::{
     dense::{DenseMle, DenseMleRef},
-    Mle, MleAble, MleIndex, MleRef,
+    MleIndex, MleRef,
 };
 use thiserror::Error;
 
@@ -82,7 +78,7 @@ pub fn compute_new_beta_table<F: FieldExt>(
     challenge: F,
 ) -> Result<Vec<F>, BetaError> {
     let (layer_claims, _) = &beta_table.layer_claim;
-    let curr_beta = beta_table.table.bookkeeping_table().clone();
+    let curr_beta = beta_table.table.bookkeeping_table();
 
     // --- This should always be true now, no? ---
     if beta_table.relevant_indices.contains(&round_index) {
@@ -107,7 +103,7 @@ pub fn beta_split<F: FieldExt>(beta_mle_ref: &DenseMleRef<F>) -> (DenseMleRef<F>
     // the first split is to take two, then skip two (0, 1 mod 4)
     let beta_bookkeep_first: Vec<F> = beta_mle_ref
         .bookkeeping_table()
-        .into_iter()
+        .iter()
         .enumerate()
         .filter(|&(i, _)| (i % 4 == 0) | (i % 4 == 1))
         .map(|(_, v)| *v)
@@ -116,7 +112,7 @@ pub fn beta_split<F: FieldExt>(beta_mle_ref: &DenseMleRef<F>) -> (DenseMleRef<F>
     // the other half -- (2, 3 mod 4)
     let beta_bookkeep_second: Vec<F> = beta_mle_ref
         .bookkeeping_table()
-        .into_iter()
+        .iter()
         .enumerate()
         .filter(|&(i, _)| (i % 4 == 2) | (i % 4 == 3))
         .map(|(_, v)| *v)
@@ -162,7 +158,7 @@ impl<F: FieldExt> BetaTable<F> {
     /// Fix variable for a beta table
     pub fn beta_update(&mut self, round_index: usize, challenge: F) -> Result<(), BetaError> {
         // --- Use the pure function ---
-        let new_beta = compute_new_beta_table(&self, round_index, challenge);
+        let new_beta = compute_new_beta_table(self, round_index, challenge);
         match new_beta {
             Err(e) => Err(e),
             Ok(new_beta_table) => {

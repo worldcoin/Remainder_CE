@@ -181,7 +181,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_attr_idx_data = (0..(DUMMY_INPUT_LEN * (TREE_HEIGHT - 1)))
         .map(|x| F::from(x as u16))
         .collect_vec();
-    let dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
+    let _dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
 
     // --- Populate (note that we have to permute later) ---
     for _ in 0..NUM_DUMMY_INPUTS {
@@ -191,7 +191,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
         for attr_id in 0..DUMMY_INPUT_LEN {
             let input_attribute = InputAttribute {
                 attr_id: F::from(attr_id as u16),
-                attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)) as u16)),
+                attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)))),
             };
             single_attribute_copy.push(input_attribute);
             // single_permuted_attribute_copy.push(input_attribute);
@@ -282,7 +282,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
             // --- Basically need to create a new vector with input attributes ---
             let ret = used_input_attributes
-                .clone()
+                
                 .into_iter()
                 .chain(original_input_attributes.clone().into_iter().filter(|x| {
                     // --- Filter by duplicates, but remove them from the containing set ---
@@ -296,7 +296,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
             assert_eq!(ret.len(), original_input_attributes.len());
 
-            return ret;
+            ret
         })
         .collect_vec();
 
@@ -310,7 +310,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
             multiplicities,
             |prev_multiplicities, (path_decision_nodes, path_leaf_node, _, _)| {
                 // --- TODO!(ryancao): This is so bad lol ---
-                let mut new_multiplicities: Vec<F> = prev_multiplicities.clone();
+                let mut new_multiplicities: Vec<F> = prev_multiplicities;
 
                 // --- Just grab the node IDs from each decision node and add them to the multiplicities ---
                 path_decision_nodes.into_iter().for_each(|decision_node| {
@@ -334,7 +334,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
     // --- Compute the binary decompositions of the differences ---
     let dummy_binary_decomp_diffs = dummy_auxiliaries
-        .clone()
+        
         .into_iter()
         .map(|(_, _, diffs, _)| {
             diffs
@@ -375,7 +375,7 @@ fn get_sign_bit_and_abs_value<F: FieldExt>(value: F) -> (F, F) {
     } else {
         value
     };
-    return (sign_bit, abs_value);
+    (sign_bit, abs_value)
 }
 
 /// Computes the recomposition of the bits within `decomp` and checks
@@ -462,17 +462,17 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         .map(BinDecomp16Bit::from)
         .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
     let dummy_multiplicities_bin_decomp_mle = dummy_multiplicities_bin_decomp
-        .clone()
+        
         .into_iter()
         .map(BinDecomp16Bit::from)
         .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
     let dummy_decision_nodes_mle = dummy_decision_nodes
-        .clone()
+        
         .into_iter()
         .map(DecisionNode::from)
         .collect::<DenseMle<F, DecisionNode<F>>>();
     let dummy_leaf_nodes_mle = dummy_leaf_nodes
-        .clone()
+        
         .into_iter()
         .map(LeafNode::from)
         .collect::<DenseMle<F, LeafNode<F>>>();

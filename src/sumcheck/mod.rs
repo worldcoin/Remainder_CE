@@ -1,26 +1,24 @@
 //! Contains cryptographic algorithms for going through the sumcheck protocol
 
 use std::{
-    cmp::Ordering,
     iter::repeat,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, Mul, Neg},
 };
 
 #[cfg(test)]
 pub(crate) mod tests;
 
 use ark_poly::MultilinearExtension;
-use ark_std::{cfg_into_iter, cfg_iter, rand::Rng};
+use ark_std::{cfg_into_iter};
 use itertools::Itertools;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
-    layer::Claim,
     mle::{
-        beta::{evaluate_beta, BetaError, BetaTable},
-        dense::{DenseMle, DenseMleRef},
+        beta::{BetaTable},
+        dense::{DenseMleRef},
         MleIndex, MleRef,
     },
     FieldExt,

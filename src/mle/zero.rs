@@ -31,7 +31,7 @@ impl<F: FieldExt> ZeroMleRef<F> {
         Self {
             mle_indices,
             num_vars,
-            layer_id: layer_id,
+            layer_id,
             zero: [F::zero()],
             indexed: false,
         }

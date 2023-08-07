@@ -1,16 +1,17 @@
 use super::*;
 use crate::{
     expression::ExpressionStandard,
-    layer::claims::aggregate_claims,
+    layer::{claims::aggregate_claims, Claim},
     mle::{
         dense::{DenseMle, Tuple2},
-        Mle,
+        Mle, beta::evaluate_beta,
     },
 };
 use ark_bn254::Fr;
 use ark_std::test_rng;
 use ark_std::UniformRand;
 use ark_std::{One, Zero};
+use rand::Rng;
 
 /// Does a dummy version of sumcheck with a testing RNG
 pub fn dummy_sumcheck<F: FieldExt>(
