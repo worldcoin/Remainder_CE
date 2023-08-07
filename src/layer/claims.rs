@@ -1,10 +1,6 @@
 //!Utilities involving the claims a layer makes
 
-use crate::{
-    expression::ExpressionStandard,
-    mle::beta::BetaTable,
-    FieldExt,
-};
+use crate::{expression::ExpressionStandard, mle::beta::BetaTable, FieldExt};
 
 // use itertools::Itertools;
 use crate::mle::MleRef;
@@ -12,9 +8,7 @@ use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
 
-use rayon::prelude::{
-        IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-    };
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use thiserror::Error;
 
 use super::Claim;
@@ -69,7 +63,7 @@ fn compute_wlx<F: FieldExt>(
                     let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                         .map(|claim| claim[claim_idx])
                         .collect();
-                    
+
                     evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                 })
                 .collect();
@@ -91,7 +85,7 @@ fn compute_wlx<F: FieldExt>(
 }
 
 /// Aggregate several claims into one
-pub fn aggregate_claims<F: FieldExt>(
+pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &[Claim<F>],
     expr: &ExpressionStandard<F>,
     rstar: F,
@@ -125,7 +119,7 @@ pub fn aggregate_claims<F: FieldExt>(
 }
 
 /// verifies the claim aggregation
-pub fn verify_aggragate_claim<F: FieldExt>(
+pub(crate) fn verify_aggragate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for qx
     claims: &[Claim<F>],
     r_star: F,

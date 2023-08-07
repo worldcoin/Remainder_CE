@@ -30,9 +30,9 @@ const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
 /// - Fourth element is the input attributes which were used during inference
 /// - Third element is the attributes used (deprecated)
 fn generate_correct_path_and_permutation<F: FieldExt>(
-    decision_nodes: &Vec<DecisionNode<F>>,
-    leaf_nodes: &Vec<LeafNode<F>>,
-    input_datum: &Vec<InputAttribute<F>>,
+    decision_nodes: &[DecisionNode<F>],
+    leaf_nodes: &[LeafNode<F>],
+    input_datum: &[InputAttribute<F>],
 ) -> (
     Vec<DecisionNode<F>>,
     LeafNode<F>,
@@ -138,10 +138,10 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 
     // --- Length must be 16, then parse as array of length 16 ---
     let mut binary_repr_arr = [F::zero(); 16];
-    for idx in 0..16 {
+    for (idx, item) in binary_repr_arr.iter_mut().enumerate() {
         let char_repr = binary_repr.chars().nth(idx).unwrap();
         assert!(char_repr == '0' || char_repr == '1');
-        binary_repr_arr[idx] = if char_repr == '0' {
+        *item = if char_repr == '0' {
             F::zero()
         } else {
             F::one()
@@ -282,7 +282,6 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
             // --- Basically need to create a new vector with input attributes ---
             let ret = used_input_attributes
-                
                 .into_iter()
                 .chain(original_input_attributes.clone().into_iter().filter(|x| {
                     // --- Filter by duplicates, but remove them from the containing set ---
@@ -334,7 +333,6 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
     // --- Compute the binary decompositions of the differences ---
     let dummy_binary_decomp_diffs = dummy_auxiliaries
-        
         .into_iter()
         .map(|(_, _, diffs, _)| {
             diffs
@@ -462,17 +460,14 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         .map(BinDecomp16Bit::from)
         .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
     let dummy_multiplicities_bin_decomp_mle = dummy_multiplicities_bin_decomp
-        
         .into_iter()
         .map(BinDecomp16Bit::from)
         .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
     let dummy_decision_nodes_mle = dummy_decision_nodes
-        
         .into_iter()
         .map(DecisionNode::from)
         .collect::<DenseMle<F, DecisionNode<F>>>();
     let dummy_leaf_nodes_mle = dummy_leaf_nodes
-        
         .into_iter()
         .map(LeafNode::from)
         .collect::<DenseMle<F, LeafNode<F>>>();
@@ -497,9 +492,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        expression::{ExpressionStandard},
+        expression::ExpressionStandard,
         layer::Claim,
-        mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, Mle, MleRef},
+        mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef},
         sumcheck::{
             compute_sumcheck_message, get_round_degree,
             tests::{dummy_sumcheck, verify_sumcheck_messages},
@@ -825,8 +820,7 @@ mod tests {
         let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone());
         let permuted_input_values_mle: DenseMleRef<Fr> =
             dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars()));
-        let permuted_input_values_mle_expr =
-            ExpressionStandard::Mle(permuted_input_values_mle);
+        let permuted_input_values_mle_expr = ExpressionStandard::Mle(permuted_input_values_mle);
 
         // --- For debugging ---
         // let threshold_mle_expr_eval = evaluate_expr(&mut threshold_mle_expr.clone(), 1, 2);

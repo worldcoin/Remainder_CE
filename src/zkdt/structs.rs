@@ -15,22 +15,22 @@ use itertools::{repeat_n, Itertools};
 /// Used for the following components of the (circuit) input:
 /// a)
 #[derive(Copy, Debug, Clone)]
-pub struct DecisionNode<F: FieldExt> {
+pub(crate) struct DecisionNode<F: FieldExt> {
     ///The id of this node in the tree
-    pub node_id: F,
+    pub(crate) node_id: F,
     ///The id of the attribute this node involves
-    pub attr_id: F,
+    pub(crate) attr_id: F,
     ///The treshold of this node
-    pub threshold: F,
+    pub(crate) threshold: F,
 }
 
 #[derive(Copy, Debug, Clone)]
 ///The Leafs of the tree
-pub struct LeafNode<F: FieldExt> {
+pub(crate) struct LeafNode<F: FieldExt> {
     ///The id of this leaf in the tree
-    pub node_id: F,
+    pub(crate) node_id: F,
     ///The value of this leaf
-    pub node_val: F,
+    pub(crate) node_val: F,
 }
 
 /// --- 16-bit binary decomposition ---
@@ -38,11 +38,11 @@ pub struct LeafNode<F: FieldExt> {
 /// a) The binary decomposition of the path node hints (i.e. path_x.thr - x.val)
 /// b) The binary decomposition of the multiplicity coefficients $c_j$
 #[derive(Copy, Debug, Clone)]
-pub struct BinDecomp16Bit<F: FieldExt> {
+pub(crate) struct BinDecomp16Bit<F: FieldExt> {
     ///The 16 bits that make up this decomposition
-    /// 
+    ///
     /// Should all be 1 or 0
-    pub bits: [F; 16],
+    pub(crate) bits: [F; 16],
 }
 
 /// --- Input element to the tree, i.e. a list of input attributes ---
@@ -50,12 +50,12 @@ pub struct BinDecomp16Bit<F: FieldExt> {
 /// a) The actual input attributes, i.e. x
 /// b) The permuted input attributes, i.e. \bar{x}
 #[derive(Copy, Debug, Clone, PartialEq)]
-pub struct InputAttribute<F: FieldExt> {
+pub(crate) struct InputAttribute<F: FieldExt> {
     // pub attr_idx: F,
     ///The attr id of this input
-    pub attr_id: F,
+    pub(crate) attr_id: F,
     ///The threshold value of this input
-    pub attr_val: F,
+    pub(crate) attr_val: F,
 }
 
 // --- Just an enumeration of, uh, stuff...? ---
@@ -113,7 +113,7 @@ impl<F: FieldExt> FromIterator<DecisionNode<F>> for DenseMle<F, DecisionNode<F>>
 
 impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     /// MleRef grabbing just the list of node IDs
-    pub fn node_id(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn node_id(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
@@ -135,13 +135,13 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 2,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
 
     /// MleRef grabbing just the list of attribute IDs
-    pub fn attr_id(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn attr_id(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
@@ -163,13 +163,13 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 2,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
 
     /// MleRef grabbing just the list of thresholds
-    pub fn threshold(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn threshold(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
@@ -191,7 +191,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 2,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
@@ -240,7 +240,7 @@ impl<F: FieldExt> FromIterator<LeafNode<F>> for DenseMle<F, LeafNode<F>> {
 
 impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     /// MleRef grabbing just the list of node IDs
-    pub fn node_id(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn node_id(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
@@ -261,13 +261,13 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 1,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
 
     /// MleRef grabbing just the list of attribute IDs
-    pub fn node_val(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn node_val(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         DenseMleRef {
@@ -285,7 +285,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 1,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
@@ -334,7 +334,7 @@ impl<F: FieldExt> FromIterator<InputAttribute<F>> for DenseMle<F, InputAttribute
 
 impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// MleRef grabbing just the list of attribute IDs
-    pub fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
+    pub(crate) fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
         // --- Default to the entire (component of) the MLE ---
         let num_vars = num_vars.unwrap_or(self.num_vars - 1);
 
@@ -364,13 +364,13 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 )
                 .collect_vec(),
             num_vars,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
 
     /// MleRef grabbing just the list of attribute values
-    pub fn attr_val(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
+    pub(crate) fn attr_val(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
         // --- Default to the entire (component of) the MLE ---
         let num_vars = match num_vars {
             Some(num) => num,
@@ -404,7 +404,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 )
                 .collect_vec(),
             num_vars,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
@@ -425,8 +425,8 @@ impl<F: FieldExt> FromIterator<BinDecomp16Bit<F>> for DenseMle<F, BinDecomp16Bit
         // --- TODO!(ryancao): This is genuinely horrible but we'll fix it later ---
         let mut ret: [Vec<F>; 16] = std::array::from_fn(|_| vec![]);
         iter.for_each(|tuple| {
-            for idx in 0..tuple.bits.len() {
-                ret[idx].push(tuple.bits[idx]);
+            for (item, bit) in ret.iter_mut().zip(tuple.bits.iter()) {
+                item.push(*bit);
             }
         });
 
@@ -447,7 +447,7 @@ impl<F: FieldExt> FromIterator<BinDecomp16Bit<F>> for DenseMle<F, BinDecomp16Bit
 impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
     /// Returns a list of MLERefs, one for each bit
     /// TODO!(ryancao): Change this back to [DenseMleRef<F>; 16] and make it work!
-    pub fn mle_bit_refs(&'_ self) -> Vec<DenseMleRef<F>> {
+    pub(crate) fn mle_bit_refs(&'_ self) -> Vec<DenseMleRef<F>> {
         let num_vars = self.num_vars;
 
         // --- There are sixteen components to this MLE ---
@@ -475,7 +475,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
                     )
                     .collect_vec(),
                 num_vars: num_vars - 4,
-                layer_id: self.layer_id.clone().unwrap(),
+                layer_id: self.layer_id.clone(),
                 indexed: false,
             };
             ret.push(bit_mle_ref);

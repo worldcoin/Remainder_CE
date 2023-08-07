@@ -4,7 +4,6 @@ use std::{
     marker::PhantomData,
 };
 
-
 use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
@@ -12,10 +11,7 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use super::{Mle, MleAble, MleIndex, MleRef};
 use crate::{expression::ExpressionStandard, layer::Claim};
-use crate::{
-    {layer::LayerId, FieldExt},
-};
-
+use crate::{layer::LayerId, FieldExt};
 
 #[derive(Clone, Debug)]
 ///An [Mle] that is dense
@@ -108,7 +104,7 @@ impl<F: FieldExt> DenseMle<F, F> {
                 .chain((0..self.num_vars()).map(|_| MleIndex::Iterated))
                 .collect(),
             num_vars: self.num_vars,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
@@ -182,7 +178,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 )
                 .collect_vec(),
             num_vars,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
@@ -204,7 +200,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 )
                 .collect_vec(),
             num_vars,
-            layer_id: self.layer_id.clone().unwrap(),
+            layer_id: self.layer_id.clone(),
             indexed: false,
         }
     }
@@ -223,7 +219,7 @@ pub struct DenseMleRef<F: FieldExt> {
     /// (warning: this gets modified destructively DURING sumcheck)
     pub num_vars: usize,
     /// The layer this MleRef is a reference to
-    pub layer_id: LayerId,
+    pub layer_id: Option<LayerId>,
     /// A marker that keeps track of if this MleRef is indexed
     pub indexed: bool,
 }
@@ -235,7 +231,7 @@ impl<F: FieldExt> DenseMleRef<F> {
     }
 }
 
-impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
+impl<F: FieldExt> MleRef for DenseMleRef<F> {
     type F = F;
 
     fn bookkeeping_table(&self) -> &[F] {
@@ -316,19 +312,17 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
     }
 
     fn get_layer_id(&self) -> LayerId {
-        self.layer_id.clone()
+        self.layer_id.clone().unwrap()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     use ark_bn254::Fr;
-    
-    
+
     use ark_std::One;
-    
 
     #[test]
     ///test fixing variables in an mle with two variables

@@ -15,11 +15,7 @@ use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
-    mle::{
-        beta::BetaTable,
-        dense::DenseMleRef,
-        MleIndex, MleRef,
-    },
+    mle::{beta::BetaTable, dense::DenseMleRef, MleIndex, MleRef},
     FieldExt,
 };
 
@@ -63,7 +59,7 @@ pub enum InterpError {
 
 ///A newtype that makes it easier to do arithmatic on sets of evaluations of the summed expression
 #[derive(PartialEq, Debug, Clone)]
-pub(crate) struct Evals<F: FieldExt>(pub Vec<F>);
+pub(crate) struct Evals<F: FieldExt>(pub(crate) Vec<F>);
 
 impl<F: FieldExt> Neg for Evals<F> {
     type Output = Self;
@@ -481,30 +477,31 @@ fn evaluate_mle_ref_product<F: FieldExt>(
 
 /// Returns the maximum degree of b_{curr_round} within an expression
 /// (and therefore the number of prover messages we need to send)
-pub fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: usize) -> usize {
+pub(crate) fn get_round_degree<F: FieldExt>(
+    expr: &ExpressionStandard<F>,
+    curr_round: usize,
+) -> usize {
     // --- By default, all rounds have degree at least 2 (beta table included) ---
     let mut round_degree = 1;
 
     let mut traverse = for<'a> |expr: &'a ExpressionStandard<F>| -> Result<(), ()> {
         let round_degree = &mut round_degree;
-        match expr {
-            // --- The only exception is within a product of MLEs ---
-            ExpressionStandard::Product(mle_refs) => {
-                let mut product_round_degree: usize = 0;
-                for mle_ref in mle_refs {
-                    let mle_indices = mle_ref.mle_indices();
-                    for mle_index in mle_indices {
-                        if *mle_index == MleIndex::IndexedBit(curr_round) {
-                            product_round_degree += 1;
-                            break;
-                        }
+
+        // --- The only exception is within a product of MLEs ---
+        if let ExpressionStandard::Product(mle_refs) = expr {
+            let mut product_round_degree: usize = 0;
+            for mle_ref in mle_refs {
+                let mle_indices = mle_ref.mle_indices();
+                for mle_index in mle_indices {
+                    if *mle_index == MleIndex::IndexedBit(curr_round) {
+                        product_round_degree += 1;
+                        break;
                     }
                 }
-                if *round_degree < product_round_degree {
-                    *round_degree = product_round_degree;
-                }
             }
-            _ => {}
+            if *round_degree < product_round_degree {
+                *round_degree = product_round_degree;
+            }
         }
         Ok(())
     };
@@ -515,7 +512,10 @@ pub fn get_round_degree<F: FieldExt>(expr: &ExpressionStandard<F>, curr_round: u
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
-pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &Vec<F>, point: F) -> Result<F, InterpError> {
+pub(crate) fn evaluate_at_a_point<F: FieldExt>(
+    given_evals: &Vec<F>,
+    point: F,
+) -> Result<F, InterpError> {
     // Need degree + 1 evaluations to interpolate
     let eval = (0..given_evals.len())
         .map(

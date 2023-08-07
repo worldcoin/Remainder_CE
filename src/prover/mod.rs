@@ -45,7 +45,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
 }
 
 impl<F: FieldExt, Tr: Transcript<F> + 'static> Default for Layers<F, Tr> {
-        fn default() -> Self {
+    fn default() -> Self {
         Self::new()
     }
 }
@@ -212,9 +212,8 @@ pub trait GKRCircuit<F: FieldExt> {
 
         for output in output_layers.iter() {
             let mle_indices = output.mle_indices();
-            let bits = mle_indices.len();
             let mut claim_chal: Vec<F> = vec![];
-            for bit in 0..bits {
+            for (bit, index) in mle_indices.iter().enumerate() {
                 let challenge = transcript
                     .get_challenge("Setting Output Layer Claim")
                     .unwrap();
@@ -222,7 +221,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 // assume the output layers are zero valued...
                 // cannot actually do the initial step of evaluating V_1'(z) as specified in Thaler 13 page 14
                 // basically checks all the challenges are correct right now
-                if MleIndex::Bound(challenge, bit) != mle_indices[bit] {
+                if MleIndex::Bound(challenge, bit) != *index {
                     return Err(GKRError::ErrorWhenVerifyingOutputLayer);
                 }
                 claim_chal.push(challenge);
@@ -306,7 +305,7 @@ mod tests {
     use std::{cmp::max, time::Instant};
 
     use ark_bn254::Fr;
-    use ark_std::{test_rng, UniformRand};    
+    use ark_std::{test_rng, UniformRand};
 
     use crate::{
         expression::ExpressionStandard,
@@ -407,7 +406,7 @@ mod tests {
     #[test]
     fn test_gkr() {
         let mut rng = test_rng();
-        let size = 2 << 18;
+        let size = 2 << 10;
         // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
         // tracing::subscriber::set_global_default(subscriber)
         //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));

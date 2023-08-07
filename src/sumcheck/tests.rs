@@ -3,14 +3,15 @@ use crate::{
     expression::ExpressionStandard,
     layer::{claims::aggregate_claims, Claim},
     mle::{
+        beta::evaluate_beta,
         dense::{DenseMle, Tuple2},
-        Mle, beta::evaluate_beta,
+        Mle,
     },
 };
 use ark_bn254::Fr;
 use ark_std::test_rng;
-use ark_std::UniformRand;
 use ark_std::One;
+use ark_std::UniformRand;
 use rand::Rng;
 
 /// Does a dummy version of sumcheck with a testing RNG
@@ -497,7 +498,6 @@ fn test_dummy_sumcheck_concat_aggro() {
     let mle_ref_2 = mle2.mle_ref();
 
     let mle_output = mle1
-        
         .into_iter()
         .zip(mle2.clone().into_iter().chain(mle2.into_iter()))
         .map(|(first, second)| first * second)

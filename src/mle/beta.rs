@@ -1,15 +1,10 @@
 //!Module for dealing with the Beta equality function
 
-use std::{
-    fmt::Debug,
-};
+use std::fmt::Debug;
 
-
-use ark_std::{cfg_into_iter};
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use rayon::{
-    prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-};
+use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 
 use crate::layer::Claim;
 use crate::FieldExt;
@@ -23,13 +18,11 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone)]
 
 /// Beta table struct for a product of mle refs
-pub struct BetaTable<F: FieldExt> {
+pub(crate) struct BetaTable<F: FieldExt> {
     layer_claim: Claim<F>,
     ///The bookkeeping table for the beta table
-    pub table: DenseMleRef<F>,
+    pub(crate) table: DenseMleRef<F>,
     relevant_indices: Vec<usize>,
-    ///A marker to make sure the table is indexed or not
-    pub indexed: bool,
 }
 
 /// Error handling for beta table construction
@@ -56,7 +49,7 @@ pub enum BetaError {
 }
 
 /// fully evaluate a beta table
-pub fn evaluate_beta<F: FieldExt>(
+pub(crate) fn evaluate_beta<F: FieldExt>(
     beta_table: &mut BetaTable<F>,
     challenges: Vec<F>,
 ) -> Result<F, BetaError> {
@@ -74,7 +67,7 @@ pub fn evaluate_beta<F: FieldExt>(
 }
 
 /// `fix_variable` for a beta table.
-pub fn compute_new_beta_table<F: FieldExt>(
+pub(crate) fn compute_new_beta_table<F: FieldExt>(
     beta_table: &BetaTable<F>,
     round_index: usize,
     challenge: F,
@@ -89,7 +82,7 @@ pub fn compute_new_beta_table<F: FieldExt>(
         let mult_factor = layer_claim_inv
             * (challenge * layer_claim + (F::one() - challenge) * (F::one() - layer_claim));
 
-        let new_beta: Vec<F> = cfg_into_iter!(curr_beta.clone())
+        let new_beta: Vec<F> = cfg_into_iter!(curr_beta)
             .skip(1)
             .step_by(2)
             .map(|curr_eval| *curr_eval * mult_factor)
@@ -101,7 +94,9 @@ pub fn compute_new_beta_table<F: FieldExt>(
 }
 /// Splits the beta table by the second most significant bit when we have nested selectors
 /// (the case where the selector bit is not the independent variable)
-pub fn beta_split<F: FieldExt>(beta_mle_ref: &DenseMleRef<F>) -> (DenseMleRef<F>, DenseMleRef<F>) {
+pub(crate) fn beta_split<F: FieldExt>(
+    beta_mle_ref: &DenseMleRef<F>,
+) -> (DenseMleRef<F>, DenseMleRef<F>) {
     // the first split is to take two, then skip two (0, 1 mod 4)
     let beta_bookkeep_first: Vec<F> = beta_mle_ref
         .bookkeeping_table()
@@ -131,14 +126,14 @@ pub fn beta_split<F: FieldExt>(beta_mle_ref: &DenseMleRef<F>) -> (DenseMleRef<F>
 
 impl<F: FieldExt> BetaTable<F> {
     /// Construct a new beta table using a single claim
-    pub fn new(layer_claim: Claim<F>) -> Result<BetaTable<F>, BetaError> {
+    pub(crate) fn new(layer_claim: Claim<F>) -> Result<BetaTable<F>, BetaError> {
         let (layer_claim_vars, _) = &layer_claim;
         let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
         let mut cur_table = vec![one_minus_r, r];
 
         // TODO!(vishruti) make this parallelizable
-        for i in 1..layer_claim_vars.len() {
-            let (one_minus_r, r) = (F::one() - layer_claim_vars[i], layer_claim_vars[i]);
+        for claim in layer_claim_vars.iter().skip(1) {
+            let (one_minus_r, r) = (F::one() - claim, claim);
             let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone())
                 .map(|eval| eval * one_minus_r)
                 .collect();
@@ -153,12 +148,15 @@ impl<F: FieldExt> BetaTable<F> {
             layer_claim,
             table: cur_table_mle_ref,
             relevant_indices: iterated_bit_indices,
-            indexed: false,
         })
     }
 
     /// Fix variable for a beta table
-    pub fn beta_update(&mut self, round_index: usize, challenge: F) -> Result<(), BetaError> {
+    pub(crate) fn beta_update(
+        &mut self,
+        round_index: usize,
+        challenge: F,
+    ) -> Result<(), BetaError> {
         // --- Use the pure function ---
         let new_beta = compute_new_beta_table(self, round_index, challenge);
         match new_beta {

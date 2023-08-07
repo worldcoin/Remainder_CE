@@ -3,9 +3,6 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use core::fmt::Debug;
 
-
-
-
 use crate::layer::Claim;
 use crate::{layer::LayerId, FieldExt};
 
@@ -103,12 +100,16 @@ pub enum MleIndex<F: FieldExt> {
 impl<F: FieldExt> MleIndex<F> {
     ///Turns this MleIndex into an IndexedBit variant if it's an Iterated variant
     pub fn index_index(&mut self, bit: usize) {
-        if matches!(self, MleIndex::Iterated) { *self = Self::IndexedBit(bit) }
+        if matches!(self, MleIndex::Iterated) {
+            *self = Self::IndexedBit(bit)
+        }
     }
 
     ///Bind an indexed bit to a challenge
     pub fn bind_index(&mut self, chal: F) {
-        if let MleIndex::IndexedBit(bit) = self {*self = Self::Bound(chal, *bit)}
+        if let MleIndex::IndexedBit(bit) = self {
+            *self = Self::Bound(chal, *bit)
+        }
     }
 
     ///Evaluate this MleIndex
