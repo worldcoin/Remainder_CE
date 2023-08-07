@@ -5,7 +5,7 @@ use std::{
 };
 
 
-use ark_std::{log2};
+use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};

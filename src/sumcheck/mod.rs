@@ -8,7 +8,7 @@ use std::{
 #[cfg(test)]
 pub(crate) mod tests;
 
-use ark_std::{cfg_into_iter};
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
@@ -16,8 +16,8 @@ use thiserror::Error;
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
     mle::{
-        beta::{BetaTable},
-        dense::{DenseMleRef},
+        beta::BetaTable,
+        dense::DenseMleRef,
         MleIndex, MleRef,
     },
     FieldExt,

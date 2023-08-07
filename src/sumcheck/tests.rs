@@ -10,7 +10,7 @@ use crate::{
 use ark_bn254::Fr;
 use ark_std::test_rng;
 use ark_std::UniformRand;
-use ark_std::{One, Zero};
+use ark_std::One;
 use rand::Rng;
 
 /// Does a dummy version of sumcheck with a testing RNG

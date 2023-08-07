@@ -615,7 +615,7 @@ impl<F: FieldExt> Mul<F> for ExpressionStandard<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::mle::dense::DenseMle;
 
     use super::*;

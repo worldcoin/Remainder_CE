@@ -1,8 +1,8 @@
 //!Utilities involving the claims a layer makes
 
 use crate::{
-    expression::{ExpressionStandard},
-    mle::{beta::BetaTable},
+    expression::ExpressionStandard,
+    mle::beta::BetaTable,
     FieldExt,
 };
 
@@ -12,11 +12,9 @@ use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
 
-use rayon::{
-    prelude::{
+use rayon::prelude::{
         IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-    },
-};
+    };
 use thiserror::Error;
 
 use super::Claim;
@@ -163,7 +161,7 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 mod tests {
 
     use crate::expression::Expression;
-    use crate::mle::{dense::DenseMle};
+    use crate::mle::dense::DenseMle;
 
     use super::*;
     use ark_bn254::Fr;

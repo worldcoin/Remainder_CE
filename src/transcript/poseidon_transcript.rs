@@ -70,7 +70,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use ark_bn254::Fr;
     use ark_ff::One;
     use itertools::Itertools;

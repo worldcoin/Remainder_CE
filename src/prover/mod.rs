@@ -1,6 +1,6 @@
 //!Module that orchestrates creating a GKR Proof
 
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use crate::{
     layer::{
@@ -302,13 +302,11 @@ pub trait GKRCircuit<F: FieldExt> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::{cmp::max, time::Instant};
 
     use ark_bn254::Fr;
-    use ark_std::{test_rng, UniformRand};
-    use rayon::{prelude::ParallelIterator};
-    
+    use ark_std::{test_rng, UniformRand};    
 
     use crate::{
         expression::ExpressionStandard,
