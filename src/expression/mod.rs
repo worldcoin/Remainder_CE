@@ -37,7 +37,7 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     #[allow(clippy::too_many_arguments)]
     /// Evaluate an expression for sumcheck
     fn evaluate_sumcheck<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F, &DenseMleRef<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(&Self::MleRef, &DenseMleRef<F>) -> T,
@@ -234,7 +234,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         match self {
             ExpressionStandard::Selector(index, a, b) => {
                 if *index == MleIndex::IndexedBit(round_index) {
-                    *index = MleIndex::Bound(challenge);
+                    index.bind_index(challenge);
                 } else {
                     a.fix_variable(round_index, challenge);
                     b.fix_variable(round_index, challenge);
@@ -285,7 +285,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 
     #[allow(clippy::too_many_arguments)]
     fn evaluate_sumcheck<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F, &DenseMleRef<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(&DenseMleRef<F>, &DenseMleRef<F>) -> T,
@@ -456,7 +456,7 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     let selector_column =
         |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
             // --- Selector bit must be bound ---
-            if let MleIndex::Bound(val) = idx {
+            if let MleIndex::Bound(val, _) = idx {
                 return Ok(*val * lhs? + (F::one() - val) * rhs?);
             }
             Err(ExpressionError::SelectorBitNotBoundError)

@@ -95,5 +95,32 @@ pub enum MleIndex<F: FieldExt> {
     ///An unbound bit where the particular b_i in the larger expression has been set
     IndexedBit(usize),
     ///an index that has been bound to a random challenge by the sumcheck protocol
-    Bound(F),
+    Bound(F, usize),
+}
+
+impl<F: FieldExt> MleIndex<F> {
+    ///Turns this MleIndex into an IndexedBit variant if it's an Iterated variant
+    pub fn index_index(&mut self, bit: usize) {
+        match self {
+            MleIndex::Iterated => *self = Self::IndexedBit(bit),
+            _ => ()
+        }
+    }
+
+    ///Bind an indexed bit to a challenge
+    pub fn bind_index(&mut self, chal: F) {
+        match self {
+            MleIndex::IndexedBit(bit) => *self = Self::Bound(chal, *bit),
+            _ => ()
+        }
+    }
+
+    ///Evaluate this MleIndex
+    pub fn val(&self) -> Option<F> {
+        match self {
+            MleIndex::Fixed(bit) => if *bit {Some(F::one())} else {Some(F::zero())},
+            MleIndex::Bound(chal, _) => Some(*chal),
+            _ => None
+        }
+    }
 }

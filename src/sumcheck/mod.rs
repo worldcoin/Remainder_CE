@@ -221,7 +221,7 @@ pub(crate) fn compute_sumcheck_message<
     Exp: Expression<F, MleRef = Mle>,
     Mle: MleRef<F = F> + Clone,
 >(
-    expr: &mut Exp,
+    expr: &Exp,
     round_index: usize,
     max_degree: usize,
     beta_table: &BetaTable<F>,
@@ -331,7 +331,7 @@ pub(crate) fn compute_sumcheck_message<
                 std::cmp::Ordering::Greater => Err(ExpressionError::InvalidMleIndex),
             }
         }
-        MleIndex::Bound(coeff) => {
+        MleIndex::Bound(coeff, _) => {
             let coeff_neg = F::one() - coeff;
             let a: PartialSum<F> = a?;
             let b: PartialSum<F> = b?;
@@ -842,17 +842,7 @@ mod tests {
             ExpressionStandard::Mle(mle) => mle
                 .mle_indices
                 .iter()
-                .map(|item| match item {
-                    MleIndex::Fixed(bit) => {
-                        if *bit {
-                            F::one()
-                        } else {
-                            F::zero()
-                        }
-                    }
-                    MleIndex::Bound(chal) => *chal,
-                    _ => panic!(),
-                })
+                .map(|index: &MleIndex<F>| index.val().unwrap())
                 .collect_vec(),
             _ => panic!(),
         };

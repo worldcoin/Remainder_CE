@@ -161,7 +161,7 @@ impl<F: FieldExt> BetaTable<F> {
                 // --- If we successfully compute the new beta table, update the internal representation ---
                 for mle_index in self.table.mle_indices.iter_mut() {
                     if *mle_index == MleIndex::IndexedBit(round_index) {
-                        *mle_index = MleIndex::Bound(challenge);
+                        mle_index.bind_index(challenge);
                     }
                 }
                 self.table.bookkeeping_table = new_beta_table;

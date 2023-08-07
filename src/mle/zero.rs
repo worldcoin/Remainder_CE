@@ -60,7 +60,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
     fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
-                *mle_index = MleIndex::Bound(challenge);
+                mle_index.bind_index(challenge);
             }
         }
 
@@ -71,17 +71,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
             Some((
                 self.mle_indices
                     .iter()
-                    .map(|x| match x {
-                        MleIndex::Bound(chal) => *chal,
-                        MleIndex::Fixed(bit) => {
-                            if *bit {
-                                F::one()
-                            } else {
-                                F::zero()
-                            }
-                        }
-                        _ => panic!("All bits should be bound!"),
-                    })
+                    .map(|index| index.val().unwrap())
                     .collect_vec(),
                 F::zero(),
             ))

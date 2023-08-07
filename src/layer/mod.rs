@@ -147,7 +147,6 @@ pub trait Layer<F: FieldExt> {
         // first round, see Thaler book page 34
         let mut prev_evals = &sumcheck_rounds[0];
         let claimed_claim = prev_evals[0] + prev_evals[1];
-        dbg!(claimed_claim, claim.1);
         if prev_evals[0] + prev_evals[1] != claim.1 {
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
@@ -235,20 +234,7 @@ pub trait Layer<F: FieldExt> {
                     // --- This is super jank ---
                     let mut fixed_mle_indices: Vec<F> = vec![];
                     for mle_idx in mle_indices {
-                        match mle_idx {
-                            // --- We can't have either iterated or indexed bits ---
-                            MleIndex::IndexedBit(_) | MleIndex::Iterated => {
-                                return Err(ClaimError::MleRefMleError);
-                            }
-                            // --- We can't have either iterated or indexed bits ---
-                            MleIndex::Bound(idx) => {
-                                fixed_mle_indices.push(*idx);
-                            }
-                            MleIndex::Fixed(one) => {
-                                let idx = if *one { F::one() } else { F::zero() };
-                                fixed_mle_indices.push(idx);
-                            }
-                        }
+                        fixed_mle_indices.push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
                     }
 
                     // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---

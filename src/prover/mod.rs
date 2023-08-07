@@ -229,7 +229,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 // assume the output layers are zero valued...
                 // cannot actually do the initial step of evaluating V_1'(z) as specified in Thaler 13 page 14
                 // basically checks all the challenges are correct right now
-                if MleIndex::Bound(challenge) != mle_indices[bit] {
+                if MleIndex::Bound(challenge, bit) != mle_indices[bit] {
                     return Err(GKRError::ErrorWhenVerifyingOutputLayer);
                 }
                 claim_chal.push(challenge);
@@ -310,11 +310,12 @@ pub trait GKRCircuit<F: FieldExt> {
 
 #[cfg(test)]
 mod test {
-    use std::cmp::max;
+    use std::{cmp::max, time::Instant};
 
     use ark_bn254::Fr;
-    use ark_std::One;
+    use ark_std::{One, test_rng, UniformRand, cfg_into_iter};
     use tracing::Level;
+    use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
 
     use crate::{
         expression::ExpressionStandard,
@@ -333,7 +334,7 @@ mod test {
     struct TestCircuit<F: FieldExt> {
         mle: DenseMle<F, Tuple2<F>>,
         mle_2: DenseMle<F, Tuple2<F>>,
-        mle_3: DenseMle<F, F>,
+        // mle_3: DenseMle<F, F>,
     }
 
     impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
@@ -395,8 +396,11 @@ mod test {
 
             let output = layers.add_gkr(builder4);
 
+            let mut output_input = output.clone();
+            output_input.define_layer_id(LayerId::Input);
+
             let builder4 = from_mle(
-                (output, self.mle_3.clone()),
+                (output, output_input),
                 |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
                 |(mle1, mle2), layer_id, prefix_bits| {
                     let num_vars = max(mle1.num_vars(), mle2.num_vars());
@@ -412,37 +416,44 @@ mod test {
 
     #[test]
     fn test_gkr() {
+        let mut rng = test_rng();
+        let size = 2<<10;
         // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
         // tracing::subscriber::set_global_default(subscriber)
         //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
-        let mut mle: DenseMle<Fr, Tuple2<Fr>> =
-            vec![(Fr::from(2), Fr::from(8)), (Fr::from(7), Fr::from(3))]
-                .into_iter()
-                .map(|x| x.into())
-                .collect();
-        mle.define_layer_id(LayerId::Input);
-        let mut mle_2: DenseMle<Fr, Tuple2<Fr>> =
-            vec![(Fr::from(9), Fr::from(2)), (Fr::from(12), Fr::from(1))]
-                .into_iter()
-                .map(|x| x.into())
-                .collect();
-        mle_2.define_layer_id(LayerId::Input);
-        let mut mle_3 = DenseMle::<Fr, Fr>::new(vec![Fr::from(5), Fr::from(8)]);
-        mle_3.define_layer_id(LayerId::Input);
+        // let mut mle: DenseMle<Fr, Tuple2<Fr>> =
+        //     vec![(Fr::from(2), Fr::from(8)), (Fr::from(7), Fr::from(3))]
+        //         .into_iter()
+        //         .map(|x| x.into())
+        //         .collect();
 
-        let mut circuit = TestCircuit::<Fr> { mle, mle_2, mle_3 };
+        let mut mle: DenseMle<Fr, Tuple2<Fr>> = (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()).collect();
+        mle.define_layer_id(LayerId::Input);
+        // let mut mle_2: DenseMle<Fr, Tuple2<Fr>> =
+        //     vec![(Fr::from(9), Fr::from(2)), (Fr::from(12), Fr::from(1))]
+        //         .into_iter()
+        //         .map(|x| x.into())
+        //         .collect();
+        let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()).collect();
+
+        mle_2.define_layer_id(LayerId::Input);
+        // let mut mle_3 = DenseMle::<Fr, Fr>::new(vec![Fr::from(5), Fr::from(8)]);
+        // mle_3.define_layer_id(LayerId::Input);
+
+        let mut circuit = TestCircuit::<Fr> { mle, mle_2 };
 
         let mut transcript: PoseidonTranscript<Fr> =
             PoseidonTranscript::new("GKR Prover Transcript");
-
+        let now = Instant::now();
         match circuit.prove(&mut transcript) {
             Ok(proof) => {
-                println!("proof generated successfully!");
+                println!("proof generated successfully in {}!", now.elapsed().as_secs_f32());
                 let mut transcript: PoseidonTranscript<Fr> =
                     PoseidonTranscript::new("GKR Verifier Transcript");
+                let now = Instant::now();
                 match circuit.verify(&mut transcript, proof) {
-                    Ok(_) => {}
+                    Ok(_) => {println!("Verification succeeded: takes {}!", now.elapsed().as_secs_f32());}
                     Err(err) => {
                         println!("Verify failed! Error: {}", err);
                         panic!();
