@@ -105,7 +105,7 @@ impl<F: FieldExt> MleIndex<F> {
     pub fn index_index(&mut self, bit: usize) {
         match self {
             MleIndex::Iterated => *self = Self::IndexedBit(bit),
-            _ => ()
+            _ => (),
         }
     }
 
@@ -113,16 +113,22 @@ impl<F: FieldExt> MleIndex<F> {
     pub fn bind_index(&mut self, chal: F) {
         match self {
             MleIndex::IndexedBit(bit) => *self = Self::Bound(chal, *bit),
-            _ => ()
+            _ => (),
         }
     }
 
     ///Evaluate this MleIndex
     pub fn val(&self) -> Option<F> {
         match self {
-            MleIndex::Fixed(bit) => if *bit {Some(F::one())} else {Some(F::zero())},
+            MleIndex::Fixed(bit) => {
+                if *bit {
+                    Some(F::one())
+                } else {
+                    Some(F::zero())
+                }
+            }
             MleIndex::Bound(chal, _) => Some(*chal),
-            _ => None
+            _ => None,
         }
     }
 }

@@ -18,7 +18,7 @@ use crate::{
     },
     prover::SumcheckProof,
     sumcheck::{
-        compute_sumcheck_message, evaluate_at_a_point, get_round_degree, InterpError, Evals,
+        compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
     transcript::Transcript,
     FieldExt,
@@ -87,7 +87,11 @@ pub trait Layer<F: FieldExt> {
     type Transcript: Transcript<F>;
 
     ///Creates a sumcheck proof for this Layer
-    fn prove_rounds(&mut self, claim: Claim<F>, transcript: &mut Self::Transcript) -> Result<SumcheckProof<F>, LayerError>;
+    fn prove_rounds(
+        &mut self,
+        claim: Claim<F>,
+        transcript: &mut Self::Transcript,
+    ) -> Result<SumcheckProof<F>, LayerError>;
 
     /// Verifies the sumcheck protocol
     fn verify_rounds(
@@ -121,63 +125,62 @@ pub struct GKRLayer<F: FieldExt, Tr: Transcript<F>> {
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
-        ///Injest a claim, initialize beta tables, and do any other bookeeping that needs to be done before the sumcheck starts
-        fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<(Vec<F>, usize), LayerError> {
-            let (max_round, beta) = {
-                let (expression, _) = self.mut_expression_and_beta();
-    
-                let mut beta = BetaTable::new(claim).map_err(|err| LayerError::BetaError(err))?;
-    
-                let max_round = std::cmp::max(
-                    expression.index_mle_indices(0),
-                    beta.table.index_mle_indices(0),
-                );
-                (max_round, beta)
-            };
-    
-            self.set_beta(beta);
-    
-            let (expression, beta) = self.mut_expression_and_beta();
-    
-            let beta = beta.as_ref().unwrap();
-    
-            let degree = get_round_degree(expression, 0);
-    
-            let eval = compute_sumcheck_message(expression, 0, degree, &beta)
-                .map_err(LayerError::ExpressionError)?;
-    
-            let Evals(out) = eval;
-    
-            Ok((out, max_round))
-        }
-    
-        ///Computes a round of the sumcheck protocol on this Layer
-        fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
-            let (expression, beta) = self.mut_expression_and_beta();
-            let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
-            expression.fix_variable(round_index - 1, challenge);
-            beta.beta_update(round_index - 1, challenge)
-                .map_err(LayerError::BetaError)?;
-    
-            // --- Grabs the degree of univariate polynomial we are sending over ---
-            let degree = get_round_degree(expression, round_index);
-    
-            let eval = compute_sumcheck_message(expression, round_index, degree, beta)
-                .map_err(LayerError::ExpressionError)?;
-    
-            Ok(eval.0)
-        }
+    ///Injest a claim, initialize beta tables, and do any other bookeeping that needs to be done before the sumcheck starts
+    fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<(Vec<F>, usize), LayerError> {
+        let (max_round, beta) = {
+            let (expression, _) = self.mut_expression_and_beta();
 
-        fn mut_expression_and_beta(
-            &mut self,
-        ) -> (&mut ExpressionStandard<F>, &mut Option<BetaTable<F>>) {
-            (&mut self.expression, &mut self.beta)
-        }
+            let mut beta = BetaTable::new(claim).map_err(|err| LayerError::BetaError(err))?;
 
-        fn set_beta(&mut self, beta: BetaTable<F>) {
-            self.beta = Some(beta);
-        }
-    
+            let max_round = std::cmp::max(
+                expression.index_mle_indices(0),
+                beta.table.index_mle_indices(0),
+            );
+            (max_round, beta)
+        };
+
+        self.set_beta(beta);
+
+        let (expression, beta) = self.mut_expression_and_beta();
+
+        let beta = beta.as_ref().unwrap();
+
+        let degree = get_round_degree(expression, 0);
+
+        let eval = compute_sumcheck_message(expression, 0, degree, &beta)
+            .map_err(LayerError::ExpressionError)?;
+
+        let Evals(out) = eval;
+
+        Ok((out, max_round))
+    }
+
+    ///Computes a round of the sumcheck protocol on this Layer
+    fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
+        let (expression, beta) = self.mut_expression_and_beta();
+        let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
+        expression.fix_variable(round_index - 1, challenge);
+        beta.beta_update(round_index - 1, challenge)
+            .map_err(LayerError::BetaError)?;
+
+        // --- Grabs the degree of univariate polynomial we are sending over ---
+        let degree = get_round_degree(expression, round_index);
+
+        let eval = compute_sumcheck_message(expression, round_index, degree, beta)
+            .map_err(LayerError::ExpressionError)?;
+
+        Ok(eval.0)
+    }
+
+    fn mut_expression_and_beta(
+        &mut self,
+    ) -> (&mut ExpressionStandard<F>, &mut Option<BetaTable<F>>) {
+        (&mut self.expression, &mut self.beta)
+    }
+
+    fn set_beta(&mut self, beta: BetaTable<F>) {
+        self.beta = Some(beta);
+    }
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
@@ -191,32 +194,36 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         }
     }
 
-    fn prove_rounds(&mut self, claim: Claim<F>, transcript: &mut Self::Transcript) -> Result<SumcheckProof<F>, LayerError> {
+    fn prove_rounds(
+        &mut self,
+        claim: Claim<F>,
+        transcript: &mut Self::Transcript,
+    ) -> Result<SumcheckProof<F>, LayerError> {
         let (init_evals, rounds) = self.start_sumcheck(claim)?;
 
         transcript
-        .append_field_elements("Initial Sumcheck evaluations", &init_evals)
-        .unwrap();
+            .append_field_elements("Initial Sumcheck evaluations", &init_evals)
+            .unwrap();
 
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(init_evals))
-        .chain((1..rounds).map(|round_index| {
-            let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
-            let evals = self.prove_round(round_index, challenge)?;
-            transcript
-                .append_field_elements("Sumcheck evaluations", &evals)
-                .unwrap();
-            Ok::<_, LayerError>(evals)
-        }))
-        .try_collect()?;
+            .chain((1..rounds).map(|round_index| {
+                let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+                let evals = self.prove_round(round_index, challenge)?;
+                transcript
+                    .append_field_elements("Sumcheck evaluations", &evals)
+                    .unwrap();
+                Ok::<_, LayerError>(evals)
+            }))
+            .try_collect()?;
 
         let final_chal = transcript
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
 
         self.expression.fix_variable(rounds - 1, final_chal);
-        self.beta.as_mut()
+        self.beta
+            .as_mut()
             .map(|beta| beta.beta_update(rounds - 1, final_chal));
-
 
         Ok(sumcheck_rounds.into())
     }

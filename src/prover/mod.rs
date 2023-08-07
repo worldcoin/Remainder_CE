@@ -150,7 +150,9 @@ pub trait GKRCircuit<F: FieldExt> {
                     .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
                     .unwrap();
 
-                let sumcheck_rounds = layer.prove_rounds(layer_claim, transcript).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+                let sumcheck_rounds = layer
+                    .prove_rounds(layer_claim, transcript)
+                    .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
 
                 let other_claims = layer
                     .get_claims()
@@ -292,9 +294,9 @@ mod test {
     use std::{cmp::max, time::Instant};
 
     use ark_bn254::Fr;
-    use ark_std::{One, test_rng, UniformRand, cfg_into_iter};
-    use tracing::Level;
+    use ark_std::{cfg_into_iter, test_rng, One, UniformRand};
     use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
+    use tracing::Level;
 
     use crate::{
         expression::ExpressionStandard,
@@ -395,14 +397,18 @@ mod test {
     #[test]
     fn test_gkr() {
         let mut rng = test_rng();
-        let size = 2<<18;
+        let size = 2 << 18;
         // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
         // tracing::subscriber::set_global_default(subscriber)
         //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
-        let mut mle: DenseMle<Fr, Tuple2<Fr>> = (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()).collect();
+        let mut mle: DenseMle<Fr, Tuple2<Fr>> = (0..size)
+            .map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into())
+            .collect();
         mle.define_layer_id(LayerId::Input);
-        let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()).collect();
+        let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = (0..size)
+            .map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into())
+            .collect();
 
         mle_2.define_layer_id(LayerId::Input);
 
@@ -413,12 +419,20 @@ mod test {
         let now = Instant::now();
         match circuit.prove(&mut transcript) {
             Ok(proof) => {
-                println!("proof generated successfully in {}!", now.elapsed().as_secs_f32());
+                println!(
+                    "proof generated successfully in {}!",
+                    now.elapsed().as_secs_f32()
+                );
                 let mut transcript: PoseidonTranscript<Fr> =
                     PoseidonTranscript::new("GKR Verifier Transcript");
                 let now = Instant::now();
                 match circuit.verify(&mut transcript, proof) {
-                    Ok(_) => {println!("Verification succeeded: takes {}!", now.elapsed().as_secs_f32());}
+                    Ok(_) => {
+                        println!(
+                            "Verification succeeded: takes {}!",
+                            now.elapsed().as_secs_f32()
+                        );
+                    }
                     Err(err) => {
                         println!("Verify failed! Error: {}", err);
                         panic!();

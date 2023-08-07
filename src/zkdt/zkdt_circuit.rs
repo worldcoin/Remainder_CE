@@ -502,7 +502,8 @@ mod tests {
         mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, Mle, MleRef},
         sumcheck::{
             compute_sumcheck_message, get_round_degree,
-            Evals, tests::{dummy_sumcheck, verify_sumcheck_messages}
+            tests::{dummy_sumcheck, verify_sumcheck_messages},
+            Evals,
         },
     };
     use ark_bn254::Fr;

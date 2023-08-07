@@ -1,9 +1,16 @@
-use std::{marker::PhantomData, cmp};
+use std::{cmp, marker::PhantomData};
 
-use crate::{FieldExt, mle::{MleAble, dense::{DenseMle, DenseMleRef}, MleIndex}, layer::LayerId};
+use crate::{
+    layer::LayerId,
+    mle::{
+        dense::{DenseMle, DenseMleRef},
+        MleAble, MleIndex,
+    },
+    FieldExt,
+};
 use ark_std::log2;
 use derive_more::{From, Into};
-use itertools::{Itertools, repeat_n};
+use itertools::{repeat_n, Itertools};
 
 /// --- Path nodes within the tree and in the path hint ---
 /// Used for the following components of the (circuit) input:

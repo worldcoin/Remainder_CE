@@ -812,17 +812,13 @@ fn test_dummy_sumcheck_constant() {
     let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
     let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
 
-    let mle_out = DenseMle::<Fr, Fr>::new(vec![
-        Fr::from(6),
-        Fr::from(7),
-        Fr::from(8),
-        Fr::from(9),
-    ]);
+    let mle_out = DenseMle::<Fr, Fr>::new(vec![Fr::from(6), Fr::from(7), Fr::from(8), Fr::from(9)]);
     let layer_claims = get_dummy_claim(mle_out.mle_ref(), &mut rng, None);
 
     let mle_ref_1 = mle1.mle_ref();
 
-    let mut expression = ExpressionStandard::Mle(mle_ref_1) + ExpressionStandard::Constant(Fr::from(5));
+    let mut expression =
+        ExpressionStandard::Mle(mle_ref_1) + ExpressionStandard::Constant(Fr::from(5));
 
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);

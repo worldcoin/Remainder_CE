@@ -175,18 +175,13 @@ pub(crate) fn compute_sumcheck_message<
                     let first = b?;
                     let second: Evals<F> = a?;
 
-                    let (
-                        Evals(first_evals),
-                        Evals(second_evals)
-                    ) = (first, second);
+                    let (Evals(first_evals), Evals(second_evals)) = (first, second);
                     if (first_evals.len() == second_evals.len()) && first_evals.len() == 3 {
                         if max_degree == 2 {
                             // we need to combine the evals by doing (1-x) * first eval + x * second eval
                             let first_evals = Evals(
                                 (0..3)
-                                    .map(|idx| {
-                                        first_evals[idx] * (F::one() - F::from(idx as u64))
-                                    })
+                                    .map(|idx| first_evals[idx] * (F::one() - F::from(idx as u64)))
                                     .collect(),
                             );
 
@@ -222,13 +217,19 @@ pub(crate) fn compute_sumcheck_message<
         _ => Err(ExpressionError::InvalidMleIndex),
     };
 
-    let mle_eval = 
-        for<'a, 'b> |mle_ref: &'a Exp::MleRef, beta_mle_ref: &'b DenseMleRef<F>| -> Result<Evals<F>, ExpressionError> {
+    let mle_eval = for<'a, 'b> |mle_ref: &'a Exp::MleRef,
+                                beta_mle_ref: &'b DenseMleRef<F>|
+                 -> Result<Evals<F>, ExpressionError> {
         let mle_indicies = mle_ref.mle_indices();
         let independent_variable = mle_indicies.contains(&MleIndex::IndexedBit(round_index));
         // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---
-        evaluate_mle_ref_product(&[mle_ref.clone()], independent_variable, max_degree, beta_mle_ref.clone())
-            .map_err(ExpressionError::MleError)
+        evaluate_mle_ref_product(
+            &[mle_ref.clone()],
+            independent_variable,
+            max_degree,
+            beta_mle_ref.clone(),
+        )
+        .map_err(ExpressionError::MleError)
     };
 
     // --- Just invert ---
@@ -267,18 +268,17 @@ pub(crate) fn compute_sumcheck_message<
         Ok(a * scalar)
     };
 
-    expr
-        .evaluate_sumcheck(
-            &constant,
-            &selector,
-            &mle_eval,
-            &negated,
-            &sum,
-            &product,
-            &scaled,
-            &beta_table.table,
-            round_index,
-        )
+    expr.evaluate_sumcheck(
+        &constant,
+        &selector,
+        &mle_eval,
+        &negated,
+        &sum,
+        &product,
+        &scaled,
+        &beta_table.table,
+        round_index,
+    )
 }
 
 /// Evaluates a product in the form factor V_1(x_1, ..., x_n) * V_2(y_1, ..., y_m) * ...

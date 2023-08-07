@@ -206,7 +206,6 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     }
 }
 
-
 // --------------------------- MleRef stuff ---------------------------
 
 /// An [MleRef] that is dense
