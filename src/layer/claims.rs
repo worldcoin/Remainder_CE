@@ -160,8 +160,9 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
+    use crate::expression::Expression;
     use crate::mle::{dense::DenseMle, Mle};
 
     use super::*;

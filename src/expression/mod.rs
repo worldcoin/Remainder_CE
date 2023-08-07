@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::{
     mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef},
-    sumcheck::{MleError},
+    sumcheck::MleError,
     FieldExt,
 };
 
@@ -616,7 +616,7 @@ impl<F: FieldExt> Mul<F> for ExpressionStandard<F> {
 
 #[cfg(test)]
 mod test {
-    use crate::mle::{dense::DenseMle, Mle};
+    use crate::mle::dense::DenseMle;
 
     use super::*;
     use ark_bn254::Fr;
