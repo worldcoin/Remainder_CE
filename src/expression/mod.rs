@@ -524,7 +524,7 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
             Ok(acc.unwrap() * new_mle_ref.bookkeeping_table()[0])
         })
     };
-    let scaled = |a, scalar| {
+    let scaled = |a: Result<F, ExpressionError>, scalar: F| {
         if let Err(e) = a {
             return Err(e);
         }
