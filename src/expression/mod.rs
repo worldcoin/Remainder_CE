@@ -504,31 +504,19 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
         Ok(val) => Ok(val.neg()),
     };
     let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
-        if let Err(e) = lhs {
-            return Err(e);
-        }
-        if let Err(e) = rhs {
-            return Err(e);
-        }
-        Ok(lhs.unwrap() + rhs.unwrap())
+        Ok(lhs? + rhs?)
     };
     let product = for<'a, 'b> |mle_refs: &'a [Exp::MleRef]| -> Result<F, ExpressionError> {
         mle_refs.into_iter().fold(Ok(F::one()), |acc, new_mle_ref| {
             // --- Accumulate either errors or multiply ---
-            if let Err(e) = acc {
-                return Err(e);
-            }
             if new_mle_ref.bookkeeping_table().len() != 1 {
                 return Err(ExpressionError::EvaluateNotFullyBoundError);
             }
-            Ok(acc.unwrap() * new_mle_ref.bookkeeping_table()[0])
+            Ok(acc? * new_mle_ref.bookkeeping_table()[0])
         })
     };
     let scaled = |a: Result<F, ExpressionError>, scalar: F| {
-        if let Err(e) = a {
-            return Err(e);
-        }
-        Ok(a.unwrap() * scalar)
+        Ok(a? * scalar)
     };
     expr.evaluate(
         &constant,
