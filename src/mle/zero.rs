@@ -14,7 +14,7 @@ pub struct ZeroMleRef<F: FieldExt> {
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     num_vars: usize,
-    layer_id: Option<LayerId>,
+    layer_id: LayerId,
     zero: [F; 1],
     indexed: bool,
 }
@@ -31,7 +31,7 @@ impl<F: FieldExt> ZeroMleRef<F> {
         Self {
             mle_indices,
             num_vars,
-            layer_id: Some(layer_id),
+            layer_id: layer_id,
             zero: [F::zero()],
             indexed: false,
         }
@@ -92,7 +92,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         curr_index + new_indices
     }
 
-    fn get_layer_id(&self) -> Option<LayerId> {
+    fn get_layer_id(&self) -> LayerId {
         self.layer_id.clone()
     }
 }

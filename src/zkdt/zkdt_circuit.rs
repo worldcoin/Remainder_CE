@@ -501,8 +501,8 @@ mod tests {
         layer::Claim,
         mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, Mle, MleRef},
         sumcheck::{
-            compute_sumcheck_message, dummy_sumcheck, get_round_degree, verify_sumcheck_messages,
-            SumOrEvals,
+            compute_sumcheck_message, get_round_degree,
+            Evals, tests::{dummy_sumcheck, verify_sumcheck_messages}
         },
     };
     use ark_bn254::Fr;
@@ -616,13 +616,9 @@ mod tests {
             compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree, &mut beta);
 
         // --- Only first two values need to be zeros ---
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => panic!(),
-            SumOrEvals::Evals(vec) => {
-                assert_eq!(vec[0], Fr::zero());
-                assert_eq!(vec[1], Fr::zero());
-            }
-        }
+        let Evals::<Fr>(vec) = res.unwrap();
+        assert_eq!(vec[0], Fr::zero());
+        assert_eq!(vec[1], Fr::zero());
 
         let res_messages = dummy_sumcheck(
             &mut b_minus_b_squared_clone.clone(),
@@ -692,13 +688,9 @@ mod tests {
             first_round_deg,
             &mut beta,
         );
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => panic!(),
-            SumOrEvals::Evals(vec) => {
-                assert_eq!(vec[0], Fr::zero());
-                assert_eq!(vec[1], Fr::zero());
-            }
-        }
+        let Evals::<Fr>(vec) = res.unwrap();
+        assert_eq!(vec[0], Fr::zero());
+        assert_eq!(vec[1], Fr::zero());
 
         let res_messages = dummy_sumcheck(
             &mut b_minus_b_squared_clone.clone(),
@@ -924,13 +916,9 @@ mod tests {
 
         // --- Only the first two evals should be zeros ---
         let res = compute_sumcheck_message(&mut final_expr, 1, 3, &mut beta);
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => {}
-            SumOrEvals::Evals(evaluations) => {
-                assert_eq!(evaluations[0], Fr::zero());
-                assert_eq!(evaluations[1], Fr::zero());
-            }
-        }
+        let Evals::<Fr>(vec) = res.unwrap();
+        assert_eq!(vec[0], Fr::zero());
+        assert_eq!(vec[1], Fr::zero());
 
         // let res_messages = dummy_sumcheck(final_expr_clone, &mut rng, dummy_claim);
         // let verify_res = verify_sumcheck_messages(res_messages);

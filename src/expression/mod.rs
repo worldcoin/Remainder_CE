@@ -83,17 +83,16 @@ pub enum ExpressionError {
     #[error("Something went wrong while evaluating: {0}")]
     EvaluationError(&'static str),
     ///Error that wraps an MleError
-    /// TODO!(Do we even need this?)
     #[error("Something went wrong while evaluating the MLE: {0}")]
     MleError(MleError),
-    // ///Error when there is no beta table!!!!!!
-    // #[error("No beta table")]
-    // BetaError,
     #[error("Selector bit not bound before final evaluation gather")]
+    ///Selector bit not bound before final evaluation gather
     SelectorBitNotBoundError,
     #[error("MLE ref with more than one element in its bookkeeping table")]
+    ///MLE ref with more than one element in its bookkeeping table
     EvaluateNotFullyBoundError,
     #[error("The bound indices of this expression don't match the indices passed in")]
+    ///The bound indices of this expression don't match the indices passed in
     EvaluateBoundIndicesDontMatch
 }
 

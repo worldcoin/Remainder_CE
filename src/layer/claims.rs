@@ -21,18 +21,25 @@ use thiserror::Error;
 use super::{Claim, Layer, LayerId};
 
 #[derive(Error, Debug, Clone)]
+///Errors to do with aggregating and collecting claims
 pub enum ClaimError {
     #[error("The Layer has not finished the sumcheck protocol")]
+    ///The Layer has not finished the sumcheck protocol
     SumCheckNotComplete,
     #[error("MLE indices must all be fixed")]
+    ///MLE indices must all be fixed
     ClaimMleIndexError,
     #[error("Layer ID not assigned")]
+    ///Layer ID not assigned
     LayerMleError,
     #[error("MLE within MleRef has multiple values within it")]
+    ///MLE within MleRef has multiple values within it
     MleRefMleError,
     #[error("Error aggregating claims")]
+    ///Error aggregating claims
     ClaimAggroError,
     #[error("Should be evaluating to a sum")]
+    ///Should be evaluating to a sum
     ExpressionEvalError,
 }
 
@@ -68,24 +75,13 @@ fn compute_wlx<F: FieldExt>(
                 })
                 .collect();
 
-            // use fix_var to compute W(l(index))
-            // let mut fix_expr = expr.clone();
-            // let eval_w_l = fix_expr.evaluate_expr(new_chal);
+            // use compute_sumcheck_message to compute W(l(index))
 
             let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
             beta.table.index_mle_indices(0);
             let eval = compute_sumcheck_message(expr, 0, degree, &beta).unwrap();
-            if let SumOrEvals::Evals(evals) = eval {
-                Ok(evals[0] + evals[1])
-            } else {
-                panic!()
-            }
-
-            // this has to be a sum--get the overall evaluation
-            // match eval_w_l {
-            //     Ok(evaluation) => Ok(evaluation),
-            //     Err(_) => Err(ClaimError::ExpressionEvalError)
-            // }
+            let Evals(evals) = eval;
+            Ok(evals[0] + evals[1])
         })
         .collect();
 
@@ -100,7 +96,6 @@ pub fn aggregate_claims<F: FieldExt>(
     claims: &[Claim<F>],
     expr: &ExpressionStandard<F>,
     rstar: F,
-    // prev_layer_claim: Claim<F>,
 ) -> Result<(Claim<F>, Vec<F>), ClaimError> {
     let mut expr = expr.clone();
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
@@ -136,7 +131,7 @@ pub fn verify_aggragate_claim<F: FieldExt>(
     claims: &[Claim<F>],
     r_star: F,
 ) -> Result<Claim<F>, ClaimError> {
-    let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+    let (claim_vecs, _): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
     let num_idx = claim_vecs[0].len();
 
     // check q(0), q(1) equals the claimed value (or wl(0), wl(1))
@@ -156,7 +151,6 @@ pub fn verify_aggragate_claim<F: FieldExt>(
         })
         .collect();
 
-    // check q(r_star) === W(r)
     let q_rstar = evaluate_at_a_point(&wlx, r_star).unwrap();
 
     let aggregated_claim: Claim<F> = (r, q_rstar);
@@ -541,9 +535,6 @@ mod test {
 
         let (res, wlx) = aggregate_claims(&claims, &mut expr.clone(), rchal).unwrap();
         let rounds = expr.index_mle_indices(0);
-        // for round in 0..rounds {
-        //     expr.fix
-        // }
         let verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
     }
 }

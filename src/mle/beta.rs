@@ -27,8 +27,10 @@ use thiserror::Error;
 /// Beta table struct for a product of mle refs
 pub struct BetaTable<F: FieldExt> {
     layer_claim: Claim<F>,
+    ///The bookkeeping table for the beta table
     pub table: DenseMleRef<F>,
     relevant_indices: Vec<usize>,
+    ///A marker to make sure the table is indexed or not
     pub indexed: bool,
 }
 
@@ -36,16 +38,22 @@ pub struct BetaTable<F: FieldExt> {
 #[derive(Error, Debug, Clone)]
 pub enum BetaError {
     #[error("claim index is 0, cannot take inverse")]
+    ///claim index is 0, cannot take inverse
     NoInverse,
     #[error("not enough claims to compute beta table")]
+    ///not enough claims to compute beta table
     NotEnoughClaims,
     #[error("cannot make beta table over empty mle list")]
+    ///cannot make beta table over empty mle list
     EmptyMleList,
     #[error("cannot update beta table")]
+    ///cannot update beta table
     BetaUpdateError,
     #[error("MLE bits were not indexed")]
+    ///MLE bits were not indexed
     MleNotIndexedError,
     #[error("Beta table doesn't contain the particular indexed bit")]
+    ///Beta table doesn't contain the particular indexed bit
     IndexedBitNotFoundError,
 }
 

@@ -18,7 +18,7 @@ use crate::{
     },
     prover::SumcheckProof,
     sumcheck::{
-        compute_sumcheck_message, evaluate_at_a_point, get_round_degree, InterpError, SumOrEvals,
+        compute_sumcheck_message, evaluate_at_a_point, get_round_degree, InterpError, Evals,
     },
     transcript::Transcript,
     FieldExt,
@@ -26,35 +26,49 @@ use crate::{
 
 use self::claims::ClaimError;
 
+///Type alias for a claim (A point to evaluate at and an evaluation)
 pub type Claim<F> = (Vec<F>, F);
 
 #[derive(Error, Debug, Clone)]
+///Errors to do with working with a Layer
 pub enum LayerError {
     #[error("Layer isn't ready to prove")]
+    ///Layer isn't ready to prove
     LayerNotReady,
     #[error("Error with underlying expression: {0}")]
+    ///Error with underlying expression: {0}
     ExpressionError(ExpressionError),
     #[error("Error with aggregating curr layer")]
+    ///Error with aggregating curr layer
     AggregationError,
     #[error("Error with getting Claim: {0}")]
+    ///Error with getting Claim
     ClaimError(ClaimError),
     #[error("Error with verifying layer: {0}")]
+    ///Error with verifying layer
     VerificationError(VerificationError),
     #[error("Beta Error: {0}")]
+    ///Beta Error
     BetaError(BetaError),
     #[error("InterpError: {0}")]
+    ///InterpError
     InterpError(InterpError),
 }
 
 #[derive(Error, Debug, Clone)]
+///Errors to do with verifying a Layer
 pub enum VerificationError {
     #[error("The sum of the first evaluations do not equal the claim")]
+    ///The sum of the first evaluations do not equal the claim
     SumcheckStartFailed,
     #[error("The sum of the current rounds evaluations do not equal the previous round at a random point")]
+    ///The sum of the current rounds evaluations do not equal the previous round at a random point
     SumcheckFailed,
     #[error("The final rounds evaluations at r do not equal the oracle query")]
+    ///The final rounds evaluations at r do not equal the oracle query
     FinalSumcheckFailed,
     #[error("The Oracle query does not match the final claim")]
+    ///The Oracle query does not match the final claim
     GKRClaimCheckFailed,
 }
 
@@ -69,12 +83,11 @@ pub enum LayerId {
 
 ///A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
+    ///The transcript that this layer uses
     type Transcript: Transcript<F>;
-    ///The Expression type that this Layer is defined by
-    // type Expression: Expression<F>;
 
+    ///Creates a sumcheck proof for this Layer
     fn prove_rounds(&mut self, claim: Claim<F>, transcript: &mut Self::Transcript) -> Result<SumcheckProof<F>, LayerError>;
-
 
     /// Verifies the sumcheck protocol
     fn verify_rounds(
@@ -133,15 +146,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
             let eval = compute_sumcheck_message(expression, 0, degree, &beta)
                 .map_err(LayerError::ExpressionError)?;
     
-            let out = if let SumOrEvals::Evals(evals) = eval {
-                Ok(evals)
-            } else {
-                Err(LayerError::ExpressionError(
-                    ExpressionError::EvaluationError(
-                        "Received a sum variant from evaluate expression before the final round",
-                    ),
-                ))
-            }?;
+            let Evals(out) = eval;
     
             Ok((out, max_round))
         }
@@ -160,15 +165,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
             let eval = compute_sumcheck_message(expression, round_index, degree, beta)
                 .map_err(LayerError::ExpressionError)?;
     
-            if let SumOrEvals::Evals(evals) = eval {
-                Ok(evals)
-            } else {
-                Err(LayerError::ExpressionError(
-                    ExpressionError::EvaluationError(
-                        "Received a sum variant from evaluate expression before the final round",
-                    ),
-                ))
-            }
+            Ok(eval.0)
         }
 
         fn mut_expression_and_beta(
@@ -179,10 +176,6 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
         fn set_beta(&mut self, beta: BetaTable<F>) {
             self.beta = Some(beta);
-        }
-
-        fn beta(&self) -> &Option<BetaTable<F>> {
-            &self.beta
         }
     
 }
@@ -319,19 +312,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     }
 
                     // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
-                    let mle_layer_id = match mle_ref.get_layer_id() {
-                        None => {
-                            return Err(ClaimError::LayerMleError);
-                        }
-                        Some(layer_id) => layer_id,
-                    };
+                    let mle_layer_id = mle_ref.get_layer_id();
 
                     // --- Grab the actual value that the claim is supposed to evaluate to ---
                     if mle_ref.bookkeeping_table().len() != 1 {
                         return Err(ClaimError::MleRefMleError);
                     }
-                    // TODO(ryancao): Does this accidentally take ownership of that element?
-                    // Answer: No, because F implements Copy
                     let claimed_value = mle_ref.bookkeeping_table()[0];
 
                     // --- Construct the claim ---
@@ -485,7 +471,7 @@ mod test {
     use crate::{
         expression::ExpressionStandard,
         mle::{dense::DenseMle, MleIndex},
-        sumcheck::{dummy_sumcheck, verify_sumcheck_messages},
+        sumcheck::tests::{dummy_sumcheck, verify_sumcheck_messages},
         transcript::poseidon_transcript::PoseidonTranscript,
     };
 

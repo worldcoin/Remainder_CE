@@ -1,3 +1,5 @@
+//!The LayerBuilders that build the ZKDT Circuit
+
 use crate::expression::ExpressionStandard;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::dense::{DenseMle, Tuple2};

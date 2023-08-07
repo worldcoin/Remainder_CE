@@ -48,12 +48,16 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
 #[derive(Error, Debug, Clone)]
 pub enum GKRError {
     #[error("No claims were found for layer {0:?}")]
+    ///No claims were found for layer
     NoClaimsForLayer(LayerId),
     #[error("Error when proving layer {0:?}: {1}")]
+    ///Error when proving layer
     ErrorWhenProvingLayer(LayerId, LayerError),
     #[error("Error when verifying layer {0:?}: {1}")]
+    ///Error when verifying layer
     ErrorWhenVerifyingLayer(LayerId, LayerError),
     #[error("Error when verifying output layer")]
+    ///Error when verifying output layer
     ErrorWhenVerifyingOutputLayer,
 }
 
@@ -61,6 +65,7 @@ pub enum GKRError {
 #[derive(Clone, Debug, From)]
 pub struct SumcheckProof<F: FieldExt>(Vec<Vec<F>>);
 
+///The proof for an individual GKR layer
 pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {
     sumcheck_proof: SumcheckProof<F>,
     layer: Box<dyn Layer<F, Transcript = Tr>>,
@@ -73,6 +78,7 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     ///
     /// In reverse order (e.g. layer closest to the output layer is first)
     pub layer_sumcheck_proofs: Vec<LayerProof<F, Tr>>,
+    ///All the output layers that this circuit yields
     pub output_layers: Vec<Box<dyn MleRef<F = F>>>,
 }
 
@@ -104,7 +110,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             let claim = claim.unwrap();
 
-            let layer_id = output.get_layer_id().unwrap();
+            let layer_id = output.get_layer_id();
 
             if let Some(curr_claims) = claims.get_mut(&layer_id) {
                 curr_claims.push(claim);
@@ -208,7 +214,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 claim_chal.push(challenge);
             }
             let claim = (claim_chal, F::zero());
-            let layer_id = output.get_layer_id().unwrap();
+            let layer_id = output.get_layer_id();
 
             if let Some(curr_claims) = claims.get_mut(&layer_id) {
                 curr_claims.push(claim);
@@ -307,7 +313,6 @@ mod test {
     struct TestCircuit<F: FieldExt> {
         mle: DenseMle<F, Tuple2<F>>,
         mle_2: DenseMle<F, Tuple2<F>>,
-        // mle_3: DenseMle<F, F>,
     }
 
     impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
@@ -390,29 +395,16 @@ mod test {
     #[test]
     fn test_gkr() {
         let mut rng = test_rng();
-        let size = 2<<10;
+        let size = 2<<18;
         // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
         // tracing::subscriber::set_global_default(subscriber)
         //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
-        // let mut mle: DenseMle<Fr, Tuple2<Fr>> =
-        //     vec![(Fr::from(2), Fr::from(8)), (Fr::from(7), Fr::from(3))]
-        //         .into_iter()
-        //         .map(|x| x.into())
-        //         .collect();
-
         let mut mle: DenseMle<Fr, Tuple2<Fr>> = (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()).collect();
         mle.define_layer_id(LayerId::Input);
-        // let mut mle_2: DenseMle<Fr, Tuple2<Fr>> =
-        //     vec![(Fr::from(9), Fr::from(2)), (Fr::from(12), Fr::from(1))]
-        //         .into_iter()
-        //         .map(|x| x.into())
-        //         .collect();
         let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()).collect();
 
         mle_2.define_layer_id(LayerId::Input);
-        // let mut mle_3 = DenseMle::<Fr, Fr>::new(vec![Fr::from(5), Fr::from(8)]);
-        // mle_3.define_layer_id(LayerId::Input);
 
         let mut circuit = TestCircuit { mle, mle_2 };
 

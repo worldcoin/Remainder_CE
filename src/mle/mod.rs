@@ -7,7 +7,6 @@ use std::ops::Index;
 
 use crate::expression::ExpressionStandard;
 use crate::layer::Claim;
-use crate::mle::dense::BetaError;
 use crate::{layer::LayerId, FieldExt};
 
 pub mod beta;
@@ -28,7 +27,7 @@ where
     // + IntoIterator<Item = T>
     // + FromIterator<T>,
     F: FieldExt,
-    //TODO!(Define MLEable trait + derive)
+    //TODO!(Derive MLEable trait)
     T: Send + Sync + MleAble<F>,
 {
     ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
@@ -40,8 +39,11 @@ where
     ///Get number of variables of the Mle which is equivalent to the log_2 of the size of the MLE
     fn num_vars(&self) -> usize;
 
+    ///Defines the layer_id of where this Mle comes from
+    /// TODO!(Get rid of this awfulness)
     fn define_layer_id(&mut self, id: LayerId);
 
+    ///Add any prefix bits that must be added to any MleRefs this Mle yields
     fn add_prefix_bits(&mut self, prefix: Option<Vec<MleIndex<F>>>);
 }
 
@@ -71,7 +73,7 @@ pub trait MleRef: Debug + Send + Sync {
     fn index_mle_indices(&mut self, curr_index: usize) -> usize;
 
     /// The layer_id of the layer that this MLE belongs to
-    fn get_layer_id(&self) -> Option<LayerId>;
+    fn get_layer_id(&self) -> LayerId;
 
     /// get whether mle has been indexed
     fn indexed(&self) -> bool;
