@@ -22,7 +22,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 
-
 pub struct AddGate<F: FieldExt> {
     layer_claim: Claim<F>,
     nonzero_gates: Vec<((F, F, F), F)>,
@@ -39,32 +38,32 @@ pub enum GateError {
 }
 
 impl<F: FieldExt> AddGate<F> {
-    /// Initialize Bookkeeping tables for lhs 
-    pub fn init_phase_1(&mut self) -> (DenseMleRef<F>, DenseMleRef<F>) {
-        let mut beta_g = self.beta_g;
+    /// initialize bookkeeping tables for phase 1 of sumcheck
+    pub fn init_phase_1(&mut self) -> DenseMleRef<F> {
+        // TODO!(vishady) so many clones
+        let mut beta_g = self.beta_g.clone();
         if beta_g.is_none() { 
-            beta_g = Some(BetaTable::new(self.layer_claim).unwrap());
-            self.beta_g = beta_g;
+            beta_g = Some(BetaTable::new(self.layer_claim.clone()).unwrap());
+            self.beta_g = beta_g.clone();
         } else {
-            beta_g = self.beta_g;
+            beta_g = self.beta_g.clone();
         }
         let num_x = self.lhs.num_vars();
-        let mut a_hg_lhs = vec![F::zero(); 1 << num_x];
-        let mut a_hg_rhs = vec![F::zero(); 1 << num_x];
+        let mut a_hg = vec![F::zero(); 1 << num_x];
         let _ = self.nonzero_gates.clone().into_iter().map(
             |((z, x, y), val)| {
                 let x_ind = x.into_bigint().as_ref()[0] as usize;
                 let y_ind = y.into_bigint().as_ref()[0] as usize;
                 let z_ind = z.into_bigint().as_ref()[0] as usize;
-                let adder = val * *beta_g.unwrap().table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
-                a_hg_lhs[x_ind] = a_hg_lhs[x_ind] + adder;
-                a_hg_rhs[x_ind] = a_hg_rhs[x_ind] + adder * self.rhs.bookkeeping_table().get(y_ind).unwrap_or(&F::zero());
+                let adder = val * beta_g.as_ref().unwrap().table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
+                a_hg[x_ind] = a_hg[x_ind] + adder + (adder * self.rhs.bookkeeping_table().get(y_ind).unwrap_or(&F::zero()));
             }
         );
-        (DenseMle::new(a_hg_lhs).mle_ref(), DenseMle::new(a_hg_rhs).mle_ref())
+        DenseMle::new(a_hg).mle_ref()
     }
 
-    pub fn init_phase_2(&self, phase_1_claim_chal: Vec<F>, f_at_u: F) -> (DenseMleRef<F>, DenseMleRef<F>){
+    /// initialize bookkeeping tables for phase 2 of sumcheck
+    pub fn init_phase_2(&self, phase_1_claim_chal: Vec<F>, f_at_u: F) -> (DenseMleRef<F>, [DenseMleRef<F>; 2]){
         let beta_g = self.beta_g.as_ref().expect("beta table should be initialized by now");
         // uhhhhhh
         let phase_1_claim = (phase_1_claim_chal, F::zero()); 
@@ -79,28 +78,20 @@ impl<F: FieldExt> AddGate<F> {
                 let z_ind = z.into_bigint().as_ref()[0] as usize;
                 let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
                 let ux = *beta_u.table.bookkeeping_table().get(x_ind).unwrap_or(&F::zero());
-                a_f1[x_ind] = a_f1[x_ind] + gz * ux * val * f_at_u;
+                let adder = gz * ux * val;
+                a_f1_lhs[y_ind] = a_f1_lhs[y_ind] + adder * f_at_u;
+                a_f1_rhs[y_ind] = a_f1_rhs[y_ind] + adder;
             }
         );
-        (DenseMle::new(a_f1).mle_ref(), DenseMle::new(a_f1).mle_ref())
+        (DenseMle::new(a_f1_lhs).mle_ref(), [DenseMle::new(a_f1_rhs).mle_ref(), self.rhs.clone()])
     }
 
-    pub fn prep_for_sumcheck(&mut self, phase_1_claim: Claim<F>) -> Result<(DenseMleRef<F>, DenseMleRef<F>), GateError> {
-        // do first u rounds of sumcheck on lhs
-        let chal = self.init_phase_1();
-        if self.lhs.bookkeeping_table().len() != 1 { 
-            return Err(GateError::Phase1Error);
-        } 
-        else {
-            let f_at_u = self.lhs.bookkeeping_table()[0];
-            let (a_f1, a_f3) = self.init_phase_2(chal, f_at_u);
-            let mut expr = ExpressionStandard::Sum(Box::new(ExpressionStandard::Mle(a_f1.clone())), Box::new(ExpressionStandard::Product(vec![a_f1.clone(), a_f3.clone()])));
-            let num_y = self.rhs.num_vars();
-            let new_chal = vec![F::one(); num_y];
-            let final_val = expr.evaluate_expr(new_chal);
-            dbg!(final_val);
-            Ok((a_f1, a_f3))
-        }
+    pub fn sumcheck(&mut self) -> Result<(DenseMleRef<F>, DenseMleRef<F>), GateError> {
+        // do first (num_x_vars) rounds of sumcheck
+
+        // do the next (num_y_vars) rounds of sumcheck
+        
+        todo!()
     }
 
 }
