@@ -1,3 +1,4 @@
+use ark_ff::Field;
 use itertools::Itertools;
 
 use crate::expression::{Expression, ExpressionStandard};
@@ -32,14 +33,17 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
-struct ExpoBuilder<F: FieldExt> {
+/// Takes x, outputs tuple [ r-x, b_ij*(r-x) + (1-b_ij) ]
+/// which is [repeated squares, continued exponetiations]
+/// first step in exponantiation
+struct ExpoBuilderInit<F: FieldExt> {
     packed_x: DenseMle<F, F>,
     bin_decomp: BinDecomp16Bit<F>,
     bit_index: usize,
     r: F,
 }
 
-impl<F: FieldExt> LayerBuilder<F> for ExpoBuilder<F> {
+impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderInit<F> {
     type Successor = (DenseMle<F, F>, DenseMle<F, F>);
 
     fn build_expression(&self) -> ExpressionStandard<F> {
@@ -58,71 +62,102 @@ impl<F: FieldExt> LayerBuilder<F> for ExpoBuilder<F> {
         let mut r_minus_x: DenseMle<F, F> = self.packed_x.clone().into_iter().map(
             |x| self.r - x
         ).collect();
-        r_minus_x.add_prefix_bits(prefix_bits); 
-        r_minus_x.define_layer_id(id);
+        r_minus_x.add_prefix_bits(prefix_bits.clone()); 
+        r_minus_x.define_layer_id(id.clone());
 
         let b_ij = self.bin_decomp.bits[self.bit_index];
 
         let mut prev_prod: DenseMle<F, F> = r_minus_x.clone().into_iter().map(
             |r_minus_x| b_ij * r_minus_x + (F::one() - b_ij)
         ).collect();
+        prev_prod.add_prefix_bits(prefix_bits); 
+        prev_prod.define_layer_id(id);
 
         (r_minus_x, prev_prod)
     }
 }
 
-struct ExpoBuilderRecurse<F: FieldExt> {
-    prev_expo: DenseMle<F, F>,
-    prev_prod: DenseMle<F, F>,
-    bin_decomp: BinDecomp16Bit<F>,
-    bit_index: usize,
+/// Takes x, outputs x^2
+/// used in repeated squaring in exponantiation
+struct SquaringBuilder<F: FieldExt> {
+    mle: DenseMle<F, F>,
 }
 
-impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderRecurse<F> {
-    type Successor = (DenseMle<F, F>, DenseMle<F, F>);
-
+impl<F: FieldExt> LayerBuilder<F> for SquaringBuilder<F> {
+    type Successor = DenseMle<F, F>;
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let expression_expo = ExpressionStandard::products(vec![self.prev_expo.mle_ref(), self.prev_expo.mle_ref()]);
-
-        let b_ij = self.bin_decomp.bits[self.bit_index];
-
-        // begin sus
-        let expo: DenseMle<F, F> = self.prev_expo.clone().into_iter().map(
-                |x| x * x
-            ).collect();
-
-        let prod: DenseMle<F, F> = self.prev_prod
+        ExpressionStandard::products(vec![self.mle.mle_ref(), self.mle.mle_ref()])
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let mut squared: DenseMle<F, F> = self.mle
             .clone()
             .into_iter()
-            .zip(expo.into_iter())
+            .map(|x| x * x)
+            .collect();
+        squared.add_prefix_bits(prefix_bits);
+        squared.define_layer_id(id);
+        squared
+    }
+}
+
+struct ExpoBuilderBitExpo<F: FieldExt> {
+    bin_decomp: BinDecomp16Bit<F>,
+    bit_index: usize,
+    squared: DenseMle<F, F>,
+}
+
+/// Takes squared (r-x_i)^j, outputs b_ij * (r-x_i)^k + (1-b_ij)
+impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderBitExpo<F> {
+    type Successor = DenseMle<F, F>;
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        let b_ij = self.bin_decomp.bits[self.bit_index];
+        ExpressionStandard::Sum(Box::new(ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.squared.mle_ref())),
+                                                                     b_ij)),
+                                Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Constant(b_ij)))
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let b_ij = self.bin_decomp.bits[self.bit_index];
+        let mut bit_expoed: DenseMle<F, F> = self.squared
+            .clone()
+            .into_iter()
             .map(
-                |(prev_prod, expo)| prev_prod * (b_ij * expo + (F::one() - b_ij))
-            ).collect();
-        // end sus
+            |squared| (b_ij * squared + (F::one() - b_ij))
+        ).collect();
 
-        let expression_prod = ExpressionStandard::Mle(prod.mle_ref());
+        bit_expoed.add_prefix_bits(prefix_bits);
+        bit_expoed.define_layer_id(id);
+        bit_expoed
+    }
+}
 
-        expression_expo.concat(expression_prod)
+/// Takes (1) b_ij * (r-x_i)^j + (1-b_ij), (2) prev_prods PROD(b_ij * (r-x_i)^j + (1-b_ij)) across j
+/// Outputs (1) * (2). naming (1) as multiplier
+struct ExpoBuilderProduct<F: FieldExt> {
+    multiplier: DenseMle<F, F>,
+    prev_prod: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderProduct<F> {
+    type Successor = DenseMle<F, F>;
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::products(vec![self.multiplier.mle_ref(), self.prev_prod.mle_ref()])
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let mut expo: DenseMle<F, F> = self.prev_expo.clone().into_iter().map(
-            |x| x * x
-        ).collect();
-        expo.add_prefix_bits(prefix_bits); 
-        expo.define_layer_id(id);
-
-        let b_ij = self.bin_decomp.bits[self.bit_index];
 
         let mut prod: DenseMle<F, F> = self.prev_prod
             .clone()
             .into_iter()
-            .zip(expo.clone().into_iter())
+            .zip(self.multiplier.clone().into_iter())
             .map(
-            |(prev_prod, expo)| prev_prod * (b_ij * expo + (F::one() - b_ij))
+            |(prev_prod, multiplier)| prev_prod * multiplier
         ).collect();
 
-        (expo, prod)
+        prod.add_prefix_bits(prefix_bits);
+        prod.define_layer_id(id);
+        prod
+        
     }
 }
 
