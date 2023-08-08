@@ -56,15 +56,15 @@ pub enum InterpError {
 /// eval points (i.e. stored in Evals(Vec<F>)) giving us e.g.
 /// g(0), g(1), g(2), ...
 #[derive(PartialEq, Debug, Clone)]
-pub(crate) enum SumOrEvals<F: FieldExt> {
+pub enum SumOrEvals<F: FieldExt> {
     Sum(F),
     Evals(Vec<F>),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct PartialSum<F: FieldExt> {
-    sum_or_eval: SumOrEvals<F>,
-    max_num_vars: usize,
+pub struct PartialSum<F: FieldExt> {
+    pub sum_or_eval: SumOrEvals<F>,
+    pub max_num_vars: usize,
 }
 
 impl<F: FieldExt> Neg for SumOrEvals<F> {

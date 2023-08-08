@@ -127,6 +127,7 @@ impl<F: FieldExt> BetaTable<F> {
     /// Construct a new beta table using a single claim
     pub fn new(layer_claim: Claim<F>) -> Result<BetaTable<F>, BetaError> {
         let (layer_claim_vars, _) = &layer_claim;
+        dbg!(&layer_claim);
         let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
         let mut cur_table = vec![one_minus_r, r];
 
