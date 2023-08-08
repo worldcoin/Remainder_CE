@@ -33,6 +33,32 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
+struct ConcatBuilder<F: FieldExt> {
+    mle_1: DenseMle<F, F>,
+    mle_2: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
+    type Successor = DenseMle<F, F>;
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Selector(MleIndex::Iterated,
+                                     Box::new(ExpressionStandard::Mle(self.mle_1.mle_ref())),
+                                     Box::new(ExpressionStandard::Mle(self.mle_2.mle_ref())))
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let mut concat_mle_vec: Vec<F> = self.mle_1
+            .clone()
+            .into_iter()
+            .collect();
+
+        concat_mle_vec.extend(self.mle_2.clone().into_iter());
+        let mut concat_mle: DenseMle<F, F> = concat_mle_vec.into_iter().collect();
+        concat_mle.add_prefix_bits(prefix_bits);
+        concat_mle.define_layer_id(id);
+        concat_mle
+    }
+}
+
 /// Takes x, outputs r-x
 /// first step in exponantiation
 struct ExpoBuilderInit<F: FieldExt> {
@@ -416,27 +442,72 @@ mod tests {
     #[test]
     fn test_expo_builder() {
         // ExpoBuilderInit -> (SquaringBuilder -> ExpoBuilderBitExpo -> ExpoBuilderProduct ->)
-        let (_,_, dummy_decision_node_paths_mle, _, _, dummy_multiplicities_bin_decomp_mle, _, _) = generate_dummy_mles::<Fr>();
+        let (_,_, dummy_decision_node_paths_mle,
+            dummy_leaf_node_paths_mle, _,
+            dummy_multiplicities_bin_decomp_mle,
+            dummy_decision_nodes_mle,
+            dummy_leaf_nodes_mle) = generate_dummy_mles::<Fr>();
         println!("node path {:?}", dummy_decision_node_paths_mle);
         println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
+        println!("decision nodes: {:?}", dummy_decision_nodes_mle);
+        println!("leaf nodes: {:?}", dummy_leaf_nodes_mle);
+
         let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
-        let input_packing_builder = DecisionNodePackingBuilder{
+        let another_r = Fr::from(6);
+
+        // WHOLE TREE: decision nodes packing
+        let decision_packing_builder = DecisionNodePackingBuilder{
+            mle: dummy_decision_nodes_mle.clone(),
+            r,
+            r_packings
+        };
+        let _ = decision_packing_builder.build_expression();
+        let decision_packed = decision_packing_builder.next_layer(LayerId::Layer(0), None);
+
+        // WHOLE TREE: leaf nodes packing
+        let leaf_packing_builder = LeafNodePackingBuilder{
+            mle: dummy_leaf_nodes_mle.clone(),
+            r,
+            r_packing: another_r
+        };
+        let _ = leaf_packing_builder.build_expression();
+        let leaf_packed = leaf_packing_builder.next_layer(LayerId::Layer(0), None);
+
+        // PATH: decision nodes packing
+        let decision_path_packing_builder = DecisionNodePackingBuilder{
             mle: dummy_decision_node_paths_mle.clone(),
             r,
             r_packings
         };
+        let _ = decision_path_packing_builder.build_expression();
+        let decision_path_packed = decision_path_packing_builder.next_layer(LayerId::Layer(0), None);
 
-        let input_packed_expression = input_packing_builder.build_expression();
-        println!("layer expression: {:?}", input_packed_expression);
+        // PATH: leaf nodes packing
+        let leaf_path_packing_builder = LeafNodePackingBuilder{
+            mle: dummy_leaf_node_paths_mle.clone(),
+            r,
+            r_packing: another_r
+        };
+        let _ = leaf_path_packing_builder.build_expression();
+        let leaf_path_packed = leaf_path_packing_builder.next_layer(LayerId::Layer(0), None);
 
-        let next_layer = input_packing_builder.next_layer(LayerId::Layer(0), None);
-        println!("next layer mle: {:?}", next_layer);
+        println!("decision {:?}", decision_packed);
+        println!("leaf {:?}", leaf_packed);
 
-        let another_r = Fr::from(6);
+        let decision_leaf_concat_builder = ConcatBuilder{
+            mle_1: decision_packed,
+            mle_2: leaf_packed
+        };
+        let _ = decision_leaf_concat_builder.build_expression();
+        let x_packed = decision_leaf_concat_builder.next_layer(LayerId::Layer(0), None);
+
+        println!("concat leaf & decision {:?}", x_packed);
+
+        println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
 
         // r-x
         let r_minus_x_builder =  ExpoBuilderInit {
-            packed_x: next_layer,
+            packed_x: x_packed,
             r: another_r,
         };
         let _ = r_minus_x_builder.build_expression();
