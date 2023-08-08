@@ -275,7 +275,7 @@ impl<T: Copy> Node<T> {
     /// + Root node has id root_id;
     /// + Left child id is 2 * parent_id + 1;
     /// + Right child is 2 * parent_id + 2.
-    pub fn extract_decision_nodes<F: FieldExt>(&self, root_id: u32) -> Vec<DecisionNode<F>> {
+    pub(crate) fn extract_decision_nodes<F: FieldExt>(&self, root_id: u32) -> Vec<DecisionNode<F>> {
         let mut decision_nodes = Vec::new();
         self.append_decision_nodes(root_id, &mut decision_nodes);
         decision_nodes

@@ -1,6 +1,7 @@
-use super::structs::*;
 use crate::mle::dense::DenseMle;
 use crate::FieldExt;
+
+use super::structs::*;
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
@@ -29,9 +30,9 @@ const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
 /// - Fourth element is the input attributes which were used during inference
 /// - Third element is the attributes used (deprecated)
 fn generate_correct_path_and_permutation<F: FieldExt>(
-    decision_nodes: &Vec<DecisionNode<F>>,
-    leaf_nodes: &Vec<LeafNode<F>>,
-    input_datum: &Vec<InputAttribute<F>>,
+    decision_nodes: &[DecisionNode<F>],
+    leaf_nodes: &[LeafNode<F>],
+    input_datum: &[InputAttribute<F>],
 ) -> (
     Vec<DecisionNode<F>>,
     LeafNode<F>,
@@ -137,10 +138,10 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 
     // --- Length must be 16, then parse as array of length 16 ---
     let mut binary_repr_arr = [F::zero(); 16];
-    for idx in 0..16 {
+    for (idx, item) in binary_repr_arr.iter_mut().enumerate() {
         let char_repr = binary_repr.chars().nth(idx).unwrap();
         assert!(char_repr == '0' || char_repr == '1');
-        binary_repr_arr[idx] = if char_repr == '0' {
+        *item = if char_repr == '0' {
             F::zero()
         } else {
             F::one()
@@ -180,7 +181,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_attr_idx_data = (0..(DUMMY_INPUT_LEN * (TREE_HEIGHT - 1)))
         .map(|x| F::from(x as u16))
         .collect_vec();
-    let dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
+    let _dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
 
     // --- Populate (note that we have to permute later) ---
     for _ in 0..NUM_DUMMY_INPUTS {
@@ -190,7 +191,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
         for attr_id in 0..DUMMY_INPUT_LEN {
             let input_attribute = InputAttribute {
                 attr_id: F::from(attr_id as u16),
-                attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)) as u16)),
+                attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)))),
             };
             single_attribute_copy.push(input_attribute);
             // single_permuted_attribute_copy.push(input_attribute);
@@ -281,7 +282,6 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
             // --- Basically need to create a new vector with input attributes ---
             let ret = used_input_attributes
-                .clone()
                 .into_iter()
                 .chain(original_input_attributes.clone().into_iter().filter(|x| {
                     // --- Filter by duplicates, but remove them from the containing set ---
@@ -295,7 +295,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
             assert_eq!(ret.len(), original_input_attributes.len());
 
-            return ret;
+            ret
         })
         .collect_vec();
 
@@ -309,7 +309,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
             multiplicities,
             |prev_multiplicities, (path_decision_nodes, path_leaf_node, _, _)| {
                 // --- TODO!(ryancao): This is so bad lol ---
-                let mut new_multiplicities: Vec<F> = prev_multiplicities.clone();
+                let mut new_multiplicities: Vec<F> = prev_multiplicities;
 
                 // --- Just grab the node IDs from each decision node and add them to the multiplicities ---
                 path_decision_nodes.into_iter().for_each(|decision_node| {
@@ -333,7 +333,6 @@ fn generate_dummy_data<F: FieldExt>() -> (
 
     // --- Compute the binary decompositions of the differences ---
     let dummy_binary_decomp_diffs = dummy_auxiliaries
-        .clone()
         .into_iter()
         .map(|(_, _, diffs, _)| {
             diffs
@@ -374,7 +373,7 @@ fn get_sign_bit_and_abs_value<F: FieldExt>(value: F) -> (F, F) {
     } else {
         value
     };
-    return (sign_bit, abs_value);
+    (sign_bit, abs_value)
 }
 
 /// Computes the recomposition of the bits within `decomp` and checks
@@ -393,11 +392,11 @@ fn check_signed_recomposition<F: FieldExt>(actual_value: F, decomp: BinDecomp16B
         total
     };
     if total != actual_value {
-        dbg!(
-            "RIP: Total = {:?}, actual_value = {:?}",
-            total,
-            actual_value
-        );
+        // dbg!(
+        //     "RIP: Total = {:?}, actual_value = {:?}",
+        //     total,
+        //     actual_value
+        // );
         panic!();
         // return false;
     }
@@ -461,17 +460,14 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         .map(BinDecomp16Bit::from)
         .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
     let dummy_multiplicities_bin_decomp_mle = dummy_multiplicities_bin_decomp
-        .clone()
         .into_iter()
         .map(BinDecomp16Bit::from)
         .collect::<DenseMle<F, BinDecomp16Bit<F>>>();
     let dummy_decision_nodes_mle = dummy_decision_nodes
-        .clone()
         .into_iter()
         .map(DecisionNode::from)
         .collect::<DenseMle<F, DecisionNode<F>>>();
     let dummy_leaf_nodes_mle = dummy_leaf_nodes
-        .clone()
         .into_iter()
         .map(LeafNode::from)
         .collect::<DenseMle<F, LeafNode<F>>>();
@@ -496,16 +492,19 @@ mod tests {
 
     use super::*;
     use crate::{
-        expression::{Expression, ExpressionStandard},
-        mle::{dense::DenseMle, dense::DenseMleRef, Mle},
+        expression::ExpressionStandard,
+        layer::Claim,
+        mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef},
         sumcheck::{
-            compute_sumcheck_message, dummy_sumcheck, get_round_degree, verify_sumcheck_messages,
-            SumOrEvals,
+            compute_sumcheck_message, get_round_degree,
+            tests::{dummy_sumcheck, verify_sumcheck_messages},
+            Evals,
         },
     };
     use ark_bn254::Fr;
     use ark_std::test_rng;
     use ark_std::One;
+    use ark_std::UniformRand;
     use ark_std::Zero;
 
     /// Checks that bits within the diff binary decomp and the multiplicity
@@ -515,15 +514,15 @@ mod tests {
         // --- First generate the dummy data ---
         let (
             // dummy_attr_idx_data,
-            dummy_input_data,
+            _dummy_input_data,
             // dummy_permutation_indices,
-            dummy_permuted_input_data,
-            dummy_decision_node_paths,
-            dummy_leaf_node_paths,
+            _dummy_permuted_input_data,
+            _dummy_decision_node_paths,
+            _dummy_leaf_node_paths,
             dummy_binary_decomp_diffs,
             dummy_multiplicities_bin_decomp,
-            dummy_decision_nodes,
-            dummy_leaf_nodes,
+            _dummy_decision_nodes,
+            _dummy_leaf_nodes,
         ) = generate_dummy_data::<Fr>();
 
         // --- Checks that all the (diff) bits are either zero or one ---
@@ -559,18 +558,29 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_diff() {
         let mut rng = test_rng();
+        let layer_claim: Claim<Fr> = (
+            vec![
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+            ],
+            Fr::zero(),
+        );
+        let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
+        beta.table.index_mle_indices(0);
 
         let (
             // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
+            _dummy_input_data_mle,
             // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
+            _dummy_permuted_input_data_mle,
+            _dummy_decision_node_paths_mle,
+            _dummy_leaf_node_paths_mle,
             dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
+            _dummy_multiplicities_bin_decomp_mle,
+            _dummy_decision_nodes_mle,
+            _dummy_leaf_nodes_mle,
         ) = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLE ---
@@ -584,33 +594,35 @@ mod tests {
             first_bin_decomp_bit_mle[0].clone(),
             first_bin_decomp_bit_mle[0].clone(),
         ]);
-        dbg!(&b_squared);
-        dbg!(&first_bin_decomp_bit_mle[0]);
+        // dbg!(&b_squared);
+        // dbg!(&first_bin_decomp_bit_mle[0]);
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
-        dbg!(&b_minus_b_squared);
+        // dbg!(&b_minus_b_squared);
 
         // --- Evaluating at V(0, 0, 0) --> 0 ---
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
+        let _dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
         let b_minus_b_squared_clone = b_minus_b_squared.clone();
         b_minus_b_squared.index_mle_indices(0);
         // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
 
         // idk if this is actually how we should do this
         let round_degree = get_round_degree(&b_minus_b_squared, 0);
-        dbg!(round_degree);
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree);
+        // dbg!(round_degree);
+        let res =
+            compute_sumcheck_message(&mut b_minus_b_squared.clone(), 0, round_degree, &mut beta);
 
         // --- Only first two values need to be zeros ---
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => panic!(),
-            SumOrEvals::Evals(vec) => {
-                assert_eq!(vec[0], Fr::zero());
-                assert_eq!(vec[1], Fr::zero());
-            }
-        }
+        let Evals::<Fr>(vec) = res.unwrap();
+        assert_eq!(vec[0], Fr::zero());
+        assert_eq!(vec[1], Fr::zero());
 
-        let res_messages = dummy_sumcheck(b_minus_b_squared_clone.clone(), &mut rng, dummy_claim);
-        let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, &mut rng);
+        let res_messages = dummy_sumcheck(
+            &mut b_minus_b_squared_clone.clone(),
+            &mut rng,
+            layer_claim.clone(),
+        );
+        let verify_res =
+            verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
 
@@ -618,18 +630,21 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_multiplicities() {
         let mut rng = test_rng();
+        let layer_claim: Claim<Fr> = (vec![Fr::rand(&mut rng); 12], Fr::zero());
+        let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
+        beta.table.index_mle_indices(0);
 
         let (
             // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
+            _dummy_input_data_mle,
             // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle,
+            _dummy_permuted_input_data_mle,
+            _dummy_decision_node_paths_mle,
+            _dummy_leaf_node_paths_mle,
+            _dummy_binary_decomp_diffs_mle,
             dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
+            _dummy_decision_nodes_mle,
+            _dummy_leaf_nodes_mle,
         ) = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLE ---
@@ -647,12 +662,12 @@ mod tests {
 
         // --- We should get all zeros ---x
         let all_zeros: Vec<Fr> = vec![Fr::zero()]
-            .repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars as u32) as usize);
+            .repeat(2_u32.pow(first_bin_decomp_bit_mle[0].num_vars() as u32) as usize);
         let all_zeros_mle = DenseMle::new(all_zeros);
-        let all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
+        let _all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
 
         // --- Evaluating at V(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) --> 0 ---
-        let dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
+        let _dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
 
         // --- Initialize beta tables manually ---
         let b_minus_b_squared_clone = b_minus_b_squared.clone();
@@ -663,17 +678,23 @@ mod tests {
 
         // --- The first two elements in the sumcheck message should both be zero ---
         // Afterwards there are no guarantees since we're doing a potentially non-linear interpolation
-        let res = compute_sumcheck_message(&mut b_minus_b_squared.clone(), 1, first_round_deg);
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => panic!(),
-            SumOrEvals::Evals(vec) => {
-                assert_eq!(vec[0], Fr::zero());
-                assert_eq!(vec[1], Fr::zero());
-            }
-        }
+        let res = compute_sumcheck_message(
+            &mut b_minus_b_squared.clone(),
+            1,
+            first_round_deg,
+            &mut beta,
+        );
+        let Evals::<Fr>(vec) = res.unwrap();
+        assert_eq!(vec[0], Fr::zero());
+        assert_eq!(vec[1], Fr::zero());
 
-        let res_messages = dummy_sumcheck(b_minus_b_squared_clone.clone(), &mut rng, dummy_claim);
-        let verify_res = verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, &mut rng);
+        let res_messages = dummy_sumcheck(
+            &mut b_minus_b_squared_clone.clone(),
+            &mut rng,
+            layer_claim.clone(),
+        );
+        let verify_res =
+            verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
 
@@ -683,15 +704,15 @@ mod tests {
         // --- First generate the dummy data ---
         let (
             // dummy_attr_idx_data,
-            dummy_input_data,
+            _dummy_input_data,
             // dummy_permutation_indices,
             dummy_permuted_input_data,
             dummy_decision_node_paths,
-            dummy_leaf_node_paths,
+            _dummy_leaf_node_paths,
             dummy_binary_decomp_diffs,
-            dummy_multiplicities_bin_decomp,
-            dummy_decision_nodes,
-            dummy_leaf_nodes,
+            _dummy_multiplicities_bin_decomp,
+            _dummy_decision_nodes,
+            _dummy_leaf_nodes,
         ) = generate_dummy_data::<Fr>();
 
         // --- Grab the attr vals from the permuted inputs ---
@@ -767,17 +788,28 @@ mod tests {
     #[test]
     fn circuit_dummy_binary_recomp_test() {
         let mut rng = test_rng();
+        let layer_claim: Claim<Fr> = (
+            vec![
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+                Fr::rand(&mut rng),
+            ],
+            Fr::zero(),
+        );
+        let mut beta = BetaTable::new(layer_claim).unwrap();
+        beta.table.index_mle_indices(0);
         let (
             // dummy_attr_idx_data_mle,
-            dummy_input_data_mle,
+            _dummy_input_data_mle,
             // dummy_permutation_indices_mle,
             dummy_permuted_input_data_mle,
             dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
+            _dummy_leaf_node_paths_mle,
             dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
+            _dummy_multiplicities_bin_decomp_mle,
+            _dummy_decision_nodes_mle,
+            _dummy_leaf_nodes_mle,
         ) = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLEs and associated expressions ---
@@ -787,9 +819,8 @@ mod tests {
         let threshold_mle: DenseMleRef<Fr> = dummy_decision_node_paths_mle.threshold();
         let threshold_mle_expr = ExpressionStandard::Mle(threshold_mle.clone());
         let permuted_input_values_mle: DenseMleRef<Fr> =
-            dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars));
-        let permuted_input_values_mle_expr =
-            ExpressionStandard::Mle(permuted_input_values_mle.clone());
+            dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars()));
+        let permuted_input_values_mle_expr = ExpressionStandard::Mle(permuted_input_values_mle);
 
         // --- For debugging ---
         // let threshold_mle_expr_eval = evaluate_expr(&mut threshold_mle_expr.clone(), 1, 2);
@@ -800,7 +831,7 @@ mod tests {
         // --- Need to just get diff ---
         // dbg!(permuted_input_values_mle.num_vars); // Should be 3
         // dbg!(threshold_mle.num_vars); // Should be 3
-        let mut diff_expr = permuted_input_values_mle_expr.clone() - threshold_mle_expr.clone();
+        let diff_expr = permuted_input_values_mle_expr - threshold_mle_expr;
         // let permuted_input_values_mle_expr_eval = compute_sumcheck_message(&mut permuted_input_values_mle_expr.clone(), 1, 2);
         // let threshold_mle_expr_eval = compute_sumcheck_message(&mut threshold_mle_expr.clone(), 1, 2);
         // dbg!(permuted_input_values_mle_expr_eval);
@@ -812,12 +843,12 @@ mod tests {
         let bin_decomp_mles_clone = bin_decomp_mles.clone();
 
         // --- Time for iterators... sigh ---
-        let mut b_s_times_abs_recomp_expr = bin_decomp_mles.into_iter().enumerate().skip(1).fold(
+        let b_s_times_abs_recomp_expr = bin_decomp_mles.into_iter().enumerate().skip(1).fold(
             b_s_initial_acc,
             |acc_expr, (bit_idx, bin_decomp_mle)| {
                 // --- First compute b_s * coeff ---
                 let b_s_times_coeff =
-                    ExpressionStandard::Product(vec![bin_decomp_mle.clone(), sign_bit_mle.clone()]);
+                    ExpressionStandard::Product(vec![bin_decomp_mle, sign_bit_mle.clone()]);
 
                 let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
 
@@ -840,7 +871,7 @@ mod tests {
         );
 
         let abs_recomp_initial_acc = ExpressionStandard::Constant(Fr::zero());
-        let mut abs_recomp_expr = bin_decomp_mles_clone.into_iter().enumerate().skip(1).fold(
+        let abs_recomp_expr = bin_decomp_mles_clone.into_iter().enumerate().skip(1).fold(
             abs_recomp_initial_acc,
             |acc_expr, (bit_idx, bin_decomp_mle)| {
                 // --- Compute just coeff * 2^{bit_idx} ---
@@ -850,17 +881,17 @@ mod tests {
                 let coeff_times_base = ExpressionStandard::Scaled(coeff_expr_ptr, base);
 
                 // Debugging
-                let coeff_times_base_eval =
-                    compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2);
+                let _coeff_times_base_eval =
+                    compute_sumcheck_message(&mut coeff_times_base.clone(), 1, 2, &mut beta);
 
                 acc_expr + coeff_times_base
             },
         );
 
         // --- Subtract the two, and (TODO!(ryancao)) ensure they have the same number of variables ---
-        let mut final_expr = diff_expr.clone() - abs_recomp_expr.clone()
+        let mut final_expr = diff_expr - abs_recomp_expr
             + b_s_times_abs_recomp_expr.clone()
-            + b_s_times_abs_recomp_expr.clone();
+            + b_s_times_abs_recomp_expr;
 
         // --- Let's just see what the expressions give us... ---
         // Debugging
@@ -873,20 +904,16 @@ mod tests {
 
         // let dummy_claim = (vec![Fr::one(); 3], Fr::zero());
 
-        let final_expr_clone = final_expr.clone();
+        let _final_expr_clone = final_expr.clone();
 
         final_expr.index_mle_indices(0);
         // final_expr.init_beta_tables(dummy_claim.clone());
 
         // --- Only the first two evals should be zeros ---
-        let res = compute_sumcheck_message(&mut final_expr, 1, 3);
-        match res.clone().unwrap() {
-            SumOrEvals::Sum(_) => {}
-            SumOrEvals::Evals(evaluations) => {
-                assert_eq!(evaluations[0], Fr::zero());
-                assert_eq!(evaluations[1], Fr::zero());
-            }
-        }
+        let res = compute_sumcheck_message(&mut final_expr, 1, 3, &mut beta);
+        let Evals::<Fr>(vec) = res.unwrap();
+        assert_eq!(vec[0], Fr::zero());
+        assert_eq!(vec[1], Fr::zero());
 
         // let res_messages = dummy_sumcheck(final_expr_clone, &mut rng, dummy_claim);
         // let verify_res = verify_sumcheck_messages(res_messages);
@@ -905,26 +932,26 @@ mod tests {
             // dummy_attr_idx_data_mle,
             dummy_input_data_mle,
             // dummy_permutation_indices_mle,
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
+            _dummy_permuted_input_data_mle,
+            _dummy_decision_node_paths_mle,
+            _dummy_leaf_node_paths_mle,
+            _dummy_binary_decomp_diffs_mle,
+            _dummy_multiplicities_bin_decomp_mle,
+            _dummy_decision_nodes_mle,
+            _dummy_leaf_nodes_mle,
         ) = generate_dummy_mles::<Fr>();
 
         let mut rng = test_rng();
 
         // --- Get packed inputs first ---
-        let r1: Fr = rng.gen();
-        let r2: Fr = rng.gen();
+        let _r1: Fr = rng.gen();
+        let _r2: Fr = rng.gen();
 
         // --- Multiply to do packing ---
         let dummy_attribute_id_mleref = dummy_input_data_mle.attr_id(None);
-        let dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref);
+        let _dummy_attribute_id_mleref_expr = ExpressionStandard::Mle(dummy_attribute_id_mleref);
         let dummy_attribute_val_mleref = dummy_input_data_mle.attr_val(None);
-        let dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref);
+        let _dummy_attribute_val_mleref_expr = ExpressionStandard::Mle(dummy_attribute_val_mleref);
 
         // ---
     }

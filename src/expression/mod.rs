@@ -6,12 +6,12 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
+use itertools::Itertools;
 use thiserror::Error;
 
 use crate::{
-    layer::Claim,
     mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef},
-    sumcheck::compute_sumcheck_message,
+    sumcheck::MleError,
     FieldExt,
 };
 
@@ -24,7 +24,7 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     #[allow(clippy::too_many_arguments)]
     ///Evaluate an expression and return a custom type
     fn evaluate<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(&Self::MleRef) -> T,
@@ -32,6 +32,21 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(&[Self::MleRef]) -> T,
         scaled: &impl Fn(T, F) -> T,
+    ) -> T;
+
+    #[allow(clippy::too_many_arguments)]
+    /// Evaluate an expression for sumcheck
+    fn evaluate_sumcheck<T>(
+        &self,
+        constant: &impl Fn(F, &DenseMleRef<F>) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        mle_eval: &impl Fn(&Self::MleRef, &DenseMleRef<F>) -> T,
+        negated: &impl Fn(T) -> T,
+        sum: &impl Fn(T, T) -> T,
+        product: &impl Fn(&[Self::MleRef], &DenseMleRef<F>) -> T,
+        scaled: &impl Fn(T, F) -> T,
+        beta_mle_ref: &DenseMleRef<F>,
+        round_index: usize,
     ) -> T;
 
     /// Traverses the expression tree, similarly to `evaluate()`, but with a single
@@ -50,6 +65,8 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     fn fix_variable(&mut self, round_index: usize, challenge: F);
 
     /// Evaluates the current expression (as a multivariate function) at `challenges`
+    ///
+    /// If the expression is already bound, this will check that the challenges match the already bound indices
     fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError>;
 }
 
@@ -65,16 +82,17 @@ pub enum ExpressionError {
     #[error("Something went wrong while evaluating: {0}")]
     EvaluationError(&'static str),
     ///Error that wraps an MleError
-    /// TODO!(Do we even need this?)
-    #[error("Something went wrong while evaluating the MLE")]
-    MleError,
-    // ///Error when there is no beta table!!!!!!
-    // #[error("No beta table")]
-    // BetaError,
+    #[error("Something went wrong while evaluating the MLE: {0}")]
+    MleError(MleError),
     #[error("Selector bit not bound before final evaluation gather")]
+    ///Selector bit not bound before final evaluation gather
     SelectorBitNotBoundError,
     #[error("MLE ref with more than one element in its bookkeeping table")]
+    ///MLE ref with more than one element in its bookkeeping table
     EvaluateNotFullyBoundError,
+    #[error("The bound indices of this expression don't match the indices passed in")]
+    ///The bound indices of this expression don't match the indices passed in
+    EvaluateBoundIndicesDontMatch,
 }
 
 ///TODO!(Genericise this over the MleRef Trait)
@@ -107,7 +125,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     /// operations.
     #[allow(clippy::too_many_arguments)]
     fn evaluate<T>(
-        &mut self,
+        &self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
         mle_eval: &impl Fn(&DenseMleRef<F>) -> T,
@@ -219,7 +237,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         match self {
             ExpressionStandard::Selector(index, a, b) => {
                 if *index == MleIndex::IndexedBit(round_index) {
-                    *index = MleIndex::Bound(challenge);
+                    index.bind_index(challenge);
                 } else {
                     a.fix_variable(round_index, challenge);
                     b.fix_variable(round_index, challenge);
@@ -258,14 +276,203 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
         // --- It's as simple as fixing all variables ---
         challenges
-            .into_iter()
+            .iter()
             .enumerate()
-            .for_each(|(round_idx, challenge)| {
+            .for_each(|(round_idx, &challenge)| {
                 self.fix_variable(round_idx, challenge);
             });
 
+        let mut observer_fn = |exp: &ExpressionStandard<F>| -> Result<(), ExpressionError> {
+            match exp {
+                ExpressionStandard::Mle(mle_ref) => {
+                    let indices = mle_ref
+                        .mle_indices()
+                        .iter()
+                        .filter_map(|index| match index {
+                            MleIndex::Bound(chal, index) => Some((*chal, index)),
+                            _ => None,
+                        })
+                        .collect_vec();
+
+                    let start = *indices[0].1;
+                    let end = *indices[indices.len() - 1].1;
+
+                    let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
+
+                    if indices.as_slice() == &challenges[start..=end] {
+                        Ok(())
+                    } else {
+                        Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                    }
+                }
+                _ => Ok(()),
+            }
+        };
+        self.traverse(&mut observer_fn)?;
+
         // --- Traverse the expression and pick up all the evals ---
         gather_combine_all_evals(self)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn evaluate_sumcheck<T>(
+        &self,
+        constant: &impl Fn(F, &DenseMleRef<F>) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
+        mle_eval: &impl Fn(&DenseMleRef<F>, &DenseMleRef<F>) -> T,
+        negated: &impl Fn(T) -> T,
+        sum: &impl Fn(T, T) -> T,
+        product: &impl Fn(&[DenseMleRef<F>], &DenseMleRef<F>) -> T,
+        scaled: &impl Fn(T, F) -> T,
+        beta_mle_ref: &DenseMleRef<F>,
+        round_index: usize,
+    ) -> T {
+        match self {
+            ExpressionStandard::Constant(scalar) => constant(*scalar, beta_mle_ref),
+            ExpressionStandard::Selector(index, a, b) => {
+                // need to check whether the selector bit is the current independent variable
+                if let MleIndex::IndexedBit(idx) = index {
+                    match Ord::cmp(&round_index, idx) {
+                        // if not, need to split the beta table according to the beta_split function
+                        std::cmp::Ordering::Less => {
+                            let (beta_mle_first, beta_mle_second) = beta_split(beta_mle_ref);
+                            selector_column(
+                                index,
+                                a.evaluate_sumcheck(
+                                    constant,
+                                    selector_column,
+                                    mle_eval,
+                                    negated,
+                                    sum,
+                                    product,
+                                    scaled,
+                                    &beta_mle_second,
+                                    round_index,
+                                ),
+                                b.evaluate_sumcheck(
+                                    constant,
+                                    selector_column,
+                                    mle_eval,
+                                    negated,
+                                    sum,
+                                    product,
+                                    scaled,
+                                    &beta_mle_first,
+                                    round_index,
+                                ),
+                            )
+                        }
+                        // otherwise, proceed normally
+                        std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => selector_column(
+                            index,
+                            a.evaluate_sumcheck(
+                                constant,
+                                selector_column,
+                                mle_eval,
+                                negated,
+                                sum,
+                                product,
+                                scaled,
+                                beta_mle_ref,
+                                round_index,
+                            ),
+                            b.evaluate_sumcheck(
+                                constant,
+                                selector_column,
+                                mle_eval,
+                                negated,
+                                sum,
+                                product,
+                                scaled,
+                                beta_mle_ref,
+                                round_index,
+                            ),
+                        ),
+                    }
+                } else {
+                    selector_column(
+                        index,
+                        a.evaluate_sumcheck(
+                            constant,
+                            selector_column,
+                            mle_eval,
+                            negated,
+                            sum,
+                            product,
+                            scaled,
+                            beta_mle_ref,
+                            round_index,
+                        ),
+                        b.evaluate_sumcheck(
+                            constant,
+                            selector_column,
+                            mle_eval,
+                            negated,
+                            sum,
+                            product,
+                            scaled,
+                            beta_mle_ref,
+                            round_index,
+                        ),
+                    )
+                }
+            }
+            ExpressionStandard::Mle(query) => mle_eval(query, beta_mle_ref),
+            ExpressionStandard::Negated(a) => {
+                let a = a.evaluate_sumcheck(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta_mle_ref,
+                    round_index,
+                );
+                negated(a)
+            }
+            ExpressionStandard::Sum(a, b) => {
+                let a = a.evaluate_sumcheck(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta_mle_ref,
+                    round_index,
+                );
+                let b = b.evaluate_sumcheck(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta_mle_ref,
+                    round_index,
+                );
+                sum(a, b)
+            }
+            ExpressionStandard::Product(queries) => product(queries, beta_mle_ref),
+            ExpressionStandard::Scaled(a, f) => {
+                let a = a.evaluate_sumcheck(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta_mle_ref,
+                    round_index,
+                );
+                scaled(a, *f)
+            }
+        }
     }
 }
 
@@ -274,20 +481,14 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
 /// within. TODO!(ryancao): Make this not need to be mutable
 fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
-    expr: &mut Exp,
+    expr: &Exp,
 ) -> Result<F, ExpressionError> {
     let constant = |c| Ok(c);
     let selector_column =
         |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
-            if let Err(e) = lhs {
-                return Err(e);
-            }
-            if let Err(e) = rhs {
-                return Err(e);
-            }
             // --- Selector bit must be bound ---
-            if let MleIndex::Bound(val) = idx {
-                return Ok(*val * lhs.unwrap() + (F::one() - val) * rhs.unwrap());
+            if let MleIndex::Bound(val, _) = idx {
+                return Ok(*val * lhs? + (F::one() - val) * rhs?);
             }
             Err(ExpressionError::SelectorBitNotBoundError)
         };
@@ -301,33 +502,17 @@ fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
         Err(e) => Err(e),
         Ok(val) => Ok(val.neg()),
     };
-    let sum = |lhs, rhs| {
-        if let Err(e) = lhs {
-            return Err(e);
-        }
-        if let Err(e) = rhs {
-            return Err(e);
-        }
-        Ok(lhs.unwrap() + rhs.unwrap())
-    };
+    let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
     let product = for<'a, 'b> |mle_refs: &'a [Exp::MleRef]| -> Result<F, ExpressionError> {
-        mle_refs.into_iter().fold(Ok(F::one()), |acc, new_mle_ref| {
+        mle_refs.iter().fold(Ok(F::one()), |acc, new_mle_ref| {
             // --- Accumulate either errors or multiply ---
-            if let Err(e) = acc {
-                return Err(e);
-            }
             if new_mle_ref.bookkeeping_table().len() != 1 {
                 return Err(ExpressionError::EvaluateNotFullyBoundError);
             }
-            Ok(acc.unwrap() * new_mle_ref.bookkeeping_table()[0])
+            Ok(acc? * new_mle_ref.bookkeeping_table()[0])
         })
     };
-    let scaled = |a, scalar| {
-        if let Err(e) = a {
-            return Err(e);
-        }
-        Ok(a.unwrap() * scalar)
-    };
+    let scaled = |a: Result<F, ExpressionError>, scalar: F| Ok(a? * scalar);
     expr.evaluate(
         &constant,
         &selector_column,
@@ -344,33 +529,6 @@ impl<F: FieldExt> ExpressionStandard<F> {
     pub fn products(product_list: Vec<DenseMleRef<F>>) -> Self {
         Self::Product(product_list)
     }
-
-    /*
-    /// Initializes all beta tables within the current Expression
-    pub fn init_beta_tables(&mut self, layer_claim: Claim<F>) {
-        match self {
-            ExpressionStandard::Mle(mle_ref, beta_table) => {
-                let init_table = Some(BetaTable::new(layer_claim, &[mle_ref.clone()]).unwrap());
-                *beta_table = init_table.clone();
-            }
-            ExpressionStandard::Product(mle_refs, beta_table) => {
-                let init_table = Some(BetaTable::new(layer_claim, mle_refs).unwrap());
-                *beta_table = init_table;
-            }
-            ExpressionStandard::Selector(mle_index, a, b) => {
-                a.init_beta_tables(layer_claim.clone());
-                b.init_beta_tables(layer_claim);
-            }
-            ExpressionStandard::Sum(a, b) => {
-                a.init_beta_tables(layer_claim.clone());
-                b.init_beta_tables(layer_claim);
-            }
-            ExpressionStandard::Scaled(a, _) => a.init_beta_tables(layer_claim),
-            ExpressionStandard::Negated(a) => a.init_beta_tables(layer_claim),
-            ExpressionStandard::Constant(_) => {},
-        }
-    }
-    */
 
     /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
     /// Returns the max number of bits that are indexed
@@ -453,8 +611,8 @@ impl<F: FieldExt> Mul<F> for ExpressionStandard<F> {
 }
 
 #[cfg(test)]
-mod test {
-    use crate::mle::{dense::DenseMle, Mle};
+mod tests {
+    use crate::mle::dense::DenseMle;
 
     use super::*;
     use ark_bn254::Fr;
@@ -471,7 +629,7 @@ mod test {
 
         let expression = expression1.clone() + expression3.clone();
 
-        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle.clone()]);
+        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
 
         let expression = expression_product + expression;
 
@@ -619,7 +777,7 @@ mod test {
         let challenge = vec![Fr::from(-1), Fr::from(7), Fr::from(3)];
         let eval = expression.evaluate_expr(challenge);
 
-        assert_eq!(eval.unwrap(), Fr::from((-1) * 149 + (1 - (-1)) * 5));
+        assert_eq!(eval.unwrap(), Fr::from(-149 + (1 - (-1)) * 5));
     }
 
     #[test]
@@ -646,9 +804,9 @@ mod test {
         let num_indices = expression_product.index_mle_indices(0);
         assert_eq!(num_indices, 2);
 
-        let eval_prod = expression_product.evaluate_expr(challenge.clone()).unwrap();
+        let eval_prod = expression_product.evaluate_expr(challenge).unwrap();
 
-        assert_eq!(eval_prod, Fr::from(eval_1 * eval_2));
+        assert_eq!(eval_prod, (eval_1 * eval_2));
         assert_eq!(eval_prod, Fr::from(11 * -17));
     }
 
@@ -660,7 +818,7 @@ mod test {
             DenseMle::<_, Fr>::new(vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)])
                 .mle_ref();
 
-        let expression_1 = ExpressionStandard::Mle(mle_1.clone());
+        let expression_1 = ExpressionStandard::Mle(mle_1);
 
         let mle_2 = DenseMle::<_, Fr>::new(vec![
             Fr::from(1),
@@ -674,7 +832,7 @@ mod test {
         ])
         .mle_ref();
 
-        let expression_2 = ExpressionStandard::Mle(mle_2.clone());
+        let expression_2 = ExpressionStandard::Mle(mle_2);
 
         let mut expression = expression_1 + expression_2;
         let num_indices = expression.index_mle_indices(0);
@@ -747,7 +905,7 @@ mod test {
 
         let expression = expression1.clone() + expression3.clone();
 
-        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle.clone()]);
+        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
 
         let expression = expression_product + expression;
 
@@ -762,6 +920,6 @@ mod test {
         let challenge = vec![Fr::from(2), Fr::from(3), Fr::from(4)];
         let eval = expression.evaluate_expr(challenge).unwrap();
 
-        assert_eq!(eval, Fr::from(-1 * ((1 - (24 * 24 - 23)) * 2) - 24 * 2));
+        assert_eq!(eval, Fr::from(-((1 - (24 * 24 - 23)) * 2) - 24 * 2));
     }
 }
