@@ -16,57 +16,70 @@ struct TreesInfo {
     scale: f64,
 }
 
+// a type _alias_ (note for self)
 type FlatTree<F> = (Vec<DecisionNode<F>>, Vec<LeafNode<F>>);
-/// Given a TreesInfo object representing a decision tree model operating on u32 samples, prepare
-/// the model for circuitization:
-/// 1. scale and bias are folded into the leaf values;
-/// 2. leaf values are symmetrically quantized to i32;
-/// 3. all trees are padded such that they are all perfect and of uniform depth (without modifying
-///    the predictions of any tree);
-/// 4. the uniform depth is chosen to be 2^l + 1 for minimal l >= 0.
-/// The tree of the decision tree model is then "flattened" to a 2-tuple of type:
-///   (Vec<DecisionNode>, Vec<LeafNode<i32>>).
-/// Both these vectors are ordered by the id attributes of their members.
-/// Ids for DecisionNodes are 0 .. 2^(depth - 1) - 2 (inclusive).
-/// Ids for LeafNodes are 2^(depth - 1) - 1 .. 2^depth - 1 (inclusive).
-/// The vector of all such pairs is then returned, along with
-/// the (uniform) depth of the trees, and the scaling factor to approximately undo the quantization
-/// (via division) after aggregating scores.
-fn prepare_for_circuitization<F: FieldExt>(trees_info: &TreesInfo) -> (Vec<FlatTree<F>>, u32, f64) {
-    let mut trees_f64 = trees_info.trees.clone();
-    // fold scale into all trees
-    for tree in &mut trees_f64 {
-        tree.transform_values(&|value| trees_info.scale * value);
+struct CircuitizedTrees<F: FieldExt> {
+    trees: Vec<FlatTree<F>>,
+    depth: u32,
+    scaling: f64,
+}
+
+impl<'a, F: FieldExt> From<&'a TreesInfo> for CircuitizedTrees<F> {
+    
+    /// Given a TreesInfo object representing a decision tree model operating on u32 samples, prepare the model for circuitization:
+    /// 1. scale and bias are folded into the leaf values;
+    /// 2. leaf values are symmetrically quantized to i32;
+    /// 3. all trees are padded such that they are all perfect and of uniform depth (without modifying
+    ///    the predictions of any tree);
+    /// 4. the uniform depth is chosen to be 2^l + 1 for minimal l >= 0.
+    /// The tree of the decision tree model is then "flattened" to a 2-tuple of type:
+    ///   (Vec<DecisionNode>, Vec<LeafNode<i32>>).
+    /// a ("FlatTree").  Both these vectors are ordered by the id attributes of their members.
+    /// Ids for DecisionNodes are 0 .. 2^(depth - 1) - 2 (inclusive).
+    /// Ids for LeafNodes are 2^(depth - 1) - 1 .. 2^depth - 1 (inclusive).
+    /// The resulting CircuitizedTrees incorporates all the FlatTree instances, the (uniform) depth
+    /// of the trees, and the scaling factor to approximately undo the quantization (via division)
+    /// after aggregating the scores.
+    fn from(trees_info: &'a TreesInfo) -> Self {
+        let mut trees_f64 = trees_info.trees.clone();
+        // fold scale into all trees
+        for tree in &mut trees_f64 {
+            tree.transform_values(&|value| trees_info.scale * value);
+        }
+        // fold bias into first tree
+        trees_f64[0].transform_values(&|value| value + trees_info.bias);
+
+        // quantize the leaf values
+        let (qtrees, rescaling) = quantize_trees(&trees_f64);
+
+        // pad the trees for perfection
+        let max_depth = qtrees
+            .iter()
+            .map(|tree: &Node<i32>| tree.depth(std::cmp::max))
+            .max()
+            .unwrap();
+        let target_depth = next_power_of_two(max_depth - 1).unwrap() + 1;
+        // we'll insert DecisionNodes with feature_index=0 and threshold=0 where needed
+        let leaf_expander = |depth: u32, value: i32| Node::new_constant_tree(depth, 0, 0, value);
+        let qtrees: Vec<Node<i32>> = qtrees
+            .iter()
+            .map(|tree: &Node<i32>| tree.perfect_to_depth(target_depth, &leaf_expander))
+            .collect();
+
+        let mut flattened_trees: Vec<(Vec<DecisionNode<F>>, Vec<LeafNode<F>>)> = vec![];
+        for qtree in qtrees {
+            flattened_trees.push((
+                qtree.extract_decision_nodes::<F>(0),
+                qtree.extract_leaf_nodes::<F>(0),
+            ));
+        }
+
+        CircuitizedTrees {
+            trees: flattened_trees,
+            depth: target_depth,
+            scaling: rescaling,
+        }
     }
-    // fold bias into first tree
-    trees_f64[0].transform_values(&|value| value + trees_info.bias);
-
-    // quantize the leaf values
-    let (qtrees, rescaling) = quantize_trees(&trees_f64);
-
-    // pad the trees for perfection
-    let max_depth = qtrees
-        .iter()
-        .map(|tree: &Node<i32>| tree.depth(std::cmp::max))
-        .max()
-        .unwrap();
-    let target_depth = next_power_of_two(max_depth - 1).unwrap() + 1;
-    // we'll insert DecisionNodes with feature_index=0 and threshold=0 where needed
-    let leaf_expander = |depth: u32, value: i32| Node::new_constant_tree(depth, 0, 0, value);
-    let qtrees: Vec<Node<i32>> = qtrees
-        .iter()
-        .map(|tree: &Node<i32>| tree.perfect_to_depth(target_depth, &leaf_expander))
-        .collect();
-
-    let mut flattened_trees: Vec<(Vec<DecisionNode<F>>, Vec<LeafNode<F>>)> = vec![];
-    for qtree in qtrees {
-        flattened_trees.push((
-            qtree.extract_decision_nodes::<F>(0),
-            qtree.extract_leaf_nodes::<F>(0),
-        ));
-    }
-
-    (flattened_trees, target_depth, rescaling)
 }
 
 type Sample<F> = Vec<InputAttribute<F>>;
@@ -597,17 +610,17 @@ mod tests {
     }
 
     #[test]
-    fn test_prepare_for_circuitization() {
+    fn test_circuitizedtrees_from() {
         let trees_info = TreesInfo {
             trees: vec![build_small_tree(), Node::new_leaf(3.0)],
             bias: 1.1,
             scale: 6.6,
         };
-        let (flattened_trees, depth, rescaling) = prepare_for_circuitization::<Fr>(&trees_info);
-        assert_eq!(flattened_trees.len(), 2);
-        assert_eq!(depth, 3);
+        let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
+        assert_eq!(circ_trees.trees.len(), 2);
+        assert_eq!(circ_trees.depth, 3);
         let mut acc_score: Fr = Fr::from(0);
-        for (decision_nodes, leaf_nodes) in &flattened_trees {
+        for (decision_nodes, leaf_nodes) in &circ_trees.trees {
             assert_eq!(decision_nodes.len(), 3);
             assert_eq!(leaf_nodes.len(), 4);
             // check the ids of the decision nodes
@@ -629,7 +642,7 @@ mod tests {
         }
         // check that the quantized scores accumulated as expected
         let expected_score = trees_info.scale * (0.1 + 3.0) + trees_info.bias;
-        let quant_score = (expected_score * rescaling) as i32;
+        let quant_score = (expected_score * circ_trees.scaling) as i32;
         let f_quant_score = if quant_score >= 0 {
             Fr::from(quant_score)
         } else {
@@ -648,8 +661,8 @@ mod tests {
             bias: 1.1,
             scale: 6.6,
         };
-        let (flattened_trees, depth, rescaling) = prepare_for_circuitization::<Fr>(&trees_info);
+        let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
         // check that the depth is now 2^l + 1 for minimal l, i.e. equal to 9.
-        assert_eq!(depth, 9);
+        assert_eq!(circ_trees.depth, 9);
     }
 }
