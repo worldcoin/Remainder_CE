@@ -353,13 +353,13 @@ fn next_power_of_two(n: u32) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_test_curves::fp128::Fq;
+    use ark_bn254::Fr;
     use std::fs::File;
 
     #[test]
     fn test_read_sample_array() {
         let filename = String::from("src/zkdt/test_samples_10x6.npy");
-        let samples = read_sample_array::<Fq>(&filename);
+        let samples = read_sample_array::<Fr>(&filename);
         match samples {
             Ok(samples) => {
                 assert_eq!(samples.len(), 10);
@@ -535,17 +535,17 @@ mod tests {
     fn test_extract_decision_nodes() {
         // test trivial boundary case
         let leaf = Node::new_leaf(3);
-        let decision_nodes = leaf.extract_decision_nodes::<Fq>(0);
+        let decision_nodes = leaf.extract_decision_nodes::<Fr>(0);
         assert_eq!(decision_nodes.len(), 0);
         // test in non-trivial case
         let tree = build_small_tree();
         let root_id = 6;
-        let mut decision_nodes = tree.extract_decision_nodes::<Fq>(root_id);
+        let mut decision_nodes = tree.extract_decision_nodes::<Fr>(root_id);
         assert_eq!(decision_nodes.len(), 2);
         decision_nodes.sort_by_key(|node| node.node_id);
-        assert_eq!(decision_nodes[0].node_id, Fq::from(root_id));
-        assert_eq!(decision_nodes[0].attr_id, Fq::from(0));
-        assert_eq!(decision_nodes[1].node_id, Fq::from(2 * root_id + 1));
+        assert_eq!(decision_nodes[0].node_id, Fr::from(root_id));
+        assert_eq!(decision_nodes[0].attr_id, Fr::from(0));
+        assert_eq!(decision_nodes[1].node_id, Fr::from(2 * root_id + 1));
     }
 
     #[test]
@@ -553,19 +553,19 @@ mod tests {
         // trivial case
         let leaf = Node::new_leaf(-3);
         let root_id = 5;
-        let leaf_nodes = leaf.extract_leaf_nodes::<Fq>(root_id);
+        let leaf_nodes = leaf.extract_leaf_nodes::<Fr>(root_id);
         assert_eq!(leaf_nodes.len(), 1);
-        assert_eq!(leaf_nodes[0].node_id, Fq::from(root_id));
-        assert_eq!(leaf_nodes[0].node_val, -Fq::from(3));
+        assert_eq!(leaf_nodes[0].node_id, Fr::from(root_id));
+        assert_eq!(leaf_nodes[0].node_val, -Fr::from(3));
         // non-trivial
         let tree = build_small_tree().map(&|x| x as i32);
-        let mut leaf_nodes = tree.extract_leaf_nodes::<Fq>(0);
+        let mut leaf_nodes = tree.extract_leaf_nodes::<Fr>(0);
         assert_eq!(leaf_nodes.len(), 3);
         leaf_nodes.sort_by_key(|node| node.node_id);
-        assert_eq!(leaf_nodes[0].node_id, Fq::from(2));
-        assert_eq!(leaf_nodes[0].node_val, Fq::from(1));
-        assert_eq!(leaf_nodes[2].node_id, Fq::from(4));
-        assert_eq!(leaf_nodes[2].node_val, Fq::from(0));
+        assert_eq!(leaf_nodes[0].node_id, Fr::from(2));
+        assert_eq!(leaf_nodes[0].node_val, Fr::from(1));
+        assert_eq!(leaf_nodes[2].node_id, Fr::from(4));
+        assert_eq!(leaf_nodes[2].node_val, Fr::from(0));
     }
 
     #[test]
@@ -603,10 +603,10 @@ mod tests {
             bias: 1.1,
             scale: 6.6,
         };
-        let (flattened_trees, depth, rescaling) = prepare_for_circuitization::<Fq>(&trees_info);
+        let (flattened_trees, depth, rescaling) = prepare_for_circuitization::<Fr>(&trees_info);
         assert_eq!(flattened_trees.len(), 2);
         assert_eq!(depth, 3);
-        let mut acc_score: Fq = Fq::from(0);
+        let mut acc_score: Fr = Fr::from(0);
         for (decision_nodes, leaf_nodes) in &flattened_trees {
             assert_eq!(decision_nodes.len(), 3);
             assert_eq!(leaf_nodes.len(), 4);
@@ -615,14 +615,14 @@ mod tests {
                 .iter()
                 .map(|node| node.node_id)
                 .zip(0..3)
-                .map(|(a, b)| a == Fq::from(b))
+                .map(|(a, b)| a == Fr::from(b))
                 .all(|x| x));
             // check the ids of the leaf nodes
             assert!(leaf_nodes
                 .iter()
                 .map(|node| node.node_id)
                 .zip(3..7)
-                .map(|(a, b)| a == Fq::from(b))
+                .map(|(a, b)| a == Fr::from(b))
                 .all(|x| x));
             // accumulate score by taking the value of the first leaf node
             acc_score += leaf_nodes[0].node_val;
@@ -631,12 +631,12 @@ mod tests {
         let expected_score = trees_info.scale * (0.1 + 3.0) + trees_info.bias;
         let quant_score = (expected_score * rescaling) as i32;
         let f_quant_score = if quant_score >= 0 {
-            Fq::from(quant_score)
+            Fr::from(quant_score)
         } else {
-            -Fq::from(quant_score.abs() as u32)
+            -Fr::from(quant_score.abs() as u32)
         };
         // just check that's it's close
-        assert_eq!(f_quant_score, acc_score + Fq::from(1));
+        assert_eq!(f_quant_score, acc_score + Fr::from(1));
     }
 
     #[test]
@@ -648,7 +648,7 @@ mod tests {
             bias: 1.1,
             scale: 6.6,
         };
-        let (flattened_trees, depth, rescaling) = prepare_for_circuitization::<Fq>(&trees_info);
+        let (flattened_trees, depth, rescaling) = prepare_for_circuitization::<Fr>(&trees_info);
         // check that the depth is now 2^l + 1 for minimal l, i.e. equal to 9.
         assert_eq!(depth, 9);
     }
