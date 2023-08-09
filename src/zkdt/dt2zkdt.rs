@@ -10,38 +10,6 @@ use num::pow;
 use serde::{Deserialize, Serialize};
 use itertools::{repeat_n, Itertools};
 
-//#[derive(Copy, Debug, Clone)]
-//struct DecisionNode {
-//    node_id: u32,
-//    attr_id: u32,
-//    threshold: u32,
-//}
-//
-//#[derive(Copy, Debug, Clone)]
-//struct LeafNode {
-//    node_id: u32,
-//    node_val: i32,
-//}
-//
-///// --- 16-bit binary decomposition ---
-///// Used for the following components of the (circuit) input:
-///// a) The binary decomposition of the path node hints (i.e. path_x.thr - x.val)
-///// b) The binary decomposition of the multiplicity coefficients $c_j$
-//#[derive(Copy, Debug, Clone)]
-//struct BinDecomp16Bit {
-//    bits: [bool; 16],
-//}
-//
-///// --- Input element to the tree, i.e. a list of input attributes ---
-///// Used for the following components of the (circuit) input:
-///// a) The actual input attributes, i.e. x
-///// b) The permuted input attributes, i.e. \bar{x}
-//#[derive(Copy, Debug, Clone, PartialEq)]
-//struct InputAttribute {
-//    attr_id: u32,
-//    attr_val: u32,
-//}
-
 #[derive(Debug, Serialize, Deserialize)]
 struct TreesInfo {
     trees: Vec<Node<f64>>,
@@ -72,28 +40,6 @@ impl<F: FieldExt> From<&Node<i32>> for FlatTree<F> {
         }
     }
 }
-
-//impl<F: FieldExt> FlatTree<F> {
-//    /// Pre: sample.len()
-//    fn get_path(&self, sample: &Sample<F>) -> (Vec<DecisionNode<F>>, LeafNode<F>) {
-//        let mut path: Vec<DecisionNode<F>> = vec![];
-//        // start at root
-//        let mut current_node_id = 0;
-//        // keep going until current_node_id is becomes a leaf node id
-//        while current_node_id < self.decision_nodes.len() {
-//            path.push(self.decision_nodes[current_node_id]);
-//            let attr_id = (self.decision_nodes[current_node_id].attr_id.into_bigint()).as_ref()[0] as usize;
-//            // FIXME should we really be comparing field elements?
-//            if sample[attr_id].attr_val >= self.decision_nodes[current_node_id].threshold {
-//                current_node_id = current_node_id * 2 + 2;
-//            } else {
-//                current_node_id = current_node_id * 2 + 1;
-//            }
-//        }
-//        let leaf_node_idx = current_node_id - self.decision_nodes.len();
-//        (path, self.leaf_nodes[leaf_node_idx])
-//    }
-//}
 
 struct CircuitizedTrees<F: FieldExt> {
     trees: Vec<FlatTree<F>>,
@@ -134,10 +80,14 @@ impl<F: FieldExt> From<&TreesInfo> for CircuitizedTrees<F> {
         let target_depth = next_power_of_two(max_depth - 1).unwrap() + 1;
         // we'll insert DecisionNodes with feature_index=0 and threshold=0 where needed
         let leaf_expander = |depth: u32, value: i32| Node::new_constant_tree(depth, 0, 0, value);
-        let qtrees: Vec<Node<i32>> = qtrees
+        let mut qtrees: Vec<Node<i32>> = qtrees
             .iter()
             .map(|tree: &Node<i32>| tree.perfect_to_depth(target_depth, &leaf_expander))
             .collect();
+        // assign ids to all nodes
+        for tree in qtrees.iter_mut() {
+            tree.assign_id(0);
+        }
 
         let flattened_trees: Vec<FlatTree<F>> = qtrees.iter()
             .map(|qtree| qtree.into())
@@ -226,7 +176,7 @@ fn read_sample_array<F: FieldExt>(filename: &String) -> Result<Vec<Sample<F>>, R
 pub enum Node<T: Copy> {
     Internal {
         id: Option<u32>,
-        feature_index: u32,
+        feature_index: u32,  // FIXME should be usize?
         threshold: u32,
         left: Box<Node<T>>,
         right: Box<Node<T>>,
@@ -386,6 +336,34 @@ impl<T: Copy> Node<T> {
         match self {
             Node::Internal { id, .. } => *id,
             Node::Leaf { id, .. } => *id,
+        }
+    }
+
+    /// Return the path traced by the specified sample down this tree.
+    /// Pre: sample.len() > node.feature_index for this node and all descendents.
+    fn get_path<'a>(&'a self, sample: &Vec<u32>) -> Vec<&'a Node<T>> {
+        let mut path = Vec::new();
+        self.append_path(sample, &mut path);
+        path
+    }
+
+    /// Helper function to get_path.
+    /// Appends self to path, then, if internal, calls on the appropriate child node.
+    fn append_path<'a>(&'a self, sample: &Vec<u32>, path_to_here: &mut Vec<&'a Node<T>>) {
+        path_to_here.push(self);
+        if let Node::Internal {
+            left,
+            right,
+            feature_index,
+            threshold,
+            ..
+        } = self {
+            let next = if sample[*feature_index as usize] >= *threshold {
+                right
+            } else {
+                left
+            };
+            next.append_path(sample, path_to_here);
         }
     }
 }
@@ -832,28 +810,14 @@ mod tests {
                 .all(|x| x));
     }
 
-    /// FIXME needed
-    /// Helper function for testing
-    fn values_to_sample(values: Vec<i32>) -> Sample<Fr> {
-        values.iter()
-            .enumerate()
-            .map(|(index, value)| InputAttribute {
-                attr_id: Fr::from(index as u32),
-                attr_val: Fr::from(*value),
-            })
-            .collect()
+    #[test]
+    fn test_get_path() {
+        let mut tree = quantize_and_perfect(build_small_tree(), 3);
+        tree.assign_id(0);
+        let path = tree.get_path(&vec![0_u32, 2_u32]);
+        assert_eq!(path.len(), 3);
+        assert_eq!(path[0].get_id(), Some(0));
+        assert_eq!(path[1].get_id(), Some(1));
+        assert_eq!(path[2].get_id(), Some(4));
     }
-
-    //#[test]
-    //fn test_get_path() {
-    //    let tree = quantize_and_perfect(build_small_tree(), 3);
-    //    let flat_tree: FlatTree<Fr> = (&tree).into();
-    //    // sample chosen to hit boundary case for routing decision (<=)
-    //    let sample = values_to_sample(vec![0, 2]);
-    //    let (decision_nodes, leaf_node) = flat_tree.get_path(&sample);
-    //    assert_eq!(decision_nodes.len(), 2);
-    //    assert_eq!(decision_nodes[0].node_id, Fr::from(0));
-    //    assert_eq!(decision_nodes[1].node_id, Fr::from(1));
-    //    assert_eq!(leaf_node.node_id, Fr::from(4));
-    //}
 }
