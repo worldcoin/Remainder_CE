@@ -344,7 +344,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_circuit::generate_dummy_mles};
+    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_circuit::{generate_dummy_mles, TREE_HEIGHT}};
     use ark_bn254::Fr;
     use FieldExt;
 
@@ -637,6 +637,22 @@ mod tests {
                     (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64))).pow([59 as u64]),
                     (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))).pow([197 as u64])
                 ]).mle_ref().bookkeeping_table);
+
+        
+        let mut exponentiated_nodes = prev_prod.clone();
+        for _ in 0..TREE_HEIGHT {
+            let prod_builder = SplitProductBuilder {
+                mle: exponentiated_nodes
+            };
+            let _ = prod_builder.build_expression();
+            exponentiated_nodes = prod_builder.next_layer(LayerId::Layer(0), None);
+        }
+        println!("final multiset 1. {:?}", exponentiated_nodes);
+
+        println!("path decision {:?}", decision_path_packed);
+        println!("path leaf {:?}", leaf_path_packed);
+
+
 
     }
 
