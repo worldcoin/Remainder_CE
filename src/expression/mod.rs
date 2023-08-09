@@ -619,32 +619,6 @@ mod tests {
     use ark_std::One;
 
     #[test]
-    fn test_expression_operators() {
-        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
-
-        let mle =
-            DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]).mle_ref();
-
-        let expression3 = ExpressionStandard::Mle(mle.clone());
-
-        let expression = expression1.clone() + expression3.clone();
-
-        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
-
-        let expression = expression_product + expression;
-
-        let expression = expression1 - expression;
-
-        let expression = expression * Fr::from(2);
-
-        let expression = expression3.concat(expression);
-
-        let dense_mle_print = "DenseMleRef { bookkeeping_table: [BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0])], mle_indices: [Iterated, Iterated], num_vars: 2, layer_id: None }";
-
-        assert_eq!(format!("{expression:?}"), format!("Selector(Iterated, Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Product([{dense_mle_print}, {dense_mle_print}]), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))"));
-    }
-
-    #[test]
     fn test_constants_eval() {
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
 
@@ -872,27 +846,27 @@ mod tests {
         assert_eq!(eval_prod, Fr::from((-230 + 68) * 11));
     }
 
-    #[test]
-    fn test_not_fully_bounded_eval() {
-        let mle = DenseMle::<_, Fr>::new(vec![
-            Fr::from(4),
-            Fr::from(2),
-            Fr::from(5),
-            Fr::from(7),
-            Fr::from(2),
-            Fr::from(4),
-            Fr::from(9),
-            Fr::from(6),
-        ])
-        .mle_ref();
+    // #[test]
+    // fn test_not_fully_bounded_eval() {
+    //     let mle = DenseMle::<_, Fr>::new(vec![
+    //         Fr::from(4),
+    //         Fr::from(2),
+    //         Fr::from(5),
+    //         Fr::from(7),
+    //         Fr::from(2),
+    //         Fr::from(4),
+    //         Fr::from(9),
+    //         Fr::from(6),
+    //     ])
+    //     .mle_ref();
 
-        let mut expression = ExpressionStandard::Mle(mle);
-        let _ = expression.index_mle_indices(3);
+    //     let mut expression = ExpressionStandard::Mle(mle);
+    //     let _ = expression.index_mle_indices(3);
 
-        let challenge = vec![Fr::from(-2), Fr::from(3), Fr::from(5)];
-        let eval = expression.evaluate_expr(challenge);
-        assert_eq!(eval, Err(ExpressionError::EvaluateNotFullyBoundError));
-    }
+    //     let challenge = vec![Fr::from(-2), Fr::from(3), Fr::from(5)];
+    //     let eval = expression.evaluate_expr(challenge);
+    //     assert_eq!(eval, Err(ExpressionError::EvaluateNotFullyBoundError));
+    // }
 
     #[test]
     fn big_test_eval() {

@@ -113,7 +113,7 @@ impl<F: FieldExt> FromIterator<DecisionNode<F>> for DenseMle<F, DecisionNode<F>>
 
 impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     /// MleRef grabbing just the list of node IDs
-    pub(crate) fn node_id(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn _node_id(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
@@ -141,7 +141,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     }
 
     /// MleRef grabbing just the list of attribute IDs
-    pub(crate) fn attr_id(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn _attr_id(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
@@ -169,7 +169,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     }
 
     /// MleRef grabbing just the list of thresholds
-    pub(crate) fn threshold(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn _threshold(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
@@ -240,7 +240,7 @@ impl<F: FieldExt> FromIterator<LeafNode<F>> for DenseMle<F, LeafNode<F>> {
 
 impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     /// MleRef grabbing just the list of node IDs
-    pub(crate) fn node_id(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn _node_id(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         // --- There are four components to this MLE ---
@@ -267,7 +267,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     }
 
     /// MleRef grabbing just the list of attribute IDs
-    pub(crate) fn node_val(&'_ self) -> DenseMleRef<F> {
+    pub(crate) fn _node_val(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
         DenseMleRef {
@@ -334,7 +334,7 @@ impl<F: FieldExt> FromIterator<InputAttribute<F>> for DenseMle<F, InputAttribute
 
 impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// MleRef grabbing just the list of attribute IDs
-    pub(crate) fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
+    pub(crate) fn _attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
         // --- Default to the entire (component of) the MLE ---
         let num_vars = num_vars.unwrap_or(self.num_vars - 1);
 
@@ -370,7 +370,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     }
 
     /// MleRef grabbing just the list of attribute values
-    pub(crate) fn attr_val(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
+    pub(crate) fn _attr_val(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
         // --- Default to the entire (component of) the MLE ---
         let num_vars = match num_vars {
             Some(num) => num,
@@ -447,7 +447,7 @@ impl<F: FieldExt> FromIterator<BinDecomp16Bit<F>> for DenseMle<F, BinDecomp16Bit
 impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
     /// Returns a list of MLERefs, one for each bit
     /// TODO!(ryancao): Change this back to [DenseMleRef<F>; 16] and make it work!
-    pub(crate) fn mle_bit_refs(&'_ self) -> Vec<DenseMleRef<F>> {
+    pub(crate) fn _mle_bit_refs(&'_ self) -> Vec<DenseMleRef<F>> {
         let num_vars = self.num_vars;
 
         // --- There are sixteen components to this MLE ---

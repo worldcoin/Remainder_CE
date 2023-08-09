@@ -50,6 +50,9 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Default for Layers<F, Tr> {
     }
 }
 
+///An output layer which will have it's bits bound and then evaluated
+pub type OutputLayer<F> = Box<dyn MleRef<F = F>>;
+
 #[derive(Error, Debug, Clone)]
 ///Errors relating to the proving of a GKR circuit
 pub enum GKRError {
@@ -91,7 +94,7 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     /// In reverse order (e.g. layer closest to the output layer is first)
     pub layer_sumcheck_proofs: Vec<LayerProof<F, Tr>>,
     ///All the output layers that this circuit yields
-    pub output_layers: Vec<Box<dyn MleRef<F = F>>>,
+    pub output_layers: Vec<OutputLayer<F>>,
 }
 
 ///A GKRCircuit ready to be proven
@@ -99,7 +102,7 @@ pub trait GKRCircuit<F: FieldExt> {
     ///The transcript this circuit uses
     type Transcript: Transcript<F>;
     ///The forward pass, defining the layer relationships and generating the layers
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>);
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<OutputLayer<F>>);
 
     ///The backwards pass, creating the GKRProof
     fn prove(
