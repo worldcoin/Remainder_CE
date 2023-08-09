@@ -65,33 +65,6 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     }
 }
 
-struct BinaryProductTreeBuilder<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
-}
-
-impl<F: FieldExt> LayerBuilder<F> for BinaryProductTreeBuilder<F> {
-    type Successor = DenseMle<F, F>;
-    //a function that multiplies the parts of the tuple pair-wise
-    fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::products(vec![self.mle_1.mle_ref(), self.mle_2.mle_ref()])
-    }
-
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        // Create flatmle from tuple mle
-        let mut product_mle: DenseMle<F, F> = self
-            .mle_1
-            .clone()
-            .into_iter()
-            .zip(self.mle_2.clone().into_iter())
-            .map(|(first, second)| first * second)
-            .collect();
-        product_mle.add_prefix_bits(prefix_bits);
-        product_mle.define_layer_id(id);
-        product_mle
-    }
-}
-
 struct ConcatBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -344,7 +317,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_circuit::{generate_dummy_mles, TREE_HEIGHT}};
+    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_circuit::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch}};
     use ark_bn254::Fr;
     use FieldExt;
 
@@ -501,12 +474,12 @@ mod tests {
     #[test]
     fn test_expo_builder() {
         // ExpoBuilderInit -> (SquaringBuilder -> ExpoBuilderBitExpo -> ExpoBuilderProduct ->)
-        let (_,_, dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle, _,
+        let (_,_, dummy_decision_node_paths_mle_vec,
+            dummy_leaf_node_paths_mle_vec, _,
             dummy_multiplicities_bin_decomp_mle,
             dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle) = generate_dummy_mles::<Fr>();
-        println!("node path {:?}", dummy_decision_node_paths_mle);
+            dummy_leaf_nodes_mle) = generate_dummy_mles_batch::<Fr>();
+
         println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
         println!("decision nodes: {:?}", dummy_decision_nodes_mle);
         println!("leaf nodes: {:?}", dummy_leaf_nodes_mle);
@@ -539,24 +512,6 @@ mod tests {
         assert_eq!(leaf_packed.mle_ref().bookkeeping_table,
             DenseMle::new(vec![ Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
                         Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
-
-        // PATH: decision nodes packing
-        let decision_path_packing_builder = DecisionNodePackingBuilder{
-            mle: dummy_decision_node_paths_mle.clone(),
-            r,
-            r_packings
-        };
-        let _ = decision_path_packing_builder.build_expression();
-        let decision_path_packed = decision_path_packing_builder.next_layer(LayerId::Layer(0), None);
-
-        // PATH: leaf nodes packing
-        let leaf_path_packing_builder = LeafNodePackingBuilder{
-            mle: dummy_leaf_node_paths_mle.clone(),
-            r,
-            r_packing: another_r
-        };
-        let _ = leaf_path_packing_builder.build_expression();
-        let leaf_path_packed = leaf_path_packing_builder.next_layer(LayerId::Layer(0), None);
 
         println!("decision {:?}", decision_packed);
         println!("leaf {:?}", leaf_packed);
@@ -649,9 +604,57 @@ mod tests {
         }
         println!("final multiset 1. {:?}", exponentiated_nodes);
 
-        println!("path decision {:?}", decision_path_packed);
-        println!("path leaf {:?}", leaf_path_packed);
+        let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = [Fr::from(1)].into_iter().collect::<DenseMle<Fr, Fr>>();
 
+        for i in 0..NUM_DUMMY_INPUTS {
+
+            // PATH: decision nodes packing
+            let decision_path_packing_builder = DecisionNodePackingBuilder{
+                mle: dummy_decision_node_paths_mle_vec[i].clone(),
+                r,
+                r_packings
+            };
+            let _ = decision_path_packing_builder.build_expression();
+            let decision_path_packed = decision_path_packing_builder.next_layer(LayerId::Layer(0), None);
+
+            // PATH: leaf nodes packing
+            let leaf_path_packing_builder = LeafNodePackingBuilder{
+                mle: dummy_leaf_node_paths_mle_vec[i].clone(),
+                r,
+                r_packing: another_r
+            };
+            let _ = leaf_path_packing_builder.build_expression();
+            let leaf_path_packed = leaf_path_packing_builder.next_layer(LayerId::Layer(0), None);
+
+            // println!("path decision {:?}", decision_path_packed);
+            // println!("path leaf {:?}", leaf_path_packed);
+
+            let decision_leaf_path_concat_builder = ConcatBuilder{
+                mle_1: decision_path_packed,
+                mle_2: leaf_path_packed
+            };
+            let _ = decision_leaf_path_concat_builder.build_expression();
+            let curr_x_path_packed = decision_leaf_path_concat_builder.next_layer(LayerId::Layer(0), None);
+
+            let prod_builder = ExpoBuilderProduct {
+                multiplier: prev_prod_x_path_packed,
+                prev_prod: curr_x_path_packed
+            };
+
+            let _ = prod_builder.build_expression();
+            prev_prod_x_path_packed = prod_builder.next_layer(LayerId::Layer(0), None);
+        }
+
+        let mut path_exponentiated = prev_prod_x_path_packed.clone();
+
+        for _ in 0..TREE_HEIGHT {
+            let prod_builder = SplitProductBuilder {
+                mle: path_exponentiated
+            };
+            let _ = prod_builder.build_expression();
+            path_exponentiated = prod_builder.next_layer(LayerId::Layer(0), None);
+        }
+        println!("final multiset 2. {:?}", path_exponentiated);
 
 
     }

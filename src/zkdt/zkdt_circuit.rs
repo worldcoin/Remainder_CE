@@ -19,7 +19,7 @@ What's our plan here?
 
 // --- Constants ---
 const DUMMY_INPUT_LEN: usize = 1 << 1; // was 1 << 5
-const NUM_DUMMY_INPUTS: usize = 1 << 8;
+pub const NUM_DUMMY_INPUTS: usize = 1 << 8;
 pub const TREE_HEIGHT: usize = 2; // was 9
 const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
@@ -411,8 +411,8 @@ pub fn generate_dummy_mles_batch<F: FieldExt>() -> (
     DenseMle<F, InputAttribute<F>>,
     // DenseMle<F, F>,
     DenseMle<F, InputAttribute<F>>,
-    DenseMle<F, DecisionNode<F>>,
-    DenseMle<F, LeafNode<F>>,
+    Vec<DenseMle<F, DecisionNode<F>>>,
+    Vec<DenseMle<F, LeafNode<F>>>,
     DenseMle<F, BinDecomp16Bit<F>>,
     DenseMle<F, BinDecomp16Bit<F>>,
     DenseMle<F, DecisionNode<F>>,
@@ -446,15 +446,18 @@ pub fn generate_dummy_mles_batch<F: FieldExt>() -> (
         .into_iter()
         .map(InputAttribute::from)
         .collect::<DenseMle<F, InputAttribute<F>>>();
-    let dummy_decision_node_paths_mle = dummy_decision_node_paths[0]
-        .clone()
+    let dummy_decision_node_paths_mle = dummy_decision_node_paths
+        .iter()
+        .map(|path|
+            path
+            .clone()
+            .into_iter()
+            .collect::<DenseMle<F, DecisionNode<F>>>())
+        .collect();
+    let dummy_leaf_node_paths_mle = dummy_leaf_node_paths
         .into_iter()
-        .map(DecisionNode::from)
-        .collect::<DenseMle<F, DecisionNode<F>>>();
-    let dummy_leaf_node_paths_mle = vec![dummy_leaf_node_paths[0]]
-        .into_iter()
-        .map(LeafNode::from)
-        .collect::<DenseMle<F, LeafNode<F>>>();
+        .map(|path| [path].into_iter().collect::<DenseMle<F, LeafNode<F>>>())
+        .collect();
     let dummy_binary_decomp_diffs_mle = dummy_binary_decomp_diffs[0]
         .clone()
         .into_iter()
