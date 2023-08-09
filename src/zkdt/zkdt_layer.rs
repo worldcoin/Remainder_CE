@@ -6,7 +6,7 @@ use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use crate::FieldExt;
-
+use ark_std::{cfg_into_iter, cfg_iter, log2};
 use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
 
 struct ProductTreeBuilder<F: FieldExt> {
@@ -391,6 +391,7 @@ mod tests {
 
         // hand compute
         // for this to pass, change the parameters into the following:
+        // const NUM_DUMMY_INPUTS: usize = 1 << 8;
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // the attr_id: [0, 1], its values are: [3233, 2380],  r = 3, r_packing = 5
@@ -426,6 +427,7 @@ mod tests {
 
         // hand compute
         // for this to pass, change the parameters into the following:
+        // const NUM_DUMMY_INPUTS: usize = 1 << 8;
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // the node_id: [0], its attr_id is: [0], its threshold is: [1206].  r = 3, r_packings = 5, 4
@@ -461,6 +463,7 @@ mod tests {
 
         // hand compute
         // for this to pass, change the parameters into the following:
+        // const NUM_DUMMY_INPUTS: usize = 1 << 8;
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // the node_id: [2], its node_val is: 17299145535799709783. r = 3, r_packing = 5
@@ -473,6 +476,11 @@ mod tests {
 
     #[test]
     fn test_expo_builder() {
+        // hand compute
+        // for this to pass, change the parameters into the following:
+        // const NUM_DUMMY_INPUTS: usize = 1 << 8;
+        // const DUMMY_INPUT_LEN: usize = 1 << 1;
+        // const TREE_HEIGHT: usize = 2;
         // ExpoBuilderInit -> (SquaringBuilder -> ExpoBuilderBitExpo -> ExpoBuilderProduct ->)
         let (_,_, dummy_decision_node_paths_mle_vec,
             dummy_leaf_node_paths_mle_vec, _,
@@ -581,10 +589,6 @@ mod tests {
 
         }
 
-        // hand compute
-        // for this to pass, change the parameters into the following:
-        // const DUMMY_INPUT_LEN: usize = 1 << 1;
-        // const TREE_HEIGHT: usize = 2;
         // Multiplicities is [256, 59, 197]
         assert_eq!(prev_prod.mle_ref().bookkeeping_table,
             DenseMle::new(vec![
@@ -592,6 +596,131 @@ mod tests {
                     (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64))).pow([59 as u64]),
                     (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))).pow([197 as u64])
                 ]).mle_ref().bookkeeping_table);
+
+    }
+
+    #[test]
+    fn test_multiset_builder() {
+        // hand compute
+        // for this to pass, change the parameters into the following:
+        // const NUM_DUMMY_INPUTS: usize = 1 << 2;
+        // const DUMMY_INPUT_LEN: usize = 1 << 1;
+        // const TREE_HEIGHT: usize = 2;
+        // ExpoBuilderInit -> (SquaringBuilder -> ExpoBuilderBitExpo -> ExpoBuilderProduct ->)
+        let (_,_, dummy_decision_node_paths_mle_vec,
+            dummy_leaf_node_paths_mle_vec, _,
+            dummy_multiplicities_bin_decomp_mle,
+            dummy_decision_nodes_mle,
+            dummy_leaf_nodes_mle) = generate_dummy_mles_batch::<Fr>();
+
+        println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
+        println!("decision nodes: {:?}", dummy_decision_nodes_mle);
+        println!("leaf nodes: {:?}", dummy_leaf_nodes_mle);
+
+        let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
+        let another_r = Fr::from(6);
+
+        // WHOLE TREE: decision nodes packing
+        let decision_packing_builder = DecisionNodePackingBuilder{
+            mle: dummy_decision_nodes_mle.clone(),
+            r,
+            r_packings
+        };
+        let _ = decision_packing_builder.build_expression();
+        let decision_packed = decision_packing_builder.next_layer(LayerId::Layer(0), None);
+        // characteristic poly w packing: [3 - (0 + 5 * 0 + 4 * 1206 )], which is [-4821]
+        // assert_eq!(decision_packed.mle_ref().bookkeeping_table,
+            // DenseMle::new(vec![ Fr::from(-4821)]).mle_ref().bookkeeping_table);
+
+        // WHOLE TREE: leaf nodes packing
+        let leaf_packing_builder = LeafNodePackingBuilder{
+            mle: dummy_leaf_nodes_mle.clone(),
+            r,
+            r_packing: another_r
+        };
+        let _ = leaf_packing_builder.build_expression();
+        let leaf_packed = leaf_packing_builder.next_layer(LayerId::Layer(0), None);
+        // characteristic poly w packing: [3 - (1 + 6 * 8929665060402191575)]
+        // characteristic poly w packing: [3 - (2 + 6 * 17299145535799709783)]
+        // assert_eq!(leaf_packed.mle_ref().bookkeeping_table,
+            // DenseMle::new(vec![ Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
+                        // Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
+
+        println!("decision {:?}", decision_packed);
+        println!("leaf {:?}", leaf_packed);
+
+        let decision_leaf_concat_builder = ConcatBuilder{
+            mle_1: decision_packed,
+            mle_2: leaf_packed
+        };
+        let _ = decision_leaf_concat_builder.build_expression();
+        let x_packed = decision_leaf_concat_builder.next_layer(LayerId::Layer(0), None);
+        // assert_eq!(x_packed.mle_ref().bookkeeping_table,
+        //     DenseMle::new(vec![ Fr::from(-4821),
+        //                 Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
+        //                 Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
+
+        // r-x
+        let r_minus_x_builder =  ExpoBuilderInit {
+            packed_x: x_packed,
+            r: another_r,
+        };
+        let _ = r_minus_x_builder.build_expression();
+        let mut r_minus_x = r_minus_x_builder.next_layer(LayerId::Layer(0), None);
+        // assert_eq!(r_minus_x.mle_ref().bookkeeping_table,
+        //     DenseMle::new(vec![ Fr::from(6+4821),
+        //                 Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
+        //                 Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
+
+        // b_ij * (r-x) + (1 - b_ij), j = 0
+        let prev_prod_builder = ExpoBuilderBitExpo {
+            bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
+            bit_index: 0,
+            r_minus_x_power: r_minus_x.clone()
+        };
+        let _ = prev_prod_builder.build_expression();
+        let mut prev_prod = prev_prod_builder.next_layer(LayerId::Layer(0), None);
+        // assert_eq!(prev_prod.mle_ref().bookkeeping_table,
+        //     DenseMle::new(vec![ Fr::from(1),
+        //                 Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
+        //                 Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
+
+        for i in 1..16 {
+            // (r-x)^2
+            let r_minus_x_square_builder = SquaringBuilder {
+                mle: r_minus_x
+            };
+            let _ = r_minus_x_square_builder.build_expression();
+            let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(0), None);
+
+            // b_ij * (r-x)^2 + (1 - b_ij), j = 1..15
+            let curr_prod_builder = ExpoBuilderBitExpo {
+                bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
+                bit_index: i,
+                r_minus_x_power: r_minus_x_square.clone()
+            };
+            let _ = curr_prod_builder.build_expression();
+            let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(0), None);
+
+            // PROD(b_ij * (r-x) + (1 - b_ij))
+            let prod_builder = ExpoBuilderProduct {
+                multiplier: curr_prod,
+                prev_prod
+            };
+            let _ = prod_builder.build_expression();
+            prev_prod = prod_builder.next_layer(LayerId::Layer(0), None);
+
+            r_minus_x = r_minus_x_square;
+
+        }
+
+        // Multiplicities is [256, 59, 197]
+        // assert_eq!(prev_prod.mle_ref().bookkeeping_table,
+        //     DenseMle::new(vec![
+        //             Fr::from(6+4821).pow([256 as u64]),
+        //             (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64))).pow([59 as u64]),
+        //             (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))).pow([197 as u64])
+        //         ]).mle_ref().bookkeeping_table);
 
         
         let mut exponentiated_nodes = prev_prod.clone();
@@ -604,7 +733,7 @@ mod tests {
         }
         println!("final multiset 1. {:?}", exponentiated_nodes);
 
-        let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = [Fr::from(1)].into_iter().collect::<DenseMle<Fr, Fr>>();
+        let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = [Fr::from(1); TREE_HEIGHT].into_iter().collect::<DenseMle<Fr, Fr>>();
 
         for i in 0..NUM_DUMMY_INPUTS {
 
@@ -626,8 +755,17 @@ mod tests {
             let _ = leaf_path_packing_builder.build_expression();
             let leaf_path_packed = leaf_path_packing_builder.next_layer(LayerId::Layer(0), None);
 
+            // r, r_packings, another_r: 3, (5, 4), 6
+            // println!("path decision mle{:?}", dummy_decision_node_paths_mle_vec[i].clone());
             // println!("path decision {:?}", decision_path_packed);
+            // println!("path leaf mle{:?}", dummy_leaf_node_paths_mle_vec[i].clone());
             // println!("path leaf {:?}", leaf_path_packed);
+
+            // assert_eq!(decision_path_packed.mle_ref().bookkeeping_table,
+            // DenseMle::new(vec![ Fr::from(3) - (Fr::from(0) + Fr::from(5) * Fr::from(0) + Fr::from(4) * Fr::from(1206))]).mle_ref().bookkeeping_table);
+            // assert_eq!(leaf_path_packed.mle_ref().bookkeeping_table,
+            // DenseMle::new(vec![ Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
+            //
 
             let decision_leaf_path_concat_builder = ConcatBuilder{
                 mle_1: decision_path_packed,
@@ -635,6 +773,7 @@ mod tests {
             };
             let _ = decision_leaf_path_concat_builder.build_expression();
             let curr_x_path_packed = decision_leaf_path_concat_builder.next_layer(LayerId::Layer(0), None);
+            // println!("concat path {:?}", curr_x_path_packed);
 
             let prod_builder = ExpoBuilderProduct {
                 multiplier: prev_prod_x_path_packed,
@@ -643,11 +782,15 @@ mod tests {
 
             let _ = prod_builder.build_expression();
             prev_prod_x_path_packed = prod_builder.next_layer(LayerId::Layer(0), None);
+
+            // println!("prod path {:?}", prev_prod_x_path_packed);
         }
 
         let mut path_exponentiated = prev_prod_x_path_packed.clone();
 
-        for _ in 0..TREE_HEIGHT {
+        // dbg!(&path_exponentiated, "path exponentiated");
+
+        for _ in 0..log2(TREE_HEIGHT) {
             let prod_builder = SplitProductBuilder {
                 mle: path_exponentiated
             };
@@ -655,8 +798,6 @@ mod tests {
             path_exponentiated = prod_builder.next_layer(LayerId::Layer(0), None);
         }
         println!("final multiset 2. {:?}", path_exponentiated);
-
-
     }
 
 }
