@@ -2,13 +2,45 @@ extern crate num;
 extern crate serde;
 extern crate serde_json;
 
-use super::structs::*;
+use crate::zkdt::structs::{DecisionNode,LeafNode,InputAttribute};
 use crate::FieldExt;
 use ndarray::Array2;
 use ndarray_npy::{read_npy, ReadNpyError};
 use num::pow;
 use serde::{Deserialize, Serialize};
 use itertools::{repeat_n, Itertools};
+
+//#[derive(Copy, Debug, Clone)]
+//struct DecisionNode {
+//    node_id: u32,
+//    attr_id: u32,
+//    threshold: u32,
+//}
+//
+//#[derive(Copy, Debug, Clone)]
+//struct LeafNode {
+//    node_id: u32,
+//    node_val: i32,
+//}
+//
+///// --- 16-bit binary decomposition ---
+///// Used for the following components of the (circuit) input:
+///// a) The binary decomposition of the path node hints (i.e. path_x.thr - x.val)
+///// b) The binary decomposition of the multiplicity coefficients $c_j$
+//#[derive(Copy, Debug, Clone)]
+//struct BinDecomp16Bit {
+//    bits: [bool; 16],
+//}
+//
+///// --- Input element to the tree, i.e. a list of input attributes ---
+///// Used for the following components of the (circuit) input:
+///// a) The actual input attributes, i.e. x
+///// b) The permuted input attributes, i.e. \bar{x}
+//#[derive(Copy, Debug, Clone, PartialEq)]
+//struct InputAttribute {
+//    attr_id: u32,
+//    attr_val: u32,
+//}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TreesInfo {
@@ -35,32 +67,33 @@ impl<F: FieldExt> From<&Node<i32>> for FlatTree<F> {
     /// Pre: tree.is_perfect()
     fn from(tree: &Node<i32>) -> Self {
         FlatTree {
-            decision_nodes: tree.extract_decision_nodes::<F>(0),
-            leaf_nodes: tree.extract_leaf_nodes::<F>(0),
+            decision_nodes: tree.extract_decision_nodes::<F>(),
+            leaf_nodes: tree.extract_leaf_nodes::<F>(),
         }
     }
 }
 
-impl<F: FieldExt> FlatTree<F> {
-    fn get_path(&self, sample: &Sample<F>) -> (Vec<DecisionNode<F>>, LeafNode<F>) {
-        let mut path: Vec<DecisionNode<F>> = vec![];
-        // start at root
-        let mut current_node_id = 0;
-        // keep going until current_node_id is becomes a leaf node id
-        while current_node_id < self.decision_nodes.len() {
-            path.push(self.decision_nodes[current_node_id]);
-            let attr_id = (self.decision_nodes[current_node_id].attr_id.into_bigint()).as_ref()[0] as usize;
-            // FIXME should we really be comparing field elements?
-            if sample[attr_id].attr_val >= self.decision_nodes[current_node_id].threshold {
-                current_node_id = current_node_id * 2 + 2;
-            } else {
-                current_node_id = current_node_id * 2 + 1;
-            }
-        }
-        let leaf_node_idx = current_node_id - self.decision_nodes.len();
-        (path, self.leaf_nodes[leaf_node_idx])
-    }
-}
+//impl<F: FieldExt> FlatTree<F> {
+//    /// Pre: sample.len()
+//    fn get_path(&self, sample: &Sample<F>) -> (Vec<DecisionNode<F>>, LeafNode<F>) {
+//        let mut path: Vec<DecisionNode<F>> = vec![];
+//        // start at root
+//        let mut current_node_id = 0;
+//        // keep going until current_node_id is becomes a leaf node id
+//        while current_node_id < self.decision_nodes.len() {
+//            path.push(self.decision_nodes[current_node_id]);
+//            let attr_id = (self.decision_nodes[current_node_id].attr_id.into_bigint()).as_ref()[0] as usize;
+//            // FIXME should we really be comparing field elements?
+//            if sample[attr_id].attr_val >= self.decision_nodes[current_node_id].threshold {
+//                current_node_id = current_node_id * 2 + 2;
+//            } else {
+//                current_node_id = current_node_id * 2 + 1;
+//            }
+//        }
+//        let leaf_node_idx = current_node_id - self.decision_nodes.len();
+//        (path, self.leaf_nodes[leaf_node_idx])
+//    }
+//}
 
 struct CircuitizedTrees<F: FieldExt> {
     trees: Vec<FlatTree<F>>,
@@ -192,23 +225,26 @@ fn read_sample_array<F: FieldExt>(filename: &String) -> Result<Vec<Sample<F>>, R
 #[serde(untagged)]
 pub enum Node<T: Copy> {
     Internal {
+        id: Option<u32>,
         feature_index: u32,
         threshold: u32,
         left: Box<Node<T>>,
         right: Box<Node<T>>,
     },
     Leaf {
+        id: Option<u32>,
         value: T,
     },
 }
 
 impl<T: Copy> Node<T> {
-    fn new_leaf(value: T) -> Self {
-        Node::Leaf { value }
+    fn new_leaf(id: Option<u32>, value: T) -> Self {
+        Node::Leaf { id, value }
     }
 
-    fn new_internal(feature_index: u32, threshold: u32, left: Node<T>, right: Node<T>) -> Self {
+    fn new_internal(id: Option<u32>, feature_index: u32, threshold: u32, left: Node<T>, right: Node<T>) -> Self {
         Node::Internal {
+            id,
             feature_index,
             threshold,
             left: Box::new(left),
@@ -218,13 +254,14 @@ impl<T: Copy> Node<T> {
 
     /// Helper function: return a new perfect tree where all internal nodes have the feature index
     /// and threshold specified, and all leaf nodes have the value specified.
+    /// Ids are not assigned.
     fn new_constant_tree(depth: u32, feature_index: u32, threshold: u32, value: T) -> Node<T> {
         if depth > 1 {
             let left = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
             let right = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
-            Self::new_internal(feature_index, threshold, left, right)
+            Self::new_internal(None, feature_index, threshold, left, right)
         } else {
-            Self::new_leaf(value)
+            Self::new_leaf(None, value)
         }
     }
 
@@ -249,7 +286,7 @@ impl<T: Copy> Node<T> {
     /// ```
     fn aggregate_values(&self, operation: fn(T, T) -> T) -> T {
         match self {
-            Node::Leaf { value } => *value,
+            Node::Leaf { value, .. } => *value,
             Node::Internal { left, right, .. } => operation(
                 left.aggregate_values(operation),
                 right.aggregate_values(operation),
@@ -267,7 +304,7 @@ impl<T: Copy> Node<T> {
         F: Fn(T) -> T,
     {
         match self {
-            Node::Leaf { value } => {
+            Node::Leaf { value, .. } => {
                 *value = transform(*value);
             }
             Node::Internal { left, right, .. } => {
@@ -285,13 +322,14 @@ impl<T: Copy> Node<T> {
         U: Copy,
     {
         match self {
-            Node::Leaf { value } => Node::new_leaf(f(*value)),
+            Node::Leaf { id, value } => Node::new_leaf(*id, f(*value)),
             Node::Internal {
+                id, 
                 feature_index,
                 threshold,
                 left,
                 right,
-            } => Node::new_internal(*feature_index, *threshold, left.map(f), right.map(f)),
+            } => Node::new_internal(*id, *feature_index, *threshold, left.map(f), right.map(f)),
         }
     }
 
@@ -303,6 +341,7 @@ impl<T: Copy> Node<T> {
     /// Return a new Node<T> instance which is perfect with the specified depth, given a function
     /// `leaf_expander(depth, value)` that returns a subtree of depth `depth` to replace the
     /// premature Leaf with value `value`.
+    /// New Nodes will not have ids assigned.
     /// Pre: depth >= self.depth()
     /// Post: self.is_perfect()
     fn perfect_to_depth<F>(&self, depth: u32, leaf_expander: &F) -> Node<T>
@@ -312,6 +351,7 @@ impl<T: Copy> Node<T> {
         assert!(depth >= 1);
         match self {
             Node::Internal {
+                id, 
                 left,
                 right,
                 feature_index,
@@ -319,9 +359,33 @@ impl<T: Copy> Node<T> {
             } => {
                 let _left = left.perfect_to_depth(depth - 1, leaf_expander);
                 let _right = right.perfect_to_depth(depth - 1, leaf_expander);
-                Node::new_internal(*feature_index, *threshold, _left, _right)
+                Node::new_internal(None, *feature_index, *threshold, _left, _right)
             }
-            Node::Leaf { value } => leaf_expander(depth, *value),
+            Node::Leaf { value, .. } => leaf_expander(depth, *value),
+        }
+    }
+
+    /// Assign the specified id to this Node, and assign ids to any child nodes according to the
+    /// rule:
+    /// left_child_id = 2 * id + 1
+    /// right_child_id = 2 * id + 2
+    fn assign_id(&mut self, new_id: u32) {
+        match self {
+            Node::Internal { id, left, right, .. } => {
+                *id = Some(new_id);
+                left.assign_id(2 * new_id + 1);
+                right.assign_id(2 * new_id + 2);
+            }
+            Node::Leaf { id, .. } => {
+                *id = Some(new_id);
+            }
+        }
+    }
+
+    fn get_id(&self) -> Option<u32> {
+        match self {
+            Node::Internal { id, .. } => *id,
+            Node::Leaf { id, .. } => *id,
         }
     }
 }
@@ -354,24 +418,21 @@ fn quantize_trees(trees: &[Node<f64>]) -> (Vec<Node<i32>>, f64) {
 }
 
 impl<T: Copy> Node<T> {
-    /// Return a Vec containing a DecisionNode for each Node::Internal appearing in this tree, in
-    /// arbitrary order, with ids allocated according to:
-    /// + Root node has id root_id;
-    /// + Left child id is 2 * parent_id + 1;
-    /// + Right child is 2 * parent_id + 2.
-    pub(crate) fn extract_decision_nodes<F: FieldExt>(&self, root_id: u32) -> Vec<DecisionNode<F>> {
+    /// Return a Vec containing a DecisionNode for each Node::Internal appearing in this tree, in arbitrary order.
+    /// Pre: if `node` is any descendent of this Node then `node.get_id()` is not None.
+    pub(crate) fn extract_decision_nodes<F: FieldExt>(&self) -> Vec<DecisionNode<F>> {
         let mut decision_nodes = Vec::new();
-        self.append_decision_nodes(root_id, &mut decision_nodes);
+        self.append_decision_nodes(&mut decision_nodes);
         decision_nodes
     }
 
     /// Helper function to extract_decision_nodes.
     fn append_decision_nodes<F: FieldExt>(
         &self,
-        root_id: u32,
         decision_nodes: &mut Vec<DecisionNode<F>>,
     ) {
         if let Node::Internal {
+            id,
             left,
             right,
             feature_index,
@@ -379,12 +440,12 @@ impl<T: Copy> Node<T> {
         } = self
         {
             decision_nodes.push(DecisionNode {
-                node_id: F::from(root_id),
+                node_id: F::from(id.unwrap()),
                 attr_id: F::from(*feature_index),
                 threshold: F::from(*threshold),
             });
-            left.append_decision_nodes(2 * root_id + 1, decision_nodes);
-            right.append_decision_nodes(2 * root_id + 2, decision_nodes);
+            left.append_decision_nodes(decision_nodes);
+            right.append_decision_nodes(decision_nodes);
         }
     }
 }
@@ -392,17 +453,17 @@ impl<T: Copy> Node<T> {
 impl Node<i32> {
     /// Return a Vec containing a LeafNode for each Node::Leaf appearing in this tree, in order of
     /// id, where the ids are allocated as in extract_decision_nodes().
-    fn extract_leaf_nodes<F: FieldExt>(&self, root_id: u32) -> Vec<LeafNode<F>> {
+    fn extract_leaf_nodes<F: FieldExt>(&self) -> Vec<LeafNode<F>> {
         let mut leaf_nodes = Vec::new();
-        self.append_leaf_nodes(root_id, &mut leaf_nodes);
+        self.append_leaf_nodes(&mut leaf_nodes);
         leaf_nodes
     }
 
-    fn append_leaf_nodes<F: FieldExt>(&self, root_id: u32, leaf_nodes: &mut Vec<LeafNode<F>>) {
+    fn append_leaf_nodes<F: FieldExt>(&self, leaf_nodes: &mut Vec<LeafNode<F>>) {
         match self {
-            Node::Leaf { value } => {
+            Node::Leaf { id, value } => {
                 leaf_nodes.push(LeafNode {
-                    node_id: F::from(root_id),
+                    node_id: F::from(id.unwrap()),
                     node_val: if *value >= 0 {
                         F::from(*value as u32)
                     } else {
@@ -411,8 +472,8 @@ impl Node<i32> {
                 });
             }
             Node::Internal { left, right, .. } => {
-                left.append_leaf_nodes(2 * root_id + 1, leaf_nodes);
-                right.append_leaf_nodes(2 * root_id + 2, leaf_nodes);
+                left.append_leaf_nodes(leaf_nodes);
+                right.append_leaf_nodes(leaf_nodes);
             }
         }
     }
@@ -467,7 +528,7 @@ mod tests {
 
     #[test]
     fn test_depth() {
-        let tree = Node::new_leaf(0);
+        let tree = Node::new_leaf(None, 0);
         assert_eq!(tree.depth(std::cmp::max), 1);
         let tree = build_small_tree();
         assert_eq!(tree.depth(std::cmp::max), 3);
@@ -506,7 +567,7 @@ mod tests {
 
     #[test]
     fn test_debug_printing() {
-        let tree = Node::new_internal(0, 1, Node::new_leaf(0), Node::new_leaf(1));
+        let tree = Node::new_internal(None, 0, 1, Node::new_leaf(None, 0), Node::new_leaf(None, 1));
         println!("{:?}", tree);
     }
 
@@ -517,11 +578,11 @@ mod tests {
     ///   / \
     /// 0.1 0.2
     fn build_small_tree() -> Node<f64> {
-        let left = Node::new_leaf(0.1);
-        let middle = Node::new_leaf(0.2);
-        let right = Node::new_leaf(1.2);
-        let internal = Node::new_internal(1, 2, left, middle);
-        Node::new_internal(0, 1, internal, right)
+        let left = Node::new_leaf(None, 0.1);
+        let middle = Node::new_leaf(None, 0.2);
+        let right = Node::new_leaf(None, 1.2);
+        let internal = Node::new_internal(None, 1, 2, left, middle);
+        Node::new_internal(None, 0, 1, internal, right)
     }
 
     /// Returns a skinny looking tree for testing.
@@ -534,11 +595,11 @@ mod tests {
     ///   / \
     ///  1.  -2.
     fn build_skinny_tree(target_depth: u32) -> Node<f64> {
-        let mut tree = Node::new_leaf(1.0);
+        let mut tree = Node::new_leaf(None, 1.0);
         let mut depth = 1;
         while depth < target_depth {
-            let premature_leaf = Node::new_leaf(-2.0);
-            tree = Node::new_internal(1, 2, tree, premature_leaf);
+            let premature_leaf = Node::new_leaf(None, -2.0);
+            tree = Node::new_internal(None, 1, 2, tree, premature_leaf);
             depth += 1;
         }
         tree
@@ -563,7 +624,7 @@ mod tests {
         let mut tree = build_small_tree();
         tree.transform_values(&|x| -1.0 * x);
         if let Node::Internal { right, .. } = tree {
-            if let Node::Leaf { value } = *right {
+            if let Node::Leaf { value, .. } = *right {
                 assert_eq!(value, -1.2);
                 return;
             }
@@ -576,7 +637,7 @@ mod tests {
         let tree_f64 = build_small_tree();
         let tree_i32 = tree_f64.map(&|x| x as i32);
         if let Node::Internal { right, .. } = tree_i32 {
-            if let Node::Leaf { value } = *right {
+            if let Node::Leaf { value, .. } = *right {
                 assert_eq!(value, 1);
                 return;
             }
@@ -592,16 +653,18 @@ mod tests {
         let tree = Node::new_constant_tree(3, _feature_index, _threshold, _value);
         assert_eq!(tree.depth(std::cmp::max), 3);
         if let Node::Internal {
+            id,
             left,
             right,
             feature_index,
             threshold,
         } = tree
         {
+            assert_eq!(id, None);
             assert_eq!(feature_index, _feature_index);
             assert_eq!(threshold, _threshold);
             if let Node::Internal { left, .. } = *left {
-                if let Node::Leaf { value } = *left {
+                if let Node::Leaf { value, .. } = *left {
                     assert_eq!(value, _value);
                     return;
                 }
@@ -623,15 +686,30 @@ mod tests {
     }
 
     #[test]
+    fn test_assign_id() {
+        let mut tree = build_small_tree();
+        tree.assign_id(0);
+        assert_eq!(tree.get_id(), Some(0));
+        if let Node::Internal { left, .. } = tree {
+            assert_eq!(left.get_id(), Some(1));
+            if let Node::Internal { left, right, .. } = *left {
+                assert_eq!(left.get_id(), Some(3));
+                assert_eq!(right.get_id(), Some(4));
+            }
+        }
+    }
+
+    #[test]
     fn test_extract_decision_nodes() {
         // test trivial boundary case
-        let leaf = Node::new_leaf(3);
-        let decision_nodes = leaf.extract_decision_nodes::<Fr>(0);
+        let leaf = Node::new_leaf(Some(1), 3);
+        let decision_nodes = leaf.extract_decision_nodes::<Fr>();
         assert_eq!(decision_nodes.len(), 0);
         // test in non-trivial case
-        let tree = build_small_tree();
+        let mut tree = build_small_tree();
         let root_id = 6;
-        let mut decision_nodes = tree.extract_decision_nodes::<Fr>(root_id);
+        tree.assign_id(root_id);
+        let mut decision_nodes = tree.extract_decision_nodes::<Fr>();
         assert_eq!(decision_nodes.len(), 2);
         decision_nodes.sort_by_key(|node| node.node_id);
         assert_eq!(decision_nodes[0].node_id, Fr::from(root_id));
@@ -642,15 +720,15 @@ mod tests {
     #[test]
     fn test_extract_leaf_nodes() {
         // trivial case
-        let leaf = Node::new_leaf(-3);
-        let root_id = 5;
-        let leaf_nodes = leaf.extract_leaf_nodes::<Fr>(root_id);
+        let leaf = Node::new_leaf(Some(5), -3);
+        let leaf_nodes = leaf.extract_leaf_nodes::<Fr>();
         assert_eq!(leaf_nodes.len(), 1);
-        assert_eq!(leaf_nodes[0].node_id, Fr::from(root_id));
+        assert_eq!(leaf_nodes[0].node_id, Fr::from(5));
         assert_eq!(leaf_nodes[0].node_val, -Fr::from(3));
         // non-trivial
-        let tree = build_small_tree().map(&|x| x as i32);
-        let mut leaf_nodes = tree.extract_leaf_nodes::<Fr>(0);
+        let mut tree = build_small_tree().map(&|x| x as i32);
+        tree.assign_id(0);
+        let mut leaf_nodes = tree.extract_leaf_nodes::<Fr>();
         assert_eq!(leaf_nodes.len(), 3);
         leaf_nodes.sort_by_key(|node| node.node_id);
         assert_eq!(leaf_nodes[0].node_id, Fr::from(2));
@@ -663,12 +741,12 @@ mod tests {
     fn test_quantize_trees() {
         let value0 = -123.1;
         let value1 = 145.1;
-        let trees = vec![Node::new_leaf(value0), Node::new_leaf(value1)];
+        let trees = vec![Node::new_leaf(None, value0), Node::new_leaf(None, value1)];
         let (qtrees, rescaling) = quantize_trees(&trees);
         assert_eq!(qtrees.len(), trees.len());
-        if let Node::Leaf { value: qvalue0 } = qtrees[0] {
+        if let Node::Leaf { value: qvalue0, .. } = qtrees[0] {
             assert!((value0 - (qvalue0 as f64) / rescaling).abs() < 1e-5);
-            if let Node::Leaf { value: qvalue1 } = qtrees[1] {
+            if let Node::Leaf { value: qvalue1, .. } = qtrees[1] {
                 assert!((value1 - (qvalue1 as f64) / rescaling).abs() < 1e-5);
                 return;
             }
@@ -689,8 +767,10 @@ mod tests {
 
     #[test]
     fn test_circuitizedtrees_from() {
+        let mut tree = build_small_tree();
+        tree.assign_id(0);
         let trees_info = TreesInfo {
-            trees: vec![build_small_tree(), Node::new_leaf(3.0)],
+            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
             bias: 1.1,
             scale: 6.6,
         };
@@ -701,21 +781,6 @@ mod tests {
         for flat_tree in &circ_trees.trees {
             assert_eq!(flat_tree.decision_nodes.len(), 3);
             assert_eq!(flat_tree.leaf_nodes.len(), 4);
-            // FIXME we don't need to check this here, since we test it in FlatTree from
-            // check the ids of the decision nodes
-            assert!(flat_tree.decision_nodes
-                .iter()
-                .map(|node| node.node_id)
-                .zip(0..3)
-                .map(|(a, b)| a == Fr::from(b))
-                .all(|x| x));
-            // check the ids of the leaf nodes
-            assert!(flat_tree.leaf_nodes
-                .iter()
-                .map(|node| node.node_id)
-                .zip(3..7)
-                .map(|(a, b)| a == Fr::from(b))
-                .all(|x| x));
             // accumulate score by taking the value of the first leaf node
             acc_score += flat_tree.leaf_nodes[0].node_val;
         }
@@ -734,7 +799,8 @@ mod tests {
     #[test]
     fn test_prepare_for_circuitization_depth() {
         // create a tree of depth 6
-        let tree = build_skinny_tree(6);
+        let mut tree = build_skinny_tree(6);
+        tree.assign_id(0);
         let trees_info = TreesInfo {
             trees: vec![tree],
             bias: 1.1,
@@ -747,7 +813,8 @@ mod tests {
 
     #[test]
     fn test_flattree_from() {
-        let tree = quantize_and_perfect(build_small_tree(), 3);
+        let mut tree = quantize_and_perfect(build_small_tree(), 3);
+        tree.assign_id(0);
         let flat_tree: FlatTree<Fr> = (&tree).into();
         assert_eq!(flat_tree.decision_nodes.len(), 3);
         assert_eq!(flat_tree.leaf_nodes.len(), 4);
@@ -765,6 +832,7 @@ mod tests {
                 .all(|x| x));
     }
 
+    /// FIXME needed
     /// Helper function for testing
     fn values_to_sample(values: Vec<i32>) -> Sample<Fr> {
         values.iter()
@@ -776,16 +844,16 @@ mod tests {
             .collect()
     }
 
-    #[test]
-    fn test_get_path() {
-        let tree = quantize_and_perfect(build_small_tree(), 3);
-        let flat_tree: FlatTree<Fr> = (&tree).into();
-        // sample chosen to hit boundary case for routing decision (<=)
-        let sample = values_to_sample(vec![0, 2]);
-        let (decision_nodes, leaf_node) = flat_tree.get_path(&sample);
-        assert_eq!(decision_nodes.len(), 2);
-        assert_eq!(decision_nodes[0].node_id, Fr::from(0));
-        assert_eq!(decision_nodes[1].node_id, Fr::from(1));
-        assert_eq!(leaf_node.node_id, Fr::from(4));
-    }
+    //#[test]
+    //fn test_get_path() {
+    //    let tree = quantize_and_perfect(build_small_tree(), 3);
+    //    let flat_tree: FlatTree<Fr> = (&tree).into();
+    //    // sample chosen to hit boundary case for routing decision (<=)
+    //    let sample = values_to_sample(vec![0, 2]);
+    //    let (decision_nodes, leaf_node) = flat_tree.get_path(&sample);
+    //    assert_eq!(decision_nodes.len(), 2);
+    //    assert_eq!(decision_nodes[0].node_id, Fr::from(0));
+    //    assert_eq!(decision_nodes[1].node_id, Fr::from(1));
+    //    assert_eq!(leaf_node.node_id, Fr::from(4));
+    //}
 }
