@@ -8,6 +8,7 @@ use ndarray::Array2;
 use ndarray_npy::{read_npy, ReadNpyError};
 use num::pow;
 use serde::{Deserialize, Serialize};
+use itertools::{repeat_n, Itertools};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TreesInfo {
@@ -16,15 +17,58 @@ struct TreesInfo {
     scale: f64,
 }
 
-// a type _alias_ (note for self)
-type FlatTree<F> = (Vec<DecisionNode<F>>, Vec<LeafNode<F>>);
+/// Ids are allocated according to:
+/// + Root node has id 0;
+/// + Left child id is 2 * parent_id + 1;
+/// + Right child is 2 * parent_id + 2.
+/// Decision nodes and leaf nodes are both ordered by id.
+/// FlatTrees are always perfect.
+/// Decision node ids are 0..K and leaf node ids are K..L (excluding endpoints) where:
+/// K = 2^(depth - 1) - 1 and
+/// L = 2^depth - 1
+struct FlatTree<F: FieldExt> {
+    decision_nodes: Vec<DecisionNode<F>>,
+    leaf_nodes: Vec<LeafNode<F>>,
+}
+
+impl<F: FieldExt> From<&Node<i32>> for FlatTree<F> {
+    /// Pre: tree.is_perfect()
+    fn from(tree: &Node<i32>) -> Self {
+        FlatTree {
+            decision_nodes: tree.extract_decision_nodes::<F>(0),
+            leaf_nodes: tree.extract_leaf_nodes::<F>(0),
+        }
+    }
+}
+
+impl<F: FieldExt> FlatTree<F> {
+    fn get_path(&self, sample: &Sample<F>) -> (Vec<DecisionNode<F>>, LeafNode<F>) {
+        let mut path: Vec<DecisionNode<F>> = vec![];
+        // start at root
+        let mut current_node_id = 0;
+        // keep going until current_node_id is becomes a leaf node id
+        while current_node_id < self.decision_nodes.len() {
+            path.push(self.decision_nodes[current_node_id]);
+            let attr_id = (self.decision_nodes[current_node_id].attr_id.into_bigint()).as_ref()[0] as usize;
+            // FIXME should we really be comparing field elements?
+            if sample[attr_id].attr_val >= self.decision_nodes[current_node_id].threshold {
+                current_node_id = current_node_id * 2 + 2;
+            } else {
+                current_node_id = current_node_id * 2 + 1;
+            }
+        }
+        let leaf_node_idx = current_node_id - self.decision_nodes.len();
+        (path, self.leaf_nodes[leaf_node_idx])
+    }
+}
+
 struct CircuitizedTrees<F: FieldExt> {
     trees: Vec<FlatTree<F>>,
     depth: u32,
     scaling: f64,
 }
 
-impl<'a, F: FieldExt> From<&'a TreesInfo> for CircuitizedTrees<F> {
+impl<F: FieldExt> From<&TreesInfo> for CircuitizedTrees<F> {
     
     /// Given a TreesInfo object representing a decision tree model operating on u32 samples, prepare the model for circuitization:
     /// 1. scale and bias are folded into the leaf values;
@@ -32,15 +76,11 @@ impl<'a, F: FieldExt> From<&'a TreesInfo> for CircuitizedTrees<F> {
     /// 3. all trees are padded such that they are all perfect and of uniform depth (without modifying
     ///    the predictions of any tree);
     /// 4. the uniform depth is chosen to be 2^l + 1 for minimal l >= 0.
-    /// The tree of the decision tree model is then "flattened" to a 2-tuple of type:
-    ///   (Vec<DecisionNode>, Vec<LeafNode<i32>>).
-    /// a ("FlatTree").  Both these vectors are ordered by the id attributes of their members.
-    /// Ids for DecisionNodes are 0 .. 2^(depth - 1) - 2 (inclusive).
-    /// Ids for LeafNodes are 2^(depth - 1) - 1 .. 2^depth - 1 (inclusive).
+    /// The tree of the decision tree model is then transformed to a FlatTree.
     /// The resulting CircuitizedTrees incorporates all the FlatTree instances, the (uniform) depth
     /// of the trees, and the scaling factor to approximately undo the quantization (via division)
     /// after aggregating the scores.
-    fn from(trees_info: &'a TreesInfo) -> Self {
+    fn from(trees_info: &TreesInfo) -> Self {
         let mut trees_f64 = trees_info.trees.clone();
         // fold scale into all trees
         for tree in &mut trees_f64 {
@@ -66,13 +106,9 @@ impl<'a, F: FieldExt> From<&'a TreesInfo> for CircuitizedTrees<F> {
             .map(|tree: &Node<i32>| tree.perfect_to_depth(target_depth, &leaf_expander))
             .collect();
 
-        let mut flattened_trees: Vec<(Vec<DecisionNode<F>>, Vec<LeafNode<F>>)> = vec![];
-        for qtree in qtrees {
-            flattened_trees.push((
-                qtree.extract_decision_nodes::<F>(0),
-                qtree.extract_leaf_nodes::<F>(0),
-            ));
-        }
+        let flattened_trees: Vec<FlatTree<F>> = qtrees.iter()
+            .map(|qtree| qtree.into())
+            .collect();
 
         CircuitizedTrees {
             trees: flattened_trees,
@@ -82,6 +118,41 @@ impl<'a, F: FieldExt> From<&'a TreesInfo> for CircuitizedTrees<F> {
     }
 }
 
+struct CircuitizedPaths<'a, F: FieldExt> {
+    trees: &'a CircuitizedTrees<F>,
+    samples: Vec<Sample<F>>,
+    permuted_samples: Vec<Sample<F>>,
+    decision_paths: Vec<Vec<DecisionNode<F>>>,
+    path_ends: Vec<LeafNode<F>>,
+    // differences: Vec<Vec<BinDecomp16Bit<F>>>,
+    // multiplicities: Vec<BinDecomp16Bit<F>>,
+}
+
+impl<'a, F: FieldExt> From<(&'a CircuitizedTrees<F>, Vec<Sample<F>>)> for CircuitizedPaths<'a, F> {
+    // NOTE can't live longer than the CircuitizedTrees given as input
+    // NOTE takes ownership of the vector of samples
+    fn from(inputs: (&'a CircuitizedTrees<F>, Vec<Sample<F>>)) -> Self {
+        let (trees, samples) = inputs;
+        
+        // Repeat the attributes depth - 1 times
+        let repeated_samples = samples.iter()
+            .map(|row| row.iter()
+                 .cycle()
+                 .take(row.len() * (trees.depth as usize - 1))
+                 .cloned().collect())
+            .collect();
+        CircuitizedPaths {
+            trees: trees,
+            samples: repeated_samples,
+            permuted_samples: vec![],
+            decision_paths: vec![vec![]],
+            path_ends: vec![],
+        }
+    }
+}
+
+// TODO consider doing the conversion to samples in the from function
+// do we want to use InputAttribute as late as possible?  Redundant encoding of the attr_id
 type Sample<F> = Vec<InputAttribute<F>>;
 /// Read in the 2d array of u16s serialized in `npy` format from the filename specified, and return
 /// its conversion to Vec<Sample> where the attr_id of the InputAttribute is given by
@@ -439,12 +510,12 @@ mod tests {
         println!("{:?}", tree);
     }
 
-    /// Returns a small tree for testing. Shape:
+    /// Returns a small tree for testing:
     ///      .
     ///     / \
-    ///    .   .
+    ///    .  1.2
     ///   / \
-    ///  .   .
+    /// 0.1 0.2
     fn build_small_tree() -> Node<f64> {
         let left = Node::new_leaf(0.1);
         let middle = Node::new_leaf(0.2);
@@ -471,6 +542,13 @@ mod tests {
             depth += 1;
         }
         tree
+    }
+
+    /// Helper function for testing.
+    fn quantize_and_perfect(tree_f64: Node<f64>, depth: u32) -> Node<i32> {
+        let leaf_expander = |depth: u32, value: i32| Node::new_constant_tree(depth, 0, 0, value);
+        tree_f64.map(&|x| x as i32)
+            .perfect_to_depth(3, &leaf_expander)
     }
 
     #[test]
@@ -620,25 +698,26 @@ mod tests {
         assert_eq!(circ_trees.trees.len(), 2);
         assert_eq!(circ_trees.depth, 3);
         let mut acc_score: Fr = Fr::from(0);
-        for (decision_nodes, leaf_nodes) in &circ_trees.trees {
-            assert_eq!(decision_nodes.len(), 3);
-            assert_eq!(leaf_nodes.len(), 4);
+        for flat_tree in &circ_trees.trees {
+            assert_eq!(flat_tree.decision_nodes.len(), 3);
+            assert_eq!(flat_tree.leaf_nodes.len(), 4);
+            // FIXME we don't need to check this here, since we test it in FlatTree from
             // check the ids of the decision nodes
-            assert!(decision_nodes
+            assert!(flat_tree.decision_nodes
                 .iter()
                 .map(|node| node.node_id)
                 .zip(0..3)
                 .map(|(a, b)| a == Fr::from(b))
                 .all(|x| x));
             // check the ids of the leaf nodes
-            assert!(leaf_nodes
+            assert!(flat_tree.leaf_nodes
                 .iter()
                 .map(|node| node.node_id)
                 .zip(3..7)
                 .map(|(a, b)| a == Fr::from(b))
                 .all(|x| x));
             // accumulate score by taking the value of the first leaf node
-            acc_score += leaf_nodes[0].node_val;
+            acc_score += flat_tree.leaf_nodes[0].node_val;
         }
         // check that the quantized scores accumulated as expected
         let expected_score = trees_info.scale * (0.1 + 3.0) + trees_info.bias;
@@ -664,5 +743,49 @@ mod tests {
         let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
         // check that the depth is now 2^l + 1 for minimal l, i.e. equal to 9.
         assert_eq!(circ_trees.depth, 9);
+    }
+
+    #[test]
+    fn test_flattree_from() {
+        let tree = quantize_and_perfect(build_small_tree(), 3);
+        let flat_tree: FlatTree<Fr> = (&tree).into();
+        assert_eq!(flat_tree.decision_nodes.len(), 3);
+        assert_eq!(flat_tree.leaf_nodes.len(), 4);
+        assert!(flat_tree.decision_nodes
+                .iter()
+                .map(|node| node.node_id)
+                .zip(0..3)
+                .map(|(a, b)| a == Fr::from(b))
+                .all(|x| x));
+        assert!(flat_tree.leaf_nodes
+                .iter()
+                .map(|node| node.node_id)
+                .zip(3..7)
+                .map(|(a, b)| a == Fr::from(b))
+                .all(|x| x));
+    }
+
+    /// Helper function for testing
+    fn values_to_sample(values: Vec<i32>) -> Sample<Fr> {
+        values.iter()
+            .enumerate()
+            .map(|(index, value)| InputAttribute {
+                attr_id: Fr::from(index as u32),
+                attr_val: Fr::from(*value),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_get_path() {
+        let tree = quantize_and_perfect(build_small_tree(), 3);
+        let flat_tree: FlatTree<Fr> = (&tree).into();
+        // sample chosen to hit boundary case for routing decision (<=)
+        let sample = values_to_sample(vec![0, 2]);
+        let (decision_nodes, leaf_node) = flat_tree.get_path(&sample);
+        assert_eq!(decision_nodes.len(), 2);
+        assert_eq!(decision_nodes[0].node_id, Fr::from(0));
+        assert_eq!(decision_nodes[1].node_id, Fr::from(1));
+        assert_eq!(leaf_node.node_id, Fr::from(4));
     }
 }
