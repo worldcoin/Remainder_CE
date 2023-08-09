@@ -68,9 +68,7 @@ pub fn combine_input_mles<F: FieldExt>(input_mles: &mut Vec<&mut DenseMle<F, F>>
     let final_bookkeeping_table = input_mles.into_iter().fold(initial_vec, |current_bookkeeping_table, input_mle| {
 
         // --- Grab the prefix bits and add them to the individual MLEs ---
-        dbg!(current_padded_usage);
         let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(current_padded_usage, total_num_vars, input_mle.num_vars);
-        dbg!(prefix_bits.clone());
         input_mle.add_prefix_bits(Some(prefix_bits));
         current_padded_usage += 2_u32.pow(input_mle.num_vars as u32);
 
