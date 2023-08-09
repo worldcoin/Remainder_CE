@@ -1,6 +1,11 @@
-use itertools::{Itertools, repeat_n};
+//!Contains ZeroMleRef which is an MleRef which always contains only all zeros
 
-use crate::{FieldExt, layer::{LayerId, Claim}};
+use itertools::{repeat_n, Itertools};
+
+use crate::{
+    layer::{Claim, LayerId},
+    FieldExt,
+};
 
 use super::{MleIndex, MleRef};
 
@@ -11,20 +16,26 @@ pub struct ZeroMleRef<F: FieldExt> {
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     num_vars: usize,
-    layer_id: Option<LayerId>,
+    layer_id: LayerId,
     zero: [F; 1],
+    indexed: bool,
 }
 
 impl<F: FieldExt> ZeroMleRef<F> {
     ///Creates a new ZERO MleRef
     pub fn new(num_vars: usize, prefix_bits: Option<Vec<MleIndex<F>>>, layer_id: LayerId) -> Self {
-        let mle_indices = prefix_bits.into_iter().flatten().chain(repeat_n(MleIndex::Iterated, num_vars)).collect_vec();
+        let mle_indices = prefix_bits
+            .into_iter()
+            .flatten()
+            .chain(repeat_n(MleIndex::Iterated, num_vars))
+            .collect_vec();
 
         Self {
             mle_indices,
             num_vars,
-            layer_id: Some(layer_id),
-            zero: [F::zero()]
+            layer_id,
+            zero: [F::zero()],
+            indexed: false,
         }
     }
 }
@@ -35,23 +46,23 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
     fn bookkeeping_table(&self) -> &[Self::F] {
         &self.zero
     }
-    
+
+    fn indexed(&self) -> bool {
+        self.indexed
+    }
+
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
-       &self.mle_indices
+        &self.mle_indices
     }
 
     fn num_vars(&self) -> usize {
         self.num_vars
     }
 
-    fn fix_variable(
-        &mut self,
-        round_index: usize,
-        challenge: Self::F,
-    ) -> Option<Claim<Self::F>> {
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
-                *mle_index = MleIndex::Bound(challenge);
+                mle_index.bind_index(challenge);
             }
         }
 
@@ -59,11 +70,13 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
-            Some((self.mle_indices.iter().map(|x| match x {
-                MleIndex::Bound(chal) => *chal,
-                MleIndex::Fixed(bit) => if *bit { F::one() } else { F::zero() },
-                _ => panic!("All bits should be bound!")
-            }).collect_vec(), F::zero()))
+            Some((
+                self.mle_indices
+                    .iter()
+                    .map(|index| index.val().unwrap())
+                    .collect_vec(),
+                F::zero(),
+            ))
         } else {
             None
         }
@@ -81,7 +94,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         curr_index + new_indices
     }
 
-    fn get_layer_id(&self) -> Option<LayerId> {
+    fn get_layer_id(&self) -> LayerId {
         self.layer_id.clone()
     }
 
