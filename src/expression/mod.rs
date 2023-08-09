@@ -305,6 +305,31 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                         Err(ExpressionError::EvaluateBoundIndicesDontMatch)
                     }
                 }
+                ExpressionStandard::Product(mle_refs) => mle_refs
+                    .iter()
+                    .map(|mle_ref| {
+                        let indices = mle_ref
+                            .mle_indices()
+                            .iter()
+                            .filter_map(|index| match index {
+                                MleIndex::Bound(chal, index) => Some((*chal, index)),
+                                _ => None,
+                            })
+                            .collect_vec();
+
+                        let start = *indices[0].1;
+                        let end = *indices[indices.len() - 1].1;
+
+                        let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
+
+                        if indices.as_slice() == &challenges[start..=end] {
+                            Ok(())
+                        } else {
+                            Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                        }
+                    })
+                    .try_collect(),
+
                 _ => Ok(()),
             }
         };
