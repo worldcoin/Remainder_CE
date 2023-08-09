@@ -33,6 +33,38 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
+struct SplitProductBuilder<F: FieldExt> {
+    mle: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
+    type Successor = DenseMle<F, F>;
+    //a function that multiplies the parts of the tuple pair-wise
+    fn build_expression(&self) -> ExpressionStandard<F> {
+
+        // begin sus: feels like there should be a concat (reverse direction) for expression,
+        // for splitting the expression
+        let split_mle = self.mle.split(F::one());
+        // end sus
+
+        ExpressionStandard::products(vec![split_mle.first(), split_mle.second()])
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+
+        // Create flatmle from tuple mle
+        let split_mle = self.mle.split(F::one());
+        let mut split_product_mle: DenseMle<F, F> = split_mle
+            .into_iter()
+            .map(|(a, b)| a * b)
+            .collect();
+        split_product_mle.add_prefix_bits(prefix_bits);
+        split_product_mle.define_layer_id(id);
+        split_product_mle
+        
+    }
+}
+
 struct BinaryProductTreeBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,

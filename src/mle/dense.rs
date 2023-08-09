@@ -123,8 +123,8 @@ impl<F: FieldExt> DenseMle<F, F> {
     }
 
     ///Splits the mle into a new mle with a tuple of size 2 as it's element
-    pub fn split(&self) -> DenseMle<F, Tuple2<F>> {
-        self.mle.chunks(2).map(|items| (items[0], items.get(1).cloned().unwrap_or(F::zero())).into()).collect()
+    pub fn split(&self, default_fill: F) -> DenseMle<F, Tuple2<F>> {
+        self.mle.chunks(2).map(|items| (items[0], items.get(1).cloned().unwrap_or(default_fill)).into()).collect()
     }
 }
 
