@@ -129,7 +129,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     Ok(chal)
 }
 
-fn get_dummy_claim<F: FieldExt>(
+pub fn get_dummy_claim<F: FieldExt>(
     mle_ref: DenseMleRef<F>,
     rng: &mut impl Rng,
     challenges: Option<Vec<F>>,
@@ -572,8 +572,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let expression = ExpressionStandard::Mle(mle_ref_1);
-    let expr2 = ExpressionStandard::Mle(mle_ref_2);
+    let expression = mle_ref_1.expression();
+    let expr2 = mle_ref_2.expression();
 
     let expression = expr2.clone().concat(expression);
     let expression_aggro = expression.concat(expr2.clone());
