@@ -428,7 +428,7 @@ pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
     // DenseMle<F, F>,
     DenseMle<F, InputAttribute<F>>,
     // DenseMle<F, F>,
-    DenseMle<F, InputAttribute<F>>,
+    Vec<DenseMle<F, InputAttribute<F>>>,
     Vec<DenseMle<F, DecisionNode<F>>>,
     Vec<DenseMle<F, LeafNode<F>>>,
     DenseMle<F, BinDecomp16Bit<F>>,
@@ -459,11 +459,12 @@ pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
         .map(InputAttribute::from)
         .collect::<DenseMle<F, InputAttribute<F>>>();
     // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
-    let dummy_permuted_input_data_mle = dummy_permuted_input_data[0]
-        .clone()
-        .into_iter()
-        .map(InputAttribute::from)
-        .collect::<DenseMle<F, InputAttribute<F>>>();
+    let dummy_permuted_input_data_mle = dummy_permuted_input_data
+        .iter().map(|datum| datum
+            .clone()
+            .into_iter()
+            .map(InputAttribute::from)
+            .collect::<DenseMle<F, InputAttribute<F>>>()).collect();
     let dummy_decision_node_paths_mle = dummy_decision_node_paths
         .iter()
         .map(|path|
