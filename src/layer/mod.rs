@@ -149,6 +149,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         ///Computes a round of the sumcheck protocol on this Layer
         fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
             let (expression, beta) = self.mut_expression_and_beta();
+            dbg!(&expression, "before");
             let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
             expression.fix_variable(round_index - 1, challenge);
             beta.beta_update(round_index - 1, challenge)
@@ -240,7 +241,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // first round, see Thaler book page 34
         let mut prev_evals = &sumcheck_rounds[0];
         let claimed_claim = prev_evals[0] + prev_evals[1];
-        if prev_evals[0] + prev_evals[1] != claim.1 {
+        if claimed_claim != claim.1 {
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
             ));
@@ -276,11 +277,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .unwrap();
         challenges.push(final_chal);
 
-        let claimed_value = claim.1;
-
         // uses the expression to make one single oracle query
         let mut beta = BetaTable::new(claim).unwrap();
         let _ = expression.index_mle_indices(0);
+        dbg!(&expression, "after");
         let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
         let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
         let oracle_query = mle_bound * beta_bound;
