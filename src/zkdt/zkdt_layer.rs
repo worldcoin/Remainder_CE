@@ -770,6 +770,21 @@ mod tests {
 
 
         // ********** MULTISET PART II **********
+        // depending on the implementation / form factor of decision_node_paths_mle / leaf_node_paths_mle
+        // (i) vectors of decision_node_path / leaf_node_path,
+        // then
+        // decision/leaf packing: 1 layer
+        // concat: 1 layer
+        // r-x: 1 layer
+        // prod w pre_prod: 1 layer
+        // 4 * NUM_DUMMY_INPUTS layers +  log2(TREE_HEIGHT) layers for the final product
+        //
+        // (ii) straight mle of all decision_node_paths / leaf_node_paths
+        // then
+        // decision/leaf packing: 1 layer
+        // concat: 1 layer
+        // r-x: 1 layer
+        // literally 3 layers + log2(TREE_HEIGHT * NUM_DUMMY_INPUTS) layers for final product (binary product)
 
         let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = [Fr::from(1); TREE_HEIGHT].into_iter().collect::<DenseMle<Fr, Fr>>();
 
