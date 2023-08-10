@@ -6,7 +6,7 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 
-use crate::layer::Claim;
+use crate::layer::{Claim, LayerId};
 use crate::FieldExt;
 
 use super::{
@@ -21,6 +21,7 @@ use thiserror::Error;
 pub(crate) struct BetaTable<F: FieldExt> {
     layer_claim: Claim<F>,
     ///The bookkeeping table for the beta table
+    /// TODO(Get rid of BetaTable's reliance on the DenseMleRef type; Create a shared subtype for the shared behavior)
     pub(crate) table: DenseMleRef<F>,
     relevant_indices: Vec<usize>,
 }
@@ -115,8 +116,10 @@ pub(crate) fn beta_split<F: FieldExt>(
         .map(|(_, v)| *v)
         .collect();
 
-    let mut beta_first_mle_ref: DenseMleRef<F> = DenseMle::new(beta_bookkeep_first).mle_ref();
-    let mut beta_second_mle_ref: DenseMleRef<F> = DenseMle::new(beta_bookkeep_second).mle_ref();
+    let mut beta_first_mle_ref: DenseMleRef<F> =
+        DenseMle::new_from_raw(beta_bookkeep_first, LayerId::Input, None).mle_ref();
+    let mut beta_second_mle_ref: DenseMleRef<F> =
+        DenseMle::new_from_raw(beta_bookkeep_second, LayerId::Input, None).mle_ref();
 
     beta_first_mle_ref.index_mle_indices(0);
     beta_second_mle_ref.index_mle_indices(0);
@@ -143,7 +146,8 @@ impl<F: FieldExt> BetaTable<F> {
         }
 
         let iterated_bit_indices = (0..layer_claim_vars.len()).into_iter().collect_vec();
-        let cur_table_mle_ref: DenseMleRef<F> = DenseMle::new(cur_table).mle_ref();
+        let cur_table_mle_ref: DenseMleRef<F> =
+            DenseMle::new_from_raw(cur_table, LayerId::Input, None).mle_ref();
         Ok(BetaTable {
             layer_claim,
             table: cur_table_mle_ref,

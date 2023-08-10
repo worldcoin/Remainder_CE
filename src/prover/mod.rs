@@ -335,15 +335,12 @@ mod tests {
                 self.mle.clone(),
                 |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
                 |mle, layer_id, prefix_bits| {
-                    let mut output = mle
-                        .into_iter()
-                        .map(|(first, second)| first * second)
-                        .collect::<DenseMle<F, F>>();
-
-                    output.define_layer_id(layer_id);
-                    output.add_prefix_bits(prefix_bits);
-
-                    output
+                    DenseMle::new_from_iter(
+                        mle.into_iter()
+                            .map(|Tuple2((first, second))| first * second),
+                        layer_id,
+                        prefix_bits,
+                    )
                 },
             );
 
@@ -351,15 +348,12 @@ mod tests {
                 self.mle_2.clone(),
                 |mle| mle.first().expression() + mle.second().expression(),
                 |mle, layer_id, prefix_bits| {
-                    let mut output = mle
-                        .into_iter()
-                        .map(|(first, second)| first + second)
-                        .collect::<DenseMle<F, F>>();
-
-                    output.define_layer_id(layer_id);
-                    output.add_prefix_bits(prefix_bits);
-
-                    output
+                    DenseMle::new_from_iter(
+                        mle.into_iter()
+                            .map(|Tuple2((first, second))| first + second),
+                        layer_id,
+                        prefix_bits,
+                    )
                 },
             );
 
@@ -371,22 +365,21 @@ mod tests {
                 output,
                 |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
                 |(mle1, mle2), layer_id, prefix_bits| {
-                    let mut new_mle = mle1
-                        .clone()
-                        .into_iter()
-                        .zip(mle2.clone().into_iter())
-                        .map(|(first, second)| first - second)
-                        .collect::<DenseMle<F, F>>();
-                    new_mle.define_layer_id(layer_id);
-                    new_mle.add_prefix_bits(prefix_bits);
-                    new_mle
+                    DenseMle::new_from_iter(
+                        mle1.clone()
+                            .into_iter()
+                            .zip(mle2.clone().into_iter())
+                            .map(|(first, second)| first - second),
+                        layer_id,
+                        prefix_bits,
+                    )
                 },
             );
 
             let output = layers.add_gkr(builder4);
 
-            let mut output_input = output.clone();
-            output_input.define_layer_id(LayerId::Input);
+            let mut output_input =
+                DenseMle::new_from_iter(output.into_iter(), LayerId::Input, None);
 
             let builder4 = from_mle(
                 (output, output_input),
@@ -411,15 +404,16 @@ mod tests {
         // tracing::subscriber::set_global_default(subscriber)
         //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
-        let mut mle: DenseMle<Fr, Tuple2<Fr>> = (0..size)
-            .map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into())
-            .collect();
-        mle.define_layer_id(LayerId::Input);
-        let mut mle_2: DenseMle<Fr, Tuple2<Fr>> = (0..size)
-            .map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into())
-            .collect();
-
-        mle_2.define_layer_id(LayerId::Input);
+        let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
+            LayerId::Input,
+            None,
+        );
+        let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
+            LayerId::Input,
+            None,
+        );
 
         let mut circuit = TestCircuit { mle, mle_2 };
 

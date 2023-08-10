@@ -17,31 +17,20 @@ pub mod zero;
 ///
 /// If you want to construct an Mle, or use an Mle for some non-cryptographic computation (e.g. wit gen) then
 /// you should always use the iterator adaptors IntoIterator and FromIterator, this is to ensure that the semantic ordering within T is always consistent.
-pub trait Mle<F, T>
+pub trait Mle<F>
 where
     Self: Clone + Debug,
+
     //+ CanonicalSerialize + CanonicalDeserialize,
-    // + IntoIterator<Item = T>
     // + FromIterator<T>,
     F: FieldExt,
-    //TODO!(Derive MLEable trait)
-    T: Send + Sync + MleAble<F>,
 {
-    ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-    type MleRef: MleRef;
-
-    ///Underlying MultiLinearExtention implementation
-    type MultiLinearExtention: IntoIterator<Item = F>;
-
-    ///Get number of variables of the Mle which is equivalent to the log_2 of the size of the MLE
+    ///Get the log_2 size of the WHOLE mle
     fn num_vars(&self) -> usize;
+    ///Get the padded set of evaluations over the boolean hypercube; Useful for constructing the input layer
+    fn get_padded_evaluations(&self) -> Vec<F>;
 
-    ///Defines the layer_id of where this Mle comes from
-    /// TODO!(Get rid of this awfulness)
-    fn define_layer_id(&mut self, id: LayerId);
-
-    ///Add any prefix bits that must be added to any MleRefs this Mle yields
-    fn add_prefix_bits(&mut self, prefix: Option<Vec<MleIndex<F>>>);
+    fn add_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
@@ -82,6 +71,18 @@ pub trait MleRef: Debug + Send + Sync {
 pub trait MleAble<F: FieldExt> {
     ///The particular representation that is convienent for an MleAble, most of the time it will be a \[Vec<F>; Size\] array
     type Repr: Send + Sync + Clone + Debug + CanonicalDeserialize + CanonicalSerialize;
+
+    type IntoIter<'a>: Iterator<Item = Self>
+    where
+        Self: 'a;
+
+    fn get_padded_evaluations(items: &Self::Repr) -> Vec<F>;
+
+    fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr;
+
+    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a>;
+
+    fn num_vars(items: &Self::Repr) -> usize;
 }
 
 ///The Enum that represents the possible indices for an MLE

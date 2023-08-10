@@ -19,13 +19,12 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         // Create flatmle from tuple mle
-        let mut flat_mle: DenseMle<F, F> = self
-            .mle
-            .into_iter()
-            .map(|(first, second)| first * second)
-            .collect();
-        flat_mle.add_prefix_bits(prefix_bits);
-        flat_mle.define_layer_id(id);
-        flat_mle
+        DenseMle::new_from_iter(
+            self.mle
+                .into_iter()
+                .map(|Tuple2((first, second))| first * second),
+            id,
+            prefix_bits,
+        )
     }
 }
