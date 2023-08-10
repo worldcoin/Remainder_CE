@@ -622,6 +622,10 @@ mod tests {
         let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
         let another_r = Fr::from(6);
 
+
+        // ********** MULTISET PART I **********
+        // ------ LAYER ID: 0 ------
+
         // WHOLE TREE: decision nodes packing
         let decision_packing_builder = DecisionNodePackingBuilder{
             mle: dummy_decision_nodes_mle.clone(),
@@ -651,16 +655,20 @@ mod tests {
         // println!("decision {:?}", decision_packed);
         // println!("leaf {:?}", leaf_packed);
 
+        // ------ LAYER ID: 1 ------
+
         let decision_leaf_concat_builder = ConcatBuilder{
             mle_1: decision_packed,
             mle_2: leaf_packed
         };
         let _ = decision_leaf_concat_builder.build_expression();
-        let x_packed = decision_leaf_concat_builder.next_layer(LayerId::Layer(0), None);
+        let x_packed = decision_leaf_concat_builder.next_layer(LayerId::Layer(1), None);
         assert_eq!(x_packed.mle_ref().bookkeeping_table,
             DenseMle::new(vec![ Fr::from(-8342),
                         Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
                         Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))]).mle_ref().bookkeeping_table);
+
+        // ------ LAYER ID: 2 ------
 
         // r-x
         let r_minus_x_builder =  ExpoBuilderInit {
@@ -668,11 +676,13 @@ mod tests {
             r: another_r,
         };
         let _ = r_minus_x_builder.build_expression();
-        let mut r_minus_x = r_minus_x_builder.next_layer(LayerId::Layer(0), None);
+        let mut r_minus_x = r_minus_x_builder.next_layer(LayerId::Layer(2), None);
         assert_eq!(r_minus_x.mle_ref().bookkeeping_table,
             DenseMle::new(vec![ Fr::from(6+8342),
                         Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
                         Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))]).mle_ref().bookkeeping_table);
+
+        // ------ LAYER ID: 3 ------
 
         // b_ij * (r-x) + (1 - b_ij), j = 0
         let prev_prod_builder = ExpoBuilderBitExpo {
@@ -681,19 +691,27 @@ mod tests {
             r_minus_x_power: r_minus_x.clone()
         };
         let _ = prev_prod_builder.build_expression();
-        let mut prev_prod = prev_prod_builder.next_layer(LayerId::Layer(0), None);
+        let mut prev_prod = prev_prod_builder.next_layer(LayerId::Layer(3), None);
         assert_eq!(prev_prod.mle_ref().bookkeeping_table,
             DenseMle::new(vec![ Fr::from(1),
                         Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
                         Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))]).mle_ref().bookkeeping_table);
 
+
+        
+
         for i in 1..16 {
+
+            // ------ LAYER ID: 3 ------
+            // (r-x)^2 can be put in the same layer as: b_ij * (r-x) + (1 - b_ij), j = 0
+            // in general, (r-x)^(2^(j+1)) can be put in the same lyaer as : b_ij * (r-x) + (1 - b_ij), j = j
+
             // (r-x)^2
             let r_minus_x_square_builder = SquaringBuilder {
                 mle: r_minus_x
             };
             let _ = r_minus_x_square_builder.build_expression();
-            let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(0), None);
+            let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(i+2), None);
 
             // b_ij * (r-x)^2 + (1 - b_ij), j = 1..15
             let curr_prod_builder = ExpoBuilderBitExpo {
@@ -702,7 +720,7 @@ mod tests {
                 r_minus_x_power: r_minus_x_square.clone()
             };
             let _ = curr_prod_builder.build_expression();
-            let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(0), None);
+            let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(i+3), None);
 
             // PROD(b_ij * (r-x) + (1 - b_ij))
             let prod_builder = ExpoBuilderProduct {
@@ -710,11 +728,15 @@ mod tests {
                 prev_prod
             };
             let _ = prod_builder.build_expression();
-            prev_prod = prod_builder.next_layer(LayerId::Layer(0), None);
+            prev_prod = prod_builder.next_layer(LayerId::Layer(i+4), None);
 
             r_minus_x = r_minus_x_square;
 
         }
+
+        // ------ NEXT LAYER ID: 20 ------
+        // the last layer of prev_prod is LayerId::Layer(15+4) = LayerId::Layer(19)
+
 
         // Multiplicities is [4, 1, 3]
         assert_eq!(prev_prod.mle_ref().bookkeeping_table,
@@ -724,16 +746,20 @@ mod tests {
                     (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))).pow([3 as u64])
                 ]).mle_ref().bookkeeping_table);
 
-        
+
+        // ------ NEXT LAYER ID: 20 ------
+
         let mut exponentiated_nodes = prev_prod.clone();
-        for _ in 0..TREE_HEIGHT {
+        for i in 0..TREE_HEIGHT {
             let prod_builder = SplitProductBuilder {
                 mle: exponentiated_nodes
             };
             let _ = prod_builder.build_expression();
-            exponentiated_nodes = prod_builder.next_layer(LayerId::Layer(0), None);
+            exponentiated_nodes = prod_builder.next_layer(LayerId::Layer(20+i), None);
         }
         println!("final multiset 1. {:?}", exponentiated_nodes);
+        
+        // ------ LAST LAYER ID: 20+(TREE_HEIGHT-1)  ------
 
         assert_eq!(exponentiated_nodes.mle_ref().bookkeeping_table,
         DenseMle::new(vec![
@@ -741,6 +767,9 @@ mod tests {
             (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64))).pow([1 as u64]) *
             (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))).pow([3 as u64])
         ]).mle_ref().bookkeeping_table);
+
+
+        // ********** MULTISET PART II **********
 
         let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = [Fr::from(1); TREE_HEIGHT].into_iter().collect::<DenseMle<Fr, Fr>>();
 
