@@ -813,11 +813,11 @@ mod tests {
     use super::*;
     use crate::{
         expression::ExpressionStandard,
-        layer::claims::aggregate_claims,
+        layer::{claims::aggregate_claims, from_mle, GKRLayer, LayerId, Layer, LayerBuilder},
         mle::{
             dense::{DenseMle, Tuple2},
             Mle,
-        },
+        }, transcript::poseidon_transcript::PoseidonTranscript,
     };
     use ark_bn254::Fr;
     use ark_std::test_rng;
@@ -1354,9 +1354,12 @@ mod tests {
 
         let mut expression = mle_ref_1.expression() - mle_ref_2.expression();
 
+        let layer = from_mle((mle1, mle2), |mle| mle.0.mle_ref().expression() - mle.1.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let (layer_claims, _) = aggregate_claims(
             &[first_claim, second_claim],
-            &expression,
+            &Box::new(layer),
             Fr::rand(&mut rng),
         )
         .unwrap();
@@ -1415,9 +1418,12 @@ mod tests {
 
         let mut expression = ExpressionStandard::products(vec![mle_ref_1, mle_ref_2]);
 
+        let layer = from_mle((mle1, mle2), |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let (layer_claims, _) = aggregate_claims(
             &[first_claim, second_claim],
-            &expression,
+            &Box::new(layer),
             Fr::rand(&mut rng),
         )
         .unwrap();
@@ -1477,13 +1483,22 @@ mod tests {
         );
 
         let expr_1 = ExpressionStandard::products(vec![mle.first(), mle.second()]);
+
+        let layer = from_mle(mle, |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]), |_, _, _| unimplemented!());
+        
         // let expr_1 = mle.first().expression() + mle.second().expression();
         let expr_2 = mle_2.first().expression() + mle_2.second().expression();
         let mut expression = expr_1.concat(expr_2);
 
+        let layer_2 = from_mle(mle_2, |mle| mle.first().expression() + mle.second().expression(), |_, _, _| unimplemented!());
+
+        let layer = layer.concat(layer_2);
+
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let (layer_claims, _) = aggregate_claims(
             &[first_claim, second_claim],
-            &expression,
+            &Box::new(layer),
             Fr::rand(&mut rng),
         )
         .unwrap();

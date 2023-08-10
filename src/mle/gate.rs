@@ -208,14 +208,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         &self.layer_id
     }
 
-    ///Gets this layers expression
-    fn expression(&self) -> &ExpressionStandard<F> {
-        // uh this is def not right anyway we dont need it??? we're not using expressions
-        return &self.expression
-    }
-
     ///Create new ConcreteLayer from a LayerBuilder
     fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
+        todo!()
+    }
+
+    fn get_wlx_evaluations(&self, claim_vecs: Vec<Vec<F>>,
+        claimed_vals: &mut Vec<F>,
+        num_claims: usize,
+        num_idx: usize) -> Result<Vec<F>, ClaimError> {
         todo!()
     }
 }
