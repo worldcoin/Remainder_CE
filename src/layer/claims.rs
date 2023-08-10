@@ -155,6 +155,7 @@ pub(crate) fn verify_aggragate_claim<F: FieldExt>(
 mod tests {
 
     use crate::expression::Expression;
+    use crate::layer::LayerId;
     use crate::mle::dense::DenseMle;
 
     use super::*;
@@ -167,7 +168,11 @@ mod tests {
     fn test_get_claim() {
         // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
-        let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
+        let mle = DenseMle::<_, Fr>::new_from_raw(
+            vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
+            LayerId::Input,
+            None,
+        );
         let expression3 = ExpressionStandard::Mle(mle.mle_ref());
         let expression = expression1.clone() + expression3.clone();
         // let expression = expression1.clone() * expression;
@@ -184,7 +189,7 @@ mod tests {
         let _dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
 
         let mut expr = ExpressionStandard::Mle(mle_ref);
@@ -223,7 +228,7 @@ mod tests {
         let _dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -281,7 +286,7 @@ mod tests {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -337,8 +342,8 @@ mod tests {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
-        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
@@ -398,7 +403,7 @@ mod tests {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -456,7 +461,7 @@ mod tests {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -502,7 +507,7 @@ mod tests {
     #[test]
     fn test_verify_claim_aggro() {
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let _expr_copy = expr.clone();

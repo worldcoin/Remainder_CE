@@ -637,11 +637,41 @@ impl<F: FieldExt> Mul<F> for ExpressionStandard<F> {
 
 #[cfg(test)]
 mod tests {
-    use crate::mle::dense::DenseMle;
+    use crate::{layer::LayerId, mle::dense::DenseMle};
 
     use super::*;
     use ark_bn254::Fr;
     use ark_std::One;
+
+    #[test]
+    fn test_expression_operators() {
+        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+
+        let mle = DenseMle::new_from_raw(
+            vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
+
+        let expression3 = ExpressionStandard::Mle(mle.clone());
+
+        let expression = expression1.clone() + expression3.clone();
+
+        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
+
+        let expression = expression_product + expression;
+
+        let expression = expression1 - expression;
+
+        let expression = expression * Fr::from(2);
+
+        let expression = expression3.concat(expression);
+
+        let dense_mle_print = "DenseMleRef { bookkeeping_table: [BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0])], mle_indices: [Iterated, Iterated], num_vars: 2, layer_id: None }";
+
+        assert_eq!(format!("{expression:?}"), format!("Selector(Iterated, Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Product([{dense_mle_print}, {dense_mle_print}]), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))"));
+    }
 
     #[test]
     fn test_constants_eval() {
@@ -664,8 +694,12 @@ mod tests {
 
     #[test]
     fn test_mle_eval_two_variable() {
-        let mle = DenseMle::<_, Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(5), Fr::from(7)])
-            .mle_ref();
+        let mle = DenseMle::new_from_raw(
+            vec![Fr::from(4), Fr::from(2), Fr::from(5), Fr::from(7)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let mut expression = ExpressionStandard::Mle(mle);
         let num_indices = expression.index_mle_indices(0);
@@ -678,16 +712,20 @@ mod tests {
 
     #[test]
     fn test_mle_eval_three_variable() {
-        let mle = DenseMle::<_, Fr>::new(vec![
-            Fr::from(4),
-            Fr::from(2),
-            Fr::from(5),
-            Fr::from(7),
-            Fr::from(2),
-            Fr::from(4),
-            Fr::from(9),
-            Fr::from(6),
-        ])
+        let mle = DenseMle::new_from_raw(
+            vec![
+                Fr::from(4),
+                Fr::from(2),
+                Fr::from(5),
+                Fr::from(7),
+                Fr::from(2),
+                Fr::from(4),
+                Fr::from(9),
+                Fr::from(6),
+            ],
+            LayerId::Input,
+            None,
+        )
         .mle_ref();
 
         let mut expression = ExpressionStandard::Mle(mle);
@@ -701,8 +739,12 @@ mod tests {
 
     #[test]
     fn test_mle_eval_sum_w_constant_then_scale() {
-        let mle = DenseMle::<_, Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)])
-            .mle_ref();
+        let mle = DenseMle::new_from_raw(
+            vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let expression = ExpressionStandard::Mle(mle);
         let mut expression = (expression + ExpressionStandard::Constant(Fr::from(5))) * Fr::from(2);
@@ -716,15 +758,21 @@ mod tests {
 
     #[test]
     fn test_mle_eval_selector() {
-        let mle_1 =
-            DenseMle::<_, Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)])
-                .mle_ref();
+        let mle_1 = DenseMle::new_from_raw(
+            vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let expression_1 = ExpressionStandard::Mle(mle_1);
 
-        let mle_2 =
-            DenseMle::<_, Fr>::new(vec![Fr::from(1), Fr::from(9), Fr::from(8), Fr::from(2)])
-                .mle_ref();
+        let mle_2 = DenseMle::new_from_raw(
+            vec![Fr::from(1), Fr::from(9), Fr::from(8), Fr::from(2)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let expression_2 = ExpressionStandard::Mle(mle_2);
 
@@ -736,16 +784,20 @@ mod tests {
         let challenge = vec![Fr::from(2), Fr::from(7), Fr::from(3)];
         let eval = expression.evaluate_expr(challenge);
 
-        let mle_concat = DenseMle::<_, Fr>::new(vec![
-            Fr::from(1),
-            Fr::from(9),
-            Fr::from(8),
-            Fr::from(2),
-            Fr::from(4),
-            Fr::from(2),
-            Fr::from(1),
-            Fr::from(7),
-        ])
+        let mle_concat = DenseMle::new_from_raw(
+            vec![
+                Fr::from(1),
+                Fr::from(9),
+                Fr::from(8),
+                Fr::from(2),
+                Fr::from(4),
+                Fr::from(2),
+                Fr::from(1),
+                Fr::from(7),
+            ],
+            LayerId::Input,
+            None,
+        )
         .mle_ref(); // cancat actually prepends
 
         let challenge_concat = vec![Fr::from(7), Fr::from(3), Fr::from(2)]; // move the first challenge towards the end
@@ -762,9 +814,12 @@ mod tests {
 
     #[test]
     fn test_mle_eval_selector_w_constant() {
-        let mle_1 =
-            DenseMle::<_, Fr>::new(vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)])
-                .mle_ref();
+        let mle_1 = DenseMle::new_from_raw(
+            vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let expression_1 = ExpressionStandard::Mle(mle_1);
 
@@ -783,17 +838,23 @@ mod tests {
     fn test_mle_refs_eval() {
         let challenge = vec![Fr::from(2), Fr::from(3)];
 
-        let mle_1 =
-            DenseMle::<_, Fr>::new(vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)])
-                .mle_ref();
+        let mle_1 = DenseMle::new_from_raw(
+            vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let mut expression_1 = ExpressionStandard::Mle(mle_1.clone());
         let _ = expression_1.index_mle_indices(0);
         let eval_1 = expression_1.evaluate_expr(challenge.clone()).unwrap();
 
-        let mle_2 =
-            DenseMle::<_, Fr>::new(vec![Fr::from(1), Fr::from(4), Fr::from(5), Fr::from(2)])
-                .mle_ref();
+        let mle_2 = DenseMle::new_from_raw(
+            vec![Fr::from(1), Fr::from(4), Fr::from(5), Fr::from(2)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let mut expression_2 = ExpressionStandard::Mle(mle_2.clone());
         let _ = expression_2.index_mle_indices(0);
@@ -813,22 +874,29 @@ mod tests {
     fn test_mle_different_length_eval() {
         let challenge = vec![Fr::from(2), Fr::from(3), Fr::from(5)];
 
-        let mle_1 =
-            DenseMle::<_, Fr>::new(vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)])
-                .mle_ref();
+        let mle_1 = DenseMle::new_from_raw(
+            vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let expression_1 = ExpressionStandard::Mle(mle_1);
 
-        let mle_2 = DenseMle::<_, Fr>::new(vec![
-            Fr::from(1),
-            Fr::from(4),
-            Fr::from(5),
-            Fr::from(2),
-            Fr::from(1),
-            Fr::from(9),
-            Fr::from(8),
-            Fr::from(2),
-        ])
+        let mle_2 = DenseMle::new_from_raw(
+            vec![
+                Fr::from(1),
+                Fr::from(4),
+                Fr::from(5),
+                Fr::from(2),
+                Fr::from(1),
+                Fr::from(9),
+                Fr::from(8),
+                Fr::from(2),
+            ],
+            LayerId::Input,
+            None,
+        )
         .mle_ref();
 
         let expression_2 = ExpressionStandard::Mle(mle_2);
@@ -846,20 +914,27 @@ mod tests {
     fn test_mle_different_length_prod() {
         let challenge = vec![Fr::from(2), Fr::from(3), Fr::from(5)];
 
-        let mle_1 =
-            DenseMle::<_, Fr>::new(vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)])
-                .mle_ref();
+        let mle_1 = DenseMle::new_from_raw(
+            vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
-        let mle_2 = DenseMle::<_, Fr>::new(vec![
-            Fr::from(1),
-            Fr::from(4),
-            Fr::from(5),
-            Fr::from(2),
-            Fr::from(1),
-            Fr::from(9),
-            Fr::from(8),
-            Fr::from(2),
-        ])
+        let mle_2 = DenseMle::new_from_raw(
+            vec![
+                Fr::from(1),
+                Fr::from(4),
+                Fr::from(5),
+                Fr::from(2),
+                Fr::from(1),
+                Fr::from(9),
+                Fr::from(8),
+                Fr::from(2),
+            ],
+            LayerId::Input,
+            None,
+        )
         .mle_ref();
 
         let mut expression_product = ExpressionStandard::products(vec![mle_1, mle_2]);
@@ -897,8 +972,12 @@ mod tests {
     fn big_test_eval() {
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
 
-        let mle =
-            DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::one()]).mle_ref();
+        let mle = DenseMle::new_from_raw(
+            vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::one()],
+            LayerId::Input,
+            None,
+        )
+        .mle_ref();
 
         let expression3 = ExpressionStandard::Mle(mle.clone());
 
