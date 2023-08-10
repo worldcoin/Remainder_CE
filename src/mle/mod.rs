@@ -19,8 +19,6 @@ pub mod zero;
 /// you should always use the iterator adaptors IntoIterator and FromIterator, this is to ensure that the semantic ordering within T is always consistent.
 pub trait Mle<F>
 where
-    Self: Clone + Debug,
-
     //+ CanonicalSerialize + CanonicalDeserialize,
     // + FromIterator<T>,
     F: FieldExt,

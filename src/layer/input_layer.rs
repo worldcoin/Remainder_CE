@@ -61,7 +61,7 @@ fn get_prefix_bits_from_capacity<F: FieldExt>(
 /// todo!();
 /// ```
 pub fn combine_input_mles<F: FieldExt>(
-    input_mles: &mut Vec<&mut DenseMle<F, F>>,
+    input_mles: &mut Vec<Box<&mut dyn Mle<F>>>,
 ) -> DenseMle<F, F> {
     // --- First, just sort the `input_mles` by number of variables (but inverted) ---
     input_mles.sort_by(|a, b| b.num_vars().partial_cmp(&a.num_vars()).unwrap());
@@ -90,7 +90,7 @@ pub fn combine_input_mles<F: FieldExt>(
                 current_padded_usage += 2_u32.pow(input_mle.num_vars() as u32);
 
                 // --- Fold the new (padded) bookkeeping table with the old ones ---
-                let padded_bookkeeping_table = get_padded_bookkeeping_table(input_mle);
+                let padded_bookkeeping_table = input_mle.get_padded_evaluations();
                 current_bookkeeping_table
                     .into_iter()
                     .chain(padded_bookkeeping_table.into_iter())
@@ -150,7 +150,7 @@ mod tests {
         let mut mle_1 = get_random_mle::<Fr>(5);
         let mut mle_2 = get_random_mle::<Fr>(5);
         let mut mle_3 = get_random_mle::<Fr>(4);
-        let mut mle_list = vec![&mut mle_1, &mut mle_3, &mut mle_2];
+        let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_3), Box::new(&mut mle_2)];
 
         let combined_mle = combine_input_mles(&mut mle_list);
 
@@ -182,7 +182,7 @@ mod tests {
         let mut mle_1 = get_random_mle_with_capacity::<Fr>(31);
         let mut mle_2 = get_random_mle_with_capacity::<Fr>(115);
         let mut mle_3 = get_random_mle::<Fr>(6);
-        let mut mle_list = vec![&mut mle_1, &mut mle_3, &mut mle_2];
+        let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_3), Box::new(&mut mle_2)];
 
         let combined_mle = combine_input_mles(&mut mle_list);
 
