@@ -8,69 +8,227 @@ use ndarray::Array2;
 use ndarray_npy::{read_npy, ReadNpyError};
 use num::pow;
 use serde::{Deserialize, Serialize};
-use itertools::{repeat_n, Itertools};
+use std::iter::repeat;
+use itertools::Itertools;
 
-struct CircuitizedPath<F: FieldExt> {
-    sample: Sample<F>,
-    permuted_sample: Sample<F>,
-    decision_path: Vec<DecisionNode<F>>,
-    path_end: LeafNode<F>,
-    differences: Vec<BinDecomp16Bit<F>>,
-    //? multiplicities: Vec<BinDecomp16Bit<F>>,
+const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 = 2_u32.pow(15) - 1;
+/// Build a 16 bit signed decomposition of the specified i32, or None if the argument is too large
+/// in absolute value (exceeding SIGNED_DECOMPOSITION_MAX_ARG_ABS).
+fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDecomp16Bit<F>> {
+    let abs_val = value.abs() as u32;
+    if abs_val > SIGNED_DECOMPOSITION_MAX_ARG_ABS {
+        return None;
+    }
+    let mut decomposition = build_unsigned_bit_decomposition(abs_val).unwrap();
+    // set the sign bit
+    decomposition.bits[0] = if value >= 0 {
+        F::zero()
+    } else {
+        F::one()
+    };
+    Some(decomposition)
 }
-// FIXME define a struct for the return value of this method?
-// But what about the multiplicities in each tree?  how does this interact with batching?
-fn circuitize_samples<F: FieldExt>(sample: &Vec<u32>, pqtrees: &PaddedQuantizedTrees) -> Vec<InputAttribute<F>> {
-    // repeat the attributes of the sample
-    let sample = sample.iter()
-        .cycle()
-        .take((pqtrees.depth - 1) as usize * sample.len())
+
+const UNSIGNED_DECOMPOSITION_MAX_ARG: u32 = 2_u32.pow(16) - 1;
+/// Build a 16 bit decomposition of the specified u32, or None if the argument is too large
+/// (exceeding UNSIGNED_DECOMPOSITION_MAX_ARG_ABS).
+fn build_unsigned_bit_decomposition<F: FieldExt>(value: u32) -> Option<BinDecomp16Bit<F>> {
+    if value > UNSIGNED_DECOMPOSITION_MAX_ARG {
+        None
+    } else {
+        // FIXME use some standard method to obtain the bit decomposition
+        Some(BinDecomp16Bit {
+            bits: [F::zero(); 16]
+        })
+    }
+}
+
+type Sample<F> = Vec<InputAttribute<F>>;
+/// Convert a vector of u32s to a Sample (consisting of field elements).
+fn build_sample<F: FieldExt>(values: &Vec<u32>) -> Sample<F> {
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| InputAttribute {
+            attr_id: F::from(index as u32),
+            attr_val: F::from(*value),
+        })
+        .collect()
+}
+
+/// Repeat the items of the provided vector `repetitions` times, before padding with the minimal
+/// number of zeros such that the length is a power of two.
+fn repeat_and_pad(values: &Vec<u32>, repetitions: usize) -> Vec<u32> {
+    // repeat
+    let repeated_length = repetitions * values.len();
+    let repeated_iter = values.into_iter().cycle().take(repeated_length);
+    // pad to nearest power of two
+    let padding_length = (next_power_of_two(repeated_length as u32).unwrap() as usize - repeated_length);
+    let padding_iter = repeat(&0).take(padding_length);
+    // chain together and convert to Sample
+    repeated_iter
+        .chain(padding_iter)
         .cloned()
+        .collect()
+}
+
+// TODO:
+// Confirm index orders below
+// Confirm that multiplicities is just over node indices (extend by 1 dummy node?)
+// Ask: do the number of trees need to be a power of two?
+// Double-check: input attributes are repeated _then_ padded to a power of two.
+struct CircuitizedSamples<F: FieldExt> {
+    samples: Vec<Sample<F>>, // indexed by samples
+    permuted_samples: Vec<Vec<Sample<F>>>, // indexed by samples, trees
+    decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by samples, trees, steps in path
+    differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>, // indexed by samples, trees, steps in path
+    path_ends: Vec<Vec<LeafNode<F>>>, // indexed by samples, trees
+    multiplicities: Vec<BinDecomp16Bit<F>>, // indexed by tree node indices
+}
+
+/// Pre: values_array is not empty
+fn circuitize_samples<F: FieldExt>(values_array: &Vec<Vec<u32>>, pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
+    // repeat and pad the attributes of the sample
+    let values_array: Vec<Vec<u32>> = values_array
+        .iter()
+        .map(|x| repeat_and_pad(x, (pqtrees.depth - 1) as usize))
         .collect();
-    // get the paths
-    let paths = pqtrees.trees.iter().map(|x| x.get_path(&sample)).collect_vec();
+    let sample_length = values_array[0].len();
+    
+    // TODO can we think of a better naming convention than appending 's'?
+    let mut samples: Vec<Sample<F>> = vec![];
+    let mut permuted_sampless: Vec<Vec<Sample<F>>> = vec![];
+    let mut decision_pathss: Vec<Vec<Vec<DecisionNode<F>>>> = vec![];
+    let mut path_endss: Vec<Vec<LeafNode<F>>> = vec![];
+    let mut differencesss: Vec<Vec<Vec<BinDecomp16Bit<F>>>> = vec![];
 
-    // pad sample to the next power of two
-    vec![]
-}
+    // initialize the visit counts
+    let node_count: usize = 2_usize.pow(pqtrees.depth) - 1;
+    let mut multiplicities: Vec<u32> = vec![0_u32; node_count];
 
+    for values in values_array {
+        let sample = build_sample(&values);
+        samples.push(sample.clone());
+        let mut permuted_samples: Vec<Sample<F>> = vec![];
+        let mut decision_paths: Vec<Vec<DecisionNode<F>>> = vec![];
+        let mut path_ends: Vec<LeafNode<F>> = vec![];
+        let mut differencess: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TreesInfo {
-    trees: Vec<Node<f64>>,
-    bias: f64,
-    scale: f64,
-    n_features: usize,
-}
+        for tree in &pqtrees.trees {
+            // get the path
+            let path = tree.get_path(&values);
+            
+            // derive data from decision path
+            let mut decision_path = vec![];
+            let mut permuted_sample: Sample<F> = vec![];
+            let mut attribute_visits = vec![0; sample_length];
+            let mut differences = vec![];
+            for node in &path[..path.len() - 1] {
+                if let Node::Internal {
+                    id,
+                    feature_index,
+                    threshold,
+                    ..
+                } = node
+                {
+                    decision_path.push(DecisionNode {
+                        node_id: F::from(id.unwrap()),
+                        attr_id: F::from(*feature_index as u32),
+                        threshold: F::from(*threshold),
+                    });
+                    // calculate the bit decompositions of the differences
+                    let difference = (values[*feature_index] as i32) - (*threshold as i32);
+                    differences.push(build_signed_bit_decomposition::<F>(difference).unwrap());
+                    // accumulate the multiplicities for this tree
+                    multiplicities[id.unwrap() as usize] += 1;
+                    // build up the permuted sample
+                    permuted_sample.push(sample[*feature_index]);
+                    attribute_visits[*feature_index] += 1;
+                } else {
+                    panic!("All Nodes in the path must be internal, except the last");
+                }
+            }
+            // populate the remaining attributes of the permuted sample
+            for idx in 0..sample_length {
+                if attribute_visits[idx] == 0 {
+                    permuted_sample.push(sample[idx]);
+                }
+            }
 
-/// Ids are allocated according to:
-/// + Root node has id 0;
-/// + Left child id is 2 * parent_id + 1;
-/// + Right child is 2 * parent_id + 2.
-/// Decision nodes and leaf nodes are both ordered by id.
-/// CircuitizedTrees are always perfect.
-/// Decision node ids are 0..K and leaf node ids are K..L (excluding endpoints) where:
-/// K = 2^(depth - 1) - 1 and
-/// L = 2^depth - 1
-struct CircuitizedTree<F: FieldExt> {
-    decision_nodes: Vec<DecisionNode<F>>,
-    leaf_nodes: Vec<LeafNode<F>>,
-}
-
-impl<F: FieldExt> From<&Node<i32>> for CircuitizedTree<F> {
-    /// Pre: tree.is_perfect()
-    fn from(tree: &Node<i32>) -> Self {
-        CircuitizedTree {
-            decision_nodes: tree.extract_decision_nodes::<F>(),
-            leaf_nodes: tree.extract_leaf_nodes::<F>(),
+            permuted_samples.push(permuted_sample);
+            decision_paths.push(decision_path);
+            differencess.push(differences);
+            
+            // build the leaf node
+            if let Node::Leaf { id, value } = path[path.len() - 1] {
+                path_ends.push(LeafNode {
+                    node_id: F::from(id.unwrap()),
+                    node_val: i32_to_field(*value)
+                });
+                // accumulate multiplicity for leaf node
+                multiplicities[id.unwrap() as usize] += 1;
+            } else {
+                panic!("Last item in path should be a Node::Leaf");
+            }
         }
+        permuted_sampless.push(permuted_samples);
+        decision_pathss.push(decision_paths);
+        path_endss.push(path_ends);
+        differencesss.push(differencess);
+    }
+
+    // calculate the bit decompositions of the visit counts
+    let multiplicities: Vec<BinDecomp16Bit<F>> = multiplicities
+        .into_iter()
+        .map(build_unsigned_bit_decomposition)
+        .map(|option| option.unwrap())
+        .collect();
+
+    CircuitizedSamples {
+        samples: samples,
+        permuted_samples: permuted_sampless,
+        decision_paths: decision_pathss,
+        differences: differencesss,
+        path_ends: path_endss,
+        multiplicities: multiplicities
     }
 }
 
 struct CircuitizedTrees<F: FieldExt> {
-    trees: Vec<CircuitizedTree<F>>,
+    //FIXME add a dummy node to the decision nodes?
+    decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then node id
+    leaf_nodes: Vec<Vec<LeafNode<F>>>, // indexed by tree, then node id
     depth: u32,
     scaling: f64,
+}
+
+impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
+    /// Extract the DecisionNode and LeafNode instances from the PaddedQuantizedTrees instance to
+    /// obtain a CircuitizedTrees.
+    fn from(pqtrees: &PaddedQuantizedTrees) -> Self {
+        CircuitizedTrees {
+            decision_nodes: pqtrees.trees
+                .iter()
+                .map(|tree| tree.extract_decision_nodes())
+                .collect(),
+            leaf_nodes: pqtrees.trees
+                .iter()
+                .map(|tree| tree.extract_leaf_nodes())
+                .collect(),
+            depth: pqtrees.depth,
+            scaling: pqtrees.scaling,
+        }
+    }
+}
+
+
+/// Represents the trees model as it appears in the input JSON.
+#[derive(Debug, Serialize, Deserialize)]
+struct TreesModelInput {
+    trees: Vec<Node<f64>>,
+    bias: f64,
+    scale: f64,
+    n_features: usize,
 }
 
 struct PaddedQuantizedTrees {
@@ -79,9 +237,8 @@ struct PaddedQuantizedTrees {
     scaling: f64,
 }
 
-
-impl From<&TreesInfo> for PaddedQuantizedTrees {
-    /// Given a TreesInfo object representing a decision tree model operating on u32 samples, prepare the model for circuitization:
+impl From<&TreesModelInput> for PaddedQuantizedTrees {
+    /// Given a TreesModelInput object representing a decision tree model operating on u32 samples, prepare the model for circuitization:
     /// 1. scale and bias are folded into the leaf values;
     /// 2. leaf values are symmetrically quantized to i32;
     /// 3. all trees are padded such that they are all perfect and of uniform depth (without modifying
@@ -93,7 +250,7 @@ impl From<&TreesInfo> for PaddedQuantizedTrees {
     /// The resulting PaddedQuantizedTrees incorporates all the CircuitizedTree instances, the (uniform) depth
     /// of the trees, and the scaling factor to approximately undo the quantization (via division)
     /// after aggregating the scores.
-    fn from(trees_info: &TreesInfo) -> Self {
+    fn from(trees_info: &TreesModelInput) -> Self {
         let mut trees_f64 = trees_info.trees.clone();
         // fold scale into all trees
         for tree in &mut trees_f64 {
@@ -124,7 +281,7 @@ impl From<&TreesInfo> for PaddedQuantizedTrees {
         }
         // transform feature indices such that they never repeat along a path
         for tree in &mut qtrees {
-            tree.offset_feature_indices(trees_info.n_features as u32);
+            tree.offset_feature_indices(trees_info.n_features);
         }
 
         PaddedQuantizedTrees {
@@ -135,83 +292,13 @@ impl From<&TreesInfo> for PaddedQuantizedTrees {
     }
 }
 
-// FIXME this is now redundant
-struct CircuitizedPaths<'a, F: FieldExt> {
-    trees: &'a CircuitizedTrees<F>,
-    samples: Vec<Sample<F>>,
-    permuted_samples: Vec<Sample<F>>,
-    decision_paths: Vec<Vec<DecisionNode<F>>>,
-    path_ends: Vec<LeafNode<F>>,
-    // differences: Vec<Vec<BinDecomp16Bit<F>>>,
-    // multiplicities: Vec<BinDecomp16Bit<F>>,
-}
-
-impl<'a, F: FieldExt> From<(&'a CircuitizedTrees<F>, Vec<Sample<F>>)> for CircuitizedPaths<'a, F> {
-    // NOTE can't live longer than the CircuitizedTrees given as input
-    // NOTE takes ownership of the vector of samples
-    fn from(inputs: (&'a CircuitizedTrees<F>, Vec<Sample<F>>)) -> Self {
-        let (trees, samples) = inputs;
-        
-        // Repeat the attributes depth - 1 times
-        let repeated_samples = samples.iter()
-            .map(|row| row.iter()
-                 .cycle()
-                 .take(row.len() * (trees.depth as usize - 1))
-                 .cloned().collect())
-            .collect();
-        CircuitizedPaths {
-            trees: trees,
-            samples: repeated_samples,
-            permuted_samples: vec![],
-            decision_paths: vec![vec![]],
-            path_ends: vec![],
-        }
-    }
-}
-
-// TODO consider doing the conversion to samples in the from function
-// do we want to use InputAttribute as late as possible?  Redundant encoding of the attr_id
-type Sample<F> = Vec<InputAttribute<F>>;
-/// Read in the 2d array of u16s serialized in `npy` format from the filename specified, and return
-/// its conversion to Vec<Sample> where the attr_id of the InputAttribute is given by
-/// the column index of the value.
-/// Samples have a uniform number of InputAttributes, equal to the next_power_of_two of the number
-/// of columns in the numpy array.
-fn read_sample_array<F: FieldExt>(filename: &String) -> Result<Vec<Sample<F>>, ReadNpyError> {
-    let input_arr: Array2<u16> = read_npy(filename)?;
-    let target_length = next_power_of_two(input_arr.shape()[1] as u32).unwrap();
-    let mut samples: Vec<Vec<InputAttribute<F>>> = vec![];
-    for row in input_arr.outer_iter() {
-        let mut sample: Sample<F> = row
-            .iter()
-            .enumerate()
-            .map(|(index, value)| InputAttribute {
-                attr_id: F::from(index as u32),
-                attr_val: F::from(*value),
-            })
-            .collect();
-        
-        // pad the Sample with as many dummy attributes as required
-        let mut next_index = sample.len() as u32;
-        while next_index < target_length {
-            sample.push(InputAttribute {
-                attr_id: F::from(next_index),
-                attr_val: F::from(0_u32),
-            });
-            next_index += 1;
-        }
-        samples.push(sample);
-    }
-    Ok(samples)
-}
-
 /// Struct for representing a tree in recursive form
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum Node<T: Copy> {
     Internal {
         id: Option<u32>,
-        feature_index: u32,  // FIXME should be usize?
+        feature_index: usize,
         threshold: u32,
         left: Box<Node<T>>,
         right: Box<Node<T>>,
@@ -227,7 +314,7 @@ impl<T: Copy> Node<T> {
         Node::Leaf { id, value }
     }
 
-    fn new_internal(id: Option<u32>, feature_index: u32, threshold: u32, left: Node<T>, right: Node<T>) -> Self {
+    fn new_internal(id: Option<u32>, feature_index: usize, threshold: u32, left: Node<T>, right: Node<T>) -> Self {
         Node::Internal {
             id,
             feature_index,
@@ -240,7 +327,7 @@ impl<T: Copy> Node<T> {
     /// Helper function: return a new perfect tree where all internal nodes have the feature index
     /// and threshold specified, and all leaf nodes have the value specified.
     /// Ids are not assigned.
-    fn new_constant_tree(depth: u32, feature_index: u32, threshold: u32, value: T) -> Node<T> {
+    fn new_constant_tree(depth: u32, feature_index: usize, threshold: u32, value: T) -> Node<T> {
         if depth > 1 {
             let left = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
             let right = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
@@ -376,12 +463,12 @@ impl<T: Copy> Node<T> {
 
     /// Add (depth_of_node - 1) * multiplier to the feature index of all internal nodes in this
     /// tree.
-    fn offset_feature_indices(&mut self, multiplier: u32) {
+    fn offset_feature_indices(&mut self, multiplier: usize) {
         self.offset_feature_indices_for_depth(multiplier, 1);
     }
 
     /// Helper to offset_feature_indices.
-    fn offset_feature_indices_for_depth(&mut self, multiplier: u32, depth: u32) {
+    fn offset_feature_indices_for_depth(&mut self, multiplier: usize, depth: usize) {
         if let Node::Internal { feature_index, left, right, .. } = self {
             *feature_index = (depth - 1) * multiplier + *feature_index;
             left.offset_feature_indices_for_depth(multiplier, depth + 1);
@@ -408,7 +495,7 @@ impl<T: Copy> Node<T> {
             threshold,
             ..
         } = self {
-            let next = if sample[*feature_index as usize] >= *threshold {
+            let next = if sample[*feature_index] >= *threshold {
                 right
             } else {
                 left
@@ -469,7 +556,7 @@ impl<T: Copy> Node<T> {
         {
             decision_nodes.push(DecisionNode {
                 node_id: F::from(id.unwrap()),
-                attr_id: F::from(*feature_index),
+                attr_id: F::from(*feature_index as u32),
                 threshold: F::from(*threshold),
             });
             left.append_decision_nodes(decision_nodes);
@@ -492,11 +579,7 @@ impl Node<i32> {
             Node::Leaf { id, value } => {
                 leaf_nodes.push(LeafNode {
                     node_id: F::from(id.unwrap()),
-                    node_val: if *value >= 0 {
-                        F::from(*value as u32)
-                    } else {
-                        F::from(value.abs() as u32).neg()
-                    },
+                    node_val: i32_to_field(*value)
                 });
             }
             Node::Internal { left, right, .. } => {
@@ -504,6 +587,15 @@ impl Node<i32> {
                 right.append_leaf_nodes(leaf_nodes);
             }
         }
+    }
+}
+
+/// Helper function for conversion to field elements, handling negative values.
+fn i32_to_field<F: FieldExt>(value: i32) -> F {
+    if value >= 0 {
+        F::from(value as u32)
+    } else {
+        F::from(value.abs() as u32).neg()
     }
 }
 
@@ -528,22 +620,6 @@ mod tests {
     use super::*;
     use ark_bn254::Fr;
     use std::fs::File;
-
-    #[test]
-    fn test_read_sample_array() {
-        let filename = String::from("src/zkdt/test_samples_10x6.npy");
-        let samples = read_sample_array::<Fr>(&filename);
-        match samples {
-            Ok(samples) => {
-                assert_eq!(samples.len(), 10);
-                // check that number of InputAttributes is the next power of two
-                assert_eq!(samples[0].len(), 8);
-            }
-            Err(why) => {
-                panic!("{}", why);
-            }
-        }
-    }
 
     #[test]
     fn test_next_power_of_two() {
@@ -787,8 +863,8 @@ mod tests {
     fn test_trees_info_loading() {
         let file = File::open(TEST_TREES_INFO)
             .expect(&format!("'{}' should be available.", TEST_TREES_INFO));
-        let trees_info: TreesInfo = serde_json::from_reader(file).expect(&format!(
-            "'{}' should be valid TreesInfo JSON.",
+        let trees_info: TreesModelInput = serde_json::from_reader(file).expect(&format!(
+            "'{}' should be valid TreesModelInput JSON.",
             TEST_TREES_INFO
         ));
     }
@@ -807,73 +883,6 @@ mod tests {
         panic!("Should be inaccessible");
     }
 
-    //#[test]
-    //fn test_circuitizedtrees_from() {
-    //    let mut tree = build_small_tree();
-    //    tree.assign_id(0);
-    //    let trees_info = TreesInfo {
-    //        trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
-    //        bias: 1.1,
-    //        scale: 6.6,
-    //    };
-    //    let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
-    //    assert_eq!(circ_trees.trees.len(), 2);
-    //    assert_eq!(circ_trees.depth, 3);
-    //    let mut acc_score: Fr = Fr::from(0);
-    //    for flat_tree in &circ_trees.trees {
-    //        assert_eq!(flat_tree.decision_nodes.len(), 3);
-    //        assert_eq!(flat_tree.leaf_nodes.len(), 4);
-    //        // accumulate score by taking the value of the first leaf node
-    //        acc_score += flat_tree.leaf_nodes[0].node_val;
-    //    }
-    //    // check that the quantized scores accumulated as expected
-    //    let expected_score = trees_info.scale * (0.1 + 3.0) + trees_info.bias;
-    //    let quant_score = (expected_score * circ_trees.scaling) as i32;
-    //    let f_quant_score = if quant_score >= 0 {
-    //        Fr::from(quant_score)
-    //    } else {
-    //        -Fr::from(quant_score.abs() as u32)
-    //    };
-    //    // just check that's it's close
-    //    assert_eq!(f_quant_score, acc_score + Fr::from(1));
-    //}
-
-    //#[test]
-    //fn test_prepare_for_circuitization_depth() {
-    //    // create a tree of depth 6
-    //    let mut tree = build_skinny_tree(6);
-    //    tree.assign_id(0);
-    //    let trees_info = TreesInfo {
-    //        trees: vec![tree],
-    //        bias: 1.1,
-    //        scale: 6.6,
-    //    };
-    //    let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
-    //    // check that the depth is now 2^l + 1 for minimal l, i.e. equal to 9.
-    //    assert_eq!(circ_trees.depth, 9);
-    //}
-
-    #[test]
-    fn test_flattree_from() {
-        let mut tree = quantize_and_perfect(build_small_tree(), 3);
-        tree.assign_id(0);
-        let flat_tree: CircuitizedTree<Fr> = (&tree).into();
-        assert_eq!(flat_tree.decision_nodes.len(), 3);
-        assert_eq!(flat_tree.leaf_nodes.len(), 4);
-        assert!(flat_tree.decision_nodes
-                .iter()
-                .map(|node| node.node_id)
-                .zip(0..3)
-                .map(|(a, b)| a == Fr::from(b))
-                .all(|x| x));
-        assert!(flat_tree.leaf_nodes
-                .iter()
-                .map(|node| node.node_id)
-                .zip(3..7)
-                .map(|(a, b)| a == Fr::from(b))
-                .all(|x| x));
-    }
-
     #[test]
     fn test_get_path() {
         let mut tree = quantize_and_perfect(build_small_tree(), 3);
@@ -883,5 +892,113 @@ mod tests {
         assert_eq!(path[0].get_id(), Some(0));
         assert_eq!(path[1].get_id(), Some(1));
         assert_eq!(path[2].get_id(), Some(4));
+    }
+
+    #[test]
+    fn test_repeat_and_pad() {
+        let result = repeat_and_pad(&vec![3_u32, 1_u32], 3);
+        assert_eq!(result.len(), 8);
+        assert_eq!(result[0], 3_u32);
+        assert_eq!(result[1], 1_u32);
+        assert_eq!(result[2], 3_u32);
+        assert_eq!(result[4], 3_u32);
+        assert_eq!(result[6], 0_u32);
+        assert_eq!(result[7], 0_u32);
+    }
+
+    #[test]
+    fn test_repeat_and_pad_boundary() {
+        let result = repeat_and_pad(&vec![3_u32, 1_u32], 2);
+        assert_eq!(result.len(), 4);
+    }
+
+    #[test]
+    fn test_build_sample() {
+        let result = build_sample::<Fr>(&vec![3_u32, 1_u32, 0_u32]);
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn test_build_signed_bit_decomposition() {
+        // test vanilla case
+        let result = build_signed_bit_decomposition::<Fr>(-3);
+        if let Some(bit_decomp) = result {
+            assert_eq!(bit_decomp.bits[0], Fr::from(1));
+            assert_eq!(bit_decomp.bits[1], Fr::from(1));
+            assert_eq!(bit_decomp.bits[2], Fr::from(0));
+            assert_eq!(bit_decomp.bits[3], Fr::from(0));
+            assert_eq!(bit_decomp.bits[15], Fr::from(1));
+        } else {
+            assert!(false);
+        }
+        // test overflow handling
+        assert_eq!(build_signed_bit_decomposition::<Fr>(2_i32.pow(30)), None);
+        assert_eq!(build_signed_bit_decomposition::<Fr>(-1 * 2_i32.pow(30)), None);
+    }
+
+    #[test]
+    fn test_build_unsigned_bit_decomposition() {
+        // test vanilla case
+        let result = build_unsigned_bit_decomposition::<Fr>(6);
+        if let Some(bit_decomp) = result {
+            assert_eq!(bit_decomp.bits[0], Fr::from(0));
+            assert_eq!(bit_decomp.bits[1], Fr::from(1));
+            assert_eq!(bit_decomp.bits[2], Fr::from(1));
+            assert_eq!(bit_decomp.bits[3], Fr::from(0));
+            assert_eq!(bit_decomp.bits[15], Fr::from(0));
+        } else {
+            assert!(false);
+        }
+        // test overflow handling
+        assert_eq!(build_unsigned_bit_decomposition::<Fr>(2_u32.pow(30)), None);
+    }
+    
+    #[test]
+    fn test_padded_quantized_trees_from() {
+        let mut tree = build_small_tree();
+        let trees_info = TreesModelInput {
+            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: 11,
+        };
+        let pqtrees: PaddedQuantizedTrees = (&trees_info).into();
+        assert_eq!(pqtrees.trees.len(), 2);
+        assert_eq!(pqtrees.depth, 3);
+        // check trees are as claimed
+        for tree in &pqtrees.trees {
+            assert_eq!(tree.depth(std::cmp::max), 3);
+            assert!(tree.is_perfect());
+            assert_eq!(tree.get_id().unwrap(), 0);
+        }
+    }
+
+    #[test]
+    fn test_circuitized_trees_from() {
+        let mut tree = build_small_tree();
+        let trees_info = TreesModelInput {
+            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: 11,
+        };
+        let pqtrees: PaddedQuantizedTrees = (&trees_info).into();
+        let ctrees: CircuitizedTrees<Fr> = (&pqtrees).into();
+        // FIXME check length of DNs and LNs
+        // FIXME check the id ordering
+        // accumulate score by taking the value of the first leaf node
+        let mut acc_score: Fr = Fr::from(0);
+        acc_score += ctrees.leaf_nodes[0][0].node_val;
+        acc_score += ctrees.leaf_nodes[1][0].node_val;
+        // check that the quantized scores accumulated as expected
+        let expected_score = trees_info.scale * (0.1 + 3.0) + trees_info.bias;
+        let quant_score = (expected_score * ctrees.scaling) as i32;
+        let f_quant_score = if quant_score >= 0 {
+            Fr::from(quant_score)
+        } else {
+            -Fr::from(quant_score.abs() as u32)
+        };
+        // just check that's it's close
+        assert_eq!(f_quant_score, acc_score + Fr::from(1));
     }
 }
