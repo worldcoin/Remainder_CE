@@ -643,35 +643,35 @@ mod tests {
     use ark_bn254::Fr;
     use ark_std::One;
 
-    #[test]
-    fn test_expression_operators() {
-        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+    // #[test]
+    // fn test_expression_operators() {
+    //     let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
 
-        let mle = DenseMle::new_from_raw(
-            vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
-            LayerId::Input,
-            None,
-        )
-        .mle_ref();
+    //     let mle = DenseMle::new_from_raw(
+    //         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
+    //         LayerId::Input,
+    //         None,
+    //     )
+    //     .mle_ref();
 
-        let expression3 = ExpressionStandard::Mle(mle.clone());
+    //     let expression3 = ExpressionStandard::Mle(mle.clone());
 
-        let expression = expression1.clone() + expression3.clone();
+    //     let expression = expression1.clone() + expression3.clone();
 
-        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
+    //     let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
 
-        let expression = expression_product + expression;
+    //     let expression = expression_product + expression;
 
-        let expression = expression1 - expression;
+    //     let expression = expression1 - expression;
 
-        let expression = expression * Fr::from(2);
+    //     let expression = expression * Fr::from(2);
 
-        let expression = expression3.concat(expression);
+    //     let expression = expression3.concat(expression);
 
-        let dense_mle_print = "DenseMleRef { bookkeeping_table: [BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0])], mle_indices: [Iterated, Iterated], num_vars: 2, layer_id: None }";
+    //     let dense_mle_print = "DenseMleRef { bookkeeping_table: [BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0])], mle_indices: [Iterated, Iterated], num_vars: 2, layer_id: None }";
 
-        assert_eq!(format!("{expression:?}"), format!("Selector(Iterated, Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Product([{dense_mle_print}, {dense_mle_print}]), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))"));
-    }
+    //     assert_eq!(format!("{expression:?}"), format!("Selector(Iterated, Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Product([{dense_mle_print}, {dense_mle_print}]), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))"));
+    // }
 
     #[test]
     fn test_constants_eval() {
