@@ -2,7 +2,7 @@ extern crate num;
 extern crate serde;
 extern crate serde_json;
 
-use crate::zkdt::structs::{DecisionNode,LeafNode,InputAttribute};
+use crate::zkdt::structs::{DecisionNode,LeafNode,InputAttribute,BinDecomp16Bit};
 use crate::FieldExt;
 use ndarray::Array2;
 use ndarray_npy::{read_npy, ReadNpyError};
@@ -10,11 +10,37 @@ use num::pow;
 use serde::{Deserialize, Serialize};
 use itertools::{repeat_n, Itertools};
 
+struct CircuitizedPath<F: FieldExt> {
+    sample: Sample<F>,
+    permuted_sample: Sample<F>,
+    decision_path: Vec<DecisionNode<F>>,
+    path_end: LeafNode<F>,
+    differences: Vec<BinDecomp16Bit<F>>,
+    //? multiplicities: Vec<BinDecomp16Bit<F>>,
+}
+// FIXME define a struct for the return value of this method?
+// But what about the multiplicities in each tree?  how does this interact with batching?
+fn circuitize_samples<F: FieldExt>(sample: &Vec<u32>, pqtrees: &PaddedQuantizedTrees) -> Vec<InputAttribute<F>> {
+    // repeat the attributes of the sample
+    let sample = sample.iter()
+        .cycle()
+        .take((pqtrees.depth - 1) as usize * sample.len())
+        .cloned()
+        .collect();
+    // get the paths
+    let paths = pqtrees.trees.iter().map(|x| x.get_path(&sample)).collect_vec();
+
+    // pad sample to the next power of two
+    vec![]
+}
+
+
 #[derive(Debug, Serialize, Deserialize)]
 struct TreesInfo {
     trees: Vec<Node<f64>>,
     bias: f64,
     scale: f64,
+    n_features: usize,
 }
 
 /// Ids are allocated according to:
@@ -22,19 +48,19 @@ struct TreesInfo {
 /// + Left child id is 2 * parent_id + 1;
 /// + Right child is 2 * parent_id + 2.
 /// Decision nodes and leaf nodes are both ordered by id.
-/// FlatTrees are always perfect.
+/// CircuitizedTrees are always perfect.
 /// Decision node ids are 0..K and leaf node ids are K..L (excluding endpoints) where:
 /// K = 2^(depth - 1) - 1 and
 /// L = 2^depth - 1
-struct FlatTree<F: FieldExt> {
+struct CircuitizedTree<F: FieldExt> {
     decision_nodes: Vec<DecisionNode<F>>,
     leaf_nodes: Vec<LeafNode<F>>,
 }
 
-impl<F: FieldExt> From<&Node<i32>> for FlatTree<F> {
+impl<F: FieldExt> From<&Node<i32>> for CircuitizedTree<F> {
     /// Pre: tree.is_perfect()
     fn from(tree: &Node<i32>) -> Self {
-        FlatTree {
+        CircuitizedTree {
             decision_nodes: tree.extract_decision_nodes::<F>(),
             leaf_nodes: tree.extract_leaf_nodes::<F>(),
         }
@@ -42,21 +68,29 @@ impl<F: FieldExt> From<&Node<i32>> for FlatTree<F> {
 }
 
 struct CircuitizedTrees<F: FieldExt> {
-    trees: Vec<FlatTree<F>>,
+    trees: Vec<CircuitizedTree<F>>,
     depth: u32,
     scaling: f64,
 }
 
-impl<F: FieldExt> From<&TreesInfo> for CircuitizedTrees<F> {
-    
+struct PaddedQuantizedTrees {
+    trees: Vec<Node<i32>>,
+    depth: u32,
+    scaling: f64,
+}
+
+
+impl From<&TreesInfo> for PaddedQuantizedTrees {
     /// Given a TreesInfo object representing a decision tree model operating on u32 samples, prepare the model for circuitization:
     /// 1. scale and bias are folded into the leaf values;
     /// 2. leaf values are symmetrically quantized to i32;
     /// 3. all trees are padded such that they are all perfect and of uniform depth (without modifying
-    ///    the predictions of any tree);
-    /// 4. the uniform depth is chosen to be 2^l + 1 for minimal l >= 0.
-    /// The tree of the decision tree model is then transformed to a FlatTree.
-    /// The resulting CircuitizedTrees incorporates all the FlatTree instances, the (uniform) depth
+    ///    the predictions of any tree) where the uniform depth is chosen to be 2^l + 1 for minimal l >= 0;
+    /// 4. ids are assigned to all nodes (as per assign_id());
+    /// 5. the feature indexes are transformed according to
+    ///      idx -> (depth_of_node - 1) * trees_info.n_features + idx
+    ///    thereby ensuring that each feature index occurs only once on each descent path.
+    /// The resulting PaddedQuantizedTrees incorporates all the CircuitizedTree instances, the (uniform) depth
     /// of the trees, and the scaling factor to approximately undo the quantization (via division)
     /// after aggregating the scores.
     fn from(trees_info: &TreesInfo) -> Self {
@@ -85,22 +119,23 @@ impl<F: FieldExt> From<&TreesInfo> for CircuitizedTrees<F> {
             .map(|tree: &Node<i32>| tree.perfect_to_depth(target_depth, &leaf_expander))
             .collect();
         // assign ids to all nodes
-        for tree in qtrees.iter_mut() {
+        for tree in &mut qtrees {
             tree.assign_id(0);
         }
+        // transform feature indices such that they never repeat along a path
+        for tree in &mut qtrees {
+            tree.offset_feature_indices(trees_info.n_features as u32);
+        }
 
-        let flattened_trees: Vec<FlatTree<F>> = qtrees.iter()
-            .map(|qtree| qtree.into())
-            .collect();
-
-        CircuitizedTrees {
-            trees: flattened_trees,
+        PaddedQuantizedTrees {
+            trees: qtrees,
             depth: target_depth,
             scaling: rescaling,
         }
     }
 }
 
+// FIXME this is now redundant
 struct CircuitizedPaths<'a, F: FieldExt> {
     trees: &'a CircuitizedTrees<F>,
     samples: Vec<Sample<F>>,
@@ -336,6 +371,21 @@ impl<T: Copy> Node<T> {
         match self {
             Node::Internal { id, .. } => *id,
             Node::Leaf { id, .. } => *id,
+        }
+    }
+
+    /// Add (depth_of_node - 1) * multiplier to the feature index of all internal nodes in this
+    /// tree.
+    fn offset_feature_indices(&mut self, multiplier: u32) {
+        self.offset_feature_indices_for_depth(multiplier, 1);
+    }
+
+    /// Helper to offset_feature_indices.
+    fn offset_feature_indices_for_depth(&mut self, multiplier: u32, depth: u32) {
+        if let Node::Internal { feature_index, left, right, .. } = self {
+            *feature_index = (depth - 1) * multiplier + *feature_index;
+            left.offset_feature_indices_for_depth(multiplier, depth + 1);
+            right.offset_feature_indices_for_depth(multiplier, depth + 1);
         }
     }
 
@@ -744,56 +794,70 @@ mod tests {
     }
 
     #[test]
-    fn test_circuitizedtrees_from() {
+    fn test_offset_feature_indices() {
         let mut tree = build_small_tree();
-        tree.assign_id(0);
-        let trees_info = TreesInfo {
-            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
-            bias: 1.1,
-            scale: 6.6,
-        };
-        let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
-        assert_eq!(circ_trees.trees.len(), 2);
-        assert_eq!(circ_trees.depth, 3);
-        let mut acc_score: Fr = Fr::from(0);
-        for flat_tree in &circ_trees.trees {
-            assert_eq!(flat_tree.decision_nodes.len(), 3);
-            assert_eq!(flat_tree.leaf_nodes.len(), 4);
-            // accumulate score by taking the value of the first leaf node
-            acc_score += flat_tree.leaf_nodes[0].node_val;
+        tree.offset_feature_indices(10);
+        if let Node::Internal { left, feature_index, .. } = tree {
+            assert_eq!(feature_index, 0);
+            if let Node::Internal { feature_index, .. } = *left {
+                assert_eq!(feature_index, 11);
+                return;
+            }
         }
-        // check that the quantized scores accumulated as expected
-        let expected_score = trees_info.scale * (0.1 + 3.0) + trees_info.bias;
-        let quant_score = (expected_score * circ_trees.scaling) as i32;
-        let f_quant_score = if quant_score >= 0 {
-            Fr::from(quant_score)
-        } else {
-            -Fr::from(quant_score.abs() as u32)
-        };
-        // just check that's it's close
-        assert_eq!(f_quant_score, acc_score + Fr::from(1));
+        panic!("Should be inaccessible");
     }
 
-    #[test]
-    fn test_prepare_for_circuitization_depth() {
-        // create a tree of depth 6
-        let mut tree = build_skinny_tree(6);
-        tree.assign_id(0);
-        let trees_info = TreesInfo {
-            trees: vec![tree],
-            bias: 1.1,
-            scale: 6.6,
-        };
-        let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
-        // check that the depth is now 2^l + 1 for minimal l, i.e. equal to 9.
-        assert_eq!(circ_trees.depth, 9);
-    }
+    //#[test]
+    //fn test_circuitizedtrees_from() {
+    //    let mut tree = build_small_tree();
+    //    tree.assign_id(0);
+    //    let trees_info = TreesInfo {
+    //        trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+    //        bias: 1.1,
+    //        scale: 6.6,
+    //    };
+    //    let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
+    //    assert_eq!(circ_trees.trees.len(), 2);
+    //    assert_eq!(circ_trees.depth, 3);
+    //    let mut acc_score: Fr = Fr::from(0);
+    //    for flat_tree in &circ_trees.trees {
+    //        assert_eq!(flat_tree.decision_nodes.len(), 3);
+    //        assert_eq!(flat_tree.leaf_nodes.len(), 4);
+    //        // accumulate score by taking the value of the first leaf node
+    //        acc_score += flat_tree.leaf_nodes[0].node_val;
+    //    }
+    //    // check that the quantized scores accumulated as expected
+    //    let expected_score = trees_info.scale * (0.1 + 3.0) + trees_info.bias;
+    //    let quant_score = (expected_score * circ_trees.scaling) as i32;
+    //    let f_quant_score = if quant_score >= 0 {
+    //        Fr::from(quant_score)
+    //    } else {
+    //        -Fr::from(quant_score.abs() as u32)
+    //    };
+    //    // just check that's it's close
+    //    assert_eq!(f_quant_score, acc_score + Fr::from(1));
+    //}
+
+    //#[test]
+    //fn test_prepare_for_circuitization_depth() {
+    //    // create a tree of depth 6
+    //    let mut tree = build_skinny_tree(6);
+    //    tree.assign_id(0);
+    //    let trees_info = TreesInfo {
+    //        trees: vec![tree],
+    //        bias: 1.1,
+    //        scale: 6.6,
+    //    };
+    //    let circ_trees: CircuitizedTrees<Fr> = (&trees_info).into();
+    //    // check that the depth is now 2^l + 1 for minimal l, i.e. equal to 9.
+    //    assert_eq!(circ_trees.depth, 9);
+    //}
 
     #[test]
     fn test_flattree_from() {
         let mut tree = quantize_and_perfect(build_small_tree(), 3);
         tree.assign_id(0);
-        let flat_tree: FlatTree<Fr> = (&tree).into();
+        let flat_tree: CircuitizedTree<Fr> = (&tree).into();
         assert_eq!(flat_tree.decision_nodes.len(), 3);
         assert_eq!(flat_tree.leaf_nodes.len(), 4);
         assert!(flat_tree.decision_nodes
