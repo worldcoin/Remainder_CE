@@ -94,6 +94,7 @@ struct CircuitizedSamples<F: FieldExt> {
     multiplicities: Vec<BinDecomp16Bit<F>>, // indexed by tree node indices
 }
 
+/// TODO describe return values
 /// Pre: values_array is not empty
 fn circuitize_samples<F: FieldExt>(values_array: &Vec<Vec<u32>>, pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
     // repeat and pad the attributes of the sample
@@ -110,9 +111,8 @@ fn circuitize_samples<F: FieldExt>(values_array: &Vec<Vec<u32>>, pqtrees: &Padde
     let mut path_endss: Vec<Vec<LeafNode<F>>> = vec![];
     let mut differencesss: Vec<Vec<Vec<BinDecomp16Bit<F>>>> = vec![];
 
-    // initialize the visit counts
-    let node_count: usize = 2_usize.pow(pqtrees.depth) - 1;
-    let mut multiplicities: Vec<u32> = vec![0_u32; node_count];
+    // initialize the node visit counts "multiplicities"
+    let mut multiplicities: Vec<u32> = vec![0_u32; 2_usize.pow(pqtrees.depth)];
 
     for values in values_array {
         let sample = build_sample(&values);
@@ -202,10 +202,15 @@ fn circuitize_samples<F: FieldExt>(values_array: &Vec<Vec<u32>>, pqtrees: &Padde
     }
 }
 
+/// Circuitized trees use flat (i.e. non-recursive) structs for the decision and leaf nodes and
+/// represent all integers using the field.
+/// Circuitized trees have the same properties as PaddedQuantizedTree, except that they include an
+/// extra "dummy" decision node so that the number of decision nodes is a power of two (equal to
+/// the number of leaf nodes).
+/// The dummy decision node has node id 2^depth - 1.
 struct CircuitizedTrees<F: FieldExt> {
-    //FIXME add a dummy node to the decision nodes?
-    decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then node id
-    leaf_nodes: Vec<Vec<LeafNode<F>>>, // indexed by tree, then node id
+    decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then by node (sorted by node id)
+    leaf_nodes: Vec<Vec<LeafNode<F>>>, // indexed by tree, then by node (sorted by node id)
     depth: u32,
     scaling: f64,
 }
@@ -214,15 +219,31 @@ impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
     /// Extract the DecisionNode and LeafNode instances from the PaddedQuantizedTrees instance to
     /// obtain a CircuitizedTrees.
     fn from(pqtrees: &PaddedQuantizedTrees) -> Self {
+        // extract, sort & pad the decision nodes
+        let mut decision_nodes = vec![];
+        let dummy_node = DecisionNode {
+            node_id: F::from(2_u32.pow(pqtrees.depth) - 1),
+            attr_id: F::from(0_u32),
+            threshold: F::from(0_u32)
+        };
+        for tree in &pqtrees.trees {
+            let mut tree_decision_nodes = tree.extract_decision_nodes();
+            tree_decision_nodes.sort_by_key(|node| node.node_id);
+            // add a dummy node to make length a power of two
+            tree_decision_nodes.push(dummy_node.clone());
+            decision_nodes.push(tree_decision_nodes);
+        }
+        // extract and sort the leaf nodes
+        let mut leaf_nodes = vec![];
+        for tree in &pqtrees.trees {
+            let mut tree_leaf_nodes = tree.extract_leaf_nodes();
+            tree_leaf_nodes.sort_by_key(|node| node.node_id);
+            leaf_nodes.push(tree_leaf_nodes);
+        }
+        
         CircuitizedTrees {
-            decision_nodes: pqtrees.trees
-                .iter()
-                .map(|tree| tree.extract_decision_nodes())
-                .collect(),
-            leaf_nodes: pqtrees.trees
-                .iter()
-                .map(|tree| tree.extract_leaf_nodes())
-                .collect(),
+            decision_nodes: decision_nodes,
+            leaf_nodes: leaf_nodes,
             depth: pqtrees.depth,
             scaling: pqtrees.scaling,
         }
@@ -255,7 +276,7 @@ impl From<&TreesModelInput> for PaddedQuantizedTrees {
     /// 5. the feature indexes are transformed according to
     ///      idx -> (depth_of_node - 1) * trees_info.n_features + idx
     ///    thereby ensuring that each feature index occurs only once on each descent path.
-    /// The resulting PaddedQuantizedTrees incorporates all the CircuitizedTree instances, the (uniform) depth
+    /// The resulting PaddedQuantizedTrees incorporates all the tree instances, the (uniform) depth
     /// of the trees, and the scaling factor to approximately undo the quantization (via division)
     /// after aggregating the scores.
     fn from(trees_info: &TreesModelInput) -> Self {
@@ -493,7 +514,7 @@ impl<T: Copy> Node<T> {
     }
 
     /// Helper function to get_path.
-    /// Appends self to path, then, if internal, calls on the appropriate child node.
+    /// Appends self to path, then, if internal, calls this function on the appropriate child node.
     fn append_path<'a>(&'a self, sample: &Vec<u32>, path_to_here: &mut Vec<&'a Node<T>>) {
         path_to_here.push(self);
         if let Node::Internal {
@@ -892,6 +913,11 @@ mod tests {
     }
 
     #[test]
+    fn test_circuitize_samples() {
+        // TODO check multiplicities length
+    }
+
+    #[test]
     fn test_get_path() {
         let mut tree = quantize_and_perfect(build_small_tree(), 3);
         tree.assign_id(0);
@@ -992,8 +1018,23 @@ mod tests {
         };
         let pqtrees: PaddedQuantizedTrees = (&trees_info).into();
         let ctrees: CircuitizedTrees<Fr> = (&pqtrees).into();
-        // FIXME check length of DNs and LNs
-        // FIXME check the id ordering
+        // check decision nodes
+        for tree_dns in &ctrees.decision_nodes {
+            assert_eq!(tree_dns.len(), 4);
+            for (node_id, node) in tree_dns
+                .iter().take(tree_dns.len() - 1).enumerate() {
+                assert_eq!(node.node_id, Fr::from(node_id as u32));
+            }
+            assert_eq!(tree_dns[tree_dns.len() - 1].node_id, Fr::from(7 as u32));
+        }
+        // check leaf nodes
+        for tree_lns in &ctrees.leaf_nodes {
+            assert_eq!(tree_lns.len(), 4);
+            for (node_id, node) in tree_lns
+                .iter().enumerate() {
+                assert_eq!(node.node_id, Fr::from((4 - 1) + node_id as u32));
+            }
+        }
         // accumulate score by taking the value of the first leaf node
         let mut acc_score: Fr = Fr::from(0);
         acc_score += ctrees.leaf_nodes[0][0].node_val;
