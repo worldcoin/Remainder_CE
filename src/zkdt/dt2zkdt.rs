@@ -95,6 +95,7 @@ struct CircuitizedSamples<F: FieldExt> {
 }
 
 /// TODO describe return values
+/// multiplicities is 2 ** depth in size.
 /// Pre: values_array is not empty
 fn circuitize_samples<F: FieldExt>(values_array: &Vec<Vec<u16>>, pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
     // repeat and pad the attributes of the sample
@@ -913,8 +914,33 @@ mod tests {
     }
 
     #[test]
+    fn test_numpy_loading() {
+        let filename = String::from("src/zkdt/test_samples_10x6.npy");
+        let input_arr: Array2<u16> = read_npy(filename).unwrap();
+        let samples: Vec<Vec<u16>> = input_arr
+            .outer_iter().map(|row| row.to_vec()).collect();
+    }
+
+    #[test]
     fn test_circuitize_samples() {
-        // TODO check multiplicities length
+        let samples = vec![vec![0_u16; 5], vec![1_u16; 5]];
+        let mut tree = build_small_tree();
+        let trees_info = TreesModelInput {
+            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: 5,
+        };
+        let pqtrees: PaddedQuantizedTrees = (&trees_info).into();
+        let csamples = circuitize_samples::<Fr>(&samples, &pqtrees);
+        // check size of outer dimensions
+        assert_eq!(csamples.samples.len(), samples.len());
+        assert_eq!(csamples.permuted_samples.len(), samples.len());
+        assert_eq!(csamples.decision_paths.len(), samples.len());
+        assert_eq!(csamples.differences.len(), samples.len());
+        assert_eq!(csamples.path_ends.len(), samples.len());
+        assert_eq!(csamples.multiplicities.len(), 8);
+        // FIXME requires thorough inspection of inner dimensions
     }
 
     #[test]
