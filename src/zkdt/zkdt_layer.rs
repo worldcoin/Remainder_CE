@@ -33,7 +33,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
-struct SplitProductBuilder<F: FieldExt> {
+pub struct SplitProductBuilder<F: FieldExt> {
     mle: DenseMle<F, F>,
 }
 
@@ -65,7 +65,19 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     }
 }
 
-struct ConcatBuilder<F: FieldExt> {
+impl<F: FieldExt> SplitProductBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        mle: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            mle
+        }
+    }
+}
+
+/// concats two mles together
+pub struct ConcatBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
 }
@@ -91,14 +103,26 @@ impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
     }
 }
 
+impl<F: FieldExt> ConcatBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        mle_1: DenseMle<F, F>,
+        mle_2: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            mle_1, mle_2
+        }
+    }
+}
+
 /// Takes x, outputs r-x
 /// first step in exponantiation
-struct ExpoBuilderInit<F: FieldExt> {
+pub struct RMinusXBuilder<F: FieldExt> {
     packed_x: DenseMle<F, F>,
     r: F,
 }
 
-impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderInit<F> {
+impl<F: FieldExt> LayerBuilder<F> for RMinusXBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
@@ -116,9 +140,21 @@ impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderInit<F> {
     }
 }
 
+impl<F: FieldExt> RMinusXBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        packed_x: DenseMle<F, F>,
+        r: F,
+    ) -> Self {
+        Self {
+            packed_x, r
+        }
+    }
+}
+
 /// Takes x, outputs x^2
 /// used in repeated squaring in exponantiation
-struct SquaringBuilder<F: FieldExt> {
+pub struct SquaringBuilder<F: FieldExt> {
     mle: DenseMle<F, F>,
 }
 
@@ -139,14 +175,25 @@ impl<F: FieldExt> LayerBuilder<F> for SquaringBuilder<F> {
     }
 }
 
-struct ExpoBuilderBitExpo<F: FieldExt> {
+impl<F: FieldExt> SquaringBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        mle: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            mle
+        }
+    }
+}
+
+pub struct BitExponentiationBuilder<F: FieldExt> {
     bin_decomp: DenseMle<F, BinDecomp16Bit<F>>,
     bit_index: usize,
     r_minus_x_power: DenseMle<F, F>,
 }
 
 /// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
-impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderBitExpo<F> {
+impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilder<F> {
     type Successor = DenseMle<F, F>;
     fn build_expression(&self) -> ExpressionStandard<F> {
         let b_ij = self.bin_decomp.mle_bit_refs()[15-self.bit_index].clone();
@@ -169,14 +216,27 @@ impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderBitExpo<F> {
     }
 }
 
+impl<F: FieldExt> BitExponentiationBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        bin_decomp: DenseMle<F, BinDecomp16Bit<F>>,
+        bit_index: usize,
+        r_minus_x_power: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            bin_decomp, bit_index, r_minus_x_power
+        }
+    }
+}
+
 /// Takes (1) b_ij * (r-x_i)^j + (1-b_ij), (2) prev_prods PROD(b_ij * (r-x_i)^j + (1-b_ij)) across j
 /// Outputs (1) * (2). naming (1) as multiplier
-struct ExpoBuilderProduct<F: FieldExt> {
+pub struct ProductBuilder<F: FieldExt> {
     multiplier: DenseMle<F, F>,
     prev_prod: DenseMle<F, F>,
 }
 
-impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderProduct<F> {
+impl<F: FieldExt> LayerBuilder<F> for ProductBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
@@ -200,13 +260,26 @@ impl<F: FieldExt> LayerBuilder<F> for ExpoBuilderProduct<F> {
     }
 }
 
-struct LeafNodePackingBuilder<F: FieldExt> {
+impl<F: FieldExt> ProductBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        multiplier: DenseMle<F, F>,
+        prev_prod: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            multiplier, prev_prod
+        }
+    }
+}
+
+/// packs leaf node mles
+pub struct LeafPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, LeafNode<F>>,
     r: F,
     r_packing: F
 }
 
-impl<F: FieldExt> LayerBuilder<F> for LeafNodePackingBuilder<F> {
+impl<F: FieldExt> LayerBuilder<F> for LeafPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // expressions = r - (x.node_id + r_packing * x.node_val)
@@ -226,13 +299,27 @@ impl<F: FieldExt> LayerBuilder<F> for LeafNodePackingBuilder<F> {
     }
 }
 
-struct DecisionNodePackingBuilder<F: FieldExt> {
+impl<F: FieldExt> LeafPackingBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        mle: DenseMle<F, LeafNode<F>>,
+        r: F,
+        r_packing: F
+    ) -> Self {
+        Self {
+            mle, r, r_packing
+        }
+    }
+}
+
+/// packs decision node mles
+pub struct DecisionPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, DecisionNode<F>>,
     r: F,
     r_packings: (F, F)
 }
 
-impl<F: FieldExt> LayerBuilder<F> for DecisionNodePackingBuilder<F> {
+impl<F: FieldExt> LayerBuilder<F> for DecisionPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // expressions = r - (x.node_id + r_packing[0] * x.attr_id + r_packing[1] * x.threshold)
@@ -250,6 +337,19 @@ impl<F: FieldExt> LayerBuilder<F> for DecisionNodePackingBuilder<F> {
         flat_mle.add_prefix_bits(prefix_bits);
         flat_mle.define_layer_id(id);
         flat_mle
+    }
+}
+
+impl<F: FieldExt> DecisionPackingBuilder<F> {
+    /// create new decision node packed
+    pub fn new(
+        mle: DenseMle<F, DecisionNode<F>>,
+        r: F,
+        r_packings: (F, F)
+    ) -> Self {
+        Self {
+            mle, r, r_packings
+        }
     }
 }
 
@@ -406,7 +506,7 @@ mod tests {
         let (_,_, dummy_decision_node_paths_mle, _, _, _, _, _) = generate_dummy_mles::<Fr>();
 
         let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
-        let input_packing_builder = DecisionNodePackingBuilder{
+        let input_packing_builder = DecisionPackingBuilder{
                                                                                             mle: dummy_decision_node_paths_mle.clone(),
                                                                                             r,
                                                                                             r_packings
@@ -439,11 +539,16 @@ mod tests {
 
     #[test]
     fn test_leaf_node_packing_builder() {
+        // hand compute
+        // for this to pass, change the parameters into the following:
+        // const NUM_DUMMY_INPUTS: usize = 1 << 8;
+        // const DUMMY_INPUT_LEN: usize = 1 << 1;
+        // const TREE_HEIGHT: usize = 2;
 
         let (_,_, _, dummy_leaf_node_paths_mle, _, _, _, _) = generate_dummy_mles::<Fr>();
 
         let (r, r_packing) = (Fr::from(3), Fr::from(5));
-        let input_packing_builder = LeafNodePackingBuilder{
+        let input_packing_builder = LeafPackingBuilder{
                                                                                             mle: dummy_leaf_node_paths_mle.clone(),
                                                                                             r,
                                                                                             r_packing
@@ -461,14 +566,9 @@ mod tests {
         assert_eq!(next_layer.mle_ref().bookkeeping_table, next_layer_should_be);
         println!("layer mle: {:?}", next_layer.mle_ref().bookkeeping_table);
 
-        // hand compute
-        // for this to pass, change the parameters into the following:
-        // const NUM_DUMMY_INPUTS: usize = 1 << 8;
-        // const DUMMY_INPUT_LEN: usize = 1 << 1;
-        // const TREE_HEIGHT: usize = 2;
+
         // the node_id: [2], its node_val is: 17299145535799709783. r = 3, r_packing = 5
         // characteristic poly w packing: [3 - (2 + 5 * 17299145535799709783)]
-
         println!("{:?}", dummy_leaf_node_paths_mle);
         assert_eq!(next_layer_should_be, DenseMle::new(vec![ Fr::from(3) - (Fr::from(2) + Fr::from(5) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
 
@@ -481,7 +581,7 @@ mod tests {
         // const NUM_DUMMY_INPUTS: usize = 1 << 8;
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
-        // ExpoBuilderInit -> (SquaringBuilder -> ExpoBuilderBitExpo -> ExpoBuilderProduct ->)
+        // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
         let (_,_, dummy_decision_node_paths_mle_vec,
             dummy_leaf_node_paths_mle_vec, _,
             dummy_multiplicities_bin_decomp_mle,
@@ -496,7 +596,7 @@ mod tests {
         let another_r = Fr::from(6);
 
         // WHOLE TREE: decision nodes packing
-        let decision_packing_builder = DecisionNodePackingBuilder{
+        let decision_packing_builder = DecisionPackingBuilder{
             mle: dummy_decision_nodes_mle.clone(),
             r,
             r_packings
@@ -508,7 +608,7 @@ mod tests {
             DenseMle::new(vec![ Fr::from(-4821)]).mle_ref().bookkeeping_table);
 
         // WHOLE TREE: leaf nodes packing
-        let leaf_packing_builder = LeafNodePackingBuilder{
+        let leaf_packing_builder = LeafPackingBuilder{
             mle: dummy_leaf_nodes_mle.clone(),
             r,
             r_packing: another_r
@@ -536,7 +636,7 @@ mod tests {
                         Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
 
         // r-x
-        let r_minus_x_builder =  ExpoBuilderInit {
+        let r_minus_x_builder =  RMinusXBuilder {
             packed_x: x_packed,
             r: another_r,
         };
@@ -548,7 +648,7 @@ mod tests {
                         Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
 
         // b_ij * (r-x) + (1 - b_ij), j = 0
-        let prev_prod_builder = ExpoBuilderBitExpo {
+        let prev_prod_builder = BitExponentiationBuilder {
             bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
             bit_index: 0,
             r_minus_x_power: r_minus_x.clone()
@@ -569,7 +669,7 @@ mod tests {
             let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(0), None);
 
             // b_ij * (r-x)^2 + (1 - b_ij), j = 1..15
-            let curr_prod_builder = ExpoBuilderBitExpo {
+            let curr_prod_builder = BitExponentiationBuilder {
                 bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
                 bit_index: i,
                 r_minus_x_power: r_minus_x_square.clone()
@@ -578,7 +678,7 @@ mod tests {
             let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(0), None);
 
             // PROD(b_ij * (r-x) + (1 - b_ij))
-            let prod_builder = ExpoBuilderProduct {
+            let prod_builder = ProductBuilder {
                 multiplier: curr_prod,
                 prev_prod
             };
@@ -606,7 +706,7 @@ mod tests {
         // const NUM_DUMMY_INPUTS: usize = 1 << 2;
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
-        // ExpoBuilderInit -> (SquaringBuilder -> ExpoBuilderBitExpo -> ExpoBuilderProduct ->)
+        // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
         let (_,_, dummy_decision_node_paths_mle_vec,
             dummy_leaf_node_paths_mle_vec, _,
             dummy_multiplicities_bin_decomp_mle,
@@ -627,7 +727,7 @@ mod tests {
         // ------ LAYER ID: 0 ------
 
         // WHOLE TREE: decision nodes packing
-        let decision_packing_builder = DecisionNodePackingBuilder{
+        let decision_packing_builder = DecisionPackingBuilder{
             mle: dummy_decision_nodes_mle.clone(),
             r,
             r_packings
@@ -639,7 +739,7 @@ mod tests {
             DenseMle::new(vec![ Fr::from(-8342)]).mle_ref().bookkeeping_table);
 
         // WHOLE TREE: leaf nodes packing
-        let leaf_packing_builder = LeafNodePackingBuilder{
+        let leaf_packing_builder = LeafPackingBuilder{
             mle: dummy_leaf_nodes_mle.clone(),
             r,
             r_packing: another_r
@@ -671,7 +771,7 @@ mod tests {
         // ------ LAYER ID: 2 ------
 
         // r-x
-        let r_minus_x_builder =  ExpoBuilderInit {
+        let r_minus_x_builder =  RMinusXBuilder {
             packed_x: x_packed,
             r: another_r,
         };
@@ -685,7 +785,7 @@ mod tests {
         // ------ LAYER ID: 3 ------
 
         // b_ij * (r-x) + (1 - b_ij), j = 0
-        let prev_prod_builder = ExpoBuilderBitExpo {
+        let prev_prod_builder = BitExponentiationBuilder {
             bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
             bit_index: 0,
             r_minus_x_power: r_minus_x.clone()
@@ -714,7 +814,7 @@ mod tests {
             let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(i+2), None);
 
             // b_ij * (r-x)^2 + (1 - b_ij), j = 1..15
-            let curr_prod_builder = ExpoBuilderBitExpo {
+            let curr_prod_builder = BitExponentiationBuilder {
                 bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
                 bit_index: i,
                 r_minus_x_power: r_minus_x_square.clone()
@@ -723,7 +823,7 @@ mod tests {
             let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(i+3), None);
 
             // PROD(b_ij * (r-x) + (1 - b_ij))
-            let prod_builder = ExpoBuilderProduct {
+            let prod_builder = ProductBuilder {
                 multiplier: curr_prod,
                 prev_prod
             };
@@ -791,7 +891,7 @@ mod tests {
         for i in 0..NUM_DUMMY_INPUTS {
 
             // PATH: decision nodes packing
-            let decision_path_packing_builder = DecisionNodePackingBuilder{
+            let decision_path_packing_builder = DecisionPackingBuilder{
                 mle: dummy_decision_node_paths_mle_vec[i].clone(),
                 r,
                 r_packings
@@ -802,7 +902,7 @@ mod tests {
             DenseMle::new(vec![ Fr::from(-8342)]).mle_ref().bookkeeping_table);
 
             // PATH: leaf nodes packing
-            let leaf_path_packing_builder = LeafNodePackingBuilder{
+            let leaf_path_packing_builder = LeafPackingBuilder{
                 mle: dummy_leaf_node_paths_mle_vec[i].clone(),
                 r,
                 r_packing: another_r
@@ -853,7 +953,7 @@ mod tests {
                     ]).mle_ref().bookkeeping_table);
             }
 
-            let r_minus_x_builder =  ExpoBuilderInit {
+            let r_minus_x_builder =  RMinusXBuilder {
                 packed_x: x_path_packed,
                 r: another_r,
             };
@@ -872,7 +972,7 @@ mod tests {
                     ]).mle_ref().bookkeeping_table);
             }
 
-            let prod_builder = ExpoBuilderProduct {
+            let prod_builder = ProductBuilder {
                 multiplier: prev_prod_x_path_packed,
                 prev_prod: curr_x_path_packed
             };

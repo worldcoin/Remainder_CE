@@ -6,6 +6,7 @@ use crate::{
     layer::{Claim, GKRLayer, Layer, LayerBuilder, LayerError, LayerId, claims::aggregate_claims},
     transcript::Transcript,
     FieldExt, expression::ExpressionStandard, mle::MleRef,
+    zkdt::zkdt_layer::{DecisionPackingBuilder}
 };
 
 use itertools::Itertools;
@@ -147,9 +148,99 @@ mod test {
     use ark_bn254::Fr;
     use ark_std::One;
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer}, expression::ExpressionStandard};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder}}};
 
     use super::{GKRCircuit, Layers};
+
+    struct MultiSetCircuit<F: FieldExt> {
+        dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+        dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+        dummy_multiplicities_bin_decomp_mle: DenseMle<F, BinDecomp16Bit<F>>,
+        dummy_decision_node_paths_mle_vec: DenseMle<F, DecisionNode<F>>, // batched
+        dummy_leaf_node_paths_mle_vec: DenseMle<F, LeafNode<F>>,         // batched
+        r: F,
+        r_packings: (F, F),
+        tree_height: usize
+    }
+
+    impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
+        fn synthesize(&mut self) -> (Layers<F>, Vec<Box<dyn MleRef<F = F>>>) {
+            let mut layers = Layers::new();
+
+            // layer 0
+            let decision_packing_builder = DecisionPackingBuilder::new(
+                self.dummy_decision_nodes_mle.clone(), self.r, self.r_packings);
+
+            let leaf_packing_builder = LeafPackingBuilder::new(
+                self.dummy_leaf_nodes_mle.clone(), self.r, self.r_packings.0
+            );
+
+            let packing_builders = decision_packing_builder.concat(leaf_packing_builder);
+            let (decision_packed, leaf_packed) = layers.add_gkr(packing_builders);
+
+            // layer 1
+            let decision_leaf_concat_builder = ConcatBuilder::new(
+                decision_packed, leaf_packed
+            );
+            let x_packed = layers.add_gkr(decision_leaf_concat_builder);
+
+            // layer 2
+            let r_minus_x_builder =  RMinusXBuilder::new(
+                x_packed, self.r
+            );
+            let mut r_minus_x = layers.add_gkr(r_minus_x_builder);
+
+            // layer 3
+            let prev_prod_builder = BitExponentiationBuilder::new(
+                self.dummy_multiplicities_bin_decomp_mle.clone(),
+                0,
+                r_minus_x.clone()
+            );
+            let mut prev_prod = layers.add_gkr(prev_prod_builder);
+
+            for i in 1..16 {
+
+                // layer 3, or i + 2
+                let r_minus_x_square_builder = SquaringBuilder::new(
+                    r_minus_x
+                );
+                let r_minus_x_square = layers.add_gkr(r_minus_x_square_builder);
+
+                // layer 4, or i + 3
+                let curr_prod_builder = BitExponentiationBuilder::new(
+                    self.dummy_multiplicities_bin_decomp_mle.clone(),
+                    i,
+                    r_minus_x_square.clone()
+                );
+                let curr_prod = layers.add_gkr(curr_prod_builder);
+
+                // layer 5, or i + 4
+                let prod_builder = ProductBuilder::new(
+                    curr_prod,
+                    prev_prod
+                );
+                prev_prod = layers.add_gkr(prod_builder);
+
+                r_minus_x = r_minus_x_square;
+
+            }
+
+            let mut exponentiated_nodes = prev_prod;
+
+            for i in 0..self.tree_height {
+
+                // layer 20, or i+20
+                let prod_builder = SplitProductBuilder::new(
+                    exponentiated_nodes
+                );
+                exponentiated_nodes = layers.add_gkr(prod_builder);
+            }
+
+            // let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = [Fr::from(1); self.tree_height as *const u32].into_iter().collect::<DenseMle<Fr, Fr>>();
+
+            (layers, vec![Box::new(ZeroMleRef::new(0, None, LayerId::Layer(0)))])
+        }
+    }
 
     struct TestCircuit<F: FieldExt> {
         mle: DenseMle<F, Tuple2<F>>,
