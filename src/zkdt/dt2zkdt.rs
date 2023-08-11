@@ -11,9 +11,14 @@ use serde::{Deserialize, Serialize};
 use std::iter::repeat;
 use itertools::Itertools;
 
-const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 = 2_u32.pow(15) - 1;
+const BIT_DECOMPOSITION_LENGTH: usize = 16;
+const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
+const UNSIGNED_DECOMPOSITION_MAX_ARG: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32) - 1;
+
 /// Build a 16 bit signed decomposition of the specified i32, or None if the argument is too large
 /// in absolute value (exceeding SIGNED_DECOMPOSITION_MAX_ARG_ABS).
+/// Result is little endian (so LSB has index 0).
+/// Sign bit has maximal index.
 fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDecomp16Bit<F>> {
     let abs_val = value.abs() as u32;
     if abs_val > SIGNED_DECOMPOSITION_MAX_ARG_ABS {
@@ -21,7 +26,7 @@ fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDecomp16
     }
     let mut decomposition = build_unsigned_bit_decomposition(abs_val).unwrap();
     // set the sign bit
-    decomposition.bits[0] = if value >= 0 {
+    decomposition.bits[BIT_DECOMPOSITION_LENGTH - 1] = if value >= 0 {
         F::zero()
     } else {
         F::one()
@@ -29,18 +34,21 @@ fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDecomp16
     Some(decomposition)
 }
 
-const UNSIGNED_DECOMPOSITION_MAX_ARG: u32 = 2_u32.pow(16) - 1;
 /// Build a 16 bit decomposition of the specified u32, or None if the argument is too large
 /// (exceeding UNSIGNED_DECOMPOSITION_MAX_ARG_ABS).
-fn build_unsigned_bit_decomposition<F: FieldExt>(value: u32) -> Option<BinDecomp16Bit<F>> {
+/// Result is little endian i.e. LSB has index 0.
+fn build_unsigned_bit_decomposition<F: FieldExt>(mut value: u32) -> Option<BinDecomp16Bit<F>> {
     if value > UNSIGNED_DECOMPOSITION_MAX_ARG {
-        None
-    } else {
-        // FIXME use some standard method to obtain the bit decomposition
-        Some(BinDecomp16Bit {
-            bits: [F::zero(); 16]
-        })
+        return None;
     }
+    let mut bits = [F::zero(); BIT_DECOMPOSITION_LENGTH];
+    for i in 0..BIT_DECOMPOSITION_LENGTH {
+        if value & 1 == 1 {
+            bits[i] = F::one();
+        }
+        value >>= 1;
+    }
+    Some(BinDecomp16Bit { bits: bits })
 }
 
 type Sample<F> = Vec<InputAttribute<F>>;
@@ -74,7 +82,7 @@ fn repeat_and_pad(values: &Vec<u32>, repetitions: usize) -> Vec<u32> {
 
 // TODO:
 // Confirm index orders below
-// Confirm that multiplicities is just over node indices (extend by 1 dummy node?)
+// Confirm that multiplicities is just over node indices, i.e. not counted separately per tree
 // Ask: do the number of trees need to be a power of two?
 // Double-check: input attributes are repeated _then_ padded to a power of two.
 struct CircuitizedSamples<F: FieldExt> {

@@ -35,7 +35,7 @@ pub(crate) struct LeafNode<F: FieldExt> {
 
 /// --- 16-bit binary decomposition ---
 /// Used for the following components of the (circuit) input:
-/// a) The binary decomposition of the path node hints (i.e. path_x.thr - x.val)
+/// a) The binary decomposition of the path node hints (i.e. x.val - path_x.thr)
 /// b) The binary decomposition of the multiplicity coefficients $c_j$
 #[derive(Copy, Debug, Clone, PartialEq)]
 pub(crate) struct BinDecomp16Bit<F: FieldExt> {
