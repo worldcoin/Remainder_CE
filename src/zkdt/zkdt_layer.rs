@@ -30,6 +30,46 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     }
 }
 
+/// calculates the difference between two mles
+pub struct DifferenceBuilder<F: FieldExt> {
+    mle_1: DenseMle<F, F>,
+    mle_2: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for DifferenceBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.mle_1.mle_ref()) - 
+        ExpressionStandard::Mle(self.mle_2.mle_ref())
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+
+        let mut difference_mle: DenseMle<F, F> = self
+            .mle_1
+            .clone()
+            .into_iter()
+            .zip(self.mle_2.clone().into_iter())
+            .map(|(a, b)| a - b ).collect();
+        difference_mle.add_prefix_bits(prefix_bits);
+        difference_mle.define_layer_id(id);
+        difference_mle
+    }
+}
+
+impl<F: FieldExt> DifferenceBuilder<F> {
+    /// creates new difference mle
+    pub fn new(
+        mle_1: DenseMle<F, F>,
+        mle_2: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            mle_1, mle_2
+        }
+    }
+}
+
 /// checks consistency (attr_id are the same) between
 /// permuted input x, and the decision node path
 pub struct AttributeConsistencyBuilder<F: FieldExt> {

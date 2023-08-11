@@ -146,9 +146,9 @@ mod test {
     use std::cmp::max;
 
     use ark_bn254::Fr;
-    use ark_std::One;
+    use ark_std::{One, log2};
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder}}};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder}}};
 
     use super::{GKRCircuit, Layers};
 
@@ -160,7 +160,8 @@ mod test {
         dummy_leaf_node_paths_mle_vec: DenseMle<F, LeafNode<F>>,         // batched
         r: F,
         r_packings: (F, F),
-        tree_height: usize
+        tree_height: usize,
+        num_inputs: usize,
     }
 
     impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
@@ -227,7 +228,7 @@ mod test {
 
             let mut exponentiated_nodes = prev_prod;
 
-            for i in 0..self.tree_height {
+            for _ in 0..self.tree_height {
 
                 // layer 20, or i+20
                 let prod_builder = SplitProductBuilder::new(
@@ -236,9 +237,56 @@ mod test {
                 exponentiated_nodes = layers.add_gkr(prod_builder);
             }
 
-            // let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = [Fr::from(1); self.tree_height as *const u32].into_iter().collect::<DenseMle<Fr, Fr>>();
+            // **** above is nodes exponentiated ****
+            // **** below is all decision nodes on the path multiplied ****
 
-            (layers, vec![Box::new(ZeroMleRef::new(0, None, LayerId::Layer(0)))])
+
+            // layer 0: packing
+            let decision_path_packing_builder = DecisionPackingBuilder::new(
+                self.dummy_decision_node_paths_mle_vec.clone(),
+                self.r,
+                self.r_packings
+            );
+
+            let leaf_path_packing_builder = LeafPackingBuilder::new(
+                self.dummy_leaf_node_paths_mle_vec.clone(),
+                self.r,
+                self.r_packings.0
+            );
+
+            let path_packing_builders = decision_path_packing_builder.concat(leaf_path_packing_builder);
+            let (decision_path_packed, leaf_path_packed) = layers.add_gkr(path_packing_builders);
+
+            // layer 1: concat
+            let path_decision_leaf_concat_builder = ConcatBuilder::new(
+                decision_path_packed, leaf_path_packed
+            );
+            let x_path_packed = layers.add_gkr(path_decision_leaf_concat_builder);
+
+            // layer 2: r - x
+            let r_minus_x_path_builder =  RMinusXBuilder::new(
+                x_path_packed, self.r
+            );
+            let r_minus_x_path = layers.add_gkr(r_minus_x_path_builder);
+
+            let mut path_product = r_minus_x_path;
+
+            // layer remaining: product it together
+            for _ in 0..log2(self.tree_height * self.num_inputs) {
+                let prod_builder = SplitProductBuilder::new(
+                    path_product
+                );
+                path_product = layers.add_gkr(prod_builder);
+            }
+
+            let difference_builder = DifferenceBuilder::new(
+                exponentiated_nodes,
+                path_product
+            );
+
+            let difference = layers.add_gkr(difference_builder);
+
+            (layers, vec![Box::new(difference.mle_ref())])
         }
     }
 
