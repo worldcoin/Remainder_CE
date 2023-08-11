@@ -53,6 +53,7 @@ pub struct GKRProof<F: FieldExt> {
     /// 
     /// In reverse order (e.g. layer closest to the output layer is first)
     pub layer_sumcheck_proofs: Vec<(SumcheckProof<F>, ExpressionStandard<F>)>,
+    /// assumes to be all zero for now?
     pub output_layers: Vec<Box<dyn MleRef<F = F>>>
 }
 
@@ -146,11 +147,33 @@ mod test {
     use std::cmp::max;
 
     use ark_bn254::Fr;
-    use ark_std::{One, log2};
+    use ark_std::log2;
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, SimpleLayer, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder}}};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder}}};
 
     use super::{GKRCircuit, Layers};
+
+    struct AttributeConsistencyCircuit<F: FieldExt> {
+        dummy_permuted_input_data_mle_vec: DenseMle<F, InputAttribute<F>>, // batched
+        dummy_decision_node_paths_mle_vec: DenseMle<F, DecisionNode<F>>,     // batched
+        tree_height: usize,
+    }
+
+    impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
+        fn synthesize(&mut self) -> (Layers<F>, Vec<Box<dyn MleRef<F = F>>>) {
+            let mut layers = Layers::new();
+
+            let attribute_consistency_builder = AttributeConsistencyBuilder::new(
+                self.dummy_permuted_input_data_mle_vec.clone(),
+                self.dummy_decision_node_paths_mle_vec.clone(),
+                self.tree_height
+            );
+
+            let difference_mle = layers.add_gkr(attribute_consistency_builder);
+
+            (layers, vec![Box::new(difference_mle.mle_ref())])
+        }
+    }
 
     struct MultiSetCircuit<F: FieldExt> {
         dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
