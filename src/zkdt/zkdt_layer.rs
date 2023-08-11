@@ -1,12 +1,9 @@
-use ark_ff::Field;
 use itertools::Itertools;
-
 use crate::expression::{Expression, ExpressionStandard};
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use crate::FieldExt;
-use ark_std::{cfg_into_iter, cfg_iter, log2};
 use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
 
 struct ProductTreeBuilder<F: FieldExt> {
@@ -61,6 +58,19 @@ impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilder<F> {
         difference_mle.add_prefix_bits(prefix_bits);
         difference_mle.define_layer_id(id);
         difference_mle
+    }
+}
+
+impl<F: FieldExt> AttributeConsistencyBuilder<F> {
+    /// create new halfed multiplied mle
+    pub fn new(
+        mle_input: DenseMle<F, InputAttribute<F>>,
+        mle_path: DenseMle<F, DecisionNode<F>>,
+        tree_height: usize
+    ) -> Self {
+        Self {
+            mle_input, mle_path, tree_height
+        }
     }
 }
 
@@ -418,7 +428,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
     // Returns an expression that checks if the bits are binary.
     fn build_expression(&self) -> ExpressionStandard<F> {
         let decomp_bit_mle = self.mle.mle_bit_refs();
-        let mut expressions = decomp_bit_mle
+        let expressions = decomp_bit_mle
             .into_iter()
             .map(|bit| {
                 let b = ExpressionStandard::Mle(bit.clone());
@@ -451,7 +461,8 @@ mod tests {
     use super::*;
     use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_circuit::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch}};
     use ark_bn254::Fr;
-    use FieldExt;
+    use ark_ff::Field;
+    use ark_std::log2;
 
     #[test]
     fn test_product_tree_builder_next_layer() {
@@ -484,14 +495,14 @@ mod tests {
         let (_, _, _, _, dummy_binary_decomp_diffs_mle, _, _, _) = generate_dummy_mles::<Fr>();
 
         let first_bin_decomp_bit_mle = dummy_binary_decomp_diffs_mle.mle_bit_refs();
-        let first_bin_decomp_bit_expr =
+        let _first_bin_decomp_bit_expr =
             ExpressionStandard::Mle(first_bin_decomp_bit_mle[0].clone());
 
         let binary_decomp_builder = BinaryDecompBuilder {
             mle: dummy_binary_decomp_diffs_mle,
         };
 
-        let binary_decomp_expr: ExpressionStandard<_>= binary_decomp_builder.build_expression();
+        let _binary_decomp_expr: ExpressionStandard<_>= binary_decomp_builder.build_expression();
         assert_eq!(1, 1)
     }
 
@@ -505,7 +516,7 @@ mod tests {
         // const TREE_HEIGHT: usize = 2;
 
         let (dummy_input_data_mle,
-            dummy_permuted_input_data_mle,
+            _dummy_permuted_input_data_mle,
             _, _, _, _, _, _) = generate_dummy_mles::<Fr>();
 
         let (r, r_packing) = (Fr::from(3), Fr::from(5));
@@ -620,8 +631,8 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
-        let (_,_, dummy_decision_node_paths_mle_vec,
-            dummy_leaf_node_paths_mle_vec, _,
+        let (_,_, _dummy_decision_node_paths_mle_vec,
+            _dummy_leaf_node_paths_mle_vec, _,
             dummy_multiplicities_bin_decomp_mle,
             dummy_decision_nodes_mle,
             dummy_leaf_nodes_mle) = generate_dummy_mles_batch::<Fr>();
