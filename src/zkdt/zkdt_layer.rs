@@ -1064,4 +1064,31 @@ mod tests {
         println!("multi SET!!")
     }
 
+    #[test]
+    fn test_attribute_consistency() {
+
+        let mut zero_vec = vec![];
+        for _ in 0..(TREE_HEIGHT-1) {
+            zero_vec.push(Fr::from(0));
+        }
+
+        let (_,
+            dummy_permuted_input_data_mle_vec,
+            dummy_decision_node_paths_mle_vec,_, _,_, _, _) = generate_dummy_mles_batch::<Fr>();
+
+        for i in 0..NUM_DUMMY_INPUTS {
+            let attribute_consistency_build = AttributeConsistencyBuilder {
+                mle_input: dummy_permuted_input_data_mle_vec[i].clone(),
+                mle_path: dummy_decision_node_paths_mle_vec[i].clone(),
+                tree_height: TREE_HEIGHT
+            };
+            let _ = attribute_consistency_build.build_expression();
+            let difference_mle = attribute_consistency_build.next_layer(LayerId::Layer(0), None);
+            let zero_mle = DenseMle::new(zero_vec.clone());
+
+            assert_eq!(difference_mle.mle_ref().bookkeeping_table,
+                    zero_mle.mle_ref().bookkeeping_table)
+        }
+    }
+
 }
