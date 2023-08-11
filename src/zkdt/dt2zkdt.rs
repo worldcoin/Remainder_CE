@@ -549,11 +549,11 @@ fn quantize_trees(trees: &[Node<f64>]) -> (Vec<Node<i32>>, f64) {
         .iter()
         .map(|tree| tree.aggregate_values(f64::min))
         .sum();
-    let spread = f64::max(max_score.abs(), min_score.abs());
+    let radius = f64::max(max_score.abs(), min_score.abs());
 
     // quantize the leaf values
     let quant_max = ((1_u32) << (LEAF_QUANTILE_BITWIDTH - 1)) - 2;
-    let rescaling = (quant_max as f64) / spread;
+    let rescaling = (quant_max as f64) / radius;
     let qtrees: Vec<Node<i32>> = trees
         .iter()
         .map(|tree| tree.map(&|value| (value * rescaling) as i32))
