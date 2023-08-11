@@ -1,5 +1,6 @@
 //!The LayerBuilders that build the ZKDT Circuit
 
+use ark_std::log2;
 use itertools::Itertools;
 
 use crate::expression::{ExpressionStandard, Expression};
@@ -81,7 +82,7 @@ impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle_input.attr_id(Some(self.tree_height))) - 
+        ExpressionStandard::Mle(self.mle_input.attr_id(Some(log2(self.tree_height) as usize))) - 
         ExpressionStandard::Mle(self.mle_path.attr_id())
     }
 
