@@ -52,13 +52,13 @@ fn build_unsigned_bit_decomposition<F: FieldExt>(mut value: u32) -> Option<BinDe
 }
 
 type Sample<F> = Vec<InputAttribute<F>>;
-/// Convert a vector of u32s to a Sample (consisting of field elements).
-fn build_sample<F: FieldExt>(values: &Vec<u32>) -> Sample<F> {
+/// Convert a vector of u16s to a Sample (consisting of field elements).
+fn build_sample<F: FieldExt>(values: &Vec<u16>) -> Sample<F> {
     values
         .iter()
         .enumerate()
         .map(|(index, value)| InputAttribute {
-            attr_id: F::from(index as u32),
+            attr_id: F::from(index as u16),
             attr_val: F::from(*value),
         })
         .collect()
@@ -66,13 +66,13 @@ fn build_sample<F: FieldExt>(values: &Vec<u32>) -> Sample<F> {
 
 /// Repeat the items of the provided vector `repetitions` times, before padding with the minimal
 /// number of zeros such that the length is a power of two.
-fn repeat_and_pad(values: &Vec<u32>, repetitions: usize) -> Vec<u32> {
+fn repeat_and_pad<T: Clone>(values: &Vec<T>, repetitions: usize, padding: T) -> Vec<T> {
     // repeat
     let repeated_length = repetitions * values.len();
     let repeated_iter = values.into_iter().cycle().take(repeated_length);
     // pad to nearest power of two
     let padding_length = (next_power_of_two(repeated_length as u32).unwrap() as usize - repeated_length);
-    let padding_iter = repeat(&0).take(padding_length);
+    let padding_iter = repeat(&padding).take(padding_length);
     // chain together and convert to Sample
     repeated_iter
         .chain(padding_iter)
@@ -96,11 +96,11 @@ struct CircuitizedSamples<F: FieldExt> {
 
 /// TODO describe return values
 /// Pre: values_array is not empty
-fn circuitize_samples<F: FieldExt>(values_array: &Vec<Vec<u32>>, pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
+fn circuitize_samples<F: FieldExt>(values_array: &Vec<Vec<u16>>, pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
     // repeat and pad the attributes of the sample
-    let values_array: Vec<Vec<u32>> = values_array
+    let values_array: Vec<Vec<u16>> = values_array
         .iter()
-        .map(|x| repeat_and_pad(x, (pqtrees.depth - 1) as usize))
+        .map(|x| repeat_and_pad(x, (pqtrees.depth - 1) as usize, 0_u16))
         .collect();
     let sample_length = values_array[0].len();
     
@@ -328,7 +328,7 @@ pub enum Node<T: Copy> {
     Internal {
         id: Option<u32>,
         feature_index: usize,
-        threshold: u32,
+        threshold: u16,
         left: Box<Node<T>>,
         right: Box<Node<T>>,
     },
@@ -343,7 +343,7 @@ impl<T: Copy> Node<T> {
         Node::Leaf { id, value }
     }
 
-    fn new_internal(id: Option<u32>, feature_index: usize, threshold: u32, left: Node<T>, right: Node<T>) -> Self {
+    fn new_internal(id: Option<u32>, feature_index: usize, threshold: u16, left: Node<T>, right: Node<T>) -> Self {
         Node::Internal {
             id,
             feature_index,
@@ -356,7 +356,7 @@ impl<T: Copy> Node<T> {
     /// Helper function: return a new perfect tree where all internal nodes have the feature index
     /// and threshold specified, and all leaf nodes have the value specified.
     /// Ids are not assigned.
-    fn new_constant_tree(depth: u32, feature_index: usize, threshold: u32, value: T) -> Node<T> {
+    fn new_constant_tree(depth: u32, feature_index: usize, threshold: u16, value: T) -> Node<T> {
         if depth > 1 {
             let left = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
             let right = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
@@ -507,7 +507,7 @@ impl<T: Copy> Node<T> {
 
     /// Return the path traced by the specified sample down this tree.
     /// Pre: sample.len() > node.feature_index for this node and all descendents.
-    fn get_path<'a>(&'a self, sample: &Vec<u32>) -> Vec<&'a Node<T>> {
+    fn get_path<'a>(&'a self, sample: &Vec<u16>) -> Vec<&'a Node<T>> {
         let mut path = Vec::new();
         self.append_path(sample, &mut path);
         path
@@ -515,7 +515,7 @@ impl<T: Copy> Node<T> {
 
     /// Helper function to get_path.
     /// Appends self to path, then, if internal, calls this function on the appropriate child node.
-    fn append_path<'a>(&'a self, sample: &Vec<u32>, path_to_here: &mut Vec<&'a Node<T>>) {
+    fn append_path<'a>(&'a self, sample: &Vec<u16>, path_to_here: &mut Vec<&'a Node<T>>) {
         path_to_here.push(self);
         if let Node::Internal {
             left,
@@ -921,7 +921,7 @@ mod tests {
     fn test_get_path() {
         let mut tree = quantize_and_perfect(build_small_tree(), 3);
         tree.assign_id(0);
-        let path = tree.get_path(&vec![0_u32, 2_u32]);
+        let path = tree.get_path(&vec![0_u16, 2_u16]);
         assert_eq!(path.len(), 3);
         assert_eq!(path[0].get_id(), Some(0));
         assert_eq!(path[1].get_id(), Some(1));
@@ -930,25 +930,25 @@ mod tests {
 
     #[test]
     fn test_repeat_and_pad() {
-        let result = repeat_and_pad(&vec![3_u32, 1_u32], 3);
+        let result = repeat_and_pad(&vec![3_u16, 1_u16], 3, 0_u16);
         assert_eq!(result.len(), 8);
-        assert_eq!(result[0], 3_u32);
-        assert_eq!(result[1], 1_u32);
-        assert_eq!(result[2], 3_u32);
-        assert_eq!(result[4], 3_u32);
-        assert_eq!(result[6], 0_u32);
-        assert_eq!(result[7], 0_u32);
+        assert_eq!(result[0], 3_u16);
+        assert_eq!(result[1], 1_u16);
+        assert_eq!(result[2], 3_u16);
+        assert_eq!(result[4], 3_u16);
+        assert_eq!(result[6], 0_u16);
+        assert_eq!(result[7], 0_u16);
     }
 
     #[test]
     fn test_repeat_and_pad_boundary() {
-        let result = repeat_and_pad(&vec![3_u32, 1_u32], 2);
+        let result = repeat_and_pad(&vec![3_u32, 1_u32], 2, 0_u32);
         assert_eq!(result.len(), 4);
     }
 
     #[test]
     fn test_build_sample() {
-        let result = build_sample::<Fr>(&vec![3_u32, 1_u32, 0_u32]);
+        let result = build_sample::<Fr>(&vec![3_u16, 1_u16, 0_u16]);
         assert_eq!(result.len(), 3);
     }
 
