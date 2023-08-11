@@ -36,73 +36,72 @@ pub enum ClaimError {
     ExpressionEvalError,
 }
 
-/// Compute evaluations of W(l(x))
-fn compute_wlx<F: FieldExt>(
-    expr: &mut ExpressionStandard<F>,
-    claim_vecs: Vec<Vec<F>>,
-    claimed_vals: &mut Vec<F>,
-    num_claims: usize,
-    num_idx: usize,
-    // prev_layer_claim: Claim<F>,
-) -> Result<Vec<F>, ClaimError> {
-    //fix variable hella times
-    //evaluate expr on the mutated expr
+// /// Compute evaluations of W(l(x))
+// fn compute_wlx<F: FieldExt>(
+//     layer: &impl Layer<F>,
+//     claim_vecs: Vec<Vec<F>>,
+//     claimed_vals: &mut Vec<F>,
+//     num_claims: usize,
+//     num_idx: usize,
+//     // prev_layer_claim: Claim<F>,
+// ) -> Result<Vec<F>, ClaimError> {
+//     //fix variable hella times
+//     //evaluate expr on the mutated expr
 
-    // get the number of evaluations
-    let num_vars = expr.index_mle_indices(0);
-    let degree = get_round_degree(&expr, 0);
-    // expr.init_beta_tables(prev_layer_claim);
-    let num_evals = (num_vars) * (num_claims); //* degree;
+//     // get the number of evaluations
+//     let num_vars = expr.index_mle_indices(0);
+//     let degree = get_round_degree(&expr, 0);
+//     // expr.init_beta_tables(prev_layer_claim);
+//     let num_evals = (num_vars) * (num_claims); //* degree;
 
-    // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-    let next_evals: Result<Vec<F>, ClaimError> = cfg_into_iter!(num_claims..num_evals)
-        .map(|idx| {
-            // get the challenge l(idx)
-            let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                .map(|claim_idx| {
-                    let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                        .map(|claim| claim[claim_idx])
-                        .collect();
-                    let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                    res
-                })
-                .collect();
+//     // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+//     let next_evals: Result<Vec<F>, ClaimError> = cfg_into_iter!(num_claims..num_evals)
+//         .map(|idx| {
+//             // get the challenge l(idx)
+//             let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+//                 .map(|claim_idx| {
+//                     let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+//                         .map(|claim| claim[claim_idx])
+//                         .collect();
+//                     let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
+//                     res
+//                 })
+//                 .collect();
 
-            // use fix_var to compute W(l(index))
-            // let mut fix_expr = expr.clone();
-            // let eval_w_l = fix_expr.evaluate_expr(new_chal);
+//             // use fix_var to compute W(l(index))
+//             // let mut fix_expr = expr.clone();
+//             // let eval_w_l = fix_expr.evaluate_expr(new_chal);
 
-            let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
-            beta.table.index_mle_indices(0);
-            let eval = compute_sumcheck_message(expr, 0, degree, &beta).unwrap();
-            if let SumOrEvals::Evals(evals) = eval {
-                Ok(evals[0] + evals[1])
-            } else {
-                panic!()
-            }
+//             let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
+//             beta.table.index_mle_indices(0);
+//             let eval = compute_sumcheck_message(expr, 0, degree, &beta).unwrap();
+//             if let SumOrEvals::Evals(evals) = eval {
+//                 Ok(evals[0] + evals[1])
+//             } else {
+//                 panic!()
+//             }
 
-            // this has to be a sum--get the overall evaluation
-            // match eval_w_l {
-            //     Ok(evaluation) => Ok(evaluation),
-            //     Err(_) => Err(ClaimError::ExpressionEvalError)
-            // }
-        })
-        .collect();
+//             // this has to be a sum--get the overall evaluation
+//             // match eval_w_l {
+//             //     Ok(evaluation) => Ok(evaluation),
+//             //     Err(_) => Err(ClaimError::ExpressionEvalError)
+//             // }
+//         })
+//         .collect();
 
-    // concat this with the first k evaluations from the claims to get num_evals evaluations
-    claimed_vals.extend(&next_evals.unwrap());
-    let wlx_evals = claimed_vals.clone();
-    Ok(wlx_evals)
-}
+//     // concat this with the first k evaluations from the claims to get num_evals evaluations
+//     claimed_vals.extend(&next_evals.unwrap());
+//     let wlx_evals = claimed_vals.clone();
+//     Ok(wlx_evals)
+// }
 
 /// Aggregate several claims into one
 pub fn aggregate_claims<F: FieldExt>(
     claims: &[Claim<F>],
-    expr: &ExpressionStandard<F>,
+    layer: &Box<impl Layer<F> + ?Sized>,
     rstar: F,
     // prev_layer_claim: Claim<F>,
 ) -> Result<(Claim<F>, Vec<F>), ClaimError> {
-    let mut expr = expr.clone();
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
 
     if claims.len() < 1 {
@@ -122,7 +121,7 @@ pub fn aggregate_claims<F: FieldExt>(
         .collect();
 
     // get the evals [W(l(0)), W(l(1)), ...]
-    let wlx = compute_wlx(&mut expr, claim_vecs, &mut vals, claims.len(), num_idx).unwrap();
+    let wlx = layer.get_wlx_evaluations(claim_vecs, &mut vals, claims.len(), num_idx)?;
 
     // interpolate to get W(l(r)), that's the claimed value
     let claimed_val = evaluate_at_a_point(&wlx, rstar);
@@ -167,7 +166,9 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 #[cfg(test)]
 mod test {
 
+    use crate::layer::{from_mle, GKRLayer};
     use crate::mle::{dense::DenseMle, Mle};
+    use crate::transcript::poseidon_transcript::PoseidonTranscript;
 
     use super::*;
     use ark_bn254::Fr;
@@ -200,6 +201,9 @@ mod test {
         let mle_ref = mle1.mle_ref();
 
         let mut expr = ExpressionStandard::Mle(mle_ref);
+
+        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(3), Fr::from(3)];
@@ -218,7 +222,7 @@ mod test {
         let claim1: Claim<Fr> = (chals1, valchal[0]);
         let claim2: Claim<Fr> = (chals2, valchal[1]);
 
-        let res = aggregate_claims(&[claim1, claim2], &mut expr, Fr::from(10))
+        let res = aggregate_claims(&[claim1, claim2], &Box::new(layer), Fr::from(10))
             .unwrap()
             .0;
 
@@ -240,6 +244,9 @@ mod test {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
+        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let chals1 = vec![Fr::from(1), Fr::from(2)];
         let chals2 = vec![Fr::from(2), Fr::from(3)];
         let chals3 = vec![Fr::from(3), Fr::from(1)];
@@ -259,7 +266,7 @@ mod test {
 
         let rchal = Fr::from(-2);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
             .unwrap()
             .0;
 
@@ -298,6 +305,9 @@ mod test {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
+        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
         let chals3 = vec![Fr::from(92108), Fr::from(29014), Fr::from(524)];
@@ -316,7 +326,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
             .unwrap()
             .0;
 
@@ -357,6 +367,9 @@ mod test {
         let mut expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
         let mut expr_copy = expr.clone();
 
+        let layer = from_mle((mle1, mle2), |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
         let chals3 = vec![Fr::from(92108), Fr::from(29014), Fr::from(524)];
@@ -375,7 +388,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
             .unwrap()
             .0;
 
@@ -415,6 +428,9 @@ mod test {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
+        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
         let chals3 = vec![Fr::from(92108), Fr::from(29014), Fr::from(524)];
@@ -433,7 +449,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
             .unwrap()
             .0;
 
@@ -473,6 +489,9 @@ mod test {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
+        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let chals1 = vec![Fr::from(-2), Fr::from(-192013), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
         let chals3 = vec![Fr::from(92108), Fr::from(29014), Fr::from(524)];
@@ -491,7 +510,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &mut expr, rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
             .unwrap()
             .0;
 
@@ -519,6 +538,9 @@ mod test {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
+        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
         let chals1 = vec![Fr::from(1), Fr::from(2)];
         let chals2 = vec![Fr::from(2), Fr::from(3)];
         let chals3 = vec![Fr::from(3), Fr::from(1)];
@@ -539,7 +561,7 @@ mod test {
 
         let rchal = Fr::from(-2);
 
-        let (res, wlx) = aggregate_claims(&claims, &mut expr.clone(), rchal).unwrap();
+        let (res, wlx) = aggregate_claims(&claims, &Box::new(layer), rchal).unwrap();
         let rounds = expr.index_mle_indices(0);
         // for round in 0..rounds {
         //     expr.fix

@@ -138,7 +138,7 @@ pub trait GKRCircuit<F: FieldExt> {
                     .unwrap();
 
                 let (layer_claim, wlx_evaluations) =
-                    aggregate_claims(layer_claims, layer.expression(), agg_chal).unwrap();
+                    aggregate_claims(layer_claims, &layer, agg_chal).unwrap();
 
                 transcript
                     .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
