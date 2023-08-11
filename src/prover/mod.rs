@@ -149,9 +149,58 @@ mod test {
     use ark_bn254::Fr;
     use ark_std::log2;
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder}}};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder, InputPackingBuilder}}};
 
     use super::{GKRCircuit, Layers};
+
+    struct PermutationCircuit<F: FieldExt> {
+        dummy_input_data_mle_vec: DenseMle<F, InputAttribute<F>>,               // batched
+        dummy_permuted_input_data_mle_vec: DenseMle<F, InputAttribute<F>>,      // batched
+        r: F,
+        r_packing: F,
+        input_len: usize,
+        num_inputs: usize
+    }
+
+    impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
+        fn synthesize(&mut self) -> (Layers<F>, Vec<Box<dyn MleRef<F = F>>>) {
+            let mut layers = Layers::new();
+
+            // layer 0: packing
+            let input_packing_builder = InputPackingBuilder::new(
+                self.dummy_input_data_mle_vec.clone(),
+                self.r,
+                self.r_packing);
+
+            let input_permuted_packing_builder = InputPackingBuilder::new(
+                self.dummy_permuted_input_data_mle_vec.clone(),
+                self.r,
+                self.r_packing);
+
+            let packing_builders = input_packing_builder.concat(input_permuted_packing_builder);
+            let (mut input_packed, mut input_permuted_packed) = layers.add_gkr(packing_builders);
+
+            for _ in 0..log2(self.input_len * self.num_inputs) {
+                let prod_builder = SplitProductBuilder::new(
+                    input_packed
+                );
+                let prod_permuted_builder = SplitProductBuilder::new(
+                    input_permuted_packed
+                );
+                let split_product_builders = prod_builder.concat(prod_permuted_builder);
+                (input_packed, input_permuted_packed) = layers.add_gkr(split_product_builders);
+            }
+
+            let difference_builder = DifferenceBuilder::new(
+                input_packed,
+                input_permuted_packed,
+            );
+
+            let difference_mle = layers.add_gkr(difference_builder);
+
+            (layers, vec![Box::new(difference_mle.mle_ref())])
+        }
+    }
 
     struct AttributeConsistencyCircuit<F: FieldExt> {
         dummy_permuted_input_data_mle_vec: DenseMle<F, InputAttribute<F>>, // batched

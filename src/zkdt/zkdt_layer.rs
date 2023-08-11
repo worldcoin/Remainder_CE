@@ -435,7 +435,8 @@ impl<F: FieldExt> DecisionPackingBuilder<F> {
     }
 }
 
-struct InputPackingBuilder<F: FieldExt> {
+/// packs input x
+pub struct InputPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, InputAttribute<F>>,
     r: F,
     r_packing: F
@@ -455,6 +456,19 @@ impl<F: FieldExt> LayerBuilder<F> for InputPackingBuilder<F> {
         flat_mle.add_prefix_bits(prefix_bits);
         flat_mle.define_layer_id(id);
         flat_mle
+    }
+}
+
+impl<F: FieldExt> InputPackingBuilder<F> {
+    /// create new decision node packed
+    pub fn new(
+        mle: DenseMle<F, InputAttribute<F>>,
+        r: F,
+        r_packing: F
+    ) -> Self {
+        Self {
+            mle, r, r_packing
+        }
     }
 }
 
