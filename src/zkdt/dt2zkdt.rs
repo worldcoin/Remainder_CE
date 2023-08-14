@@ -71,9 +71,9 @@ fn repeat_and_pad<T: Clone>(values: &[T], repetitions: usize, padding: T) -> Vec
     let repeated_length = repetitions * values.len();
     let repeated_iter = values.into_iter().cycle().take(repeated_length);
     // pad to nearest power of two
-    let padding_length = (next_power_of_two(repeated_length as u32).unwrap() as usize - repeated_length);
+    let padding_length = (next_power_of_two(repeated_length).unwrap() - repeated_length);
     let padding_iter = repeat(&padding).take(padding_length);
-    // chain together and convert to Sample
+    // chain together and convert to a vector
     repeated_iter
         .chain(padding_iter)
         .cloned()
@@ -91,12 +91,14 @@ struct CircuitizedSamples<F: FieldExt> {
 
 /// TODO describe return values
 /// multiplicities is 2 ** depth in size.
+/// length of each sample and permuted sample is next_power_of_two((depth - 1) * sample length)
+/// Little endian, sign bit at end.
 /// Pre: values_array is not empty
 fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
     // repeat and pad the attributes of the sample
     let values_array: Vec<Vec<u16>> = values_array
         .iter()
-        .map(|x| repeat_and_pad(x, (pqtrees.depth - 1) as usize, 0_u16))
+        .map(|x| repeat_and_pad(x, pqtrees.depth - 1, 0_u16))
         .collect();
     let sample_length = values_array[0].len();
     
@@ -107,7 +109,7 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
     let mut differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>> = vec![];
 
     // initialize the node visit counts "multiplicities"
-    let mut multiplicities: Vec<u32> = vec![0_u32; 2_usize.pow(pqtrees.depth)];
+    let mut multiplicities: Vec<u32> = vec![0_u32; 2_usize.pow(pqtrees.depth as u32)];
 
     // build the samples array
     for values in &values_array {
@@ -209,7 +211,7 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
 struct CircuitizedTrees<F: FieldExt> {
     decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then by node (sorted by node id)
     leaf_nodes: Vec<Vec<LeafNode<F>>>, // indexed by tree, then by node (sorted by node id)
-    depth: u32,
+    depth: usize,
     scaling: f64,
 }
 
@@ -220,7 +222,7 @@ impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
         // extract, sort & pad the decision nodes
         let mut decision_nodes = vec![];
         let dummy_node = DecisionNode {
-            node_id: F::from(2_u32.pow(pqtrees.depth) - 1),
+            node_id: F::from(2_u32.pow(pqtrees.depth as u32) - 1),
             attr_id: F::from(0_u32),
             threshold: F::from(0_u32)
         };
@@ -260,7 +262,7 @@ struct TreesModelInput {
 
 struct PaddedQuantizedTrees {
     trees: Vec<Node<i32>>,
-    depth: u32,
+    depth: usize,
     scaling: f64,
 }
 
@@ -297,7 +299,7 @@ impl From<&TreesModelInput> for PaddedQuantizedTrees {
             .unwrap();
         let target_depth = next_power_of_two(max_depth - 1).unwrap() + 1;
         // we'll insert DecisionNodes with feature_index=0 and threshold=0 where needed
-        let leaf_expander = |depth: u32, value: i32| Node::new_constant_tree(depth, 0, 0, value);
+        let leaf_expander = |depth: usize, value: i32| Node::new_constant_tree(depth, 0, 0, value);
         let mut qtrees: Vec<Node<i32>> = qtrees
             .iter()
             .map(|tree: &Node<i32>| tree.perfect_to_depth(target_depth, &leaf_expander))
@@ -354,7 +356,7 @@ impl<T: Copy> Node<T> {
     /// Helper function: return a new perfect tree where all internal nodes have the feature index
     /// and threshold specified, and all leaf nodes have the value specified.
     /// Ids are not assigned.
-    fn new_constant_tree(depth: u32, feature_index: usize, threshold: u16, value: T) -> Node<T> {
+    fn new_constant_tree(depth: usize, feature_index: usize, threshold: u16, value: T) -> Node<T> {
         if depth > 1 {
             let left = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
             let right = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
@@ -369,7 +371,7 @@ impl<T: Copy> Node<T> {
     /// ```ignore
     /// tree.depth(std::cmp::max);
     /// ```
-    fn depth(&self, aggregator: fn(u32, u32) -> u32) -> u32 {
+    fn depth(&self, aggregator: fn(usize, usize) -> usize) -> usize {
         match self {
             Node::Internal { left, right, .. } => {
                 1 + aggregator(left.depth(aggregator), right.depth(aggregator))
@@ -443,9 +445,9 @@ impl<T: Copy> Node<T> {
     /// New Nodes will not have ids assigned.
     /// Pre: depth >= self.depth()
     /// Post: self.is_perfect()
-    fn perfect_to_depth<F>(&self, depth: u32, leaf_expander: &F) -> Node<T>
+    fn perfect_to_depth<F>(&self, depth: usize, leaf_expander: &F) -> Node<T>
     where
-        F: Fn(u32, T) -> Node<T>,
+        F: Fn(usize, T) -> Node<T>,
     {
         assert!(depth >= 1);
         match self {
@@ -625,14 +627,14 @@ fn i32_to_field<F: FieldExt>(value: i32) -> F {
 }
 
 /// Return the first power of two that is greater than or equal to the argument, or None if this
-/// would exceed the range of u32.
-fn next_power_of_two(n: u32) -> Option<u32> {
+/// would exceed the range of a u32.
+fn next_power_of_two(n: usize) -> Option<usize> {
     if n == 0 {
         return Some(1);
     }
 
     for pow in 1..32 {
-        let value = 1_u32 << (pow - 1);
+        let value = 1_usize << (pow - 1);
         if value >= n {
             return Some(value);
         }
@@ -652,7 +654,8 @@ mod tests {
         assert_eq!(next_power_of_two(3), Some(4));
         assert_eq!(next_power_of_two(4), Some(4));
         assert_eq!(next_power_of_two(5), Some(8));
-        assert_eq!(next_power_of_two(u32::MAX), None);
+        assert_eq!(next_power_of_two(usize::MAX), None);  // NOTE this will only fail on 64bit
+                                                          // platforms
     }
 
     #[test]
@@ -710,8 +713,8 @@ mod tests {
         let left = Node::new_leaf(None, 0.1);
         let middle = Node::new_leaf(None, 0.2);
         let right = Node::new_leaf(None, 1.2);
-        let internal = Node::new_internal(None, 1, 2, left, middle);
-        Node::new_internal(None, 0, 1, internal, right)
+        let internal = Node::new_internal(None, 0, 2, left, middle);
+        Node::new_internal(None, 1, 1, internal, right)
     }
 
     /// Returns a skinny looking tree for testing.
@@ -735,8 +738,8 @@ mod tests {
     }
 
     /// Helper function for testing.
-    fn quantize_and_perfect(tree_f64: Node<f64>, depth: u32) -> Node<i32> {
-        let leaf_expander = |depth: u32, value: i32| Node::new_constant_tree(depth, 0, 0, value);
+    fn quantize_and_perfect(tree_f64: Node<f64>, depth: usize) -> Node<i32> {
+        let leaf_expander = |depth: usize, value: i32| Node::new_constant_tree(depth, 0, 0, value);
         tree_f64.map(&|x| x as i32)
             .perfect_to_depth(3, &leaf_expander)
     }
@@ -805,7 +808,7 @@ mod tests {
     #[test]
     fn test_perfect_to_depth() {
         let tree = build_small_tree();
-        let leaf_expander = |depth: u32, value: f64| Node::new_constant_tree(depth, 0, 0, value);
+        let leaf_expander = |depth: usize, value: f64| Node::new_constant_tree(depth, 0, 0, value);
         let perfect_tree = tree.perfect_to_depth(3, &leaf_expander);
         assert_eq!(perfect_tree.depth(std::cmp::max), 3);
         assert!(perfect_tree.is_perfect());
@@ -842,7 +845,7 @@ mod tests {
         assert_eq!(decision_nodes.len(), 2);
         decision_nodes.sort_by_key(|node| node.node_id);
         assert_eq!(decision_nodes[0].node_id, Fr::from(root_id));
-        assert_eq!(decision_nodes[0].attr_id, Fr::from(0));
+        assert_eq!(decision_nodes[0].attr_id, Fr::from(1));
         assert_eq!(decision_nodes[1].node_id, Fr::from(2 * root_id + 1));
     }
 
@@ -899,9 +902,9 @@ mod tests {
         let mut tree = build_small_tree();
         tree.offset_feature_indices(10);
         if let Node::Internal { left, feature_index, .. } = tree {
-            assert_eq!(feature_index, 0);
+            assert_eq!(feature_index, 1);
             if let Node::Internal { feature_index, .. } = *left {
-                assert_eq!(feature_index, 11);
+                assert_eq!(feature_index, 10);
                 return;
             }
         }
@@ -918,31 +921,99 @@ mod tests {
 
     #[test]
     fn test_circuitize_samples() {
-        let samples = vec![vec![0_u16; 5], vec![1_u16; 5]];
+        let sample_length = 5;
+        let samples = vec![
+            vec![0_u16; sample_length],
+            vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
+            vec![2_u16; sample_length]
+        ];
         let mut tree = build_small_tree();
         let trees_info = TreesModelInput {
             trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
             bias: 1.1,
             scale: 6.6,
-            n_features: 5,
+            n_features: sample_length,
         };
         let pqtrees: PaddedQuantizedTrees = (&trees_info).into();
         let csamples = circuitize_samples::<Fr>(&samples, &pqtrees);
         // check size of outer dimensions
+        let n_trees = trees_info.trees.len();
+        let repeated_sample_length = next_power_of_two((pqtrees.depth - 1) * sample_length).unwrap();
         assert_eq!(csamples.samples.len(), samples.len());
-        assert_eq!(csamples.permuted_samples.len(), samples.len());
-        assert_eq!(csamples.decision_paths.len(), samples.len());
-        assert_eq!(csamples.differences.len(), samples.len());
-        assert_eq!(csamples.path_ends.len(), samples.len());
-        assert_eq!(csamples.multiplicities.len(), 8);
-        // FIXME requires thorough inspection of inner dimensions
+        
+        // check dimensions of permuted samples
+        assert_eq!(csamples.permuted_samples.len(), n_trees);
+        for permuted_samples_for_tree in &csamples.permuted_samples {
+            assert_eq!(permuted_samples_for_tree.len(), samples.len());
+            for permuted_sample in permuted_samples_for_tree {
+                assert_eq!(permuted_sample.len(), repeated_sample_length);
+            }
+        }
+        // check the contents of the permuted samples for the non-trivial tree (the 0th)
+        let permuted_sample = &csamples.permuted_samples[0][0];
+        assert_eq!(permuted_sample[0].attr_id, Fr::from(1));
+        // ... sample travels left down the tree
+        assert_eq!(permuted_sample[1].attr_id, Fr::from(sample_length as u32 + 0));
+
+        // check the dimension of the decision paths
+        assert_eq!(csamples.decision_paths.len(), n_trees);
+        for decision_paths_for_tree in &csamples.decision_paths {
+            assert_eq!(decision_paths_for_tree.len(), samples.len());
+            for decision_path in decision_paths_for_tree {
+                assert_eq!(decision_path.len(), pqtrees.depth - 1);
+            }
+        }
+        // check decision path contents for one combination
+        let decision_path = &csamples.decision_paths[0][2];
+        assert_eq!(decision_path[0].node_id, Fr::from(0));
+        // ... sample travels right down the tree
+        assert_eq!(decision_path[1].node_id, Fr::from(2));
+
+        // check the dimension of the path_ends
+        assert_eq!(csamples.path_ends.len(), n_trees);
+        for path_ends_for_tree in &csamples.path_ends {
+            assert_eq!(path_ends_for_tree.len(), samples.len());
+        }
+        // check the contents
+        let path_ends_for_tree = &csamples.path_ends[0];
+        assert_eq!(path_ends_for_tree[0].node_id, Fr::from(3));
+        assert_eq!(path_ends_for_tree[1].node_id, Fr::from(4));
+
+        // check the dimensions of the differences
+        assert_eq!(csamples.differences.len(), n_trees);
+        for differences_for_tree in &csamples.differences {
+            assert_eq!(differences_for_tree.len(), samples.len());
+            for differences in differences_for_tree {
+                assert_eq!(differences.len(), pqtrees.depth - 1);
+            }
+        }
+        // check contents
+        let differences = &csamples.differences[0][0];
+        // should have the bit decomposition of -2
+        assert_eq!(differences[1].bits[0], Fr::from(0));
+        assert_eq!(differences[1].bits[1], Fr::from(1));
+        assert_eq!(differences[1].bits[2], Fr::from(0));
+        assert_eq!(differences[1].bits[15], Fr::from(1));
+
+        // check the multiplicities
+        assert_eq!(csamples.multiplicities.len(), 2_usize.pow(pqtrees.depth as u32));
+        // root node id has multiplicity n_trees * samples.len() = 6
+        let multiplicity = &csamples.multiplicities[0];
+        assert_eq!(multiplicity.bits[0], Fr::from(0));
+        assert_eq!(multiplicity.bits[1], Fr::from(1));
+        assert_eq!(multiplicity.bits[2], Fr::from(1));
+        // dummy node id has multiplicity 0
+        let multiplicity = &csamples.multiplicities[2_usize.pow(pqtrees.depth as u32) - 1];
+        for bit in multiplicity.bits {
+            assert_eq!(bit, Fr::from(0));
+        }
     }
 
     #[test]
     fn test_get_path() {
         let mut tree = quantize_and_perfect(build_small_tree(), 3);
         tree.assign_id(0);
-        let path = tree.get_path(&vec![0_u16, 2_u16]);
+        let path = tree.get_path(&vec![2_u16, 0_u16]);
         assert_eq!(path.len(), 3);
         assert_eq!(path[0].get_id(), Some(0));
         assert_eq!(path[1].get_id(), Some(1));
