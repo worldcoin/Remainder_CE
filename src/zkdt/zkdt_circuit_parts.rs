@@ -242,7 +242,7 @@ mod tests {
             r: Fr::rand(&mut rng),
             r_packing: Fr::rand(&mut rng),
             input_len: DUMMY_INPUT_LEN,
-            num_inputs: NUM_DUMMY_INPUTS,
+            num_inputs: 1,
         };
 
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");

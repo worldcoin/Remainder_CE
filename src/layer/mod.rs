@@ -199,6 +199,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
+        let claimed_value = claim.1.clone();
         let (init_evals, rounds) = self.start_sumcheck(claim)?;
 
         transcript
@@ -238,6 +239,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let (expression, _) = self.mut_expression_and_beta();
 
         // first round, see Thaler book page 34
+
         let mut prev_evals = &sumcheck_rounds[0];
         if prev_evals[0] + prev_evals[1] != claim.1 {
             return Err(LayerError::VerificationError(
