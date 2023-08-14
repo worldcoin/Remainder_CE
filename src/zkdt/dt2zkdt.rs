@@ -530,36 +530,7 @@ impl<T: Copy> Node<T> {
             next.append_path(sample, path_to_here);
         }
     }
-}
 
-const LEAF_QUANTILE_BITWIDTH: u32 = 29; // FIXME why doesn't this work with 32?
-/// Given a vector of trees (Node instances) with f64 leaf values, quantize the leaf values
-/// symmetrically, returning the quantized trees and the rescaling factor.  The scale is chosen
-/// such that all possible _aggregate_ scores will fit within the LEAF_QUANTILE_BITWIDTH.
-/// Post: (quantized leaf values) / rescaling ~= (original leaf values)
-fn quantize_trees(trees: &[Node<f64>]) -> (Vec<Node<i32>>, f64) {
-    // determine the spread of the scores
-    let max_score: f64 = trees
-        .iter()
-        .map(|tree| tree.aggregate_values(f64::max))
-        .sum();
-    let min_score: f64 = trees
-        .iter()
-        .map(|tree| tree.aggregate_values(f64::min))
-        .sum();
-    let radius = f64::max(max_score.abs(), min_score.abs());
-
-    // quantize the leaf values
-    let quant_max = ((1_u32) << (LEAF_QUANTILE_BITWIDTH - 1)) - 2;
-    let rescaling = (quant_max as f64) / radius;
-    let qtrees: Vec<Node<i32>> = trees
-        .iter()
-        .map(|tree| tree.map(&|value| (value * rescaling) as i32))
-        .collect();
-    (qtrees, rescaling)
-}
-
-impl<T: Copy> Node<T> {
     /// Return a Vec containing a DecisionNode for each Node::Internal appearing in this tree, in arbitrary order.
     /// Pre: if `node` is any descendent of this Node then `node.get_id()` is not None.
     pub(crate) fn extract_decision_nodes<F: FieldExt>(&self) -> Vec<DecisionNode<F>> {
@@ -590,6 +561,33 @@ impl<T: Copy> Node<T> {
             right.append_decision_nodes(decision_nodes);
         }
     }
+}
+
+const LEAF_QUANTILE_BITWIDTH: u32 = 29; // FIXME why doesn't this work with 32?
+/// Given a vector of trees (Node instances) with f64 leaf values, quantize the leaf values
+/// symmetrically, returning the quantized trees and the rescaling factor.  The scale is chosen
+/// such that all possible _aggregate_ scores will fit within the LEAF_QUANTILE_BITWIDTH.
+/// Post: (quantized leaf values) / rescaling ~= (original leaf values)
+fn quantize_trees(trees: &[Node<f64>]) -> (Vec<Node<i32>>, f64) {
+    // determine the spread of the scores
+    let max_score: f64 = trees
+        .iter()
+        .map(|tree| tree.aggregate_values(f64::max))
+        .sum();
+    let min_score: f64 = trees
+        .iter()
+        .map(|tree| tree.aggregate_values(f64::min))
+        .sum();
+    let radius = f64::max(max_score.abs(), min_score.abs());
+
+    // quantize the leaf values
+    let quant_max = ((1_u32) << (LEAF_QUANTILE_BITWIDTH - 1)) - 2;
+    let rescaling = (quant_max as f64) / radius;
+    let qtrees: Vec<Node<i32>> = trees
+        .iter()
+        .map(|tree| tree.map(&|value| (value * rescaling) as i32))
+        .collect();
+    (qtrees, rescaling)
 }
 
 impl Node<i32> {
