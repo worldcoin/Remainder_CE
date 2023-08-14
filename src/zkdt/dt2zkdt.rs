@@ -80,17 +80,12 @@ fn repeat_and_pad<T: Clone>(values: &[T], repetitions: usize, padding: T) -> Vec
         .collect()
 }
 
-// TODO:
-// Confirm index orders below
-// Confirm that multiplicities is just over node indices, i.e. not counted separately per tree
-// Ask: do the number of trees need to be a power of two?
-// Double-check: input attributes are repeated _then_ padded to a power of two.
 struct CircuitizedSamples<F: FieldExt> {
     samples: Vec<Sample<F>>, // indexed by samples
-    permuted_samples: Vec<Vec<Sample<F>>>, // indexed by samples, trees
-    decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by samples, trees, steps in path
-    differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>, // indexed by samples, trees, steps in path
-    path_ends: Vec<Vec<LeafNode<F>>>, // indexed by samples, trees
+    permuted_samples: Vec<Vec<Sample<F>>>, // indexed by trees, samples
+    decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
+    differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>, // indexed by trees, samples, steps in path
+    path_ends: Vec<Vec<LeafNode<F>>>, // indexed by trees, samples
     multiplicities: Vec<BinDecomp16Bit<F>>, // indexed by tree node indices
 }
 
@@ -105,25 +100,27 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
         .collect();
     let sample_length = values_array[0].len();
     
-    // TODO can we think of a better naming convention than appending 's'?
     let mut samples: Vec<Sample<F>> = vec![];
-    let mut permuted_sampless: Vec<Vec<Sample<F>>> = vec![];
-    let mut decision_pathss: Vec<Vec<Vec<DecisionNode<F>>>> = vec![];
-    let mut path_endss: Vec<Vec<LeafNode<F>>> = vec![];
-    let mut differencesss: Vec<Vec<Vec<BinDecomp16Bit<F>>>> = vec![];
+    let mut permuted_samples: Vec<Vec<Sample<F>>> = vec![];
+    let mut decision_paths: Vec<Vec<Vec<DecisionNode<F>>>> = vec![];
+    let mut path_ends: Vec<Vec<LeafNode<F>>> = vec![];
+    let mut differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>> = vec![];
 
     // initialize the node visit counts "multiplicities"
     let mut multiplicities: Vec<u32> = vec![0_u32; 2_usize.pow(pqtrees.depth)];
 
-    for values in values_array {
-        let sample = build_sample(&values);
-        samples.push(sample.clone());
-        let mut permuted_samples: Vec<Sample<F>> = vec![];
-        let mut decision_paths: Vec<Vec<DecisionNode<F>>> = vec![];
-        let mut path_ends: Vec<LeafNode<F>> = vec![];
-        let mut differencess: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
+    // build the samples array
+    for values in &values_array {
+        samples.push(build_sample(&values));
+    }
 
-        for tree in &pqtrees.trees {
+    for tree in &pqtrees.trees {
+        let mut permuted_samples_for_tree: Vec<Sample<F>> = vec![];
+        let mut decision_paths_for_tree: Vec<Vec<DecisionNode<F>>> = vec![];
+        let mut path_ends_for_tree: Vec<LeafNode<F>> = vec![];
+        let mut differences_for_tree: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
+
+        for (values, sample) in values_array.iter().zip(samples.iter()) {
             // get the path
             let path = tree.get_path(&values);
             
@@ -131,7 +128,7 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
             let mut decision_path = vec![];
             let mut permuted_sample: Sample<F> = vec![];
             let mut attribute_visits = vec![0; sample_length];
-            let mut differences = vec![];
+            let mut differences_for_tree_and_sample = vec![];
             for node in &path[..path.len() - 1] {
                 if let Node::Internal {
                     id,
@@ -147,7 +144,7 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
                     });
                     // calculate the bit decompositions of the differences
                     let difference = (values[*feature_index] as i32) - (*threshold as i32);
-                    differences.push(build_signed_bit_decomposition::<F>(difference).unwrap());
+                    differences_for_tree_and_sample.push(build_signed_bit_decomposition::<F>(difference).unwrap());
                     // accumulate the multiplicities for this tree
                     multiplicities[id.unwrap() as usize] += 1;
                     // build up the permuted sample
@@ -164,13 +161,13 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
                 }
             }
 
-            permuted_samples.push(permuted_sample);
-            decision_paths.push(decision_path);
-            differencess.push(differences);
+            permuted_samples_for_tree.push(permuted_sample);
+            decision_paths_for_tree.push(decision_path);
+            differences_for_tree.push(differences_for_tree_and_sample);
             
             // build the leaf node
             if let Node::Leaf { id, value } = path[path.len() - 1] {
-                path_ends.push(LeafNode {
+                path_ends_for_tree.push(LeafNode {
                     node_id: F::from(id.unwrap()),
                     node_val: i32_to_field(*value)
                 });
@@ -180,10 +177,10 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
                 panic!("Last item in path should be a Node::Leaf");
             }
         }
-        permuted_sampless.push(permuted_samples);
-        decision_pathss.push(decision_paths);
-        path_endss.push(path_ends);
-        differencesss.push(differencess);
+        permuted_samples.push(permuted_samples_for_tree);
+        decision_paths.push(decision_paths_for_tree);
+        path_ends.push(path_ends_for_tree);
+        differences.push(differences_for_tree);
     }
 
     // calculate the bit decompositions of the visit counts
@@ -195,10 +192,10 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
 
     CircuitizedSamples {
         samples: samples,
-        permuted_samples: permuted_sampless,
-        decision_paths: decision_pathss,
-        differences: differencesss,
-        path_ends: path_endss,
+        permuted_samples: permuted_samples,
+        decision_paths: decision_paths,
+        differences: differences,
+        path_ends: path_ends,
         multiplicities: multiplicities
     }
 }
