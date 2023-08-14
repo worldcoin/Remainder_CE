@@ -19,7 +19,7 @@ What's our plan here?
 */
 
 // --- Constants ---
-const DUMMY_INPUT_LEN: usize = 1 << 2; // was 1 << 5
+pub const DUMMY_INPUT_LEN: usize = 1 << 2; // was 1 << 5
 pub const NUM_DUMMY_INPUTS: usize = 1 << 2;
 pub const TREE_HEIGHT: usize = 2; // was 9
 const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;

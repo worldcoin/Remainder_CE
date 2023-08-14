@@ -3,6 +3,7 @@
 pub mod claims;
 /// For the input layer to the GKR circuit
 pub mod input_layer;
+pub mod empty_layer;
 // mod gkr_layer;
 
 use std::marker::PhantomData;

@@ -294,15 +294,19 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                         })
                         .collect_vec();
 
-                    let start = *indices[0].1;
-                    let end = *indices[indices.len() - 1].1;
-
-                    let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
-
-                    if indices.as_slice() == &challenges[start..=end] {
-                        Ok(())
+                    if indices.len() != 0 {
+                        let start = *indices[0].1;
+                        let end = *indices[indices.len() - 1].1;
+    
+                        let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
+    
+                        if indices.as_slice() == &challenges[start..=end] {
+                            Ok(())
+                        } else {
+                            Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                        }
                     } else {
-                        Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                        Ok(())
                     }
                 }
                 ExpressionStandard::Product(mle_refs) => mle_refs
@@ -317,17 +321,21 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                             })
                             .collect_vec();
 
-                        let start = *indices[0].1;
-                        let end = *indices[indices.len() - 1].1;
-
-                        let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
-
-                        if indices.as_slice() == &challenges[start..=end] {
-                            Ok(())
-                        } else {
-                            Err(ExpressionError::EvaluateBoundIndicesDontMatch)
-                        }
-                    })
+                            if indices.len() != 0 {
+                                let start = *indices[0].1;
+                                let end = *indices[indices.len() - 1].1;
+            
+                                let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
+            
+                                if indices.as_slice() == &challenges[start..=end] {
+                                    Ok(())
+                                } else {
+                                    Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                                }
+                            } else {
+                                Ok(())
+                            }
+                        })
                     .try_collect(),
 
                 _ => Ok(()),
@@ -505,7 +513,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// gather all of the evaluations, combining them as appropriate.
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
 /// within. TODO!(ryancao): Make this not need to be mutable
-fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
+pub(crate) fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     expr: &Exp,
 ) -> Result<F, ExpressionError> {
     let constant = |c| Ok(c);

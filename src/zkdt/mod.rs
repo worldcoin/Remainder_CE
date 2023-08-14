@@ -5,3 +5,4 @@ pub mod structs;
 /// Concrete circuit implementation
 pub mod zkdt_circuit;
 pub mod zkdt_layer;
+pub mod zkdt_circuit_parts;
