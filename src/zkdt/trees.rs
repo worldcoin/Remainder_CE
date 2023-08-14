@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Struct for representing a tree in recursive form
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-pub enum Node<T: Copy> {
+pub(crate) enum Node<T: Copy> {
     Internal {
         id: Option<u32>,
         feature_index: usize,
@@ -20,11 +20,11 @@ pub enum Node<T: Copy> {
 }
 
 impl<T: Copy> Node<T> {
-    pub fn new_leaf(id: Option<u32>, value: T) -> Self {
+    pub(crate) fn new_leaf(id: Option<u32>, value: T) -> Self {
         Node::Leaf { id, value }
     }
 
-    pub fn new_internal(
+    pub(crate) fn new_internal(
         id: Option<u32>,
         feature_index: usize,
         threshold: u16,
@@ -43,7 +43,12 @@ impl<T: Copy> Node<T> {
     /// Helper function: return a new perfect tree where all internal nodes have the feature index
     /// and threshold specified, and all leaf nodes have the value specified.
     /// Ids are not assigned.
-    pub fn new_constant_tree(depth: usize, feature_index: usize, threshold: u16, value: T) -> Node<T> {
+    pub(crate) fn new_constant_tree(
+        depth: usize,
+        feature_index: usize,
+        threshold: u16,
+        value: T,
+    ) -> Node<T> {
         if depth > 1 {
             let left = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
             let right = Self::new_constant_tree(depth - 1, feature_index, threshold, value);
@@ -58,7 +63,7 @@ impl<T: Copy> Node<T> {
     /// ```ignore
     /// tree.depth(std::cmp::max);
     /// ```
-    pub fn depth(&self, aggregator: fn(usize, usize) -> usize) -> usize {
+    pub(crate) fn depth(&self, aggregator: fn(usize, usize) -> usize) -> usize {
         match self {
             Node::Internal { left, right, .. } => {
                 1 + aggregator(left.depth(aggregator), right.depth(aggregator))
@@ -72,7 +77,7 @@ impl<T: Copy> Node<T> {
     /// ```ignore
     /// let max = tree.aggregate_values(f64::max);
     /// ```
-    pub fn aggregate_values(&self, operation: fn(T, T) -> T) -> T {
+    pub(crate) fn aggregate_values(&self, operation: fn(T, T) -> T) -> T {
         match self {
             Node::Leaf { value, .. } => *value,
             Node::Internal { left, right, .. } => operation(
@@ -87,7 +92,7 @@ impl<T: Copy> Node<T> {
     /// ```ignore
     /// tree.transform_values(&|x| -1.0 * x);
     /// ```
-    pub fn transform_values<F>(&mut self, transform: &F)
+    pub(crate) fn transform_values<F>(&mut self, transform: &F)
     where
         F: Fn(T) -> T,
     {
@@ -104,7 +109,7 @@ impl<T: Copy> Node<T> {
 
     /// As per transform_values, but handling the case of a function whose return type is different
     /// from the input type, at the cost of reconstructing the tree.
-    pub fn map<U, F>(&self, f: &F) -> Node<U>
+    pub(crate) fn map<U, F>(&self, f: &F) -> Node<U>
     where
         F: Fn(T) -> U,
         U: Copy,
@@ -122,7 +127,7 @@ impl<T: Copy> Node<T> {
     }
 
     /// Return if the tree is perfect, i.e. all children are of maximal depth.
-    pub fn is_perfect(&self) -> bool {
+    pub(crate) fn is_perfect(&self) -> bool {
         self.depth(std::cmp::max) == self.depth(std::cmp::min)
     }
 
@@ -132,7 +137,7 @@ impl<T: Copy> Node<T> {
     /// New Nodes will not have ids assigned.
     /// Pre: depth >= self.depth()
     /// Post: self.is_perfect()
-    pub fn perfect_to_depth<F>(&self, depth: usize, leaf_expander: &F) -> Node<T>
+    pub(crate) fn perfect_to_depth<F>(&self, depth: usize, leaf_expander: &F) -> Node<T>
     where
         F: Fn(usize, T) -> Node<T>,
     {
@@ -157,7 +162,7 @@ impl<T: Copy> Node<T> {
     /// rule:
     /// left_child_id = 2 * id + 1
     /// right_child_id = 2 * id + 2
-    pub fn assign_id(&mut self, new_id: u32) {
+    pub(crate) fn assign_id(&mut self, new_id: u32) {
         match self {
             Node::Internal {
                 id, left, right, ..
@@ -172,7 +177,7 @@ impl<T: Copy> Node<T> {
         }
     }
 
-    pub fn get_id(&self) -> Option<u32> {
+    pub(crate) fn get_id(&self) -> Option<u32> {
         match self {
             Node::Internal { id, .. } => *id,
             Node::Leaf { id, .. } => *id,
@@ -181,7 +186,7 @@ impl<T: Copy> Node<T> {
 
     /// Add (depth_of_node - 1) * multiplier to the feature index of all internal nodes in this
     /// tree.
-    pub fn offset_feature_indices(&mut self, multiplier: usize) {
+    pub(crate) fn offset_feature_indices(&mut self, multiplier: usize) {
         self.offset_feature_indices_for_depth(multiplier, 1);
     }
 
@@ -202,7 +207,7 @@ impl<T: Copy> Node<T> {
 
     /// Return the path traced by the specified sample down this tree.
     /// Pre: sample.len() > node.feature_index for this node and all descendents.
-    pub fn get_path<'a>(&'a self, sample: &[u16]) -> Vec<&'a Node<T>> {
+    pub(crate) fn get_path<'a>(&'a self, sample: &[u16]) -> Vec<&'a Node<T>> {
         let mut path = Vec::new();
         self.append_path(sample, &mut path);
         path
@@ -235,7 +240,7 @@ const LEAF_QUANTILE_BITWIDTH: u32 = 29; // FIXME why doesn't this work with 32?
 /// symmetrically, returning the quantized trees and the rescaling factor.  The scale is chosen
 /// such that all possible _aggregate_ scores will fit within the LEAF_QUANTILE_BITWIDTH.
 /// Post: (quantized leaf values) / rescaling ~= (original leaf values)
-pub fn quantize_trees(trees: &[Node<f64>]) -> (Vec<Node<i32>>, f64) {
+pub(crate) fn quantize_trees(trees: &[Node<f64>]) -> (Vec<Node<i32>>, f64) {
     // determine the spread of the scores
     let max_score: f64 = trees
         .iter()
@@ -407,6 +412,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_offset_feature_indices() {
+        let mut tree = build_small_tree();
+        tree.offset_feature_indices(10);
+        if let Node::Internal {
+            left,
+            feature_index,
+            ..
+        } = tree
+        {
+            assert_eq!(feature_index, 1);
+            if let Node::Internal { feature_index, .. } = *left {
+                assert_eq!(feature_index, 10);
+                return;
+            }
+        }
+        panic!("Should be inaccessible");
+    }
 
+    /// Helper function for testing.
+    fn quantize_and_perfect(tree_f64: Node<f64>, depth: usize) -> Node<i32> {
+        let leaf_expander = |depth: usize, value: i32| Node::new_constant_tree(depth, 0, 0, value);
+        tree_f64
+            .map(&|x| x as i32)
+            .perfect_to_depth(depth, &leaf_expander)
+    }
+
+    #[test]
+    fn test_get_path() {
+        let mut tree = quantize_and_perfect(build_small_tree(), 3);
+        tree.assign_id(0);
+        let path = tree.get_path(&vec![2_u16, 0_u16]);
+        assert_eq!(path.len(), 3);
+        assert_eq!(path[0].get_id(), Some(0));
+        assert_eq!(path[1].get_id(), Some(1));
+        assert_eq!(path[2].get_id(), Some(4));
+    }
+
+    #[test]
+    fn test_quantize_trees() {
+        let value0 = -123.1;
+        let value1 = 145.1;
+        let trees = vec![Node::new_leaf(None, value0), Node::new_leaf(None, value1)];
+        let (qtrees, rescaling) = quantize_trees(&trees);
+        assert_eq!(qtrees.len(), trees.len());
+        if let Node::Leaf { value: qvalue0, .. } = qtrees[0] {
+            assert!((value0 - (qvalue0 as f64) / rescaling).abs() < 1e-5);
+            if let Node::Leaf { value: qvalue1, .. } = qtrees[1] {
+                assert!((value1 - (qvalue1 as f64) / rescaling).abs() < 1e-5);
+                return;
+            }
+        }
+        panic!("The quantized trees should each have been leaf nodes");
+    }
 }
-

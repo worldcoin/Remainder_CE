@@ -7,4 +7,5 @@ pub mod zkdt_circuit;
 /// Conversion from decision tree model to circuit-ready form
 pub mod dt2zkdt;
 pub mod trees;
+pub mod helpers;
 pub mod zkdt_layer;
