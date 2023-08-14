@@ -1,6 +1,7 @@
 //!Utilities involving the claims a layer makes
 
-use crate::{expression::ExpressionStandard, mle::beta::BetaTable, FieldExt};
+use crate::{expression::ExpressionStandard, mle::beta::BetaTable};
+use lcpc_2d::FieldExt;
 
 // use itertools::Itertools;
 use crate::mle::MleRef;
@@ -119,7 +120,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 }
 
 /// verifies the claim aggregation
-pub(crate) fn verify_aggragate_claim<F: FieldExt>(
+pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for qx
     claims: &[Claim<F>],
     r_star: F,
@@ -534,6 +535,6 @@ mod tests {
 
         let (_res, wlx) = aggregate_claims(&claims, &mut expr.clone(), rchal).unwrap();
         let _rounds = expr.index_mle_indices(0);
-        let _verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
+        let _verify_result = verify_aggregate_claim(&wlx, &claims, rchal).unwrap();
     }
 }

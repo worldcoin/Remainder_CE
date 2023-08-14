@@ -7,7 +7,7 @@ use crate::expression::{ExpressionStandard, Expression};
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
-use crate::FieldExt;
+use lcpc_2d::FieldExt;
 use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
 
 struct ProductTreeBuilder<F: FieldExt> {

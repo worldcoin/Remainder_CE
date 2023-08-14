@@ -1,6 +1,6 @@
 use crate::layer::LayerId;
 use crate::mle::dense::DenseMle;
-use crate::FieldExt;
+use lcpc_2d::FieldExt;
 
 use super::structs::*;
 

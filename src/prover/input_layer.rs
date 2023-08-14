@@ -5,8 +5,9 @@ use itertools::Itertools;
 
 use crate::{
     mle::{dense::DenseMle, Mle, MleIndex},
-    FieldExt,
 };
+
+use lcpc_2d::FieldExt;
 
 use super::LayerId;
 
@@ -146,8 +147,9 @@ mod tests {
     use crate::{
         layer::LayerId,
         mle::{dense::DenseMle, Mle, MleIndex},
-        FieldExt,
     };
+
+    use lcpc_2d::FieldExt;
 
     use super::combine_input_mles;
 

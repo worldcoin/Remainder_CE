@@ -7,15 +7,17 @@ use std::collections::HashMap;
 
 use crate::{
     layer::{
-        claims::aggregate_claims, claims::verify_aggragate_claim, Claim, GKRLayer, Layer,
+        claims::aggregate_claims, claims::verify_aggregate_claim, Claim, GKRLayer, Layer,
         LayerBuilder, LayerError, LayerId,
     },
     mle::MleIndex,
     mle::MleRef,
-    transcript::Transcript,
-    FieldExt, expression::ExpressionStandard,
+    expression::ExpressionStandard,
     zkdt::zkdt_layer::{DecisionPackingBuilder}
 };
+
+use lcpc_2d::FieldExt;
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 // use derive_more::From;
 use itertools::Itertools;
@@ -341,7 +343,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 .get_challenge("Challenge for claim aggregation")
                 .unwrap();
 
-            let prev_claim = verify_aggragate_claim(&wlx_evaluations, layer_claims, agg_chal)
+            let prev_claim = verify_aggregate_claim(&wlx_evaluations, layer_claims, agg_chal)
                 .map_err(|_err| {
                     GKRError::ErrorWhenVerifyingLayer(
                         layer_id.clone(),
@@ -390,7 +392,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .unwrap();
 
         // --- Perform the aggregation verification step and extract the correct input layer claim ---
-        let input_layer_claim = verify_aggragate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
+        let input_layer_claim = verify_aggregate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
         .map_err(|_err| {
             GKRError::ErrorWhenVerifyingLayer(
                 input_layer_id,
@@ -411,7 +413,10 @@ mod tests {
     use ark_bn254::Fr;
     use ark_std::{test_rng, UniformRand, log2};
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder, InputPackingBuilder}}};
+    use crate::{mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder, InputPackingBuilder}}};
+    use lcpc_2d::FieldExt;
+    use lcpc_2d::fs_transcript::halo2_poseidon_transcript::PoseidonTranscript;
+    use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
     use super::{GKRCircuit, Layers, input_layer::InputLayer};
 

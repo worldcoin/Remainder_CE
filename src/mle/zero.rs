@@ -2,10 +2,8 @@
 
 use itertools::{repeat_n, Itertools};
 
-use crate::{
-    layer::{Claim, LayerId},
-    FieldExt,
-};
+use crate::layer::{Claim, LayerId};
+use lcpc_2d::FieldExt;
 
 use super::{MleIndex, MleRef};
 

@@ -11,7 +11,8 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 
 use super::{Mle, MleAble, MleIndex, MleRef};
 use crate::{expression::ExpressionStandard, layer::Claim};
-use crate::{layer::LayerId, FieldExt};
+use crate::layer::LayerId;
+use lcpc_2d::FieldExt;
 
 #[derive(Clone, Debug)]
 ///An [Mle] that is dense

@@ -9,8 +9,8 @@ use crate::{
         dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
         Mle, MleAble, MleIndex,
     },
-    FieldExt,
 };
+use lcpc_2d::FieldExt;
 use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Chunk, Chunks, Itertools};

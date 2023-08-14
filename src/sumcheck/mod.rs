@@ -16,8 +16,8 @@ use thiserror::Error;
 use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard},
     mle::{beta::BetaTable, dense::DenseMleRef, MleIndex, MleRef},
-    FieldExt,
 };
+use lcpc_2d::FieldExt;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 ///Errors to do with the evaluation of MleRefs

@@ -12,8 +12,9 @@ use thiserror::Error;
 use crate::{
     mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef},
     sumcheck::MleError,
-    FieldExt,
 };
+
+use lcpc_2d::FieldExt;
 
 ///trait that defines what an Expression needs to be able to do
 ///TODO!(Fix to make this more general)

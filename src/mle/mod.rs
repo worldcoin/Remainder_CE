@@ -4,7 +4,8 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use core::fmt::Debug;
 
 use crate::layer::Claim;
-use crate::{layer::LayerId, FieldExt};
+use crate::layer::LayerId;
+use lcpc_2d::FieldExt;
 
 pub mod beta;
 /// Contains default dense implementation of Mle

@@ -17,9 +17,10 @@ use crate::{
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
-    transcript::Transcript,
-    FieldExt,
 };
+
+use lcpc_2d::FieldExt;
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 use self::claims::ClaimError;
 
