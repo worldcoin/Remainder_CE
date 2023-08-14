@@ -67,6 +67,9 @@ pub enum VerificationError {
     #[error("The Oracle query does not match the final claim")]
     /// The Oracle query does not match the final claim
     GKRClaimCheckFailed,
+    #[error("The Challenges generated during sumcheck don't match the claims in the given expression")]
+    ///The Challenges generated during sumcheck don't match the claims in the given expression
+    ChallengeCheckFailed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -304,7 +307,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- This automatically asserts that the expression is fully bound and simply ---
         // --- attempts to combine/collect the expression evaluated at the (already bound) challenge coords ---
-        let expr_evaluated_at_challenge_coord = gather_combine_all_evals(self.expression()).unwrap();
+        let expr_evaluated_at_challenge_coord = self.expression.evaluate_expr(challenges.clone()).map_err(|_| LayerError::VerificationError(VerificationError::ChallengeCheckFailed))?;
 
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---
