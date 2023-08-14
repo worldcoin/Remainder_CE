@@ -2,14 +2,12 @@ extern crate num;
 extern crate serde;
 extern crate serde_json;
 
-use crate::zkdt::structs::{DecisionNode,LeafNode,InputAttribute,BinDecomp16Bit};
+use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, InputAttribute, LeafNode};
 use crate::FieldExt;
 use ndarray::Array2;
 use ndarray_npy::{read_npy, ReadNpyError};
-use num::pow;
 use serde::{Deserialize, Serialize};
 use std::iter::repeat;
-use itertools::Itertools;
 
 const BIT_DECOMPOSITION_LENGTH: usize = 16;
 const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
@@ -26,11 +24,8 @@ fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDecomp16
     }
     let mut decomposition = build_unsigned_bit_decomposition(abs_val).unwrap();
     // set the sign bit
-    decomposition.bits[BIT_DECOMPOSITION_LENGTH - 1] = if value >= 0 {
-        F::zero()
-    } else {
-        F::one()
-    };
+    decomposition.bits[BIT_DECOMPOSITION_LENGTH - 1] =
+        if value >= 0 { F::zero() } else { F::one() };
     Some(decomposition)
 }
 
@@ -71,22 +66,19 @@ fn repeat_and_pad<T: Clone>(values: &[T], repetitions: usize, padding: T) -> Vec
     let repeated_length = repetitions * values.len();
     let repeated_iter = values.into_iter().cycle().take(repeated_length);
     // pad to nearest power of two
-    let padding_length = (next_power_of_two(repeated_length).unwrap() - repeated_length);
+    let padding_length = next_power_of_two(repeated_length).unwrap() - repeated_length;
     let padding_iter = repeat(&padding).take(padding_length);
     // chain together and convert to a vector
-    repeated_iter
-        .chain(padding_iter)
-        .cloned()
-        .collect()
+    repeated_iter.chain(padding_iter).cloned().collect()
 }
 
 struct CircuitizedSamples<F: FieldExt> {
-    samples: Vec<Sample<F>>, // indexed by samples
-    permuted_samples: Vec<Vec<Sample<F>>>, // indexed by trees, samples
+    samples: Vec<Sample<F>>,                        // indexed by samples
+    permuted_samples: Vec<Vec<Sample<F>>>,          // indexed by trees, samples
     decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
-    differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>, // indexed by trees, samples, steps in path
-    path_ends: Vec<Vec<LeafNode<F>>>, // indexed by trees, samples
-    multiplicities: Vec<BinDecomp16Bit<F>>, // indexed by tree node indices
+    differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,  // indexed by trees, samples, steps in path
+    path_ends: Vec<Vec<LeafNode<F>>>,               // indexed by trees, samples
+    multiplicities: Vec<BinDecomp16Bit<F>>,         // indexed by tree node indices
 }
 
 /// TODO describe return values
@@ -94,14 +86,17 @@ struct CircuitizedSamples<F: FieldExt> {
 /// length of each sample and permuted sample is next_power_of_two((depth - 1) * sample length)
 /// Little endian, sign bit at end.
 /// Pre: values_array is not empty
-fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
+fn circuitize_samples<F: FieldExt>(
+    values_array: &[Vec<u16>],
+    pqtrees: &PaddedQuantizedTrees,
+) -> CircuitizedSamples<F> {
     // repeat and pad the attributes of the sample
     let values_array: Vec<Vec<u16>> = values_array
         .iter()
         .map(|x| repeat_and_pad(x, pqtrees.depth - 1, 0_u16))
         .collect();
     let sample_length = values_array[0].len();
-    
+
     let mut samples: Vec<Sample<F>> = vec![];
     let mut permuted_samples: Vec<Vec<Sample<F>>> = vec![];
     let mut decision_paths: Vec<Vec<Vec<DecisionNode<F>>>> = vec![];
@@ -125,7 +120,7 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
         for (values, sample) in values_array.iter().zip(samples.iter()) {
             // get the path
             let path = tree.get_path(&values);
-            
+
             // derive data from decision path
             let mut decision_path = vec![];
             let mut permuted_sample: Sample<F> = vec![];
@@ -146,7 +141,8 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
                     });
                     // calculate the bit decompositions of the differences
                     let difference = (values[*feature_index] as i32) - (*threshold as i32);
-                    differences_for_tree_and_sample.push(build_signed_bit_decomposition::<F>(difference).unwrap());
+                    differences_for_tree_and_sample
+                        .push(build_signed_bit_decomposition::<F>(difference).unwrap());
                     // accumulate the multiplicities for this tree
                     multiplicities[id.unwrap() as usize] += 1;
                     // build up the permuted sample
@@ -166,12 +162,12 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
             permuted_samples_for_tree.push(permuted_sample);
             decision_paths_for_tree.push(decision_path);
             differences_for_tree.push(differences_for_tree_and_sample);
-            
+
             // build the leaf node
             if let Node::Leaf { id, value } = path[path.len() - 1] {
                 path_ends_for_tree.push(LeafNode {
                     node_id: F::from(id.unwrap()),
-                    node_val: i32_to_field(*value)
+                    node_val: i32_to_field(*value),
                 });
                 // accumulate multiplicity for leaf node
                 multiplicities[id.unwrap() as usize] += 1;
@@ -198,7 +194,7 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
         decision_paths: decision_paths,
         differences: differences,
         path_ends: path_ends,
-        multiplicities: multiplicities
+        multiplicities: multiplicities,
     }
 }
 
@@ -210,7 +206,7 @@ fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQu
 /// The dummy decision node has node id 2^depth - 1.
 struct CircuitizedTrees<F: FieldExt> {
     decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then by node (sorted by node id)
-    leaf_nodes: Vec<Vec<LeafNode<F>>>, // indexed by tree, then by node (sorted by node id)
+    leaf_nodes: Vec<Vec<LeafNode<F>>>,         // indexed by tree, then by node (sorted by node id)
     depth: usize,
     scaling: f64,
 }
@@ -224,7 +220,7 @@ impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
         let dummy_node = DecisionNode {
             node_id: F::from(2_u32.pow(pqtrees.depth as u32) - 1),
             attr_id: F::from(0_u32),
-            threshold: F::from(0_u32)
+            threshold: F::from(0_u32),
         };
         for tree in &pqtrees.trees {
             let mut tree_decision_nodes = tree.extract_decision_nodes();
@@ -240,7 +236,7 @@ impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
             tree_leaf_nodes.sort_by_key(|node| node.node_id);
             leaf_nodes.push(tree_leaf_nodes);
         }
-        
+
         CircuitizedTrees {
             decision_nodes: decision_nodes,
             leaf_nodes: leaf_nodes,
@@ -249,7 +245,6 @@ impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
         }
     }
 }
-
 
 /// Represents the trees model as it appears in the input JSON.
 #[derive(Debug, Serialize, Deserialize)]
@@ -343,7 +338,13 @@ impl<T: Copy> Node<T> {
         Node::Leaf { id, value }
     }
 
-    fn new_internal(id: Option<u32>, feature_index: usize, threshold: u16, left: Node<T>, right: Node<T>) -> Self {
+    fn new_internal(
+        id: Option<u32>,
+        feature_index: usize,
+        threshold: u16,
+        left: Node<T>,
+        right: Node<T>,
+    ) -> Self {
         Node::Internal {
             id,
             feature_index,
@@ -425,7 +426,7 @@ impl<T: Copy> Node<T> {
         match self {
             Node::Leaf { id, value } => Node::new_leaf(*id, f(*value)),
             Node::Internal {
-                id, 
+                id,
                 feature_index,
                 threshold,
                 left,
@@ -452,11 +453,11 @@ impl<T: Copy> Node<T> {
         assert!(depth >= 1);
         match self {
             Node::Internal {
-                id, 
                 left,
                 right,
                 feature_index,
                 threshold,
+                ..
             } => {
                 let _left = left.perfect_to_depth(depth - 1, leaf_expander);
                 let _right = right.perfect_to_depth(depth - 1, leaf_expander);
@@ -472,7 +473,9 @@ impl<T: Copy> Node<T> {
     /// right_child_id = 2 * id + 2
     fn assign_id(&mut self, new_id: u32) {
         match self {
-            Node::Internal { id, left, right, .. } => {
+            Node::Internal {
+                id, left, right, ..
+            } => {
                 *id = Some(new_id);
                 left.assign_id(2 * new_id + 1);
                 right.assign_id(2 * new_id + 2);
@@ -498,7 +501,13 @@ impl<T: Copy> Node<T> {
 
     /// Helper to offset_feature_indices.
     fn offset_feature_indices_for_depth(&mut self, multiplier: usize, depth: usize) {
-        if let Node::Internal { feature_index, left, right, .. } = self {
+        if let Node::Internal {
+            feature_index,
+            left,
+            right,
+            ..
+        } = self
+        {
             *feature_index = (depth - 1) * multiplier + *feature_index;
             left.offset_feature_indices_for_depth(multiplier, depth + 1);
             right.offset_feature_indices_for_depth(multiplier, depth + 1);
@@ -523,7 +532,8 @@ impl<T: Copy> Node<T> {
             feature_index,
             threshold,
             ..
-        } = self {
+        } = self
+        {
             let next = if sample[*feature_index] >= *threshold {
                 right
             } else {
@@ -542,10 +552,7 @@ impl<T: Copy> Node<T> {
     }
 
     /// Helper function to extract_decision_nodes.
-    fn append_decision_nodes<F: FieldExt>(
-        &self,
-        decision_nodes: &mut Vec<DecisionNode<F>>,
-    ) {
+    fn append_decision_nodes<F: FieldExt>(&self, decision_nodes: &mut Vec<DecisionNode<F>>) {
         if let Node::Internal {
             id,
             left,
@@ -606,7 +613,7 @@ impl Node<i32> {
             Node::Leaf { id, value } => {
                 leaf_nodes.push(LeafNode {
                     node_id: F::from(id.unwrap()),
-                    node_val: i32_to_field(*value)
+                    node_val: i32_to_field(*value),
                 });
             }
             Node::Internal { left, right, .. } => {
@@ -654,8 +661,8 @@ mod tests {
         assert_eq!(next_power_of_two(3), Some(4));
         assert_eq!(next_power_of_two(4), Some(4));
         assert_eq!(next_power_of_two(5), Some(8));
-        assert_eq!(next_power_of_two(usize::MAX), None);  // NOTE this will only fail on 64bit
-                                                          // platforms
+        assert_eq!(next_power_of_two(usize::MAX), None); // NOTE this will only fail on 64bit
+                                                         // platforms
     }
 
     #[test]
@@ -694,7 +701,7 @@ mod tests {
           }
         }
         "#;
-        let tree: Node<f64> = serde_json::from_str(&json).unwrap();
+        let _tree: Node<f64> = serde_json::from_str(&json).unwrap();
     }
 
     #[test]
@@ -717,31 +724,12 @@ mod tests {
         Node::new_internal(None, 1, 1, internal, right)
     }
 
-    /// Returns a skinny looking tree for testing.
-    /// Pre: target_depth >= 1.
-    ///        .
-    ///       / \
-    ///      .   -2.
-    ///     / \
-    ///    .   -2.
-    ///   / \
-    ///  1.  -2.
-    fn build_skinny_tree(target_depth: u32) -> Node<f64> {
-        let mut tree = Node::new_leaf(None, 1.0);
-        let mut depth = 1;
-        while depth < target_depth {
-            let premature_leaf = Node::new_leaf(None, -2.0);
-            tree = Node::new_internal(None, 1, 2, tree, premature_leaf);
-            depth += 1;
-        }
-        tree
-    }
-
     /// Helper function for testing.
     fn quantize_and_perfect(tree_f64: Node<f64>, depth: usize) -> Node<i32> {
         let leaf_expander = |depth: usize, value: i32| Node::new_constant_tree(depth, 0, 0, value);
-        tree_f64.map(&|x| x as i32)
-            .perfect_to_depth(3, &leaf_expander)
+        tree_f64
+            .map(&|x| x as i32)
+            .perfect_to_depth(depth, &leaf_expander)
     }
 
     #[test]
@@ -787,9 +775,9 @@ mod tests {
         if let Node::Internal {
             id,
             left,
-            right,
             feature_index,
             threshold,
+            ..
         } = tree
         {
             assert_eq!(id, None);
@@ -891,7 +879,7 @@ mod tests {
     fn test_trees_info_loading() {
         let file = File::open(TEST_TREES_INFO)
             .expect(&format!("'{}' should be available.", TEST_TREES_INFO));
-        let trees_info: TreesModelInput = serde_json::from_reader(file).expect(&format!(
+        let _trees_info: TreesModelInput = serde_json::from_reader(file).expect(&format!(
             "'{}' should be valid TreesModelInput JSON.",
             TEST_TREES_INFO
         ));
@@ -901,7 +889,12 @@ mod tests {
     fn test_offset_feature_indices() {
         let mut tree = build_small_tree();
         tree.offset_feature_indices(10);
-        if let Node::Internal { left, feature_index, .. } = tree {
+        if let Node::Internal {
+            left,
+            feature_index,
+            ..
+        } = tree
+        {
             assert_eq!(feature_index, 1);
             if let Node::Internal { feature_index, .. } = *left {
                 assert_eq!(feature_index, 10);
@@ -915,8 +908,7 @@ mod tests {
     fn test_numpy_loading() {
         let filename = String::from("src/zkdt/test_samples_10x6.npy");
         let input_arr: Array2<u16> = read_npy(filename).unwrap();
-        let samples: Vec<Vec<u16>> = input_arr
-            .outer_iter().map(|row| row.to_vec()).collect();
+        let _samples: Vec<Vec<u16>> = input_arr.outer_iter().map(|row| row.to_vec()).collect();
     }
 
     #[test]
@@ -925,9 +917,9 @@ mod tests {
         let samples = vec![
             vec![0_u16; sample_length],
             vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
-            vec![2_u16; sample_length]
+            vec![2_u16; sample_length],
         ];
-        let mut tree = build_small_tree();
+        let tree = build_small_tree();
         let trees_info = TreesModelInput {
             trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
             bias: 1.1,
@@ -938,9 +930,10 @@ mod tests {
         let csamples = circuitize_samples::<Fr>(&samples, &pqtrees);
         // check size of outer dimensions
         let n_trees = trees_info.trees.len();
-        let repeated_sample_length = next_power_of_two((pqtrees.depth - 1) * sample_length).unwrap();
+        let repeated_sample_length =
+            next_power_of_two((pqtrees.depth - 1) * sample_length).unwrap();
         assert_eq!(csamples.samples.len(), samples.len());
-        
+
         // check dimensions of permuted samples
         assert_eq!(csamples.permuted_samples.len(), n_trees);
         for permuted_samples_for_tree in &csamples.permuted_samples {
@@ -953,7 +946,10 @@ mod tests {
         let permuted_sample = &csamples.permuted_samples[0][0];
         assert_eq!(permuted_sample[0].attr_id, Fr::from(1));
         // ... sample travels left down the tree
-        assert_eq!(permuted_sample[1].attr_id, Fr::from(sample_length as u32 + 0));
+        assert_eq!(
+            permuted_sample[1].attr_id,
+            Fr::from(sample_length as u32 + 0)
+        );
 
         // check the dimension of the decision paths
         assert_eq!(csamples.decision_paths.len(), n_trees);
@@ -996,7 +992,10 @@ mod tests {
         assert_eq!(differences[1].bits[15], Fr::from(1));
 
         // check the multiplicities
-        assert_eq!(csamples.multiplicities.len(), 2_usize.pow(pqtrees.depth as u32));
+        assert_eq!(
+            csamples.multiplicities.len(),
+            2_usize.pow(pqtrees.depth as u32)
+        );
         // root node id has multiplicity n_trees * samples.len() = 6
         let multiplicity = &csamples.multiplicities[0];
         assert_eq!(multiplicity.bits[0], Fr::from(0));
@@ -1059,7 +1058,10 @@ mod tests {
         }
         // test overflow handling
         assert_eq!(build_signed_bit_decomposition::<Fr>(2_i32.pow(30)), None);
-        assert_eq!(build_signed_bit_decomposition::<Fr>(-1 * 2_i32.pow(30)), None);
+        assert_eq!(
+            build_signed_bit_decomposition::<Fr>(-1 * 2_i32.pow(30)),
+            None
+        );
     }
 
     #[test]
@@ -1078,10 +1080,10 @@ mod tests {
         // test overflow handling
         assert_eq!(build_unsigned_bit_decomposition::<Fr>(2_u32.pow(30)), None);
     }
-    
+
     #[test]
     fn test_padded_quantized_trees_from() {
-        let mut tree = build_small_tree();
+        let tree = build_small_tree();
         let trees_info = TreesModelInput {
             trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
             bias: 1.1,
@@ -1101,7 +1103,7 @@ mod tests {
 
     #[test]
     fn test_circuitized_trees_from() {
-        let mut tree = build_small_tree();
+        let tree = build_small_tree();
         let trees_info = TreesModelInput {
             trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
             bias: 1.1,
@@ -1113,8 +1115,7 @@ mod tests {
         // check decision nodes
         for tree_dns in &ctrees.decision_nodes {
             assert_eq!(tree_dns.len(), 4);
-            for (node_id, node) in tree_dns
-                .iter().take(tree_dns.len() - 1).enumerate() {
+            for (node_id, node) in tree_dns.iter().take(tree_dns.len() - 1).enumerate() {
                 assert_eq!(node.node_id, Fr::from(node_id as u32));
             }
             assert_eq!(tree_dns[tree_dns.len() - 1].node_id, Fr::from(7 as u32));
@@ -1122,8 +1123,7 @@ mod tests {
         // check leaf nodes
         for tree_lns in &ctrees.leaf_nodes {
             assert_eq!(tree_lns.len(), 4);
-            for (node_id, node) in tree_lns
-                .iter().enumerate() {
+            for (node_id, node) in tree_lns.iter().enumerate() {
                 assert_eq!(node.node_id, Fr::from((4 - 1) + node_id as u32));
             }
         }
