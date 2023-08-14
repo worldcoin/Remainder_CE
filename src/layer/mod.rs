@@ -1,5 +1,6 @@
 //! A layer is a combination of multiple MLEs with an expression
 
+pub mod batched;
 pub mod claims;
 /// For the input layer to the GKR circuit
 pub mod input_layer;
