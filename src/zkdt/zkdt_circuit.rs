@@ -19,11 +19,19 @@ What's our plan here?
 */
 
 // --- Constants ---
-const DUMMY_INPUT_LEN: usize = 1 << 5;
-const NUM_DUMMY_INPUTS: usize = 1 << 8;
-const TREE_HEIGHT: usize = 9;
+const DUMMY_INPUT_LEN: usize = 1 << 5; // was 1 << 5
+pub const NUM_DUMMY_INPUTS: usize = 1 << 2;
+pub const TREE_HEIGHT: usize = 9; // was 9
 const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
+
+#[derive(Debug, Clone)]
+struct PathAndPermutation<F: FieldExt> {
+    path_decision_nodes: Vec<DecisionNode<F>>,
+    ret_leaf_node: LeafNode<F>,
+    diffs: Vec<F>,
+    used_input_attributes: Vec<InputAttribute<F>>,
+}
 
 /// - First element is the decision path nodes
 /// - Second element is the final predicted leaf node
@@ -34,12 +42,7 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
     decision_nodes: &[DecisionNode<F>],
     leaf_nodes: &[LeafNode<F>],
     input_datum: &[InputAttribute<F>],
-) -> (
-    Vec<DecisionNode<F>>,
-    LeafNode<F>,
-    Vec<F>,
-    Vec<InputAttribute<F>>,
-) {
+) -> PathAndPermutation<F> {
     // --- Keep track of the path and permutation ---
     let mut path_decision_nodes: Vec<DecisionNode<F>> = vec![];
     let mut used_input_attributes: Vec<InputAttribute<F>> = vec![];
@@ -92,12 +95,12 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
     // assert!(path_decision_nodes.len() == TREE_HEIGHT - 1);
 
     // (path_decision_nodes, ret_leaf_node, permuted_access_indices, diffs)
-    (
+    PathAndPermutation {
         path_decision_nodes,
         ret_leaf_node,
         diffs,
         used_input_attributes,
-    )
+    }
 }
 
 fn generate_16_bit_signed_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
@@ -154,23 +157,23 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
     }
 }
 
+struct DummyData<F: FieldExt> {
+    dummy_input_data: Vec<Vec<InputAttribute<F>>>, // Input attributes
+    dummy_permuted_input_data: Vec<Vec<InputAttribute<F>>>, // Permuted input attributes
+    dummy_decision_node_paths: Vec<Vec<DecisionNode<F>>>, // Paths (decision node part only)
+    dummy_leaf_node_paths: Vec<LeafNode<F>>,       // Paths (leaf node part only)
+    dummy_binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>, // Binary decomp of differences
+    dummy_multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>, // Binary decomp of multiplicities
+    dummy_decision_nodes: Vec<DecisionNode<F>>,    // Actual tree decision nodes
+    dummy_leaf_nodes: Vec<LeafNode<F>>,            // Actual tree leaf nodes
+}
+
 /// Need to generate dummy circuit inputs, starting with the input data
 /// Then get the path data and binary decomp stuff
 /// TODO!(ryancao): add the attribute index field to `InputAttribute<F>`
 /// -- Actually, scratch the above: we might be getting rid of `attr_id`s
 /// altogether and replacing with `attr_idx` everywhere (as suggested by Ben!)
-fn generate_dummy_data<F: FieldExt>() -> (
-    // Vec<Vec<F>>,                    // Input attribute indices
-    Vec<Vec<InputAttribute<F>>>, // Input attributes
-    // Vec<Vec<F>>,                    // Permuted input attribute indices
-    Vec<Vec<InputAttribute<F>>>, // Permuted input attributes
-    Vec<Vec<DecisionNode<F>>>,   // Paths (decision node part only)
-    Vec<LeafNode<F>>,            // Paths (leaf node part only)
-    Vec<Vec<BinDecomp16Bit<F>>>, // Binary decomp of differences
-    Vec<BinDecomp16Bit<F>>,      // Binary decomp of multiplicities
-    Vec<DecisionNode<F>>,        // Actual tree decision nodes
-    Vec<LeafNode<F>>,            // Actual tree leaf nodes
-) {
+fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
     // --- Get the RNG ---
     let mut rng = test_rng();
 
@@ -253,14 +256,23 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let dummy_decision_node_paths = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(x, _, _, _)| x)
+        .map(
+            |PathAndPermutation {
+                 path_decision_nodes: x,
+                 ..
+             }| x,
+        )
         .collect_vec();
 
     // --- Collect correct leaf nodes ---
     let dummy_leaf_node_paths = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, x, _, _)| x)
+        .map(
+            |PathAndPermutation {
+                 ret_leaf_node: x, ..
+             }| x,
+        )
         .collect_vec();
 
     // --- Collect correct permutation indices ---
@@ -275,7 +287,12 @@ fn generate_dummy_data<F: FieldExt>() -> (
     let all_used_input_attributes = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, _, _, used_input_attributes)| used_input_attributes)
+        .map(
+            |PathAndPermutation {
+                 used_input_attributes,
+                 ..
+             }| used_input_attributes,
+        )
         .collect_vec();
     let dummy_permuted_input_data = zip(all_used_input_attributes, dummy_input_data.clone())
         .map(|(used_input_attributes, original_input_attributes)| {
@@ -308,7 +325,12 @@ fn generate_dummy_data<F: FieldExt>() -> (
         .into_iter()
         .fold(
             multiplicities,
-            |prev_multiplicities, (path_decision_nodes, path_leaf_node, _, _)| {
+            |prev_multiplicities,
+             PathAndPermutation {
+                 path_decision_nodes,
+                 ret_leaf_node: path_leaf_node,
+                 ..
+             }| {
                 // --- TODO!(ryancao): This is so bad lol ---
                 let mut new_multiplicities: Vec<F> = prev_multiplicities;
 
@@ -335,7 +357,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
     // --- Compute the binary decompositions of the differences ---
     let dummy_binary_decomp_diffs = dummy_auxiliaries
         .into_iter()
-        .map(|(_, _, diffs, _)| {
+        .map(|PathAndPermutation { diffs, .. }| {
             diffs
                 .into_iter()
                 .map(|diff| {
@@ -347,10 +369,8 @@ fn generate_dummy_data<F: FieldExt>() -> (
         })
         .collect_vec();
 
-    (
-        // dummy_attr_idx_data,
+    DummyData {
         dummy_input_data,
-        // dummy_permutation_indices,
         dummy_permuted_input_data,
         dummy_decision_node_paths,
         dummy_leaf_node_paths,
@@ -358,7 +378,7 @@ fn generate_dummy_data<F: FieldExt>() -> (
         dummy_multiplicities_bin_decomp,
         dummy_decision_nodes,
         dummy_leaf_nodes,
-    )
+    }
 }
 
 /// Gets the sign bit (0 for positive, 1 for negative) and abs value
@@ -404,22 +424,21 @@ fn check_signed_recomposition<F: FieldExt>(actual_value: F, decomp: BinDecomp16B
     true
 }
 
-/// Takes the above dummy data from `generate_dummy_data()` and converts
-/// into MLE form factor.
-fn generate_dummy_mles<F: FieldExt>() -> (
+
+pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
     // DenseMle<F, F>,
     DenseMle<F, InputAttribute<F>>,
     // DenseMle<F, F>,
-    DenseMle<F, InputAttribute<F>>,
-    DenseMle<F, DecisionNode<F>>,
-    DenseMle<F, LeafNode<F>>,
+    Vec<DenseMle<F, InputAttribute<F>>>,
+    Vec<DenseMle<F, DecisionNode<F>>>,
+    Vec<DenseMle<F, LeafNode<F>>>,
     DenseMle<F, BinDecomp16Bit<F>>,
     DenseMle<F, BinDecomp16Bit<F>>,
     DenseMle<F, DecisionNode<F>>,
     DenseMle<F, LeafNode<F>>,
 ) {
     // --- First generate the dummy data ---
-    let (
+    let DummyData {
         // dummy_attr_idx_data,
         dummy_input_data,
         // dummy_permutation_indices,
@@ -430,7 +449,88 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         dummy_multiplicities_bin_decomp,
         dummy_decision_nodes,
         dummy_leaf_nodes,
-    ) = generate_dummy_data::<F>();
+    } = generate_dummy_data::<F>();
+
+    // --- Generate MLEs for each ---
+    // TODO!(ryancao): Change this into batched form
+    // let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
+    let dummy_input_data_mle = DenseMle::new_from_iter(dummy_input_data[0]
+        .clone()
+        .into_iter()
+        .map(InputAttribute::from), LayerId::Input, None);
+    // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
+    let dummy_permuted_input_data_mle = dummy_permuted_input_data
+        .iter().map(|datum| DenseMle::new_from_iter(datum
+            .clone()
+            .into_iter()
+            .map(InputAttribute::from), LayerId::Input, None)).collect();
+    let dummy_decision_node_paths_mle = dummy_decision_node_paths
+        .iter()
+        .map(|path|
+            DenseMle::new_from_iter(path
+            .clone()
+            .into_iter(), LayerId::Input, None))
+        .collect();
+    let dummy_leaf_node_paths_mle = dummy_leaf_node_paths
+        .into_iter()
+        .map(|path| DenseMle::new_from_iter([path].into_iter(), LayerId::Input, None))
+        .collect();
+    let dummy_binary_decomp_diffs_mle = DenseMle::new_from_iter(dummy_binary_decomp_diffs[0]
+        .clone()
+        .into_iter()
+        .map(BinDecomp16Bit::from), LayerId::Input, None);
+    let dummy_multiplicities_bin_decomp_mle = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp
+        .clone()
+        .into_iter()
+        .map(BinDecomp16Bit::from), LayerId::Input, None);
+    let dummy_decision_nodes_mle = DenseMle::new_from_iter(dummy_decision_nodes
+        .clone()
+        .into_iter()
+        .map(DecisionNode::from), LayerId::Input, None);
+    let dummy_leaf_nodes_mle = DenseMle::new_from_iter(dummy_leaf_nodes
+        .clone()
+        .into_iter()
+        .map(LeafNode::from), LayerId::Input, None);
+
+    (
+        // dummy_attr_idx_data_mle,
+        dummy_input_data_mle,
+        // dummy_permutation_indices_mle,
+        dummy_permuted_input_data_mle,
+        dummy_decision_node_paths_mle,
+        dummy_leaf_node_paths_mle,
+        dummy_binary_decomp_diffs_mle,
+        dummy_multiplicities_bin_decomp_mle,
+        dummy_decision_nodes_mle,
+        dummy_leaf_nodes_mle,
+    )
+}
+
+pub(crate) struct DummyMles<F: FieldExt> {
+    pub(crate) dummy_input_data_mle: DenseMle<F, InputAttribute<F>>,
+    pub(crate) dummy_permuted_input_data_mle: DenseMle<F, InputAttribute<F>>,
+    pub(crate) dummy_decision_node_paths_mle: DenseMle<F, DecisionNode<F>>,
+    pub(crate) dummy_leaf_node_paths_mle: DenseMle<F, LeafNode<F>>,
+    pub(crate) dummy_binary_decomp_diffs_mle: DenseMle<F, BinDecomp16Bit<F>>,
+    pub(crate) dummy_multiplicities_bin_decomp_mle: DenseMle<F, BinDecomp16Bit<F>>,
+    pub(crate) dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+    pub(crate) dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+}
+
+/// Takes the above dummy data from `generate_dummy_data()` and converts
+/// into MLE form factor.
+pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
+    // --- First generate the dummy data ---
+    let DummyData {
+        dummy_input_data,
+        dummy_permuted_input_data,
+        dummy_decision_node_paths,
+        dummy_leaf_node_paths,
+        dummy_binary_decomp_diffs,
+        dummy_multiplicities_bin_decomp,
+        dummy_decision_nodes,
+        dummy_leaf_nodes,
+    } = generate_dummy_data::<F>();
 
     // --- Generate MLEs for each ---
     // TODO!(ryancao): Change this into batched form
@@ -491,10 +591,9 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         LayerId::Input,
         None,
     );
-    (
-        // dummy_attr_idx_data_mle,
+
+    DummyMles {        // dummy_attr_idx_data_mle,
         dummy_input_data_mle,
-        // dummy_permutation_indices_mle,
         dummy_permuted_input_data_mle,
         dummy_decision_node_paths_mle,
         dummy_leaf_node_paths_mle,
@@ -502,7 +601,7 @@ fn generate_dummy_mles<F: FieldExt>() -> (
         dummy_multiplicities_bin_decomp_mle,
         dummy_decision_nodes_mle,
         dummy_leaf_nodes_mle,
-    )
+    }
 }
 
 // --- Create expressions using... testing modules? ---
@@ -516,7 +615,7 @@ mod tests {
         mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef},
         sumcheck::{
             compute_sumcheck_message, get_round_degree,
-            tests::{dummy_sumcheck, verify_sumcheck_messages},
+            tests::{dummy_sumcheck, get_dummy_expression_eval, verify_sumcheck_messages},
             Evals,
         },
     };
@@ -531,18 +630,11 @@ mod tests {
     #[test]
     fn dummy_bits_are_binary_test() {
         // --- First generate the dummy data ---
-        let (
-            // dummy_attr_idx_data,
-            _dummy_input_data,
-            // dummy_permutation_indices,
-            _dummy_permuted_input_data,
-            _dummy_decision_node_paths,
-            _dummy_leaf_node_paths,
+        let DummyData {
             dummy_binary_decomp_diffs,
             dummy_multiplicities_bin_decomp,
-            _dummy_decision_nodes,
-            _dummy_leaf_nodes,
-        ) = generate_dummy_data::<Fr>();
+            ..
+        } = generate_dummy_data::<Fr>();
 
         // --- Checks that all the (diff) bits are either zero or one ---
         dummy_binary_decomp_diffs
@@ -562,7 +654,8 @@ mod tests {
 
         // --- Checks the same for the multiplicity binary decompositions ---
         assert!(
-            dummy_multiplicities_bin_decomp.len() == (NUM_DECISION_NODES + NUM_LEAF_NODES) as usize
+            dummy_multiplicities_bin_decomp.len()
+                == (NUM_DECISION_NODES + NUM_LEAF_NODES) as usize
         );
         dummy_multiplicities_bin_decomp
             .into_iter()
@@ -589,18 +682,10 @@ mod tests {
         let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
         beta.table.index_mle_indices(0);
 
-        let (
-            // dummy_attr_idx_data_mle,
-            _dummy_input_data_mle,
-            // dummy_permutation_indices_mle,
-            _dummy_permuted_input_data_mle,
-            _dummy_decision_node_paths_mle,
-            _dummy_leaf_node_paths_mle,
+        let DummyMles {
             dummy_binary_decomp_diffs_mle,
-            _dummy_multiplicities_bin_decomp_mle,
-            _dummy_decision_nodes_mle,
-            _dummy_leaf_nodes_mle,
-        ) = generate_dummy_mles::<Fr>();
+            ..
+        } = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLE ---
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> =
@@ -620,7 +705,7 @@ mod tests {
 
         // --- Evaluating at V(0, 0, 0) --> 0 ---
         let _dummy_claim = (vec![Fr::from(1); 3], Fr::zero());
-        let b_minus_b_squared_clone = b_minus_b_squared.clone();
+        let mut b_minus_b_squared_clone = b_minus_b_squared.clone();
         b_minus_b_squared.index_mle_indices(0);
         // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
 
@@ -635,13 +720,16 @@ mod tests {
         assert_eq!(vec[0], Fr::zero());
         assert_eq!(vec[1], Fr::zero());
 
-        let res_messages = dummy_sumcheck(
-            &mut b_minus_b_squared_clone.clone(),
+        let layer_claims = get_dummy_expression_eval(&b_minus_b_squared_clone, &mut rng);
+
+        let res_messages =
+            dummy_sumcheck(&mut b_minus_b_squared_clone, &mut rng, layer_claims.clone());
+        let verify_res = verify_sumcheck_messages(
+            res_messages,
+            b_minus_b_squared_clone,
+            layer_claims,
             &mut rng,
-            layer_claim.clone(),
         );
-        let verify_res =
-            verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
 
@@ -653,18 +741,10 @@ mod tests {
         let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
         beta.table.index_mle_indices(0);
 
-        let (
-            // dummy_attr_idx_data_mle,
-            _dummy_input_data_mle,
-            // dummy_permutation_indices_mle,
-            _dummy_permuted_input_data_mle,
-            _dummy_decision_node_paths_mle,
-            _dummy_leaf_node_paths_mle,
-            _dummy_binary_decomp_diffs_mle,
+        let DummyMles {
             dummy_multiplicities_bin_decomp_mle,
-            _dummy_decision_nodes_mle,
-            _dummy_leaf_nodes_mle,
-        ) = generate_dummy_mles::<Fr>();
+            ..
+        } = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLE ---
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> =
@@ -689,7 +769,7 @@ mod tests {
         let _dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
 
         // --- Initialize beta tables manually ---
-        let b_minus_b_squared_clone = b_minus_b_squared.clone();
+        let mut b_minus_b_squared_clone = b_minus_b_squared.clone();
         b_minus_b_squared.index_mle_indices(0);
         // b_minus_b_squared.init_beta_tables(dummy_claim.clone());
 
@@ -707,13 +787,16 @@ mod tests {
         assert_eq!(vec[0], Fr::zero());
         assert_eq!(vec[1], Fr::zero());
 
-        let res_messages = dummy_sumcheck(
-            &mut b_minus_b_squared_clone.clone(),
+        let layer_claims = get_dummy_expression_eval(&b_minus_b_squared_clone, &mut rng);
+
+        let res_messages =
+            dummy_sumcheck(&mut b_minus_b_squared_clone, &mut rng, layer_claims.clone());
+        let verify_res = verify_sumcheck_messages(
+            res_messages,
+            b_minus_b_squared_clone,
+            layer_claims,
             &mut rng,
-            layer_claim.clone(),
         );
-        let verify_res =
-            verify_sumcheck_messages(res_messages, b_minus_b_squared_clone, layer_claim, &mut rng);
         assert!(verify_res.is_ok());
     }
 
@@ -721,18 +804,12 @@ mod tests {
     #[test]
     fn dummy_binary_recomp_test() {
         // --- First generate the dummy data ---
-        let (
-            // dummy_attr_idx_data,
-            _dummy_input_data,
-            // dummy_permutation_indices,
+        let DummyData {
             dummy_permuted_input_data,
             dummy_decision_node_paths,
-            _dummy_leaf_node_paths,
             dummy_binary_decomp_diffs,
-            _dummy_multiplicities_bin_decomp,
-            _dummy_decision_nodes,
-            _dummy_leaf_nodes,
-        ) = generate_dummy_data::<Fr>();
+            ..
+        } = generate_dummy_data::<Fr>();
 
         // --- Grab the attr vals from the permuted inputs ---
         let permuted_attr_vals = dummy_permuted_input_data
@@ -818,18 +895,12 @@ mod tests {
         );
         let mut beta = BetaTable::new(layer_claim).unwrap();
         beta.table.index_mle_indices(0);
-        let (
-            // dummy_attr_idx_data_mle,
-            _dummy_input_data_mle,
-            // dummy_permutation_indices_mle,
+        let DummyMles {
             dummy_permuted_input_data_mle,
             dummy_decision_node_paths_mle,
-            _dummy_leaf_node_paths_mle,
             dummy_binary_decomp_diffs_mle,
-            _dummy_multiplicities_bin_decomp_mle,
-            _dummy_decision_nodes_mle,
-            _dummy_leaf_nodes_mle,
-        ) = generate_dummy_mles::<Fr>();
+            ..
+        } = generate_dummy_mles::<Fr>();
 
         // --- Grab the bin decomp MLEs and associated expressions ---
         let bin_decomp_mles: Vec<DenseMleRef<Fr>> = dummy_binary_decomp_diffs_mle.mle_bit_refs();
@@ -947,18 +1018,10 @@ mod tests {
     /// - Then we need to multiply all of them together in a binary product tree
     #[test]
     fn dummy_permutation_test() {
-        let (
-            // dummy_attr_idx_data_mle,
+        let DummyMles {
             dummy_input_data_mle,
-            // dummy_permutation_indices_mle,
-            _dummy_permuted_input_data_mle,
-            _dummy_decision_node_paths_mle,
-            _dummy_leaf_node_paths_mle,
-            _dummy_binary_decomp_diffs_mle,
-            _dummy_multiplicities_bin_decomp_mle,
-            _dummy_decision_nodes_mle,
-            _dummy_leaf_nodes_mle,
-        ) = generate_dummy_mles::<Fr>();
+            ..
+        } = generate_dummy_mles::<Fr>();
 
         let mut rng = test_rng();
 

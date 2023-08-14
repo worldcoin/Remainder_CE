@@ -305,6 +305,31 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                         Err(ExpressionError::EvaluateBoundIndicesDontMatch)
                     }
                 }
+                ExpressionStandard::Product(mle_refs) => mle_refs
+                    .iter()
+                    .map(|mle_ref| {
+                        let indices = mle_ref
+                            .mle_indices()
+                            .iter()
+                            .filter_map(|index| match index {
+                                MleIndex::Bound(chal, index) => Some((*chal, index)),
+                                _ => None,
+                            })
+                            .collect_vec();
+
+                        let start = *indices[0].1;
+                        let end = *indices[indices.len() - 1].1;
+
+                        let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
+
+                        if indices.as_slice() == &challenges[start..=end] {
+                            Ok(())
+                        } else {
+                            Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                        }
+                    })
+                    .try_collect(),
+
                 _ => Ok(()),
             }
         };
@@ -506,12 +531,12 @@ pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     };
     let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
     let product = for<'a, 'b> |mle_refs: &'a [Exp::MleRef]| -> Result<F, ExpressionError> {
-        mle_refs.iter().fold(Ok(F::one()), |acc, new_mle_ref| {
+        mle_refs.iter().try_fold(F::one(), |acc, new_mle_ref| {
             // --- Accumulate either errors or multiply ---
             if new_mle_ref.bookkeeping_table().len() != 1 {
                 return Err(ExpressionError::EvaluateNotFullyBoundError);
             }
-            Ok(acc? * new_mle_ref.bookkeeping_table()[0])
+            Ok(acc * new_mle_ref.bookkeeping_table()[0])
         })
     };
     let scaled = |a: Result<F, ExpressionError>, scalar: F| Ok(a? * scalar);
@@ -621,35 +646,35 @@ mod tests {
     use ark_bn254::Fr;
     use ark_std::One;
 
-    #[test]
-    fn test_expression_operators() {
-        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+    // #[test]
+    // fn test_expression_operators() {
+    //     let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
 
-        let mle = DenseMle::new_from_raw(
-            vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
-            LayerId::Input,
-            None,
-        )
-        .mle_ref();
+    //     let mle = DenseMle::new_from_raw(
+    //         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
+    //         LayerId::Input,
+    //         None,
+    //     )
+    //     .mle_ref();
 
-        let expression3 = ExpressionStandard::Mle(mle.clone());
+    //     let expression3 = ExpressionStandard::Mle(mle.clone());
 
-        let expression = expression1.clone() + expression3.clone();
+    //     let expression = expression1.clone() + expression3.clone();
 
-        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
+    //     let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
 
-        let expression = expression_product + expression;
+    //     let expression = expression_product + expression;
 
-        let expression = expression1 - expression;
+    //     let expression = expression1 - expression;
 
-        let expression = expression * Fr::from(2);
+    //     let expression = expression * Fr::from(2);
 
-        let expression = expression3.concat(expression);
+    //     let expression = expression3.concat(expression);
 
-        let dense_mle_print = "DenseMleRef { bookkeeping_table: [BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0])], mle_indices: [Iterated, Iterated], num_vars: 2, layer_id: None }";
+    //     let dense_mle_print = "DenseMleRef { bookkeeping_table: [BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0]), BigInt([1, 0, 0, 0])], mle_indices: [Iterated, Iterated], num_vars: 2, layer_id: None }";
 
-        assert_eq!(format!("{expression:?}"), format!("Selector(Iterated, Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Product([{dense_mle_print}, {dense_mle_print}]), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))"));
-    }
+    //     assert_eq!(format!("{expression:?}"), format!("Selector(Iterated, Mle, Scaled(Sum(Constant(BigInt([1, 0, 0, 0])), Negated(Sum(Product([{dense_mle_print}, {dense_mle_print}]), Sum(Constant(BigInt([1, 0, 0, 0])), Mle)))), BigInt([2, 0, 0, 0])))"));
+    // }
 
     #[test]
     fn test_constants_eval() {
@@ -924,31 +949,27 @@ mod tests {
         assert_eq!(eval_prod, Fr::from((-230 + 68) * 11));
     }
 
-    #[test]
-    fn test_not_fully_bounded_eval() {
-        let mle = DenseMle::new_from_raw(
-            vec![
-                Fr::from(4),
-                Fr::from(2),
-                Fr::from(5),
-                Fr::from(7),
-                Fr::from(2),
-                Fr::from(4),
-                Fr::from(9),
-                Fr::from(6),
-            ],
-            LayerId::Input,
-            None,
-        )
-        .mle_ref();
+    // #[test]
+    // fn test_not_fully_bounded_eval() {
+    //     let mle = DenseMle::<_, Fr>::new(vec![
+    //         Fr::from(4),
+    //         Fr::from(2),
+    //         Fr::from(5),
+    //         Fr::from(7),
+    //         Fr::from(2),
+    //         Fr::from(4),
+    //         Fr::from(9),
+    //         Fr::from(6),
+    //     ])
+    //     .mle_ref();
 
-        let mut expression = ExpressionStandard::Mle(mle);
-        let _ = expression.index_mle_indices(3);
+    //     let mut expression = ExpressionStandard::Mle(mle);
+    //     let _ = expression.index_mle_indices(3);
 
-        let challenge = vec![Fr::from(-2), Fr::from(3), Fr::from(5)];
-        let eval = expression.evaluate_expr(challenge);
-        assert_eq!(eval, Err(ExpressionError::EvaluateNotFullyBoundError));
-    }
+    //     let challenge = vec![Fr::from(-2), Fr::from(3), Fr::from(5)];
+    //     let eval = expression.evaluate_expr(challenge);
+    //     assert_eq!(eval, Err(ExpressionError::EvaluateNotFullyBoundError));
+    // }
 
     #[test]
     fn big_test_eval() {

@@ -110,18 +110,18 @@ impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
 }
 
 // TODO!(ryancao): Actually implement this correctly for PathNode<F>
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, PathNode<F>> {
-//     type Item = (F, F, F);
+// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, DecisionNode<F>> {
+//     type Item = ((F, F), F);
 
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
+//     type IntoIter = Zip<Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>, Cloned<std::slice::Iter<'a, F>>>;
 
 //     fn into_iter(self) -> Self::IntoIter {
-//         let len = self.mle.len() / 2;
-
+        
 //         self.mle[0]
 //             .iter()
 //             .cloned()
 //             .zip(self.mle[1].iter().cloned())
+//             .zip(self.mle[2].iter().cloned())
 //     }
 // }
 
@@ -262,9 +262,8 @@ impl<F: FieldExt> MleAble<F> for LeafNode<F> {
     }
 }
 
-// TODO!(ryancao): Actually implement this correctly for LeafNode<F>
 // impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, LeafNode<F>> {
-//     type Item = (F, F, F);
+//     type Item = (F, F);
 
 //     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
 
@@ -380,9 +379,8 @@ impl<F: FieldExt> MleAble<F> for InputAttribute<F> {
     }
 }
 
-// TODO!(ryancao): Actually implement this correctly for InputAttribute<F>
 // impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, InputAttribute<F>> {
-//     type Item = (F, F, F);
+//     type Item = (F, F);
 
 //     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
 
@@ -519,20 +517,21 @@ impl<F: FieldExt> MleAble<F> for BinDecomp16Bit<F> {
     }
 
     fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
-        let items = items
-            .iter()
-            .flatten()
-            .cloned()
-            .chunks(16)
-            .into_iter()
-            .map(|chunk| {
-                let bits = chunk.collect_vec();
-                BinDecomp16Bit {
-                    bits: bits.try_into().unwrap(),
-                }
-            })
-            .collect_vec();
-        items.into_iter()
+        // let items: Vec<BinDecomp16Bit<F>> = items
+        //     .iter()
+        //     .flatten()
+        //     .cloned()
+        //     .chunks(16)
+        //     .into_iter()
+        //     .map(|chunk| {
+        //         let bits = chunk.collect_vec();
+        //         BinDecomp16Bit {
+        //             bits: bits.try_into().unwrap(),
+        //         }
+        //     })
+        //     .collect_vec();
+        // items.into_iter()
+        todo!()
     }
 
     fn num_vars(items: &Self::Repr) -> usize {

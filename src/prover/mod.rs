@@ -14,6 +14,7 @@ use crate::{
     mle::MleRef,
     transcript::Transcript,
     FieldExt, expression::ExpressionStandard,
+    zkdt::zkdt_layer::{DecisionPackingBuilder}
 };
 
 // use derive_more::From;
@@ -56,6 +57,9 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Default for Layers<F, Tr> {
         Self::new()
     }
 }
+
+///An output layer which will have it's bits bound and then evaluated
+pub type OutputLayer<F> = Box<dyn MleRef<F = F>>;
 
 #[derive(Error, Debug, Clone)]
 /// Errors relating to the proving of a GKR circuit
@@ -405,21 +409,224 @@ mod tests {
     use std::{cmp::max, time::Instant};
 
     use ark_bn254::Fr;
-    use ark_std::{test_rng, UniformRand};
+    use ark_std::{test_rng, UniformRand, log2};
 
-    use crate::{
-        expression::ExpressionStandard,
-        layer::{from_mle, LayerBuilder, LayerId},
-        mle::{
-            dense::{DenseMle, Tuple2},
-            zero::ZeroMleRef,
-            Mle, MleRef,
-        },
-        transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
-        FieldExt,
-    };
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder, InputPackingBuilder}}};
 
     use super::{GKRCircuit, Layers, input_layer::InputLayer};
+
+    struct PermutationCircuit<F: FieldExt> {
+        dummy_input_data_mle_vec: DenseMle<F, InputAttribute<F>>,               // batched
+        dummy_permuted_input_data_mle_vec: DenseMle<F, InputAttribute<F>>,      // batched
+        r: F,
+        r_packing: F,
+        input_len: usize,
+        num_inputs: usize
+    }
+
+    impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
+        type Transcript = PoseidonTranscript<F>;
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+            let mut layers = Layers::new();
+
+            // layer 0: packing
+            let input_packing_builder = InputPackingBuilder::new(
+                self.dummy_input_data_mle_vec.clone(),
+                self.r,
+                self.r_packing);
+
+            let input_permuted_packing_builder = InputPackingBuilder::new(
+                self.dummy_permuted_input_data_mle_vec.clone(),
+                self.r,
+                self.r_packing);
+
+            let packing_builders = input_packing_builder.concat(input_permuted_packing_builder);
+            let (mut input_packed, mut input_permuted_packed) = layers.add_gkr(packing_builders);
+
+            for _ in 0..log2(self.input_len * self.num_inputs) {
+                let prod_builder = SplitProductBuilder::new(
+                    input_packed
+                );
+                let prod_permuted_builder = SplitProductBuilder::new(
+                    input_permuted_packed
+                );
+                let split_product_builders = prod_builder.concat(prod_permuted_builder);
+                (input_packed, input_permuted_packed) = layers.add_gkr(split_product_builders);
+            }
+
+            let difference_builder = DifferenceBuilder::new(
+                input_packed,
+                input_permuted_packed,
+            );
+
+            let difference_mle = layers.add_gkr(difference_builder);
+
+            (layers, vec![Box::new(difference_mle.mle_ref())])
+        }
+    }
+
+    struct AttributeConsistencyCircuit<F: FieldExt> {
+        dummy_permuted_input_data_mle_vec: DenseMle<F, InputAttribute<F>>, // batched
+        dummy_decision_node_paths_mle_vec: DenseMle<F, DecisionNode<F>>,     // batched
+        tree_height: usize,
+    }
+
+    impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
+        type Transcript = PoseidonTranscript<F>;
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+            let mut layers = Layers::new();
+
+            let attribute_consistency_builder = AttributeConsistencyBuilder::new(
+                self.dummy_permuted_input_data_mle_vec.clone(),
+                self.dummy_decision_node_paths_mle_vec.clone(),
+                self.tree_height
+            );
+
+            let difference_mle = layers.add_gkr(attribute_consistency_builder);
+
+            (layers, vec![Box::new(difference_mle.mle_ref())])
+        }
+    }
+
+    struct MultiSetCircuit<F: FieldExt> {
+        dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+        dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+        dummy_multiplicities_bin_decomp_mle: DenseMle<F, BinDecomp16Bit<F>>,
+        dummy_decision_node_paths_mle_vec: DenseMle<F, DecisionNode<F>>, // batched
+        dummy_leaf_node_paths_mle_vec: DenseMle<F, LeafNode<F>>,         // batched
+        r: F,
+        r_packings: (F, F),
+        tree_height: usize,
+        num_inputs: usize,
+    }
+
+    impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
+        type Transcript = PoseidonTranscript<F>;
+        
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+            let mut layers = Layers::new();
+
+            // layer 0
+            let decision_packing_builder = DecisionPackingBuilder::new(
+                self.dummy_decision_nodes_mle.clone(), self.r, self.r_packings);
+
+            let leaf_packing_builder = LeafPackingBuilder::new(
+                self.dummy_leaf_nodes_mle.clone(), self.r, self.r_packings.0
+            );
+
+            let packing_builders = decision_packing_builder.concat(leaf_packing_builder);
+            let (decision_packed, leaf_packed) = layers.add_gkr(packing_builders);
+
+            // layer 1
+            let decision_leaf_concat_builder = ConcatBuilder::new(
+                decision_packed, leaf_packed
+            );
+            let x_packed = layers.add_gkr(decision_leaf_concat_builder);
+
+            // layer 2
+            let r_minus_x_builder =  RMinusXBuilder::new(
+                x_packed, self.r
+            );
+            let mut r_minus_x = layers.add_gkr(r_minus_x_builder);
+
+            // layer 3
+            let prev_prod_builder = BitExponentiationBuilder::new(
+                self.dummy_multiplicities_bin_decomp_mle.clone(),
+                0,
+                r_minus_x.clone()
+            );
+            let mut prev_prod = layers.add_gkr(prev_prod_builder);
+
+            for i in 1..16 {
+
+                // layer 3, or i + 2
+                let r_minus_x_square_builder = SquaringBuilder::new(
+                    r_minus_x
+                );
+                let r_minus_x_square = layers.add_gkr(r_minus_x_square_builder);
+
+                // layer 4, or i + 3
+                let curr_prod_builder = BitExponentiationBuilder::new(
+                    self.dummy_multiplicities_bin_decomp_mle.clone(),
+                    i,
+                    r_minus_x_square.clone()
+                );
+                let curr_prod = layers.add_gkr(curr_prod_builder);
+
+                // layer 5, or i + 4
+                let prod_builder = ProductBuilder::new(
+                    curr_prod,
+                    prev_prod
+                );
+                prev_prod = layers.add_gkr(prod_builder);
+
+                r_minus_x = r_minus_x_square;
+
+            }
+
+            let mut exponentiated_nodes = prev_prod;
+
+            for _ in 0..self.tree_height {
+
+                // layer 20, or i+20
+                let prod_builder = SplitProductBuilder::new(
+                    exponentiated_nodes
+                );
+                exponentiated_nodes = layers.add_gkr(prod_builder);
+            }
+
+            // **** above is nodes exponentiated ****
+            // **** below is all decision nodes on the path multiplied ****
+
+
+            // layer 0: packing
+            let decision_path_packing_builder = DecisionPackingBuilder::new(
+                self.dummy_decision_node_paths_mle_vec.clone(),
+                self.r,
+                self.r_packings
+            );
+
+            let leaf_path_packing_builder = LeafPackingBuilder::new(
+                self.dummy_leaf_node_paths_mle_vec.clone(),
+                self.r,
+                self.r_packings.0
+            );
+
+            let path_packing_builders = decision_path_packing_builder.concat(leaf_path_packing_builder);
+            let (decision_path_packed, leaf_path_packed) = layers.add_gkr(path_packing_builders);
+
+            // layer 1: concat
+            let path_decision_leaf_concat_builder = ConcatBuilder::new(
+                decision_path_packed, leaf_path_packed
+            );
+            let x_path_packed = layers.add_gkr(path_decision_leaf_concat_builder);
+
+            // layer 2: r - x
+            let r_minus_x_path_builder =  RMinusXBuilder::new(
+                x_path_packed, self.r
+            );
+            let r_minus_x_path = layers.add_gkr(r_minus_x_path_builder);
+
+            let mut path_product = r_minus_x_path;
+
+            // layer remaining: product it together
+            for _ in 0..log2(self.tree_height * self.num_inputs) {
+                let prod_builder = SplitProductBuilder::new(
+                    path_product
+                );
+                path_product = layers.add_gkr(prod_builder);
+            }
+
+            let difference_builder = DifferenceBuilder::new(
+                exponentiated_nodes,
+                path_product
+            );
+
+            let difference = layers.add_gkr(difference_builder);
+
+            (layers, vec![Box::new(difference.mle_ref())])
+        }
+    }
 
     /// This circuit is a 4k --> k circuit, such that
     /// [x_1, x_2, x_3, x_4] --> [x_1 * x_3, x_2 + x_4] --> [(x_1 * x_3) - (x_2 + x_4)]

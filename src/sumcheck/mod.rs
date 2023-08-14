@@ -75,7 +75,7 @@ impl<F: FieldExt> Add for Evals<F> {
         Evals(
             self.0
                 .into_iter()
-                .zip(rhs.0.into_iter())
+                .zip(rhs.0)
                 .map(|(lhs, rhs)| lhs + rhs)
                 .collect_vec(),
         )
@@ -445,7 +445,7 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
 
-                let beta_evals = vec![beta_at_0, beta_at_1];
+                let beta_evals = [beta_at_0, beta_at_1];
                 // multiply the beta evals by the product of the resulting mles
                 acc.iter_mut()
                     .zip(beta_evals.iter())

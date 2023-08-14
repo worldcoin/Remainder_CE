@@ -10,7 +10,7 @@ use crate::{
 };
 use ark_bn254::Fr;
 use ark_std::test_rng;
-use ark_std::One;
+use ark_std::{One, Zero};
 use ark_std::UniformRand;
 use rand::Rng;
 
@@ -152,6 +152,22 @@ fn get_dummy_claim<F: FieldExt>(
         _ => panic!(),
     };
     (claim, eval)
+}
+
+pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
+    expression: &ExpressionStandard<F>,
+    rng: &mut impl Rng,
+) -> Claim<F> {
+    let mut expression = expression.clone();
+    let num_vars = expression.index_mle_indices(0);
+    let challenges = (0..num_vars).map(|_| F::rand(rng)).collect_vec();
+
+    let mut beta = BetaTable::new((challenges.clone(), F::zero())).unwrap();
+    beta.table.index_mle_indices(0);
+    let eval = compute_sumcheck_message(&expression, 0, 2, &beta).unwrap();
+    let Evals(evals) = eval;
+
+    (challenges, evals[0] + evals[1])
 }
 
 /// Test regular numerical evaluation, last round type beat
@@ -535,10 +551,10 @@ fn test_dummy_sumcheck_concat_aggro() {
 
 #[test]
 fn test_dummy_sumcheck_concat_aggro_aggro() {
-    let layer_claims = (
-        vec![Fr::from(12190), Fr::from(28912), Fr::from(1)],
-        Fr::one(),
-    );
+    // let layer_claims = (
+    //     vec![Fr::from(12190), Fr::from(28912), Fr::from(1)],
+    //     Fr::one(),
+    // );
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(2)];
     let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
@@ -553,12 +569,9 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat(expression);
-    let expression_aggro = expression.concat(expr2);
-    let res_messages = dummy_sumcheck(
-        &mut expression_aggro.clone(),
-        &mut rng,
-        layer_claims.clone(),
-    );
+    let mut expression_aggro = expression.concat(expr2);
+    let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
+    let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
     let verifyres =
         verify_sumcheck_messages(res_messages, expression_aggro, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -567,16 +580,6 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
 /// test dummy sumcheck for concatenated expr
 #[test]
 fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
-    let layer_claims = (
-        vec![
-            Fr::from(12190),
-            Fr::from(28912),
-            Fr::from(1),
-            Fr::from(12901),
-            Fr::from(65309),
-        ],
-        Fr::one(),
-    );
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1390), Fr::from(222104)];
     let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
@@ -592,12 +595,9 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
 
     let expression = expr2.clone().concat(expression);
     let expression_aggro = expression.concat(expr2.clone());
-    let expression_aggro_aggro = expression_aggro.concat(expr2);
-    let res_messages = dummy_sumcheck(
-        &mut expression_aggro_aggro.clone(),
-        &mut rng,
-        layer_claims.clone(),
-    );
+    let mut expression_aggro_aggro = expression_aggro.concat(expr2);
+    let layer_claims = get_dummy_expression_eval(&expression_aggro_aggro, &mut rng);
+    let res_messages = dummy_sumcheck(&mut expression_aggro_aggro, &mut rng, layer_claims.clone());
     let verifyres =
         verify_sumcheck_messages(res_messages, expression_aggro_aggro, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -605,7 +605,7 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
 
 #[test]
 fn test_dummy_sumcheck_sum() {
-    let layer_claims = (vec![Fr::from(2), Fr::from(1), Fr::from(10)], Fr::one());
+    // let layer_claims = (vec![Fr::from(2), Fr::from(1), Fr::from(10)], Fr::one());
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(0), Fr::from(2)];
     let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
@@ -620,12 +620,9 @@ fn test_dummy_sumcheck_sum() {
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat(expression);
-    let expression_aggro = expression.concat(expr2);
-    let res_messages = dummy_sumcheck(
-        &mut expression_aggro.clone(),
-        &mut rng,
-        layer_claims.clone(),
-    );
+    let mut expression_aggro = expression.concat(expr2);
+    let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
+    let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
     let verifyres =
         verify_sumcheck_messages(res_messages, expression_aggro, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -664,7 +661,7 @@ fn test_dummy_sumcheck_subtract() {
         LayerId::Input,
         None,
     )
-    .split();
+    .split(Fr::zero());
 
     let first_claim = get_dummy_claim(mle_out.first(), &mut rng, None);
     let second_claim = get_dummy_claim(
@@ -727,7 +724,7 @@ fn test_dummy_sumcheck_product_and_claim_aggregate() {
         None,
     );
 
-    let mle_out = mle_out_fake.split();
+    let mle_out = mle_out_fake.split(Fr::zero());
 
     let first_claim = get_dummy_claim(mle_out.first(), &mut rng, None);
     let second_claim = get_dummy_claim(

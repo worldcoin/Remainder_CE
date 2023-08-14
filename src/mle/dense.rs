@@ -180,11 +180,11 @@ impl<F: FieldExt> DenseMle<F, F> {
     }
 
     ///Splits the mle into a new mle with a tuple of size 2 as it's element
-    pub fn split(&self) -> DenseMle<F, Tuple2<F>> {
+    pub fn split(&self, padding: F) -> DenseMle<F, Tuple2<F>> {
         DenseMle::new_from_iter(
             self.mle
                 .chunks(2)
-                .map(|items| (items[0], items.get(1).cloned().unwrap_or(F::zero())).into()),
+                .map(|items| (items[0], items.get(1).cloned().unwrap_or(padding)).into()),
             self.layer_id.clone(),
             self.prefix_bits.clone(),
         )
