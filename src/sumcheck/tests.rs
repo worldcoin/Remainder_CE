@@ -3,7 +3,7 @@ use crate::{
     expression::ExpressionStandard,
     layer::{claims::aggregate_claims, Claim, Layer, LayerId},
     mle::{
-        beta::evaluate_beta,
+        beta::compute_beta_over_two_challenges,
         dense::{DenseMle, Tuple2},
         Mle,
     },
@@ -114,10 +114,8 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     challenges.push(final_chal);
 
     // uses the expression to make one single oracle query
-    let mut beta = BetaTable::new(layer_claim).unwrap();
-    // let _ = expression.index_mle_indices(0);
     let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
-    let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
+    let beta_bound = compute_beta_over_two_challenges(&layer_claim.0, &challenges);
     let oracle_query = mle_bound * beta_bound;
 
     let prev_at_r =
