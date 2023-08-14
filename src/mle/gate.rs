@@ -176,7 +176,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
     }
 
     ///Get the claims that this layer makes on other layers
-    fn claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
         let mut claims: Vec<(LayerId, Claim<F>)> = vec![];
         let mut fixed_mle_indices_u: Vec<F> = vec![];
         if let Some(([_, f_2_u], _)) = &self.phase_1_mles {
@@ -217,6 +217,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         claimed_vals: &mut Vec<F>,
         num_claims: usize,
         num_idx: usize) -> Result<Vec<F>, ClaimError> {
+        todo!()
+    }
+
+    fn get_enum(self) -> crate::layer::layer_enum::LayerEnum<F, Self::Transcript> {
         todo!()
     }
 }
@@ -303,8 +307,8 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
             }
         );
 
-        let mut phase_1_lhs = [DenseMle::new(a_hg_lhs).mle_ref(), self.lhs.clone()];
-        let mut phase_1_rhs = [DenseMle::new(a_hg_rhs).mle_ref()];
+        let mut phase_1_lhs = [DenseMle::new_from_raw(a_hg_lhs, LayerId::Input, None).mle_ref(), self.lhs.clone()];
+        let mut phase_1_rhs = [DenseMle::new_from_raw(a_hg_rhs, LayerId::Input, None).mle_ref()];
         index_mle_indices_gate(phase_1_lhs.as_mut(), 0);
         index_mle_indices_gate(phase_1_rhs.as_mut(), 0);
         self.set_phase_1((phase_1_lhs.clone(), phase_1_rhs.clone()));
@@ -329,8 +333,8 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
                 a_f1_rhs[y_ind] = a_f1_rhs[y_ind] + adder;
             }
         );
-        let mut phase_2_lhs = [DenseMle::new(a_f1_lhs).mle_ref()];
-        let mut phase_2_rhs = [DenseMle::new(a_f1_rhs).mle_ref(), self.rhs.clone()];
+        let mut phase_2_lhs = [DenseMle::new_from_raw(a_f1_lhs, LayerId::Input, None).mle_ref()];
+        let mut phase_2_rhs = [DenseMle::new_from_raw(a_f1_rhs, LayerId::Input, None).mle_ref(), self.rhs.clone()];
         index_mle_indices_gate(phase_2_lhs.as_mut(), 0);
         index_mle_indices_gate(phase_2_rhs.as_mut(), 0);
         self.set_phase_2((phase_2_lhs.clone(), phase_2_rhs.clone()));
@@ -472,11 +476,11 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
 }
 
 /// shut up
-pub fn evaluate_mle_ref_product_gate<F: FieldExt>(
+pub(crate) fn evaluate_mle_ref_product_gate<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
     degree: usize,
-) -> Result<PartialSum<F>, MleError> {
+) -> Result<Evals<F>, MleError> {
     for mle_ref in mle_refs {
         if !mle_ref.indexed() {
             return Err(MleError::NotIndexedError);
@@ -556,10 +560,7 @@ pub fn evaluate_mle_ref_product_gate<F: FieldExt>(
         );
 
         //     dbg!(&evals, real_num_vars);
-        Ok(PartialSum {
-            sum_or_eval: SumOrEvals::Evals(evals),
-            max_num_vars: real_num_vars,
-        })
+        Ok(Evals(evals))
     } else {
         // There is no independent variable and we can sum over everything
         let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
@@ -594,10 +595,9 @@ pub fn evaluate_mle_ref_product_gate<F: FieldExt>(
 
         #[cfg(feature = "parallel")]
         let sum = partials.sum();
-        Ok(PartialSum {
-            sum_or_eval: SumOrEvals::Sum(sum),
-            max_num_vars: real_num_vars,
-        })
+
+
+        Ok(Evals(vec![sum; degree]))
     }
 }
 
@@ -706,11 +706,9 @@ fn compute_sumcheck_message_gate<F: FieldExt>(
     let eval = eval_lhs + eval_rhs;
 
 
-    if let PartialSum { sum_or_eval: SumOrEvals::Evals(evaluations), max_num_vars: _ } = eval {
-        Ok(evaluations)
-    } else {
-        Err(GateError::SumcheckProverError)
-    }
+    let Evals(evaluations) = eval;
+
+    Ok(evaluations)
 }
 
 ///Computes a round of the sumcheck protocol on this Layer
@@ -743,13 +741,13 @@ mod test {
             Fr::from(1),
             Fr::from(2),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(51395810),
             Fr::from(2),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0), nonzero_gates, lhs_mle_ref, rhs_mle_ref);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -780,7 +778,7 @@ mod test {
             Fr::from(75361),
             Fr::from(-91901),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -792,7 +790,7 @@ mod test {
             Fr::from(-131899),
             Fr::from(191),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0),  nonzero_gates, lhs_mle_ref, rhs_mle_ref);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -825,7 +823,7 @@ mod test {
             Fr::from(75361),
             Fr::from(-91901),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -845,7 +843,7 @@ mod test {
             Fr::from(7),
             Fr::from(9999),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0), nonzero_gates, lhs_mle_ref, rhs_mle_ref);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);

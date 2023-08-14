@@ -1,38 +1,38 @@
-use crate::{
-    expression::{Expression, ExpressionStandard},
-    mle::{beta::BetaTable, MleIndex},
-    FieldExt,
-};
+//!Utilities involving the claims a layer makes
+
+use crate::{expression::ExpressionStandard, mle::beta::BetaTable, FieldExt};
 
 // use itertools::Itertools;
 use crate::mle::MleRef;
 use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
-use itertools::{izip, multizip, Itertools};
-use rayon::{
-    prelude::{
-        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-    },
-    slice::ParallelSlice,
-};
+
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use thiserror::Error;
 
-use super::{Claim, Layer, LayerId};
+use super::{Claim, Layer};
 
 #[derive(Error, Debug, Clone)]
+///Errors to do with aggregating and collecting claims
 pub enum ClaimError {
     #[error("The Layer has not finished the sumcheck protocol")]
+    ///The Layer has not finished the sumcheck protocol
     SumCheckNotComplete,
     #[error("MLE indices must all be fixed")]
+    ///MLE indices must all be fixed
     ClaimMleIndexError,
     #[error("Layer ID not assigned")]
+    ///Layer ID not assigned
     LayerMleError,
     #[error("MLE within MleRef has multiple values within it")]
+    ///MLE within MleRef has multiple values within it
     MleRefMleError,
     #[error("Error aggregating claims")]
+    ///Error aggregating claims
     ClaimAggroError,
     #[error("Should be evaluating to a sum")]
+    ///Should be evaluating to a sum
     ExpressionEvalError,
 }
 
@@ -96,15 +96,14 @@ pub enum ClaimError {
 // }
 
 /// Aggregate several claims into one
-pub fn aggregate_claims<F: FieldExt>(
+pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &[Claim<F>],
-    layer: &Box<impl Layer<F> + ?Sized>,
+    layer: &impl Layer<F>,
     rstar: F,
-    // prev_layer_claim: Claim<F>,
 ) -> Result<(Claim<F>, Vec<F>), ClaimError> {
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
 
-    if claims.len() < 1 {
+    if claims.is_empty() {
         return Err(ClaimError::ClaimAggroError);
     }
 
@@ -130,12 +129,12 @@ pub fn aggregate_claims<F: FieldExt>(
 }
 
 /// verifies the claim aggregation
-pub fn verify_aggragate_claim<F: FieldExt>(
+pub(crate) fn verify_aggragate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for qx
     claims: &[Claim<F>],
     r_star: F,
 ) -> Result<Claim<F>, ClaimError> {
-    let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+    let (claim_vecs, _): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
     let num_idx = claim_vecs[0].len();
 
     // check q(0), q(1) equals the claimed value (or wl(0), wl(1))
@@ -155,8 +154,7 @@ pub fn verify_aggragate_claim<F: FieldExt>(
         })
         .collect();
 
-    // check q(r_star) === W(r)
-    let q_rstar = evaluate_at_a_point(&wlx, r_star).unwrap();
+    let q_rstar = evaluate_at_a_point(wlx, r_star).unwrap();
 
     let aggregated_claim: Claim<F> = (r, q_rstar);
 
@@ -164,9 +162,10 @@ pub fn verify_aggragate_claim<F: FieldExt>(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
-    use crate::layer::{from_mle, GKRLayer};
+    use crate::expression::Expression;
+    use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::{dense::DenseMle, Mle};
     use crate::transcript::poseidon_transcript::PoseidonTranscript;
 
@@ -180,7 +179,11 @@ mod test {
     fn test_get_claim() {
         // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
-        let mle = DenseMle::<_, Fr>::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
+        let mle = DenseMle::<_, Fr>::new_from_raw(
+            vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
+            LayerId::Input,
+            None,
+        );
         let expression3 = ExpressionStandard::Mle(mle.mle_ref());
         let expression = expression1.clone() + expression3.clone();
         // let expression = expression1.clone() * expression;
@@ -194,10 +197,10 @@ mod test {
     /// Test claim aggregation small mle
     #[test]
     fn test_aggro_claim() {
-        let dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
+        let _dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
 
         let mut expr = ExpressionStandard::Mle(mle_ref);
@@ -222,7 +225,7 @@ mod test {
         let claim1: Claim<Fr> = (chals1, valchal[0]);
         let claim2: Claim<Fr> = (chals2, valchal[1]);
 
-        let res = aggregate_claims(&[claim1, claim2], &Box::new(layer), Fr::from(10))
+        let res = aggregate_claims(&[claim1, claim2], &layer, Fr::from(10))
             .unwrap()
             .0;
 
@@ -236,10 +239,10 @@ mod test {
     /// Test claim aggregation on another small mle
     #[test]
     fn test_aggro_claim_2() {
-        let dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
+        let _dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -266,7 +269,7 @@ mod test {
 
         let rchal = Fr::from(-2);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
             .unwrap()
             .0;
 
@@ -288,7 +291,7 @@ mod test {
     /// Test claim aggregation on random mle
     #[test]
     fn test_aggro_claim_3() {
-        let dummy_claim = (vec![Fr::one(); 3], Fr::from(0));
+        let _dummy_claim = (vec![Fr::one(); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -300,7 +303,7 @@ mod test {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -326,7 +329,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
             .unwrap()
             .0;
 
@@ -350,7 +353,7 @@ mod test {
     /// Test claim aggregation on a RANDOM mle
     #[test]
     fn test_aggro_claim_4() {
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
+        let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![Fr::rand(&mut rng), Fr::rand(&mut rng)];
         let mle_v2 = vec![
@@ -359,8 +362,8 @@ mod test {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
-        let mle2: DenseMle<Fr, Fr> = DenseMle::new(mle_v2);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
@@ -388,7 +391,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
             .unwrap()
             .0;
 
@@ -411,7 +414,7 @@ mod test {
     /// Make sure claim aggregation FAILS for a WRONG CLAIM!
     #[test]
     fn test_aggro_claim_negative_1() {
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
+        let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -423,7 +426,7 @@ mod test {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -449,7 +452,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
             .unwrap()
             .0;
 
@@ -472,7 +475,7 @@ mod test {
     /// Make sure claim aggregation fails for ANOTHER WRONG CLAIM!
     #[test]
     fn test_aggro_claim_negative_2() {
-        let dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
+        let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -484,7 +487,7 @@ mod test {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -510,7 +513,7 @@ mod test {
 
         let rchal = Fr::rand(&mut rng);
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &Box::new(layer), rchal)
+        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
             .unwrap()
             .0;
 
@@ -533,7 +536,7 @@ mod test {
     #[test]
     fn test_verify_claim_aggro() {
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new(mle_v1);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
@@ -561,7 +564,7 @@ mod test {
 
         let rchal = Fr::from(-2);
 
-        let (res, wlx) = aggregate_claims(&claims, &Box::new(layer), rchal).unwrap();
+        let (res, wlx) = aggregate_claims(&claims, &layer, rchal).unwrap();
         let rounds = expr.index_mle_indices(0);
         // for round in 0..rounds {
         //     expr.fix
