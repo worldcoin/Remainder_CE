@@ -10,6 +10,40 @@ use crate::{
 
 use super::LayerId;
 
+/// Input layer struct containing the information we need to 
+/// 
+/// a) Aggregate the input layer MLEs into a single large DenseMle<F, F>
+/// 
+/// b) Aggregate claims on the input layer
+/// 
+/// c) Evaluate the final claim on the input layer
+pub struct InputLayer<F: FieldExt> {
+    combined_dense_mle: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> InputLayer<F> {
+
+    /// Creates a new InputLayer from a bunch of MLEs which belong
+    /// in the input layer by merging them.
+    pub fn new_from_mles(input_mles: &mut Vec<Box<&mut dyn Mle<F>>>) -> Self {
+        Self {
+            combined_dense_mle: combine_input_mles(input_mles)
+        }
+    }
+
+    /// Creates an empty InputLayer
+    pub fn new() -> Self {
+        Self {
+            combined_dense_mle: DenseMle::new_from_raw(vec![], LayerId::Input, None)
+        }
+    }
+
+    /// Getter for the DenseMLE making up the input layer
+    pub fn get_combined_mle(&self) -> &DenseMle<F, F> {
+        &self.combined_dense_mle
+    }
+}
+
 /// Exactly what it says
 fn round_to_next_largest_power_of_2(x: usize) -> u32 {
     2_u32.pow(log2(x))
@@ -104,10 +138,10 @@ pub fn combine_input_mles<F: FieldExt>(
 #[cfg(test)]
 mod tests {
     use ark_bn254::Fr;
-    use ark_std::{log2, test_rng, Zero};
+    use ark_std::{test_rng, Zero};
     use itertools::Itertools;
     use rand::{distributions::Standard, prelude::Distribution, Rng};
-    use std::{iter::repeat_with, marker::PhantomData};
+    use std::iter::repeat_with;
 
     use crate::{
         layer::LayerId,
@@ -115,7 +149,7 @@ mod tests {
         FieldExt,
     };
 
-    use super::{combine_input_mles, round_to_next_largest_power_of_2};
+    use super::combine_input_mles;
 
     /// Helper function to create random MLE with specific number of vars
     fn get_random_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F>
@@ -136,8 +170,6 @@ mod tests {
         Standard: Distribution<F>,
     {
         let mut rng = test_rng();
-        let actual_capacity = round_to_next_largest_power_of_2(capacity) as usize;
-        let num_vars = log2(actual_capacity) as usize;
         let bookkeeping_table = repeat_with(|| rng.gen::<F>())
             .take(capacity as usize)
             .collect_vec();
@@ -214,6 +246,8 @@ mod tests {
 
         // Finally, mle_1's bookkeeping table
         assert_eq!(combined_mle.mle[(128 + 64)..(128 + 64 + 31)], mle_1.mle);
+
+        // Padding
         assert_eq!(
             combined_mle.mle[(128 + 64 + 31)..(128 + 64 + 32)],
             vec![Fr::zero(); 1]

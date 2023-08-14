@@ -479,8 +479,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// Helper function for `evaluate_expr` to traverse the expression and simply
 /// gather all of the evaluations, combining them as appropriate.
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
-/// within. TODO!(ryancao): Make this not need to be mutable
-fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
+/// within. 
+/// 
+/// TODO!(ryancao): Make this not need to be mutable
+pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     expr: &Exp,
 ) -> Result<F, ExpressionError> {
     let constant = |c| Ok(c);
@@ -531,6 +533,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     }
 
     /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
+    /// 
     /// Returns the max number of bits that are indexed
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {

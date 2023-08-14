@@ -49,22 +49,21 @@ pub enum BetaError {
     IndexedBitNotFoundError,
 }
 
-/// fully evaluate a beta table
-pub(crate) fn evaluate_beta<F: FieldExt>(
-    beta_table: &mut BetaTable<F>,
-    challenges: Vec<F>,
-) -> Result<F, BetaError> {
-    challenges
-        .into_iter()
-        .enumerate()
-        .for_each(|(round_idx, challenge)| {
-            let _ = beta_table.beta_update(round_idx, challenge);
-        });
-    let beta_bt = beta_table.table.bookkeeping_table();
-    if beta_bt.len() == 1 {
-        return Ok(beta_bt[0]);
-    }
-    Err(BetaError::BetaUpdateError)
+/// Computes \tilde{\beta}((x_1, ..., x_n), (y_1, ..., y_n))
+/// 
+/// Panics if `challenge_one` and `challenge_two` don't have
+/// the same length!
+pub(crate) fn compute_beta_over_two_challenges<F: FieldExt>(
+    challenge_one: &Vec<F>,
+    challenge_two: &Vec<F>,
+) -> F {
+    assert_eq!(challenge_one.len(), challenge_two.len());
+
+    // --- Formula is just \prod_i (x_i * y_i) + (1 - x_i) * (1 - y_i) ---
+    let one = F::one();
+    challenge_one.into_iter().zip(challenge_two.into_iter()).fold(F::one(), |acc, (x_i, y_i)| {
+        acc * ((*x_i * y_i) + (one - x_i) * (one - y_i))
+    })
 }
 
 /// `fix_variable` for a beta table.
