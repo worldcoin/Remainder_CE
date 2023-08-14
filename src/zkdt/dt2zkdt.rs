@@ -53,7 +53,7 @@ fn build_unsigned_bit_decomposition<F: FieldExt>(mut value: u32) -> Option<BinDe
 
 type Sample<F> = Vec<InputAttribute<F>>;
 /// Convert a vector of u16s to a Sample (consisting of field elements).
-fn build_sample<F: FieldExt>(values: &Vec<u16>) -> Sample<F> {
+fn build_sample<F: FieldExt>(values: &[u16]) -> Sample<F> {
     values
         .iter()
         .enumerate()
@@ -64,9 +64,9 @@ fn build_sample<F: FieldExt>(values: &Vec<u16>) -> Sample<F> {
         .collect()
 }
 
-/// Repeat the items of the provided vector `repetitions` times, before padding with the minimal
+/// Repeat the items of the provided slice `repetitions` times, before padding with the minimal
 /// number of zeros such that the length is a power of two.
-fn repeat_and_pad<T: Clone>(values: &Vec<T>, repetitions: usize, padding: T) -> Vec<T> {
+fn repeat_and_pad<T: Clone>(values: &[T], repetitions: usize, padding: T) -> Vec<T> {
     // repeat
     let repeated_length = repetitions * values.len();
     let repeated_iter = values.into_iter().cycle().take(repeated_length);
@@ -97,7 +97,7 @@ struct CircuitizedSamples<F: FieldExt> {
 /// TODO describe return values
 /// multiplicities is 2 ** depth in size.
 /// Pre: values_array is not empty
-fn circuitize_samples<F: FieldExt>(values_array: &Vec<Vec<u16>>, pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
+fn circuitize_samples<F: FieldExt>(values_array: &[Vec<u16>], pqtrees: &PaddedQuantizedTrees) -> CircuitizedSamples<F> {
     // repeat and pad the attributes of the sample
     let values_array: Vec<Vec<u16>> = values_array
         .iter()
@@ -508,7 +508,7 @@ impl<T: Copy> Node<T> {
 
     /// Return the path traced by the specified sample down this tree.
     /// Pre: sample.len() > node.feature_index for this node and all descendents.
-    fn get_path<'a>(&'a self, sample: &Vec<u16>) -> Vec<&'a Node<T>> {
+    fn get_path<'a>(&'a self, sample: &[u16]) -> Vec<&'a Node<T>> {
         let mut path = Vec::new();
         self.append_path(sample, &mut path);
         path
@@ -516,7 +516,7 @@ impl<T: Copy> Node<T> {
 
     /// Helper function to get_path.
     /// Appends self to path, then, if internal, calls this function on the appropriate child node.
-    fn append_path<'a>(&'a self, sample: &Vec<u16>, path_to_here: &mut Vec<&'a Node<T>>) {
+    fn append_path<'a>(&'a self, sample: &[u16], path_to_here: &mut Vec<&'a Node<T>>) {
         path_to_here.push(self);
         if let Node::Internal {
             left,
