@@ -19,9 +19,9 @@ What's our plan here?
 */
 
 // --- Constants ---
-const DUMMY_INPUT_LEN: usize = 1 << 5; // was 1 << 5
+const DUMMY_INPUT_LEN: usize = 1 << 2; // was 1 << 5
 pub const NUM_DUMMY_INPUTS: usize = 1 << 2;
-pub const TREE_HEIGHT: usize = 9; // was 9
+pub const TREE_HEIGHT: usize = 2; // was 9
 const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
 
@@ -454,7 +454,13 @@ pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
     // --- Generate MLEs for each ---
     // TODO!(ryancao): Change this into batched form
     // let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
-    let dummy_input_data_mle = DenseMle::new_from_iter(dummy_input_data[0]
+    let dummy_input_data_batch = dummy_input_data.clone().into_iter().reduce(
+        |a, b| {
+            let mut c = a.clone();
+            c.extend(b);
+            c
+        }).unwrap();
+    let dummy_input_data_mle = DenseMle::new_from_iter(dummy_input_data_batch
         .clone()
         .into_iter()
         .map(InputAttribute::from), LayerId::Input, None);

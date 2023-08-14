@@ -311,7 +311,7 @@ mod tests {
     use ark_bn254::Fr;
     use ark_std::{test_rng, UniformRand, log2};
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder, InputPackingBuilder}}};
+    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef}, layer::{LayerBuilder, from_mle, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder, InputPackingBuilder}, zkdt_circuit::generate_dummy_mles_batch}};
 
     use super::{GKRCircuit, Layers};
 
@@ -654,5 +654,17 @@ mod tests {
                 panic!();
             }
         }
+    }
+
+    #[test]
+    fn test_permutation() {
+        let (_,_, dummy_decision_node_paths_mle_vec,
+            dummy_leaf_node_paths_mle_vec, _,
+            dummy_multiplicities_bin_decomp_mle,
+            dummy_decision_nodes_mle,
+            dummy_leaf_nodes_mle) = generate_dummy_mles_batch::<Fr>();
+        // let permutation_circuit = PermutationCircuit{
+
+        // }
     }
 }
