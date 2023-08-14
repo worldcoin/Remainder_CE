@@ -426,7 +426,7 @@ mod tests {
 
     impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
             let mut layers = Layers::new();
 
             // layer 0: packing
@@ -461,7 +461,11 @@ mod tests {
 
             let difference_mle = layers.add_gkr(difference_builder);
 
-            (layers, vec![Box::new(difference_mle.mle_ref())])
+            // --- Input MLEs are just the input data and permuted input data MLEs ---
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.dummy_input_data_mle_vec), Box::new(&mut self.dummy_permuted_input_data_mle_vec)];
+            let input_layer = InputLayer::new_from_mles(&mut input_mles);
+
+            (layers, vec![Box::new(difference_mle.mle_ref())], input_layer)
         }
     }
 
@@ -473,7 +477,7 @@ mod tests {
 
     impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
             let mut layers = Layers::new();
 
             let attribute_consistency_builder = AttributeConsistencyBuilder::new(
@@ -484,7 +488,11 @@ mod tests {
 
             let difference_mle = layers.add_gkr(attribute_consistency_builder);
 
-            (layers, vec![Box::new(difference_mle.mle_ref())])
+            // --- Input MLEs are just the permuted input data and decision path MLEs ---
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.dummy_permuted_input_data_mle_vec), Box::new(&mut self.dummy_decision_node_paths_mle_vec)];
+            let input_layer = InputLayer::new_from_mles(&mut input_mles);
+
+            (layers, vec![Box::new(difference_mle.mle_ref())], input_layer)
         }
     }
 
@@ -503,7 +511,7 @@ mod tests {
     impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
         
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
             let mut layers = Layers::new();
 
             // layer 0
@@ -624,7 +632,17 @@ mod tests {
 
             let difference = layers.add_gkr(difference_builder);
 
-            (layers, vec![Box::new(difference.mle_ref())])
+            // --- Input MLEs are just each of the dummy MLE inputs ---
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+                Box::new(&mut self.dummy_decision_nodes_mle), 
+                Box::new(&mut self.dummy_leaf_nodes_mle),
+                Box::new(&mut self.dummy_multiplicities_bin_decomp_mle),
+                Box::new(&mut self.dummy_decision_node_paths_mle_vec),
+                Box::new(&mut self.dummy_leaf_node_paths_mle_vec),
+            ];
+            let input_layer = InputLayer::new_from_mles(&mut input_mles);
+
+            (layers, vec![Box::new(difference.mle_ref())], input_layer)
         }
     }
 
