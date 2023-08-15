@@ -412,22 +412,26 @@ mod tests {
             Some(vec![MleIndex::Fixed(false)])
         );
 
-        // // --- Finally, let's check the bookkeeping tables ---
-        // // First up we should have mle_2's bookkeeping table
-        // assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[0..115], mle_2.mle);
-        // assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[115..128], vec![Fr::zero(); 128 - 115]);
+        // --- Finally, let's check the bookkeeping tables ---
 
-        // // Next, mle_3's bookkeeping table
-        // assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[128..(128 + 64)], mle_3.mle);
+        // First up we should have input_output_mle's bookkeeping table
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[0..256], input_output_mle.mle);
 
-        // // Finally, mle_1's bookkeeping table
-        // assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[(128 + 64)..(128 + 64 + 31)], mle_1.mle);
+        // Next, we should have mle_2's bookkeeping table
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[256..(256 + 115)], mle_2.mle);
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[(256 + 115)..(256 + 128)], vec![Fr::zero(); 128 - 115]);
 
-        // // Padding
-        // assert_eq!(
-        //     dummy_input_layer.combined_dense_mle.clone().unwrap().mle[(128 + 64 + 31)..(128 + 64 + 32)],
-        //     vec![Fr::zero(); 1]
-        // );
+        // Next, mle_3's bookkeeping table
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[256 + 128..(256 + 128 + 64)], mle_3.mle);
+
+        // Finally, mle_1's bookkeeping table
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle[(256 + 128 + 64)..(256 + 128 + 64 + 31)], mle_1.mle);
+
+        // Padding
+        assert_eq!(
+            dummy_input_layer.combined_dense_mle.clone().unwrap().mle[(256 + 128 + 64 + 31)..(256 + 128 + 64 + 32)],
+            vec![Fr::zero(); 1]
+        );
 
     }
 }
