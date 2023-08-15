@@ -38,6 +38,7 @@ pub enum ClaimError {
 }
 
 /// Compute evaluations of W(l(x))
+/// W(l(0)), ..., W(l(d - 1))
 fn compute_wlx<F: FieldExt>(
     expr: &mut ExpressionStandard<F>,
     claim_vecs: Vec<Vec<F>>,
@@ -91,6 +92,38 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     expr: &ExpressionStandard<F>,
     rstar: F,
 ) -> Result<(Claim<F>, Vec<F>), ClaimError> {
+
+    // expr: W(x_1, ..., x_n)
+    // V_i(g_1, ..., g_n) = \sum_{b_1, ..., b_n} \beta(g, b) * W(b_1, ..., b_n)
+
+    // V_i(u_1, ..., u_n) = c_1
+    // V_i(v_1, ..., v_n) = c_2
+    // V_i(w_1, ..., w_n) = c_3
+
+    // l(x): F -> F^n
+    // l(0) = u_1, ..., u_n
+    // l(1) = v_1, ..., v_n
+    // l(2) = w_1, ..., w_n
+    // l_i(x): F -> F
+    // l_i(0) = u_i
+    // l_i(1) = v_1
+
+    // I. Verifier computes l(x) for the given claims
+    // II. Verifier samples r^* <- F and computes l(r^*) \in F^n
+    //  Let l(r^*) = (r_1, ..., r_n) (this is `r` in the code)
+    // III. Prover sends V_i(l(x)): F -> F
+    //  Let's call this function q(x): F -> F
+    // IV. Verifier needs to check:
+    //  a) q(0) = V_i(l(0)) = c_1
+    //  b) V_i(l(1)) = c_2
+    //  c) V_i(l(2)) = c_3
+    //  d) q(r^*) = V_i(r_1, ..., r_n) = c_4
+
+    // Goal:
+    // It's true that r_1, ..., r_n = l(r^*)
+    // V_i(r_1, ..., r_n) = c_4
+    // V_i(l(r^*)) = c_4, equivalently
+
     let mut expr = expr.clone();
     let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
 
@@ -98,6 +131,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
         return Err(ClaimError::ClaimAggroError);
     }
 
+    // --- Number of variables in the claim ---
     let num_idx = claim_vecs[0].len();
 
     // get the claim (r = l(r*))
@@ -106,6 +140,8 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
             let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                 .map(|claim| claim[idx])
                 .collect();
+            // --- Interpolate u_1, v_1, w_1 --> r_1 ---
+            // l(0) = u_1, ... what is l(r^*)?
             evaluate_at_a_point(&evals, rstar).unwrap()
         })
         .collect();

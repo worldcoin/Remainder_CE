@@ -16,7 +16,7 @@ use crate::{
     zkdt::zkdt_layer::{DecisionPackingBuilder}
 };
 
-use lcpc_2d::FieldExt;
+use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove}, fs_transcript::halo2_poseidon_transcript::PoseidonTranscript};
 use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 // use derive_more::From;
@@ -24,6 +24,9 @@ use itertools::Itertools;
 use thiserror::Error;
 
 use self::input_layer::InputLayer;
+
+use lcpc_2d::ScalarField;
+use lcpc_2d::adapter::LigeroProof;
 
 /// New type for containing the list of Layers that make up the GKR circuit
 /// 
@@ -103,7 +106,7 @@ pub struct InputLayerProof<F: FieldExt> {
 }
 
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
-pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
+pub struct GKRProof<F: FieldExt, Tr: Transcript<F>, F2: ScalarField> {
     /// The sumcheck proof of each GKR Layer, along with the fully bound expression.
     /// 
     /// In reverse order (i.e. layer closest to the output layer is first)
@@ -112,10 +115,12 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     pub output_layers: Vec<Box<dyn MleRef<F = F>>>,
     /// Proof for the circuit input layer
     pub input_layer_proof: InputLayerProof<F>,
+    /// Ligero proof
+    pub ligero_commit_eval_proof: LigeroProof<F2>,
 }
 
 /// A GKRCircuit ready to be proven
-pub trait GKRCircuit<F: FieldExt> {
+pub trait GKRCircuit<F: FieldExt, F2: ScalarField> {
     /// The transcript this circuit uses
     type Transcript: Transcript<F>;
     /// The forward pass, defining the layer relationships and generating the layers
@@ -125,10 +130,15 @@ pub trait GKRCircuit<F: FieldExt> {
     fn prove(
         &mut self,
         transcript: &mut Self::Transcript,
-    ) -> Result<GKRProof<F, Self::Transcript>, GKRError> {
+    ) -> Result<GKRProof<F, Self::Transcript, F2>, GKRError> {
 
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
         let (layers, mut output_layers, input_layer) = self.synthesize();
+
+        // --- Compute the Ligero commitment to the combined input MLE ---
+        // TODO!(ryancao): Hard-code this somewhere else!!
+        let rho_inv: u8 = 4;
+        let (_, comm, root, aux) = remainder_ligero_commit_prove(&input_layer.get_combined_mle().mle, rho_inv);
 
         // --- Keep track of GKR-style claims across all layers ---
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
@@ -258,10 +268,21 @@ pub trait GKRCircuit<F: FieldExt> {
             input_layer_aggregated_claim_proof: input_wlx_evaluations,
         };
 
+        // --- Finally, the Ligero commit + eval proof ---
+        let ligero_commit_eval_proof = remainder_ligero_eval_prove(
+            &input_layer.get_combined_mle().mle,
+            &input_layer_claim.0,
+            transcript,
+            aux,
+            comm,
+            root
+        );
+
         let gkr_proof = GKRProof {
             layer_sumcheck_proofs,
             output_layers,
             input_layer_proof,
+            ligero_commit_eval_proof,
         };
 
         Ok(gkr_proof)
@@ -273,12 +294,13 @@ pub trait GKRCircuit<F: FieldExt> {
     fn verify(
         &mut self,
         transcript: &mut Self::Transcript,
-        gkr_proof: GKRProof<F, Self::Transcript>,
+        gkr_proof: GKRProof<F, Self::Transcript, F2>,
     ) -> Result<(), GKRError> {
         let GKRProof {
             layer_sumcheck_proofs,
             output_layers,
-            input_layer_proof
+            input_layer_proof,
+            ligero_commit_eval_proof,
         } = gkr_proof;
 
         // --- Verifier keeps track of the claims on its own ---
@@ -417,6 +439,7 @@ mod tests {
     use lcpc_2d::FieldExt;
     use lcpc_2d::fs_transcript::halo2_poseidon_transcript::PoseidonTranscript;
     use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
+    use lcpc_2d::ScalarField;
 
     use super::{GKRCircuit, Layers, input_layer::InputLayer};
 
@@ -429,7 +452,7 @@ mod tests {
         num_inputs: usize
     }
 
-    impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
+    impl<F: FieldExt, F2: ScalarField> GKRCircuit<F, F2> for PermutationCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
         fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
             let mut layers = Layers::new();
@@ -480,7 +503,7 @@ mod tests {
         tree_height: usize,
     }
 
-    impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
+    impl<F: FieldExt, F2: ScalarField> GKRCircuit<F, F2> for AttributeConsistencyCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
         fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
             let mut layers = Layers::new();
@@ -513,7 +536,7 @@ mod tests {
         num_inputs: usize,
     }
 
-    impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
+    impl<F: FieldExt, F2: ScalarField> GKRCircuit<F, F2> for MultiSetCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
         
         fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
@@ -658,7 +681,7 @@ mod tests {
         mle_2: DenseMle<F, Tuple2<F>>,
     }
 
-    impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
+    impl<F: FieldExt, F2: ScalarField> GKRCircuit<F, F2> for TestCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
         fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
 
@@ -765,12 +788,13 @@ mod tests {
             None,
         );
 
-        let mut circuit = TestCircuit { mle, mle_2 };
+        let mut circuit: TestCircuit<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = TestCircuit { mle, mle_2 };
 
         let mut transcript: PoseidonTranscript<Fr> =
             PoseidonTranscript::new("GKR Prover Transcript");
         let now = Instant::now();
-        match circuit.prove(&mut transcript) {
+
+        match circuit::<GKRCircuit<F, F2>>::prove(&mut transcript) {
             Ok(proof) => {
                 println!(
                     "proof generated successfully in {}!",
