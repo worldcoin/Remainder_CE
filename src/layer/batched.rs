@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{
     expression::ExpressionStandard,
-    mle::{dense::DenseMleRef, MleIndex, MleRef},
+    mle::{dense::DenseMleRef, MleIndex, MleRef, zero::ZeroMleRef},
     FieldExt,
 };
 
@@ -29,6 +29,13 @@ impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
             _marker: PhantomData,
         }
     }
+}
+
+pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMleRef<F> {
+    let new_bits = log2(mle_refs.len()) as usize;
+    let num_vars = mle_refs[0].mle_indices().len();
+    let layer_id = mle_refs[0].get_layer_id().clone();
+    ZeroMleRef::new(num_vars + new_bits, None, layer_id)
 }
 
 fn combine_expressions<F: FieldExt>(
@@ -161,7 +168,7 @@ fn combine_expressions_helper<F: FieldExt>(
 fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> DenseMleRef<F> {
     let old_indices = mles[0].mle_indices();
     let old_num_vars = mles[0].num_vars();
-    let layer_id = Some(mles[0].get_layer_id());
+    let layer_id = mles[0].get_layer_id();
 
     let out = (0..mles[0].bookkeeping_table.len())
         .flat_map(|index| {
@@ -197,40 +204,41 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let num_bits = log2(self.layers.len()) as usize;
-        let bits = std::iter::successors(
-            Some(vec![MleIndex::Fixed(false); num_bits]),
-            |prev| {
-                let mut prev = prev.clone();
-                let mut removed_bits = 0;
-                for index in (0..num_bits).rev() {
-                    let curr = prev.remove(index);
-                    if curr == MleIndex::Fixed(false) {
-                        prev.push(MleIndex::Fixed(true));
-                        break;
-                    } else {
-                        removed_bits += 1;
-                    }
-                }
-                if removed_bits == num_bits {
-                    None
-                } else {
-                    Some(prev.into_iter().chain(repeat_n(MleIndex::Fixed(false), removed_bits)).collect_vec())
-                }
-            },
-        );
+        // let num_bits = log2(self.layers.len()) as usize;
+        // let bits = std::iter::successors(
+        //     Some(vec![MleIndex::Fixed(false); num_bits]),
+        //     |prev| {
+        //         let mut prev = prev.clone();
+        //         let mut removed_bits = 0;
+        //         for index in (0..num_bits).rev() {
+        //             let curr = prev.remove(index);
+        //             if curr == MleIndex::Fixed(false) {
+        //                 prev.push(MleIndex::Fixed(true));
+        //                 break;
+        //             } else {
+        //                 removed_bits += 1;
+        //             }
+        //         }
+        //         if removed_bits == num_bits {
+        //             None
+        //         } else {
+        //             Some(prev.into_iter().chain(repeat_n(MleIndex::Fixed(false), removed_bits)).collect_vec())
+        //         }
+        //     },
+        // );
 
         self.layers
             .iter()
-            .zip(bits)
-            .map(|(layer, bits)| {
+            // .zip(bits)
+            .map(|layer| {
                 layer.next_layer(
                     id.clone(),
-                    Some(
-                        bits.into_iter()
-                            .chain(prefix_bits.clone().into_iter().flatten())
-                            .collect_vec(),
-                    ),
+                    // Some(
+                    //     bits.into_iter()
+                    //         .chain(prefix_bits.clone().into_iter().flatten())
+                    //         .collect_vec(),
+                    // ),
+                    None
                 )
             })
             .collect()
@@ -243,7 +251,7 @@ mod tests {
     use ark_std::test_rng;
     use itertools::Itertools;
 
-    use crate::{layer::{from_mle, LayerBuilder, LayerId}, mle::{Mle, dense::DenseMle}, sumcheck::tests::{get_dummy_claim, dummy_sumcheck, verify_sumcheck_messages}};
+    use crate::{layer::{from_mle, LayerBuilder, LayerId}, mle::{Mle, dense::DenseMle}, sumcheck::tests::{get_dummy_claim, dummy_sumcheck, verify_sumcheck_messages}, expression::ExpressionStandard};
 
     use super::BatchedLayer;
 
@@ -251,23 +259,17 @@ mod tests {
     #[test]
     fn test_batched_layer() {
         let mut rng = test_rng();
-        let expression_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| mle1.mle_ref().expression() + mle2.mle_ref().expression();
-        let layer_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>), layer_id, prefix_bits| {
-            let mut new_mle = mle1
+        let expression_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| -> ExpressionStandard<Fr> {mle1.mle_ref().expression() + mle2.mle_ref().expression()};
+        let layer_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>), layer_id, prefix_bits| -> DenseMle<Fr, Fr> {
+            DenseMle::new_from_iter(mle1
                 .clone()
                 .into_iter()
                 .zip(mle2.clone().into_iter())
-                .map(|(first, second)| first + second)
-                .collect::<DenseMle<Fr, Fr>>();
-            new_mle.define_layer_id(layer_id);
-            new_mle.add_prefix_bits(prefix_bits);
-            new_mle
+                .map(|(first, second)| first + second), layer_id, prefix_bits)
         };        
         let output: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new(vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)]);
-            first.define_layer_id(LayerId::Input);
-            let mut second = DenseMle::new(vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)]);
-            second.define_layer_id(LayerId::Input);
+            let mut first = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)], LayerId::Input, None);
+            let mut second = DenseMle::new_from_raw(vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)], LayerId::Input, None);
             (first, second)
         };
         let builder = from_mle(
@@ -277,10 +279,8 @@ mod tests {
         );
 
         let output_2: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new(vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)]);
-            first.define_layer_id(LayerId::Input);
-            let mut second = DenseMle::new(vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)]);
-            second.define_layer_id(LayerId::Input);
+            let mut first = DenseMle::new_from_raw(vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)], LayerId::Input, None);
+            let mut second = DenseMle::new_from_raw(vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)], LayerId::Input, None);
             (first, second)
         };
 
@@ -296,7 +296,7 @@ mod tests {
 
         let output = layer_builder.next_layer(LayerId::Layer(0), None);
 
-        let output_real = output[0].clone().into_iter().interleave(output[1].clone().into_iter()).collect::<DenseMle<Fr, Fr>>();
+        let output_real = DenseMle::new_from_iter(output[0].clone().into_iter().interleave(output[1].clone().into_iter()), LayerId::Layer(0), None);
 
         let layer_claims = get_dummy_claim(output_real.mle_ref(), &mut rng, None);
 

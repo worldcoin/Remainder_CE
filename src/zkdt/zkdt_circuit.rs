@@ -424,19 +424,19 @@ fn check_signed_recomposition<F: FieldExt>(actual_value: F, decomp: BinDecomp16B
     true
 }
 
+pub(crate) struct BatchedDummyMles<F: FieldExt> {
+    pub dummy_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub dummy_permuted_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub dummy_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>,
+    pub dummy_leaf_node_paths_mle: Vec<DenseMle<F, LeafNode<F>>>,
+    pub dummy_binary_decomp_diffs_mle: DenseMle<F, BinDecomp16Bit<F>>,
+    pub dummy_multiplicities_bin_decomp_mle: DenseMle<F, BinDecomp16Bit<F>>,
+    pub dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+    pub dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+}
 
-pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
-    // DenseMle<F, F>,
-    DenseMle<F, InputAttribute<F>>,
-    // DenseMle<F, F>,
-    Vec<DenseMle<F, InputAttribute<F>>>,
-    Vec<DenseMle<F, DecisionNode<F>>>,
-    Vec<DenseMle<F, LeafNode<F>>>,
-    DenseMle<F, BinDecomp16Bit<F>>,
-    DenseMle<F, BinDecomp16Bit<F>>,
-    DenseMle<F, DecisionNode<F>>,
-    DenseMle<F, LeafNode<F>>,
-) {
+
+pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
     // --- First generate the dummy data ---
     let DummyData {
         // dummy_attr_idx_data,
@@ -454,16 +454,10 @@ pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
     // --- Generate MLEs for each ---
     // TODO!(ryancao): Change this into batched form
     // let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
-    let dummy_input_data_batch = dummy_input_data.clone().into_iter().reduce(
-        |a, b| {
-            let mut c = a.clone();
-            c.extend(b);
-            c
-        }).unwrap();
-    let dummy_input_data_mle = DenseMle::new_from_iter(dummy_input_data_batch
+    let dummy_input_data_mle = dummy_input_data.into_iter().map(|input| DenseMle::new_from_iter(input
         .clone()
         .into_iter()
-        .map(InputAttribute::from), LayerId::Input, None);
+        .map(InputAttribute::from), LayerId::Input, None)).collect_vec();
     // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
     let dummy_permuted_input_data_mle = dummy_permuted_input_data
         .iter().map(|datum| DenseMle::new_from_iter(datum
@@ -498,10 +492,8 @@ pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
         .into_iter()
         .map(LeafNode::from), LayerId::Input, None);
 
-    (
-        // dummy_attr_idx_data_mle,
+    BatchedDummyMles {
         dummy_input_data_mle,
-        // dummy_permutation_indices_mle,
         dummy_permuted_input_data_mle,
         dummy_decision_node_paths_mle,
         dummy_leaf_node_paths_mle,
@@ -509,7 +501,7 @@ pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
         dummy_multiplicities_bin_decomp_mle,
         dummy_decision_nodes_mle,
         dummy_leaf_nodes_mle,
-    )
+    }
 }
 
 pub(crate) struct DummyMles<F: FieldExt> {
