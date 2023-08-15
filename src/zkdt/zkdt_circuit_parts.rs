@@ -230,9 +230,9 @@ mod tests {
     use ark_bn254::Fr;
     use ark_std::{test_rng, UniformRand};
 
-    use crate::{zkdt::zkdt_circuit::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, generate_dummy_mles_batch, BatchedDummyMles}, prover::GKRCircuit, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}};
+    use crate::{zkdt::zkdt_circuit::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles}, prover::GKRCircuit, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}};
 
-    use super::PermutationCircuit;
+    use super::{PermutationCircuit, AttributeConsistencyCircuit};
 
 
     #[test]
@@ -260,6 +260,40 @@ mod tests {
         match proof {
             Ok(proof) => {
                 let mut transcript = PoseidonTranscript::new("Permutation Circuit Verifier Transcript");
+                let result = circuit.verify(&mut transcript, proof);
+                if let Err(err) = result {
+                    println!("{}", err);
+                    panic!();
+                }
+            },
+            Err(err) => {
+                println!("{}", err);
+                panic!();
+            }
+        }
+    }
+
+    #[test]
+    fn test_attribute_consistency_circuit() {
+
+        let DummyMles::<Fr> {
+            dummy_permuted_input_data_mle,
+            dummy_decision_node_paths_mle, ..
+        } = generate_dummy_mles();
+
+        let mut circuit = AttributeConsistencyCircuit {
+            dummy_permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
+            dummy_decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
+            tree_height: TREE_HEIGHT,
+        };
+
+        let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Prover Transcript");
+
+        let proof = circuit.prove(&mut transcript);
+
+        match proof {
+            Ok(proof) => {
+                let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Verifier Transcript");
                 let result = circuit.verify(&mut transcript, proof);
                 if let Err(err) = result {
                     println!("{}", err);
