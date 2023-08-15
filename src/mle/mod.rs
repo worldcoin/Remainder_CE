@@ -1,20 +1,20 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use serde::{Deserialize, Serialize};
 use core::fmt::Debug;
 
-use std::ops::Index;
-
-use crate::expression::ExpressionStandard;
 use crate::layer::Claim;
-use crate::mle::dense::BetaError;
 use crate::{layer::LayerId, FieldExt};
+
+use self::mle_enum::MleEnum;
 
 pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
 pub mod zero;
 pub mod gate;
+pub mod mle_enum;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
@@ -22,28 +22,18 @@ pub mod gate;
 ///
 /// If you want to construct an Mle, or use an Mle for some non-cryptographic computation (e.g. wit gen) then
 /// you should always use the iterator adaptors IntoIterator and FromIterator, this is to ensure that the semantic ordering within T is always consistent.
-pub trait Mle<F, T>
+pub trait Mle<F>
 where
-    Self: Clone + Debug,
     //+ CanonicalSerialize + CanonicalDeserialize,
-    // + IntoIterator<Item = T>
     // + FromIterator<T>,
     F: FieldExt,
-    //TODO!(Define MLEable trait + derive)
-    T: Send + Sync + MleAble<F>,
 {
-    ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-    type MleRef: MleRef;
-
-    ///Underlying MultiLinearExtention implementation
-    type MultiLinearExtention: IntoIterator<Item = F>;
-
-    ///Get number of variables of the Mle which is equivalent to the log_2 of the size of the MLE
+    ///Get the log_2 size of the WHOLE mle
     fn num_vars(&self) -> usize;
+    ///Get the padded set of evaluations over the boolean hypercube; Useful for constructing the input layer
+    fn get_padded_evaluations(&self) -> Vec<F>;
 
-    fn define_layer_id(&mut self, id: LayerId);
-
-    fn add_prefix_bits(&mut self, prefix: Option<Vec<MleIndex<F>>>);
+    fn add_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
@@ -72,10 +62,12 @@ pub trait MleRef: Debug + Send + Sync {
     fn index_mle_indices(&mut self, curr_index: usize) -> usize;
 
     /// The layer_id of the layer that this MLE belongs to
-    fn get_layer_id(&self) -> Option<LayerId>;
+    fn get_layer_id(&self) -> LayerId;
 
     /// get whether mle has been indexed
     fn indexed(&self) -> bool;
+
+    fn get_enum(self) -> MleEnum<Self::F>;
 }
 
 ///Trait that allows a type to be serialized into an Mle, and yield MleRefs
@@ -84,10 +76,22 @@ pub trait MleRef: Debug + Send + Sync {
 pub trait MleAble<F: FieldExt> {
     ///The particular representation that is convienent for an MleAble, most of the time it will be a \[Vec<F>; Size\] array
     type Repr: Send + Sync + Clone + Debug + CanonicalDeserialize + CanonicalSerialize;
+
+    type IntoIter<'a>: Iterator<Item = Self>
+    where
+        Self: 'a;
+
+    fn get_padded_evaluations(items: &Self::Repr) -> Vec<F>;
+
+    fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr;
+
+    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a>;
+
+    fn num_vars(items: &Self::Repr) -> usize;
 }
 
 ///The Enum that represents the possible indices for an MLE
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MleIndex<F: FieldExt> {
     ///A Selector bit for fixed MLE access
     Fixed(bool),
@@ -102,26 +106,30 @@ pub enum MleIndex<F: FieldExt> {
 impl<F: FieldExt> MleIndex<F> {
     ///Turns this MleIndex into an IndexedBit variant if it's an Iterated variant
     pub fn index_index(&mut self, bit: usize) {
-        match self {
-            MleIndex::Iterated => *self = Self::IndexedBit(bit),
-            _ => ()
+        if matches!(self, MleIndex::Iterated) {
+            *self = Self::IndexedBit(bit)
         }
     }
 
     ///Bind an indexed bit to a challenge
     pub fn bind_index(&mut self, chal: F) {
-        match self {
-            MleIndex::IndexedBit(bit) => *self = Self::Bound(chal, *bit),
-            _ => ()
+        if let MleIndex::IndexedBit(bit) = self {
+            *self = Self::Bound(chal, *bit)
         }
     }
 
     ///Evaluate this MleIndex
     pub fn val(&self) -> Option<F> {
         match self {
-            MleIndex::Fixed(bit) => if *bit {Some(F::one())} else {Some(F::zero())},
+            MleIndex::Fixed(bit) => {
+                if *bit {
+                    Some(F::one())
+                } else {
+                    Some(F::zero())
+                }
+            }
             MleIndex::Bound(chal, _) => Some(*chal),
-            _ => None
+            _ => None,
         }
     }
 }

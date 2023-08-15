@@ -183,7 +183,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
     }
 
     ///Get the claims that this layer makes on other layers
-    fn claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
         let mut claims: Vec<(LayerId, Claim<F>)> = vec![];
         let mut fixed_mle_indices_u: Vec<F> = vec![];
         if let Some(([_, f_2_u], _)) = &self.phase_1_mles {
@@ -224,6 +224,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         claimed_vals: &mut Vec<F>,
         num_claims: usize,
         num_idx: usize) -> Result<Vec<F>, ClaimError> {
+        todo!()
+    }
+
+    fn get_enum(self) -> crate::layer::layer_enum::LayerEnum<F, Self::Transcript> {
         todo!()
     }
 }
@@ -314,8 +318,8 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
             }
         );
 
-        let mut phase_1_lhs = [DenseMle::new(a_hg_lhs).mle_ref(), self.lhs.clone()];
-        let mut phase_1_rhs = [DenseMle::new(a_hg_rhs).mle_ref()];
+        let mut phase_1_lhs = [DenseMle::new_from_raw(a_hg_lhs, LayerId::Input, None).mle_ref(), self.lhs.clone()];
+        let mut phase_1_rhs = [DenseMle::new_from_raw(a_hg_rhs, LayerId::Input, None).mle_ref()];
         index_mle_indices_gate(phase_1_lhs.as_mut(), 0);
         index_mle_indices_gate(phase_1_rhs.as_mut(), 0);
         self.set_phase_1((phase_1_lhs.clone(), phase_1_rhs.clone()));
@@ -340,8 +344,8 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
                 a_f1_rhs[y_ind] = a_f1_rhs[y_ind] + adder;
             }
         );
-        let mut phase_2_lhs = [DenseMle::new(a_f1_lhs).mle_ref()];
-        let mut phase_2_rhs = [DenseMle::new(a_f1_rhs).mle_ref(), self.rhs.clone()];
+        let mut phase_2_lhs = [DenseMle::new_from_raw(a_f1_lhs, LayerId::Input, None).mle_ref()];
+        let mut phase_2_rhs = [DenseMle::new_from_raw(a_f1_rhs, LayerId::Input, None).mle_ref(), self.rhs.clone()];
         index_mle_indices_gate(phase_2_lhs.as_mut(), 0);
         index_mle_indices_gate(phase_2_rhs.as_mut(), 0);
         self.set_phase_2((phase_2_lhs.clone(), phase_2_rhs.clone()));
@@ -489,11 +493,11 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
 }
 
 /// shut up
-pub fn evaluate_mle_ref_product_gate<F: FieldExt>(
+pub(crate) fn evaluate_mle_ref_product_gate<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
     degree: usize,
-) -> Result<PartialSum<F>, MleError> {
+) -> Result<Evals<F>, MleError> {
     for mle_ref in mle_refs {
         if !mle_ref.indexed() {
             return Err(MleError::NotIndexedError);
@@ -572,10 +576,7 @@ pub fn evaluate_mle_ref_product_gate<F: FieldExt>(
             },
         );
 
-        Ok(PartialSum {
-            sum_or_eval: SumOrEvals::Evals(evals),
-            max_num_vars: real_num_vars,
-        })
+        Ok(Evals(evals))
     } else {
         // There is no independent variable and we can sum over everything
         let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
@@ -610,10 +611,10 @@ pub fn evaluate_mle_ref_product_gate<F: FieldExt>(
 
         #[cfg(feature = "parallel")]
         let sum = partials.sum();
-        Ok(PartialSum {
-            sum_or_eval: SumOrEvals::Sum(sum),
-            max_num_vars: real_num_vars,
-        })
+
+
+
+        Ok(Evals(vec![sum; degree]))
     }
 }
 
@@ -643,6 +644,7 @@ fn fully_bind<F: FieldExt>(
         }
     );
 
+    
     bound_eval
 
 }
@@ -775,11 +777,9 @@ fn compute_sumcheck_message_gate<F: FieldExt>(
     let eval = eval_lhs + eval_rhs;
 
 
-    if let PartialSum { sum_or_eval: SumOrEvals::Evals(evaluations), max_num_vars: _ } = eval {
-        Ok(evaluations)
-    } else {
-        Err(GateError::SumcheckProverError)
-    }
+    let Evals(evaluations) = eval;
+
+    Ok(evaluations)
 }
 
 ///Computes a round of the sumcheck protocol on this Layer
@@ -873,9 +873,9 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
                 a_f3[idx] += adder_f3; 
             });
         
-        let mut a_f2_mle = DenseMle::new(a_f2).mle_ref();
+        let mut a_f2_mle = DenseMle::new_from_raw(a_f2, LayerId::Input, None).mle_ref();
         a_f2_mle.index_mle_indices(0);
-        let mut a_f3_mle = DenseMle::new(a_f3).mle_ref();
+        let mut a_f3_mle = DenseMle::new_from_raw(a_f3, LayerId::Input, None).mle_ref();
         a_f3_mle.index_mle_indices(0);
         beta_g2.table.index_mle_indices(0);
         self.lhs.index_mle_indices(0);
@@ -925,9 +925,9 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
         // }
         let beta_g2 = beta_g.table.bookkeeping_table()[0];
         let new_lhs_v: Vec<F> = self.lhs.clone().bookkeeping_table().iter().map(|val| *val * beta_g2).collect();
-        let new_lhs = DenseMle::new(new_lhs_v).mle_ref();
+        let new_lhs = DenseMle::new_from_raw(new_lhs_v, LayerId::Input, None).mle_ref();
         let new_rhs_v: Vec<F> = self.rhs.clone().bookkeeping_table().iter().map(|val| *val * beta_g2).collect();
-        let new_rhs = DenseMle::new(new_rhs_v).mle_ref();
+        let new_rhs = DenseMle::new_from_raw(new_rhs_v, LayerId::Input, None).mle_ref();
         let next_claims = (self.g1_challenges.clone().unwrap(), F::zero());
 
         let mut reduced_gate: AddGate<F, Tr> = AddGate::new(self.layer_id.clone(), self.nonzero_gates.clone(), new_lhs, new_rhs);
@@ -1048,17 +1048,14 @@ fn compute_sumcheck_message_copy<F: FieldExt>(beta: &mut BetaTable<F>, lhs: &mut
     let independent_lhs = lhs.mle_indices().contains(&MleIndex::IndexedBit(round_index));
     let independent_rhs = rhs.mle_indices().contains(&MleIndex::IndexedBit(round_index));
     
-    let evals_lhs = evaluate_mle_ref_product(&[lhs.clone()], independent_lhs, degree, beta.clone().table, false).unwrap();
-    let evals_rhs = evaluate_mle_ref_product(&[rhs.clone()], independent_rhs, degree, beta.clone().table, false).unwrap();
+    let evals_lhs = evaluate_mle_ref_product(&[lhs.clone()], independent_lhs, degree, beta.clone().table).unwrap();
+    let evals_rhs = evaluate_mle_ref_product(&[rhs.clone()], independent_rhs, degree, beta.clone().table).unwrap();
 
     let eval = evals_lhs + evals_rhs;
 
+    let Evals(evaluations) = eval;
     
-    if let PartialSum { sum_or_eval: SumOrEvals::Evals(evaluations), max_num_vars: _ } = eval {
-        Ok(evaluations)
-    } else {
-        Err(GateError::SumcheckProverError)
-    }
+    Ok(evaluations)
 }
 
 fn prove_round_copy<F: FieldExt>(phase_lhs: &mut DenseMleRef<F>, phase_rhs: &mut DenseMleRef<F>, lhs: &mut DenseMleRef<F>, rhs: &mut DenseMleRef<F>, beta: &mut BetaTable<F>, round_index: usize, challenge: F) -> Result<Vec<F>, GateError> {
@@ -1094,13 +1091,13 @@ mod test {
             Fr::from(1),
             Fr::from(2),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(51395810),
             Fr::from(2),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0), nonzero_gates, lhs_mle_ref, rhs_mle_ref);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1131,7 +1128,7 @@ mod test {
             Fr::from(1),
             Fr::from(1),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1143,7 +1140,7 @@ mod test {
             Fr::from(1),
             Fr::from(1),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0),  nonzero_gates, lhs_mle_ref, rhs_mle_ref);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1176,7 +1173,7 @@ mod test {
             Fr::from(75361),
             Fr::from(-91901),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1196,7 +1193,7 @@ mod test {
             Fr::from(7),
             Fr::from(9999),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0), nonzero_gates, lhs_mle_ref, rhs_mle_ref);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1222,7 +1219,7 @@ mod test {
             Fr::from(1),
             Fr::from(2),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(0),
@@ -1230,7 +1227,7 @@ mod test {
             Fr::from(51395810),
             Fr::from(2),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut batched_gate_mle: AddGateBatched<Fr, PoseidonTranscript<Fr>> = AddGateBatched::new(new_bits, nonzero_gates, lhs_mle_ref, rhs_mle_ref, LayerId::Layer(0));
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1260,7 +1257,7 @@ mod test {
             Fr::from(1),
             Fr::from(1),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1272,7 +1269,7 @@ mod test {
             Fr::from(1),
             Fr::from(1),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut batched_gate_mle: AddGateBatched<Fr, PoseidonTranscript<Fr>> = AddGateBatched::new(new_bits, nonzero_gates, lhs_mle_ref, rhs_mle_ref, LayerId::Layer(0));
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1302,7 +1299,7 @@ mod test {
             Fr::from(7),
             Fr::from(3),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1314,7 +1311,7 @@ mod test {
             Fr::from(3),
             Fr::from(4),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut batched_gate_mle: AddGateBatched<Fr, PoseidonTranscript<Fr>> = AddGateBatched::new(new_bits, nonzero_gates, lhs_mle_ref, rhs_mle_ref, LayerId::Layer(0));
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1353,7 +1350,7 @@ mod test {
             Fr::from(7),
             Fr::from(3),
         ];
-        let lhs_mle_ref = DenseMle::new(lhs_v).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1373,7 +1370,7 @@ mod test {
             Fr::from(3),
             Fr::from(4),
         ];
-        let rhs_mle_ref = DenseMle::new(rhs_v).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
 
         let mut batched_gate_mle: AddGateBatched<Fr, PoseidonTranscript<Fr>> = AddGateBatched::new(new_bits, nonzero_gates, lhs_mle_ref, rhs_mle_ref, LayerId::Layer(0));
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);

@@ -1,113 +1,170 @@
 use std::{
-    cmp,
     fmt::Debug,
-    iter::{Cloned, Zip},
+    iter::{Cloned, Map, Zip},
     marker::PhantomData,
 };
 
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{cfg_into_iter, cfg_iter, log2};
-use derive_more::{From, Into};
-use itertools::{repeat_n, Itertools};
+use ark_std::log2;
+// use derive_more::{From, Into};
+use itertools::{repeat_n, Itertools, MapInto};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
+use serde::{Deserialize, Serialize};
 
-use super::{Mle, MleAble, MleIndex, MleRef};
+use super::{Mle, MleAble, MleIndex, MleRef, mle_enum::MleEnum};
 use crate::{expression::ExpressionStandard, layer::Claim};
-use crate::{
-    zkdt::structs::LeafNode,
-    {layer::LayerId, FieldExt},
-};
-
-use super::super::zkdt::structs::{BinDecomp16Bit, DecisionNode, InputAttribute};
-use thiserror::Error;
-
-#[derive(Error, Debug, Clone)]
-
-/// Error for handling beta table updates
-pub enum BetaError {
-    #[error("claim index is 0, cannot take inverse")]
-    NoInverse,
-    #[error("not enough claims to compute beta table")]
-    NotEnoughClaims,
-    #[error("no initialized beta table")]
-    NoBetaTable,
-}
+use crate::{layer::LayerId, FieldExt};
 
 #[derive(Clone, Debug)]
 ///An [Mle] that is dense
 pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> {
-    mle: T::Repr,
+    ///The underlying data
+    pub mle: T::Repr,
     num_vars: usize,
-    layer_id: Option<LayerId>,
-    prefix_bits: Option<Vec<MleIndex<F>>>,
-    _marker: PhantomData<F>,
+    ///The layer_id this data belongs to
+    pub layer_id: LayerId,
+    ///Any prefix bits that must be added to any MleRefs yielded by this Mle
+    pub prefix_bits: Option<Vec<MleIndex<F>>>,
+    ///marker
+    pub _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, T> Mle<F, T> for DenseMle<F, T>
+impl<F: FieldExt, T> Mle<F> for DenseMle<F, T>
 where
+    // Self: IntoIterator<Item = T> + FromIterator<T>
     T: Send + Sync + Clone + Debug + MleAble<F>,
 {
-    type MleRef = DenseMleRef<F>;
-
-    type MultiLinearExtention = Vec<F>;
-
     fn num_vars(&self) -> usize {
         self.num_vars
     }
-
-    fn define_layer_id(&mut self, id: LayerId) {
-        self.layer_id = Some(id);
+    fn get_padded_evaluations(&self) -> Vec<F> {
+        T::get_padded_evaluations(&self.mle)
     }
 
-    fn add_prefix_bits(&mut self, prefix: Option<Vec<MleIndex<F>>>) {
-        self.prefix_bits = prefix;
-    }
-}
-
-impl<F: FieldExt> IntoIterator for DenseMle<F, F> {
-    type Item = F;
-
-    type IntoIter = std::vec::IntoIter<F>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.mle.into_iter()
+    fn add_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>) {
+        self.prefix_bits = new_bits;
     }
 }
 
-impl<F: FieldExt> FromIterator<F> for DenseMle<F, F> {
-    fn from_iter<T: IntoIterator<Item = F>>(iter: T) -> Self {
-        let evaluations = iter.into_iter().collect_vec();
-
-        let num_vars = log2(evaluations.len()) as usize;
-
+impl<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> DenseMle<F, T> {
+    pub fn new_from_iter(
+        iter: impl Iterator<Item = T>,
+        layer_id: LayerId,
+        prefix_bits: Option<Vec<MleIndex<F>>>,
+    ) -> Self {
+        let items = T::from_iter(iter);
+        let num_vars = T::num_vars(&items);
         Self {
-            mle: evaluations,
+            mle: items,
             num_vars,
-            layer_id: None,
-            prefix_bits: None,
+            layer_id,
+            prefix_bits,
             _marker: PhantomData,
         }
     }
+
+    pub fn new_from_raw(
+        items: T::Repr,
+        layer_id: LayerId,
+        prefix_bits: Option<Vec<MleIndex<F>>>,
+    ) -> Self {
+        let num_vars = T::num_vars(&items);
+        Self {
+            mle: items,
+            num_vars,
+            layer_id,
+            prefix_bits,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> IntoIterator
+    for &'a DenseMle<F, T>
+{
+    type Item = T;
+
+    type IntoIter = T::IntoIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        T::to_iter(&self.mle)
+    }
+}
+
+// impl<F: FieldExt> FromIterator<F> for DenseMle<F, F> {
+//     fn from_iter<T: IntoIterator<Item = F>>(iter: T) -> Self {
+//         let evaluations = iter.into_iter().collect_vec();
+
+//         let num_vars = log2(evaluations.len()) as usize;
+
+//         Self {
+//             mle: evaluations,
+//             num_vars,
+//             layer_id: None,
+//             prefix_bits: None,
+//             _marker: PhantomData,
+//         }
+//     }
+// }
+
+pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
+    let max_size = items
+        .iter()
+        .map(|mle_ref| mle_ref.len())
+        .max().unwrap();
+    let part_size = 1 << log2(max_size);
+    let part_count = 2_u32.pow(log2(L)) as usize;
+    let padding_count = part_count - L;
+
+    items.into_iter().cloned().map(|mut items| {
+        let padding = part_size - items.len();
+        items.extend(repeat_n(F::zero(), padding));
+        items
+    }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
 }
 
 impl<F: FieldExt> MleAble<F> for F {
     type Repr = Vec<F>;
+    type IntoIter<'a> = Cloned<std::slice::Iter<'a, F>>;
+
+    fn get_padded_evaluations(items: &Self::Repr) -> Vec<F> {
+        let size = 1 << log2(items.len());
+        let padding = size - items.len();
+
+        items
+            .iter()
+            .cloned()
+            .chain(repeat_n(F::zero(), padding))
+            .collect()
+    }
+
+    fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr {
+        iter.into_iter().collect_vec()
+    }
+
+    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
+        items.iter().cloned()
+    }
+
+    fn num_vars(items: &Self::Repr) -> usize {
+        log2(items.len()) as usize
+    }
 }
 
 impl<F: FieldExt> DenseMle<F, F> {
-    pub fn new(mle: Vec<F>) -> Self {
-        let num_vars = log2(mle.len()) as usize;
-        Self {
-            mle,
-            num_vars,
-            layer_id: None,
-            prefix_bits: None,
-            _marker: PhantomData,
-        }
-    }
+    ///Creates a flat DenseMle from a Vec<F>
+    // pub fn new(mle: Vec<F>) -> Self {
+    //     let num_vars = log2(mle.len()) as usize;
+    //     Self {
+    //         mle,
+    //         num_vars,
+    //         layer_id: None,
+    //         prefix_bits: None,
+    //         _marker: PhantomData,
+    //     }
+    // }
 
+    ///Creates a DenseMleRef from this DenseMle
     pub fn mle_ref(&self) -> DenseMleRef<F> {
-        // let num_vars = self.num_vars() + self.prefix_bits.as_ref().map(|bits| bits.len()).unwrap_or(0);
         DenseMleRef {
             bookkeeping_table: self.mle.clone(),
             mle_indices: self
@@ -124,57 +181,86 @@ impl<F: FieldExt> DenseMle<F, F> {
     }
 
     ///Splits the mle into a new mle with a tuple of size 2 as it's element
-    pub fn split(&self) -> DenseMle<F, Tuple2<F>> {
-        self.mle
-            .chunks(2)
-            .map(|items| (items[0], items.get(1).cloned().unwrap_or(F::zero())).into())
-            .collect()
+    pub fn split(&self, padding: F) -> DenseMle<F, Tuple2<F>> {
+        DenseMle::new_from_iter(
+            self.mle
+                .chunks(2)
+                .map(|items| (items[0], items.get(1).cloned().unwrap_or(padding)).into()),
+            self.layer_id.clone(),
+            self.prefix_bits.clone(),
+        )
     }
 }
 
-#[derive(Debug, Clone, From, Into)]
-pub struct Tuple2<F: FieldExt>((F, F));
+#[derive(Debug, Clone)]
+///Newtype around a tuple of field elements
+pub struct Tuple2<F: FieldExt>(pub (F, F));
 
 impl<F: FieldExt> MleAble<F> for Tuple2<F> {
     type Repr = [Vec<F>; 2];
+
+    fn get_padded_evaluations(items: &Self::Repr) -> Vec<F> {
+        get_padded_evaluations_for_list(items)
+    }
+
+    type IntoIter<'a> = Map<Zip<std::slice::Iter<'a, F>, std::slice::Iter<'a, F>>, fn((&F, &F)) -> Self> where Self: 'a;
+
+    fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr {
+        let iter = iter.into_iter();
+        let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0 .1)).unzip();
+        [first, second]
+    }
+
+    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
+        items[0]
+            .iter()
+            .zip(items[1].iter())
+            .map(|(first, second)| Tuple2((first.clone(), second.clone())))
+    }
+
+    fn num_vars(items: &Self::Repr) -> usize {
+        log2(items[0].len() + items[1].len()) as usize
+    }
+}
+
+impl<F: FieldExt> From<(F, F)> for Tuple2<F> {
+    fn from(value: (F, F)) -> Self {
+        Self(value)
+    }
 }
 
 //TODO!(Fix this so that it clones less)
-impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, Tuple2<F>> {
-    type Item = (F, F);
+// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, Tuple2<F>> {
+//     type Item = (F, F);
 
-    type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
+//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
 
-    fn into_iter(self) -> Self::IntoIter {
-        let len = self.mle.len() / 2;
+//     fn into_iter(self) -> Self::IntoIter {
+//         self.mle[0].iter().cloned().zip(self.mle[1].iter().cloned())
+//     }
+// }
 
-        self.mle[0].iter().cloned().zip(self.mle[1].iter().cloned())
-    }
-}
+// impl<F: FieldExt> FromIterator<Tuple2<F>> for DenseMle<F, Tuple2<F>> {
+//     fn from_iter<T: IntoIterator<Item = Tuple2<F>>>(iter: T) -> Self {
+//         let iter = iter.into_iter();
+//         let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0 .1)).unzip();
 
-impl<F: FieldExt> FromIterator<Tuple2<F>> for DenseMle<F, Tuple2<F>> {
-    fn from_iter<T: IntoIterator<Item = Tuple2<F>>>(iter: T) -> Self {
-        let iter = iter.into_iter();
-        let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0 .1)).unzip();
+//         let num_vars: usize = log2(first.len() + second.len()) as usize;
 
-        let num_vars = log2(first.len() + second.len()) as usize;
-
-        Self {
-            mle: [first, second],
-            num_vars,
-            layer_id: None,
-            prefix_bits: None,
-            _marker: PhantomData,
-        }
-    }
-}
+//         Self {
+//             mle: [first, second],
+//             num_vars,
+//             layer_id: None,
+//             prefix_bits: None,
+//             _marker: PhantomData,
+//         }
+//     }
+// }
 
 impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     ///Gets an MleRef to the first element in the tuple
     pub fn first(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
-
-        let len = self.mle.len() / 2;
 
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
@@ -198,8 +284,6 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     pub fn second(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_vars;
 
-        let len = self.mle.len() / 2;
-
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
             mle_indices: self
@@ -216,462 +300,35 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
-    }
-}
-
-// --------------------------- zkDT struct stuff ---------------------------
-
-impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
-    type Repr = [Vec<F>; 3];
-}
-
-// TODO!(ryancao): Actually implement this correctly for PathNode<F>
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, PathNode<F>> {
-//     type Item = (F, F, F);
-
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         let len = self.mle.len() / 2;
-
-//         self.mle[0]
-//             .iter()
-//             .cloned()
-//             .zip(self.mle[1].iter().cloned())
-//     }
-// }
-
-/// Conversion from a list of `PathNode<F>`s into a DenseMle
-impl<F: FieldExt> FromIterator<DecisionNode<F>> for DenseMle<F, DecisionNode<F>> {
-    fn from_iter<T: IntoIterator<Item = DecisionNode<F>>>(iter: T) -> Self {
-        // --- The physical storage is [node_id_1, ...] + [attr_id_1, ...] + [threshold_1, ...] ---
-        let iter = iter.into_iter();
-        let (node_ids, attr_ids, thresholds): (Vec<F>, Vec<F>, Vec<F>) = iter
-            .map(|x| (x.node_id, x.attr_id, x.threshold))
-            .multiunzip();
-
-        // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-        let num_vars = log2(4 * node_ids.len()) as usize;
-
-        Self {
-            mle: [node_ids, attr_ids, thresholds],
-            num_vars,
-            _marker: PhantomData,
-            layer_id: None,
-            prefix_bits: None,
-        }
-    }
-}
-
-impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
-    /// MleRef grabbing just the list of node IDs
-    pub fn node_id(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
-
-        // --- There are four components to this MLE ---
-        let len = self.mle.len() / 4;
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec(),
-            // --- [0, 0, b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(std::iter::once(MleIndex::Fixed(false)))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-                )
-                .collect_vec(),
-            num_vars: num_vars - 2,
-            layer_id: self.layer_id.clone(),
-            indexed: false,
-        }
-    }
-
-    /// MleRef grabbing just the list of attribute IDs
-    pub fn attr_id(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
-
-        // --- There are four components to this MLE ---
-        let len = self.mle.len() / 4;
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec(),
-            // --- [0, 1, b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(std::iter::once(MleIndex::Fixed(true)))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-                )
-                .collect_vec(),
-            num_vars: num_vars - 2,
-            layer_id: None,
-            indexed: false,
-        }
-    }
-
-    /// MleRef grabbing just the list of thresholds
-    pub fn threshold(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
-
-        // --- There are four components to this MLE ---
-        // let len = self.mle.len() / 4;
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[2].to_vec(),
-            // --- [1, 0, b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(std::iter::once(MleIndex::Fixed(false)))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-                )
-                .collect_vec(),
-            num_vars: num_vars - 2,
-            layer_id: None,
-            indexed: false,
-        }
-    }
-}
-
-// --- Leaf node ---
-impl<F: FieldExt> MleAble<F> for LeafNode<F> {
-    type Repr = [Vec<F>; 2];
-}
-
-// TODO!(ryancao): Actually implement this correctly for LeafNode<F>
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, LeafNode<F>> {
-//     type Item = (F, F, F);
-
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         let len = self.mle.len() / 2;
-
-//         self.mle[0]
-//             .iter()
-//             .cloned()
-//             .zip(self.mle[1].iter().cloned())
-//     }
-// }
-
-/// Conversion from a list of `LeafNode<F>`s into a DenseMle
-impl<F: FieldExt> FromIterator<LeafNode<F>> for DenseMle<F, LeafNode<F>> {
-    fn from_iter<T: IntoIterator<Item = LeafNode<F>>>(iter: T) -> Self {
-        // --- The physical storage is [node_id_1, ...] + [attr_id_1, ...] + [threshold_1, ...] ---
-        let iter = iter.into_iter();
-        let (node_ids, node_vals): (Vec<F>, Vec<F>) = iter.map(|x| (x.node_id, x.node_val)).unzip();
-
-        // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-        let num_vars = log2(2 * node_ids.len()) as usize;
-
-        Self {
-            mle: [node_ids, node_vals],
-            num_vars,
-            _marker: PhantomData,
-            layer_id: None,
-            prefix_bits: None,
-        }
-    }
-}
-
-impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
-    /// MleRef grabbing just the list of node IDs
-    pub fn node_id(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
-
-        // --- There are four components to this MLE ---
-        let len = self.mle.len() / 2;
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec(),
-            // --- [0, b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
-                )
-                .collect_vec(),
-            num_vars: num_vars - 1,
-            layer_id: self.layer_id.clone(),
-            indexed: false,
-        }
-    }
-
-    /// MleRef grabbing just the list of attribute IDs
-    pub fn node_val(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec(),
-            // --- [1, b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
-                )
-                .collect_vec(),
-            num_vars: num_vars - 1,
-            layer_id: self.layer_id.clone(),
-            indexed: false,
-        }
-    }
-}
-
-// --- Input attribute ---
-impl<F: FieldExt> MleAble<F> for InputAttribute<F> {
-    type Repr = [Vec<F>; 2];
-}
-
-// TODO!(ryancao): Actually implement this correctly for InputAttribute<F>
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, InputAttribute<F>> {
-//     type Item = (F, F, F);
-
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         let len = self.mle.len() / 2;
-
-//         self.mle[0]
-//             .iter()
-//             .cloned()
-//             .zip(self.mle[1].iter().cloned())
-//     }
-// }
-
-/// Conversion from a list of `InputAttribute<F>`s into a DenseMle
-impl<F: FieldExt> FromIterator<InputAttribute<F>> for DenseMle<F, InputAttribute<F>> {
-    fn from_iter<T: IntoIterator<Item = InputAttribute<F>>>(iter: T) -> Self {
-        // --- The physical storage is [node_id_1, ...] + [attr_id_1, ...] + [threshold_1, ...] ---
-        let iter = iter.into_iter();
-        let (attr_ids, attr_vals): (Vec<F>, Vec<F>) = iter.map(|x| (x.attr_id, x.attr_val)).unzip();
-
-        // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-        let num_vars = log2(2 * attr_ids.len()) as usize;
-
-        Self {
-            mle: [attr_ids, attr_vals],
-            num_vars,
-            _marker: PhantomData,
-            layer_id: None,
-            prefix_bits: None,
-        }
-    }
-}
-
-impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
-    /// MleRef grabbing just the list of attribute IDs
-    pub fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
-        // --- Default to the entire (component of) the MLE ---
-        let num_vars = num_vars.unwrap_or(self.num_vars - 1);
-
-        // TODO!(ryancao): Make this actually do error-handling
-        assert!(num_vars <= self.num_vars - 1);
-
-        // --- The length of the MLERef is just 2^{num_vars} ---
-        let len = 2_u32.pow(num_vars as u32) as usize;
-        let concrete_len = cmp::min(len, self.mle[0].to_vec().len());
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec()[..concrete_len].to_vec(),
-            // --- [0; 0, ..., 0; b_1, ..., b_n] ---
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(repeat_n(
-                            MleIndex::Fixed(false),
-                            self.num_vars - 1 - num_vars,
-                        ))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars)),
-                )
-                .collect_vec(),
-            num_vars,
-            layer_id: self.layer_id.clone(),
-            indexed: false,
-        }
-    }
-
-    /// MleRef grabbing just the list of attribute values
-    pub fn attr_val(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
-        // --- Default to the entire (component of) the MLE ---
-        let num_vars = match num_vars {
-            Some(num) => num,
-            None => self.num_vars - 1,
-        };
-
-        // TODO!(ryancao): Make this actually do error-handling
-        assert!(num_vars <= self.num_vars - 1);
-
-        // --- The length of the MLERef is just 2^{num_vars} ---
-        let len = 2_u32.pow(num_vars as u32) as usize;
-        let concrete_len = cmp::min(len, self.mle[1].to_vec().len());
-
-        DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec()[..concrete_len].to_vec(),
-            // --- [1; 0, ..., 0; b_1, ..., b_n] ---
-            // Note that the zeros are there to prefix all the things we chunked out
-            // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(repeat_n(
-                            MleIndex::Fixed(false),
-                            self.num_vars - 1 - num_vars,
-                        ))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars)),
-                )
-                .collect_vec(),
-            num_vars,
-            layer_id: None,
-            indexed: false,
-        }
-    }
-}
-
-// --- Bin decomp ---
-impl<F: FieldExt> MleAble<F> for BinDecomp16Bit<F> {
-    type Repr = [Vec<F>; 16];
-}
-
-/// Conversion from a list of `BinDecomp16Bit<F>`s into a DenseMle
-// TODO!(ryancao): Make this stuff derivable
-impl<F: FieldExt> FromIterator<BinDecomp16Bit<F>> for DenseMle<F, BinDecomp16Bit<F>> {
-    fn from_iter<T: IntoIterator<Item = BinDecomp16Bit<F>>>(iter: T) -> Self {
-        // --- The physical storage is [bit_0, ...] + [bit_1, ...] + [bit_2, ...], ... ---
-        let iter = iter.into_iter();
-
-        // --- TODO!(ryancao): This is genuinely horrible but we'll fix it later ---
-        let mut ret: [Vec<F>; 16] = std::array::from_fn(|_| vec![]);
-        iter.for_each(|tuple| {
-            for idx in 0..tuple.bits.len() {
-                ret[idx].push(tuple.bits[idx]);
-            }
-        });
-
-        // let ret: [Vec<F>; 16] = (0..16).into_iter().map(|index| {
-        //     iter.map(|tuple| {
-        //         tuple.bits[index]
-        //     }).collect()
-        // }).collect_vec().try_into().unwrap();
-
-        // For debugging
-        // ret.clone().into_iter().for_each(|x| {
-        //     dbg!(x.len());
-        // });
-
-        // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-        let num_vars = log2(16 * ret[0].len()) as usize;
-
-        Self {
-            mle: ret,
-            num_vars,
-            _marker: PhantomData,
-            layer_id: None,
-            prefix_bits: None,
-        }
-    }
-}
-
-// TODO!(ryancao): Make this stuff derivable
-impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
-    /// Returns a list of MLERefs, one for each bit
-    /// TODO!(ryancao): Change this back to [DenseMleRef<F>; 16] and make it work!
-    pub fn mle_bit_refs(&'_ self) -> Vec<DenseMleRef<F>> {
-        let num_vars = self.num_vars;
-
-        // --- There are sixteen components to this MLE ---
-        // TODO!(ryancao): Get rid of all the magic numbers
-        let len = self.mle.len() / 16;
-
-        let mut ret: Vec<DenseMleRef<F>> = vec![];
-
-        for bit_idx in 0..16 {
-            let first_prefix = (bit_idx % 16) >= 8;
-            let second_prefix = (bit_idx % 8) >= 4;
-            let third_prefix = (bit_idx % 4) >= 2;
-            let fourth_prefix = (bit_idx % 2) >= 1;
-            let bit_mle_ref = DenseMleRef {
-                bookkeeping_table: self.mle[bit_idx].to_vec(),
-                // --- [0, 0, 0, 0, b_1, ..., b_n] ---
-                mle_indices: self
-                    .prefix_bits
-                    .clone()
-                    .into_iter()
-                    .flatten()
-                    .chain(
-                        std::iter::once(MleIndex::Fixed(first_prefix))
-                            .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
-                            .chain(std::iter::once(MleIndex::Fixed(third_prefix)))
-                            .chain(std::iter::once(MleIndex::Fixed(fourth_prefix)))
-                            .chain(repeat_n(MleIndex::Iterated, num_vars - 4)),
-                    )
-                    .collect_vec(),
-                num_vars: num_vars - 4,
-                layer_id: None,
-                indexed: false,
-            };
-            ret.push(bit_mle_ref);
-        }
-
-        ret
     }
 }
 
 // --------------------------- MleRef stuff ---------------------------
 
 /// An [MleRef] that is dense
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DenseMleRef<F: FieldExt> {
+    ///The bookkeeping table of this MleRefs evaluations over the boolean hypercube
     pub bookkeeping_table: Vec<F>,
+    ///The MleIndices of this MleRef e.g. V(0, 1, r_1, r_2)
     pub mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     pub num_vars: usize,
-    layer_id: Option<LayerId>,
-    indexed: bool,
+    /// The layer this MleRef is a reference to
+    pub layer_id: LayerId,
+    /// A marker that keeps track of if this MleRef is indexed
+    pub indexed: bool,
 }
 
 impl<F: FieldExt> DenseMleRef<F> {
+    ///Convienence function for wrapping this in an Expression
     pub fn expression(self) -> ExpressionStandard<F> {
         ExpressionStandard::Mle(self)
     }
 }
 
-impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
+impl<F: FieldExt> MleRef for DenseMleRef<F> {
     type F = F;
 
     fn bookkeeping_table(&self) -> &[F] {
@@ -681,14 +338,6 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
         &self.mle_indices
     }
-
-    // fn relabel_mle_indices(&mut self, new_indices: &[MleIndex<F>]) {
-    //     self.mle_indices = new_indices
-    //         .iter()
-    //         .cloned()
-    //         .chain(self.mle_indices.drain(..))
-    //         .collect();
-    // }
 
     fn num_vars(&self) -> usize {
         self.num_vars
@@ -760,38 +409,40 @@ impl<'a, F: FieldExt> MleRef for DenseMleRef<F> {
         curr_index + new_indices
     }
 
-    fn get_layer_id(&self) -> Option<LayerId> {
+    fn get_layer_id(&self) -> LayerId {
         self.layer_id.clone()
+    }
+
+    fn get_enum(self) -> MleEnum<Self::F> {
+        MleEnum::Dense(self)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sumcheck::SumOrEvals;
+
     use ark_bn254::Fr;
-    use ark_ff::UniformRand;
-    use ark_std::test_rng;
+
     use ark_std::One;
-    use ark_std::Zero;
 
     #[test]
     ///test fixing variables in an mle with two variables
     fn fix_variable_twovars() {
-        let layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input, None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
     #[test]
     ///test fixing variables in an mle with three variables
     fn fix_variable_threevars() {
-        let layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -802,19 +453,19 @@ mod tests {
             Fr::from(1),
             Fr::from(4),
         ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input, None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
     #[test]
     ///test nested fixing variables in an mle with three variables
     fn fix_variable_nested() {
-        let layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -825,20 +476,20 @@ mod tests {
             Fr::from(1),
             Fr::from(4),
         ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
         mle_ref.fix_variable(2, Fr::from(2));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input, None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
     #[test]
     ///test nested fixing all the wayyyy
     fn fix_variable_full() {
-        let layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -849,7 +500,7 @@ mod tests {
             Fr::from(1),
             Fr::from(4),
         ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
         let mut mle_ref = mle.mle_ref();
         let _ = mle_ref.index_mle_indices(0);
         mle_ref.fix_variable(0, Fr::from(3));
@@ -857,7 +508,7 @@ mod tests {
         mle_ref.fix_variable(2, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(26)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new(mle_vec_exp);
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input, None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
@@ -875,9 +526,9 @@ mod tests {
         ];
 
         //DON'T do this normally, it clones the vec, if you have a flat MLE just use Mle::new
-        let mle_iter = mle_vec.clone().into_iter().collect::<DenseMle<Fr, Fr>>();
+        let mle_iter = DenseMle::new_from_iter(mle_vec.clone().into_iter(), LayerId::Input, None);
 
-        let mle_new: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
+        let mle_new: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
 
         assert!(mle_iter.mle == mle_new.mle);
         assert!(
@@ -895,11 +546,11 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec
-            .clone()
-            .into_iter()
-            .map(Tuple2::from)
-            .collect::<DenseMle<Fr, Tuple2<Fr>>>();
+        let mle = DenseMle::new_from_iter(
+            tuple_vec.clone().into_iter().map(Tuple2::from),
+            LayerId::Input,
+            None,
+        );
 
         let (first, second): (Vec<Fr>, Vec<_>) = tuple_vec.into_iter().unzip();
 
@@ -920,7 +571,7 @@ mod tests {
             Fr::from(7),
         ];
 
-        let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec.clone());
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec.clone(), LayerId::Input, None);
 
         let mle_ref: DenseMleRef<Fr> = mle.mle_ref();
 
@@ -939,10 +590,11 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = tuple_vec
-            .into_iter()
-            .map(Tuple2::from)
-            .collect::<DenseMle<Fr, Tuple2<Fr>>>();
+        let mle = DenseMle::new_from_iter(
+            tuple_vec.into_iter().map(Tuple2::from),
+            LayerId::Input,
+            None,
+        );
 
         let first = mle.first();
         let second = mle.second();
@@ -969,35 +621,4 @@ mod tests {
             second.bookkeeping_table() == &[Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)]
         );
     }
-
-    // #[test]
-    // fn relabel_claim_dense_mle() {
-    //     let mle_vec = vec![
-    //         Fr::from(0),
-    //         Fr::from(1),
-    //         Fr::from(2),
-    //         Fr::from(3),
-    //         Fr::from(4),
-    //         Fr::from(5),
-    //         Fr::from(6),
-    //         Fr::from(7),
-    //     ];
-
-    //     let mle: DenseMle<Fr, Fr> = DenseMle::new(mle_vec);
-
-    //     let mut mle_ref: DenseMleRef<Fr> = mle.mle_ref();
-
-    //     mle_ref.relabel_mle_indices(&[MleIndex::Fixed(true), MleIndex::Fixed(false)]);
-
-    //     assert!(
-    //         mle_ref.mle_indices
-    //             == vec![
-    //                 MleIndex::Fixed(true),
-    //                 MleIndex::Fixed(false),
-    //                 MleIndex::Iterated,
-    //                 MleIndex::Iterated,
-    //                 MleIndex::Iterated
-    //             ]
-    //     );
-    // }
 }
