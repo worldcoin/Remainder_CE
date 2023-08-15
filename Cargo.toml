@@ -23,6 +23,7 @@ rand = "0.8"
 tracing-subscriber = "0.3.17"
 # --- For FieldExt and transcript and other Ligero stuff ---
 lcpc-2d = { git = "ssh://git@github.com/Modulus-Labs/lcpc-ligero.git", branch = "REM-90-Input-layer-Ligero-integration" }
+halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" } # For BN-254 from Halo2
 
 [dev-dependencies]
 
