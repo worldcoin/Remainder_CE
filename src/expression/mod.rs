@@ -600,7 +600,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
                 .field(b)
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionStandard::Mle(_mle_ref) => f.debug_struct("Mle").finish(),
+            ExpressionStandard::Mle(_mle_ref) => f.debug_struct("Mle").field("mle_ref", _mle_ref).finish(),
             ExpressionStandard::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionStandard::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionStandard::Product(a) => f.debug_tuple("Product").field(a).finish(),

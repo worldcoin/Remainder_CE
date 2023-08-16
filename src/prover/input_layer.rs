@@ -30,7 +30,8 @@ pub struct InputLayer<F: FieldExt> {
     pub maybe_output_input_mle_num_vars: Option<usize>,
     /// Stop
     pub total_num_vars: usize,
-    maybe_output_input_mle_prefix_indices: Option<Vec<MleIndex<F>>>,
+    /// Stop
+    pub maybe_output_input_mle_prefix_indices: Option<Vec<MleIndex<F>>>,
 }
 
 impl<F: FieldExt> InputLayer<F> {
