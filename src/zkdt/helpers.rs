@@ -1,10 +1,11 @@
+//! Miscellaneous helper functions for `dt2zkdt`.
 use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode};
 use crate::zkdt::trees::*;
 use crate::FieldExt;
 use std::iter::repeat;
 
 /// Helper function for conversion to field elements, handling negative values.
-pub(crate) fn i32_to_field<F: FieldExt>(value: i32) -> F {
+pub fn i32_to_field<F: FieldExt>(value: i32) -> F {
     if value >= 0 {
         F::from(value as u32)
     } else {
@@ -14,7 +15,7 @@ pub(crate) fn i32_to_field<F: FieldExt>(value: i32) -> F {
 
 /// Return the first power of two that is greater than or equal to the argument, or None if this
 /// would exceed the range of a u32.
-pub(crate) fn next_power_of_two(n: usize) -> Option<usize> {
+pub fn next_power_of_two(n: usize) -> Option<usize> {
     if n == 0 {
         return Some(1);
     }
@@ -29,14 +30,14 @@ pub(crate) fn next_power_of_two(n: usize) -> Option<usize> {
 }
 
 const BIT_DECOMPOSITION_LENGTH: usize = 16;
-const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
+pub const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
 const UNSIGNED_DECOMPOSITION_MAX_ARG: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32) - 1;
 
 /// Build a 16 bit signed decomposition of the specified i32, or None if the argument is too large
 /// in absolute value (exceeding SIGNED_DECOMPOSITION_MAX_ARG_ABS).
 /// Result is little endian (so LSB has index 0).
 /// Sign bit has maximal index.
-pub(crate) fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDecomp16Bit<F>> {
+pub fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDecomp16Bit<F>> {
     let abs_val = value.abs() as u32;
     if abs_val > SIGNED_DECOMPOSITION_MAX_ARG_ABS {
         return None;
@@ -51,7 +52,7 @@ pub(crate) fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<
 /// Build a 16 bit decomposition of the specified u32, or None if the argument is too large
 /// (exceeding UNSIGNED_DECOMPOSITION_MAX_ARG_ABS).
 /// Result is little endian i.e. LSB has index 0.
-pub(crate) fn build_unsigned_bit_decomposition<F: FieldExt>(
+pub fn build_unsigned_bit_decomposition<F: FieldExt>(
     mut value: u32,
 ) -> Option<BinDecomp16Bit<F>> {
     if value > UNSIGNED_DECOMPOSITION_MAX_ARG {
@@ -69,7 +70,7 @@ pub(crate) fn build_unsigned_bit_decomposition<F: FieldExt>(
 
 /// Repeat the items of the provided slice `repetitions` times, before padding with the minimal
 /// number of zeros such that the length is a power of two.
-pub(crate) fn repeat_and_pad<T: Clone>(values: &[T], repetitions: usize, padding: T) -> Vec<T> {
+pub fn repeat_and_pad<T: Clone>(values: &[T], repetitions: usize, padding: T) -> Vec<T> {
     // repeat
     let repeated_length = repetitions * values.len();
     let repeated_iter = values.into_iter().cycle().take(repeated_length);
@@ -82,7 +83,7 @@ pub(crate) fn repeat_and_pad<T: Clone>(values: &[T], repetitions: usize, padding
 
 /// Return a Vec containing a DecisionNode for each Node::Internal appearing in this tree, in arbitrary order.
 /// Pre: if `node` is any descendent of this Node then `node.get_id()` is not None.
-pub(crate) fn extract_decision_nodes<T: Copy, F: FieldExt>(tree: &Node<T>) -> Vec<DecisionNode<F>> {
+pub fn extract_decision_nodes<T: Copy, F: FieldExt>(tree: &Node<T>) -> Vec<DecisionNode<F>> {
     let mut decision_nodes = Vec::new();
     append_decision_nodes(tree, &mut decision_nodes);
     decision_nodes
@@ -113,7 +114,7 @@ fn append_decision_nodes<T: Copy, F: FieldExt>(
 
 /// Return a Vec containing a LeafNode for each Node::Leaf appearing in this tree, in order of
 /// id, where the ids are allocated as in extract_decision_nodes().
-pub(crate) fn extract_leaf_nodes<F: FieldExt>(tree: &Node<i32>) -> Vec<LeafNode<F>> {
+pub fn extract_leaf_nodes<F: FieldExt>(tree: &Node<i32>) -> Vec<LeafNode<F>> {
     let mut leaf_nodes = Vec::new();
     append_leaf_nodes(tree, &mut leaf_nodes);
     leaf_nodes
