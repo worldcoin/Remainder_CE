@@ -48,7 +48,7 @@ struct CircuitizedSamples<F: FieldExt> {
     decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
     differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,  // indexed by trees, samples, steps in path
     path_ends: Vec<Vec<LeafNode<F>>>,               // indexed by trees, samples
-    multiplicities: Vec<BinDecomp16Bit<F>>,         // indexed by tree node indices
+    multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,    // indexed by trees, tree nodes
 }
 
 /// TODO describe return values
@@ -72,9 +72,7 @@ fn circuitize_samples<F: FieldExt>(
     let mut decision_paths: Vec<Vec<Vec<DecisionNode<F>>>> = vec![];
     let mut path_ends: Vec<Vec<LeafNode<F>>> = vec![];
     let mut differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>> = vec![];
-
-    // initialize the node visit counts "multiplicities"
-    let mut multiplicities: Vec<u32> = vec![0_u32; 2_usize.pow(pqtrees.depth as u32)];
+    let mut multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
 
     // build the samples array
     for values in &values_array {
@@ -91,6 +89,8 @@ fn circuitize_samples<F: FieldExt>(
     }
 
     for tree in &pqtrees.trees {
+        // initialize the node visit counts "multiplicities"
+        let mut multiplicities_for_tree: Vec<u32> = vec![0_u32; 2_usize.pow(pqtrees.depth as u32)];
         let mut permuted_samples_for_tree: Vec<Sample<F>> = vec![];
         let mut decision_paths_for_tree: Vec<Vec<DecisionNode<F>>> = vec![];
         let mut path_ends_for_tree: Vec<LeafNode<F>> = vec![];
@@ -123,7 +123,7 @@ fn circuitize_samples<F: FieldExt>(
                     differences_for_tree_and_sample
                         .push(build_signed_bit_decomposition::<F>(difference).unwrap());
                     // accumulate the multiplicities for this tree
-                    multiplicities[id.unwrap() as usize] += 1;
+                    multiplicities_for_tree[id.unwrap() as usize] += 1;
                     // build up the permuted sample
                     permuted_sample.push(sample[*feature_index]);
                     attribute_visits[*feature_index] += 1;
@@ -149,7 +149,7 @@ fn circuitize_samples<F: FieldExt>(
                     node_val: i32_to_field(*value),
                 });
                 // accumulate multiplicity for leaf node
-                multiplicities[id.unwrap() as usize] += 1;
+                multiplicities_for_tree[id.unwrap() as usize] += 1;
             } else {
                 panic!("Last item in path should be a Node::Leaf");
             }
@@ -158,14 +158,13 @@ fn circuitize_samples<F: FieldExt>(
         decision_paths.push(decision_paths_for_tree);
         path_ends.push(path_ends_for_tree);
         differences.push(differences_for_tree);
+        // calculate the bit decompositions of the visit counts
+        multiplicities.push(multiplicities_for_tree
+                            .into_iter()
+                            .map(build_unsigned_bit_decomposition)
+                            .map(|option| option.unwrap())
+                            .collect());
     }
-
-    // calculate the bit decompositions of the visit counts
-    let multiplicities: Vec<BinDecomp16Bit<F>> = multiplicities
-        .into_iter()
-        .map(build_unsigned_bit_decomposition)
-        .map(|option| option.unwrap())
-        .collect();
 
     CircuitizedSamples {
         samples: samples,
@@ -386,19 +385,21 @@ mod tests {
         assert_eq!(differences[1].bits[15], Fr::from(1));
 
         // check the multiplicities
-        assert_eq!(
-            csamples.multiplicities.len(),
-            2_usize.pow(pqtrees.depth as u32)
-        );
-        // root node id has multiplicity n_trees * samples.len() = 6
-        let multiplicity = &csamples.multiplicities[0];
-        assert_eq!(multiplicity.bits[0], Fr::from(0));
-        assert_eq!(multiplicity.bits[1], Fr::from(1));
-        assert_eq!(multiplicity.bits[2], Fr::from(1));
-        // dummy node id has multiplicity 0
-        let multiplicity = &csamples.multiplicities[2_usize.pow(pqtrees.depth as u32) - 1];
-        for bit in multiplicity.bits {
-            assert_eq!(bit, Fr::from(0));
+        let multiplicities = csamples.multiplicities;
+        let n_nodes = 2_usize.pow(pqtrees.depth as u32); // includes dummy node
+        assert_eq!(multiplicities.len(), n_trees);
+        for multiplicities_for_tree in &multiplicities {
+            assert_eq!(multiplicities_for_tree.len(), n_nodes);
+            // root node id has multiplicity samples.len() = 3
+            let multiplicity = &multiplicities_for_tree[0];
+            assert_eq!(multiplicity.bits[0], Fr::from(1));
+            assert_eq!(multiplicity.bits[1], Fr::from(1));
+            assert_eq!(multiplicity.bits[2], Fr::from(0));
+            // dummy node id has multiplicity 0
+            let multiplicity = &multiplicities_for_tree[n_nodes - 1];
+            for bit in multiplicity.bits {
+                assert_eq!(bit, Fr::from(0));
+            }
         }
     }
 
