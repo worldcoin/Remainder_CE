@@ -42,6 +42,10 @@ struct CircuitizedTrees<F: FieldExt> {
 }
 
 type Sample<F> = Vec<InputAttribute<F>>;
+/// Represents the circuitization of a batch of samples with respect to a PaddedQuantizedTrees.
+/// Bit decompositions are little endian.
+/// `differences` is a signed decomposition, with the sign bit at the end.
+/// Each vector in `multiplicities` has length `2.pow(pqtrees.depth)`.
 struct CircuitizedSamples<F: FieldExt> {
     samples: Vec<Sample<F>>,                        // indexed by samples
     permuted_samples: Vec<Vec<Sample<F>>>,          // indexed by trees, samples
@@ -51,11 +55,12 @@ struct CircuitizedSamples<F: FieldExt> {
     multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,    // indexed by trees, tree nodes
 }
 
-/// TODO describe return values
-/// multiplicities is 2 ** depth in size.
-/// length of each sample and permuted sample is next_power_of_two((depth - 1) * sample length)
-/// Little endian, sign bit at end.
-/// Pre: values_array is not empty
+/// Circuitize the provided batch of samples using the specified PaddedQuantizedTrees instance,
+/// returning a CircuitizedSamples instance.
+/// See documentation of CircuitizedSamples.
+/// The length of each returned Sample instance (both in `samples` and `permuted_samples`) is
+/// `next_power_of_two((pqtrees.depth - 1) * values_array[0].len())`
+/// Pre: `values_array.len() > 0`.
 fn circuitize_samples<F: FieldExt>(
     values_array: &[Vec<u16>],
     pqtrees: &PaddedQuantizedTrees,
