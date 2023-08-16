@@ -42,7 +42,6 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         let id = LayerId::Layer(self.0.len());
         let successor = new_layer.next_layer(id.clone(), None);
         let layer = L::new(new_layer, id);
-        dbg!(layer.expression());
         self.0.push(Box::new(layer));
         successor
     }
@@ -701,8 +700,6 @@ mod tests {
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
             let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(4));
             let mle_clone = self.mle.clone();
-            dbg!(mle_clone.clone().prefix_bits);
-            dbg!(input_layer.maybe_output_input_mle_prefix_indices.clone());
 
             // --- Create Layers to be added to ---
             let mut layers = Layers::new();
@@ -775,9 +772,6 @@ mod tests {
             let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(1));
             let mle_clone = self.mle.clone();
             let mle_2_clone = self.mle_2.clone();
-            dbg!(mle_clone.clone().prefix_bits);
-            dbg!(mle_2_clone.clone().prefix_bits);
-            dbg!(input_layer.maybe_output_input_mle_prefix_indices.clone());
 
             // --- Create Layers to be added to ---
             let mut layers = Layers::new();
