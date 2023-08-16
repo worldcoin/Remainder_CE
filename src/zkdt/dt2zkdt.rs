@@ -8,6 +8,7 @@ use crate::FieldExt;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
 use serde::{Deserialize, Serialize};
+use rand::Rng;
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
@@ -271,6 +272,50 @@ impl From<&TreesModelInput> for PaddedQuantizedTrees {
     }
 }
 
+/// Scale and bias are chosen randomly.
+fn generate_trees_model(n_trees: usize, target_depth: usize, n_features: usize, premature_leaf_proba: f64) -> TreesModelInput {
+    let mut rng = rand::thread_rng();
+    TreesModelInput {
+        trees: (0..n_trees)
+            .map(|_| generate_tree(target_depth, n_features, premature_leaf_proba))
+            .collect(),
+        bias: rng.gen(),
+        scale: rng.gen(),
+        n_features: n_features
+    }
+}
+
+/// Randomly generate a tree with f64 leaf values.
+/// Each potential decision node can degenerate to a leaf node with probability `premature_leaf_proba`.
+/// Tree is guaranteed to be perfect of depth `target_depth` if `premature_leaf_proba` is 0,
+/// otherwise `target_depth` is an upper bound.
+/// Node ids are not assigned.
+/// Pre: target_depth >= 1; n_features >= 1.
+fn generate_tree(target_depth: usize, n_features: usize, premature_leaf_proba: f64) -> Node<f64> {
+    let mut rng = rand::thread_rng();
+    let premature_leaf: bool = rng.gen::<f64>() < premature_leaf_proba;
+    if (target_depth == 1) | premature_leaf {
+        Node::new_leaf(None, rng.gen())
+    } else {
+        Node::new_internal(
+            None,
+            rng.gen_range(0..n_features) as usize,
+            rng.gen_range(0..u16::MAX) as u16,
+            generate_tree(target_depth - 1, n_features, premature_leaf_proba),
+            generate_tree(target_depth - 1, n_features, premature_leaf_proba),
+        )
+    }
+}
+
+/// Generate an array of samples for input into the trees model.
+fn generate_samples(n_samples: usize, n_features: usize) -> Vec<Vec<u16>> {
+    let mut rng = rand::thread_rng();
+    (0..n_samples)
+        .map(|_| (0..n_features).map(|_| rng.gen_range(0..u16::MAX)).collect())
+        .collect()
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -469,5 +514,51 @@ mod tests {
         };
         // just check that's it's close
         assert_eq!(f_quant_score, acc_score + Fr::from(1));
+    }
+
+    #[test]
+    fn test_generate_trees_model() {
+        let target_depth = 3;
+        let n_features = 6;
+        let n_trees = 11;
+        let trees_model = generate_trees_model(n_trees, target_depth, n_features, 0.5);
+        assert_eq!(trees_model.n_features, n_features);
+        assert_eq!(trees_model.trees.len(), n_trees);
+        for tree in &trees_model.trees {
+            assert!(tree.depth(std::cmp::max) <= target_depth);
+        }
+    }
+
+    #[test]
+    fn test_generate_tree() {
+        let target_depth = 3;
+        let n_features = 6;
+        // check that trees are perfect when premature_leaf_proba==0.
+        for _ in (0..10) {
+            let tree = generate_tree(target_depth, n_features, 0.);
+            assert_eq!(tree.depth(std::cmp::max), target_depth);
+            assert!(tree.is_perfect());
+        }
+        // check that target_depth is always upper bound and that premature_leaf_proba > 0 results
+        // in some imperfect trees.
+        let mut n_perfect: usize = 0;
+        let n_iter = 50;
+        for _ in (0..n_iter) {
+            let tree = generate_tree(target_depth, n_features, 0.5);
+            assert!(tree.depth(std::cmp::max) <= target_depth);
+            if tree.is_perfect() {
+                n_perfect += 1;
+            }
+        }
+        assert!(n_perfect < n_iter);
+    }
+
+    #[test]
+    fn test_generate_samples() {
+        let samples = generate_samples(10, 3);
+        assert_eq!(samples.len(), 10);
+        for sample in &samples {
+            assert_eq!(sample.len(), 3);
+        }
     }
 }
