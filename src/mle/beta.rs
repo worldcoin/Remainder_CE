@@ -142,7 +142,7 @@ impl<F: FieldExt> BetaTable<F> {
             cur_table = firsthalf;
         }
 
-        let iterated_bit_indices = (0..layer_claim_vars.len()).into_iter().collect_vec();
+        let iterated_bit_indices = (0..layer_claim_vars.len()).collect_vec();
         let cur_table_mle_ref: DenseMleRef<F> = DenseMle::new(cur_table).mle_ref();
         Ok(BetaTable {
             layer_claim,
