@@ -333,7 +333,7 @@ pub fn generate_trees_model(n_trees: usize, target_depth: usize, n_features: usi
 
 /// Generate an array of samples for input into the trees model.
 /// Values less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
-/// [`build_signed_bit_decomposition`].
+/// [`build_signed_bit_decomposition`]).
 pub fn generate_samples(n_samples: usize, n_features: usize) -> Vec<Vec<u16>> {
     let mut rng = rand::thread_rng();
     (0..n_samples)
@@ -343,7 +343,7 @@ pub fn generate_samples(n_samples: usize, n_features: usize) -> Vec<Vec<u16>> {
 
 /// Load a 2d array of samples from a `.npy` file.
 /// Pre: all values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
-/// [`build_signed_bit_decomposition`].
+/// [`build_signed_bit_decomposition`]).
 pub fn load_samples(filename: &str) -> Vec<Vec<u16>> {
     let input_arr: Array2<u16> = read_npy(filename).unwrap();
     // check sample values are in bounds
@@ -353,7 +353,7 @@ pub fn load_samples(filename: &str) -> Vec<Vec<u16>> {
 
 /// Load a trees model from a JSON file.
 /// Pre: all threshold values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
-/// [`build_signed_bit_decomposition`].
+/// [`build_signed_bit_decomposition`]).
 pub fn load_trees_model(filename: &str) -> TreesModel {
     let file = File::open(filename)
         .expect(&format!("'{}' should be available.", filename));
