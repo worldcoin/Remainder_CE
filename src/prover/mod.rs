@@ -81,7 +81,7 @@ pub enum GKRError {
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SumcheckProof<F: FieldExt>(Vec<Vec<F>>);
+pub struct SumcheckProof<F: FieldExt>(pub Vec<Vec<F>>);
 
 impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
     fn from(value: Vec<Vec<F>>) -> Self {
