@@ -153,6 +153,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         let (expression, beta) = self.mut_expression_and_beta();
         let beta = beta.as_ref().unwrap();
         let degree = get_round_degree(expression, 0);
+
         let first_round_sumcheck_message = compute_sumcheck_message(expression, 0, degree, beta)
             .map_err(LayerError::ExpressionError)?;
 
@@ -208,6 +209,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
 
+        dbg!("Starting to prove rounds");
+
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
 
@@ -232,7 +235,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
                 // --- Prover uses that random challenge to compute the next sumcheck message ---
                 // --- We then add the prover message to FS transcript ---
+                dbg!(round_index);
+                dbg!(&self.expression());
+                dbg!(challenge);
                 let prover_sumcheck_message = self.prove_round(round_index, challenge)?;
+                dbg!(&self.expression());
                 transcript
                     .append_field_elements("Sumcheck evaluations", &prover_sumcheck_message)
                     .unwrap();
@@ -246,10 +253,16 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
 
+        // dbg!(round_index);
+        dbg!(&self.expression());
+        dbg!(final_chal);
+
         self.expression.fix_variable(num_sumcheck_rounds - 1, final_chal);
         self.beta
             .as_mut()
             .map(|beta| beta.beta_update(num_sumcheck_rounds - 1, final_chal));
+
+        dbg!(&self.expression());
 
         Ok(all_prover_sumcheck_messages.into())
     }
@@ -363,6 +376,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     if mle_ref.bookkeeping_table().len() != 1 {
                         return Err(ClaimError::MleRefMleError);
                     }
+                    // dbg!(mle_ref.bookkeeping_table());
+                    // dbg!(mle_indices);
                     let claimed_value = mle_ref.bookkeeping_table()[0];
 
                     // --- Construct the claim ---
@@ -408,7 +423,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             Ok(())
         };
 
-        // TODO!(ryancao): What the heck is this code doing?
+        // --- Apply the observer function from above onto the expression ---
         layerwise_expr
             .traverse(&mut observer_fn)
             .map_err(LayerError::ClaimError)?;

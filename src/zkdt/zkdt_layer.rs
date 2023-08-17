@@ -467,7 +467,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        ZeroMleRef::new(self.mle.num_vars() + 4, prefix_bits, id)
+        ZeroMleRef::new(self.mle.num_iterated_vars() + 4, prefix_bits, id)
     }
 }
 

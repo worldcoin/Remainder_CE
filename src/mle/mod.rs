@@ -25,7 +25,7 @@ where
     F: FieldExt,
 {
     ///Get the log_2 size of the WHOLE mle
-    fn num_vars(&self) -> usize;
+    fn num_iterated_vars(&self) -> usize;
     ///Get the padded set of evaluations over the boolean hypercube; Useful for constructing the input layer
     fn get_padded_evaluations(&self) -> Vec<F>;
 

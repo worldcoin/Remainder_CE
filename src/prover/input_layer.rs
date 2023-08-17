@@ -166,8 +166,9 @@ impl<F: FieldExt> InputLayer<F> {
         // --- Grab sorted indices of the MLEs ---
         let mut input_mle_num_vars = input_mles
             .into_iter()
-            .map(|input_mle| input_mle.num_vars())
+            .map(|input_mle| input_mle.num_iterated_vars())
             .collect_vec();
+
         // --- Add input-output MLE length if needed ---
         if let Some(output_input_mle_num_vars) = maybe_output_input_mle_num_vars {
             input_mle_num_vars.push(output_input_mle_num_vars);
@@ -186,20 +187,26 @@ impl<F: FieldExt> InputLayer<F> {
         mle_combine_indices
             .clone()
             .into_iter()
-            .for_each(|input_mle_idx| {
+            .enumerate()
+            .for_each(|(idx, input_mle_idx)| {
 
                 // --- Only add prefix bits to the non-input-output MLEs ---
                 if input_mle_idx < input_mles.len() {
                     let input_mle = &mut input_mles[input_mle_idx];
 
                     // --- Grab the prefix bits and add them to the individual MLEs ---
+                    dbg!(idx);
+                    dbg!(current_padded_usage);
+                    dbg!(total_num_vars);
+                    dbg!(input_mle.num_iterated_vars());
+                    dbg!(input_mle.get_padded_evaluations());
                     let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
                         current_padded_usage as u32,
                         total_num_vars,
-                        input_mle.num_vars(),
+                        input_mle.num_iterated_vars(),
                     );
                     input_mle.add_prefix_bits(Some(prefix_bits));
-                    current_padded_usage += 2_u32.pow(input_mle.num_vars() as u32);
+                    current_padded_usage += 2_u32.pow(input_mle.num_iterated_vars() as u32);
                 } else {
                     // --- Grab the prefix bits for the dummy padded MLE (this should ONLY happen if we have a dummy padded MLE) ---
                     let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
@@ -227,7 +234,7 @@ fn round_to_next_largest_power_of_2(x: usize) -> u32 {
 /// Returns the padded bookkeeping table of the given MLE
 fn get_padded_bookkeeping_table<F: FieldExt>(mle: &DenseMle<F, F>) -> Vec<F> {
     // --- Amount of zeros we need to add ---
-    let padding_amt = 2_usize.pow(mle.num_vars() as u32) - mle.mle.len();
+    let padding_amt = 2_usize.pow(mle.num_iterated_vars() as u32) - mle.mle.len();
 
     mle.mle
         .clone()
@@ -249,6 +256,8 @@ fn get_prefix_bits_from_capacity<F: FieldExt>(
             MleIndex::Fixed(bit_val == 1)
         })
         .collect()
+    // dbg!(&result);
+    // result
 }
 
 #[cfg(test)]
@@ -304,7 +313,7 @@ mod tests {
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         // --- The padded combined version should have size 2^7 (but only 2^5 + 2^5 + 2^4 = 80 unpadded elems) ---
-        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_vars(), 7);
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 7);
         assert_eq!(dummy_input_layer.combined_dense_mle.unwrap().mle.len(), 32 + 32 + 16 as usize);
 
         // --- The prefix bits should be (0, 0), (0, 1), (1, 0, 0) ---
@@ -338,7 +347,7 @@ mod tests {
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         // --- The padded combined version should have size 2^8 ---
-        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_vars(), 8);
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 8);
 
         // --- The prefix bits should be (1, 1, 0), (0,), (1, 0) ---
         assert_eq!(
@@ -389,7 +398,7 @@ mod tests {
         dummy_input_layer.index_input_output_mle(&mut Box::new(&mut input_output_mle));
 
         // --- The padded combined version should have size 2^9 ---
-        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_vars(), 9);
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 9);
 
         dbg!(dummy_input_layer.mle_combine_indices);
 
