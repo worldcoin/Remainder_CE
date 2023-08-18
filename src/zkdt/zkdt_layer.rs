@@ -481,7 +481,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_circuit::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, BatchedDummyMles}};
+    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_helpers::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, BatchedDummyMles}};
     use ark_bn254::Fr;
     use ark_ff::Field;
     use ark_std::log2;

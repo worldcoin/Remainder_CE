@@ -271,7 +271,7 @@ mod tests {
     use ark_bn254::Fr;
     use ark_std::{test_rng, UniformRand};
 
-    use crate::{zkdt::zkdt_circuit::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles}, prover::GKRCircuit, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}};
+    use crate::{zkdt::zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles}, prover::GKRCircuit, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}};
 
     use super::{PermutationCircuit, AttributeConsistencyCircuit};
 

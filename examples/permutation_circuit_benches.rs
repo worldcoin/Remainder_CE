@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use ark_bn254::Fr;
 use ark_std::{test_rng, UniformRand};
-use remainder::{zkdt::{zkdt_circuit::{BatchedDummyMles, generate_dummy_mles_batch}, zkdt_circuit_parts::PermutationCircuit}, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, prover::GKRCircuit};
+use remainder::{zkdt::{zkdt_helpers::{BatchedDummyMles, generate_dummy_mles_batch}, zkdt_circuit_parts::PermutationCircuit}, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, prover::GKRCircuit};
 
 fn main() {
     let mut rng = test_rng();
