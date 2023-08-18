@@ -3,7 +3,8 @@ use std::iter::repeat_with;
 use ark_std::log2;
 use itertools::Itertools;
 
-use crate::{mle::{dense::DenseMle, Mle, MleIndex}, utils::argsort};
+use crate::{mle::{dense::DenseMle, Mle, MleIndex}, utils::{argsort, pad_to_nearest_power_of_two}};
+// use crate::mle::MleRef;
 
 use lcpc_2d::FieldExt;
 
@@ -115,16 +116,27 @@ impl<F: FieldExt> InputLayer<F> {
                     maybe_input_output_mle_ref
                 };
 
+                // --- Basically, everything is stored in big-endian (including bookkeeping tables ---
+                // --- and indices), BUT the indexing functions all happen as if we're interpreting ---
+                // --- the indices as little-endian. Therefore we need to merge the input MLEs via ---
+                // --- interleaving, or alternatively by converting everything to "big-endian", ---
+                // --- merging the usual big-endian way, and re-converting the merged version back to ---
+                // --- "little-endian" ---
+                let inverted_input_mle = invert_mle_bookkeeping_table(input_mle.get_padded_evaluations());
+
                 // --- Fold the new (padded) bookkeeping table with the old ones ---
-                let padded_bookkeeping_table = input_mle.get_padded_evaluations();
+                // let padded_bookkeeping_table = input_mle.get_padded_evaluations();
                 current_bookkeeping_table
                     .into_iter()
-                    .chain(padded_bookkeeping_table.into_iter())
+                    .chain(inverted_input_mle.into_iter())
                     .collect()
             });
 
+        // --- Convert the final bookkeeping table back to "little-endian" ---
+        let re_inverted_final_bookkeeping_table = invert_mle_bookkeeping_table(final_bookkeeping_table);
+
         // --- Return the combined bookkeeping table ---
-        self.combined_dense_mle = Some(DenseMle::new_from_raw(final_bookkeeping_table, LayerId::Input, None));
+        self.combined_dense_mle = Some(DenseMle::new_from_raw(re_inverted_final_bookkeeping_table, LayerId::Input, None));
 
     }
 
@@ -187,19 +199,13 @@ impl<F: FieldExt> InputLayer<F> {
         mle_combine_indices
             .clone()
             .into_iter()
-            .enumerate()
-            .for_each(|(idx, input_mle_idx)| {
+            .for_each(|input_mle_idx| {
 
                 // --- Only add prefix bits to the non-input-output MLEs ---
                 if input_mle_idx < input_mles.len() {
                     let input_mle = &mut input_mles[input_mle_idx];
 
                     // --- Grab the prefix bits and add them to the individual MLEs ---
-                    dbg!(idx);
-                    dbg!(current_padded_usage);
-                    dbg!(total_num_vars);
-                    dbg!(input_mle.num_iterated_vars());
-                    dbg!(input_mle.get_padded_evaluations());
                     let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
                         current_padded_usage as u32,
                         total_num_vars,
@@ -231,8 +237,45 @@ fn round_to_next_largest_power_of_2(x: usize) -> u32 {
     2_u32.pow(log2(x))
 }
 
+/// Takes an MLE bookkeeping table interpreted as (big/little)-endian,
+/// and converts it into a bookkeeping table interpreted as (little/big)-endian.
+/// 
+/// ## Arguments
+/// * `bookkeeping_table` - Original MLE bookkeeping table
+/// 
+/// ## Returns
+/// * `opposite_endian_bookkeeping_table` - MLE bookkeeping table, which, when
+///     indexed (b_n, ..., b_1) rather than (b_1, ..., b_n), yields the same
+///     result.
+pub fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F> {
+
+    // --- This should only happen the first time!!! ---
+    let padded_bookkeeping_table = pad_to_nearest_power_of_two(bookkeeping_table);
+
+    // --- 2 or fewer elements: No-op ---
+    if padded_bookkeeping_table.len() <= 2 {
+        return padded_bookkeeping_table;
+    }
+
+    // --- Grab the table by pairs, and create iterators over each half ---
+    let tuples: (Vec<F>, Vec<F>) = padded_bookkeeping_table
+        .chunks(2)
+        .into_iter()
+        .map(|pair| {
+            (pair[0], pair[1])
+        })
+        .unzip();
+
+    // --- Recursively flip each half ---
+    let inverted_first_half = invert_mle_bookkeeping_table(tuples.0);
+    let inverted_second_half = invert_mle_bookkeeping_table(tuples.1);
+
+    // --- Return the concatenation of the two ---
+    inverted_first_half.into_iter().chain(inverted_second_half.into_iter()).collect()
+}
+
 /// Returns the padded bookkeeping table of the given MLE
-fn get_padded_bookkeeping_table<F: FieldExt>(mle: &DenseMle<F, F>) -> Vec<F> {
+pub fn get_padded_bookkeeping_table<F: FieldExt>(mle: &DenseMle<F, F>) -> Vec<F> {
     // --- Amount of zeros we need to add ---
     let padding_amt = 2_usize.pow(mle.num_iterated_vars() as u32) - mle.mle.len();
 
@@ -263,18 +306,18 @@ fn get_prefix_bits_from_capacity<F: FieldExt>(
 #[cfg(test)]
 mod tests {
     use ark_bn254::Fr;
-    use ark_std::{test_rng, Zero};
+    use ark_std::{test_rng, Zero, One};
     use itertools::Itertools;
     use rand::{distributions::Standard, prelude::Distribution, Rng};
     use std::iter::repeat_with;
 
     use crate::{
         layer::LayerId,
-        mle::{dense::DenseMle, Mle, MleIndex},
+        mle::{dense::DenseMle, Mle, MleIndex}, utils::pad_to_nearest_power_of_two,
     };
 
-    use lcpc_2d::FieldExt;
-    use super::InputLayer;
+    use lcpc_2d::{FieldExt, ligero_ml_helper::naive_eval_mle_at_challenge_point};
+    use super::{InputLayer, invert_mle_bookkeeping_table};
 
     /// Helper function to create random MLE with specific number of vars
     fn get_random_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F>
@@ -313,27 +356,75 @@ mod tests {
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         // --- The padded combined version should have size 2^7 (but only 2^5 + 2^5 + 2^4 = 80 unpadded elems) ---
+        // --- The padded combined version should ALSO have 2^7 total slots in the bookkeeping table, if I understand correctly... ---
         assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 7);
-        assert_eq!(dummy_input_layer.combined_dense_mle.unwrap().mle.len(), 32 + 32 + 16 as usize);
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle.len(), 2_usize.pow(7));
+        // assert_eq!(dummy_input_layer.combined_dense_mle.unwrap().mle.len(), 32 + 32 + 16 as usize);
 
+        // --- The new test is to evaluate each individual MLE at a random challenge point ---
+        // --- then evaluate the merged input MLE at the prefixed version of that challenge ---
+        // --- point and ensure they're the same ---
+        let mut rng = test_rng();
+        let challenge_coord_1 = repeat_with(|| rng.gen::<Fr>()).take(5).collect_vec();
+        let challenge_coord_2 = repeat_with(|| rng.gen::<Fr>()).take(5).collect_vec();
+        let challenge_coord_3 = repeat_with(|| rng.gen::<Fr>()).take(4).collect_vec();
+        let mle_1_eval = naive_eval_mle_at_challenge_point(&mle_1.mle, &challenge_coord_1);
+        let mle_2_eval = naive_eval_mle_at_challenge_point(&mle_2.mle, &challenge_coord_2);
+        let mle_3_eval = naive_eval_mle_at_challenge_point(&mle_3.mle, &challenge_coord_3);
+
+        // --- Get prefixed versions of challenges and evaluate merged input MLE ---
         // --- The prefix bits should be (0, 0), (0, 1), (1, 0, 0) ---
-        assert_eq!(
-            mle_1.prefix_bits,
-            Some(vec![MleIndex::Fixed(false), MleIndex::Fixed(false)])
-        );
-        assert_eq!(
-            mle_2.prefix_bits,
-            Some(vec![MleIndex::Fixed(false), MleIndex::Fixed(true)])
-        );
-        assert_eq!(
-            mle_3.prefix_bits,
-            Some(vec![
-                MleIndex::Fixed(true),
-                MleIndex::Fixed(false),
-                MleIndex::Fixed(false)
-            ])
-        );
+        let prefixed_challenge_coord_1 = vec![Fr::zero(), Fr::zero()].into_iter().chain(challenge_coord_1.into_iter()).collect_vec();
+        let mle_1_combined_eval = naive_eval_mle_at_challenge_point(&dummy_input_layer.combined_dense_mle.clone().unwrap().mle, &prefixed_challenge_coord_1);
+
+        let prefixed_challenge_coord_2 = vec![Fr::zero(), Fr::one()].into_iter().chain(challenge_coord_2.into_iter()).collect_vec();
+        let mle_2_combined_eval = naive_eval_mle_at_challenge_point(&dummy_input_layer.combined_dense_mle.clone().unwrap().mle, &prefixed_challenge_coord_2);
+
+        let prefixed_challenge_coord_3 = vec![Fr::one(), Fr::zero(), Fr::zero()].into_iter().chain(challenge_coord_3.into_iter()).collect_vec();
+        let mle_3_combined_eval = naive_eval_mle_at_challenge_point(&dummy_input_layer.combined_dense_mle.clone().unwrap().mle, &prefixed_challenge_coord_3);
+
+        // --- Check equality! ---
+        assert_eq!(mle_1_eval, mle_1_combined_eval);
+        assert_eq!(mle_2_eval, mle_2_combined_eval);
+        assert_eq!(mle_3_eval, mle_3_combined_eval);
+        
     }
+
+    // --- NOTE that this test only works with big-endian --> big-endian ---
+    // TODO!(ryancao): Put this test back in when we do the big-endian refactor!
+    // #[test]
+    // fn simple_test() {
+    //     // --- Create MLEs of size 2^5, 2^5, 2^4 ---
+    //     let mut mle_1 = get_random_mle::<Fr>(5);
+    //     let mut mle_2 = get_random_mle::<Fr>(5);
+    //     let mut mle_3 = get_random_mle::<Fr>(4);
+    //     let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
+
+    //     let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None);
+    //     dummy_input_layer.combine_input_mles(&mle_list, None);
+
+    //     // --- The padded combined version should have size 2^7 (but only 2^5 + 2^5 + 2^4 = 80 unpadded elems) ---
+    //     assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 7);
+    //     assert_eq!(dummy_input_layer.combined_dense_mle.unwrap().mle.len(), 32 + 32 + 16 as usize);
+
+    //     // --- The prefix bits should be (0, 0), (0, 1), (1, 0, 0) ---
+    //     assert_eq!(
+    //         mle_1.prefix_bits,
+    //         Some(vec![MleIndex::Fixed(false), MleIndex::Fixed(false)])
+    //     );
+    //     assert_eq!(
+    //         mle_2.prefix_bits,
+    //         Some(vec![MleIndex::Fixed(false), MleIndex::Fixed(true)])
+    //     );
+    //     assert_eq!(
+    //         mle_3.prefix_bits,
+    //         Some(vec![
+    //             MleIndex::Fixed(true),
+    //             MleIndex::Fixed(false),
+    //             MleIndex::Fixed(false)
+    //         ])
+    //     );
+    // }
 
     #[test]
     fn test_with_padding() {
@@ -443,5 +534,58 @@ mod tests {
             vec![Fr::zero(); 1]
         );
 
+    }
+
+    #[test]
+    fn test_invert_mle_bookkeeping_table() {
+
+        let mut rng = test_rng();
+
+        let num_vars = 6;
+        let mle = get_random_mle::<Fr>(num_vars);
+        let random_challenge = repeat_with(|| rng.gen::<Fr>()).take(num_vars).collect_vec();
+
+        let orig_eval = naive_eval_mle_at_challenge_point(&mle.mle, &random_challenge);
+
+        let inverted_mle_table = invert_mle_bookkeeping_table(mle.mle.clone());
+        let inverted_random_challenge = random_challenge.into_iter().rev().collect_vec();
+        let inverted_eval = naive_eval_mle_at_challenge_point(&inverted_mle_table, &inverted_random_challenge);
+
+        // --- Original eval and eval over the inverted MLE with the inverted random challenge should be the same ---
+        assert_eq!(orig_eval, inverted_eval);
+
+        // --- Inverting twice should produce the same table ---
+        let double_inverted_mle_table = invert_mle_bookkeeping_table(inverted_mle_table);
+        assert_eq!(mle.mle, double_inverted_mle_table);
+    }
+
+    #[test]
+    fn test_invert_mle_bookkeeping_table_not_power_of_two() {
+
+        let mut rng = test_rng();
+
+        // --- Setup ---
+        let num_vars = 6;
+        let mle = get_random_mle_with_capacity::<Fr>(2_usize.pow(num_vars as u32) - 4);
+        let random_challenge = repeat_with(|| rng.gen::<Fr>()).take(num_vars).collect_vec();
+
+        // --- Only need padding because `naive_eval_mle_at_challenge_point()` requires it lol ---
+        let padded_bookkeeping_table: Vec<Fr> = pad_to_nearest_power_of_two(mle.mle.clone());
+        let orig_eval = naive_eval_mle_at_challenge_point(&padded_bookkeeping_table, &random_challenge);
+
+        let inverted_mle_table = invert_mle_bookkeeping_table(mle.mle.clone());
+        let inverted_random_challenge = random_challenge.into_iter().rev().collect_vec();
+
+        // --- Ditto here! ---
+        let padded_inverted_bookkeeping_table = pad_to_nearest_power_of_two(inverted_mle_table.clone());
+        let inverted_eval = naive_eval_mle_at_challenge_point(&padded_inverted_bookkeeping_table, &inverted_random_challenge);
+
+        // --- Original eval and eval over the inverted MLE with the inverted random challenge should be the same ---
+        assert_eq!(orig_eval, inverted_eval);
+
+        // --- Inverting twice should produce the same table (with padding!!!) ---
+        let double_inverted_mle_table = invert_mle_bookkeeping_table(inverted_mle_table);
+        let padded_orig_mle = pad_to_nearest_power_of_two(mle.mle.clone());
+        assert_eq!(padded_orig_mle, double_inverted_mle_table);
     }
 }
