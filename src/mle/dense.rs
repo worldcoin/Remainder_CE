@@ -114,12 +114,18 @@ pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items
     let part_size = 1 << log2(max_size);
     let part_count = 2_u32.pow(log2(L)) as usize;
     let padding_count = part_count - L;
+    let total_size = part_size * part_count;
+    let total_padding: usize = total_size - max_size * part_count;
 
-    items.into_iter().cloned().map(|mut items| {
-        let padding = part_size - items.len();
-        items.extend(repeat_n(F::zero(), padding));
-        items
-    }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
+    // items.into_iter().cloned().map(|mut items| {
+    //     let padding = part_size - items.len();
+    //     items.extend(repeat_n(F::zero(), padding));
+    //     items
+    // }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
+
+    (0..max_size).flat_map(|index| {
+        items.iter().map(move |item| item.get(index).unwrap_or(&F::zero()).clone()).chain(repeat_n(F::zero(), padding_count))
+    }).chain(repeat_n(F::zero(), total_padding)).collect()
 }
 
 impl<F: FieldExt> MleAble<F> for F {
@@ -127,7 +133,7 @@ impl<F: FieldExt> MleAble<F> for F {
     type IntoIter<'a> = Cloned<std::slice::Iter<'a, F>>;
 
     fn get_padded_evaluations(items: &Self::Repr) -> Vec<F> {
-        let size = 1 << log2(items.len());
+        let size: usize = 1 << log2(items.len());
         let padding = size - items.len();
 
         items
