@@ -21,32 +21,32 @@ use itertools::{repeat_n, Chunk, Chunks, Itertools};
 #[derive(Copy, Debug, Clone)]
 pub struct DecisionNode<F: FieldExt> {
     ///The id of this node in the tree
-    pub(crate) node_id: F,
+    pub node_id: F,
     ///The id of the attribute this node involves
-    pub(crate) attr_id: F,
+    pub attr_id: F,
     ///The treshold of this node
-    pub(crate) threshold: F,
+    pub threshold: F,
 }
 
 #[derive(Copy, Debug, Clone)]
 ///The Leafs of the tree
 pub struct LeafNode<F: FieldExt> {
     ///The id of this leaf in the tree
-    pub(crate) node_id: F,
+    pub node_id: F,
     ///The value of this leaf
-    pub(crate) node_val: F,
+    pub node_val: F,
 }
 
 /// --- 16-bit binary decomposition ---
 /// Used for the following components of the (circuit) input:
-/// a) The binary decomposition of the path node hints (i.e. path_x.thr - x.val)
+/// a) The binary decomposition of the path node hints (i.e. x.val - path_x.thr)
 /// b) The binary decomposition of the multiplicity coefficients $c_j$
-#[derive(Copy, Debug, Clone)]
+#[derive(Copy, Debug, Clone, PartialEq)]
 pub struct BinDecomp16Bit<F: FieldExt> {
     ///The 16 bits that make up this decomposition
     ///
     /// Should all be 1 or 0
-    pub(crate) bits: [F; 16],
+    pub bits: [F; 16],
 }
 
 /// --- Input element to the tree, i.e. a list of input attributes ---
@@ -57,9 +57,9 @@ pub struct BinDecomp16Bit<F: FieldExt> {
 pub struct InputAttribute<F: FieldExt> {
     // pub attr_idx: F,
     ///The attr id of this input
-    pub(crate) attr_id: F,
+    pub attr_id: F,
     ///The threshold value of this input
-    pub(crate) attr_val: F,
+    pub attr_val: F,
 }
 
 // --- Just an enumeration of, uh, stuff...? ---
