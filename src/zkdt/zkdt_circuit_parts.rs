@@ -1,17 +1,19 @@
-use ark_std::log2;
-use itertools::Itertools;
+use std::io::Empty;
 
-use crate::{prover::{GKRCircuit, Layers}, FieldExt, mle::{dense::DenseMle, MleRef}, transcript::poseidon_transcript::PoseidonTranscript, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}}};
+use ark_std::log2;
+use itertools::{Itertools, repeat_n};
+
+use crate::{prover::{GKRCircuit, Layers}, FieldExt, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, transcript::poseidon_transcript::PoseidonTranscript, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
 
 use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
 
-struct PermutationCircuit<F: FieldExt> {
-    dummy_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
-    dummy_permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,      // batched
-    r: F,
-    r_packing: F,
-    input_len: usize,
-    num_inputs: usize
+pub struct PermutationCircuit<F: FieldExt> {
+    pub dummy_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
+    pub dummy_permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,      // batched
+    pub r: F,
+    pub r_packing: F,
+    pub input_len: usize,
+    pub num_inputs: usize
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
@@ -21,21 +23,58 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
 
         // layer 0: packing
         // let input_packing_builder: InputPackingBuilder<F> = InputPackingBuilder::new(
-        //     self.dummy_input_data_mle_vec.clone(),
+        //     self.dummy_input_data_mle_vec[0].clone(),
         //     self.r,
         //     self.r_packing);
 
-        let input_packing_builder = BatchedLayer::new(self.dummy_input_data_mle_vec.iter().map(|input_data_mle| InputPackingBuilder::new(
-            input_data_mle.clone(),
-            self.r,
-            self.r_packing)).collect_vec());
+        // let input_permuted_packing_builder: InputPackingBuilder<F> = InputPackingBuilder::new(
+        //     self.dummy_permuted_input_data_mle_vec[0].clone(),
+        //     self.r,
+        //     self.r_packing);
 
-        let input_permuted_packing_builder = BatchedLayer::new(self.dummy_permuted_input_data_mle_vec.iter().map(|input_data_mle| InputPackingBuilder::new(
-            input_data_mle.clone(),
-            self.r,
-            self.r_packing)).collect_vec());
+        let batch_bits = log2(self.dummy_input_data_mle_vec.len()) as usize;
+    
+    
+        let input_packing_builder = BatchedLayer::new(self.dummy_input_data_mle_vec.iter().map(|input_data_mle| {
+            let mut input_data_mle = input_data_mle.clone();
+            input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+            InputPackingBuilder::new(
+                input_data_mle,
+                self.r,
+                self.r_packing
+            )
+        }).collect_vec());
+
+        let input_permuted_packing_builder = BatchedLayer::new(self.dummy_permuted_input_data_mle_vec.iter().map(|input_data_mle| {
+            let mut input_data_mle = input_data_mle.clone();
+            input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+            InputPackingBuilder::new(
+                input_data_mle,
+                self.r,
+                self.r_packing
+            )
+        }).collect_vec());
 
         let packing_builders = input_packing_builder.concat(input_permuted_packing_builder);
+        // let mut expression: crate::expression::ExpressionStandard<F> = packing_builders.build_expression();
+        // let num_vars = expression.index_mle_indices(0);
+        // let degree = get_round_degree(&expression, 0);    
+        // let (_, next) = packing_builders.next_layer(LayerId::Layer(0), None);
+
+        // let eval = {
+        //     let mut beta = BetaTable::new((vec![F::zero(), F::one(), F::zero(), F::zero(), F::zero(), F::zero(), F::zero(), F::zero(), F::zero()], F::zero())).unwrap();
+        //     beta.table.index_mle_indices(0);
+        //     let eval = compute_sumcheck_message(&expression, 0, degree, &beta).unwrap();
+        //     let Evals(evals) = eval;
+        //     evals[0] + evals[1]
+        // };
+
+        // let next = next.mle_ref();
+        // let val = next.bookkeeping_table()[1];
+        // dbg!(eval, val);
+
+        // assert_eq!(eval, val);
+
         let (mut input_packed, mut input_permuted_packed) = layers.add_gkr(packing_builders);
 
         for _ in 0..log2(self.input_len) {
@@ -227,6 +266,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use ark_bn254::Fr;
     use ark_std::{test_rng, UniformRand};
 
@@ -249,13 +290,17 @@ mod tests {
             dummy_permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
             r: Fr::rand(&mut rng),
             r_packing: Fr::rand(&mut rng),
-            input_len: DUMMY_INPUT_LEN,
+            input_len: DUMMY_INPUT_LEN * (TREE_HEIGHT - 1),
             num_inputs: 1,
         };
 
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
 
+        let now = Instant::now();
+
         let proof = circuit.prove(&mut transcript);
+
+        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
 
         match proof {
             Ok(proof) => {

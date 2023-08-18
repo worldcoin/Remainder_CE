@@ -19,7 +19,7 @@ use itertools::{repeat_n, Chunk, Chunks, Itertools};
 /// Used for the following components of the (circuit) input:
 /// a)
 #[derive(Copy, Debug, Clone)]
-pub(crate) struct DecisionNode<F: FieldExt> {
+pub struct DecisionNode<F: FieldExt> {
     ///The id of this node in the tree
     pub(crate) node_id: F,
     ///The id of the attribute this node involves
@@ -30,7 +30,7 @@ pub(crate) struct DecisionNode<F: FieldExt> {
 
 #[derive(Copy, Debug, Clone)]
 ///The Leafs of the tree
-pub(crate) struct LeafNode<F: FieldExt> {
+pub struct LeafNode<F: FieldExt> {
     ///The id of this leaf in the tree
     pub(crate) node_id: F,
     ///The value of this leaf
@@ -42,7 +42,7 @@ pub(crate) struct LeafNode<F: FieldExt> {
 /// a) The binary decomposition of the path node hints (i.e. path_x.thr - x.val)
 /// b) The binary decomposition of the multiplicity coefficients $c_j$
 #[derive(Copy, Debug, Clone)]
-pub(crate) struct BinDecomp16Bit<F: FieldExt> {
+pub struct BinDecomp16Bit<F: FieldExt> {
     ///The 16 bits that make up this decomposition
     ///
     /// Should all be 1 or 0
@@ -54,7 +54,7 @@ pub(crate) struct BinDecomp16Bit<F: FieldExt> {
 /// a) The actual input attributes, i.e. x
 /// b) The permuted input attributes, i.e. \bar{x}
 #[derive(Copy, Debug, Clone, PartialEq)]
-pub(crate) struct InputAttribute<F: FieldExt> {
+pub struct InputAttribute<F: FieldExt> {
     // pub attr_idx: F,
     ///The attr id of this input
     pub(crate) attr_id: F,
@@ -478,7 +478,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 .flatten()
                 .chain(
                     std::iter::once(MleIndex::Fixed(true))
-                        .chain(repeat_n(
+.chain(repeat_n(
                             MleIndex::Fixed(false),
                             self.num_vars() - 1 - num_vars,
                         ))

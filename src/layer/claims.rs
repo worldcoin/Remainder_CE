@@ -2,7 +2,7 @@
 
 use crate::{expression::ExpressionStandard, mle::beta::BetaTable, FieldExt};
 
-// use itertools::Itertools;
+use itertools::Itertools;
 use crate::mle::MleRef;
 use crate::sumcheck::*;
 
@@ -47,9 +47,28 @@ fn compute_wlx<F: FieldExt>(
 ) -> Result<Vec<F>, ClaimError> {
     //fix variable hella times
     //evaluate expr on the mutated expr
+    let num_vars = expr.index_mle_indices(0);
+    let degree = get_round_degree(expr, 0);
+
+    debug_assert!({
+        claim_vecs.iter().zip(claimed_vals.iter()).map(|(point, val)| {
+            let mut beta = BetaTable::new((point.to_vec(), F::zero())).unwrap();
+            beta.table.index_mle_indices(0);
+            let eval = compute_sumcheck_message(expr, 0, degree, &beta).unwrap();
+            let Evals(evals) = eval;
+            let eval = evals[0] + evals[1];
+
+            if eval == *val {
+                true
+            } else {
+                println!("Claim passed into compute_wlx is invalid! point is {:?} claimed val is {}, actual eval is {}", point, val , eval);
+                false
+            }
+        }).reduce(|acc, val| acc && val).unwrap()
+    });
 
     // get the number of evaluations
-    let num_vars = expr.index_mle_indices(0);
+    // let num_vars = expr.index_mle_indices(0);
     let degree = get_round_degree(expr, 0);
     // expr.init_beta_tables(prev_layer_claim);
     let num_evals = (num_vars) * (num_claims); //* degree;

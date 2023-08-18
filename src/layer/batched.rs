@@ -178,11 +178,25 @@ fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> Dens
         })
         .collect_vec();
 
+    // let mut count: usize = 0;
+
+    // for mle_index in old_indices {
+    //     match mle_index {
+    //         MleIndex::Iterated | MleIndex::IndexedBit(_) => break,
+    //         _ => count +=1
+    //     }
+    // }
+
+    // if count > 1 {
+    //     count -= 1;
+    // }
+
+    // let mle_indices = old_indices[..count].iter().cloned().chain(repeat_n(MleIndex::Iterated, new_bits)).chain(old_indices[count..].iter().cloned()).collect_vec();
+    // let mle_indices = repeat_n(MleIndex::Iterated, new_bits).chain(old_indices.iter().cloned()).collect_vec();
+
     DenseMleRef {
         bookkeeping_table: out,
-        mle_indices: repeat_n(MleIndex::Iterated, new_bits)
-            .chain(old_indices.into_iter().cloned())
-            .collect_vec(),
+        mle_indices: old_indices.to_vec(),
         num_vars: old_num_vars + new_bits,
         layer_id,
         indexed: false,
@@ -204,7 +218,7 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        // let num_bits = log2(self.layers.len()) as usize;
+        let new_bits = log2(self.layers.len()) as usize;
         // let bits = std::iter::successors(
         //     Some(vec![MleIndex::Fixed(false); num_bits]),
         //     |prev| {
@@ -238,7 +252,7 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
                     //         .chain(prefix_bits.clone().into_iter().flatten())
                     //         .collect_vec(),
                     // ),
-                    None
+                    Some(prefix_bits.clone().into_iter().flatten().chain(repeat_n(MleIndex::Iterated, new_bits)).collect_vec())
                 )
             })
             .collect()

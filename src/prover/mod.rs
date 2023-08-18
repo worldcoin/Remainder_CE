@@ -146,6 +146,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .map(|mut layer| {
                 //Aggregate claims
                 let layer_id = layer.id().clone();
+                dbg!(&layer_id);
                 let layer_claims = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;

@@ -273,7 +273,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                         .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
                 )
                 .collect_vec(),
-            num_vars,
+            num_vars: num_vars - 1,
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
@@ -295,7 +295,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                         .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
                 )
                 .collect_vec(),
-            num_vars,
+            num_vars: num_vars - 1,
             layer_id: self.layer_id.clone(),
             indexed: false,
         }

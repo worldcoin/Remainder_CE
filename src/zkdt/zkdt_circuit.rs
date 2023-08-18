@@ -19,9 +19,9 @@ What's our plan here?
 */
 
 // --- Constants ---
-pub const DUMMY_INPUT_LEN: usize = 1 << 5; // was 1 << 5
-pub const NUM_DUMMY_INPUTS: usize = 1 << 2;
-pub const TREE_HEIGHT: usize = 4; // was 9
+pub const DUMMY_INPUT_LEN: usize = 1 << 6; // was 1 << 5
+pub const NUM_DUMMY_INPUTS: usize = 8;
+pub const TREE_HEIGHT: usize = 8; // was 9
 const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
 
@@ -424,7 +424,7 @@ fn check_signed_recomposition<F: FieldExt>(actual_value: F, decomp: BinDecomp16B
     true
 }
 
-pub(crate) struct BatchedDummyMles<F: FieldExt> {
+pub struct BatchedDummyMles<F: FieldExt> {
     pub dummy_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
     pub dummy_permuted_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
     pub dummy_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>,
@@ -436,7 +436,7 @@ pub(crate) struct BatchedDummyMles<F: FieldExt> {
 }
 
 
-pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
+pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
     // --- First generate the dummy data ---
     let DummyData {
         // dummy_attr_idx_data,

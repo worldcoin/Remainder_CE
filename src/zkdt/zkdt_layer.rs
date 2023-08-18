@@ -129,7 +129,7 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
 
         // begin sus: feels like there should be a concat (reverse direction) for expression,
         // for splitting the expression
-        let split_mle = self.mle.split(F::one());
+        let split_mle = self.mle.split(F::zero());
         // end sus
 
         ExpressionStandard::products(vec![split_mle.first(), split_mle.second()])
@@ -138,7 +138,7 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
 
         // Create flatmle from tuple mle
-        let split_mle = self.mle.split(F::one());
+        let split_mle = self.mle.split(F::zero());
         DenseMle::new_from_iter(split_mle
             .into_iter()
             .map(|Tuple2((a, b))| a * b), id, prefix_bits)        

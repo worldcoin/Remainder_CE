@@ -860,3 +860,30 @@ fn test_dummy_sumcheck_constant() {
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
+
+#[test]
+fn test_dummy_sumcheck_scaled() {
+    // let layer_claims = (
+    //     vec![Fr::from(2), Fr::from(4), Fr::from(2), Fr::from(3)],
+    //     Fr::one(),
+    // );
+    let mut rng = test_rng();
+    let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
+    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+
+    let mle_out = DenseMle::<Fr, Fr>::new_from_raw(
+        vec![Fr::from(5), Fr::from(10), Fr::from(15), Fr::from(20)],
+        LayerId::Input,
+        None,
+    );
+    let layer_claims = get_dummy_claim(mle_out.mle_ref(), &mut rng, None);
+
+    let mle_ref_1 = mle1.mle_ref();
+
+    let mut expression =
+        ExpressionStandard::Mle(mle_ref_1) * Fr::from(5);
+
+    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
+    let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
+    assert!(verifyres.is_ok());
+}

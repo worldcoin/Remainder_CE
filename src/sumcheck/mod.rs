@@ -409,19 +409,19 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                     index * 2
                 };
 
+                let zero = F::zero();
+
                 let beta_idx_1 = beta_idx_0 + 1;
 
                 // get the index of the beta table at the binary string (0, ...) and (1, ...) by doing 2*index and 2*index + 1
                 let beta_at_0 = beta_ref
                     .bookkeeping_table()
                     .get(beta_idx_0)
-                    .cloned()
-                    .unwrap_or(F::zero());
+                    .unwrap_or(&zero);
                 let beta_at_1 = beta_ref
                     .bookkeeping_table()
                     .get(beta_idx_1)
-                    .cloned()
-                    .unwrap_or(F::zero());
+                    .unwrap_or(&zero);
 
                 // Go through each MLE within the product
                 let product = mle_refs
@@ -439,17 +439,15 @@ fn evaluate_mle_ref_product<F: FieldExt>(
                         mle_ref
                             .bookkeeping_table()
                             .get(index)
-                            .cloned()
-                            .unwrap_or(F::zero())
+                            .unwrap_or(&zero)
                     })
-                    .reduce(|acc, eval| acc * eval)
-                    .unwrap();
+                    .fold(F::one(), |acc, eval| acc * eval);
 
                 let beta_evals = [beta_at_0, beta_at_1];
                 // multiply the beta evals by the product of the resulting mles
                 acc.iter_mut()
                     .zip(beta_evals.iter())
-                    .for_each(|(acc, eval)| *acc += product * eval);
+                    .for_each(|(acc, eval)| *acc += product * *eval);
                 acc
             },
         );
