@@ -335,9 +335,9 @@ mod tests {
         let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None);
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
-        dbg!(&mle_1.mle);
-        dbg!(&mle_2.mle);
-        println!("{:?}", &dummy_input_layer.combined_dense_mle.clone().unwrap().mle);
+        // dbg!(&mle_1.mle);
+        // dbg!(&mle_2.mle);
+        // println!("{:?}", &dummy_input_layer.combined_dense_mle.clone().unwrap().mle);
 
         // --- The padded combined version should have size 2^7 (but only 2^5 + 2^5 + 2^4 = 80 unpadded elems) ---
         // --- The padded combined version should ALSO have 2^7 total slots in the bookkeeping table, if I understand correctly... ---

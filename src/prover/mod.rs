@@ -775,7 +775,7 @@ mod tests {
 
             // --- The input layer should just be the concatenation of `mle` and `output_input` ---
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(1));
+            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(5));
             let mle_clone = self.mle.clone();
 
             // --- Create Layers to be added to ---
@@ -1053,19 +1053,19 @@ mod tests {
     #[test]
     fn test_gkr_simple_circuit() {
         let mut rng = test_rng();
-        let size = 1 << 1;
+        let size = 1 << 5;
 
         // --- This should be 2^2 ---
-        // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        //     (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
-        //     LayerId::Input,
-        //     None,
-        // );
         let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-            (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
+            (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
             LayerId::Input,
             None,
         );
+        // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
+        //     LayerId::Input,
+        //     None,
+        // );
 
         let mut circuit: SimpleCircuit<Fr> = SimpleCircuit { mle };
 
