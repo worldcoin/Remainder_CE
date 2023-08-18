@@ -1,7 +1,11 @@
 use std::iter::repeat_with;
 
+use ark_std::test_rng;
 use itertools::Itertools;
 use lcpc_2d::FieldExt;
+use rand::{distributions::Standard, prelude::Distribution, Rng};
+
+use crate::{mle::dense::DenseMle, layer::LayerId};
 
 /// Returns a zero-padded version of `coeffs` with length padded
 /// to the nearest power of two.
@@ -37,4 +41,42 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
     });
 
     indices
+}
+
+/// Helper function to create random MLE with specific number of vars
+pub fn get_random_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F>
+where
+    Standard: Distribution<F>,
+{
+    let mut rng = test_rng();
+    let capacity = 2_u32.pow(num_vars as u32);
+    let bookkeeping_table = repeat_with(|| rng.gen::<F>())
+        .take(capacity as usize)
+        .collect_vec();
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
+}
+
+/// Helper function to create random MLE with specific number of vars
+pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F>
+where
+    Standard: Distribution<F>,
+{
+    // let mut rng = test_rng();
+    let capacity = 2_u32.pow(num_vars as u32);
+    let bookkeeping_table = (0..capacity).map(|idx| F::from(idx + 1))
+        .take(capacity as usize)
+        .collect_vec();
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
+}
+
+/// Helper function to create random MLE with specific length
+pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F, F>
+where
+    Standard: Distribution<F>,
+{
+    let mut rng = test_rng();
+    let bookkeeping_table = repeat_with(|| rng.gen::<F>())
+        .take(capacity as usize)
+        .collect_vec();
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
 }

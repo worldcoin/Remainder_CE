@@ -116,6 +116,8 @@ impl<F: FieldExt> InputLayer<F> {
                     maybe_input_output_mle_ref
                 };
 
+                // dbg!(input_mle.get_padded_evaluations());
+
                 // --- Basically, everything is stored in big-endian (including bookkeeping tables ---
                 // --- and indices), BUT the indexing functions all happen as if we're interpreting ---
                 // --- the indices as little-endian. Therefore we need to merge the input MLEs via ---
@@ -123,6 +125,8 @@ impl<F: FieldExt> InputLayer<F> {
                 // --- merging the usual big-endian way, and re-converting the merged version back to ---
                 // --- "little-endian" ---
                 let inverted_input_mle = invert_mle_bookkeeping_table(input_mle.get_padded_evaluations());
+
+                // dbg!(&inverted_input_mle);
 
                 // --- Fold the new (padded) bookkeeping table with the old ones ---
                 // let padded_bookkeeping_table = input_mle.get_padded_evaluations();
@@ -214,6 +218,7 @@ impl<F: FieldExt> InputLayer<F> {
                     input_mle.add_prefix_bits(Some(prefix_bits));
                     current_padded_usage += 2_u32.pow(input_mle.num_iterated_vars() as u32);
                 } else {
+
                     // --- Grab the prefix bits for the dummy padded MLE (this should ONLY happen if we have a dummy padded MLE) ---
                     let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
                         current_padded_usage as u32,
@@ -313,74 +318,105 @@ mod tests {
 
     use crate::{
         layer::LayerId,
-        mle::{dense::DenseMle, Mle, MleIndex}, utils::pad_to_nearest_power_of_two,
+        mle::{dense::DenseMle, Mle, MleIndex}, utils::{pad_to_nearest_power_of_two, get_random_mle, get_random_mle_with_capacity, get_range_mle},
     };
 
     use lcpc_2d::{FieldExt, ligero_ml_helper::naive_eval_mle_at_challenge_point};
     use super::{InputLayer, invert_mle_bookkeeping_table};
 
-    /// Helper function to create random MLE with specific number of vars
-    fn get_random_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F>
-    where
-        Standard: Distribution<F>,
-    {
-        let mut rng = test_rng();
-        let capacity = 2_u32.pow(num_vars as u32);
-        let bookkeeping_table = repeat_with(|| rng.gen::<F>())
-            .take(capacity as usize)
-            .collect_vec();
-        DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
-    }
-
-    /// Helper function to create random MLE with specific length
-    fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F, F>
-    where
-        Standard: Distribution<F>,
-    {
-        let mut rng = test_rng();
-        let bookkeeping_table = repeat_with(|| rng.gen::<F>())
-            .take(capacity as usize)
-            .collect_vec();
-        DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
-    }
-
     #[test]
-    fn simple_test() {
-        // --- Create MLEs of size 2^5, 2^5, 2^4 ---
-        let mut mle_1 = get_random_mle::<Fr>(5);
-        let mut mle_2 = get_random_mle::<Fr>(5);
-        let mut mle_3 = get_random_mle::<Fr>(4);
-        let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
+    fn simplest_test() {
+        // --- Create MLEs of size 2^2, 2^1 ---
+        let mut mle_1 = get_range_mle::<Fr>(2);
+        let mut mle_2 = get_range_mle::<Fr>(1);
+
+        let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2)];
 
         let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None);
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
+        dbg!(&mle_1.mle);
+        dbg!(&mle_2.mle);
+        println!("{:?}", &dummy_input_layer.combined_dense_mle.clone().unwrap().mle);
+
         // --- The padded combined version should have size 2^7 (but only 2^5 + 2^5 + 2^4 = 80 unpadded elems) ---
         // --- The padded combined version should ALSO have 2^7 total slots in the bookkeeping table, if I understand correctly... ---
-        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 7);
-        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle.len(), 2_usize.pow(7));
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 3);
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle.len(), 2_usize.pow(3));
         // assert_eq!(dummy_input_layer.combined_dense_mle.unwrap().mle.len(), 32 + 32 + 16 as usize);
 
         // --- The new test is to evaluate each individual MLE at a random challenge point ---
         // --- then evaluate the merged input MLE at the prefixed version of that challenge ---
         // --- point and ensure they're the same ---
         let mut rng = test_rng();
-        let challenge_coord_1 = repeat_with(|| rng.gen::<Fr>()).take(5).collect_vec();
-        let challenge_coord_2 = repeat_with(|| rng.gen::<Fr>()).take(5).collect_vec();
-        let challenge_coord_3 = repeat_with(|| rng.gen::<Fr>()).take(4).collect_vec();
+        let challenge_coord_1 = repeat_with(|| rng.gen::<Fr>()).take(2).collect_vec();
+        let challenge_coord_2 = repeat_with(|| rng.gen::<Fr>()).take(1).collect_vec();
+        let mle_1_eval = naive_eval_mle_at_challenge_point(&mle_1.mle, &challenge_coord_1);
+        let mle_2_eval = naive_eval_mle_at_challenge_point(&mle_2.mle, &challenge_coord_2);
+
+        // --- Get prefixed versions of challenges and evaluate merged input MLE ---
+        // --- The prefix bits should be (0,), (1, 0) ---
+        let prefixed_challenge_coord_1 = vec![Fr::zero()].into_iter().chain(challenge_coord_1.into_iter()).collect_vec();
+        let mle_1_combined_eval = naive_eval_mle_at_challenge_point(&dummy_input_layer.combined_dense_mle.clone().unwrap().mle, &prefixed_challenge_coord_1);
+
+        let prefixed_challenge_coord_2 = vec![Fr::one(), Fr::zero()].into_iter().chain(challenge_coord_2.into_iter()).collect_vec();
+        let mle_2_combined_eval = naive_eval_mle_at_challenge_point(&dummy_input_layer.combined_dense_mle.clone().unwrap().mle, &prefixed_challenge_coord_2);
+
+        // --- Check equality! ---
+        assert_eq!(mle_1_eval, mle_1_combined_eval);
+        assert_eq!(mle_2_eval, mle_2_combined_eval);
+        
+    }
+
+    #[test]
+    fn simple_test() {
+        // --- Create MLEs of size 2^5, 2^5, 2^4 ---
+        // let mut mle_1 = get_random_mle::<Fr>(5);
+        // let mut mle_2 = get_random_mle::<Fr>(5);
+        // let mut mle_3 = get_random_mle::<Fr>(4);
+        let mut mle_1 = get_range_mle::<Fr>(3);
+        let mut mle_2 = get_range_mle::<Fr>(2);
+        let mut mle_3 = get_range_mle::<Fr>(1);
+
+        let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
+
+        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None);
+        dummy_input_layer.combine_input_mles(&mle_list, None);
+
+        dbg!(&mle_1.mle);
+        dbg!(&mle_2.mle);
+        dbg!(&mle_3.mle);
+        println!("{:?}", &dummy_input_layer.combined_dense_mle.clone().unwrap().mle);
+
+        // --- The padded combined version should have size 2^7 (but only 2^5 + 2^5 + 2^4 = 80 unpadded elems) ---
+        // --- The padded combined version should ALSO have 2^7 total slots in the bookkeeping table, if I understand correctly... ---
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 4);
+        assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().mle.len(), 2_usize.pow(4));
+        // assert_eq!(dummy_input_layer.combined_dense_mle.unwrap().mle.len(), 32 + 32 + 16 as usize);
+
+        // --- The new test is to evaluate each individual MLE at a random challenge point ---
+        // --- then evaluate the merged input MLE at the prefixed version of that challenge ---
+        // --- point and ensure they're the same ---
+        // let mut rng = test_rng();
+        // let challenge_coord_1 = repeat_with(|| rng.gen::<Fr>()).take(5).collect_vec();
+        // let challenge_coord_2 = repeat_with(|| rng.gen::<Fr>()).take(5).collect_vec();
+        // let challenge_coord_3 = repeat_with(|| rng.gen::<Fr>()).take(4).collect_vec();
+        let challenge_coord_1 = repeat_with(|| Fr::one()).take(3).collect_vec();
+        let challenge_coord_2 = repeat_with(|| Fr::one()).take(2).collect_vec();
+        let challenge_coord_3 = repeat_with(|| Fr::one()).take(1).collect_vec();
         let mle_1_eval = naive_eval_mle_at_challenge_point(&mle_1.mle, &challenge_coord_1);
         let mle_2_eval = naive_eval_mle_at_challenge_point(&mle_2.mle, &challenge_coord_2);
         let mle_3_eval = naive_eval_mle_at_challenge_point(&mle_3.mle, &challenge_coord_3);
 
         // --- Get prefixed versions of challenges and evaluate merged input MLE ---
-        // --- The prefix bits should be (0, 0), (0, 1), (1, 0, 0) ---
-        let prefixed_challenge_coord_1 = vec![Fr::zero(), Fr::zero()].into_iter().chain(challenge_coord_1.into_iter()).collect_vec();
+        // --- The prefix bits should be (0,), (1, 0), (1, 1, 0) ---
+        let prefixed_challenge_coord_1 = vec![Fr::zero()].into_iter().chain(challenge_coord_1.into_iter()).collect_vec();
         let mle_1_combined_eval = naive_eval_mle_at_challenge_point(&dummy_input_layer.combined_dense_mle.clone().unwrap().mle, &prefixed_challenge_coord_1);
 
-        let prefixed_challenge_coord_2 = vec![Fr::zero(), Fr::one()].into_iter().chain(challenge_coord_2.into_iter()).collect_vec();
+        let prefixed_challenge_coord_2 = vec![Fr::one(), Fr::zero()].into_iter().chain(challenge_coord_2.into_iter()).collect_vec();
         let mle_2_combined_eval = naive_eval_mle_at_challenge_point(&dummy_input_layer.combined_dense_mle.clone().unwrap().mle, &prefixed_challenge_coord_2);
 
-        let prefixed_challenge_coord_3 = vec![Fr::one(), Fr::zero(), Fr::zero()].into_iter().chain(challenge_coord_3.into_iter()).collect_vec();
+        let prefixed_challenge_coord_3 = vec![Fr::one(), Fr::one(), Fr::zero()].into_iter().chain(challenge_coord_3.into_iter()).collect_vec();
         let mle_3_combined_eval = naive_eval_mle_at_challenge_point(&dummy_input_layer.combined_dense_mle.clone().unwrap().mle, &prefixed_challenge_coord_3);
 
         // --- Check equality! ---

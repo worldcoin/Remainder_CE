@@ -42,7 +42,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         let id = LayerId::Layer(self.0.len());
         let successor = new_layer.next_layer(id.clone(), None);
         let layer = L::new(new_layer, id);
-        // dbg!(layer.expression());
+        dbg!(layer.expression());
         self.0.push(Box::new(layer));
         successor
     }
@@ -287,31 +287,30 @@ pub trait GKRCircuit<F: FieldExt> {
         } else {
             dbg!("Not aggroing input claims this time around");
         }
-        dbg!(input_layer_claim.clone());
-        dbg!(-input_layer_claim.1);
+        // dbg!(input_layer_claim.clone());
+        // dbg!(-input_layer_claim.1);
 
         // --- Sanitycheck on the un-aggregated input claims ---
+        let padded_input_layer_mle = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle);
+        dbg!(&padded_input_layer_mle);
         for input_claim in input_layer_claims {
-            let padded_input_layer_mle = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle);
+            
             // let input_layer_challenge_coords_big_endian = input_claim.0.clone().into_iter().rev().collect_vec();
             let naive_eval = naive_eval_mle_at_challenge_point(&padded_input_layer_mle, &input_claim.0);
-            dbg!(input_claim);
-            dbg!(naive_eval);
-            // assert_eq!(naive_eval, input_claim.1);
+            dbg!(&padded_input_layer_mle);
+            dbg!(&input_claim);
+            dbg!(&naive_eval);
+            assert_eq!(naive_eval, input_claim.1);
         }
-        panic!();
+        // panic!();
 
         // --- Sanitycheck (TODO!(ryancao): Remove this) ---
         let padded_input_layer_mle = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle);
         // let input_layer_challenge_coords_big_endian = input_layer_claim.0.clone().into_iter().rev().collect_vec();
         let naive_eval = naive_eval_mle_at_challenge_point(&padded_input_layer_mle, &input_layer_claim.0);
-        dbg!(-naive_eval);
-        dbg!(&input_layer_claim);
+        // dbg!(-naive_eval);
+        // dbg!(&input_layer_claim);
         assert_eq!(naive_eval, input_layer_claim.1);
-
-        transcript
-            .append_field_elements("Input claim aggregation Wlx_evaluations", &input_wlx_evaluations)
-            .unwrap();
 
         let input_layer_proof = InputLayerProof {
             input_layer_aggregated_claim_proof: input_wlx_evaluations,
@@ -480,26 +479,28 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // --- Grab the input claim aggregation challenge ---
             let input_r_star = transcript
-            .get_challenge("Challenge for input claim aggregation")
-            .unwrap();
+                .get_challenge("Challenge for input claim aggregation")
+                .unwrap();
 
             // --- Perform the aggregation verification step and extract the correct input layer claim ---
             input_layer_claim = verify_aggregate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
-            .map_err(|_err| {
-            GKRError::ErrorWhenVerifyingLayer(
-                input_layer_id,
-                LayerError::AggregationError,
-            )
-            })?;
+                .map_err(|_err| {
+                    GKRError::ErrorWhenVerifyingLayer(
+                        input_layer_id,
+                        LayerError::AggregationError,
+                    )
+                })?;
+
+            // --- Add the aggregation step to the transcript ---
+            transcript
+            .append_field_elements("Input claim aggregation Wlx_evaluations", &input_layer_aggregated_claim_proof)
+            .unwrap();
         }
 
         // --- The prover interprets the challenge coords as big-endian, but Ligero interprets them as little-endian ---
         // let input_layer_challenge_coords_big_endian = input_layer_claim.0.clone().into_iter().rev().collect_vec();
 
-        // --- Add the aggregation step to the transcript ---
-        transcript
-            .append_field_elements("Input claim aggregation Wlx_evaluations", &input_layer_aggregated_claim_proof)
-            .unwrap();
+        dbg!("----- Hahahahahahahaahaha!-----");
 
         // --- This is broken for now... The prover input claim is not the same as the Ligero proof ---
         let (root, ligero_eval_proof, _) = convert_halo_to_lcpc::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F, Self::F2>(ligero_aux.clone(), ligero_commit_eval_proof);
@@ -1001,7 +1002,7 @@ mod tests {
             (0..size).map(|_| {
                 let num = Fr::rand(&mut rng);
                 let second_num = Fr::rand(&mut rng);
-                (num, num).into()
+                (num, second_num).into()
             }),
             LayerId::Input,
             None,
