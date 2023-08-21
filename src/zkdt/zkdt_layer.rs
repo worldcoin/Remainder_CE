@@ -1,12 +1,9 @@
 //!The LayerBuilders that build the ZKDT Circuit
 
-use std::cmp::max;
-
 use ark_std::log2;
 use itertools::Itertools;
 
 use crate::expression::{ExpressionStandard, Expression};
-use crate::layer::batched::BatchedLayer;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
@@ -37,13 +34,13 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
 }
 
 /// calculates the difference between two mles
-pub struct EqualityCheck<F: FieldExt> {
+pub struct DifferenceBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
 }
 
-impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
-    type Successor = ZeroMleRef<F>;
+impl<F: FieldExt> LayerBuilder<F> for DifferenceBuilder<F> {
+    type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
         ExpressionStandard::Mle(self.mle_1.mle_ref()) - 
@@ -51,12 +48,17 @@ impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let num_vars = max(self.mle_1.num_vars(), self.mle_2.num_vars());
-        ZeroMleRef::new(num_vars, prefix_bits, id)
+
+        DenseMle::new_from_iter(self
+            .mle_1
+            .clone()
+            .into_iter()
+            .zip(self.mle_2.clone().into_iter())
+            .map(|(a, b)| a - b ), id, prefix_bits)
     }
 }
 
-impl<F: FieldExt> EqualityCheck<F> {
+impl<F: FieldExt> DifferenceBuilder<F> {
     /// creates new difference mle
     pub fn new(
         mle_1: DenseMle<F, F>,
@@ -65,15 +67,6 @@ impl<F: FieldExt> EqualityCheck<F> {
         Self {
             mle_1, mle_2
         }
-    }
-
-    pub fn new_batched(
-        mle_1: Vec<DenseMle<F, F>>,
-        mle_2: Vec<DenseMle<F, F>>,
-    ) -> BatchedLayer<F, Self> {
-        BatchedLayer::new(mle_1.into_iter().zip(mle_2.into_iter()).map(|(mle_1, mle_2)| Self {
-            mle_1, mle_2
-        }).collect())
     }
 }
 
@@ -89,7 +82,7 @@ impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle_input.attr_id(Some(log2(self.tree_height-1) as usize))) - 
+        ExpressionStandard::Mle(self.mle_input.attr_id(Some(log2(self.tree_height) as usize))) - 
         ExpressionStandard::Mle(self.mle_path.attr_id())
     }
 
@@ -129,7 +122,7 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
 
         // begin sus: feels like there should be a concat (reverse direction) for expression,
         // for splitting the expression
-        let split_mle = self.mle.split(F::zero());
+        let split_mle = self.mle.split(F::one());
         // end sus
 
         ExpressionStandard::products(vec![split_mle.first(), split_mle.second()])
@@ -138,7 +131,7 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
 
         // Create flatmle from tuple mle
-        let split_mle = self.mle.split(F::zero());
+        let split_mle = self.mle.split(F::one());
         DenseMle::new_from_iter(split_mle
             .into_iter()
             .map(|Tuple2((a, b))| a * b), id, prefix_bits)        
@@ -481,7 +474,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_helpers::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, BatchedDummyMles}};
+    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_circuit::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles}};
     use ark_bn254::Fr;
     use ark_ff::Field;
     use ark_std::log2;
@@ -650,10 +643,11 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
-        let BatchedDummyMles {dummy_decision_node_paths_mle,
+        let (_,_, _dummy_decision_node_paths_mle_vec,
+            _dummy_leaf_node_paths_mle_vec, _,
             dummy_multiplicities_bin_decomp_mle,
             dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle, ..} = generate_dummy_mles_batch::<Fr>();
+            dummy_leaf_nodes_mle) = generate_dummy_mles_batch::<Fr>();
 
         println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
         println!("decision nodes: {:?}", dummy_decision_nodes_mle);
@@ -775,17 +769,17 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
-        let BatchedDummyMles {dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
+        let (_,_, dummy_decision_node_paths_mle_vec,
+            dummy_leaf_node_paths_mle_vec, _,
             dummy_multiplicities_bin_decomp_mle,
             dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle, ..} = generate_dummy_mles_batch::<Fr>();
+            dummy_leaf_nodes_mle) = generate_dummy_mles_batch::<Fr>();
 
         println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
         println!("decision nodes: {:?}", dummy_decision_nodes_mle);
         println!("leaf nodes: {:?}", dummy_leaf_nodes_mle);
-        println!("node_paths nodes: {:?}", dummy_decision_node_paths_mle);
-        println!("leaf_paths nodes: {:?}", dummy_leaf_node_paths_mle);
+        println!("node_paths nodes: {:?}", dummy_decision_node_paths_mle_vec);
+        println!("leaf_paths nodes: {:?}", dummy_leaf_node_paths_mle_vec);
 
         let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
         let another_r = Fr::from(6);
@@ -960,7 +954,7 @@ mod tests {
 
             // PATH: decision nodes packing
             let decision_path_packing_builder = DecisionPackingBuilder{
-                mle: dummy_decision_node_paths_mle[i].clone(),
+                mle: dummy_decision_node_paths_mle_vec[i].clone(),
                 r,
                 r_packings
             };
@@ -971,7 +965,7 @@ mod tests {
 
             // PATH: leaf nodes packing
             let leaf_path_packing_builder = LeafPackingBuilder{
-                mle: dummy_leaf_node_paths_mle[i].clone(),
+                mle: dummy_leaf_node_paths_mle_vec[i].clone(),
                 r,
                 r_packing: another_r
             };
@@ -1090,15 +1084,14 @@ mod tests {
             zero_vec.push(Fr::from(0));
         }
 
-        let BatchedDummyMles {
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle, ..
-        } = generate_dummy_mles_batch::<Fr>();
+        let (_,
+            dummy_permuted_input_data_mle_vec,
+            dummy_decision_node_paths_mle_vec,_, _,_, _, _) = generate_dummy_mles_batch::<Fr>();
 
         for i in 0..NUM_DUMMY_INPUTS {
             let attribute_consistency_build = AttributeConsistencyBuilder {
-                mle_input: dummy_permuted_input_data_mle[i].clone(),
-                mle_path: dummy_decision_node_paths_mle[i].clone(),
+                mle_input: dummy_permuted_input_data_mle_vec[i].clone(),
+                mle_path: dummy_decision_node_paths_mle_vec[i].clone(),
                 tree_height: TREE_HEIGHT
             };
             let _ = attribute_consistency_build.build_expression();

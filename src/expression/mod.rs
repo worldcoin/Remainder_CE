@@ -7,6 +7,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use serde::{Serialize, Deserialize};
 use thiserror::Error;
 
 use crate::{
@@ -97,7 +98,7 @@ pub enum ExpressionError {
 
 ///TODO!(Genericise this over the MleRef Trait)
 ///Expression representing the relationship between the current layer and layers claims are being made on
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum ExpressionStandard<F: FieldExt> {
     /// This is a constant polynomial
     Constant(F),
@@ -294,19 +295,15 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                         })
                         .collect_vec();
 
-                    if indices.len() != 0 {
-                        let start = *indices[0].1;
-                        let end = *indices[indices.len() - 1].1;
-    
-                        let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
-    
-                        if indices.as_slice() == &challenges[start..=end] {
-                            Ok(())
-                        } else {
-                            Err(ExpressionError::EvaluateBoundIndicesDontMatch)
-                        }
-                    } else {
+                    let start = *indices[0].1;
+                    let end = *indices[indices.len() - 1].1;
+
+                    let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
+
+                    if indices.as_slice() == &challenges[start..=end] {
                         Ok(())
+                    } else {
+                        Err(ExpressionError::EvaluateBoundIndicesDontMatch)
                     }
                 }
                 ExpressionStandard::Product(mle_refs) => mle_refs
@@ -321,21 +318,17 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                             })
                             .collect_vec();
 
-                            if indices.len() != 0 {
-                                let start = *indices[0].1;
-                                let end = *indices[indices.len() - 1].1;
-            
-                                let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
-            
-                                if indices.as_slice() == &challenges[start..=end] {
-                                    Ok(())
-                                } else {
-                                    Err(ExpressionError::EvaluateBoundIndicesDontMatch)
-                                }
-                            } else {
-                                Ok(())
-                            }
-                        })
+                        let start = *indices[0].1;
+                        let end = *indices[indices.len() - 1].1;
+
+                        let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
+
+                        if indices.as_slice() == &challenges[start..=end] {
+                            Ok(())
+                        } else {
+                            Err(ExpressionError::EvaluateBoundIndicesDontMatch)
+                        }
+                    })
                     .try_collect(),
 
                 _ => Ok(()),
@@ -512,8 +505,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// Helper function for `evaluate_expr` to traverse the expression and simply
 /// gather all of the evaluations, combining them as appropriate.
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
-/// within. TODO!(ryancao): Make this not need to be mutable
-pub(crate) fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
+/// within. 
+/// 
+/// TODO!(ryancao): Make this not need to be mutable
+pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     expr: &Exp,
 ) -> Result<F, ExpressionError> {
     let constant = |c| Ok(c);
@@ -564,6 +559,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     }
 
     /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
+    /// 
     /// Returns the max number of bits that are indexed
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {

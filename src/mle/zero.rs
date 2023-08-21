@@ -1,16 +1,19 @@
 //!Contains ZeroMleRef which is an MleRef which always contains only all zeros
 
+//!Contains ZeroMleRef which is an MleRef which always contains only all zeros
+
 use itertools::{repeat_n, Itertools};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     layer::{Claim, LayerId},
     FieldExt,
 };
 
-use super::{MleIndex, MleRef};
+use super::{MleIndex, MleRef, mle_enum::MleEnum};
 
 ///An MLERef that is only zeros; Typically used for the output layer
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroMleRef<F: FieldExt> {
     mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
@@ -98,7 +101,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.layer_id.clone()
     }
 
-    fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {
-        self.mle_indices.append(&mut new_indices.to_vec());
+    fn get_enum(self) -> MleEnum<Self::F> {
+        MleEnum::Zero(self)
     }
 }

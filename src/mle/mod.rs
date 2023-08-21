@@ -1,15 +1,20 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use serde::{Deserialize, Serialize};
 use core::fmt::Debug;
 
 use crate::layer::Claim;
 use crate::{layer::LayerId, FieldExt};
 
+use self::mle_enum::MleEnum;
+
 pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
 pub mod zero;
+pub mod gate;
+pub mod mle_enum;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
@@ -63,6 +68,8 @@ pub trait MleRef: Debug + Send + Sync {
 
     /// get whether mle has been indexed
     fn indexed(&self) -> bool;
+
+    fn get_enum(self) -> MleEnum<Self::F>;
 }
 
 ///Trait that allows a type to be serialized into an Mle, and yield MleRefs
@@ -86,7 +93,7 @@ pub trait MleAble<F: FieldExt> {
 }
 
 ///The Enum that represents the possible indices for an MLE
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MleIndex<F: FieldExt> {
     ///A Selector bit for fixed MLE access
     Fixed(bool),

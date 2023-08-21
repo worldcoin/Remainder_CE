@@ -1,4 +1,4 @@
-//! Module that deals with the specific circuit to prove the result of a decision tree model.
+//! Module that deals with the specific circuit to prove the result of a decision tree
 
 /// Example structs for zkDT circuit
 pub mod structs;

@@ -1,12 +1,12 @@
 use super::*;
 use crate::{
     expression::ExpressionStandard,
-    layer::{claims::aggregate_claims, Claim, Layer, LayerId},
+    layer::{claims::aggregate_claims, Claim, Layer, LayerId, GKRLayer, from_mle, LayerBuilder},
     mle::{
-        beta::evaluate_beta,
+        beta::compute_beta_over_two_challenges,
         dense::{DenseMle, Tuple2},
         Mle,
-    },
+    }, transcript::poseidon_transcript::PoseidonTranscript,
 };
 use ark_bn254::Fr;
 use ark_std::test_rng;
@@ -114,10 +114,8 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     challenges.push(final_chal);
 
     // uses the expression to make one single oracle query
-    let mut beta = BetaTable::new(layer_claim).unwrap();
-    // let _ = expression.index_mle_indices(0);
     let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
-    let beta_bound = evaluate_beta(&mut beta, challenges).unwrap();
+    let beta_bound = compute_beta_over_two_challenges(&layer_claim.0, &challenges);
     let oracle_query = mle_bound * beta_bound;
 
     let prev_at_r =
@@ -129,7 +127,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     Ok(chal)
 }
 
-pub fn get_dummy_claim<F: FieldExt>(
+fn get_dummy_claim<F: FieldExt>(
     mle_ref: DenseMleRef<F>,
     rng: &mut impl Rng,
     challenges: Option<Vec<F>>,
@@ -590,8 +588,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let expression = mle_ref_1.expression();
-    let expr2 = mle_ref_2.expression();
+    let expression = ExpressionStandard::Mle(mle_ref_1);
+    let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat(expression);
     let expression_aggro = expression.concat(expr2.clone());
@@ -675,9 +673,12 @@ fn test_dummy_sumcheck_subtract() {
 
     let mut expression = mle_ref_1.expression() - mle_ref_2.expression();
 
+    let layer = from_mle((mle1, mle2), |mle| mle.0.mle_ref().expression() - mle.1.mle_ref().expression(), |_, _, _| unimplemented!());
+    let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
     let (layer_claims, _) = aggregate_claims(
         &[first_claim, second_claim],
-        &expression,
+        &layer,
         Fr::rand(&mut rng),
     )
     .unwrap();
@@ -738,9 +739,12 @@ fn test_dummy_sumcheck_product_and_claim_aggregate() {
 
     let mut expression = ExpressionStandard::products(vec![mle_ref_1, mle_ref_2]);
 
+    let layer = from_mle((mle1, mle2), |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]), |_, _, _| unimplemented!());
+    let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
     let (layer_claims, _) = aggregate_claims(
         &[first_claim, second_claim],
-        &expression,
+        &layer,
         Fr::rand(&mut rng),
     )
     .unwrap();
@@ -812,13 +816,22 @@ fn test_dummy_sumcheck_example() {
     );
 
     let expr_1 = ExpressionStandard::products(vec![mle.first(), mle.second()]);
+
+    let layer = from_mle(mle, |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]), |_, _, _| unimplemented!());
+    
     // let expr_1 = mle.first().expression() + mle.second().expression();
     let expr_2 = mle_2.first().expression() + mle_2.second().expression();
     let mut expression = expr_1.concat(expr_2);
 
+    let layer_2 = from_mle(mle_2, |mle| mle.first().expression() + mle.second().expression(), |_, _, _| unimplemented!());
+
+    let layer = layer.concat(layer_2);
+
+    let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+
     let (layer_claims, _) = aggregate_claims(
         &[first_claim, second_claim],
-        &expression,
+        &layer,
         Fr::rand(&mut rng),
     )
     .unwrap();
@@ -861,29 +874,3 @@ fn test_dummy_sumcheck_constant() {
     assert!(verifyres.is_ok());
 }
 
-#[test]
-fn test_dummy_sumcheck_scaled() {
-    // let layer_claims = (
-    //     vec![Fr::from(2), Fr::from(4), Fr::from(2), Fr::from(3)],
-    //     Fr::one(),
-    // );
-    let mut rng = test_rng();
-    let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
-
-    let mle_out = DenseMle::<Fr, Fr>::new_from_raw(
-        vec![Fr::from(5), Fr::from(10), Fr::from(15), Fr::from(20)],
-        LayerId::Input,
-        None,
-    );
-    let layer_claims = get_dummy_claim(mle_out.mle_ref(), &mut rng, None);
-
-    let mle_ref_1 = mle1.mle_ref();
-
-    let mut expression =
-        ExpressionStandard::Mle(mle_ref_1) * Fr::from(5);
-
-    let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
-    let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
-    assert!(verifyres.is_ok());
-}

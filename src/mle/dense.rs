@@ -8,8 +8,9 @@ use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools, MapInto};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
+use serde::{Deserialize, Serialize};
 
-use super::{Mle, MleAble, MleIndex, MleRef};
+use super::{Mle, MleAble, MleIndex, MleRef, mle_enum::MleEnum};
 use crate::{expression::ExpressionStandard, layer::Claim};
 use crate::{layer::LayerId, FieldExt};
 
@@ -273,7 +274,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                         .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
                 )
                 .collect_vec(),
-            num_vars: num_vars - 1,
+            num_vars,
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
@@ -305,7 +306,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
 // --------------------------- MleRef stuff ---------------------------
 
 /// An [MleRef] that is dense
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DenseMleRef<F: FieldExt> {
     ///The bookkeeping table of this MleRefs evaluations over the boolean hypercube
     pub bookkeeping_table: Vec<F>,
@@ -379,10 +380,10 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.bookkeeping_table = new.collect();
-
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
             Some((
+                
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
@@ -411,8 +412,8 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.layer_id.clone()
     }
 
-    fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {
-        self.mle_indices.append(&mut new_indices.to_vec());
+    fn get_enum(self) -> MleEnum<Self::F> {
+        MleEnum::Dense(self)
     }
 }
 

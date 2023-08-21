@@ -57,9 +57,12 @@ pub enum InterpError {
     NoInverse,
 }
 
-///A newtype that makes it easier to do arithmatic on sets of evaluations of the summed expression
+/// A type representing the univariate message g_i(x) which the prover
+/// sends to the verifier in each round of sumcheck. Note that the prover
+/// in our case always sends evaluations g_i(0), ..., g_i(d) to the verifier,
+/// and thus the struct is called `Evals`.
 #[derive(PartialEq, Debug, Clone)]
-pub(crate) struct Evals<F: FieldExt>(pub(crate) Vec<F>);
+pub struct Evals<F: FieldExt>(pub(crate) Vec<F>);
 
 impl<F: FieldExt> Neg for Evals<F> {
     type Output = Self;
@@ -282,7 +285,7 @@ pub(crate) fn compute_sumcheck_message<
 /// # Errors:
 /// - MleError::EmptyMleList -- when there are zero MLEs within the list
 /// - TODO!(ryancao || vishady): MleError::NotIndexedError -- when ANY MLE is not fully indexed
-fn evaluate_mle_ref_product<F: FieldExt>(
+pub fn evaluate_mle_ref_product<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
     degree: usize,
