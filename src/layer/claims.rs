@@ -170,7 +170,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 }
 
 /// verifies the claim aggregation
-pub(crate) fn verify_aggragate_claim<F: FieldExt>(
+pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for qx
     claims: &[Claim<F>],
     r_star: F,
@@ -611,6 +611,6 @@ mod tests {
         // for round in 0..rounds {
         //     expr.fix
         // }
-        let verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
+        let verify_result = verify_aggregate_claim(&wlx, &claims, rchal).unwrap();
     }
 }

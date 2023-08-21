@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::{
     layer::{
-        from_mle, claims::aggregate_claims, claims::verify_aggragate_claim, claims::compute_aggregated_challenges, claims::compute_claim_wlx, Claim, GKRLayer, Layer,
+        from_mle, claims::aggregate_claims, claims::verify_aggregate_claim, claims::compute_aggregated_challenges, claims::compute_claim_wlx, Claim, GKRLayer, Layer,
         LayerBuilder, LayerError, LayerId, layer_enum::LayerEnum,
     },
     mle::{MleIndex, mle_enum::MleEnum},
@@ -427,7 +427,7 @@ pub trait GKRCircuit<F: FieldExt> {
                     .get_challenge("Challenge for claim aggregation")
                     .unwrap();
 
-                prev_claim = verify_aggragate_claim(&wlx_evaluations, layer_claims, agg_chal)
+                prev_claim = verify_aggregate_claim(&wlx_evaluations, layer_claims, agg_chal)
                     .map_err(|_err| {
                         GKRError::ErrorWhenVerifyingLayer(
                             layer_id.clone(),
@@ -439,9 +439,6 @@ pub trait GKRCircuit<F: FieldExt> {
                         .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
                         .unwrap();
             }
-
-            // --- Performs the actual sumcheck verification step ---
-
 
             // --- Performs the actual sumcheck verification step ---
             layer
@@ -495,7 +492,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 .unwrap();
 
             // --- Perform the aggregation verification step and extract the correct input layer claim ---
-            input_layer_claim = verify_aggragate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
+            input_layer_claim = verify_aggregate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
                 .map_err(|_err| {
                     GKRError::ErrorWhenVerifyingLayer(
                         input_layer_id,
@@ -529,7 +526,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .unwrap();
 
         // --- Perform the aggregation verification step and extract the correct input layer claim ---
-        input_layer_claim = verify_aggragate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
+        input_layer_claim = verify_aggregate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
         .map_err(|_err| {
             GKRError::ErrorWhenVerifyingLayer(
                 input_layer_id,
