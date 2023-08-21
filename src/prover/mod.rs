@@ -287,30 +287,6 @@ pub trait GKRCircuit<F: FieldExt> {
         } else {
             dbg!("Not aggroing input claims this time around");
         }
-        // dbg!(input_layer_claim.clone());
-        // dbg!(-input_layer_claim.1);
-
-        // --- Sanitycheck on the un-aggregated input claims ---
-        let padded_input_layer_mle = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle);
-        dbg!(&padded_input_layer_mle);
-        for input_claim in input_layer_claims {
-            
-            // let input_layer_challenge_coords_big_endian = input_claim.0.clone().into_iter().rev().collect_vec();
-            let naive_eval = naive_eval_mle_at_challenge_point(&padded_input_layer_mle, &input_claim.0);
-            dbg!(&padded_input_layer_mle);
-            dbg!(&input_claim);
-            dbg!(&naive_eval);
-            assert_eq!(naive_eval, input_claim.1);
-        }
-        // panic!();
-
-        // --- Sanitycheck (TODO!(ryancao): Remove this) ---
-        let padded_input_layer_mle = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle);
-        // let input_layer_challenge_coords_big_endian = input_layer_claim.0.clone().into_iter().rev().collect_vec();
-        let naive_eval = naive_eval_mle_at_challenge_point(&padded_input_layer_mle, &input_layer_claim.0);
-        // dbg!(-naive_eval);
-        // dbg!(&input_layer_claim);
-        assert_eq!(naive_eval, input_layer_claim.1);
 
         let input_layer_proof = InputLayerProof {
             input_layer_aggregated_claim_proof: input_wlx_evaluations,

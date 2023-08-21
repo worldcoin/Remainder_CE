@@ -426,42 +426,6 @@ mod tests {
         
     }
 
-    // --- NOTE that this test only works with big-endian --> big-endian ---
-    // TODO!(ryancao): Put this test back in when we do the big-endian refactor!
-    // #[test]
-    // fn simple_test() {
-    //     // --- Create MLEs of size 2^5, 2^5, 2^4 ---
-    //     let mut mle_1 = get_random_mle::<Fr>(5);
-    //     let mut mle_2 = get_random_mle::<Fr>(5);
-    //     let mut mle_3 = get_random_mle::<Fr>(4);
-    //     let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
-
-    //     let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None);
-    //     dummy_input_layer.combine_input_mles(&mle_list, None);
-
-    //     // --- The padded combined version should have size 2^7 (but only 2^5 + 2^5 + 2^4 = 80 unpadded elems) ---
-    //     assert_eq!(dummy_input_layer.combined_dense_mle.clone().unwrap().num_iterated_vars(), 7);
-    //     assert_eq!(dummy_input_layer.combined_dense_mle.unwrap().mle.len(), 32 + 32 + 16 as usize);
-
-    //     // --- The prefix bits should be (0, 0), (0, 1), (1, 0, 0) ---
-    //     assert_eq!(
-    //         mle_1.prefix_bits,
-    //         Some(vec![MleIndex::Fixed(false), MleIndex::Fixed(false)])
-    //     );
-    //     assert_eq!(
-    //         mle_2.prefix_bits,
-    //         Some(vec![MleIndex::Fixed(false), MleIndex::Fixed(true)])
-    //     );
-    //     assert_eq!(
-    //         mle_3.prefix_bits,
-    //         Some(vec![
-    //             MleIndex::Fixed(true),
-    //             MleIndex::Fixed(false),
-    //             MleIndex::Fixed(false)
-    //         ])
-    //     );
-    // }
-
     #[test]
     fn test_with_padding() {
         // --- Create MLEs of size < 2^5, < 2^7, 2^6 ---
