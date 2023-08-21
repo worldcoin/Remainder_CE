@@ -9,8 +9,8 @@ use crate::{
         dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
         Mle, MleAble, MleIndex,
     },
-    FieldExt,
 };
+use lcpc_2d::FieldExt;
 use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Chunk, Chunks, Itertools};
@@ -150,7 +150,7 @@ impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
 impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     /// MleRef grabbing just the list of node IDs
     pub(crate) fn node_id(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars();
+        let num_vars = self.num_iterated_vars();
 
         // --- There are four components to this MLE ---
         let _len = self.mle.len() / 4;
@@ -178,7 +178,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
 
     /// MleRef grabbing just the list of attribute IDs
     pub(crate) fn attr_id(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars();
+        let num_vars = self.num_iterated_vars();
 
         // --- There are four components to this MLE ---
         let _len = self.mle.len() / 4;
@@ -206,7 +206,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
 
     /// MleRef grabbing just the list of thresholds
     pub(crate) fn threshold(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars();
+        let num_vars = self.num_iterated_vars();
 
         // --- There are four components to this MLE ---
         // let len = self.mle.len() / 4;
@@ -300,7 +300,7 @@ impl<F: FieldExt> MleAble<F> for LeafNode<F> {
 impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     /// MleRef grabbing just the list of node IDs
     pub(crate) fn node_id(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars();
+        let num_vars = self.num_iterated_vars();
 
         // --- There are four components to this MLE ---
         let _len = self.mle.len() / 2;
@@ -327,7 +327,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
 
     /// MleRef grabbing just the list of attribute IDs
     pub(crate) fn node_val(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars();
+        let num_vars = self.num_iterated_vars();
 
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
@@ -418,10 +418,10 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// MleRef grabbing just the list of attribute IDs
     pub(crate) fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
         // --- Default to the entire (component of) the MLE ---
-        let num_vars = num_vars.unwrap_or(self.num_vars() - 1);
+        let num_vars = num_vars.unwrap_or(self.num_iterated_vars() - 1);
 
         // TODO!(ryancao): Make this actually do error-handling
-        assert!(num_vars < self.num_vars());
+        assert!(num_vars < self.num_iterated_vars());
 
         // --- The length of the MLERef is just 2^{num_vars} ---
         let len = 2_u32.pow(num_vars as u32) as usize;
@@ -440,7 +440,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                     std::iter::once(MleIndex::Fixed(false))
                         .chain(repeat_n(
                             MleIndex::Fixed(false),
-                            self.num_vars() - 1 - num_vars,
+                            self.num_iterated_vars() - 1 - num_vars,
                         ))
                         .chain(repeat_n(MleIndex::Iterated, num_vars)),
                 )
@@ -456,11 +456,11 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         // --- Default to the entire (component of) the MLE ---
         let num_vars = match num_vars {
             Some(num) => num,
-            None => self.num_vars() - 1,
+            None => self.num_iterated_vars() - 1,
         };
 
         // TODO!(ryancao): Make this actually do error-handling
-        assert!(num_vars < self.num_vars());
+        assert!(num_vars < self.num_iterated_vars());
 
         // --- The length of the MLERef is just 2^{num_vars} ---
         let len = 2_u32.pow(num_vars as u32) as usize;
@@ -480,7 +480,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                     std::iter::once(MleIndex::Fixed(true))
                         .chain(repeat_n(
                             MleIndex::Fixed(false),
-                            self.num_vars() - 1 - num_vars,
+                            self.num_iterated_vars() - 1 - num_vars,
                         ))
                         .chain(repeat_n(MleIndex::Iterated, num_vars)),
                 )
@@ -572,7 +572,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
     /// Returns a list of MLERefs, one for each bit
     /// TODO!(ryancao): Change this back to [DenseMleRef<F>; 16] and make it work!
     pub(crate) fn mle_bit_refs(&'_ self) -> Vec<DenseMleRef<F>> {
-        let num_vars = self.num_vars();
+        let num_vars = self.num_iterated_vars();
 
         // --- There are sixteen components to this MLE ---
         let mut ret: Vec<DenseMleRef<F>> = vec![];

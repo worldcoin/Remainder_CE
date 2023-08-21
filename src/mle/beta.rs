@@ -8,7 +8,7 @@ use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIter
 use serde::{Serialize, Deserialize};
 
 use crate::layer::{Claim, LayerId};
-use crate::FieldExt;
+use lcpc_2d::FieldExt;
 
 use super::{
     dense::{DenseMle, DenseMleRef},

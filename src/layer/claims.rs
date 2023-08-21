@@ -1,6 +1,7 @@
 //!Utilities involving the claims a layer makes
 
-use crate::{expression::ExpressionStandard, mle::beta::BetaTable, FieldExt};
+use crate::{expression::ExpressionStandard, mle::beta::BetaTable};
+use lcpc_2d::FieldExt;
 
 use itertools::Itertools;
 use crate::mle::MleRef;
@@ -115,6 +116,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
         return Err(ClaimError::ClaimAggroError);
     }
 
+    // --- Number of variables in the claim ---
     let num_idx = claim_vecs[0].len();
 
     // get the claim (r = l(r*))
@@ -123,6 +125,8 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
             let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                 .map(|claim| claim[idx])
                 .collect();
+            // --- Interpolate u_1, v_1, w_1 --> r_1 ---
+            // l(0) = u_1, ... what is l(r^*)?
             evaluate_at_a_point(&evals, rstar).unwrap()
         })
         .collect();
@@ -137,7 +141,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 }
 
 /// verifies the claim aggregation
-pub(crate) fn verify_aggragate_claim<F: FieldExt>(
+pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for qx
     claims: &[Claim<F>],
     r_star: F,
@@ -578,6 +582,6 @@ mod tests {
 
         let (_res, wlx) = aggregate_claims(&claims, &layer, rchal).unwrap();
         let _rounds = expr.index_mle_indices(0);
-        let _verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
+        let _verify_result = verify_aggregate_claim(&wlx, &claims, rchal).unwrap();
     }
 }

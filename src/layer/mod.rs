@@ -2,8 +2,6 @@
 
 pub mod batched;
 pub mod claims;
-/// For the input layer to the GKR circuit
-pub mod input_layer;
 pub mod empty_layer;
 pub mod layer_enum;
 // mod gkr_layer;
@@ -25,22 +23,25 @@ use crate::{
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
-    transcript::Transcript,
-    FieldExt,
 };
+
+use lcpc_2d::FieldExt;
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
+
+use lcpc_2d::FieldExt;
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 use self::{claims::ClaimError, layer_enum::LayerEnum};
 
-///Type alias for a claim (A point to evaluate at and an evaluation)
+
+/// Type alias for a claim (A point to evaluate at and an evaluation)
 /// Type alias for a claim (A point to evaluate at and an evaluation)
 pub type Claim<F> = (Vec<F>, F);
 
 #[derive(Error, Debug, Clone)]
-///Errors to do with working with a Layer
 /// Errors to do with working with a Layer
 pub enum LayerError {
     #[error("Layer isn't ready to prove")]
-    ///Layer isn't ready to prove
     /// Layer isn't ready to prove
     LayerNotReady,
     #[error("Error with underlying expression: {0}")]
@@ -78,17 +79,23 @@ pub enum VerificationError {
     #[error("The Oracle query does not match the final claim")]
     /// The Oracle query does not match the final claim
     GKRClaimCheckFailed,
+    #[error("The Challenges generated during sumcheck don't match the claims in the given expression")]
+    ///The Challenges generated during sumcheck don't match the claims in the given expression
+    ChallengeCheckFailed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-/// The location of a layer within the GKR circuit
+///  The location of a layer within the GKR circuit
 pub enum LayerId {
     /// An Mle located in the input layer
+    /// An Mle located in the input layer
     Input,
+    /// A layer within the GKR protocol, indexed by it's layer id
     /// A layer within the GKR protocol, indexed by it's layer id
     Layer(usize),
 }
 
+/// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
     /// The transcript that this layer uses
@@ -378,6 +385,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     if mle_ref.bookkeeping_table().len() != 1 {
                         return Err(ClaimError::MleRefMleError);
                     }
+                    // dbg!(mle_ref.bookkeeping_table());
+                    // dbg!(mle_indices);
                     let claimed_value = mle_ref.bookkeeping_table()[0];
 
                     // --- Construct the claim ---
@@ -423,7 +432,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             Ok(())
         };
 
-        // TODO!(ryancao): What the heck is this code doing?
+        // --- Apply the observer function from above onto the expression ---
         layerwise_expr
             .traverse(&mut observer_fn)
             .map_err(LayerError::ClaimError)?;

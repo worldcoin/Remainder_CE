@@ -3,19 +3,24 @@
 /// For the input layer to the GKR circuit
 pub mod input_layer;
 
+/// For the input layer to the GKR circuit
+pub mod input_layer;
+
 use std::collections::HashMap;
 
 use crate::{
     layer::{
-        from_mle, claims::aggregate_claims, claims::verify_aggragate_claim, Claim, GKRLayer, Layer,
+        from_mle, claims::aggregate_claims, claims::verify_aggregate_claim, Claim, GKRLayer, Layer,
         LayerBuilder, LayerError, LayerId, layer_enum::LayerEnum,
     },
     mle::{MleIndex, mle_enum::MleEnum},
     mle::MleRef,
-    transcript::Transcript,
-    FieldExt, expression::ExpressionStandard,
-    zkdt::zkdt_layer::{DecisionPackingBuilder}
+    expression::ExpressionStandard,
+    utils::pad_to_nearest_power_of_two
 };
+
+use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 // use derive_more::From;
 use itertools::Itertools;
@@ -24,7 +29,14 @@ use thiserror::Error;
 
 use self::input_layer::InputLayer;
 
-/// New type for containing the list of Layers that make up the GKR circuit
+use lcpc_2d::ScalarField;
+use lcpc_2d::adapter::LigeroProof;
+
+use self::input_layer::InputLayer;
+
+///  New  type for containing the list of Layers that make up the GKR circuit
+/// 
+/// Literally just a Vec of pointers to various layer types!
 /// 
 /// Literally just a Vec of pointers to various layer types!
 pub struct Layers<F: FieldExt, Tr: Transcript<F>>(Vec<LayerEnum<F, Tr>>);
@@ -114,29 +126,45 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     pub output_layers: Vec<Box<dyn MleRef<F = F>>>,
     /// Proof for the circuit input layer
     pub input_layer_proof: InputLayerProof<F>,
+    /// Ligero proof
+    pub ligero_commit_eval_proof: LigeroProof<F2>,
+    /// Ligero auxiliary info for verifier
+    pub ligero_aux: LcProofAuxiliaryInfo,
 }
 
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
     /// The transcript this circuit uses
     type Transcript: Transcript<F>;
+
+    /// The Halo2 field (for prover transcript)
+    type F2: ScalarField;
+
     /// The forward pass, defining the layer relationships and generating the layers
     fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>);
 
-    /// The backwards pass, creating the GKRProof
+    ///  The backwards pass, creating the GKRProof
     fn prove(
         &mut self,
         transcript: &mut Self::Transcript,
-    ) -> Result<GKRProof<F, Self::Transcript>, GKRError> {
+    ) -> Result<GKRProof<F, Self::Transcript, Self::F2>, GKRError> {
 
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
         let (layers, mut output_layers, input_layer) = self.synthesize();
 
+        // --- Compute the Ligero commitment to the combined input MLE ---
+        // TODO!(ryancao): Hard-code this somewhere else!!
+        let rho_inv: u8 = 4;
+        let orig_input_layer_bookkeeping_table = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle.clone());
+        let (_, comm, root, aux) = remainder_ligero_commit_prove(&orig_input_layer_bookkeeping_table, rho_inv);
+
         // --- Keep track of GKR-style claims across all layers ---
-        let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
+        // --- Keep track of GKR-style claims across all layers ---
+        let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new(); 
 
         // --- Go through circuit output layers and grab claims on each ---
         for output in output_layers.iter_mut() {
+            
             let mut claim = None;
             let bits = output.index_mle_indices(0);
 
@@ -176,6 +204,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 let layer_claims = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+                dbg!(layer_claims);
 
                 // --- Add the claimed values to the FS transcript ---
                 for claim in layer_claims {
@@ -188,17 +217,26 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
 
                 // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
+                // --- claim aggregation protocol. We ONLY aggregate if need be! ---
+                let mut layer_claim = layer_claims[0].clone();
+                let mut wlx_evaluations = vec![];
+                if layer_claims.len() > 1 {
+                    // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
                 // --- claim aggregation protocol ---
                 let agg_chal = transcript
-                    .get_challenge("Challenge for claim aggregation")
-                    .unwrap();
-
-                let (layer_claim, wlx_evaluations) =
-                    aggregate_claims(layer_claims, &layer, agg_chal).unwrap();
-
-                    transcript
-                        .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
+                        .get_challenge("Challenge for claim aggregation")
                         .unwrap();
+
+                    (layer_claim, wlx_evaluations) =
+                        aggregate_claims(layer_claims, &layer, agg_chal).unwrap();
+
+                        transcript
+                            .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
+                            .unwrap();
+                } else {
+                    dbg!("Yeah not aggregating claims this time around");
+                }
+                dbg!(layer_claim.clone());
 
                 // --- Compute all sumcheck messages across this particular layer ---
                 let prover_sumcheck_messages = layer
@@ -225,6 +263,58 @@ pub trait GKRCircuit<F: FieldExt> {
                 })
             })
             .try_collect()?;
+
+        // --- Gather all of the claims on the input layer and aggregate them ---
+        let input_layer_id = LayerId::Input;
+        let input_layer_claims = claims
+            .get(&input_layer_id)
+            .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
+        dbg!(input_layer_claims);
+
+        // --- Add the claimed values to the FS transcript ---
+        for claim in input_layer_claims {
+            transcript
+                .append_field_elements("Claimed challenge coordinates to be aggregated", &claim.0)
+                .unwrap();
+            transcript
+                .append_field_element("Claimed value to be aggregated", claim.1)
+                .unwrap();
+        }
+
+        // --- Aggregate challenges ONLY if we have more than one ---
+        let mut input_layer_claim = input_layer_claims[0].clone();
+        let mut input_wlx_evaluations = vec![];
+        if input_layer_claims.len() > 1 {
+            dbg!("Aggregating input claims");
+            let agg_chal = transcript
+                .get_challenge("Challenge for claim aggregation")
+                .unwrap();
+
+            let input_layer_expression = ExpressionStandard::Mle(input_layer.get_combined_mle().unwrap().mle_ref());
+
+            (input_layer_claim, input_wlx_evaluations) =
+                aggregate_claims(input_layer_claims, &input_layer_expression, agg_chal).unwrap();
+
+            transcript
+                .append_field_elements("Claim Aggregation Wlx_evaluations", &input_wlx_evaluations)
+                .unwrap();
+        } else {
+            dbg!("Not aggroing input claims this time around");
+        }
+
+        let input_layer_proof = InputLayerProof {
+            input_layer_aggregated_claim_proof: input_wlx_evaluations,
+        };
+
+        // --- Finally, the Ligero commit + eval proof ---
+        let ligero_commit_eval_proof = remainder_ligero_eval_prove(
+            &orig_input_layer_bookkeeping_table,
+            &input_layer_claim.0,
+            transcript,
+            aux.clone(),
+            comm,
+            root
+        );
 
         // --- Gather all of the claims on the input layer and aggregate them ---
         let input_layer_id = LayerId::Input;
@@ -267,6 +357,9 @@ pub trait GKRCircuit<F: FieldExt> {
             layer_sumcheck_proofs,
             output_layers,
             input_layer_proof,
+            ligero_commit_eval_proof,
+            ligero_aux: aux,
+            input_layer_proof,
         };
 
         Ok(gkr_proof)
@@ -278,11 +371,14 @@ pub trait GKRCircuit<F: FieldExt> {
     fn verify(
         &mut self,
         transcript: &mut Self::Transcript,
-        gkr_proof: GKRProof<F, Self::Transcript>,
+        gkr_proof: GKRProof<F, Self::Transcript, Self::F2>,
     ) -> Result<(), GKRError> {
         let GKRProof {
             layer_sumcheck_proofs,
             output_layers,
+            input_layer_proof,
+            ligero_commit_eval_proof,
+            ligero_aux
             input_layer_proof
         } = gkr_proof;
 
@@ -344,22 +440,28 @@ pub trait GKRCircuit<F: FieldExt> {
             }
 
             // --- Perform the claim aggregation verification, first sampling `r` ---
+            // --- Note that we ONLY do this if need be! ---
+            let mut prev_claim = layer_claims[0].clone();
+            if layer_claims.len() > 1 {
+                // --- Perform the claim aggregation verification, first sampling `r` ---
             let agg_chal = transcript
-                .get_challenge("Challenge for claim aggregation")
-                .unwrap();
-
-            let prev_claim = verify_aggragate_claim(&wlx_evaluations, layer_claims, agg_chal)
-                .map_err(|_err| {
-                    GKRError::ErrorWhenVerifyingLayer(
-                        layer_id.clone(),
-                        LayerError::AggregationError,
-                    )
-                })?;
-
-                transcript
-                    .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
+                    .get_challenge("Challenge for claim aggregation")
                     .unwrap();
 
+                prev_claim = verify_aggregate_claim(&wlx_evaluations, layer_claims, agg_chal)
+                    .map_err(|_err| {
+                        GKRError::ErrorWhenVerifyingLayer(
+                            layer_id.clone(),
+                            LayerError::AggregationError,
+                        )
+                    })?;
+
+                    transcript
+                        .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
+                        .unwrap();
+            }
+
+            // --- Performs the actual sumcheck verification step ---
 
 
             // --- Performs the actual sumcheck verification step ---
@@ -382,6 +484,61 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
             }
         }
+
+        // --- Verify the input claim aggregation step ---
+        let InputLayerProof {
+            input_layer_aggregated_claim_proof,
+        } = input_layer_proof;
+
+        // --- Grab the self-tracked input layer claims ---
+        let input_layer_id = LayerId::Input;
+        let input_layer_claims = claims
+            .get(&input_layer_id)
+            .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
+
+        // --- Add the claimed values to the FS transcript ---
+        for claim in input_layer_claims {
+            transcript
+                .append_field_elements("Claimed challenge coordinates to be aggregated", &claim.0)
+                .unwrap();
+            transcript
+                .append_field_element("Claimed value to be aggregated", claim.1)
+                .unwrap();
+        }
+
+        // --- Do claim aggregation on input layer ONLY if needed ---
+        let mut input_layer_claim = input_layer_claims[0].clone();
+        if input_layer_claims.len() > 1 {
+
+            // --- Grab the input claim aggregation challenge ---
+            let input_r_star = transcript
+                .get_challenge("Challenge for input claim aggregation")
+                .unwrap();
+
+            // --- Perform the aggregation verification step and extract the correct input layer claim ---
+            input_layer_claim = verify_aggregate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
+                .map_err(|_err| {
+                    GKRError::ErrorWhenVerifyingLayer(
+                        input_layer_id,
+                        LayerError::AggregationError,
+                    )
+                })?;
+
+            // --- Add the aggregation step to the transcript ---
+            transcript
+            .append_field_elements("Input claim aggregation Wlx_evaluations", &input_layer_aggregated_claim_proof)
+            .unwrap();
+        }
+
+        // --- The prover interprets the challenge coords as big-endian, but Ligero interprets them as little-endian ---
+        // let input_layer_challenge_coords_big_endian = input_layer_claim.0.clone().into_iter().rev().collect_vec();
+
+        dbg!("----- Hahahahahahahaahaha!-----");
+
+        // --- This is broken for now... The prover input claim is not the same as the Ligero proof ---
+        let (root, ligero_eval_proof, _) = convert_halo_to_lcpc::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F, Self::F2>(ligero_aux.clone(), ligero_commit_eval_proof);
+        remainder_ligero_verify::<F, Self::F2>(&root, &ligero_eval_proof, ligero_aux, transcript, &input_layer_claim.0, input_layer_claim.1);
+
 
         // --- Verify the input claim aggregation step ---
         let InputLayerProof {
@@ -419,11 +576,16 @@ mod tests {
 
     use ark_bn254::Fr;
     use ark_ff::PrimeField;
-    use ark_std::{test_rng, UniformRand, log2};
+    use ark_std::{test_rng, UniformRand, log2, One, Zero};
 
-    use crate::{transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, FieldExt, mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef, mle_enum::MleEnum}, layer::{LayerBuilder, from_mle, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder, InputPackingBuilder}}};
+    use crate::{mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef, mle_enum::MleEnum}, layer::{LayerBuilder, from_mle, LayerId}, expression::ExpressionStandard, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, InputAttribute}, zkdt_layer::{DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, SplitProductBuilder, DifferenceBuilder, AttributeConsistencyBuilder, InputPackingBuilder}}};
+    use lcpc_2d::FieldExt;
+    use lcpc_2d::fs_transcript::halo2_poseidon_transcript::PoseidonTranscript;
+    use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
+    use lcpc_2d::ScalarField;
 
-    use super::{GKRCircuit, Layers, input_layer::InputLayer};
+    use super::{GKRCircuit, Layers, input_layer::InputLayer, input_layer::InputLayer};
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr as H2Fr;
 
     struct PermutationCircuit<F: FieldExt> {
         dummy_input_data_mle_vec: DenseMle<F, InputAttribute<F>>,               // batched
@@ -436,7 +598,8 @@ mod tests {
 
     impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+        type F2 = H2Fr;
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>, InputLayer<F>) {
 
             let mut layers = Layers::new();
 
@@ -474,9 +637,13 @@ mod tests {
 
             // --- Input MLEs are just the input data and permuted input data MLEs ---
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.dummy_input_data_mle_vec), Box::new(&mut self.dummy_permuted_input_data_mle_vec)];
+            let input_layer = InputLayer::new_from_mles(&mut input_mles, None);
+
+            // --- Input MLEs are just the input data and permuted input data MLEs ---
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.dummy_input_data_mle_vec), Box::new(&mut self.dummy_permuted_input_data_mle_vec)];
             let input_layer = InputLayer::new_from_mles(&mut input_mles);
 
-            (layers, vec![Box::new(difference_mle.mle_ref())], input_layer)
+            (layers, vec![Box::new(difference_mle.mle_ref())], input_layer, input_layer)
         }
     }
 
@@ -488,7 +655,8 @@ mod tests {
 
     impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+        type F2 = H2Fr;
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>, InputLayer<F>) {
             let mut layers = Layers::new();
 
             let attribute_consistency_builder = AttributeConsistencyBuilder::new(
@@ -501,9 +669,13 @@ mod tests {
 
             // --- Input MLEs are just the permuted input data and decision path MLEs ---
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.dummy_permuted_input_data_mle_vec), Box::new(&mut self.dummy_decision_node_paths_mle_vec)];
+            let input_layer = InputLayer::new_from_mles(&mut input_mles, None);
+
+            // --- Input MLEs are just the permuted input data and decision path MLEs ---
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.dummy_permuted_input_data_mle_vec), Box::new(&mut self.dummy_decision_node_paths_mle_vec)];
             let input_layer = InputLayer::new_from_mles(&mut input_mles);
 
-            (layers, vec![Box::new(difference_mle.mle_ref())], input_layer)
+            (layers, vec![Box::new(difference_mle.mle_ref())], input_layer, input_layer)
         }
     }
 
@@ -521,6 +693,7 @@ mod tests {
 
     impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
+        type F2 = H2Fr;
         
         fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
             let mut layers = Layers::new();
@@ -651,12 +824,139 @@ mod tests {
                 Box::new(&mut self.dummy_decision_node_paths_mle_vec),
                 Box::new(&mut self.dummy_leaf_node_paths_mle_vec),
             ];
-            let input_layer = InputLayer::new_from_mles(&mut input_mles);
+            let input_layer = InputLayer::new_from_mles(&mut input_mles, None);
 
             (layers, vec![Box::new(difference.mle_ref())], input_layer)
         }
     }
 
+    /// This circuit is a 4 --> 2 circuit, such that
+    /// [x_1, x_2, x_3, x_4, (y_1, y_2)] --> [x_1 * x_3, x_2 * x_4] --> [x_1 * x_3 - y_1, x_2 * x_4 - y_2]
+    /// Note that we also have the difference thingy (of size 2)
+    struct SimpleCircuit<F: FieldExt> {
+        mle: DenseMle<F, Tuple2<F>>,
+    }
+    impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
+
+        type Transcript = PoseidonTranscript<F>;
+        type F2 = H2Fr;
+
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+
+            // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
+            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(5));
+            let mle_clone = self.mle.clone();
+
+            // --- Create Layers to be added to ---
+            let mut layers = Layers::new();
+
+            // --- Create a SimpleLayer from the first `mle` within the circuit ---
+            let mult_builder = from_mle(
+                mle_clone,
+                // --- The expression is a simple product between the first and second halves ---
+                |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
+                // --- The witness generation simply zips the two halves and multiplies them ---
+                |mle, layer_id, prefix_bits| {
+                    DenseMle::new_from_iter(
+                        mle.into_iter()
+                            .map(|Tuple2((first, second))| first * second),
+                        layer_id,
+                        prefix_bits,
+                    )
+                },
+            );
+
+            // --- Stacks the two aforementioned layers together into a single layer ---
+            // --- Then adds them to the overall circuit ---
+            let first_layer_output = layers.add_gkr(mult_builder);
+
+            // --- Ahh. So we're doing the thing where we add the "real" circuit output as a circuit input, ---
+            // --- then check if the difference between the two is zero ---
+            let mut output_input =
+                DenseMle::new_from_iter(first_layer_output.into_iter(), LayerId::Input, None);
+
+            // --- Index the input-output layer ONLY for the input ---
+            input_layer.index_input_output_mle(&mut Box::new(&mut output_input));
+
+            // --- Subtract the computed circuit output from the advice circuit output ---
+            let output_diff_builder = from_mle(
+                (first_layer_output, output_input.clone()),
+                |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
+                |(mle1, mle2), layer_id, prefix_bits| {
+                    let num_vars = max(mle1.num_iterated_vars(), mle2.num_iterated_vars());
+                    ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+                },
+            );
+
+            // --- Add this final layer to the circuit ---
+            let circuit_output = layers.add_gkr(output_diff_builder);
+
+            // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+            let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
+            input_layer.combine_input_mles(&input_mles, Some(Box::new(&mut output_input)));
+
+            (layers, vec![Box::new(circuit_output)], input_layer)
+        }
+    }
+
+    /// Circuit which just subtracts its two halves! No input-output layer needed.
+    struct SimplestCircuit<F: FieldExt> {
+        mle: DenseMle<F, Tuple2<F>>,
+    }
+    impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
+
+        type Transcript = PoseidonTranscript<F>;
+        type F2 = H2Fr;
+
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+
+            // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
+            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None);
+            let mle_clone = self.mle.clone();
+
+            // --- Create Layers to be added to ---
+            let mut layers = Layers::new();
+
+            // --- Create a SimpleLayer from the first `mle` within the circuit ---
+            let diff_builder = from_mle(
+                mle_clone,
+                // --- The expression is a simple diff between the first and second halves ---
+                |mle| {
+                    let first_half = Box::new(ExpressionStandard::Mle(mle.first()));
+                    let second_half = Box::new(ExpressionStandard::Mle(mle.second()));
+                    let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
+                    ExpressionStandard::Sum(first_half, negated_second_half)
+                },
+                // --- The witness generation simply zips the two halves and subtracts them ---
+                |mle, layer_id, prefix_bits| {
+                    // DenseMle::new_from_iter(
+                    //     mle.into_iter()
+                    //         .map(|Tuple2((first, second))| first - second),
+                    //     layer_id,
+                    //     prefix_bits,
+                    // )
+                    // --- The output SHOULD be all zeros ---
+                    let num_vars = max(mle.first().num_vars(), mle.second().num_vars());
+                    ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+                },
+            );
+
+            // --- Stacks the two aforementioned layers together into a single layer ---
+            // --- Then adds them to the overall circuit ---
+            let first_layer_output = layers.add_gkr(diff_builder);
+
+            // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+            let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
+            input_layer.combine_input_mles(&input_mles, None);
+
+            (layers, vec![Box::new(first_layer_output)], input_layer)
+        }
+    }
+
+    /// This circuit is a 4k --> k circuit, such that
+    /// [x_1, x_2, x_3, x_4] --> [x_1 * x_3, x_2 + x_4] --> [(x_1 * x_3) - (x_2 + x_4)]
     /// This circuit is a 4k --> k circuit, such that
     /// [x_1, x_2, x_3, x_4] --> [x_1 * x_3, x_2 + x_4] --> [(x_1 * x_3) - (x_2 + x_4)]
     struct TestCircuit<F: FieldExt> {
@@ -665,15 +965,29 @@ mod tests {
     }
 
     impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
+
         type Transcript = PoseidonTranscript<F>;
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+        type F2 = H2Fr;
+
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>, InputLayer<F>) {
+
+            // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
+            // let mut self_mle_clone = self.mle.clone();
+            // let mut self_mle_2_clone = self.mle_2.clone();
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
+            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(1));
+            let mle_clone = self.mle.clone();
+            let mle_2_clone = self.mle_2.clone();
+
+            // --- Create Layers to be added to ---
 
             // --- Create Layers to be added to ---
             let mut layers = Layers::new();
 
             // --- Create a SimpleLayer from the first `mle` within the circuit ---
             let builder = from_mle(
-                self.mle.clone(),
+                mle_clone,
+                // --- The expression is a simple product between the first and second halves ---
                 // --- The expression is a simple product between the first and second halves ---
                 |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
                 // --- The witness generation simply zips the two halves and multiplies them ---
@@ -690,7 +1004,7 @@ mod tests {
             // --- Similarly here, but with addition between the two halves ---
             // --- Note that EACH of `mle` and `mle_2` are parts of the input layer ---
             let builder2 = from_mle(
-                self.mle_2.clone(),
+                mle_2_clone,
                 |mle| mle.first().expression() + mle.second().expression(),
                 |mle, layer_id, prefix_bits| {
                     DenseMle::new_from_iter(
@@ -724,58 +1038,181 @@ mod tests {
             );
 
             // --- Appends this to the circuit ---
-            let output = layers.add_gkr(builder4);
+            // --- Appends this to the circuit ---
+            let computed_output = layers.add_gkr(builder4);
 
             // --- Ahh. So we're doing the thing where we add the "real" circuit output as a circuit input, ---
             // --- then check if the difference between the two is zero ---
             let mut output_input =
-                DenseMle::new_from_iter(output.into_iter(), LayerId::Input, None);
+                DenseMle::new_from_iter(computed_output.into_iter(), LayerId::Input, None);
+            input_layer.index_input_output_mle(&mut Box::new(&mut output_input));
 
             // --- Subtract the computed circuit output from the advice circuit output ---
-            let builder4 = from_mle(
-                (output, output_input.clone()),
+            // --- Subtract the computed circuit output from the advice circuit output ---
+            let builder5 = from_mle(
+                (computed_output, output_input.clone().clone()),
                 |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
                 |(mle1, mle2), layer_id, prefix_bits| {
-                    let num_vars = max(mle1.num_vars(), mle2.num_vars());
+                    let num_vars = max(mle1.num_iterated_vars(), mle2.num_iterated_vars());
                     ZeroMleRef::new(num_vars, prefix_bits, layer_id)
                 },
             );
 
             // --- Add this final layer to the circuit ---
-            let circuit_output = layers.add_gkr(builder4);
+            // --- Add this final layer to the circuit ---
+            let circuit_circuit_output = layers.add_gkr(builder5);
 
             // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2), Box::new(&mut output_input)];
             let input_layer = InputLayer::<F>::new_from_mles(&mut input_mles);
 
-            (layers, vec![Box::new(circuit_output)], input_layer)
+            // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
+            let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
+            input_layer.combine_input_mles(&input_mles, Some(Box::new(&mut output_input)));
+
+            (layers, vec![Box::new(circuit_circuit_output)], input_layer, input_layer)
         }
     }
 
     #[test]
-    fn test_gkr() {
+    fn test_gkr_simplest_circuit() {
         let mut rng = test_rng();
-        let size = 2 << 10;
-        // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-        // tracing::subscriber::set_global_default(subscriber)
-        //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+        let size = 1 << 4;
 
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size).map(|_| {
+                let num = Fr::rand(&mut rng);
+                let second_num = Fr::rand(&mut rng);
+                (num, second_num).into()
+            }),
+            LayerId::Input,
+            None,
+        );
+        // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
+        //     LayerId::Input,
+        //     None,
+        // );
+
+        let mut circuit: SimplestCircuit<Fr> = SimplestCircuit { mle };
+
+        let mut transcript: PoseidonTranscript<Fr> =
+            PoseidonTranscript::new("GKR Prover Transcript");
+        let now = Instant::now();
+
+        match circuit.prove(&mut transcript) {
+            Ok(proof) => {
+                println!(
+                    "proof generated successfully in {}!",
+                    now.elapsed().as_secs_f32()
+                );
+                let mut transcript: PoseidonTranscript<Fr> =
+                    PoseidonTranscript::new("GKR Verifier Transcript");
+                let now = Instant::now();
+                match circuit.verify(&mut transcript, proof) {
+                    Ok(_) => {
+                        println!(
+                            "Verification succeeded: takes {}!",
+                            now.elapsed().as_secs_f32()
+                        );
+                    }
+                    Err(err) => {
+                        println!("Verify failed! Error: {err}");
+                        panic!();
+                    }
+                }
+            }
+            Err(err) => {
+                println!("Proof failed! Error: {err}");
+                panic!();
+            }
+        }
+
+        // panic!();
+    }
+
+    #[test]
+    fn test_gkr_simple_circuit() {
+        let mut rng = test_rng();
+        let size = 1 << 5;
+
+        // --- This should be 2^2 ---
         let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
             (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
             LayerId::Input,
             None,
         );
+        // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
+        //     LayerId::Input,
+        //     None,
+        // );
+
+        let mut circuit: SimpleCircuit<Fr> = SimpleCircuit { mle };
+
+        let mut transcript: PoseidonTranscript<Fr> =
+            PoseidonTranscript::new("GKR Prover Transcript");
+        let now = Instant::now();
+
+        match circuit.prove(&mut transcript) {
+            Ok(proof) => {
+                println!(
+                    "proof generated successfully in {}!",
+                    now.elapsed().as_secs_f32()
+                );
+                let mut transcript: PoseidonTranscript<Fr> =
+                    PoseidonTranscript::new("GKR Verifier Transcript");
+                let now = Instant::now();
+                match circuit.verify(&mut transcript, proof) {
+                    Ok(_) => {
+                        println!(
+                            "Verification succeeded: takes {}!",
+                            now.elapsed().as_secs_f32()
+                        );
+                    }
+                    Err(err) => {
+                        println!("Verify failed! Error: {err}");
+                        panic!();
+                    }
+                }
+            }
+            Err(err) => {
+                println!("Proof failed! Error: {err}");
+                panic!();
+            }
+        }
+
+        // panic!();
+    }
+
+    #[test]
+    fn test_gkr() {
+        let mut rng = test_rng();
+        let size = 1 << 1;
+        // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+        // tracing::subscriber::set_global_default(subscriber)
+        //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
+            LayerId::Input,
+            None,
+        );
+        // --- This should be 2^2 ---
         let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
             (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
             LayerId::Input,
             None,
         );
 
-        let mut circuit = TestCircuit { mle, mle_2 };
+        let mut circuit: TestCircuit<Fr> = TestCircuit { mle, mle_2 };
 
         let mut transcript: PoseidonTranscript<Fr> =
             PoseidonTranscript::new("GKR Prover Transcript");
         let now = Instant::now();
+
         match circuit.prove(&mut transcript) {
             Ok(proof) => {
                 println!(

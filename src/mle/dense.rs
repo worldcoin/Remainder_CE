@@ -12,14 +12,15 @@ use serde::{Deserialize, Serialize};
 
 use super::{Mle, MleAble, MleIndex, MleRef, mle_enum::MleEnum};
 use crate::{expression::ExpressionStandard, layer::Claim};
-use crate::{layer::LayerId, FieldExt};
+use crate::layer::LayerId;
+use lcpc_2d::FieldExt;
 
 #[derive(Clone, Debug)]
 ///An [Mle] that is dense
 pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> {
     ///The underlying data
     pub mle: T::Repr,
-    num_vars: usize,
+    num_iterated_vars: usize,
     ///The layer_id this data belongs to
     pub layer_id: LayerId,
     ///Any prefix bits that must be added to any MleRefs yielded by this Mle
@@ -33,8 +34,8 @@ where
     // Self: IntoIterator<Item = T> + FromIterator<T>
     T: Send + Sync + Clone + Debug + MleAble<F>,
 {
-    fn num_vars(&self) -> usize {
-        self.num_vars
+    fn num_iterated_vars(&self) -> usize {
+        self.num_iterated_vars
     }
     fn get_padded_evaluations(&self) -> Vec<F> {
         T::get_padded_evaluations(&self.mle)
@@ -55,7 +56,7 @@ impl<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> DenseMle<F, T> {
         let num_vars = T::num_vars(&items);
         Self {
             mle: items,
-            num_vars,
+            num_iterated_vars: num_vars,
             layer_id,
             prefix_bits,
             _marker: PhantomData,
@@ -70,7 +71,7 @@ impl<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> DenseMle<F, T> {
         let num_vars = T::num_vars(&items);
         Self {
             mle: items,
-            num_vars,
+            num_iterated_vars: num_vars,
             layer_id,
             prefix_bits,
             _marker: PhantomData,
@@ -114,12 +115,18 @@ pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items
     let part_size = 1 << log2(max_size);
     let part_count = 2_u32.pow(log2(L)) as usize;
     let padding_count = part_count - L;
+    let total_size = part_size * part_count;
+    let total_padding: usize = total_size - max_size * part_count;
 
-    items.into_iter().cloned().map(|mut items| {
-        let padding = part_size - items.len();
-        items.extend(repeat_n(F::zero(), padding));
-        items
-    }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
+    // items.into_iter().cloned().map(|mut items| {
+    //     let padding = part_size - items.len();
+    //     items.extend(repeat_n(F::zero(), padding));
+    //     items
+    // }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
+
+    (0..max_size).flat_map(|index| {
+        items.iter().map(move |item| item.get(index).unwrap_or(&F::zero()).clone()).chain(repeat_n(F::zero(), padding_count))
+    }).chain(repeat_n(F::zero(), total_padding)).collect()
 }
 
 impl<F: FieldExt> MleAble<F> for F {
@@ -127,7 +134,7 @@ impl<F: FieldExt> MleAble<F> for F {
     type IntoIter<'a> = Cloned<std::slice::Iter<'a, F>>;
 
     fn get_padded_evaluations(items: &Self::Repr) -> Vec<F> {
-        let size = 1 << log2(items.len());
+        let size: usize = 1 << log2(items.len());
         let padding = size - items.len();
 
         items
@@ -172,9 +179,9 @@ impl<F: FieldExt> DenseMle<F, F> {
                 .clone()
                 .into_iter()
                 .flatten()
-                .chain((0..self.num_vars()).map(|_| MleIndex::Iterated))
+                .chain((0..self.num_iterated_vars()).map(|_| MleIndex::Iterated))
                 .collect(),
-            num_vars: self.num_vars,
+            num_vars: self.num_iterated_vars,
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
@@ -260,7 +267,9 @@ impl<F: FieldExt> From<(F, F)> for Tuple2<F> {
 impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     ///Gets an MleRef to the first element in the tuple
     pub fn first(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
+
+        // --- Number of *remaining* iterated variables ---
+        let new_num_iterated_vars = self.num_iterated_vars - 1;
 
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
@@ -271,10 +280,10 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .flatten()
                 .chain(
                     std::iter::once(MleIndex::Fixed(false))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
+                        .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
                 )
                 .collect_vec(),
-            num_vars,
+            num_vars: new_num_iterated_vars,
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
@@ -282,7 +291,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
 
     ///Gets an MleRef to the second element in the tuple
     pub fn second(&'_ self) -> DenseMleRef<F> {
-        let num_vars = self.num_vars;
+        let new_num_iterated_vars = self.num_iterated_vars - 1;
 
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
@@ -293,10 +302,10 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 .flatten()
                 .chain(
                     std::iter::once(MleIndex::Fixed(true))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
+                        .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
                 )
                 .collect_vec(),
-            num_vars: num_vars - 1,
+            num_vars: new_num_iterated_vars,
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
@@ -358,7 +367,6 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         }
 
         // --- One fewer iterated bit to sumcheck through ---
-        //        dbg!(&self, self.num_vars);
         self.num_vars -= 1;
 
         let transform = |chunk: &[F]| {
@@ -535,7 +543,7 @@ mod tests {
 
         assert!(mle_iter.mle == mle_new.mle);
         assert!(
-            mle_iter.num_vars() == 3 && mle_new.num_vars() == 3,
+            mle_iter.num_iterated_vars() == 3 && mle_new.num_iterated_vars() == 3,
             "Num vars must be the log_2 of the length of the vector"
         );
     }
@@ -558,7 +566,7 @@ mod tests {
         let (first, second): (Vec<Fr>, Vec<_>) = tuple_vec.into_iter().unzip();
 
         assert!(mle.mle == [first, second]);
-        assert!(mle.num_vars() == 3);
+        assert!(mle.num_iterated_vars() == 3);
     }
 
     #[test]

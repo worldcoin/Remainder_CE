@@ -7,7 +7,7 @@ use crate::expression::{ExpressionStandard, Expression};
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
-use crate::FieldExt;
+use lcpc_2d::FieldExt;
 use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
 
 struct ProductTreeBuilder<F: FieldExt> {
@@ -43,7 +43,7 @@ impl<F: FieldExt> LayerBuilder<F> for DifferenceBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle_1.mle_ref()) - 
+        ExpressionStandard::Mle(self.mle_1.mle_ref()) -
         ExpressionStandard::Mle(self.mle_2.mle_ref())
     }
 
@@ -82,7 +82,7 @@ impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle_input.attr_id(Some(log2(self.tree_height) as usize))) - 
+        ExpressionStandard::Mle(self.mle_input.attr_id(Some(log2(self.tree_height) as usize))) -
         ExpressionStandard::Mle(self.mle_path.attr_id())
     }
 
@@ -134,7 +134,7 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
         let split_mle = self.mle.split(F::one());
         DenseMle::new_from_iter(split_mle
             .into_iter()
-            .map(|Tuple2((a, b))| a * b), id, prefix_bits)        
+            .map(|Tuple2((a, b))| a * b), id, prefix_bits)
     }
 }
 
@@ -336,13 +336,13 @@ impl<F: FieldExt> LayerBuilder<F> for LeafPackingBuilder<F> {
 
     // expressions = r - (x.node_id + r_packing * x.node_val)
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.node_id()) + 
+        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.node_id()) +
         ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.node_val())), self.r_packing))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         DenseMle::new_from_iter(self.mle.into_iter().map(
-            |LeafNode {node_id, node_val}| 
+            |LeafNode {node_id, node_val}|
             self.r - (node_id + self.r_packing * node_val)
         ), id, prefix_bits)
     }
@@ -373,14 +373,14 @@ impl<F: FieldExt> LayerBuilder<F> for DecisionPackingBuilder<F> {
 
     // expressions = r - (x.node_id + r_packing[0] * x.attr_id + r_packing[1] * x.threshold)
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.node_id()) + 
-        ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.attr_id())), self.r_packings.0) + 
+        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.node_id()) +
+        ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.attr_id())), self.r_packings.0) +
         ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.threshold())), self.r_packings.1))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         DenseMle::new_from_iter(self.mle.into_iter().map(
-            |DecisionNode { node_id, attr_id, threshold }| 
+            |DecisionNode { node_id, attr_id, threshold }|
             self.r - (node_id + self.r_packings.0 * attr_id + self.r_packings.1 * threshold)
         ), id, prefix_bits)
     }
@@ -411,7 +411,7 @@ impl<F: FieldExt> LayerBuilder<F> for InputPackingBuilder<F> {
 
     // expressions = r - (x.attr_id + r_packing * x.attr_val)
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.attr_id(None)) + 
+        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.attr_id(None)) +
         ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.attr_val(None))), self.r_packing))
     }
 
@@ -467,7 +467,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        ZeroMleRef::new(self.mle.num_vars() + 4, prefix_bits, id)
+        ZeroMleRef::new(self.mle.num_iterated_vars() + 4, prefix_bits, id)
     }
 }
 
@@ -546,7 +546,7 @@ mod tests {
                             .zip(dummy_input_data_mle.attr_val(None).bookkeeping_table.clone().iter())
                             .map(|(a, b)| {r - (a + &(r_packing * b))})
                             .collect_vec();
-       
+
         assert_eq!(next_layer.mle_ref().bookkeeping_table, next_layer_should_be);
         println!("layer mle: {:?}", next_layer.mle_ref().bookkeeping_table);
 
@@ -584,7 +584,7 @@ mod tests {
                             .zip(dummy_decision_node_paths_mle.threshold().bookkeeping_table.clone().iter())
                             .map(|((a, b), c)| {r - (a + &(r_packings.0 * b) + &(r_packings.1 * c))})
                             .collect_vec();
-       
+
         assert_eq!(next_layer.mle_ref().bookkeeping_table, next_layer_should_be);
         println!("layer mle: {:?}", next_layer.mle_ref().bookkeeping_table);
 
@@ -622,7 +622,7 @@ mod tests {
                             .zip(dummy_leaf_node_paths_mle.node_val().bookkeeping_table.clone().iter())
                             .map(|(a, b)| {r - (a + &(r_packing * b))})
                             .collect_vec();
-       
+
         assert_eq!(next_layer.mle_ref().bookkeeping_table, next_layer_should_be);
         println!("layer mle: {:?}", next_layer.mle_ref().bookkeeping_table);
 
@@ -860,7 +860,7 @@ mod tests {
                         Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))]);
 
 
-        
+
 
         for i in 1..16 {
 
@@ -920,7 +920,7 @@ mod tests {
             exponentiated_nodes = prod_builder.next_layer(LayerId::Layer(20+i), None);
         }
         println!("final multiset 1. {:?}", exponentiated_nodes);
-        
+
         // ------ LAST LAYER ID: 20+(TREE_HEIGHT-1)  ------
 
         assert_eq!(exponentiated_nodes.mle_ref().bookkeeping_table,
