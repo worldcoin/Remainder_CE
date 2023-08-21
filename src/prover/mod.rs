@@ -104,14 +104,14 @@ pub struct InputLayerProof<F: FieldExt> {
 }
 
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
-#[derive(Serialize, Deserialize)]
+//#[derive(Serialize, Deserialize)]
 pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     /// The sumcheck proof of each GKR Layer, along with the fully bound expression.
     /// 
     /// In reverse order (i.e. layer closest to the output layer is first)
     pub layer_sumcheck_proofs: Vec<LayerProof<F, Tr>>,
     /// All the output layers that this circuit yields
-    pub output_layers: Vec<MleEnum<F>>,
+    pub output_layers: Vec<Box<dyn MleRef<F = F>>>,
     /// Proof for the circuit input layer
     pub input_layer_proof: InputLayerProof<F>,
 }
@@ -121,7 +121,7 @@ pub trait GKRCircuit<F: FieldExt> {
     /// The transcript this circuit uses
     type Transcript: Transcript<F>;
     /// The forward pass, defining the layer relationships and generating the layers
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>);
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>);
 
     /// The backwards pass, creating the GKRProof
     fn prove(
@@ -436,7 +436,8 @@ mod tests {
 
     impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+
             let mut layers = Layers::new();
 
             // layer 0: packing
@@ -475,7 +476,7 @@ mod tests {
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.dummy_input_data_mle_vec), Box::new(&mut self.dummy_permuted_input_data_mle_vec)];
             let input_layer = InputLayer::new_from_mles(&mut input_mles);
 
-            (layers, vec![difference_mle.mle_ref().get_enum()], input_layer)
+            (layers, vec![Box::new(difference_mle.mle_ref())], input_layer)
         }
     }
 
@@ -487,7 +488,7 @@ mod tests {
 
     impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
             let mut layers = Layers::new();
 
             let attribute_consistency_builder = AttributeConsistencyBuilder::new(
@@ -502,7 +503,7 @@ mod tests {
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.dummy_permuted_input_data_mle_vec), Box::new(&mut self.dummy_decision_node_paths_mle_vec)];
             let input_layer = InputLayer::new_from_mles(&mut input_mles);
 
-            (layers, vec![difference_mle.mle_ref().get_enum()], input_layer)
+            (layers, vec![Box::new(difference_mle.mle_ref())], input_layer)
         }
     }
 
@@ -521,7 +522,7 @@ mod tests {
     impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
         
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
             let mut layers = Layers::new();
 
             // layer 0
@@ -652,7 +653,7 @@ mod tests {
             ];
             let input_layer = InputLayer::new_from_mles(&mut input_mles);
 
-            (layers, vec![difference.mle_ref().get_enum()], input_layer)
+            (layers, vec![Box::new(difference.mle_ref())], input_layer)
         }
     }
 
@@ -665,7 +666,7 @@ mod tests {
 
     impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         type Transcript = PoseidonTranscript<F>;
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
 
             // --- Create Layers to be added to ---
             let mut layers = Layers::new();
@@ -741,13 +742,13 @@ mod tests {
             );
 
             // --- Add this final layer to the circuit ---
-            let output = layers.add_gkr(builder4);
+            let circuit_output = layers.add_gkr(builder4);
 
             // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2), Box::new(&mut output_input)];
             let input_layer = InputLayer::<F>::new_from_mles(&mut input_mles);
 
-            (layers, vec![output.get_enum()], input_layer)
+            (layers, vec![Box::new(circuit_output)], input_layer)
         }
     }
 
