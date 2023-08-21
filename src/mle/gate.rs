@@ -1355,7 +1355,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
         rhs.fix_variable(num_rounds_copy_phase - 1, final_chal);
 
         // grab the bound beta value
-        debug_assert_eq!(beta_g.table.bookkeeping_table().len(), 0); // --- Should be fully bound ---
+        debug_assert_eq!(beta_g.table.bookkeeping_table().len(), 1); // --- Should be fully bound ---
         let beta_g2 = beta_g.table.bookkeeping_table()[0];
         let next_claims = (self.g1_challenges.clone().unwrap(), F::zero());
 
