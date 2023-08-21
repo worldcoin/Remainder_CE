@@ -1182,6 +1182,20 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 
 
 /// batched impl for gate
+/// 
+/// ## Fields
+/// * `new_bits` - TODO!(ryancao)
+/// * `nonzero_gates` - Same as `AddGate` (non-batched)
+/// * `lhs` - MLEs on the left side to be added. 
+/// TODO!(ryancao): Wait, why is this a single `DenseMleRef<F>` as opposed to a slice, as in the non-batched case?
+/// * `rhs` - MLEs on the right side to be added
+/// * `num_vars_l` - Length of `x` (as in f_2(x))
+/// * `num_vars_r` - Length of `y` (as in f_3(y))
+/// * `copy_phase_mles` - List of MLEs for when we're binding the vars representing the batched bits
+/// * `g1_challenges` - Literally g_1
+/// * `g2_challenges` - Literally g_2
+/// * `layer_id` - GKR layer number
+/// * `reduced_gate` - TODO!(ryancao)
 pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
     new_bits: usize,
     nonzero_gates: Vec<(usize, usize, usize)>,
@@ -1226,6 +1240,20 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
     }
 
     /// initializes the copy phase
+    /// 
+    /// ---
+    /// 
+    /// The expression for this phase is as follows (note that we are binding `g_2`, i.e. the batch bits):
+    /// * V_i(g_2, g_1) = \sum_{p_2, x, y} \beta(g_2, p_2) f_1(g_1, x, y) (f_2(p_2, x) + f_3(p_2, y))
+    /// 
+    /// We thus need the following bookkeeping tables:
+    /// * \beta(g_2, p_2)
+    /// * a_f2(p_2) = \sum_{x, y} f_1(g_2, x, y) * f_2(p_2, x) = \sum_{p_2, z, x, y \in N_x} \beta(g_2, z) f_2(p_2, x)
+    /// * a_f3(p_2) = \sum_{x, y} f_1(g_2, x, y) * f_3(p_2, y) = \sum_{p_2, z, x, y \in N_x} \beta(g_2, z) f_3(p_2, y)
+    /// 
+    /// Note that -- 
+    /// * The first one is computed via initializing a beta table.
+    /// * The second/third ones are computed via iterating over all (sparse) (p_2, z, x, y) points and summing the terms above.
     fn init_copy_phase(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         let (challenges, _) = claim;
         let mut g2_challenges: Vec<F> = vec![];
@@ -1254,6 +1282,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
         let mut a_f3 = vec![F::zero(); num_copy_vars];
 
         // populate the bookkeeping tables
+        // TODO!(ryancao): Good optimization here is to parallelize -- I don't think there are any race conditions
         (0..num_copy_vars).into_iter().for_each(|idx|
             {
                 let mut adder_f2 = F::zero();
@@ -1272,18 +1301,22 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
                 a_f3[idx] += adder_f3;
             });
 
+        // --- Wrappers over the bookkeeping tables ---
         let mut a_f2_mle = DenseMle::new_from_raw(a_f2, LayerId::Input, None).mle_ref();
         a_f2_mle.index_mle_indices(0);
         let mut a_f3_mle = DenseMle::new_from_raw(a_f3, LayerId::Input, None).mle_ref();
         a_f3_mle.index_mle_indices(0);
         beta_g2.table.index_mle_indices(0);
+
+        // --- Hmm... We still have the original LHS and RHS bookkeeping tables... why? ---
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
 
-
+        // --- Sets self internal state ---
         self.set_copy_phase((beta_g2.clone(), [a_f2_mle.clone(), a_f3_mle.clone()]), g1_challenges, g2_challenges, self.lhs.num_vars(), self.rhs.num_vars());
 
         // result of initializing is the first sumcheck message!
+        // --- Basically beta(g_2, p_2) * a_f2(p_2) * a_f3(p_2) ---
         compute_sumcheck_message_copy(&mut beta_g2, &mut a_f2_mle, &mut a_f3_mle,  0)
     }
 
@@ -1300,9 +1333,10 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
         let num_rounds_copy_phase = self.new_bits;
 
         // sumcheck rounds -- over here we bind the copy bits
+        // --- At the same time, we're binding the LHS and RHS actual bookkeeping tables over the copy bits ---
+        // TODO!(ryancao): Is there a better way we can do that?
         for round in 1..(num_rounds_copy_phase) {
             challenge = Some(F::rand(rng));
-            //let challenge = Some(F::one());
             let chal = challenge.unwrap();
             challenges.push(chal);
 
@@ -1321,10 +1355,12 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
         rhs.fix_variable(num_rounds_copy_phase - 1, final_chal);
 
         // grab the bound beta value
+        debug_assert_eq!(beta_g.table.bookkeeping_table().len(), 0); // --- Should be fully bound ---
         let beta_g2 = beta_g.table.bookkeeping_table()[0];
         let next_claims = (self.g1_challenges.clone().unwrap(), F::zero());
 
         // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
+        // TODO!(ryancao): Can we get rid of the clones here somehow (for `lhs` and `rhs`)?
         let reduced_gate: AddGate<F, Tr> = AddGate::new(self.layer_id.clone(), self.nonzero_gates.clone(), lhs.clone(), rhs.clone(), self.new_bits);
         self.reduced_gate = Some(reduced_gate);
         let mut next_messages = self.reduced_gate.as_mut().unwrap().dummy_prove_rounds(next_claims, rng).unwrap();
@@ -1423,7 +1459,6 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
                 acc + gz * ux * vy
             }
         );
-
 
         // honestly just checking if get_claims() computes correctly, use this to get the bound f_2 and f_3 values
         let claims = self.get_claims().unwrap().clone();
