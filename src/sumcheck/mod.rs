@@ -57,7 +57,10 @@ pub enum InterpError {
     NoInverse,
 }
 
-///A newtype that makes it easier to do arithmatic on sets of evaluations of the summed expression
+/// A type representing the univariate message g_i(x) which the prover
+/// sends to the verifier in each round of sumcheck. Note that the prover
+/// in our case always sends evaluations g_i(0), ..., g_i(d) to the verifier,
+/// and thus the struct is called `Evals`.
 #[derive(PartialEq, Debug, Clone)]
 pub struct Evals<F: FieldExt>(pub(crate) Vec<F>);
 
