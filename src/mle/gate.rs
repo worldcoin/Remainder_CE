@@ -363,9 +363,9 @@ pub enum GateError {
 /// * `lhs` - f_2(x)
 /// * `rhs` - f_3(y)
 /// * `beta_g` - \beta(g_1, p_2)
-/// * `phase_1_mles` - TODO!(ryancao): What is this?
-/// * `phase_2_mles` - TODO!(ryancao): What is this?
-/// * `num_copy_bits` - length of `g_1` or `p_2`... right? Oh wait this isn't batched, huh...
+/// * `phase_1_mles` - the mles needed to compute the sumcheck evals for phase 1
+/// * `phase_2_mles` - the mles needed to compute the sumcheck evals for phase 2
+/// * `num_copy_bits` - length of `p_2`
 #[derive(Error, Debug)]
 pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     layer_id: LayerId,
@@ -1184,10 +1184,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 /// batched impl for gate
 /// 
 /// ## Fields
-/// * `new_bits` - TODO!(ryancao)
+/// * `new_bits` - number of bits in p2
 /// * `nonzero_gates` - Same as `AddGate` (non-batched)
 /// * `lhs` - MLEs on the left side to be added. 
-/// TODO!(ryancao): Wait, why is this a single `DenseMleRef<F>` as opposed to a slice, as in the non-batched case?
 /// * `rhs` - MLEs on the right side to be added
 /// * `num_vars_l` - Length of `x` (as in f_2(x))
 /// * `num_vars_r` - Length of `y` (as in f_3(y))
@@ -1195,7 +1194,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 /// * `g1_challenges` - Literally g_1
 /// * `g2_challenges` - Literally g_2
 /// * `layer_id` - GKR layer number
-/// * `reduced_gate` - TODO!(ryancao)
+/// * `reduced_gate` - the non-batched gate that this reduces to after the copy phase
 pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
     new_bits: usize,
     nonzero_gates: Vec<(usize, usize, usize)>,
@@ -1308,7 +1307,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
         a_f3_mle.index_mle_indices(0);
         beta_g2.table.index_mle_indices(0);
 
-        // --- Hmm... We still have the original LHS and RHS bookkeeping tables... why? ---
+        // index original bookkeeping tables to send over to the non-batched add gate after the copy phase
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
 
