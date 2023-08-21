@@ -2,7 +2,9 @@
 
 use std::marker::PhantomData;
 
-use crate::{FieldExt, expression::{ExpressionStandard, Expression, gather_combine_all_evals}, transcript::Transcript, mle::MleRef, prover::SumcheckProof};
+use crate::{expression::{ExpressionStandard, Expression, gather_combine_all_evals}, mle::MleRef, prover::SumcheckProof};
+use lcpc_2d::FieldExt;
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 use super::{Layer, LayerError, Claim, claims::ClaimError, LayerId, layer_enum::LayerEnum};
 

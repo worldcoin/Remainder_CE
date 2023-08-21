@@ -28,9 +28,6 @@ use crate::{
 use lcpc_2d::FieldExt;
 use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
-use lcpc_2d::FieldExt;
-use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
-
 use self::{claims::ClaimError, layer_enum::LayerEnum};
 
 

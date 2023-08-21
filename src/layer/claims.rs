@@ -3,44 +3,36 @@
 use crate::{expression::ExpressionStandard, mle::beta::BetaTable};
 use lcpc_2d::FieldExt;
 
-use itertools::Itertools;
+// use itertools::Itertools;
 use crate::mle::MleRef;
 use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
 
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
-
 use thiserror::Error;
 
 use super::{Claim, Layer};
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims
-///Errors to do with aggregating and collecting claims
 pub enum ClaimError {
     #[error("The Layer has not finished the sumcheck protocol")]
-    ///The Layer has not finished the sumcheck protocol
     ///The Layer has not finished the sumcheck protocol
     SumCheckNotComplete,
     #[error("MLE indices must all be fixed")]
     ///MLE indices must all be fixed
-    ///MLE indices must all be fixed
     ClaimMleIndexError,
     #[error("Layer ID not assigned")]
-    ///Layer ID not assigned
     ///Layer ID not assigned
     LayerMleError,
     #[error("MLE within MleRef has multiple values within it")]
     ///MLE within MleRef has multiple values within it
-    ///MLE within MleRef has multiple values within it
     MleRefMleError,
     #[error("Error aggregating claims")]
     ///Error aggregating claims
-    ///Error aggregating claims
     ClaimAggroError,
     #[error("Should be evaluating to a sum")]
-    ///Should be evaluating to a sum
     ///Should be evaluating to a sum
     ExpressionEvalError,
 }
@@ -115,8 +107,6 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     if claims.is_empty() {
         return Err(ClaimError::ClaimAggroError);
     }
-
-    // --- Number of variables in the claim ---
     let num_idx = claim_vecs[0].len();
 
     // get the claim (r = l(r*))
@@ -125,8 +115,6 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
             let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                 .map(|claim| claim[idx])
                 .collect();
-            // --- Interpolate u_1, v_1, w_1 --> r_1 ---
-            // l(0) = u_1, ... what is l(r^*)?
             evaluate_at_a_point(&evals, rstar).unwrap()
         })
         .collect();
@@ -140,8 +128,49 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     Ok(((r, claimed_val.unwrap()), wlx))
 }
 
+pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
+    claims: &[Claim<F>],
+    rstar: F,
+) -> Result<Vec<F>, ClaimError> {
+    let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+
+    if claims.is_empty() {
+        return Err(ClaimError::ClaimAggroError);
+    }
+    let num_idx = claim_vecs[0].len();
+
+    // get the claim (r = l(r*))
+    let r: Vec<F> = cfg_into_iter!(0..num_idx)
+        .map(|idx| {
+            let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                .map(|claim| claim[idx])
+                .collect();
+            evaluate_at_a_point(&evals, rstar).unwrap()
+        })
+        .collect();
+
+    Ok(r)
+}
+
+pub(crate) fn compute_claim_wlx<F: FieldExt>(
+    claims: &[Claim<F>],
+    layer: &impl Layer<F>,
+) -> Result<Vec<F>, ClaimError> {
+    let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+
+    if claims.is_empty() {
+        return Err(ClaimError::ClaimAggroError);
+    }
+    let num_idx = claim_vecs[0].len();
+
+    // get the evals [W(l(0)), W(l(1)), ...]
+    let wlx = layer.get_wlx_evaluations(claim_vecs, &mut vals, claims.len(), num_idx)?;
+
+    Ok(wlx)
+}
+
 /// verifies the claim aggregation
-pub(crate) fn verify_aggregate_claim<F: FieldExt>(
+pub(crate) fn verify_aggragate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for qx
     claims: &[Claim<F>],
     r_star: F,
@@ -151,6 +180,7 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 
     // check q(0), q(1) equals the claimed value (or wl(0), wl(1))
     for (idx, claim) in claims.iter().enumerate() {
+        dbg!(&wlx);
         if claim.1 != wlx[idx] {
             return Err(ClaimError::ClaimAggroError);
         }
@@ -179,8 +209,8 @@ mod tests {
     use crate::expression::Expression;
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::{dense::DenseMle, Mle};
-    use crate::transcript::poseidon_transcript::PoseidonTranscript;
-
+    use lcpc_2d::fs_transcript::halo2_poseidon_transcript::PoseidonTranscript;
+    
     use super::*;
     use ark_bn254::Fr;
     use ark_ff::UniformRand;
@@ -427,7 +457,6 @@ mod tests {
     #[test]
     fn test_aggro_claim_negative_1() {
         let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
-        let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -439,7 +468,6 @@ mod tests {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
@@ -490,7 +518,6 @@ mod tests {
     #[test]
     fn test_aggro_claim_negative_2() {
         let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
-        let _dummy_claim = (vec![Fr::from(1); 3], Fr::from(0));
         let mut rng = test_rng();
         let mle_v1 = vec![
             Fr::rand(&mut rng),
@@ -502,7 +529,6 @@ mod tests {
             Fr::rand(&mut rng),
             Fr::rand(&mut rng),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
@@ -580,8 +606,11 @@ mod tests {
 
         let rchal = Fr::from(-2);
 
-        let (_res, wlx) = aggregate_claims(&claims, &layer, rchal).unwrap();
-        let _rounds = expr.index_mle_indices(0);
-        let _verify_result = verify_aggregate_claim(&wlx, &claims, rchal).unwrap();
+        let (res, wlx) = aggregate_claims(&claims, &layer, rchal).unwrap();
+        let rounds = expr.index_mle_indices(0);
+        // for round in 0..rounds {
+        //     expr.fix
+        // }
+        let verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
     }
 }

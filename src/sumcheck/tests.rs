@@ -6,8 +6,9 @@ use crate::{
         beta::compute_beta_over_two_challenges,
         dense::{DenseMle, Tuple2},
         Mle,
-    }, transcript::poseidon_transcript::PoseidonTranscript,
+    }
 };
+use lcpc_2d::fs_transcript::{halo2_poseidon_transcript::PoseidonTranscript, halo2_remainder_transcript::Transcript};
 use ark_bn254::Fr;
 use ark_std::test_rng;
 use ark_std::{One, Zero};
@@ -873,4 +874,3 @@ fn test_dummy_sumcheck_constant() {
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
-

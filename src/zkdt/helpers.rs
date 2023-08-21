@@ -1,7 +1,7 @@
 //! Miscellaneous helper functions for `dt2zkdt`.
 use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode};
 use crate::zkdt::trees::*;
-use crate::FieldExt;
+use lcpc_2d::FieldExt;
 use std::iter::repeat;
 
 /// Helper function for conversion to field elements, handling negative values.

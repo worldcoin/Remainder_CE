@@ -1,6 +1,7 @@
 use serde::{Serialize, Deserialize};
 
-use crate::{FieldExt, transcript::Transcript};
+use lcpc_2d::FieldExt;
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 use super::{GKRLayer, Layer};
 

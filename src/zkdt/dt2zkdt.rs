@@ -49,7 +49,7 @@ extern crate serde_json;
 use crate::zkdt::helpers::*;
 use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, InputAttribute, LeafNode};
 use crate::zkdt::trees::*;
-use crate::FieldExt;
+use lcpc_2d::FieldExt;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
 use serde::{Deserialize, Serialize};

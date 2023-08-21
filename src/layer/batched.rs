@@ -7,8 +7,8 @@ use thiserror::Error;
 use crate::{
     expression::ExpressionStandard,
     mle::{dense::DenseMleRef, MleIndex, MleRef, zero::ZeroMleRef},
-    FieldExt,
 };
+use lcpc_2d::FieldExt;
 
 use super::{LayerBuilder, LayerId};
 

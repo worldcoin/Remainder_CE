@@ -1,9 +1,13 @@
 use std::io::Empty;
 
+use halo2_base::halo2_proofs::halo2curves::bn256::Fr as H2Fr;
+
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 
-use crate::{prover::{GKRCircuit, Layers}, FieldExt, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, transcript::poseidon_transcript::PoseidonTranscript, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
+use crate::{prover::{GKRCircuit, Layers, input_layer::InputLayer}, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
+use lcpc_2d::{FieldExt, ScalarField};
+use lcpc_2d::fs_transcript::{halo2_poseidon_transcript::PoseidonTranscript, halo2_remainder_transcript::Transcript};
 
 use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
 
@@ -18,7 +22,8 @@ pub struct PermutationCircuit<F: FieldExt> {
 
 impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+    
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
         let mut layers = Layers::new();
 
         // layer 0: packing
@@ -97,7 +102,7 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
 
         let difference_mle = combine_zero_mle_ref(difference_mle);
 
-        (layers, vec![Box::new(difference_mle)])
+        (layers, vec![Box::new(difference_mle)], todo!())
     }
 }
 
@@ -109,7 +114,7 @@ struct AttributeConsistencyCircuit<F: FieldExt> {
 
 impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
         let mut layers = Layers::new();
 
         let attribute_consistency_builder = AttributeConsistencyBuilder::new(
@@ -120,7 +125,7 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
 
         let difference_mle = layers.add_gkr(attribute_consistency_builder);
 
-        (layers, vec![Box::new(difference_mle.mle_ref())])
+        (layers, vec![Box::new(difference_mle.mle_ref())], todo!())
     }
 }
 
@@ -139,7 +144,7 @@ struct MultiSetCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>) {
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
         let mut layers = Layers::new();
 
         // layer 0
@@ -260,18 +265,21 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         let difference = layers.add_gkr(difference_builder);
 
-        (layers, vec![Box::new(difference)])
+        (layers, vec![Box::new(difference)], todo!())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr as H2Fr;
+
 
     use ark_bn254::Fr;
     use ark_std::{test_rng, UniformRand};
 
-    use crate::{zkdt::zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles}, prover::GKRCircuit, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}};
+    use crate::{zkdt::zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles}, prover::GKRCircuit};
+    use lcpc_2d::fs_transcript::{halo2_poseidon_transcript::PoseidonTranscript, halo2_remainder_transcript::Transcript};
 
     use super::{PermutationCircuit, AttributeConsistencyCircuit};
 
@@ -298,7 +306,7 @@ mod tests {
 
         let now = Instant::now();
 
-        let proof = circuit.prove(&mut transcript);
+        let proof = circuit.prove::<H2Fr>(&mut transcript);
 
         println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
 
@@ -334,7 +342,7 @@ mod tests {
 
         let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Prover Transcript");
 
-        let proof = circuit.prove(&mut transcript);
+        let proof = circuit.prove::<H2Fr>(&mut transcript);
 
         match proof {
             Ok(proof) => {

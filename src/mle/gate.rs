@@ -6,8 +6,9 @@ use ark_std::{cfg_into_iter, rand::Rng};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
-use crate::{layer::{Claim, Layer, LayerError, LayerId, LayerBuilder, VerificationError, claims::ClaimError}, mle::beta::BetaTable, expression::ExpressionStandard, sumcheck::*, transcript::Transcript, prover::SumcheckProof};
-use crate::FieldExt;
+use crate::{layer::{Claim, Layer, LayerError, LayerId, LayerBuilder, VerificationError, claims::ClaimError}, mle::beta::BetaTable, expression::ExpressionStandard, sumcheck::*, prover::SumcheckProof};
+use lcpc_2d::FieldExt;
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 use super::{MleIndex, MleRef, dense::{DenseMleRef, DenseMle}, beta::compute_beta_over_two_challenges};
 use thiserror::Error;
@@ -1514,7 +1515,7 @@ fn prove_round_copy<F: FieldExt>(phase_lhs: &mut DenseMleRef<F>, phase_rhs: &mut
 #[cfg(test)]
 mod test {
     use crate::mle::dense::DenseMle;
-    use crate::transcript::poseidon_transcript::PoseidonTranscript;
+    use lcpc_2d::fs_transcript::halo2_poseidon_transcript::PoseidonTranscript;
 
     use super::*;
     use ark_bn254::Fr;

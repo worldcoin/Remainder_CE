@@ -1,9 +1,11 @@
 use std::iter::repeat_with;
 
-use ark_std::log2;
+use ark_std::{log2, cfg_into_iter, cfg_iter};
 use itertools::Itertools;
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-use crate::{mle::{dense::DenseMle, Mle, MleIndex}, utils::{argsort, pad_to_nearest_power_of_two}};
+
+use crate::{mle::{dense::DenseMle, Mle, MleIndex, MleRef}, utils::{argsort, pad_to_nearest_power_of_two}, layer::{Claim, claims::ClaimError, Layer}, sumcheck::evaluate_at_a_point};
 // use crate::mle::MleRef;
 
 use lcpc_2d::FieldExt;
@@ -27,7 +29,7 @@ pub struct InputLayer<F: FieldExt> {
     pub combined_dense_mle: Option<DenseMle<F, F>>,
     /// the indices of the input mle bookkeeping tables sorted by length
     pub mle_combine_indices: Vec<usize>,
-    /// Stop
+    /// 
     pub maybe_output_input_mle_num_vars: Option<usize>,
     /// total number of variables of the padded combined mle
     pub total_num_vars: usize,
@@ -233,6 +235,100 @@ impl<F: FieldExt> InputLayer<F> {
         self.mle_combine_indices = mle_combine_indices;
         self.total_num_vars = total_num_vars;
 
+    }
+
+    /// get the wlx evaluations on the combined mle of the input layer
+    pub fn get_wlx_evaluations(
+        &self,
+        claim_vecs: Vec<Vec<F>>,
+        claimed_vals: &mut Vec<F>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, ClaimError> {
+            let mut mle = self.combined_dense_mle.as_ref().unwrap().mle_ref();
+            //fix variable hella times
+            //evaluate expr on the mutated expr
+
+            // get the number of evaluations
+            let num_vars = mle.index_mle_indices(0);
+            let num_evals = (num_vars) * (num_claims); 
+
+            // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+            let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+                .map(|idx| {
+                    // get the challenge l(idx)
+                    let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                        .map(|claim_idx| {
+                            let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                                .map(|claim| claim[claim_idx])
+                                .collect();
+                            let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
+                            res
+                        })
+                        .collect();
+
+                    let mut fix_mle = mle.clone();
+                    let eval = {
+                        new_chal.into_iter().enumerate().for_each(
+                            |(idx, chal)| {
+                                fix_mle.fix_variable(idx, chal);
+                            }
+                        ); 
+                        fix_mle.bookkeeping_table[0]
+                    }; 
+                    eval
+
+                })
+                .collect();
+
+            // concat this with the first k evaluations from the claims to get num_evals evaluations
+            claimed_vals.extend(&next_evals);
+            let wlx_evals = claimed_vals.clone();
+            Ok(wlx_evals)
+    }
+
+    /// compute the aggregated challenge r given r*
+    pub fn compute_aggregated_challenges(
+        &self,
+        claims: &[Claim<F>],
+        rstar: F,
+    ) -> Result<Vec<F>, ClaimError> {
+        let (claim_vecs, _): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+    
+        if claims.is_empty() {
+            return Err(ClaimError::ClaimAggroError);
+        }
+        let num_idx = claim_vecs[0].len();
+    
+        // get the claim (r = l(r*))
+        let r: Vec<F> = cfg_into_iter!(0..num_idx)
+            .map(|idx| {
+                let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                    .map(|claim| claim[idx])
+                    .collect();
+                evaluate_at_a_point(&evals, rstar).unwrap()
+            })
+            .collect();
+    
+        Ok(r)
+    }
+
+    /// compute the wlx for this layer given the list of claims
+    pub fn compute_claim_wlx(
+        &self,
+        claims: &[Claim<F>],
+    ) -> Result<Vec<F>, ClaimError> {
+        let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+    
+        if claims.is_empty() {
+            return Err(ClaimError::ClaimAggroError);
+        }
+        let num_idx = claim_vecs[0].len();
+    
+        // get the evals [W(l(0)), W(l(1)), ...]
+        let wlx = self.get_wlx_evaluations(claim_vecs, &mut vals, claims.len(), num_idx)?;
+    
+        Ok(wlx)
     }
 }
 

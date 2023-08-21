@@ -2,10 +2,15 @@ use std::time::Instant;
 
 use ark_bn254::Fr;
 use ark_std::{test_rng, UniformRand};
-use remainder::{zkdt::{zkdt_helpers::{BatchedDummyMles, generate_dummy_mles_batch}, zkdt_circuit_parts::PermutationCircuit}, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}, prover::GKRCircuit};
+use remainder::{zkdt::{zkdt_helpers::{BatchedDummyMles, generate_dummy_mles_batch}, zkdt_circuit_parts::PermutationCircuit}, prover::GKRCircuit};
+
+use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
+use lcpc_2d::fs_transcript::halo2_poseidon_transcript::PoseidonTranscript;
+
 
 fn main() {
     let mut rng = test_rng();
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr as H2Fr;
 
     let BatchedDummyMles {
         dummy_input_data_mle,
@@ -25,7 +30,7 @@ fn main() {
 
     let now = Instant::now();
 
-    let proof = circuit.prove(&mut transcript);
+    let proof = circuit.prove::<H2Fr>(&mut transcript);
 
     println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
 

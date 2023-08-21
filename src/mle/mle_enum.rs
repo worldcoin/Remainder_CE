@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-use crate::FieldExt;
+use lcpc_2d::FieldExt;
 
 use super::{zero::ZeroMleRef, dense::DenseMleRef, MleRef, MleIndex};
 

@@ -1,9 +1,11 @@
 //!The LayerBuilders that build the ZKDT Circuit
+use std::cmp::max;
 
 use ark_std::log2;
 use itertools::Itertools;
 
 use crate::expression::{ExpressionStandard, Expression};
+use crate::layer::batched::BatchedLayer;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
@@ -34,31 +36,26 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
 }
 
 /// calculates the difference between two mles
-pub struct DifferenceBuilder<F: FieldExt> {
+pub struct EqualityCheck<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
 }
 
-impl<F: FieldExt> LayerBuilder<F> for DifferenceBuilder<F> {
-    type Successor = DenseMle<F, F>;
+impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
+    type Successor = ZeroMleRef<F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle_1.mle_ref()) -
+        ExpressionStandard::Mle(self.mle_1.mle_ref()) - 
         ExpressionStandard::Mle(self.mle_2.mle_ref())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-
-        DenseMle::new_from_iter(self
-            .mle_1
-            .clone()
-            .into_iter()
-            .zip(self.mle_2.clone().into_iter())
-            .map(|(a, b)| a - b ), id, prefix_bits)
+        let num_vars = max(self.mle_1.num_iterated_vars(), self.mle_2.num_iterated_vars());
+        ZeroMleRef::new(num_vars, prefix_bits, id)
     }
 }
 
-impl<F: FieldExt> DifferenceBuilder<F> {
+impl<F: FieldExt> EqualityCheck<F> {
     /// creates new difference mle
     pub fn new(
         mle_1: DenseMle<F, F>,
@@ -67,6 +64,15 @@ impl<F: FieldExt> DifferenceBuilder<F> {
         Self {
             mle_1, mle_2
         }
+    }
+
+    pub fn new_batched(
+        mle_1: Vec<DenseMle<F, F>>,
+        mle_2: Vec<DenseMle<F, F>>,
+    ) -> BatchedLayer<F, Self> {
+        BatchedLayer::new(mle_1.into_iter().zip(mle_2.into_iter()).map(|(mle_1, mle_2)| Self {
+            mle_1, mle_2
+        }).collect())
     }
 }
 
