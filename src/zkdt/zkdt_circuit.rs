@@ -1,8 +1,8 @@
 use crate::layer::LayerId;
-use std::{marker::PhantomData, path::Path};
+use crate::mle::dense::DenseMle;
+use crate::FieldExt;
 
-use crate::{FieldExt, prover::GKRCircuit, transcript::poseidon_transcript::PoseidonTranscript};
-
+use super::structs::*;
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
@@ -19,11 +19,19 @@ What's our plan here?
 */
 
 // --- Constants ---
-const DUMMY_INPUT_LEN: usize = 1 << 5;
-const NUM_DUMMY_INPUTS: usize = 1 << 8;
-const TREE_HEIGHT: usize = 9;
+const DUMMY_INPUT_LEN: usize = 1 << 5; // was 1 << 5
+pub const NUM_DUMMY_INPUTS: usize = 1 << 2;
+pub const TREE_HEIGHT: usize = 9; // was 9
 const NUM_DECISION_NODES: u32 = 2_u32.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
+
+#[derive(Debug, Clone)]
+struct PathAndPermutation<F: FieldExt> {
+    path_decision_nodes: Vec<DecisionNode<F>>,
+    ret_leaf_node: LeafNode<F>,
+    diffs: Vec<F>,
+    used_input_attributes: Vec<InputAttribute<F>>,
+}
 
 /// - First element is the decision path nodes
 /// - Second element is the final predicted leaf node
@@ -31,15 +39,10 @@ const NUM_LEAF_NODES: u32 = NUM_DECISION_NODES + 1;
 /// - Fourth element is the input attributes which were used during inference
 /// - Third element is the attributes used (deprecated)
 fn generate_correct_path_and_permutation<F: FieldExt>(
-    decision_nodes: &Vec<DecisionNode<F>>,
-    leaf_nodes: &Vec<LeafNode<F>>,
-    input_datum: &Vec<InputAttribute<F>>,
-) -> (
-    Vec<DecisionNode<F>>,
-    LeafNode<F>,
-    Vec<F>,
-    Vec<InputAttribute<F>>,
-) {
+    decision_nodes: &[DecisionNode<F>],
+    leaf_nodes: &[LeafNode<F>],
+    input_datum: &[InputAttribute<F>],
+) -> PathAndPermutation<F> {
     // --- Keep track of the path and permutation ---
     let mut path_decision_nodes: Vec<DecisionNode<F>> = vec![];
     let mut used_input_attributes: Vec<InputAttribute<F>> = vec![];
@@ -92,12 +95,12 @@ fn generate_correct_path_and_permutation<F: FieldExt>(
     // assert!(path_decision_nodes.len() == TREE_HEIGHT - 1);
 
     // (path_decision_nodes, ret_leaf_node, permuted_access_indices, diffs)
-    (
+    PathAndPermutation {
         path_decision_nodes,
         ret_leaf_node,
         diffs,
         used_input_attributes,
-    )
+    }
 }
 
 fn generate_16_bit_signed_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
@@ -174,7 +177,6 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
     // --- Get the RNG ---
     let mut rng = test_rng();
 
-    
     // --- Generate dummy input data ---
     let mut dummy_input_data: Vec<Vec<InputAttribute<F>>> = vec![];
     // let mut dummy_permuted_input_data: Vec<Vec<InputAttribute<F>>> = vec![];
@@ -183,7 +185,7 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
     let dummy_attr_idx_data = (0..(DUMMY_INPUT_LEN * (TREE_HEIGHT - 1)))
         .map(|x| F::from(x as u16))
         .collect_vec();
-    let dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
+    let _dummy_attr_idx_data = repeat_n(dummy_attr_idx_data, NUM_DUMMY_INPUTS).collect_vec();
 
     // --- Populate (note that we have to permute later) ---
     for _ in 0..NUM_DUMMY_INPUTS {
@@ -193,7 +195,7 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
         for attr_id in 0..DUMMY_INPUT_LEN {
             let input_attribute = InputAttribute {
                 attr_id: F::from(attr_id as u16),
-                attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)) as u16)),
+                attr_val: F::from(rng.gen_range(0..(2_u16.pow(12)))),
             };
             single_attribute_copy.push(input_attribute);
             // single_permuted_attribute_copy.push(input_attribute);
@@ -254,14 +256,23 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
     let dummy_decision_node_paths = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(x, _, _, _)| x)
+        .map(
+            |PathAndPermutation {
+                 path_decision_nodes: x,
+                 ..
+             }| x,
+        )
         .collect_vec();
 
     // --- Collect correct leaf nodes ---
     let dummy_leaf_node_paths = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, x, _, _)| x)
+        .map(
+            |PathAndPermutation {
+                 ret_leaf_node: x, ..
+             }| x,
+        )
         .collect_vec();
 
     // --- Collect correct permutation indices ---
@@ -276,7 +287,12 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
     let all_used_input_attributes = dummy_auxiliaries
         .clone()
         .into_iter()
-        .map(|(_, _, _, used_input_attributes)| used_input_attributes)
+        .map(
+            |PathAndPermutation {
+                 used_input_attributes,
+                 ..
+             }| used_input_attributes,
+        )
         .collect_vec();
     let dummy_permuted_input_data = zip(all_used_input_attributes, dummy_input_data.clone())
         .map(|(used_input_attributes, original_input_attributes)| {
@@ -284,7 +300,6 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
 
             // --- Basically need to create a new vector with input attributes ---
             let ret = used_input_attributes
-                .clone()
                 .into_iter()
                 .chain(original_input_attributes.clone().into_iter().filter(|x| {
                     // --- Filter by duplicates, but remove them from the containing set ---
@@ -298,7 +313,7 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
 
             assert_eq!(ret.len(), original_input_attributes.len());
 
-            return ret;
+            ret
         })
         .collect_vec();
 
@@ -310,9 +325,14 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
         .into_iter()
         .fold(
             multiplicities,
-            |prev_multiplicities, (path_decision_nodes, path_leaf_node, _, _)| {
+            |prev_multiplicities,
+             PathAndPermutation {
+                 path_decision_nodes,
+                 ret_leaf_node: path_leaf_node,
+                 ..
+             }| {
                 // --- TODO!(ryancao): This is so bad lol ---
-                let mut new_multiplicities: Vec<F> = prev_multiplicities.clone();
+                let mut new_multiplicities: Vec<F> = prev_multiplicities;
 
                 // --- Just grab the node IDs from each decision node and add them to the multiplicities ---
                 path_decision_nodes.into_iter().for_each(|decision_node| {
@@ -336,9 +356,8 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
 
     // --- Compute the binary decompositions of the differences ---
     let dummy_binary_decomp_diffs = dummy_auxiliaries
-        .clone()
         .into_iter()
-        .map(|(_, _, diffs, _)| {
+        .map(|PathAndPermutation { diffs, .. }| {
             diffs
                 .into_iter()
                 .map(|diff| {
@@ -350,10 +369,8 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
         })
         .collect_vec();
 
-    (
-        // dummy_attr_idx_data,
+    DummyData {
         dummy_input_data,
-        // dummy_permutation_indices,
         dummy_permuted_input_data,
         dummy_decision_node_paths,
         dummy_leaf_node_paths,
@@ -361,7 +378,7 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
         dummy_multiplicities_bin_decomp,
         dummy_decision_nodes,
         dummy_leaf_nodes,
-    )
+    }
 }
 
 /// Gets the sign bit (0 for positive, 1 for negative) and abs value
@@ -377,7 +394,7 @@ fn get_sign_bit_and_abs_value<F: FieldExt>(value: F) -> (F, F) {
     } else {
         value
     };
-    return (sign_bit, abs_value);
+    (sign_bit, abs_value)
 }
 
 /// Computes the recomposition of the bits within `decomp` and checks
@@ -489,8 +506,6 @@ pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
     )
 }
 
-
-
 pub(crate) struct DummyMles<F: FieldExt> {
     pub(crate) dummy_input_data_mle: DenseMle<F, InputAttribute<F>>,
     pub(crate) dummy_permuted_input_data_mle: DenseMle<F, InputAttribute<F>>,
@@ -589,6 +604,7 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
     }
 }
 
+// --- Create expressions using... testing modules? ---
 #[cfg(test)]
 mod tests {
 

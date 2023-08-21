@@ -359,10 +359,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 transcript
                     .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
                     .unwrap();
-                prev_claim
-            } else {
-                layer_claims[0].clone()
-            };
+
 
 
             // --- Performs the actual sumcheck verification step ---

@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::FieldExt;
 
-use super::{zero::ZeroMleRef, dense::DenseMleRef, MleRef};
+use super::{zero::ZeroMleRef, dense::DenseMleRef, MleRef, MleIndex};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MleEnum<F: FieldExt> {
@@ -65,4 +65,9 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
     fn get_enum(self) -> MleEnum<Self::F> {
         self
     }
+
+    fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {
+        todo!()
+    }
+
 }

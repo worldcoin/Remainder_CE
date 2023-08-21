@@ -127,7 +127,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     Ok(chal)
 }
 
-fn get_dummy_claim<F: FieldExt>(
+pub fn get_dummy_claim<F: FieldExt>(
     mle_ref: DenseMleRef<F>,
     rng: &mut impl Rng,
     challenges: Option<Vec<F>>,

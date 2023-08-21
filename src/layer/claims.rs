@@ -1,9 +1,6 @@
 //!Utilities involving the claims a layer makes
 
 use crate::{expression::ExpressionStandard, mle::beta::BetaTable, FieldExt};
-//!Utilities involving the claims a layer makes
-
-use crate::{expression::ExpressionStandard, mle::beta::BetaTable, FieldExt};
 
 use itertools::Itertools;
 use crate::mle::MleRef;
@@ -13,7 +10,6 @@ use ark_std::{cfg_into_iter, cfg_iter};
 
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use thiserror::Error;
 
 use super::{Claim, Layer};
@@ -580,7 +576,7 @@ mod tests {
 
         let rchal = Fr::from(-2);
 
-        let (_res, wlx) = aggregate_claims(&claims, &mut expr.clone(), rchal).unwrap();
+        let (_res, wlx) = aggregate_claims(&claims, &layer, rchal).unwrap();
         let _rounds = expr.index_mle_indices(0);
         let _verify_result = verify_aggragate_claim(&wlx, &claims, rchal).unwrap();
     }

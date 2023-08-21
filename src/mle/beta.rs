@@ -19,11 +19,7 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 /// Beta table struct for a product of mle refs
 pub(crate) struct BetaTable<F: FieldExt> {
-pub(crate) struct BetaTable<F: FieldExt> {
     layer_claim: Claim<F>,
-    ///The bookkeeping table for the beta table
-    /// TODO(Get rid of BetaTable's reliance on the DenseMleRef type; Create a shared subtype for the shared behavior)
-    pub(crate) table: DenseMleRef<F>,
     ///The bookkeeping table for the beta table
     /// TODO(Get rid of BetaTable's reliance on the DenseMleRef type; Create a shared subtype for the shared behavior)
     pub(crate) table: DenseMleRef<F>,
@@ -77,7 +73,6 @@ pub(crate) fn compute_beta_over_two_challenges<F: FieldExt>(
 }
 
 /// `fix_variable` for a beta table.
-pub(crate) fn compute_new_beta_table<F: FieldExt>(
 pub(crate) fn compute_new_beta_table<F: FieldExt>(
     beta_table: &BetaTable<F>,
     round_index: usize,
