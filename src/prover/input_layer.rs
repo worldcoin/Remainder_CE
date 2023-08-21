@@ -29,11 +29,11 @@ pub struct InputLayer<F: FieldExt> {
     pub combined_dense_mle: Option<DenseMle<F, F>>,
     /// the indices of the input mle bookkeeping tables sorted by length
     pub mle_combine_indices: Vec<usize>,
-    /// 
+    /// the number of variables in the output mle that is checked against
     pub maybe_output_input_mle_num_vars: Option<usize>,
     /// total number of variables of the padded combined mle
     pub total_num_vars: usize,
-    /// Stop
+    /// the prefix bits for the maybe_output_input_mle
     pub maybe_output_input_mle_prefix_indices: Option<Vec<MleIndex<F>>>,
 }
 
