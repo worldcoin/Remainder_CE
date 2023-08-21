@@ -23,13 +23,13 @@ IV. When the caller passes in the actual output layer, then merge everything
 /// * Aggregate claims on the input layer
 /// * Evaluate the final claim on the input layer
 pub struct InputLayer<F: FieldExt> {
-    /// Stop
+    /// initially None, populatede when `combine_input_mles` is called. represents the combined version of input mles.
     pub combined_dense_mle: Option<DenseMle<F, F>>,
-    /// Stop
+    /// the indices of the input mle bookkeeping tables sorted by length
     pub mle_combine_indices: Vec<usize>,
     /// Stop
     pub maybe_output_input_mle_num_vars: Option<usize>,
-    /// Stop
+    /// total number of variables of the padded combined mle
     pub total_num_vars: usize,
     /// Stop
     pub maybe_output_input_mle_prefix_indices: Option<Vec<MleIndex<F>>>,
@@ -69,9 +69,8 @@ impl<F: FieldExt> InputLayer<F> {
     }
 
     /// Getter for the DenseMLE making up the input layer
-    /// * TODO!(ryancao): Return the DenseMle by reference!
-    pub fn get_combined_mle(&self) -> Option<DenseMle<F, F>> {
-        self.combined_dense_mle.clone()
+    pub fn get_combined_mle(&self) -> Option<&DenseMle<F, F>> {
+        self.combined_dense_mle.as_ref()
     }
 
     /// Takes in the same list of `input_mles` as earlier (i.e. when the `InputLayer`
