@@ -265,7 +265,7 @@ mod tests {
     use ark_std::test_rng;
     use itertools::Itertools;
 
-    use crate::{layer::{from_mle, LayerBuilder, LayerId}, mle::{Mle, dense::DenseMle}, sumcheck::tests::{get_dummy_claim, dummy_sumcheck, verify_sumcheck_messages}, expression::ExpressionStandard};
+    use crate::{layer::{from_mle, LayerBuilder, LayerId}, mle::{Mle, dense::DenseMle, MleIndex}, sumcheck::tests::{get_dummy_claim, dummy_sumcheck, verify_sumcheck_messages}, expression::ExpressionStandard};
 
     use super::BatchedLayer;
 
@@ -282,8 +282,8 @@ mod tests {
                 .map(|(first, second)| first + second), layer_id, prefix_bits)
         };        
         let output: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)], LayerId::Input, None);
-            let mut second = DenseMle::new_from_raw(vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)], LayerId::Input, None);
+            let mut first = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)], LayerId::Input, Some(vec![MleIndex::Iterated]));
+            let mut second = DenseMle::new_from_raw(vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)], LayerId::Input, Some(vec![MleIndex::Iterated]));
             (first, second)
         };
         let builder = from_mle(
@@ -293,8 +293,8 @@ mod tests {
         );
 
         let output_2: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)], LayerId::Input, None);
-            let mut second = DenseMle::new_from_raw(vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)], LayerId::Input, None);
+            let mut first = DenseMle::new_from_raw(vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)], LayerId::Input, Some(vec![MleIndex::Iterated]));
+            let mut second = DenseMle::new_from_raw(vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)], LayerId::Input, Some(vec![MleIndex::Iterated]));
             (first, second)
         };
 
