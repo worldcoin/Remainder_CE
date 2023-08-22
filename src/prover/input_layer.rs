@@ -24,6 +24,11 @@ IV. When the caller passes in the actual output layer, then merge everything
 /// * Aggregate the input layer MLEs into a single large DenseMle<F, F>
 /// * Aggregate claims on the input layer
 /// * Evaluate the final claim on the input layer
+
+pub enum InputLayerType{
+    LigeroInputLayer,
+    PublicInputLayer,
+}
 pub struct InputLayer<F: FieldExt> {
     /// initially None, populatede when `combine_input_mles` is called. represents the combined version of input mles.
     pub combined_dense_mle: Option<DenseMle<F, F>>,
@@ -35,18 +40,10 @@ pub struct InputLayer<F: FieldExt> {
     pub total_num_vars: usize,
     /// the prefix bits for the maybe_output_input_mle
     pub maybe_output_input_mle_prefix_indices: Option<Vec<MleIndex<F>>>,
+    /// whether it is a ligero or public input layer
+    pub input_layer_type: InputLayerType
 }
 
-
-///
-pub struct LigeroInputLayer {
-
-}
-
-///
-pub struct PublicInputLayer {
-
-}
 
 
 // pub trait InputLayerTrait<F: FieldExt> {
@@ -75,13 +72,14 @@ impl<F: FieldExt> InputLayer<F> {
     /// * `input_mles` - MLEs in the input layer to be merged
     /// * `maybe_output_input_mle_num_vars` - An output MLE to be zero-checked against,
     ///     but currently unpopulated
-    pub fn new_from_mles(input_mles: &mut Vec<Box<&mut dyn Mle<F>>>, maybe_output_input_mle_num_vars: Option<usize>) -> Self {
+    pub fn new_from_mles(input_mles: &mut Vec<Box<&mut dyn Mle<F>>>, maybe_output_input_mle_num_vars: Option<usize>, input_layer_type: InputLayerType) -> Self {
         let mut ret = Self {
             combined_dense_mle: None,
             mle_combine_indices: vec![],
             maybe_output_input_mle_num_vars,
             total_num_vars: 0,
             maybe_output_input_mle_prefix_indices: None,
+            input_layer_type,
         };
         ret.index_input_mles(input_mles, maybe_output_input_mle_num_vars);
         ret
@@ -95,6 +93,7 @@ impl<F: FieldExt> InputLayer<F> {
             maybe_output_input_mle_num_vars: None,
             total_num_vars: 0,
             maybe_output_input_mle_prefix_indices: None,
+            input_layer_type: InputLayerType::PublicInputLayer,
         }
     }
 
@@ -441,7 +440,7 @@ mod tests {
 
     use crate::{
         layer::LayerId,
-        mle::{dense::DenseMle, Mle, MleIndex}, utils::{pad_to_nearest_power_of_two, get_random_mle, get_random_mle_with_capacity, get_range_mle},
+        mle::{dense::DenseMle, Mle, MleIndex}, utils::{pad_to_nearest_power_of_two, get_random_mle, get_random_mle_with_capacity, get_range_mle}, prover::input_layer::InputLayerType,
     };
 
     use lcpc_2d::{FieldExt, ligero_ml_helper::naive_eval_mle_at_challenge_point};
@@ -455,7 +454,7 @@ mod tests {
 
         let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2)];
 
-        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None);
+        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer);
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         // dbg!(&mle_1.mle);
@@ -503,7 +502,7 @@ mod tests {
 
         let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
 
-        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None);
+        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer);
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         dbg!(&mle_1.mle);
@@ -557,7 +556,7 @@ mod tests {
         let mut mle_3 = get_random_mle::<Fr>(6);
         let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
 
-        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None);
+        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer);
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         // --- The padded combined version should have size 2^8 ---
@@ -606,7 +605,7 @@ mod tests {
         let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
 
         // --- Also create an input-output layer of size 2^8 ---
-        let mut dummy_input_layer = InputLayer::new_from_mles(&mut mle_list, Some(8));
+        let mut dummy_input_layer = InputLayer::new_from_mles(&mut mle_list, Some(8), InputLayerType::LigeroInputLayer);
         let mut input_output_mle = get_random_mle::<Fr>(8);
         dummy_input_layer.combine_input_mles(&mle_list, Some(Box::new(&mut input_output_mle)));
         dummy_input_layer.index_input_output_mle(&mut Box::new(&mut input_output_mle));
