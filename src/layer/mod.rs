@@ -32,7 +32,6 @@ use self::{claims::ClaimError, layer_enum::LayerEnum};
 
 
 /// Type alias for a claim (A point to evaluate at and an evaluation)
-/// Type alias for a claim (A point to evaluate at and an evaluation)
 pub type Claim<F> = (Vec<F>, F);
 
 #[derive(Error, Debug, Clone)]
@@ -85,14 +84,11 @@ pub enum VerificationError {
 ///  The location of a layer within the GKR circuit
 pub enum LayerId {
     /// An Mle located in the input layer
-    /// An Mle located in the input layer
     Input,
-    /// A layer within the GKR protocol, indexed by it's layer id
     /// A layer within the GKR protocol, indexed by it's layer id
     Layer(usize),
 }
 
-/// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
     /// The transcript that this layer uses

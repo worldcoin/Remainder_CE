@@ -32,8 +32,6 @@ use lcpc_2d::adapter::LigeroProof;
 ///  New  type for containing the list of Layers that make up the GKR circuit
 /// 
 /// Literally just a Vec of pointers to various layer types!
-/// 
-/// Literally just a Vec of pointers to various layer types!
 pub struct Layers<F: FieldExt, Tr: Transcript<F>>(Vec<LayerEnum<F, Tr>>);
 
 impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
@@ -210,12 +208,13 @@ pub trait GKRCircuit<F: FieldExt> {
                 // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
                 // --- claim aggregation protocol. We ONLY aggregate if need be! ---
                 let mut layer_claim = layer_claims[0].clone();
-                let mut wlx_evaluations = vec![];
+                let mut relevant_wlx_evaluations = vec![];
                 if layer_claims.len() > 1 {
                     // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
                     // --- claim aggregation protocol ---
-                    wlx_evaluations = compute_claim_wlx(&layer_claims, &layer).unwrap();
-                    let relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
+                    let wlx_evaluations = compute_claim_wlx(&layer_claims, &layer).unwrap();
+                    relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
+                    dbg!(&relevant_wlx_evaluations);
                     transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &relevant_wlx_evaluations).unwrap();
 
                     let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
@@ -225,17 +224,6 @@ pub trait GKRCircuit<F: FieldExt> {
 
                     layer_claim = (aggregated_challenges, claimed_val);
 
-                    // this used to be how we did it -- sampled rstar before adding wlx to transcript
-                    // let agg_chal = transcript
-                    //         .get_challenge("Challenge for claim aggregation")
-                    //         .unwrap();
-
-                    // (layer_claim, wlx_evaluations) =
-                    //     aggregate_claims(layer_claims, &layer, agg_chal).unwrap();
-
-                    // transcript
-                    //     .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
-                    //     .unwrap();
                 } else {
                     dbg!("Yeah not aggregating claims this time around");
                 }
@@ -262,7 +250,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 Ok(LayerProof {
                     sumcheck_proof: prover_sumcheck_messages,
                     layer,
-                    wlx_evaluations,
+                    wlx_evaluations: relevant_wlx_evaluations,
                 })
             })
             .try_collect()?;
@@ -286,13 +274,12 @@ pub trait GKRCircuit<F: FieldExt> {
 
         // --- Aggregate challenges ONLY if we have more than one ---
         let mut input_layer_claim = input_layer_claims[0].clone();
-        let mut input_wlx_evaluations = vec![];
+        let mut relevant_wlx_evaluations = vec![];
         if input_layer_claims.len() > 1 {
             dbg!("Aggregating input claims");
             
-            input_wlx_evaluations = input_layer.compute_claim_wlx(&input_layer_claims).unwrap();
-            dbg!(&input_wlx_evaluations);
-            let relevant_wlx_evaluations = input_wlx_evaluations[input_layer_claims.len()..].to_vec();
+            let input_wlx_evaluations = input_layer.compute_claim_wlx(&input_layer_claims).unwrap();
+            relevant_wlx_evaluations = input_wlx_evaluations[input_layer_claims.len()..].to_vec();
             transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &relevant_wlx_evaluations).unwrap();
 
             let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
@@ -302,26 +289,12 @@ pub trait GKRCircuit<F: FieldExt> {
 
             input_layer_claim = (aggregated_challenges, claimed_val);
 
-
-            // this used to be how we did it -- sampled rstar before adding wlx to transcript
-            // let agg_chal = transcript
-            //     .get_challenge("Challenge for claim aggregation")
-            //     .unwrap();
-
-            // let input_layer_expression = ExpressionStandard::Mle(input_layer.get_combined_mle().unwrap().mle_ref());
-
-            // (input_layer_claim, input_wlx_evaluations) =
-            //     aggregate_claims(input_layer_claims, &input_layer, agg_chal).unwrap();
-
-            // transcript
-            //     .append_field_elements("Claim Aggregation Wlx_evaluations", &input_wlx_evaluations)
-            //     .unwrap();
         } else {
             dbg!("Not aggroing input claims this time around");
         }
 
         let input_layer_proof = InputLayerProof {
-            input_layer_aggregated_claim_proof: input_wlx_evaluations,
+            input_layer_aggregated_claim_proof: relevant_wlx_evaluations,
         };
 
         // --- Finally, the Ligero commit + eval proof ---
@@ -423,11 +396,19 @@ pub trait GKRCircuit<F: FieldExt> {
             let mut prev_claim = layer_claims[0].clone();
             if layer_claims.len() > 1 {
                 // --- Perform the claim aggregation verification, first sampling `r` ---
-            let agg_chal = transcript
-                    .get_challenge("Challenge for claim aggregation")
-                    .unwrap();
 
-                prev_claim = verify_aggregate_claim(&wlx_evaluations, layer_claims, agg_chal)
+                let all_wlx_evaluations: Vec<F> = layer_claims.into_iter().map(
+                    |(_, val)| *val
+                ).chain(wlx_evaluations.clone().into_iter()).collect();
+
+                transcript
+                    .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
+                    .unwrap();
+                let agg_chal = transcript
+                        .get_challenge("Challenge for claim aggregation")
+                        .unwrap();
+
+                prev_claim = verify_aggregate_claim(&all_wlx_evaluations, layer_claims, agg_chal)
                     .map_err(|_err| {
                         GKRError::ErrorWhenVerifyingLayer(
                             layer_id.clone(),
@@ -435,9 +416,7 @@ pub trait GKRCircuit<F: FieldExt> {
                         )
                     })?;
 
-                    transcript
-                        .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
-                        .unwrap();
+                   
             }
 
             // --- Performs the actual sumcheck verification step ---
@@ -486,55 +465,32 @@ pub trait GKRCircuit<F: FieldExt> {
         let mut input_layer_claim = input_layer_claims[0].clone();
         if input_layer_claims.len() > 1 {
 
+            let all_input_wlx_evaluations: Vec<F> = input_layer_claims.into_iter().map(
+                    |(_, val)| *val 
+                ).chain(input_layer_aggregated_claim_proof.clone().into_iter()).collect();
+
+            // --- Add the aggregation step to the transcript ---
+            transcript
+            .append_field_elements("Input claim aggregation Wlx_evaluations", &input_layer_aggregated_claim_proof)
+            .unwrap();
+
             // --- Grab the input claim aggregation challenge ---
             let input_r_star = transcript
                 .get_challenge("Challenge for input claim aggregation")
                 .unwrap();
 
             // --- Perform the aggregation verification step and extract the correct input layer claim ---
-            input_layer_claim = verify_aggregate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
+            input_layer_claim = verify_aggregate_claim(&all_input_wlx_evaluations, input_layer_claims, input_r_star)
                 .map_err(|_err| {
                     GKRError::ErrorWhenVerifyingLayer(
                         input_layer_id,
                         LayerError::AggregationError,
                     )
                 })?;
-
-            // --- Add the aggregation step to the transcript ---
-            transcript
-            .append_field_elements("Input claim aggregation Wlx_evaluations", &input_layer_aggregated_claim_proof)
-            .unwrap();
         }
 
-        // --- The prover interprets the challenge coords as big-endian, but Ligero interprets them as little-endian ---
-        // let input_layer_challenge_coords_big_endian = input_layer_claim.0.clone().into_iter().rev().collect_vec();
-
-        dbg!("----- Hahahahahahahaahaha!-----");
-
-        // --- This is broken for now... The prover input claim is not the same as the Ligero proof ---
         let (root, ligero_eval_proof, _) = convert_halo_to_lcpc::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F, F2>(ligero_aux.clone(), ligero_commit_eval_proof);
         remainder_ligero_verify::<F, F2>(&root, &ligero_eval_proof, ligero_aux, transcript, &input_layer_claim.0, input_layer_claim.1);
-
-        // --- Grab the self-tracked input layer claims ---
-        let input_layer_id = LayerId::Input;
-        let input_layer_claims = claims
-            .get(&input_layer_id)
-            .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
-    
-        let input_r_star = transcript
-            .get_challenge("Challenge for input claim aggregation")
-            .unwrap();
-
-        // --- Perform the aggregation verification step and extract the correct input layer claim ---
-        input_layer_claim = verify_aggregate_claim(&input_layer_aggregated_claim_proof, input_layer_claims, input_r_star)
-        .map_err(|_err| {
-            GKRError::ErrorWhenVerifyingLayer(
-                input_layer_id,
-                LayerError::AggregationError,
-            )
-        })?;
-
-        // TODO!(ryancao): Verify the final `input_layer_claim` using Ligero!!!
 
         Ok(())
     }
@@ -711,7 +667,6 @@ mod tests {
             let builder = from_mle(
                 mle_clone,
                 // --- The expression is a simple product between the first and second halves ---
-                // --- The expression is a simple product between the first and second halves ---
                 |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
                 // --- The witness generation simply zips the two halves and multiplies them ---
                 |mle, layer_id, prefix_bits| {
@@ -761,7 +716,6 @@ mod tests {
             );
 
             // --- Appends this to the circuit ---
-            // --- Appends this to the circuit ---
             let computed_output = layers.add_gkr(builder4);
 
             // --- Ahh. So we're doing the thing where we add the "real" circuit output as a circuit input, ---
@@ -770,7 +724,6 @@ mod tests {
                 DenseMle::new_from_iter(computed_output.into_iter(), LayerId::Input, None);
             input_layer.index_input_output_mle(&mut Box::new(&mut output_input));
 
-            // --- Subtract the computed circuit output from the advice circuit output ---
             // --- Subtract the computed circuit output from the advice circuit output ---
             let builder5 = from_mle(
                 (computed_output, output_input.clone().clone()),
@@ -781,7 +734,6 @@ mod tests {
                 },
             );
 
-            // --- Add this final layer to the circuit ---
             // --- Add this final layer to the circuit ---
             let circuit_circuit_output = layers.add_gkr(builder5);
 
@@ -806,8 +758,8 @@ mod tests {
         let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
             (0..size).map(|_| {
                 let num = Fr::rand(&mut rng);
-                let second_num = Fr::rand(&mut rng);
-                (num, second_num).into()
+                //let second_num = Fr::rand(&mut rng);
+                (num, num).into()
             }),
             LayerId::Input,
             None,

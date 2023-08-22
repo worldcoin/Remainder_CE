@@ -37,6 +37,34 @@ pub struct InputLayer<F: FieldExt> {
     pub maybe_output_input_mle_prefix_indices: Option<Vec<MleIndex<F>>>,
 }
 
+
+///
+pub struct LigeroInputLayer {
+
+}
+
+///
+pub struct PublicInputLayer {
+
+}
+
+
+// pub trait InputLayerTrait<F: FieldExt> {
+
+//     fn new_from_mles(input_mles: &mut Vec<Box<&mut dyn Mle<F>>>, maybe_output_input_mle_num_vars: Option<usize>) -> Self {
+//         let mut ret = Self {
+//             combined_dense_mle: None,
+//             mle_combine_indices: vec![],
+//             maybe_output_input_mle_num_vars,
+//             total_num_vars: 0,
+//             maybe_output_input_mle_prefix_indices: None,
+//         };
+//         ret.index_input_mles(input_mles, maybe_output_input_mle_num_vars);
+//         ret
+//     }
+// }
+
+
 impl<F: FieldExt> InputLayer<F> {
 
     /// Creates a new `InputLayer` from a bunch of MLEs which belong
