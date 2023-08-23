@@ -1,17 +1,18 @@
-use std::iter::repeat_with;
+use std::{iter::repeat_with, collections::HashMap};
 
 use ark_std::{log2, cfg_into_iter, cfg_iter};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use serde::{Serialize, Deserialize};
 use thiserror::Error;
 
 
-use crate::{mle::{dense::{DenseMle, DenseMleRef}, Mle, MleIndex, MleRef}, utils::{argsort, pad_to_nearest_power_of_two}, layer::{Claim, claims::ClaimError, Layer}, sumcheck::evaluate_at_a_point};
+use crate::{mle::{dense::{DenseMle, DenseMleRef}, Mle, MleIndex, MleRef}, utils::{argsort, pad_to_nearest_power_of_two}, layer::{Claim, claims::{ClaimError, verify_aggregate_claim}, Layer, LayerError}, sumcheck::evaluate_at_a_point, prover::GKRError};
 // use crate::mle::MleRef;
 
-use lcpc_2d::FieldExt;
+use lcpc_2d::{FieldExt, ScalarField, fs_transcript::halo2_remainder_transcript::Transcript, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::{LigeroProof, convert_halo_to_lcpc}, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding};
 
-use super::LayerId;
+use super::{LayerId, InputLayerProof};
 
 ///
 #[derive(Error, Debug, Clone)]
@@ -32,13 +33,22 @@ pub enum InputLayerType{
 }
 
 ///
+#[derive(Serialize, Deserialize)]
+pub enum EvalProofType<F: FieldExt, F2: ScalarField> {
+    ///
+    LigeroEvalProof(LigeroProof<F2>),
+    ///
+    PublicEvalProof(DenseMleRef<F>),
+}
+
+///
 pub fn verify_public_input_layer<F: FieldExt>(
     mle_to_verify: &mut DenseMleRef<F>,
     claim: Claim<F>,
 ) -> Result<(), InputVerifyError> {
 
     let (challenges, claimed_val) = claim;
-    
+
     challenges.clone().into_iter().enumerate().for_each(
         |(idx, chal)| {
             mle_to_verify.fix_variable(idx, chal);
@@ -67,6 +77,178 @@ pub fn verify_public_input_layer<F: FieldExt>(
 
     Ok(())
 
+}
+
+///
+pub fn get_input_layer_proofs<F: FieldExt, F2: ScalarField, Tr: Transcript<F>>(
+    input_layers: Vec<InputLayer<F>>,
+    claims: HashMap<LayerId, Vec<Claim<F>>>,
+    transcript: &mut Tr,
+) -> Vec<InputLayerProof<F, F2>> {
+    let input_layer_proofs: Vec<InputLayerProof<F, F2>> = {
+        input_layers.into_iter().map(
+            |input_layer| {
+                // --- Gather all of the claims on the input layer and aggregate them ---
+                let input_layer_id = input_layer.get_layer_id();
+                let input_layer_claims = claims
+                    .get(input_layer_id)
+                    .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone())).unwrap();
+                dbg!(input_layer_claims);
+
+                // --- Add the claimed values to the FS transcript ---
+                for claim in input_layer_claims {
+                    transcript
+                        .append_field_elements("Claimed challenge coordinates to be aggregated", &claim.0)
+                        .unwrap();
+                    transcript
+                        .append_field_element("Claimed value to be aggregated", claim.1)
+                        .unwrap();
+                }
+
+                // --- Aggregate challenges ONLY if we have more than one ---
+                let mut input_layer_claim = input_layer_claims[0].clone();
+                let mut relevant_wlx_evaluations = vec![];
+                if input_layer_claims.len() > 1 {
+                    dbg!("Aggregating input claims");
+                    
+                    let input_wlx_evaluations = input_layer.compute_claim_wlx(&input_layer_claims).unwrap();
+                    relevant_wlx_evaluations = input_wlx_evaluations[input_layer_claims.len()..].to_vec();
+                    transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &relevant_wlx_evaluations).unwrap();
+
+                    let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
+
+                    let aggregated_challenges = input_layer.compute_aggregated_challenges(&input_layer_claims, agg_chal).unwrap();
+                    let claimed_val = evaluate_at_a_point(&input_wlx_evaluations, agg_chal).unwrap();
+
+                    input_layer_claim = (aggregated_challenges, claimed_val);
+
+                } else {
+                    dbg!("Not aggroing input claims this time around");
+                }
+
+                match input_layer.input_layer_type {
+                    InputLayerType::LigeroInputLayer => {
+                        // --- Compute the Ligero commitment to the combined input MLE ---
+                            let rho_inv: u8 = 4;
+
+                            // TODO!(vishady) clones
+                            let orig_input_layer_bookkeeping_table = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle.clone());
+                            let (_, comm, root, aux) = remainder_ligero_commit_prove(&orig_input_layer_bookkeeping_table, rho_inv);
+
+                            // --- Finally, the Ligero commit + eval proof ---
+                            let ligero_eval_proof:LigeroProof<F2> = remainder_ligero_eval_prove(
+                                &orig_input_layer_bookkeeping_table,
+                                &input_layer_claim.0,
+                                transcript,
+                                aux.clone(),
+                                comm,
+                                root
+                            );
+
+                            InputLayerProof {
+                                input_layer_aggregated_claim_proof: relevant_wlx_evaluations,
+                                eval_proof: EvalProofType::LigeroEvalProof(
+                                    ligero_eval_proof
+                                ),
+                                aux_info: Some(aux),
+                                layer_id: input_layer_id.clone(),
+                            }
+                    }
+
+                    InputLayerType::PublicInputLayer => {
+                        InputLayerProof {
+                            input_layer_aggregated_claim_proof: relevant_wlx_evaluations,
+                            eval_proof: EvalProofType::PublicEvalProof(
+                                input_layer.get_combined_mle().unwrap().mle_ref()
+                            ),
+                            aux_info: None,
+                            layer_id: input_layer_id.clone(),
+                        }
+                    }
+                }
+
+            }
+        ).collect()
+    };
+
+    input_layer_proofs
+}
+
+
+///
+pub fn verify_input_layer_proofs<F: FieldExt, F2: ScalarField, Tr: Transcript<F>>(
+    input_layer_proofs: Vec<InputLayerProof<F, F2>>,
+    claims: HashMap<LayerId, Vec<Claim<F>>>,
+    transcript: &mut Tr,
+    ) {
+    
+        input_layer_proofs.into_iter().for_each(
+            |input_layer_proof| {
+                // --- Verify the input claim aggregation step ---
+                let InputLayerProof {
+                    input_layer_aggregated_claim_proof,
+                    eval_proof,
+                    aux_info,
+                    layer_id
+                } = input_layer_proof;
+
+                // --- Grab the self-tracked input layer claims ---
+                let input_layer_id = layer_id;
+                let input_layer_claims = claims
+                    .get(&input_layer_id)
+                    .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone())).unwrap();
+
+                // --- Add the claimed values to the FS transcript ---
+                for claim in input_layer_claims {
+                    transcript
+                        .append_field_elements("Claimed challenge coordinates to be aggregated", &claim.0)
+                        .unwrap();
+                    transcript
+                        .append_field_element("Claimed value to be aggregated", claim.1)
+                        .unwrap();
+                }
+
+                // --- Do claim aggregation on input layer ONLY if needed ---
+                let mut input_layer_claim = input_layer_claims[0].clone();
+                if input_layer_claims.len() > 1 {
+
+                    let all_input_wlx_evaluations: Vec<F> = input_layer_claims.into_iter().map(
+                            |(_, val)| *val 
+                        ).chain(input_layer_aggregated_claim_proof.clone().into_iter()).collect();
+
+                    // --- Add the aggregation step to the transcript ---
+                    transcript
+                    .append_field_elements("Input claim aggregation Wlx_evaluations", &input_layer_aggregated_claim_proof)
+                    .unwrap();
+
+                    // --- Grab the input claim aggregation challenge ---
+                    let input_r_star = transcript
+                        .get_challenge("Challenge for input claim aggregation")
+                        .unwrap();
+
+                    // --- Perform the aggregation verification step and extract the correct input layer claim ---
+                    input_layer_claim = verify_aggregate_claim(&all_input_wlx_evaluations, input_layer_claims, input_r_star)
+                        .map_err(|_err| {
+                            GKRError::ErrorWhenVerifyingLayer(
+                                input_layer_id,
+                                LayerError::AggregationError,
+                            )
+                        }).unwrap();
+                }
+
+                match eval_proof {
+                    EvalProofType::LigeroEvalProof(ligero_commit_eval_proof) => {
+                        let ligero_aux = aux_info.unwrap();
+                        let (root, ligero_eval_proof, _) = convert_halo_to_lcpc::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F, F2>(ligero_aux.clone(), ligero_commit_eval_proof);
+                        remainder_ligero_verify::<F, F2>(&root, &ligero_eval_proof, ligero_aux, transcript, &input_layer_claim.0, input_layer_claim.1);
+                    }
+                    EvalProofType::PublicEvalProof(mut mle_ref) => {
+                        verify_public_input_layer(&mut mle_ref, input_layer_claim).unwrap();
+                    }
+                }
+                
+            }
+        );
 }
 
 /*
