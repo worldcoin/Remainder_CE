@@ -458,9 +458,9 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
         );
 
         // --- We need to multiply f_1'(x) by f_2(x) ---
-        let mut phase_1_lhs = [DenseMle::new_from_raw(a_hg_lhs, LayerId::Input, None).mle_ref(), self.lhs.clone()];
+        let mut phase_1_lhs = [DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0), None).mle_ref(), self.lhs.clone()];
         // --- The RHS will just be h_g(x), which doesn't get multiplied by f_2(x) ---
-        let mut phase_1_rhs = [DenseMle::new_from_raw(a_hg_rhs, LayerId::Input, None).mle_ref()];
+        let mut phase_1_rhs = [DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0), None).mle_ref()];
         index_mle_indices_gate(phase_1_lhs.as_mut(), self.num_copy_bits);
         index_mle_indices_gate(phase_1_rhs.as_mut(), self.num_copy_bits);
         self.set_phase_1((phase_1_lhs.clone(), phase_1_rhs.clone()));
@@ -511,9 +511,9 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
         );
 
         // --- LHS bookkeeping table is already multiplied by f_2(u) ---
-        let mut phase_2_lhs = [DenseMle::new_from_raw(a_f1_lhs, LayerId::Input, None).mle_ref()];
+        let mut phase_2_lhs = [DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0), None).mle_ref()];
         // --- RHS bookkeeping table needs to be multiplied by f_3(y) ---
-        let mut phase_2_rhs = [DenseMle::new_from_raw(a_f1_rhs, LayerId::Input, None).mle_ref(), self.rhs.clone()];
+        let mut phase_2_rhs = [DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0), None).mle_ref(), self.rhs.clone()];
         index_mle_indices_gate(phase_2_lhs.as_mut(), self.num_copy_bits);
         index_mle_indices_gate(phase_2_rhs.as_mut(), self.num_copy_bits);
         self.set_phase_2((phase_2_lhs.clone(), phase_2_rhs.clone()));
@@ -825,7 +825,7 @@ fn check_fully_bound<F: FieldExt>(
 
         let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
 
-        if indices.as_slice() != &challenges[..] {
+        if indices != challenges {
             false
         }
         else {
@@ -1302,9 +1302,9 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
             });
 
         // --- Wrappers over the bookkeeping tables ---
-        let mut a_f2_mle = DenseMle::new_from_raw(a_f2, LayerId::Input, None).mle_ref();
+        let mut a_f2_mle = DenseMle::new_from_raw(a_f2, LayerId::Input(0), None).mle_ref();
         a_f2_mle.index_mle_indices(0);
-        let mut a_f3_mle = DenseMle::new_from_raw(a_f3, LayerId::Input, None).mle_ref();
+        let mut a_f3_mle = DenseMle::new_from_raw(a_f3, LayerId::Input(0), None).mle_ref();
         a_f3_mle.index_mle_indices(0);
         beta_g2.table.index_mle_indices(0);
 
@@ -1536,13 +1536,13 @@ mod test {
             Fr::from(1),
             Fr::from(2),
         ];
-        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input(0), None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(51395810),
             Fr::from(2),
         ];
-        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0), nonzero_gates, lhs_mle_ref, rhs_mle_ref, 0);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1574,7 +1574,7 @@ mod test {
             Fr::from(1),
             Fr::from(1),
         ];
-        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input(0), None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1586,7 +1586,7 @@ mod test {
             Fr::from(1),
             Fr::from(1),
         ];
-        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0),  nonzero_gates, lhs_mle_ref, rhs_mle_ref, 0);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1620,7 +1620,7 @@ mod test {
             Fr::from(75361),
             Fr::from(-91901),
         ];
-        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input(0), None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1640,7 +1640,7 @@ mod test {
             Fr::from(7),
             Fr::from(9999),
         ];
-        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
         let mut gate_mle: AddGate<Fr, PoseidonTranscript<Fr>> = AddGate::new(LayerId::Layer(0), nonzero_gates, lhs_mle_ref, rhs_mle_ref, 0);
         let messages_1 = gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1667,7 +1667,7 @@ mod test {
             Fr::from(1),
             Fr::from(2),
         ];
-        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input(0), None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(0),
@@ -1675,7 +1675,7 @@ mod test {
             Fr::from(51395810),
             Fr::from(2),
         ];
-        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
         let mut batched_gate_mle: AddGateBatched<Fr, PoseidonTranscript<Fr>> = AddGateBatched::new(new_bits, nonzero_gates, lhs_mle_ref, rhs_mle_ref, LayerId::Layer(0));
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1707,7 +1707,7 @@ mod test {
             Fr::from(1),
             Fr::from(1),
         ];
-        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input(0), None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1719,7 +1719,7 @@ mod test {
             Fr::from(1),
             Fr::from(1),
         ];
-        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
         let mut batched_gate_mle: AddGateBatched<Fr, PoseidonTranscript<Fr>> = AddGateBatched::new(new_bits, nonzero_gates, lhs_mle_ref, rhs_mle_ref, LayerId::Layer(0));
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1751,7 +1751,7 @@ mod test {
             Fr::from(7),
             Fr::from(3),
         ];
-        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input(0), None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1763,7 +1763,7 @@ mod test {
             Fr::from(3),
             Fr::from(4),
         ];
-        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
         let mut batched_gate_mle: AddGateBatched<Fr, PoseidonTranscript<Fr>> = AddGateBatched::new(new_bits, nonzero_gates, lhs_mle_ref, rhs_mle_ref, LayerId::Layer(0));
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
@@ -1804,7 +1804,7 @@ mod test {
             Fr::from(7),
             Fr::from(3),
         ];
-        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input, None).mle_ref();
+        let lhs_mle_ref = DenseMle::new_from_raw(lhs_v, LayerId::Input(0), None).mle_ref();
 
         let rhs_v = vec![
             Fr::from(1),
@@ -1824,7 +1824,7 @@ mod test {
             Fr::from(3),
             Fr::from(4),
         ];
-        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input, None).mle_ref();
+        let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
         let mut batched_gate_mle: AddGateBatched<Fr, PoseidonTranscript<Fr>> = AddGateBatched::new(new_bits, nonzero_gates, lhs_mle_ref, rhs_mle_ref, LayerId::Layer(0));
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);

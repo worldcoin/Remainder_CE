@@ -53,7 +53,7 @@ where
     let bookkeeping_table = repeat_with(|| rng.gen::<F>())
         .take(capacity as usize)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
 }
 
 /// Helper function to create random MLE with specific number of vars
@@ -66,7 +66,7 @@ where
     let bookkeeping_table = (0..capacity).map(|idx| F::from(idx + 1))
         .take(capacity as usize)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
 }
 
 /// Helper function to create random MLE with specific length
@@ -78,5 +78,5 @@ where
     let bookkeeping_table = repeat_with(|| rng.gen::<F>())
         .take(capacity as usize)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
 }

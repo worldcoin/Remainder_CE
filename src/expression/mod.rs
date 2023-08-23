@@ -654,7 +654,7 @@ mod tests {
 
     //     let mle = DenseMle::new_from_raw(
     //         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
-    //         LayerId::Input,
+    //         LayerId::Input(0),
     //         None,
     //     )
     //     .mle_ref();
@@ -701,7 +701,7 @@ mod tests {
     fn test_mle_eval_two_variable() {
         let mle = DenseMle::new_from_raw(
             vec![Fr::from(4), Fr::from(2), Fr::from(5), Fr::from(7)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -728,7 +728,7 @@ mod tests {
                 Fr::from(9),
                 Fr::from(6),
             ],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -746,7 +746,7 @@ mod tests {
     fn test_mle_eval_sum_w_constant_then_scale() {
         let mle = DenseMle::new_from_raw(
             vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -765,7 +765,7 @@ mod tests {
     fn test_mle_eval_selector() {
         let mle_1 = DenseMle::new_from_raw(
             vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -774,7 +774,7 @@ mod tests {
 
         let mle_2 = DenseMle::new_from_raw(
             vec![Fr::from(1), Fr::from(9), Fr::from(8), Fr::from(2)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -800,7 +800,7 @@ mod tests {
                 Fr::from(1),
                 Fr::from(7),
             ],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref(); // cancat actually prepends
@@ -821,7 +821,7 @@ mod tests {
     fn test_mle_eval_selector_w_constant() {
         let mle_1 = DenseMle::new_from_raw(
             vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -845,7 +845,7 @@ mod tests {
 
         let mle_1 = DenseMle::new_from_raw(
             vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -856,7 +856,7 @@ mod tests {
 
         let mle_2 = DenseMle::new_from_raw(
             vec![Fr::from(1), Fr::from(4), Fr::from(5), Fr::from(2)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -881,7 +881,7 @@ mod tests {
 
         let mle_1 = DenseMle::new_from_raw(
             vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -899,7 +899,7 @@ mod tests {
                 Fr::from(8),
                 Fr::from(2),
             ],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -921,7 +921,7 @@ mod tests {
 
         let mle_1 = DenseMle::new_from_raw(
             vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -937,7 +937,7 @@ mod tests {
                 Fr::from(8),
                 Fr::from(2),
             ],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();
@@ -979,7 +979,7 @@ mod tests {
 
         let mle = DenseMle::new_from_raw(
             vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::one()],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         )
         .mle_ref();

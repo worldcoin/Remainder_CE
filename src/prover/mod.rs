@@ -11,9 +11,9 @@ use crate::{
         LayerBuilder, LayerError, LayerId, layer_enum::LayerEnum,
     },
     mle::{MleIndex, mle_enum::MleEnum},
-    mle::MleRef,
+    mle::{MleRef, dense::DenseMleRef},
     expression::ExpressionStandard,
-    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point
+    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point, prover::input_layer::InputLayerType
 };
 
 use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
@@ -24,7 +24,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use self::input_layer::InputLayer;
+use self::input_layer::{InputLayer, verify_public_input_layer};
 
 use lcpc_2d::ScalarField;
 use lcpc_2d::adapter::LigeroProof;
@@ -67,6 +67,15 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Default for Layers<F, Tr> {
 ///An output layer which will have it's bits bound and then evaluated
 pub type OutputLayer<F> = Box<dyn MleRef<F = F>>;
 
+///
+#[derive(Serialize, Deserialize)]
+pub enum EvalProofType<F: FieldExt, F2: ScalarField> {
+    ///
+    LigeroEvalProof(LigeroProof<F2>),
+    ///
+    PublicEvalProof(DenseMleRef<F>),
+}
+
 #[derive(Error, Debug, Clone)]
 /// Errors relating to the proving of a GKR circuit
 pub enum GKRError {
@@ -103,9 +112,12 @@ pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {
 }
 
 /// Proof for circuit input layer
-#[derive(Serialize, Deserialize)]
-pub struct InputLayerProof<F: FieldExt> {
+//#[derive(Serialize, Deserialize)]
+pub struct InputLayerProof<F: FieldExt, F2: ScalarField> {
     input_layer_aggregated_claim_proof: Vec<F>,
+    eval_proof: EvalProofType<F, F2>,
+    aux_info: Option<LcProofAuxiliaryInfo>,
+    layer_id: LayerId,
 }
 
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
@@ -118,11 +130,7 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>, F2: ScalarField> {
     /// All the output layers that this circuit yields
     pub output_layers: Vec<Box<dyn MleRef<F = F>>>,
     /// Proof for the circuit input layer
-    pub input_layer_proof: InputLayerProof<F>,
-    /// Ligero proof
-    pub ligero_commit_eval_proof: LigeroProof<F2>,
-    /// Ligero auxiliary info for verifier
-    pub ligero_aux: LcProofAuxiliaryInfo,
+    pub input_layer_proofs: Vec<InputLayerProof<F, F2>>,
 }
 
 /// A GKRCircuit ready to be proven
@@ -131,7 +139,7 @@ pub trait GKRCircuit<F: FieldExt> {
     type Transcript: Transcript<F>;
 
     /// The forward pass, defining the layer relationships and generating the layers
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>);
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, Vec<InputLayer<F>>);
 
     ///  The backwards pass, creating the GKRProof
     fn prove<F2: ScalarField>(
@@ -140,13 +148,7 @@ pub trait GKRCircuit<F: FieldExt> {
     ) -> Result<GKRProof<F, Self::Transcript, F2>, GKRError> {
 
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
-        let (layers, mut output_layers, input_layer) = self.synthesize();
-
-        // --- Compute the Ligero commitment to the combined input MLE ---
-        // TODO!(ryancao): Hard-code this somewhere else!!
-        let rho_inv: u8 = 4;
-        let orig_input_layer_bookkeeping_table = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle.clone());
-        let (_, comm, root, aux) = remainder_ligero_commit_prove(&orig_input_layer_bookkeeping_table, rho_inv);
+        let (layers, mut output_layers, input_layers) = self.synthesize();
 
         // --- Keep track of GKR-style claims across all layers ---
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new(); 
@@ -255,64 +257,96 @@ pub trait GKRCircuit<F: FieldExt> {
             })
             .try_collect()?;
 
-        // --- Gather all of the claims on the input layer and aggregate them ---
-        let input_layer_id = LayerId::Input;
-        let input_layer_claims = claims
-            .get(&input_layer_id)
-            .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
-        dbg!(input_layer_claims);
+        let input_layer_proofs: Vec<InputLayerProof<F, F2>> = {
+            input_layers.into_iter().map(
+                |input_layer| {
+                    // --- Gather all of the claims on the input layer and aggregate them ---
+                    let input_layer_id = input_layer.get_layer_id();
+                    let input_layer_claims = claims
+                        .get(input_layer_id)
+                        .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone())).unwrap();
+                    dbg!(input_layer_claims);
 
-        // --- Add the claimed values to the FS transcript ---
-        for claim in input_layer_claims {
-            transcript
-                .append_field_elements("Claimed challenge coordinates to be aggregated", &claim.0)
-                .unwrap();
-            transcript
-                .append_field_element("Claimed value to be aggregated", claim.1)
-                .unwrap();
-        }
+                    // --- Add the claimed values to the FS transcript ---
+                    for claim in input_layer_claims {
+                        transcript
+                            .append_field_elements("Claimed challenge coordinates to be aggregated", &claim.0)
+                            .unwrap();
+                        transcript
+                            .append_field_element("Claimed value to be aggregated", claim.1)
+                            .unwrap();
+                    }
 
-        // --- Aggregate challenges ONLY if we have more than one ---
-        let mut input_layer_claim = input_layer_claims[0].clone();
-        let mut relevant_wlx_evaluations = vec![];
-        if input_layer_claims.len() > 1 {
-            dbg!("Aggregating input claims");
-            
-            let input_wlx_evaluations = input_layer.compute_claim_wlx(&input_layer_claims).unwrap();
-            relevant_wlx_evaluations = input_wlx_evaluations[input_layer_claims.len()..].to_vec();
-            transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &relevant_wlx_evaluations).unwrap();
+                    // --- Aggregate challenges ONLY if we have more than one ---
+                    let mut input_layer_claim = input_layer_claims[0].clone();
+                    let mut relevant_wlx_evaluations = vec![];
+                    if input_layer_claims.len() > 1 {
+                        dbg!("Aggregating input claims");
+                        
+                        let input_wlx_evaluations = input_layer.compute_claim_wlx(&input_layer_claims).unwrap();
+                        relevant_wlx_evaluations = input_wlx_evaluations[input_layer_claims.len()..].to_vec();
+                        transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &relevant_wlx_evaluations).unwrap();
 
-            let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
+                        let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
 
-            let aggregated_challenges = input_layer.compute_aggregated_challenges(&input_layer_claims, agg_chal).unwrap();
-            let claimed_val = evaluate_at_a_point(&input_wlx_evaluations, agg_chal).unwrap();
+                        let aggregated_challenges = input_layer.compute_aggregated_challenges(&input_layer_claims, agg_chal).unwrap();
+                        let claimed_val = evaluate_at_a_point(&input_wlx_evaluations, agg_chal).unwrap();
 
-            input_layer_claim = (aggregated_challenges, claimed_val);
+                        input_layer_claim = (aggregated_challenges, claimed_val);
 
-        } else {
-            dbg!("Not aggroing input claims this time around");
-        }
+                    } else {
+                        dbg!("Not aggroing input claims this time around");
+                    }
 
-        let input_layer_proof = InputLayerProof {
-            input_layer_aggregated_claim_proof: relevant_wlx_evaluations,
+                    match input_layer.input_layer_type {
+                        InputLayerType::LigeroInputLayer => {
+                            // --- Compute the Ligero commitment to the combined input MLE ---
+                                let rho_inv: u8 = 4;
+
+                                // TODO!(vishady) clones
+                                let orig_input_layer_bookkeeping_table = pad_to_nearest_power_of_two(input_layer.get_combined_mle().unwrap().mle.clone());
+                                let (_, comm, root, aux) = remainder_ligero_commit_prove(&orig_input_layer_bookkeeping_table, rho_inv);
+
+                                // --- Finally, the Ligero commit + eval proof ---
+                                let ligero_eval_proof:LigeroProof<F2> = remainder_ligero_eval_prove(
+                                    &orig_input_layer_bookkeeping_table,
+                                    &input_layer_claim.0,
+                                    transcript,
+                                    aux.clone(),
+                                    comm,
+                                    root
+                                );
+
+                                InputLayerProof {
+                                    input_layer_aggregated_claim_proof: relevant_wlx_evaluations,
+                                    eval_proof: EvalProofType::LigeroEvalProof(
+                                        ligero_eval_proof
+                                    ),
+                                    aux_info: Some(aux),
+                                    layer_id: input_layer_id.clone(),
+                                }
+                        }
+
+                        InputLayerType::PublicInputLayer => {
+                            InputLayerProof {
+                                input_layer_aggregated_claim_proof: relevant_wlx_evaluations,
+                                eval_proof: EvalProofType::PublicEvalProof(
+                                    input_layer.get_combined_mle().unwrap().mle_ref()
+                                ),
+                                aux_info: None,
+                                layer_id: input_layer_id.clone(),
+                            }
+                        }
+                    }
+
+                }
+            ).collect()
         };
-
-        // --- Finally, the Ligero commit + eval proof ---
-        let ligero_commit_eval_proof = remainder_ligero_eval_prove(
-            &orig_input_layer_bookkeeping_table,
-            &input_layer_claim.0,
-            transcript,
-            aux.clone(),
-            comm,
-            root
-        );
 
         let gkr_proof = GKRProof {
             layer_sumcheck_proofs,
             output_layers,
-            input_layer_proof,
-            ligero_commit_eval_proof,
-            ligero_aux: aux,
+            input_layer_proofs,
         };
 
         Ok(gkr_proof)
@@ -329,9 +363,7 @@ pub trait GKRCircuit<F: FieldExt> {
         let GKRProof {
             layer_sumcheck_proofs,
             output_layers,
-            input_layer_proof,
-            ligero_commit_eval_proof,
-            ligero_aux
+            input_layer_proofs
         } = gkr_proof;
 
         // --- Verifier keeps track of the claims on its own ---
@@ -440,57 +472,76 @@ pub trait GKRCircuit<F: FieldExt> {
             }
         }
 
-        // --- Verify the input claim aggregation step ---
-        let InputLayerProof {
-            input_layer_aggregated_claim_proof,
-        } = input_layer_proof;
 
-        // --- Grab the self-tracked input layer claims ---
-        let input_layer_id = LayerId::Input;
-        let input_layer_claims = claims
-            .get(&input_layer_id)
-            .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
+        input_layer_proofs.into_iter().for_each(
+            |input_layer_proof| {
+                // --- Verify the input claim aggregation step ---
+                let InputLayerProof {
+                    input_layer_aggregated_claim_proof,
+                    eval_proof,
+                    aux_info,
+                    layer_id
+                } = input_layer_proof;
 
-        // --- Add the claimed values to the FS transcript ---
-        for claim in input_layer_claims {
-            transcript
-                .append_field_elements("Claimed challenge coordinates to be aggregated", &claim.0)
-                .unwrap();
-            transcript
-                .append_field_element("Claimed value to be aggregated", claim.1)
-                .unwrap();
-        }
+                // --- Grab the self-tracked input layer claims ---
+                let input_layer_id = layer_id;
+                let input_layer_claims = claims
+                    .get(&input_layer_id)
+                    .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone())).unwrap();
 
-        // --- Do claim aggregation on input layer ONLY if needed ---
-        let mut input_layer_claim = input_layer_claims[0].clone();
-        if input_layer_claims.len() > 1 {
+                // --- Add the claimed values to the FS transcript ---
+                for claim in input_layer_claims {
+                    transcript
+                        .append_field_elements("Claimed challenge coordinates to be aggregated", &claim.0)
+                        .unwrap();
+                    transcript
+                        .append_field_element("Claimed value to be aggregated", claim.1)
+                        .unwrap();
+                }
 
-            let all_input_wlx_evaluations: Vec<F> = input_layer_claims.into_iter().map(
-                    |(_, val)| *val 
-                ).chain(input_layer_aggregated_claim_proof.clone().into_iter()).collect();
+                // --- Do claim aggregation on input layer ONLY if needed ---
+                let mut input_layer_claim = input_layer_claims[0].clone();
+                if input_layer_claims.len() > 1 {
 
-            // --- Add the aggregation step to the transcript ---
-            transcript
-            .append_field_elements("Input claim aggregation Wlx_evaluations", &input_layer_aggregated_claim_proof)
-            .unwrap();
+                    let all_input_wlx_evaluations: Vec<F> = input_layer_claims.into_iter().map(
+                            |(_, val)| *val 
+                        ).chain(input_layer_aggregated_claim_proof.clone().into_iter()).collect();
 
-            // --- Grab the input claim aggregation challenge ---
-            let input_r_star = transcript
-                .get_challenge("Challenge for input claim aggregation")
-                .unwrap();
+                    // --- Add the aggregation step to the transcript ---
+                    transcript
+                    .append_field_elements("Input claim aggregation Wlx_evaluations", &input_layer_aggregated_claim_proof)
+                    .unwrap();
 
-            // --- Perform the aggregation verification step and extract the correct input layer claim ---
-            input_layer_claim = verify_aggregate_claim(&all_input_wlx_evaluations, input_layer_claims, input_r_star)
-                .map_err(|_err| {
-                    GKRError::ErrorWhenVerifyingLayer(
-                        input_layer_id,
-                        LayerError::AggregationError,
-                    )
-                })?;
-        }
+                    // --- Grab the input claim aggregation challenge ---
+                    let input_r_star = transcript
+                        .get_challenge("Challenge for input claim aggregation")
+                        .unwrap();
 
-        let (root, ligero_eval_proof, _) = convert_halo_to_lcpc::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F, F2>(ligero_aux.clone(), ligero_commit_eval_proof);
-        remainder_ligero_verify::<F, F2>(&root, &ligero_eval_proof, ligero_aux, transcript, &input_layer_claim.0, input_layer_claim.1);
+                    // --- Perform the aggregation verification step and extract the correct input layer claim ---
+                    input_layer_claim = verify_aggregate_claim(&all_input_wlx_evaluations, input_layer_claims, input_r_star)
+                        .map_err(|_err| {
+                            GKRError::ErrorWhenVerifyingLayer(
+                                input_layer_id,
+                                LayerError::AggregationError,
+                            )
+                        }).unwrap();
+                }
+
+                match eval_proof {
+                    EvalProofType::LigeroEvalProof(ligero_commit_eval_proof) => {
+                        let ligero_aux = aux_info.unwrap();
+                        let (root, ligero_eval_proof, _) = convert_halo_to_lcpc::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F, F2>(ligero_aux.clone(), ligero_commit_eval_proof);
+                        remainder_ligero_verify::<F, F2>(&root, &ligero_eval_proof, ligero_aux, transcript, &input_layer_claim.0, input_layer_claim.1);
+                    }
+                    EvalProofType::PublicEvalProof(mut mle_ref) => {
+                        verify_public_input_layer(&mut mle_ref, input_layer_claim).unwrap();
+                    }
+                }
+                
+            }
+        );
+            
+        
 
         Ok(())
     }
@@ -509,7 +560,7 @@ mod tests {
     use lcpc_2d::fs_transcript::halo2_poseidon_transcript::PoseidonTranscript;
     use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
-    use super::{GKRCircuit, Layers, input_layer::InputLayer};
+    use super::{GKRCircuit, Layers, input_layer::{InputLayer, InputLayerType}};
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr as H2Fr;
 
     /// This circuit is a 4 --> 2 circuit, such that
@@ -522,11 +573,11 @@ mod tests {
 
         type Transcript = PoseidonTranscript<F>;
 
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, Vec<InputLayer<F>>) {
 
             // --- The input layer should just be the concatenation of `mle` and `output_input` ---
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(5));
+            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(5), InputLayerType::LigeroInputLayer, LayerId::Input(0));
             let mle_clone = self.mle.clone();
 
             // --- Create Layers to be added to ---
@@ -555,7 +606,7 @@ mod tests {
             // --- Ahh. So we're doing the thing where we add the "real" circuit output as a circuit input, ---
             // --- then check if the difference between the two is zero ---
             let mut output_input =
-                DenseMle::new_from_iter(first_layer_output.into_iter(), LayerId::Input, None);
+                DenseMle::new_from_iter(first_layer_output.into_iter(), LayerId::Input(0), None);
 
             // --- Index the input-output layer ONLY for the input ---
             input_layer.index_input_output_mle(&mut Box::new(&mut output_input));
@@ -577,7 +628,7 @@ mod tests {
             let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
             input_layer.combine_input_mles(&input_mles, Some(Box::new(&mut output_input)));
 
-            (layers, vec![Box::new(circuit_output)], input_layer)
+            (layers, vec![Box::new(circuit_output)], vec![input_layer])
         }
     }
 
@@ -589,11 +640,11 @@ mod tests {
 
         type Transcript = PoseidonTranscript<F>;
 
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, Vec<InputLayer<F>>) {
 
             // --- The input layer should just be the concatenation of `mle` and `output_input` ---
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None);
+            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None, InputLayerType::LigeroInputLayer, LayerId::Input(0));
             let mle_clone = self.mle.clone();
 
             // --- Create Layers to be added to ---
@@ -631,7 +682,7 @@ mod tests {
             let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
             input_layer.combine_input_mles(&input_mles, None);
 
-            (layers, vec![Box::new(first_layer_output)], input_layer)
+            (layers, vec![Box::new(first_layer_output)], vec![input_layer])
         }
     }
 
@@ -648,13 +699,13 @@ mod tests {
 
         type Transcript = PoseidonTranscript<F>;
 
-        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, Vec<InputLayer<F>>) {
 
             // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
             // let mut self_mle_clone = self.mle.clone();
             // let mut self_mle_2_clone = self.mle_2.clone();
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
-            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(1));
+            let input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, Some(1), InputLayerType::LigeroInputLayer, LayerId::Input(0));
             let mle_clone = self.mle.clone();
             let mle_2_clone = self.mle_2.clone();
 
@@ -721,7 +772,7 @@ mod tests {
             // --- Ahh. So we're doing the thing where we add the "real" circuit output as a circuit input, ---
             // --- then check if the difference between the two is zero ---
             let mut output_input =
-                DenseMle::new_from_iter(computed_output.into_iter(), LayerId::Input, None);
+                DenseMle::new_from_iter(computed_output.into_iter(), LayerId::Input(0), None);
             input_layer.index_input_output_mle(&mut Box::new(&mut output_input));
 
             // --- Subtract the computed circuit output from the advice circuit output ---
@@ -739,13 +790,13 @@ mod tests {
 
             // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
             let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2), Box::new(&mut output_input)];
-            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None);
+            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None, InputLayerType::LigeroInputLayer, LayerId::Input(0));
 
             // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
             let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
             input_layer.combine_input_mles(&input_mles, Some(Box::new(&mut output_input)));
 
-            (layers, vec![Box::new(circuit_circuit_output)], input_layer)
+            (layers, vec![Box::new(circuit_circuit_output)], vec![input_layer])
         }
     }
 
@@ -761,12 +812,12 @@ mod tests {
                 //let second_num = Fr::rand(&mut rng);
                 (num, num).into()
             }),
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         );
         // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
         //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-        //     LayerId::Input,
+        //     LayerId::Input(0),
         //     None,
         // );
 
@@ -815,12 +866,12 @@ mod tests {
         // --- This should be 2^2 ---
         let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
             (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         );
         // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
         //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
-        //     LayerId::Input,
+        //     LayerId::Input(0),
         //     None,
         // );
 
@@ -872,13 +923,13 @@ mod tests {
         // --- This should be 2^2 ---
         let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
             (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         );
         // --- This should be 2^2 ---
         let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
             (0..size).map(|_| (Fr::rand(&mut rng), Fr::rand(&mut rng)).into()),
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         );
 

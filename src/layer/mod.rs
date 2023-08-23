@@ -84,7 +84,7 @@ pub enum VerificationError {
 ///  The location of a layer within the GKR circuit
 pub enum LayerId {
     /// An Mle located in the input layer
-    Input,
+    Input(usize),
     /// A layer within the GKR protocol, indexed by it's layer id
     Layer(usize),
 }
@@ -295,8 +295,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         for curr_evals in sumcheck_prover_messages.iter().skip(1) {
             let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
 
-            let prev_at_r =
-                evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
             let prev_at_r =
                 evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
 

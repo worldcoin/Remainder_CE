@@ -282,8 +282,8 @@ mod tests {
                 .map(|(first, second)| first + second), layer_id, prefix_bits)
         };        
         let output: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)], LayerId::Input, None);
-            let mut second = DenseMle::new_from_raw(vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)], LayerId::Input, None);
+            let mut first = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)], LayerId::Input(0), None);
+            let mut second = DenseMle::new_from_raw(vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)], LayerId::Input(0), None);
             (first, second)
         };
         let builder = from_mle(
@@ -293,8 +293,8 @@ mod tests {
         );
 
         let output_2: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)], LayerId::Input, None);
-            let mut second = DenseMle::new_from_raw(vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)], LayerId::Input, None);
+            let mut first = DenseMle::new_from_raw(vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)], LayerId::Input(0), None);
+            let mut second = DenseMle::new_from_raw(vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)], LayerId::Input(0), None);
             (first, second)
         };
 

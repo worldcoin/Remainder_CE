@@ -497,7 +497,7 @@ mod tests {
         let mle = DenseMle::new_from_iter(tuple_vec
             .clone()
             .into_iter()
-            .map(Tuple2::from), LayerId::Input, None);
+            .map(Tuple2::from), LayerId::Input(0), None);
 
         let builder = ProductTreeBuilder { mle };
         let next_layer = builder.next_layer(LayerId::Layer(0), None);
@@ -954,7 +954,7 @@ mod tests {
         // r-x: 1 layer
         // literally 3 layers + log2(TREE_HEIGHT * NUM_DUMMY_INPUTS) layers for final product (binary product)
 
-        let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = DenseMle::new_from_raw([Fr::from(1); TREE_HEIGHT].to_vec(), LayerId::Input, None);
+        let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = DenseMle::new_from_raw([Fr::from(1); TREE_HEIGHT].to_vec(), LayerId::Input(0), None);
 
         for i in 0..NUM_DUMMY_INPUTS {
 

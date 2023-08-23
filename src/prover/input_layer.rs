@@ -3,14 +3,71 @@ use std::iter::repeat_with;
 use ark_std::{log2, cfg_into_iter, cfg_iter};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use thiserror::Error;
 
 
-use crate::{mle::{dense::DenseMle, Mle, MleIndex, MleRef}, utils::{argsort, pad_to_nearest_power_of_two}, layer::{Claim, claims::ClaimError, Layer}, sumcheck::evaluate_at_a_point};
+use crate::{mle::{dense::{DenseMle, DenseMleRef}, Mle, MleIndex, MleRef}, utils::{argsort, pad_to_nearest_power_of_two}, layer::{Claim, claims::ClaimError, Layer}, sumcheck::evaluate_at_a_point};
 // use crate::mle::MleRef;
 
 use lcpc_2d::FieldExt;
 
 use super::LayerId;
+
+///
+#[derive(Error, Debug, Clone)]
+pub enum InputVerifyError {
+    ///
+    #[error("failed to verify public input layer")]
+    PublicInputVerificationFailed,
+}
+
+
+
+///
+pub enum InputLayerType{
+    ///
+    LigeroInputLayer,
+    ///
+    PublicInputLayer,
+}
+
+///
+pub fn verify_public_input_layer<F: FieldExt>(
+    mle_to_verify: &mut DenseMleRef<F>,
+    claim: Claim<F>,
+) -> Result<(), InputVerifyError> {
+
+    let (challenges, claimed_val) = claim;
+    
+    challenges.clone().into_iter().enumerate().for_each(
+        |(idx, chal)| {
+            mle_to_verify.fix_variable(idx, chal);
+        });
+    
+    if mle_to_verify.bookkeeping_table().len() != 1 {
+        return Err(InputVerifyError::PublicInputVerificationFailed)
+    }
+
+    if mle_to_verify.bookkeeping_table()[0] == claimed_val {
+        return Ok(())
+    }
+
+    let indices = mle_to_verify
+                .mle_indices()
+                .iter()
+                .filter_map(|index| match index {
+                    MleIndex::Bound(chal, _) => Some(*chal),
+                    _ => None,
+                })
+        .collect_vec();
+
+    if indices != challenges {
+        return Err(InputVerifyError::PublicInputVerificationFailed) 
+    }
+
+    Ok(())
+
+}
 
 /*
 Idea for handling output-input layer thingy:
@@ -25,10 +82,6 @@ IV. When the caller passes in the actual output layer, then merge everything
 /// * Aggregate claims on the input layer
 /// * Evaluate the final claim on the input layer
 
-pub enum InputLayerType{
-    LigeroInputLayer,
-    PublicInputLayer,
-}
 pub struct InputLayer<F: FieldExt> {
     /// initially None, populatede when `combine_input_mles` is called. represents the combined version of input mles.
     pub combined_dense_mle: Option<DenseMle<F, F>>,
@@ -41,25 +94,10 @@ pub struct InputLayer<F: FieldExt> {
     /// the prefix bits for the maybe_output_input_mle
     pub maybe_output_input_mle_prefix_indices: Option<Vec<MleIndex<F>>>,
     /// whether it is a ligero or public input layer
-    pub input_layer_type: InputLayerType
+    pub input_layer_type: InputLayerType,
+    /// this layer's id
+    pub layer_id: LayerId,
 }
-
-
-
-// pub trait InputLayerTrait<F: FieldExt> {
-
-//     fn new_from_mles(input_mles: &mut Vec<Box<&mut dyn Mle<F>>>, maybe_output_input_mle_num_vars: Option<usize>) -> Self {
-//         let mut ret = Self {
-//             combined_dense_mle: None,
-//             mle_combine_indices: vec![],
-//             maybe_output_input_mle_num_vars,
-//             total_num_vars: 0,
-//             maybe_output_input_mle_prefix_indices: None,
-//         };
-//         ret.index_input_mles(input_mles, maybe_output_input_mle_num_vars);
-//         ret
-//     }
-// }
 
 
 impl<F: FieldExt> InputLayer<F> {
@@ -72,7 +110,7 @@ impl<F: FieldExt> InputLayer<F> {
     /// * `input_mles` - MLEs in the input layer to be merged
     /// * `maybe_output_input_mle_num_vars` - An output MLE to be zero-checked against,
     ///     but currently unpopulated
-    pub fn new_from_mles(input_mles: &mut Vec<Box<&mut dyn Mle<F>>>, maybe_output_input_mle_num_vars: Option<usize>, input_layer_type: InputLayerType) -> Self {
+    pub fn new_from_mles(input_mles: &mut Vec<Box<&mut dyn Mle<F>>>, maybe_output_input_mle_num_vars: Option<usize>, input_layer_type: InputLayerType, layer_id: LayerId) -> Self {
         let mut ret = Self {
             combined_dense_mle: None,
             mle_combine_indices: vec![],
@@ -80,6 +118,7 @@ impl<F: FieldExt> InputLayer<F> {
             total_num_vars: 0,
             maybe_output_input_mle_prefix_indices: None,
             input_layer_type,
+            layer_id,
         };
         ret.index_input_mles(input_mles, maybe_output_input_mle_num_vars);
         ret
@@ -94,12 +133,17 @@ impl<F: FieldExt> InputLayer<F> {
             total_num_vars: 0,
             maybe_output_input_mle_prefix_indices: None,
             input_layer_type: InputLayerType::PublicInputLayer,
+            layer_id: LayerId::Input(0),
         }
     }
 
     /// Getter for the DenseMLE making up the input layer
     pub fn get_combined_mle(&self) -> Option<&DenseMle<F, F>> {
         self.combined_dense_mle.as_ref()
+    }
+
+    pub fn get_layer_id(&self) -> &LayerId {
+        &self.layer_id
     }
 
     /// Takes in the same list of `input_mles` as earlier (i.e. when the `InputLayer`
@@ -125,7 +169,7 @@ impl<F: FieldExt> InputLayer<F> {
     ) {
 
         // --- Create dummy input-output MLE in case there is no real input-output MLE ---
-        let mut dummy_input_output_mle_ref = DenseMle::<F, F>::new_from_raw(vec![], LayerId::Input, None);
+        let mut dummy_input_output_mle_ref = DenseMle::<F, F>::new_from_raw(vec![], LayerId::Input(0), None);
         let maybe_input_output_mle_ref = &maybe_input_output_mle.unwrap_or_else(|| {
             Box::new(&mut dummy_input_output_mle_ref)
         });
@@ -168,7 +212,7 @@ impl<F: FieldExt> InputLayer<F> {
         let re_inverted_final_bookkeeping_table = invert_mle_bookkeeping_table(final_bookkeeping_table);
 
         // --- Return the combined bookkeeping table ---
-        self.combined_dense_mle = Some(DenseMle::new_from_raw(re_inverted_final_bookkeeping_table, LayerId::Input, None));
+        self.combined_dense_mle = Some(DenseMle::new_from_raw(re_inverted_final_bookkeeping_table, LayerId::Input(0), None));
 
     }
 
@@ -454,7 +498,7 @@ mod tests {
 
         let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2)];
 
-        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer);
+        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer, LayerId::Input(0));
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         // dbg!(&mle_1.mle);
@@ -502,7 +546,7 @@ mod tests {
 
         let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
 
-        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer);
+        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer, LayerId::Input(0));
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         dbg!(&mle_1.mle);
@@ -556,7 +600,7 @@ mod tests {
         let mut mle_3 = get_random_mle::<Fr>(6);
         let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
 
-        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer);
+        let mut dummy_input_layer: InputLayer<ark_ff::Fp<ark_ff::MontBackend<ark_bn254::FrConfig, 4>, 4>> = InputLayer::new_from_mles(&mut mle_list, None, InputLayerType::LigeroInputLayer, LayerId::Input(0));
         dummy_input_layer.combine_input_mles(&mle_list, None);
 
         // --- The padded combined version should have size 2^8 ---
@@ -605,7 +649,7 @@ mod tests {
         let mut mle_list: Vec<Box<&mut dyn Mle<Fr>>> = vec![Box::new(&mut mle_1), Box::new(&mut mle_2), Box::new(&mut mle_3)];
 
         // --- Also create an input-output layer of size 2^8 ---
-        let mut dummy_input_layer = InputLayer::new_from_mles(&mut mle_list, Some(8), InputLayerType::LigeroInputLayer);
+        let mut dummy_input_layer = InputLayer::new_from_mles(&mut mle_list, Some(8), InputLayerType::LigeroInputLayer, LayerId::Input(0));
         let mut input_output_mle = get_random_mle::<Fr>(8);
         dummy_input_layer.combine_input_mles(&mle_list, Some(Box::new(&mut input_output_mle)));
         dummy_input_layer.index_input_output_mle(&mut Box::new(&mut input_output_mle));

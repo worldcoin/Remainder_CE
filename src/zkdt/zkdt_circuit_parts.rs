@@ -23,7 +23,7 @@ pub struct PermutationCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, Vec<InputLayer<F>>) {
         let mut layers = Layers::new();
 
         // layer 0: packing
@@ -114,7 +114,7 @@ struct AttributeConsistencyCircuit<F: FieldExt> {
 
 impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, Vec<InputLayer<F>>) {
         let mut layers = Layers::new();
 
         let attribute_consistency_builder = AttributeConsistencyBuilder::new(
@@ -144,7 +144,7 @@ struct MultiSetCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, Vec<InputLayer<F>>) {
         let mut layers = Layers::new();
 
         // layer 0
