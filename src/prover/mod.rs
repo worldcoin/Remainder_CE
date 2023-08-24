@@ -637,8 +637,6 @@ mod tests {
 
     /// This circuit is a 4k --> k circuit, such that
     /// [x_1, x_2, x_3, x_4] --> [x_1 * x_3, x_2 + x_4] --> [(x_1 * x_3) - (x_2 + x_4)]
-    /// This circuit is a 4k --> k circuit, such that
-    /// [x_1, x_2, x_3, x_4] --> [x_1 * x_3, x_2 + x_4] --> [(x_1 * x_3) - (x_2 + x_4)]
     struct TestCircuit<F: FieldExt> {
         mle: DenseMle<F, Tuple2<F>>,
         mle_2: DenseMle<F, Tuple2<F>>,
@@ -736,10 +734,6 @@ mod tests {
 
             // --- Add this final layer to the circuit ---
             let circuit_circuit_output = layers.add_gkr(builder5);
-
-            // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
-            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2), Box::new(&mut output_input)];
-            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None);
 
             // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
             let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
