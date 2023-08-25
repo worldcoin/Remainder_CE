@@ -802,7 +802,7 @@ fn evaluate_mle_ref_product_gate<F: FieldExt>(
         #[cfg(feature = "parallel")]
         let sum = partials.reduce(
             || F::zero(),
-            |mut acc, partial| {
+            |acc, partial| {
                 acc + partial
             },
         );
