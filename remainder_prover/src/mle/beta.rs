@@ -60,7 +60,7 @@ pub enum BetaError {
 /// 
 /// Panics if `challenge_one` and `challenge_two` don't have
 /// the same length!
-pub(crate) fn compute_beta_over_two_challenges<F: FieldExt>(
+pub fn compute_beta_over_two_challenges<F: FieldExt>(
     challenge_one: &Vec<F>,
     challenge_two: &Vec<F>,
 ) -> F {

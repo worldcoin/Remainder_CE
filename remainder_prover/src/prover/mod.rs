@@ -100,15 +100,15 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 /// The proof for an individual GKR layer
 #[derive(Serialize, Deserialize)]
 pub struct LayerProof<F, Tr: Transcript<F>> {
-    sumcheck_proof: SumcheckProof<F>,
-    layer: LayerEnum<F, Tr>,
-    wlx_evaluations: Vec<F>,
+    pub sumcheck_proof: SumcheckProof<F>,
+    pub layer: LayerEnum<F, Tr>,
+    pub wlx_evaluations: Vec<F>,
 }
 
 /// Proof for circuit input layer
 #[derive(Serialize, Deserialize)]
 pub struct InputLayerProof<F> {
-    input_layer_aggregated_claim_proof: Vec<F>,
+    pub input_layer_aggregated_claim_proof: Vec<F>,
 }
 
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
@@ -213,13 +213,13 @@ pub trait GKRCircuit<F: FieldExt> {
                 let mut layer_claim = layer_claims[0].clone();
                 let mut relevant_wlx_evaluations = vec![];
                 if layer_claims.len() > 1 {
-                    // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
-                    // --- claim aggregation protocol ---
+                    // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
                     let wlx_evaluations = compute_claim_wlx(&layer_claims, &layer).unwrap();
                     relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
-                    dbg!(&relevant_wlx_evaluations);
+
                     transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &relevant_wlx_evaluations).unwrap();
 
+                    // --- Next, sample r^\star from the transcript ---
                     let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
 
                     let aggregated_challenges = compute_aggregated_challenges(&layer_claims, agg_chal).unwrap();
@@ -281,10 +281,12 @@ pub trait GKRCircuit<F: FieldExt> {
         if input_layer_claims.len() > 1 {
             dbg!("Aggregating input claims");
             
+            // --- Similarly here, compute and absorb V_i(l(x)) first into the transcript ---
             let input_wlx_evaluations = input_layer.compute_claim_wlx(&input_layer_claims).unwrap();
             relevant_wlx_evaluations = input_wlx_evaluations[input_layer_claims.len()..].to_vec();
             transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &relevant_wlx_evaluations).unwrap();
 
+            // --- Then squeeze r^{star} and compute l(r^{star}), as well as V_i(l(r^{star})) ---
             let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
 
             let aggregated_challenges = input_layer.compute_aggregated_challenges(&input_layer_claims, agg_chal).unwrap();
