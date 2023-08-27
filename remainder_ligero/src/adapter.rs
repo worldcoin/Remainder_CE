@@ -18,7 +18,8 @@ pub struct LigeroProof<F> {
     /// Root of the Merkle tree
     pub merkle_root: F,
     /// Product r.A, where r is the random vector and A is the coefficient matrix
-    pub r_a: Vec<F>,
+    /// UPDATE!(ryancao): We are no longer doing the well-formedness check!
+    // pub r_a: Vec<F>,
     /// List of products v_i.A, where v_i is the tensor constructed from (half of) the i-th opened point
     pub v_0_a: Vec<Vec<F>>,
     /// List of full columns queried by the verifier
@@ -48,9 +49,10 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
 
     let merkle_root = root.root;
 
-    assert_eq!(pf.p_random_vec.len(), 1);
+    // --- No longer doing the well-formedness check ---
+    // assert_eq!(pf.p_random_vec.len(), 1);
+    // let r_a = pf.p_random_vec[0].clone();
 
-    let r_a = pf.p_random_vec[0].clone();
     // we convert this into a vector, since the circuit for the Ligero verifier
     // assumes that we can have multiple point openings
     let v_0_a = vec![pf.p_eval];
@@ -93,7 +95,8 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
     
     let proof = LigeroProof {
         merkle_root,
-        r_a,
+        // --- No longer doing the well-formedness check ---
+        // r_a,
         v_0_a,
         columns,
         merkle_paths,
@@ -134,7 +137,8 @@ where
     let ligero_eval_proof = LigeroEvalProof::<D, E, F>{
         encoded_num_cols: aux.encoded_num_cols,
         p_eval: halo2_ligero_proof.v_0_a[0].clone(),
-        p_random_vec: vec![halo2_ligero_proof.r_a],
+        // --- No longer doing the well-formedness check ---
+        // p_random_vec: vec![halo2_ligero_proof.r_a],
         columns: halo2_ligero_proof
             .col_indices
             .into_iter()

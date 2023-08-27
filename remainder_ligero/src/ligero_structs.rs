@@ -143,4 +143,4 @@ where
 pub type LigeroCommit<D, F> = LcCommit<D, LigeroEncoding<F>, F>;
 
 /// Ligero evaluation proof over LcEvalProof
-pub type LigeroEvalProof<D: FieldHashFnDigest<F>, E: LcEncoding<F>, F: FieldExt> = LcEvalProof<D, E, F>;
+pub type LigeroEvalProof<D, E, F> = LcEvalProof<D, E, F>;
