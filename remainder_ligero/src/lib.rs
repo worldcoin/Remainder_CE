@@ -305,7 +305,8 @@ where
 {
     encoded_num_cols: usize,
     p_eval: Vec<F>,
-    p_random_vec: Vec<Vec<F>>,
+    // --- No longer doing the well-formedness check ---
+    // p_random_vec: Vec<Vec<F>>,
     columns: Vec<LcColumn<E, F>>,
     phantom_data: PhantomData<D>,
 }
@@ -702,32 +703,33 @@ where
     // --- but computed where r^T comes from the prover (???) ---
     let mut p_random_fft: Vec<Vec<F>> = Vec::new();
 
-    let n_degree_tests = enc.get_n_degree_tests();
+    // --- No longer doing the well-formedness check ---
+    // let n_degree_tests = enc.get_n_degree_tests();
+
     // -- This for loop is for soundness amplification by repetition
+    // for i in 0..n_degree_tests {
 
-    for i in 0..n_degree_tests {
+    //     // --- TODO!(ryancao): Propagate the error up! ---
+    //     let rand_tensor = tr.get_challenges("random_vec_well_formedness_check", n_rows).unwrap();
+    //     rand_tensor_vec.push(rand_tensor);
 
-        // --- TODO!(ryancao): Propagate the error up! ---
-        let rand_tensor = tr.get_challenges("random_vec_well_formedness_check", n_rows).unwrap();
-        rand_tensor_vec.push(rand_tensor);
+    //     // step 1b: eval encoding of p_random
+    //     {
+    //         let mut tmp = Vec::with_capacity(encoded_num_cols);
+    //         tmp.extend_from_slice(&proof.p_random_vec[i][..]); // Copies over the random vec from the prover
+    //         tmp.resize(encoded_num_cols, F::from(0));
+    //         // Ohhhhh I see. This gives the RLC \rho^{-1} * \sqrt{N} -coordinate thingy
+    //         // of r^T M' (where `r` was prover-generated). Note that we got this by basically
+    //         // calling `enc(r^T M)`
+    //         enc.encode(&mut tmp)?;
+    //         p_random_fft.push(tmp);
+    //     };
 
-        // step 1b: eval encoding of p_random
-        {
-            let mut tmp = Vec::with_capacity(encoded_num_cols);
-            tmp.extend_from_slice(&proof.p_random_vec[i][..]); // Copies over the random vec from the prover
-            tmp.resize(encoded_num_cols, F::from(0));
-            // Ohhhhh I see. This gives the RLC \rho^{-1} * \sqrt{N} -coordinate thingy
-            // of r^T M' (where `r` was prover-generated). Note that we got this by basically
-            // calling `enc(r^T M)`
-            enc.encode(&mut tmp)?;
-            p_random_fft.push(tmp);
-        };
-
-        // step 1c: push p_random...
-        proof.p_random_vec[i]
-            .iter()
-            .for_each(|coeff| coeff.transcript_update(tr, "LABEL_PR"));
-    }
+    //     // step 1c: push p_random...
+    //     proof.p_random_vec[i]
+    //         .iter()
+    //         .for_each(|coeff| coeff.transcript_update(tr, "LABEL_PR"));
+    // }
 
     // ...and p_eval into the transcript
     proof
@@ -763,18 +765,19 @@ where
         .zip(&proof.columns[..])
         .try_for_each(|(&col_num, column)| {
 
+            // --- No longer doing the well-formedness check ---
             // --- Okay so we zip the indices with the actual columns ---
-            let rand = {
-                let mut rand = true;
-                // --- This is just 1 for us; we don't need boosting ---
-                for i in 0..n_degree_tests {
-                    rand &=
-                        // --- This literally does r^T M'_j and checks against (r^T M')[j]
-                        // (the latter is computed by the verifier) ---
-                        verify_column_value::<D, E, F>(column, &rand_tensor_vec[i], &p_random_fft[i][col_num]);
-                }
-                rand
-            };
+            // let rand = {
+            //     let mut rand = true;
+            //     // --- This is just 1 for us; we don't need boosting ---
+            //     for i in 0..n_degree_tests {
+            //         rand &=
+            //             // --- This literally does r^T M'_j and checks against (r^T M')[j]
+            //             // (the latter is computed by the verifier) ---
+            //             verify_column_value::<D, E, F>(column, &rand_tensor_vec[i], &p_random_fft[i][col_num]);
+            //     }
+            //     rand
+            // };
 
             // --- Does the RLC evaluation check for b^T as well ---
             let eval = verify_column_value::<D, E, F>(column, outer_tensor, &p_eval_fft[col_num]);
@@ -784,10 +787,11 @@ where
             let path = verify_column_path::<D, E, F>(column, col_num, root, &master_default_poseidon_merkle_hasher, &master_default_poseidon_column_hasher);
 
             // --- "Very elegant, Riad" - Ryan ---
-            match (rand, eval, path) {
-                (false, _, _) => Err(VerifierError::ColumnDegree),
-                (_, false, _) => Err(VerifierError::ColumnEval),
-                (_, _, false) => Err(VerifierError::ColumnPath),
+            match (eval, path) {
+                // --- No longer doing the well-formedness check ---
+                // (false, _, _) => Err(VerifierError::ColumnDegree),
+                (false, _) => Err(VerifierError::ColumnEval),
+                (_, false) => Err(VerifierError::ColumnPath),
                 _ => Ok(()),
             }
         })?;
@@ -909,38 +913,39 @@ where
         return Err(ProverError::OuterTensor);
     }
 
+    // --- No longer doing the well-formedness check (START) ---
+    // let mut p_random_vec: Vec<Vec<F>> = Vec::new();
     // first, evaluate the polynomial on a random tensor (low-degree test)
     // we repeat this to boost soundness
-    let mut p_random_vec: Vec<Vec<F>> = Vec::new();
-    let n_degree_tests = enc.get_n_degree_tests();
+    // let n_degree_tests = enc.get_n_degree_tests()
+    // for _i in 0..n_degree_tests {
+    //     let p_random = {
+    //         // --- Instead, we sample random challenges from the transcript ---
+    //         // TODO!(ryancao): Make this return an actual error!
+    //         let rand_tensor = tr.get_challenges("rand_Ligero_well_formedness_vec", comm.n_rows).unwrap();
 
-    for _i in 0..n_degree_tests {
-        let p_random = {
-            // --- Instead, we sample random challenges from the transcript ---
-            // TODO!(ryancao): Make this return an actual error!
-            let rand_tensor = tr.get_challenges("rand_Ligero_well_formedness_vec", comm.n_rows).unwrap();
+    //         let mut tmp = vec![F::zero(); comm.orig_num_cols];
 
-            let mut tmp = vec![F::zero(); comm.orig_num_cols];
+    //         // --- This takes the dot product against `comm.coeffs` and stores the result in `tmp` ---
+    //         // --- Basically this is the prover's claimed value for r^T M ---
+    //         collapse_columns::<E, F>(
+    //             &comm.coeffs,
+    //             &rand_tensor,
+    //             &mut tmp,
+    //             comm.n_rows,
+    //             comm.orig_num_cols,
+    //             0,
+    //         );
+    //         tmp
+    //     };
+    //     // add p_random to the transcript
+    //     p_random
+    //         .iter()
+    //         .for_each(|coeff| coeff.transcript_update(tr, "LABEL_PR"));
 
-            // --- This takes the dot product against `comm.coeffs` and stores the result in `tmp` ---
-            // --- Basically this is the prover's claimed value for r^T M ---
-            collapse_columns::<E, F>(
-                &comm.coeffs,
-                &rand_tensor,
-                &mut tmp,
-                comm.n_rows,
-                comm.orig_num_cols,
-                0,
-            );
-            tmp
-        };
-        // add p_random to the transcript
-        p_random
-            .iter()
-            .for_each(|coeff| coeff.transcript_update(tr, "LABEL_PR"));
-
-        p_random_vec.push(p_random);
-    }
+    //     p_random_vec.push(p_random);
+    // }
+    // --- No longer doing the well-formedness check (END) ---
 
     // next, evaluate the polynomial using the supplied tensor
     let p_eval = {
@@ -988,7 +993,8 @@ where
     Ok(LcEvalProof {
         encoded_num_cols: comm.encoded_num_cols, // Number of columns
         p_eval, // Actual b^T M value
-        p_random_vec, // Random vectors to check well-formedness
+        // --- No longer doing the well-formedness check ---
+        // p_random_vec, // Random vectors to check well-formedness
         columns, // Columns plus necessary opening proof content
         phantom_data: PhantomData,
     })
