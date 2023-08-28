@@ -39,15 +39,20 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         mle_ref.index_mle_indices(0);
 
         let mut curr_bit = 0;
-        let mut eval = None;
-        for &chal in claim.0.iter() {
-            if chal != F::one() && chal != F::zero() {
-                eval = mle_ref.fix_variable(curr_bit, chal);
-                curr_bit += 1;
+        let eval = if mle_ref.num_vars != 0 {
+            let mut eval = None;
+            for &chal in claim.0.iter() {
+                if chal != F::one() && chal != F::zero() {
+                    eval = mle_ref.fix_variable(curr_bit, chal);
+                    curr_bit += 1;
+                }
             }
-        }
 
-        let eval = eval.ok_or(InputLayerError::PublicInputVerificationFailed)?;
+            eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
+        } else {
+            (vec![], mle_ref.bookkeeping_table[0])
+        };
+
 
         if eval == claim {
             Ok(())

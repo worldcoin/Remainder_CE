@@ -84,7 +84,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
 
     fn index_input_mles(
         input_mles: &mut Vec<Box<&mut (dyn Mle<F> + 'static)>>,
-        extra_mle_num_vars: Option<Vec<usize>>
+        extra_mle_num_vars: Option<Vec<usize>>,
     ) -> Option<Vec<Vec<MleIndex<F>>>> {
         let mut input_mle_num_vars = input_mles
         .iter()
