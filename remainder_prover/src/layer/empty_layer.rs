@@ -4,11 +4,14 @@ use std::marker::PhantomData;
 
 use crate::{expression::{ExpressionStandard, Expression, gather_combine_all_evals}, mle::MleRef, prover::SumcheckProof};
 use remainder_shared_types::{FieldExt, transcript::Transcript};
+use serde::{Serialize, Deserialize};
 
 use super::{Layer, LayerError, Claim, claims::ClaimError, LayerId, layer_enum::LayerEnum};
 
 ///A Layer with 0 num_vars
-pub struct EmptyLayer<F: FieldExt, Tr: Transcript<F>> {
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
+pub struct EmptyLayer<F, Tr> {
     expr: ExpressionStandard<F>,
     id: LayerId,
     _marker: PhantomData<Tr>,
@@ -41,7 +44,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
     }
 
     fn get_enum(self) -> LayerEnum<F, Tr> {
-        todo!()
+        LayerEnum::EmptyLayer(self)
     }
 
     fn get_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
@@ -148,5 +151,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
             expr: builder.build_expression(),
             _marker: PhantomData,
         }
+    }
+}
+
+impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
+    ///Gets this layer's underlying expression
+    pub fn expression(&self) -> &ExpressionStandard<F> {
+        &self.expr
     }
 }

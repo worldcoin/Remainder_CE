@@ -5,8 +5,9 @@ use std::{
 use ark_std::{cfg_into_iter, rand::Rng};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use serde::{Serialize, Deserialize};
 
-use crate::{layer::{Claim, Layer, LayerError, LayerId, LayerBuilder, VerificationError, claims::ClaimError}, mle::beta::BetaTable, expression::ExpressionStandard, sumcheck::*, prover::SumcheckProof};
+use crate::{layer::{Claim, Layer, LayerError, LayerId, LayerBuilder, VerificationError, claims::ClaimError, layer_enum::LayerEnum}, mle::beta::BetaTable, expression::ExpressionStandard, sumcheck::*, prover::SumcheckProof};
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 
 use super::{MleIndex, MleRef, dense::{DenseMleRef, DenseMle}, beta::compute_beta_over_two_challenges};
@@ -263,7 +264,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
     }
 
     fn get_enum(self) -> crate::layer::layer_enum::LayerEnum<F, Self::Transcript> {
-        todo!()
+        LayerEnum::AddGate(self)
     }
 }
 
@@ -366,8 +367,8 @@ pub enum GateError {
 /// * `phase_1_mles` - the mles needed to compute the sumcheck evals for phase 1
 /// * `phase_2_mles` - the mles needed to compute the sumcheck evals for phase 2
 /// * `num_copy_bits` - length of `p_2`
-#[derive(Error, Debug)]
-pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub struct AddGate<F, Tr> {
     layer_id: LayerId,
     nonzero_gates: Vec<(usize, usize, usize)>,
     lhs: DenseMleRef<F>,
@@ -1141,7 +1142,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 
     ///Create new ConcreteLayer from a LayerBuilder
     fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
-        todo!()
+        unimplemented!()
     }
 
     fn get_wlx_evaluations(&self, claim_vecs: Vec<Vec<F>>,
@@ -1179,8 +1180,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 
     }
 
-    fn get_enum(self) -> crate::layer::layer_enum::LayerEnum<F, Self::Transcript> {
-        todo!()
+    fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
+        LayerEnum::AddGateBatched(self)
     }
 }
 
@@ -1200,7 +1201,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 /// * `g2_challenges` - Literally g_2
 /// * `layer_id` - GKR layer number
 /// * `reduced_gate` - the non-batched gate that this reduces to after the copy phase
-pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
+pub struct AddGateBatched<F, Tr> {
     new_bits: usize,
     nonzero_gates: Vec<(usize, usize, usize)>,
     lhs: DenseMleRef<F>,

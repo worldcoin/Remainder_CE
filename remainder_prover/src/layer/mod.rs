@@ -204,6 +204,11 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
     fn set_beta(&mut self, beta: BetaTable<F>) {
         self.beta = Some(beta);
     }
+
+    ///Gets the expression that this layer is proving
+    pub fn expression(&self) -> &ExpressionStandard<F> {
+        &self.expression
+    }
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
