@@ -636,6 +636,48 @@ mod tests {
         }
     }
 
+    /// Circuit which just subtracts its two halves with gate mle
+    struct SimplestGateCircuit<F: FieldExt> {
+        mle: DenseMle<F, F>,
+        negmle: DenseMle<F, F>
+    }
+    impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
+
+        type Transcript = PoseidonTranscript<F>;
+
+        fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>) {
+
+            // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+            let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
+            let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None);
+            let mle_clone = self.mle.clone();
+
+            // --- Create Layers to be added to ---
+            let mut layers = Layers::new();
+
+            let mut nonzero_gates = vec![];
+            let num_vars = self.mle.mle_ref().num_vars();
+
+            (0..num_vars).for_each(
+                |idx| {
+                    nonzero_gates.push((idx, idx, idx));
+                }
+            );
+
+            let first_layer_output = layers.add_add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), 0);
+
+            // --- Stacks the two aforementioned layers together into a single layer ---
+            // --- Then adds them to the overall circuit ---
+           // let first_layer_output = layers.add_gkr(diff_builder);
+
+            // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+            let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
+            input_layer.combine_input_mles(&input_mles, None);
+
+            (layers, vec![Box::new(first_layer_output.get_enum())], input_layer)
+        }
+    }
+
     /// This circuit is a 4k --> k circuit, such that
     /// [x_1, x_2, x_3, x_4] --> [x_1 * x_3, x_2 + x_4] --> [(x_1 * x_3) - (x_2 + x_4)]
     struct TestCircuit<F: FieldExt> {
@@ -820,6 +862,72 @@ mod tests {
         // );
 
         let mut circuit: SimpleCircuit<Fr> = SimpleCircuit { mle };
+
+        let mut transcript: PoseidonTranscript<Fr> =
+            PoseidonTranscript::new("GKR Prover Transcript");
+        let now = Instant::now();
+
+        match circuit.prove(&mut transcript) {
+            Ok(proof) => {
+                println!(
+                    "proof generated successfully in {}!",
+                    now.elapsed().as_secs_f32()
+                );
+                let mut transcript: PoseidonTranscript<Fr> =
+                    PoseidonTranscript::new("GKR Verifier Transcript");
+                let now = Instant::now();
+                match circuit.verify(&mut transcript, proof) {
+                    Ok(_) => {
+                        println!(
+                            "Verification succeeded: takes {}!",
+                            now.elapsed().as_secs_f32()
+                        );
+                    }
+                    Err(err) => {
+                        println!("Verify failed! Error: {err}");
+                        panic!();
+                    }
+                }
+            }
+            Err(err) => {
+                println!("Proof failed! Error: {err}");
+                panic!();
+            }
+        }
+
+        // panic!();
+    }
+
+    #[test]
+    fn test_gkr_gate_simplest_circuit() {
+        let mut rng = test_rng();
+        let size = 1 << 4;
+
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+            (0..size).map(|_| {
+                let num = Fr::rand(&mut rng);
+                num
+            }),
+            LayerId::Input,
+            None,
+        );
+
+        let negmle = DenseMle::new_from_iter(
+            mle.mle_ref().bookkeeping_table.into_iter().map(
+                |elem|
+                -elem
+            ), 
+            LayerId::Input,
+            None,
+        );
+        // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
+        //     LayerId::Input,
+        //     None,
+        // );
+
+        let mut circuit: SimplestGateCircuit<Fr> = SimplestGateCircuit { mle, negmle };
 
         let mut transcript: PoseidonTranscript<Fr> =
             PoseidonTranscript::new("GKR Prover Transcript");
