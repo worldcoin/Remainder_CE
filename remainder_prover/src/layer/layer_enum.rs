@@ -6,9 +6,13 @@ use super::{GKRLayer, Layer};
 
 #[derive(Serialize, Deserialize)]
 ///An enum representing all the possible kinds of Layers
-pub enum LayerEnum<F, Tr: Transcript<F>> {
+pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     ///A standard `GKRLayer`
-    Gkr(GKRLayer<F, Tr>)
+    Gkr(GKRLayer<F, Tr>),
+    ///GateMLE layer
+    Gate(AddGate<F, Tr>),
+    ///BatchedGateMLE Layer
+    GateBatched(AddGateBatched<F, Tr>),
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {

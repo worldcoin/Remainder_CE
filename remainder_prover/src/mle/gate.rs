@@ -6,7 +6,7 @@ use ark_std::{cfg_into_iter, rand::Rng};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
-use crate::{layer::{Claim, Layer, LayerError, LayerId, LayerBuilder, VerificationError, claims::ClaimError}, mle::beta::BetaTable, expression::ExpressionStandard, sumcheck::*, prover::SumcheckProof};
+use crate::{layer::{Claim, Layer, LayerError, LayerId, LayerBuilder, VerificationError, claims::ClaimError, layer_enum::LayerEnum}, mle::beta::BetaTable, expression::ExpressionStandard, sumcheck::*, prover::SumcheckProof};
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 
 use super::{MleIndex, MleRef, dense::{DenseMleRef, DenseMle}, beta::compute_beta_over_two_challenges};
@@ -263,7 +263,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
     }
 
     fn get_enum(self) -> crate::layer::layer_enum::LayerEnum<F, Self::Transcript> {
-        todo!()
+        LayerEnum::Gate(self)
     }
 }
 
