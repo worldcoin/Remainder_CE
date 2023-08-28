@@ -4,7 +4,7 @@ use itertools::{Itertools, repeat_n};
 use crate::{prover::{GKRCircuit, Layers, input_layer::InputLayer, Witness}, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex, mle_enum::MleEnum}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
+use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBit, OneMinusSignBit, SignBitProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
 
 pub struct PermutationCircuit<F: FieldExt> {
     pub dummy_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
@@ -100,6 +100,74 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
         todo!()
         // (layers, vec![difference_mle.get_enum()], todo!())
     }
+}
+
+pub struct PathCheckCircuit<F: FieldExt> {
+    pub decision_node_paths_mle: DenseMle<F, DecisionNode<F>>, 
+    pub leaf_node_paths_mle: DenseMle<F, LeafNode<F>>,
+    pub bin_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
+    pub num_copy: usize,
+}
+
+impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        let prev_node_left_builder = PrevNodeLeftBuilderDecision::new(
+            self.decision_node_paths_mle.clone());
+
+        let prev_node_right_builder = PrevNodeRightBuilderDecision::new(
+                self.decision_node_paths_mle.clone());
+
+        let curr_node_decision_builder = CurrNodeBuilderDecision::new(
+            self.decision_node_paths_mle.clone());
+
+        let curr_node_leaf_builder = CurrNodeBuilderLeaf::new(
+            self.leaf_node_paths_mle.clone());
+
+        let decision_leaf_diff = self.decision_node_paths_mle.num_iterated_vars() - self.leaf_node_paths_mle.num_iterated_vars();
+
+        let curr_node_decision_leaf = curr_node_decision_builder.concat_with_padding(curr_node_leaf_builder, Padding::Right(decision_leaf_diff));
+        let (curr_decision, curr_leaf) = layers.add_gkr(curr_node_decision_leaf);
+
+        let curr_node_decision_leaf_builder = ConcatBuilder::new(curr_decision, curr_leaf);
+        
+        let prev_node_left_mle_ref = layers.add_gkr(prev_node_left_builder).mle_ref();
+        let prev_node_right_mle_ref = layers.add_gkr(prev_node_right_builder).mle_ref();
+        let curr_node_decision_leaf_mle_ref = layers.add_gkr(curr_node_decision_leaf_builder).mle_ref();
+
+        let nonzero_gates = create_wiring_from_num_bits(curr_node_decision_leaf_mle_ref.num_vars() - self.num_copy);
+
+        // let res_negative = layers.add_add_gate_batched(self.num_copy, nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref);
+        // let res_positive = layers.add_add_gate_batched(self.num_copy, nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref);
+
+        let res_negative = layers.add_add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref, self.num_copy);
+        let res_positive = layers.add_add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref, self.num_copy);
+
+        let neg_sign_bit_builder = SignBit::new(self.bin_decomp_diff_mle.clone());
+        let neg_sign_bits = layers.add_gkr(neg_sign_bit_builder);
+
+        let pos_sign_bit_builder = OneMinusSignBit::new(self.bin_decomp_diff_mle.clone());
+        let pos_sign_bits = layers.add_gkr(pos_sign_bit_builder);
+
+        let sign_bit_sum_builder = SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative);
+        let final_res = layers.add_gkr(sign_bit_sum_builder);
+
+        let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_paths_mle), Box::new(&mut self.leaf_node_paths_mle), Box::new(&mut self.bin_decomp_diff_mle)];
+        
+        let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None);
+        input_layer.combine_input_mles(&input_mles, None);
+
+        (layers, vec![Box::new(final_res)], input_layer)
+    }
+}
+
+fn create_wiring_from_num_bits(num_bits: usize) -> Vec<(usize, usize, usize)> {
+    (0..(num_bits-1)).into_iter().map(
+        |idx| (idx, idx + 1, idx)
+    ).collect_vec()
 }
 
 struct AttributeConsistencyCircuit<F: FieldExt> {
