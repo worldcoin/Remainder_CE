@@ -11,7 +11,7 @@ use crate::{
         LayerBuilder, LayerError, LayerId, layer_enum::LayerEnum,
     },
     mle::{MleIndex, mle_enum::MleEnum},
-    mle::MleRef,
+    mle::{MleRef, dense::{DenseMleRef, DenseMle}, gate::AddGate},
     expression::ExpressionStandard,
     utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point
 };
@@ -53,6 +53,29 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add a GKRLayer to a list of layers
     pub fn add_gkr<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor {
         self.add::<_, GKRLayer<_, Tr>>(new_layer)
+    }
+
+    /// Add an AddGate to a list of layers
+    pub fn add_add_gate(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_copy_bits: usize) -> DenseMle<F, F> {
+        let id = LayerId::Layer(self.0.len());
+        let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits);
+        let num_vars = lhs.num_vars();
+        self.0.push(gate.get_enum());
+
+        let mut sum_table = vec![F::zero(); 1 << num_vars];
+        nonzero_gates.into_iter().for_each(
+            |(z, x, y)| {
+                let sum_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero()) + 
+                *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
+                sum_table[z] = sum_val;
+                
+            }
+        );
+
+        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
+        res_mle
+
+        //ZeroMleRef::new(*num_vars, None, id.clone())
     }
 
     /// Creates a new Layers
@@ -674,7 +697,7 @@ mod tests {
             let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
             input_layer.combine_input_mles(&input_mles, None);
 
-            (layers, vec![Box::new(first_layer_output.get_enum())], input_layer)
+            (layers, vec![first_layer_output.mle_ref().get_enum()], input_layer)
         }
     }
 
@@ -906,7 +929,7 @@ mod tests {
         // --- This should be 2^2 ---
         let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
             (0..size).map(|_| {
-                let num = Fr::rand(&mut rng);
+                let num = Fr::from(rng.gen::<u64>());
                 num
             }),
             LayerId::Input,
