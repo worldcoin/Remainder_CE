@@ -80,6 +80,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
             }))
             .try_collect()?;
 
+
+            // final round of sumcheck
+            let final_chal = transcript
+            .get_challenge("Final Sumcheck challenge")
+            .unwrap();
+            challenges.push(final_chal);
+            fix_var_gate(phase_2_lhs, num_rounds_phase2 - 1 + self.num_copy_bits, final_chal);
+            fix_var_gate(phase_2_rhs, num_rounds_phase2 - 1 + self.num_copy_bits, final_chal);
+
             sumcheck_rounds.extend(sumcheck_rounds_y.into_iter());
             // sumcheck rounds (binding y)
 
@@ -147,15 +156,14 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
 
         // final round of sumcheck
         let final_chal = transcript
-            .get_challenge("Final Sumcheck challenge")
-            .unwrap();
+        .get_challenge("Final Sumcheck challenge")
+        .unwrap();
         challenges.push(final_chal);
         last_v_challenges.push(final_chal);
 
         // we mutate the mles in the struct as we bind variables, so we can check whether they were bound correctly
         let ([_, lhs], _) = self.phase_1_mles.as_mut().unwrap();
         let (_, [_, rhs]) = self.phase_2_mles.as_mut().unwrap();
-        rhs.fix_variable(num_v - 1 + self.num_copy_bits, final_chal);
         let bound_lhs = check_fully_bound(&mut [lhs.clone()], first_u_challenges.clone()).unwrap();
         let bound_rhs = check_fully_bound(&mut [rhs.clone()], last_v_challenges.clone()).unwrap();
 
@@ -198,7 +206,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                 fixed_mle_indices_u.push(index.val().ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?);
             }
             let val = f_2_u.bookkeeping_table()[0];
-            claims.push((self.id().clone(), (fixed_mle_indices_u, val)));
+            claims.push((f_2_u.get_layer_id(), (fixed_mle_indices_u, val)));
         }
         else {
             return Err(LayerError::LayerNotReady)
@@ -211,7 +219,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                 fixed_mle_indices_v.push(index.val().ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?);
             }
             let val = f_3_v.bookkeeping_table()[0];
-            claims.push((self.id().clone(), (fixed_mle_indices_v, val)));
+            claims.push((f_3_v.get_layer_id(), (fixed_mle_indices_v, val)));
         }
         else {
             return Err(LayerError::LayerNotReady)
@@ -368,7 +376,8 @@ pub enum GateError {
 /// * `phase_2_mles` - the mles needed to compute the sumcheck evals for phase 2
 /// * `num_copy_bits` - length of `p_2`
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub struct AddGate<F, Tr> {
+#[serde(bound = "F: FieldExt")]
+pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     layer_id: LayerId,
     nonzero_gates: Vec<(usize, usize, usize)>,
     lhs: DenseMleRef<F>,
@@ -1203,7 +1212,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 /// * `reduced_gate` - the non-batched gate that this reduces to after the copy phase
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct AddGateBatched<F, Tr> {
+pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
     new_bits: usize,
     nonzero_gates: Vec<(usize, usize, usize)>,
     lhs: DenseMleRef<F>,

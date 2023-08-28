@@ -13,7 +13,7 @@ use crate::{
         LayerBuilder, LayerError, LayerId, layer_enum::LayerEnum,
     },
     mle::{MleIndex, mle_enum::MleEnum},
-    mle::MleRef,
+    mle::{MleRef, dense::{DenseMleRef, DenseMle}, gate::AddGate},
     expression::ExpressionStandard,
     utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point
 };
@@ -55,6 +55,29 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add a GKRLayer to a list of layers
     pub fn add_gkr<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor {
         self.add::<_, GKRLayer<_, Tr>>(new_layer)
+    }
+
+    /// Add an AddGate to a list of layers
+    pub fn add_add_gate(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_copy_bits: usize) -> DenseMle<F, F> {
+        let id = LayerId::Layer(self.0.len());
+        let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits);
+        let num_vars = lhs.num_vars();
+        self.0.push(gate.get_enum());
+
+        let mut sum_table = vec![F::zero(); 1 << num_vars];
+        nonzero_gates.into_iter().for_each(
+            |(z, x, y)| {
+                let sum_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero()) + 
+                *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
+                sum_table[z] = sum_val;
+                
+            }
+        );
+
+        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
+        res_mle
+
+        //ZeroMleRef::new(*num_vars, None, id.clone())
     }
 
     /// Creates a new Layers
@@ -104,7 +127,7 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 /// The proof for an individual GKR layer
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct LayerProof<F, Tr> {
+pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {
     pub sumcheck_proof: SumcheckProof<F>,
     pub layer: LayerEnum<F, Tr>,
     pub wlx_evaluations: Vec<F>,
@@ -123,7 +146,7 @@ pub struct InputLayerProof<F: FieldExt> {
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct GKRProof<F: FieldExt, Tr> {
+pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     /// The sumcheck proof of each GKR Layer, along with the fully bound expression.
     /// 
     /// In reverse order (i.e. layer closest to the output layer is first)
