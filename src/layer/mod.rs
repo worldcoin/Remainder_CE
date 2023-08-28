@@ -80,7 +80,7 @@ pub enum VerificationError {
     ChallengeCheckFailed,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
 ///  The location of a layer within the GKR circuit
 pub enum LayerId {
     /// An Mle located in the input layer

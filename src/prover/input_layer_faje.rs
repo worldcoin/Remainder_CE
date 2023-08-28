@@ -666,7 +666,7 @@ mod tests {
 
     use crate::{
         layer::LayerId,
-        mle::{dense::DenseMle, Mle, MleIndex}, utils::{pad_to_nearest_power_of_two, get_random_mle, get_random_mle_with_capacity, get_range_mle}, prover::input_layer::InputLayerType,
+        mle::{dense::DenseMle, Mle, MleIndex}, utils::{pad_to_nearest_power_of_two, get_random_mle, get_random_mle_with_capacity, get_range_mle}, prover::input_layer_faje::InputLayerType,
     };
 
     use lcpc_2d::{FieldExt, ligero_ml_helper::naive_eval_mle_at_challenge_point};

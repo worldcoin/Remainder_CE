@@ -17,7 +17,7 @@ use lcpc_2d::FieldExt;
 
 #[derive(Clone, Debug)]
 ///An [Mle] that is dense
-pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> {
+pub struct DenseMle<F, T: Send + Sync + Clone + Debug + MleAble<F>> {
     ///The underlying data
     pub mle: T::Repr,
     num_iterated_vars: usize,

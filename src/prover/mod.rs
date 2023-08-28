@@ -1,7 +1,9 @@
 //!Module that orchestrates creating a GKR Proof
 
 /// For the input layer to the GKR circuit
+pub mod input_layer_faje;
 pub mod input_layer;
+
 
 use std::collections::HashMap;
 
@@ -13,7 +15,7 @@ use crate::{
     mle::{MleIndex, mle_enum::MleEnum},
     mle::{MleRef, dense::DenseMleRef},
     expression::ExpressionStandard,
-    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point, prover::input_layer::InputLayerType
+    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point, prover::input_layer_faje::InputLayerType
 };
 
 use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
@@ -24,7 +26,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use self::input_layer::{EvalProofType, InputLayer, verify_public_input_layer, get_input_layer_proofs, verify_input_layer_proofs};
+use self::input_layer_faje::{EvalProofType, InputLayer, verify_public_input_layer, get_input_layer_proofs, verify_input_layer_proofs};
 
 use lcpc_2d::ScalarField;
 use lcpc_2d::adapter::LigeroProof;
@@ -402,7 +404,7 @@ mod tests {
     use lcpc_2d::fs_transcript::halo2_poseidon_transcript::PoseidonTranscript;
     use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
-    use super::{GKRCircuit, Layers, input_layer::{InputLayer, InputLayerType}};
+    use super::{GKRCircuit, Layers, input_layer_faje::{InputLayer, InputLayerType}};
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr as H2Fr;
 
     /// This circuit is a 4 --> 2 circuit, such that

@@ -76,7 +76,7 @@ pub trait MleRef: Debug + Send + Sync {
 ///Trait that allows a type to be serialized into an Mle, and yield MleRefs
 /// TODO!(add a derive MleAble macro that generates code for FromIterator, IntoIterator
 /// and creates associated functions for yielding appropriate MleRefs)
-pub trait MleAble<F: FieldExt> {
+pub trait MleAble<F> {
     ///The particular representation that is convienent for an MleAble, most of the time it will be a \[Vec<F>; Size\] array
     type Repr: Send + Sync + Clone + Debug + CanonicalDeserialize + CanonicalSerialize;
 
@@ -95,7 +95,7 @@ pub trait MleAble<F: FieldExt> {
 
 ///The Enum that represents the possible indices for an MLE
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum MleIndex<F: FieldExt> {
+pub enum MleIndex<F> {
     ///A Selector bit for fixed MLE access
     Fixed(bool),
     ///An unbound bit that iterates over the contents of the MLE

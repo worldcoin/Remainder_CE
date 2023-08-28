@@ -5,7 +5,7 @@ use halo2_base::halo2_proofs::halo2curves::bn256::Fr as H2Fr;
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 
-use crate::{prover::{GKRCircuit, Layers, input_layer::InputLayer}, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
+use crate::{prover::{GKRCircuit, Layers, input_layer_faje::InputLayer}, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
 use lcpc_2d::{FieldExt, ScalarField};
 use lcpc_2d::fs_transcript::{halo2_poseidon_transcript::PoseidonTranscript, halo2_remainder_transcript::Transcript};
 
