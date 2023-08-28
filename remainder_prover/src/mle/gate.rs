@@ -5,6 +5,7 @@ use std::{
 use ark_std::{cfg_into_iter, rand::Rng};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use serde::{Serialize, Deserialize};
 
 use crate::{layer::{Claim, Layer, LayerError, LayerId, LayerBuilder, VerificationError, claims::ClaimError, layer_enum::LayerEnum}, mle::beta::BetaTable, expression::ExpressionStandard, sumcheck::*, prover::SumcheckProof};
 use remainder_shared_types::{FieldExt, transcript::Transcript};
@@ -366,7 +367,8 @@ pub enum GateError {
 /// * `phase_1_mles` - the mles needed to compute the sumcheck evals for phase 1
 /// * `phase_2_mles` - the mles needed to compute the sumcheck evals for phase 2
 /// * `num_copy_bits` - length of `p_2`
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
 pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     layer_id: LayerId,
     nonzero_gates: Vec<(usize, usize, usize)>,
@@ -1200,6 +1202,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 /// * `g2_challenges` - Literally g_2
 /// * `layer_id` - GKR layer number
 /// * `reduced_gate` - the non-batched gate that this reduces to after the copy phase
+#[derive(Error, Debug, Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
 pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
     new_bits: usize,
     nonzero_gates: Vec<(usize, usize, usize)>,

@@ -122,7 +122,9 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 
 /// The proof for an individual GKR layer
 #[derive(Serialize, Deserialize)]
-pub struct LayerProof<F, Tr: Transcript<F>> {
+#[serde(bound = "F: FieldExt")]
+
+pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {
     pub sumcheck_proof: SumcheckProof<F>,
     pub layer: LayerEnum<F, Tr>,
     pub wlx_evaluations: Vec<F>,
@@ -136,7 +138,8 @@ pub struct InputLayerProof<F> {
 
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
 #[derive(Serialize, Deserialize)]
-pub struct GKRProof<F, Tr: Transcript<F>> {
+#[serde(bound = "F: FieldExt")]
+pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     /// The sumcheck proof of each GKR Layer, along with the fully bound expression.
     /// 
     /// In reverse order (i.e. layer closest to the output layer is first)

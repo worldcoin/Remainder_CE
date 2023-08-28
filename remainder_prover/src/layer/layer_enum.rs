@@ -2,9 +2,12 @@ use serde::{Serialize, Deserialize};
 
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 
+use crate::mle::gate::{AddGate, AddGateBatched};
+
 use super::{GKRLayer, Layer};
 
 #[derive(Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
 ///An enum representing all the possible kinds of Layers
 pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     ///A standard `GKRLayer`
@@ -25,6 +28,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     ) -> Result<crate::prover::SumcheckProof<F>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.prove_rounds(claim, transcript),
+            LayerEnum::Gate(layer) => layer.prove_rounds(claim, transcript),
+            LayerEnum::GateBatched(layer) => layer.prove_rounds(claim, transcript),
         }
     }
 
@@ -36,18 +41,25 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     ) -> Result<(), super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
+            LayerEnum::Gate(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
+            LayerEnum::GateBatched(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
         }
     }
 
     fn get_claims(&self) -> Result<Vec<(super::LayerId, super::Claim<F>)>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
+            LayerEnum::Gate(layer) => layer.get_claims(),
+            LayerEnum::GateBatched(layer) => layer.get_claims(),
         }
     }
 
     fn id(&self) -> &super::LayerId {
         match self {
             LayerEnum::Gkr(layer) => layer.id(),
+            LayerEnum::Gate(layer) => layer.id(),
+            LayerEnum::GateBatched(layer) => layer.id(),
+
         }
     }
 
@@ -67,6 +79,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         num_idx: usize) -> Result<Vec<F>, super::claims::ClaimError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals,num_claims, num_idx),
+            LayerEnum::Gate(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals,num_claims, num_idx),
+            LayerEnum::GateBatched(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals,num_claims, num_idx),
         }
     }
 }
