@@ -9,7 +9,7 @@ use super::{GKRLayer, Layer, empty_layer::EmptyLayer};
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 ///An enum representing all the possible kinds of Layers
-pub enum LayerEnum<F, Tr> {
+pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     ///A standard `GKRLayer`
     Gkr(GKRLayer<F, Tr>),
     ///An Addition Gate
