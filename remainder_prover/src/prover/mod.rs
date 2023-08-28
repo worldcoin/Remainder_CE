@@ -135,9 +135,9 @@ pub struct GKRProof<F: FieldExt, Tr> {
 }
 
 pub struct Witness<F: FieldExt, Tr: Transcript<F>> {
-    layers: Layers<F, Tr>,
-    output_layers: Vec<MleEnum<F>>,
-    input_layers: Vec<InputLayerEnum<F, Tr>>
+    pub layers: Layers<F, Tr>,
+    pub output_layers: Vec<MleEnum<F>>,
+    pub input_layers: Vec<InputLayerEnum<F, Tr>>
 }
 
 /// A GKRCircuit ready to be proven
