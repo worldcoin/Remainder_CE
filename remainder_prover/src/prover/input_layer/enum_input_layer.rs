@@ -97,9 +97,9 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
 
     fn get_padded_mle(&self) -> DenseMle<F, F> {
         match self {
-            InputLayerEnum::LigeroInputLayer(_) => self.get_padded_mle(),
-            InputLayerEnum::PublicInputLayer(_) => self.get_padded_mle(),
-            InputLayerEnum::RandomInputLayer(_) => self.get_padded_mle(),
+            InputLayerEnum::LigeroInputLayer(layer) => layer.get_padded_mle(),
+            InputLayerEnum::PublicInputLayer(layer) => layer.get_padded_mle(),
+            InputLayerEnum::RandomInputLayer(layer) => layer.get_padded_mle(),
         }
     }
 

@@ -769,7 +769,7 @@ fn evaluate_mle_ref_product_gate<F: FieldExt>(
         Ok(Evals(evals))
     } else {
         // There is no independent variable and we can sum over everything
-        let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
+        let sum = cfg_into_iter!((0..1 << (max_num_vars))).fold(
             #[cfg(feature = "parallel")]
             || F::zero(),
             #[cfg(not(feature = "parallel"))]
@@ -800,7 +800,7 @@ fn evaluate_mle_ref_product_gate<F: FieldExt>(
         );
 
         #[cfg(feature = "parallel")]
-        let sum = partials.reduce(
+        let sum = sum.reduce(
             || F::zero(),
             |acc, partial| {
                 acc + partial

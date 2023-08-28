@@ -26,6 +26,12 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
     }
 
     fn append_commitment_to_transcript(commitment: &Self::Commitment, transcript: &mut Self::Transcript) -> Result<(), TranscriptError> {
+        for challenge in commitment {
+            let real_chal = transcript.get_challenge("Getting RandomInput")?;
+            if *challenge != real_chal {
+                return Err(TranscriptError::TranscriptMatchError)
+            }
+        }
         Ok(())
     }
 
@@ -35,6 +41,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
 
     fn verify(commitment: &Self::Commitment, opening_proof: &Self::OpeningProof, claim: Claim<F>, transcript: &mut Self::Transcript) -> Result<(), super::InputLayerError> {
         let mut mle_ref = DenseMle::<F, F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
+        mle_ref.index_mle_indices(0);
 
         let mut curr_bit = 0;
         let mut eval = None;

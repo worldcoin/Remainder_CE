@@ -24,7 +24,7 @@ use crate::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
 };
-use remainder_shared_types::{FieldExt, transcript::Transcript};
+use remainder_shared_types::{FieldExt, transcript::{Transcript, TranscriptError}};
 
 use self::{claims::ClaimError, layer_enum::LayerEnum};
 
@@ -56,6 +56,9 @@ pub enum LayerError {
     #[error("InterpError: {0}")]
     /// InterpError
     InterpError(InterpError),
+    #[error("Transcript Error: {0}")]
+    /// Transcript Error
+    TranscriptError(TranscriptError)
 }
 
 #[derive(Error, Debug, Clone)]

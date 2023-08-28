@@ -180,7 +180,6 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 
     // check q(0), q(1) equals the claimed value (or wl(0), wl(1))
     for (idx, claim) in claims.iter().enumerate() {
-        dbg!(&wlx);
         if claim.1 != wlx[idx] {
             return Err(ClaimError::ClaimAggroError);
         }

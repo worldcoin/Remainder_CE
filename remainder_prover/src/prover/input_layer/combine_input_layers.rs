@@ -62,19 +62,19 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
 
 
 ///A interface for defining the set of MLEs you want to combine into a single InputLayer
-pub struct InputLayerBuilder<'a, F> {
-    mles: Vec<Box<&'a dyn Mle<F>>>,
+pub struct InputLayerBuilder<F> {
+    mles: Vec<Box<dyn Mle<F>>>,
     extra_mle_indices: Option<Vec<Vec<MleIndex<F>>>>,
     layer_id: LayerId,
 }
 
-impl<'a, F: FieldExt> InputLayerBuilder<'a, F> {
+impl<F: FieldExt> InputLayerBuilder<F> {
     ///Creates a new InputLayerBuilder that will yield an InputLayer from many Mles
     /// 
     /// extra_mle_num_vars refers to the length of any mles you want to be a part of this input_layer but haven't yet generated the data for
-    pub fn new(mut input_mles: Vec<Box<&'a mut dyn Mle<F>>>, extra_mle_num_vars: Option<Vec<usize>>, layer_id: LayerId) -> Self {
+    pub fn new(mut input_mles: Vec<Box<&mut (dyn Mle<F> + 'static)>>, extra_mle_num_vars: Option<Vec<usize>>, layer_id: LayerId) -> Self {
         let extra_mle_indices = InputLayerBuilder::index_input_mles(&mut input_mles, extra_mle_num_vars);
-        let input_mles = input_mles.into_iter().map(|mle| Box::new(&**mle.as_ref())).collect_vec();
+        let input_mles = input_mles.into_iter().map(|mle| dyn_clone::clone_box(*mle)).collect_vec();
         Self {
             mles: input_mles,
             extra_mle_indices,
@@ -83,7 +83,7 @@ impl<'a, F: FieldExt> InputLayerBuilder<'a, F> {
     }
 
     fn index_input_mles(
-        input_mles: &mut Vec<Box<&mut dyn Mle<F>>>,
+        input_mles: &mut Vec<Box<&mut (dyn Mle<F> + 'static)>>,
         extra_mle_num_vars: Option<Vec<usize>>
     ) -> Option<Vec<Vec<MleIndex<F>>>> {
         let mut input_mle_num_vars = input_mles
@@ -146,14 +146,14 @@ impl<'a, F: FieldExt> InputLayerBuilder<'a, F> {
 
     ///Add a concrete value for the extra_mle declared at the start
     pub fn add_extra_mle(
-        &'a mut self,
-        extra_mle: Box<&'a mut dyn Mle<F>>,
+        &mut self,
+        extra_mle: Box<&mut (dyn Mle<F> + 'static)>,
     ) -> Result<(), &'static str> {
         let new_bits = self.extra_mle_indices.as_mut().ok_or("Called add_extra_mle too many times compared to the extra_mles that were declared when creating the builder")?;
         let new_bits = new_bits.remove(0);
         extra_mle.add_prefix_bits(Some(new_bits));
-        let extra_mle = &**extra_mle;
-        self.mles.push(Box::new(extra_mle));
+        let extra_mle = dyn_clone::clone_box(*extra_mle);
+        self.mles.push(extra_mle);
         Ok(())
     }
 

@@ -1,6 +1,7 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
 use core::fmt::Debug;
 
@@ -9,6 +10,7 @@ use crate::layer::LayerId;
 use remainder_shared_types::FieldExt;
 
 use self::mle_enum::MleEnum;
+use dyn_clonable::*;
 
 pub mod beta;
 /// Contains default dense implementation of Mle
@@ -23,7 +25,8 @@ pub mod mle_enum;
 ///
 /// If you want to construct an Mle, or use an Mle for some non-cryptographic computation (e.g. wit gen) then
 /// you should always use the iterator adaptors IntoIterator and FromIterator, this is to ensure that the semantic ordering within T is always consistent.
-pub trait Mle<F>
+#[clonable]
+pub trait Mle<F>: Clone
 where
     //+ CanonicalSerialize + CanonicalDeserialize,
     // + FromIterator<T>,

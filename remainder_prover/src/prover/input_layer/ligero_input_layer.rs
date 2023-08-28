@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use remainder_ligero::{poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, LcCommit, LcProofAuxiliaryInfo, LcRoot, adapter::LigeroProof, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}};
+use remainder_ligero::{poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, LcCommit, LcProofAuxiliaryInfo, LcRoot, adapter::{LigeroProof, convert_halo_to_lcpc}, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, TranscriptError}};
 use serde::{Serialize, Deserialize};
 
@@ -74,7 +74,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
 
     fn verify(commitment: &Self::Commitment, opening_proof: &Self::OpeningProof, claim: crate::layer::Claim<F>, transcript: &mut Self::Transcript) -> Result<(), super::InputLayerError> {
         let ligero_aux = &opening_proof.aux;
-        let ligero_eval_proof = todo!();
+        let (_, ligero_eval_proof, _) = convert_halo_to_lcpc(opening_proof.aux.clone(), opening_proof.proof.clone());
         remainder_ligero_verify::<F>(commitment, &ligero_eval_proof, ligero_aux.clone(), transcript, &claim.0, claim.1);
         Ok(())
     }
