@@ -394,7 +394,6 @@ pub mod tests {
             comm,
             root.clone(),
         ).unwrap();
-        dbg!(eval);
 
         // --- Verify phase ---
         let mut poseidon_transcript_verifier = PoseidonTranscript::new("Test transcript");

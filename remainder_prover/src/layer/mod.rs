@@ -24,7 +24,7 @@ use crate::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
 };
-use remainder_shared_types::{FieldExt, transcript::Transcript};
+use remainder_shared_types::{FieldExt, transcript::{Transcript, TranscriptError}};
 
 use self::{claims::ClaimError, layer_enum::LayerEnum};
 
@@ -56,6 +56,9 @@ pub enum LayerError {
     #[error("InterpError: {0}")]
     /// InterpError
     InterpError(InterpError),
+    #[error("Transcript Error: {0}")]
+    /// Transcript Error
+    TranscriptError(TranscriptError)
 }
 
 #[derive(Error, Debug, Clone)]
@@ -78,11 +81,11 @@ pub enum VerificationError {
     ChallengeCheckFailed,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
 ///  The location of a layer within the GKR circuit
 pub enum LayerId {
     /// An Mle located in the input layer
-    Input,
+    Input(usize),
     /// A layer within the GKR protocol, indexed by it's layer id
     Layer(usize),
 }
@@ -129,10 +132,11 @@ pub trait Layer<F: FieldExt> {
 
 /// Default Layer abstraction
 #[derive(Serialize, Deserialize)]
-pub struct GKRLayer<F, Tr: Transcript<F>> {
+pub struct GKRLayer<F, Tr> {
     id: LayerId,
     expression: ExpressionStandard<F>,
     beta: Option<BetaTable<F>>,
+    #[serde(skip)]
     _marker: PhantomData<Tr>,
 }
 
@@ -199,6 +203,11 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
     fn set_beta(&mut self, beta: BetaTable<F>) {
         self.beta = Some(beta);
+    }
+
+    ///Gets the expression that this layer is proving
+    pub fn expression(&self) -> &ExpressionStandard<F> {
+        &self.expression
     }
 }
 
@@ -293,8 +302,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         for curr_evals in sumcheck_prover_messages.iter().skip(1) {
             let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
 
-            let prev_at_r =
-                evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
             let prev_at_r =
                 evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
 

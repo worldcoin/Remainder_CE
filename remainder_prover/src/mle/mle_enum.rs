@@ -67,7 +67,10 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
     }
 
     fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {
-        todo!()
+        match self {
+            MleEnum::Dense(item) => item.push_mle_indices(new_indices),
+            MleEnum::Zero(item) => item.push_mle_indices(new_indices)
+        }
     }
 
 }

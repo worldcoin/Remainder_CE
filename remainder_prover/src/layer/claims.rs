@@ -180,7 +180,6 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 
     // check q(0), q(1) equals the claimed value (or wl(0), wl(1))
     for (idx, claim) in claims.iter().enumerate() {
-        dbg!(&wlx);
         if claim.1 != wlx[idx] {
             return Err(ClaimError::ClaimAggroError);
         }
@@ -222,7 +221,7 @@ mod tests {
         let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
         let mle = DenseMle::<_, Fr>::new_from_raw(
             vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         );
         let expression3 = ExpressionStandard::Mle(mle.mle_ref());
@@ -241,13 +240,13 @@ mod tests {
         let _dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
 
         let mut expr = ExpressionStandard::Mle(mle_ref);
 
         let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
         let mut expr_copy = expr.clone();
 
         let chals1 = vec![Fr::from(3), Fr::from(3)];
@@ -283,13 +282,13 @@ mod tests {
         let _dummy_claim = (vec![Fr::one(); 2], Fr::from(0));
 
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(1), Fr::from(2)];
         let chals2 = vec![Fr::from(2), Fr::from(3)];
@@ -344,13 +343,13 @@ mod tests {
             Fr::from(rng.gen::<u64>()),
             Fr::from(rng.gen::<u64>()),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -403,8 +402,8 @@ mod tests {
             Fr::from(rng.gen::<u64>()),
             Fr::from(rng.gen::<u64>()),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
-        let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input, None);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
@@ -412,7 +411,7 @@ mod tests {
         let mut expr_copy = expr.clone();
 
         let layer = from_mle((mle1, mle2), |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]), |_, _, _| unimplemented!());
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -467,13 +466,13 @@ mod tests {
             Fr::from(rng.gen::<u64>()),
             Fr::from(rng.gen::<u64>()),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -528,13 +527,13 @@ mod tests {
             Fr::from(rng.gen::<u64>()),
             Fr::from(rng.gen::<u64>()),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -577,13 +576,13 @@ mod tests {
     #[test]
     fn test_verify_claim_aggro() {
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input, None);
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input);
+        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(1), Fr::from(2)];
         let chals2 = vec![Fr::from(2), Fr::from(3)];

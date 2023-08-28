@@ -5,7 +5,10 @@ pub mod poseidon_transcript;
 
 ///An error representing the things that can go wrong when working with a Transcript
 #[derive(Error, Debug, Clone)]
-pub enum TranscriptError {}
+pub enum TranscriptError {
+    #[error("The challenges generated don't match challenges given!")]
+    TranscriptMatchError
+}
 
 ///A type that is responsible for FS over the interative version of the protocol
 pub trait Transcript<F> {

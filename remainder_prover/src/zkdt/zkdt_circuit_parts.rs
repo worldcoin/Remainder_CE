@@ -1,7 +1,7 @@
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 
-use crate::{prover::{GKRCircuit, Layers, input_layer::InputLayer}, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex, mle_enum::MleEnum}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
+use crate::{prover::{GKRCircuit, Layers, input_layer::InputLayer, Witness}, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex, mle_enum::MleEnum}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
 use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
@@ -18,8 +18,8 @@ pub struct PermutationCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>) {
-        let mut layers = Layers::new();
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         // layer 0: packing
         // let input_packing_builder: InputPackingBuilder<F> = InputPackingBuilder::new(
@@ -97,7 +97,8 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
 
         let difference_mle = combine_zero_mle_ref(difference_mle);
 
-        (layers, vec![difference_mle.get_enum()], todo!())
+        todo!()
+        // (layers, vec![difference_mle.get_enum()], todo!())
     }
 }
 
@@ -109,8 +110,8 @@ struct AttributeConsistencyCircuit<F: FieldExt> {
 
 impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>) {
-        let mut layers = Layers::new();
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         let attribute_consistency_builder = AttributeConsistencyBuilder::new(
             self.dummy_permuted_input_data_mle_vec.clone(),
@@ -120,7 +121,9 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
 
         let difference_mle = layers.add_gkr(attribute_consistency_builder);
 
-        (layers, vec![difference_mle.mle_ref().get_enum()], todo!())
+
+        todo!()
+        // (layers, vec![difference_mle.mle_ref().get_enum()], todo!())
     }
 }
 
@@ -139,8 +142,8 @@ struct MultiSetCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<MleEnum<F>>, InputLayer<F>) {
-        let mut layers = Layers::new();
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         // layer 0
         let decision_packing_builder = DecisionPackingBuilder::new(
@@ -260,7 +263,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         let difference = layers.add_gkr(difference_builder);
 
-        (layers, vec![difference.get_enum()], todo!())
+        // (layers, vec![difference.get_enum()], todo!())
+        todo!()
     }
 }
 

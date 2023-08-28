@@ -17,7 +17,7 @@ use remainder_shared_types::FieldExt;
 
 #[derive(Clone, Debug)]
 ///An [Mle] that is dense
-pub struct DenseMle<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> {
+pub struct DenseMle<F, T: Send + Sync + Clone + Debug + MleAble<F>> {
     ///The underlying data
     pub mle: T::Repr,
     num_iterated_vars: usize,
@@ -439,12 +439,12 @@ mod tests {
     fn fix_variable_twovars() {
         let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
         let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input, None);
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
     #[test]
@@ -461,12 +461,12 @@ mod tests {
             Fr::from(1),
             Fr::from(4),
         ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input, None);
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
@@ -484,13 +484,13 @@ mod tests {
             Fr::from(1),
             Fr::from(4),
         ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
         let mut mle_ref = mle.mle_ref();
         mle_ref.fix_variable(1, Fr::from(3));
         mle_ref.fix_variable(2, Fr::from(2));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input, None);
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
@@ -508,7 +508,7 @@ mod tests {
             Fr::from(1),
             Fr::from(4),
         ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
         let mut mle_ref = mle.mle_ref();
         let _ = mle_ref.index_mle_indices(0);
         mle_ref.fix_variable(0, Fr::from(3));
@@ -516,7 +516,7 @@ mod tests {
         mle_ref.fix_variable(2, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(26)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input, None);
+        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
@@ -534,9 +534,9 @@ mod tests {
         ];
 
         //DON'T do this normally, it clones the vec, if you have a flat MLE just use Mle::new
-        let mle_iter = DenseMle::new_from_iter(mle_vec.clone().into_iter(), LayerId::Input, None);
+        let mle_iter = DenseMle::new_from_iter(mle_vec.clone().into_iter(), LayerId::Input(0), None);
 
-        let mle_new: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input, None);
+        let mle_new: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
 
         assert!(mle_iter.mle == mle_new.mle);
         assert!(
@@ -556,7 +556,7 @@ mod tests {
 
         let mle = DenseMle::new_from_iter(
             tuple_vec.clone().into_iter().map(Tuple2::from),
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         );
 
@@ -579,7 +579,7 @@ mod tests {
             Fr::from(7),
         ];
 
-        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec.clone(), LayerId::Input, None);
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec.clone(), LayerId::Input(0), None);
 
         let mle_ref: DenseMleRef<Fr> = mle.mle_ref();
 
@@ -600,7 +600,7 @@ mod tests {
 
         let mle = DenseMle::new_from_iter(
             tuple_vec.into_iter().map(Tuple2::from),
-            LayerId::Input,
+            LayerId::Input(0),
             None,
         );
 

@@ -459,40 +459,40 @@ pub(crate) fn generate_dummy_mles_batch<F: FieldExt>() -> (
     let dummy_input_data_mle = DenseMle::new_from_iter(dummy_input_data[0]
         .clone()
         .into_iter()
-        .map(InputAttribute::from), LayerId::Input, None);
+        .map(InputAttribute::from), LayerId::Input(0), None);
     // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
     let dummy_permuted_input_data_mle = dummy_permuted_input_data
         .iter().map(|datum| DenseMle::new_from_iter(datum
             .clone()
             .into_iter()
-            .map(InputAttribute::from), LayerId::Input, None)).collect();
+            .map(InputAttribute::from), LayerId::Input(0), None)).collect();
     let dummy_decision_node_paths_mle = dummy_decision_node_paths
         .iter()
         .map(|path|
             DenseMle::new_from_iter(path
             .clone()
-            .into_iter(), LayerId::Input, None))
+            .into_iter(), LayerId::Input(0), None))
         .collect();
     let dummy_leaf_node_paths_mle = dummy_leaf_node_paths
         .into_iter()
-        .map(|path| DenseMle::new_from_iter([path].into_iter(), LayerId::Input, None))
+        .map(|path| DenseMle::new_from_iter([path].into_iter(), LayerId::Input(0), None))
         .collect();
     let dummy_binary_decomp_diffs_mle = DenseMle::new_from_iter(dummy_binary_decomp_diffs[0]
         .clone()
         .into_iter()
-        .map(BinDecomp16Bit::from), LayerId::Input, None);
+        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
     let dummy_multiplicities_bin_decomp_mle = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp
         .clone()
         .into_iter()
-        .map(BinDecomp16Bit::from), LayerId::Input, None);
+        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
     let dummy_decision_nodes_mle = DenseMle::new_from_iter(dummy_decision_nodes
         .clone()
         .into_iter()
-        .map(DecisionNode::from), LayerId::Input, None);
+        .map(DecisionNode::from), LayerId::Input(0), None);
     let dummy_leaf_nodes_mle = DenseMle::new_from_iter(dummy_leaf_nodes
         .clone()
         .into_iter()
-        .map(LeafNode::from), LayerId::Input, None);
+        .map(LeafNode::from), LayerId::Input(0), None);
 
     (
         // dummy_attr_idx_data_mle,
@@ -542,7 +542,7 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
             .clone()
             .into_iter()
             .map(InputAttribute::from),
-        LayerId::Input,
+        LayerId::Input(0),
         None,
     ); // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
     let dummy_permuted_input_data_mle = DenseMle::new_from_iter(
@@ -550,7 +550,7 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
             .clone()
             .into_iter()
             .map(InputAttribute::from),
-        LayerId::Input,
+        LayerId::Input(0),
         None,
     );
     let dummy_decision_node_paths_mle = DenseMle::new_from_iter(
@@ -558,14 +558,14 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
             .clone()
             .into_iter()
             .map(DecisionNode::from),
-        LayerId::Input,
+        LayerId::Input(0),
         None,
     );
     let dummy_leaf_node_paths_mle = DenseMle::new_from_iter(
         vec![dummy_leaf_node_paths[0]]
             .into_iter()
             .map(LeafNode::from),
-        LayerId::Input,
+        LayerId::Input(0),
         None,
     );
     let dummy_binary_decomp_diffs_mle = DenseMle::new_from_iter(
@@ -573,24 +573,24 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
             .clone()
             .into_iter()
             .map(BinDecomp16Bit::from),
-        LayerId::Input,
+        LayerId::Input(0),
         None,
     );
     let dummy_multiplicities_bin_decomp_mle = DenseMle::new_from_iter(
         dummy_multiplicities_bin_decomp
             .into_iter()
             .map(BinDecomp16Bit::from),
-        LayerId::Input,
+        LayerId::Input(0),
         None,
     );
     let dummy_decision_nodes_mle = DenseMle::new_from_iter(
         dummy_decision_nodes.into_iter().map(DecisionNode::from),
-        LayerId::Input,
+        LayerId::Input(0),
         None,
     );
     let dummy_leaf_nodes_mle = DenseMle::new_from_iter(
         dummy_leaf_nodes.into_iter().map(LeafNode::from),
-        LayerId::Input,
+        LayerId::Input(0),
         None,
     );
 
@@ -761,7 +761,7 @@ mod tests {
         // --- We should get all zeros ---x
         let all_zeros: Vec<Fr> = vec![Fr::zero()]
             .repeat(2_u64.pow(first_bin_decomp_bit_mle[0].num_vars() as u32) as usize);
-        let all_zeros_mle = DenseMle::<Fr, _>::new_from_raw(all_zeros, LayerId::Input, None);
+        let all_zeros_mle = DenseMle::<Fr, _>::new_from_raw(all_zeros, LayerId::Input(0), None);
         let _all_zeros_mle_expr = ExpressionStandard::Mle(all_zeros_mle.mle_ref());
 
         // --- Evaluating at V(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) --> 0 ---

@@ -250,7 +250,8 @@ where
 }
 
 /// A Merkle root corresponding to a committed polynomial
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
 pub struct LcRoot<E, F>
 where
     F: FieldExt,

@@ -51,7 +51,7 @@ pub fn get_random_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F>
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
         .take(capacity as usize)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
 }
 
 /// Helper function to create random MLE with specific number of vars
@@ -62,7 +62,7 @@ pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F>
     let bookkeeping_table = (0..capacity).map(|idx| F::from(idx as u64 + 1))
         .take(capacity as usize)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
 }
 
 /// Helper function to create random MLE with specific length
@@ -72,5 +72,5 @@ pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F,
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
         .take(capacity as usize)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input, None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
 }
