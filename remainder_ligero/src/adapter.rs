@@ -77,16 +77,16 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
         .collect();
 
     // --- Printing the parameters in a Rust-ready format ---
-    println!(
-        "const LOG_M_TEST: usize = {}",
-        log2_ceil(aux.orig_num_cols as u64)
-    );
-    println!("const RHO_INV_TEST: usize = {}", aux.rho_inv);
-    println!(
-        "const LOG_N_TEST: usize = {}",
-        log2_ceil(aux.num_rows as u64)
-    );
-    println!("const T_TEST: usize =  {}", columns.len());
+    // println!(
+    //     "const LOG_M_TEST: usize = {}",
+    //     log2_ceil(aux.orig_num_cols as u64)
+    // );
+    // println!("const RHO_INV_TEST: usize = {}", aux.rho_inv);
+    // println!(
+    //     "const LOG_N_TEST: usize = {}",
+    //     log2_ceil(aux.num_rows as u64)
+    // );
+    // println!("const T_TEST: usize =  {}", columns.len());
 
     // let claim = LigeroClaim {
     //     point: vec_ark_to_halo(&raw_claim.point),
