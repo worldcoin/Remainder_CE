@@ -1,7 +1,9 @@
-use std::{cmp::max, time::Instant, fs};
+use std::{cmp::max, time::Instant, fs, iter::repeat_with};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use ark_std::{test_rng, UniformRand, log2, One, Zero};
+use itertools::Itertools;
 use rand::Rng;
+use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{to_writer, from_reader};
 use tracing::Level;
 
@@ -72,8 +74,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
         let circuit_output = layers.add_gkr(output_diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-        // input_layer.combine_input_mles(&input_mles, Some(Box::new(&mut output_input)));
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         let input_layers = vec![input_layer.to_enum()];
@@ -93,8 +93,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-        let mut input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
         let mle_clone = self.mle.clone();
 
         // --- Create Layers to be added to ---
@@ -129,7 +129,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         let first_layer_output = layers.add_gkr(diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         // (layers, vec![first_layer_output.get_enum()], input_layer)
@@ -601,6 +600,128 @@ fn test_gkr_gate_simplest_circuit() {
                 PoseidonTranscript::new("GKR Verifier Transcript");
             let now = Instant::now();
             match circuit.verify(&mut transcript, proof) {
+                Ok(_) => {
+                    println!(
+                        "Verification succeeded: takes {}!",
+                        now.elapsed().as_secs_f32()
+                    );
+                }
+                Err(err) => {
+                    println!("Verify failed! Error: {err}");
+                    panic!();
+                }
+            }
+        }
+        Err(err) => {
+            println!("Proof failed! Error: {err}");
+            panic!();
+        }
+    }
+
+    // panic!();
+}
+
+/// Circuit which subtracts its two halves, except for the part where one half is 
+/// comprised of a pre-committed Ligero input layer and the other half is comprised
+/// of a Ligero input layer which is committed to on the spot.
+struct SimplePrecommitCircuit<F: FieldExt> {
+    mle: DenseMle<F, F>,
+    mle2: DenseMle<F, F>,
+}
+impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
+
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+
+        // --- The precommitted input layer MLE is just the first MLE ---
+        let precommitted_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
+        let precommitted_input_layer_builder = InputLayerBuilder::new(precommitted_input_mles, None, LayerId::Input(0));
+
+        // --- The non-precommitted input layer MLE is just the second ---
+        let live_committed_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle2)];
+        let live_committed_input_layer_builder = InputLayerBuilder::new(live_committed_input_mles, None, LayerId::Input(0));
+
+        let mle_clone = self.mle.clone();
+        let mle2_clone = self.mle2.clone();
+
+        // --- Create Layers to be added to ---
+        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        // --- Create a SimpleLayer from the first `mle` within the circuit ---
+        let diff_builder = from_mle(
+            mle_clone.clone(),
+            // --- The expression is a simple diff between the first and second halves ---
+            |_mle| {
+                let first_half = Box::new(ExpressionStandard::Mle(mle_clone.mle_ref()));
+                let second_half = Box::new(ExpressionStandard::Mle(mle2_clone.mle_ref()));
+                let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
+                ExpressionStandard::Sum(first_half, negated_second_half)
+            },
+            // --- The output SHOULD be all zeros ---
+            |_mle, layer_id, prefix_bits| {
+                let num_vars = max(mle_clone.mle_ref().num_vars(), mle2_clone.mle_ref().num_vars());
+                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+            },
+        );
+
+        // --- Stacks the two aforementioned layers together into a single layer ---
+        // --- Then adds them to the overall circuit ---
+        let first_layer_output = layers.add_gkr(diff_builder);
+
+        // --- We should have two input layers: a single pre-committed and a single regular Ligero layer ---
+        let rho_inv = 4;
+        let (_, ligero_comm, ligero_root, ligero_aux) = remainder_ligero_commit_prove(&self.mle.mle, rho_inv);
+        let precommitted_input_layer: LigeroInputLayer<F, Self::Transcript> = precommitted_input_layer_builder.to_input_layer_with_precommit(ligero_comm, ligero_aux, ligero_root);
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> = live_committed_input_layer_builder.to_input_layer();
+
+        Witness { layers, output_layers: vec![first_layer_output.get_enum()], input_layers: vec![precommitted_input_layer.to_enum(), live_committed_input_layer.to_enum()] }
+    }
+}
+
+#[test]
+fn test_gkr_circuit_with_precommit() {
+    let mut rng = test_rng();
+    let size = 1 << 5;
+
+    // --- MLE contents ---
+    let items = repeat_with(|| Fr::from(rng.gen::<u64>())).take(size).collect_vec();
+
+    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+        items.clone(),
+        LayerId::Input(0),
+        None,
+    );
+    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+        items.clone(),
+        LayerId::Input(0),
+        None,
+    );
+
+    let mut circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
+
+    let mut transcript: PoseidonTranscript<Fr> =
+        PoseidonTranscript::new("GKR Prover Transcript");
+    let now = Instant::now();
+
+    match circuit.prove(&mut transcript) {
+        Ok(proof) => {
+            println!(
+                "proof generated successfully in {}!",
+                now.elapsed().as_secs_f32()
+            );
+
+            let mut f = fs::File::create("./gkr_proof.json").unwrap();
+            to_writer(&mut f, &proof).unwrap();
+            let mut transcript: PoseidonTranscript<Fr> =
+                PoseidonTranscript::new("GKR Verifier Transcript");
+            let now = Instant::now();
+
+            let file = std::fs::File::open("./gkr_proof.json").unwrap();
+
+            let proof_real = from_reader(&file).unwrap();
+
+            match circuit.verify(&mut transcript, proof_real) {
                 Ok(_) => {
                     println!(
                         "Verification succeeded: takes {}!",

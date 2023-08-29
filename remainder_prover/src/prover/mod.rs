@@ -171,6 +171,7 @@ pub trait GKRCircuit<F: FieldExt> {
     /// The forward pass, defining the layer relationships and generating the layers
     fn synthesize(&mut self) -> Witness<F, Self::Transcript>;
 
+    /// Calls `synthesize` and also generates commitments from each of the input layers
     fn synthesize_and_commit(&mut self, transcript: &mut Self::Transcript) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
         let mut witness = self.synthesize();
 

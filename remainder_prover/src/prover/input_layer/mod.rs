@@ -24,7 +24,6 @@ pub enum InputLayerError {
     PublicInputVerificationFailed,
 }
 
-
 ///Trait for dealing with the InputLayer
 pub trait InputLayer<F: FieldExt> {
     type Transcript: Transcript<F>;
