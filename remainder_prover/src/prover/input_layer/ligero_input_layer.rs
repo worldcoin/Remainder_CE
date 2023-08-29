@@ -23,8 +23,8 @@ pub struct LigeroInputLayer<F: FieldExt, Tr> {
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct LigeroInputProof<F: FieldExt> {
-    proof: LigeroProof<F>,
-    aux: LcProofAuxiliaryInfo,
+    pub proof: LigeroProof<F>,
+    pub aux: LcProofAuxiliaryInfo,
 }
 
 const RHO_INV: u8 = 4;

@@ -379,8 +379,8 @@ pub enum GateError {
 #[serde(bound = "F: FieldExt")]
 pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     layer_id: LayerId,
-    nonzero_gates: Vec<(usize, usize, usize)>,
-    lhs: DenseMleRef<F>,
+    pub nonzero_gates: Vec<(usize, usize, usize)>,
+    pub lhs: DenseMleRef<F>,
     rhs: DenseMleRef<F>,
     beta_g: Option<BetaTable<F>>,
     phase_1_mles: Option<([DenseMleRef<F>; 2], [DenseMleRef<F>; 1])>,
