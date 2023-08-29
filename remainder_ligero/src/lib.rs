@@ -257,7 +257,8 @@ where
     F: FieldExt,
     E: LcEncoding<F> + Send + Sync,
 {
-    root: F,
+    /// Root of the Merkle Tree
+    pub root: F,
     _p: PhantomData<E>,
     // phantom_data: PhantomData<D>
 }

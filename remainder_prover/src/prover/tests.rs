@@ -1,4 +1,4 @@
-use std::{cmp::max, time::Instant, fs};
+use std::{cmp::max, time::Instant, fs, path::Path};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use ark_std::{test_rng, UniformRand, log2, One, Zero};
 use rand::Rng;
@@ -9,6 +9,52 @@ use crate::{mle::{dense::{DenseMle, Tuple2}, MleRef, Mle, zero::ZeroMleRef, mle_
 use remainder_shared_types::{FieldExt, transcript::{poseidon_transcript::PoseidonTranscript, Transcript}};
 
 use super::{GKRCircuit, Layers, input_layer::{InputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, ligero_input_layer::LigeroInputLayer, enum_input_layer::InputLayerEnum, random_input_layer::RandomInputLayer}, Witness, GKRError};
+
+fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
+    let mut transcript =
+    C::Transcript::new("GKR Prover Transcript");
+    let now = Instant::now();
+
+    match circuit.prove(&mut transcript) {
+        Ok(proof) => {
+            println!(
+                "proof generated successfully in {}!",
+                now.elapsed().as_secs_f32()
+            );
+            if let Some(path) = path {
+                let mut f = fs::File::create(path).unwrap();
+                to_writer(&mut f, &proof).unwrap();
+            }
+            let mut transcript =
+                C::Transcript::new("GKR Verifier Transcript");
+            let now = Instant::now();
+
+            let proof = if let Some(path) = path {
+                let file = std::fs::File::open(path).unwrap();
+
+                from_reader(&file).unwrap()   
+            } else {proof};
+            match circuit.verify(&mut transcript, proof) {
+                Ok(_) => {
+                    println!(
+                        "Verification succeeded: takes {}!",
+                        now.elapsed().as_secs_f32()
+                    );
+                }
+                Err(err) => {
+                    println!("Verify failed! Error: {err}");
+                    panic!();
+                }
+            }
+        }
+        Err(err) => {
+            println!("Proof failed! Error: {err}");
+            panic!();
+        }
+    }
+}
+
+
 
 /// This circuit is a 4 --> 2 circuit, such that
 /// [x_1, x_2, x_3, x_4, (y_1, y_2)] --> [x_1 * x_3, x_2 * x_4] --> [x_1 * x_3 - y_1, x_2 * x_4 - y_2]
@@ -82,6 +128,27 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
     }
 }
 
+#[test]
+fn test_gkr_simple_circuit() {
+    let mut rng = test_rng();
+    let size = 1 << 5;
+
+    // --- This should be 2^2 ---
+    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        (0..size).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+        LayerId::Input(0),
+        None,
+    );
+    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+    //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
+    //     LayerId::Input(0),
+    //     None,
+    // );
+
+    let mut circuit: SimpleCircuit<Fr> = SimpleCircuit { mle };
+    test_circuit(circuit, None);
+}
+
 /// Circuit which just subtracts its two halves! No input-output layer needed.
 struct SimplestCircuit<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
@@ -137,6 +204,34 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
     }
 }
 
+#[test]
+fn test_gkr_simplest_circuit() {
+    let mut rng = test_rng();
+    let size = 1 << 4;
+
+    // --- This should be 2^2 ---
+    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        (0..size).map(|_| {
+            let num = Fr::from(rng.gen::<u64>());
+            //let second_num = Fr::from(rng.gen::<u64>());
+            (num, num).into()
+        }),
+        LayerId::Input(0),
+        None,
+    );
+    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
+    //     LayerId::Input(0),
+    //     None,
+    // );
+
+    let mut circuit: SimplestCircuit<Fr> = SimplestCircuit { mle };
+
+    test_circuit(circuit, None);
+
+    // panic!();
+}
+
 ///This circuit checks how RandomLayer works by multiplying the MLE by a constant, taking in that result as advice in a publiclayer and doing an equality check on the result of the mult and the advice
 struct RandomCircuit<F: FieldExt> {
     mle: DenseMle<F, F>
@@ -190,42 +285,11 @@ fn test_random_layer_circuit() {
     //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
     let num_vars = 5;
-    let mle = get_random_mle(num_vars);
+    let mle = get_random_mle::<Fr>(num_vars);
 
     let mut circuit = RandomCircuit { mle };
 
-    let mut transcript: PoseidonTranscript<Fr> =
-        PoseidonTranscript::new("GKR Prover Transcript");
-    let now = Instant::now();
-
-    match circuit.prove(&mut transcript) {
-        Ok(proof) => {
-            println!(
-                "proof generated successfully in {}!",
-                now.elapsed().as_secs_f32()
-            );
-            let mut transcript: PoseidonTranscript<Fr> =
-                PoseidonTranscript::new("GKR Verifier Transcript");
-            let now = Instant::now();
-            match circuit.verify(&mut transcript, proof) {
-                Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
-
+    test_circuit(circuit, Some(Path::new("./random_proof.json")));
 }
 
 /// This circuit is a 4k --> k circuit, such that
@@ -339,126 +403,6 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
 }
 
 #[test]
-fn test_gkr_simplest_circuit() {
-    let mut rng = test_rng();
-    let size = 1 << 4;
-
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            //let second_num = Fr::from(rng.gen::<u64>());
-            (num, num).into()
-        }),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input(0),
-    //     None,
-    // );
-
-    let mut circuit: SimplestCircuit<Fr> = SimplestCircuit { mle };
-
-    let mut transcript: PoseidonTranscript<Fr> =
-        PoseidonTranscript::new("GKR Prover Transcript");
-    let now = Instant::now();
-
-    match circuit.prove(&mut transcript) {
-        Ok(proof) => {
-            println!(
-                "proof generated successfully in {}!",
-                now.elapsed().as_secs_f32()
-            );
-            let mut transcript: PoseidonTranscript<Fr> =
-                PoseidonTranscript::new("GKR Verifier Transcript");
-            let now = Instant::now();
-            match circuit.verify(&mut transcript, proof) {
-                Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
-
-    // panic!();
-}
-
-#[test]
-fn test_gkr_simple_circuit() {
-    let mut rng = test_rng();
-    let size = 1 << 5;
-
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
-    //     LayerId::Input(0),
-    //     None,
-    // );
-
-    let mut circuit: SimpleCircuit<Fr> = SimpleCircuit { mle };
-
-    let mut transcript: PoseidonTranscript<Fr> =
-        PoseidonTranscript::new("GKR Prover Transcript");
-    let now = Instant::now();
-
-    match circuit.prove(&mut transcript) {
-        Ok(proof) => {
-            println!(
-                "proof generated successfully in {}!",
-                now.elapsed().as_secs_f32()
-            );
-
-            let mut f = fs::File::create("./gkr_proof.json").unwrap();
-            to_writer(&mut f, &proof).unwrap();
-            let mut transcript: PoseidonTranscript<Fr> =
-                PoseidonTranscript::new("GKR Verifier Transcript");
-            let now = Instant::now();
-
-            let file = std::fs::File::open("./gkr_proof.json").unwrap();
-
-            let proof_real = from_reader(&file).unwrap();
-
-            match circuit.verify(&mut transcript, proof_real) {
-                Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
-
-    // panic!();
-}
-
-#[test]
 fn test_gkr() {
     let mut rng = test_rng();
     let size = 1 << 1;
@@ -481,37 +425,7 @@ fn test_gkr() {
 
     let mut circuit: TestCircuit<Fr> = TestCircuit { mle, mle_2 };
 
-    let mut transcript: PoseidonTranscript<Fr> =
-        PoseidonTranscript::new("GKR Prover Transcript");
-    let now = Instant::now();
-
-    match circuit.prove(&mut transcript) {
-        Ok(proof) => {
-            println!(
-                "proof generated successfully in {}!",
-                now.elapsed().as_secs_f32()
-            );
-            let mut transcript: PoseidonTranscript<Fr> =
-                PoseidonTranscript::new("GKR Verifier Transcript");
-            let now = Instant::now();
-            match circuit.verify(&mut transcript, proof) {
-                Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
+    test_circuit(circuit, Some(Path::new("./gkr_proof.json")));
 }
 
 /// Circuit which just subtracts its two halves with gate mle
@@ -587,37 +501,7 @@ fn test_gkr_gate_simplest_circuit() {
 
     let mut circuit: SimplestGateCircuit<Fr> = SimplestGateCircuit { mle, negmle };
 
-    let mut transcript: PoseidonTranscript<Fr> =
-        PoseidonTranscript::new("GKR Prover Transcript");
-    let now = Instant::now();
-
-    match circuit.prove(&mut transcript) {
-        Ok(proof) => {
-            println!(
-                "proof generated successfully in {}!",
-                now.elapsed().as_secs_f32()
-            );
-            let mut transcript: PoseidonTranscript<Fr> =
-                PoseidonTranscript::new("GKR Verifier Transcript");
-            let now = Instant::now();
-            match circuit.verify(&mut transcript, proof) {
-                Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
+    test_circuit(circuit, Some(Path::new("./gate_proof.json")));
 
     // panic!();
 }
