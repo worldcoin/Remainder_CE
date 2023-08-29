@@ -1,8 +1,11 @@
-use std::marker::PhantomData;
 use itertools::Itertools;
+use std::marker::PhantomData;
 
 use crate::utils::halo2_fft;
-use crate::{LcCommit, poseidon_ligero::poseidon_digest::FieldHashFnDigest, LcEncoding, LcEvalProof, def_labels};
+use crate::{
+    def_labels, poseidon_ligero::poseidon_digest::FieldHashFnDigest, LcCommit, LcEncoding,
+    LcEvalProof,
+};
 use fffft::FFTError;
 use remainder_shared_types::FieldExt;
 
@@ -27,7 +30,6 @@ where
 {
     /// Grabs the matrix dimensions for M and M'
     pub fn get_dims(len: usize, rho: f64) -> Option<(usize, usize, usize)> {
-
         // --- 0 < rho < 1 ---
         assert!(rho > 0f64);
         assert!(rho < 1f64);
@@ -104,13 +106,18 @@ where
     def_labels!(lcpc2d_test);
 
     fn encode(&self, inp: &mut [F]) -> Result<(), FFTError> {
-
         // --- So we need to convert num_cols(M) coefficients into num_cols(M) * (1 / rho) evaluations ---
         // --- All the coefficients past the original number of cols should be zero-padded ---
         debug_assert!(inp.iter().skip(self.orig_num_cols).all(|&v| v == F::zero()));
 
         // --- TODO!(ryancao): This is wasteful (we clone twice!!!) ---
-        let evals = halo2_fft(inp.to_vec().into_iter().take(self.orig_num_cols).collect_vec(), self.rho_inv);
+        let evals = halo2_fft(
+            inp.to_vec()
+                .into_iter()
+                .take(self.orig_num_cols)
+                .collect_vec(),
+            self.rho_inv,
+        );
         inp.copy_from_slice(&evals[..]);
 
         Ok(())
