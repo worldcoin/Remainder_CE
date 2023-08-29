@@ -1,8 +1,14 @@
-use std::time::Instant;
 use ark_std::{test_rng, UniformRand};
 use rand::Rng;
-use remainder::{zkdt::{zkdt_helpers::{BatchedDummyMles, generate_dummy_mles_batch}, zkdt_circuit_parts::PermutationCircuit}, prover::GKRCircuit};
-use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
+use remainder::{
+    prover::GKRCircuit,
+    zkdt::{
+        zkdt_circuit_parts::PermutationCircuit,
+        zkdt_helpers::{generate_dummy_mles_batch, BatchedDummyMles},
+    },
+};
+use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
+use std::time::Instant;
 
 fn main() {
     let mut rng = test_rng();
@@ -10,7 +16,8 @@ fn main() {
 
     let BatchedDummyMles {
         dummy_input_data_mle,
-        dummy_permuted_input_data_mle, ..
+        dummy_permuted_input_data_mle,
+        ..
     } = generate_dummy_mles_batch();
 
     let mut circuit = PermutationCircuit {
@@ -28,7 +35,10 @@ fn main() {
 
     let proof = circuit.prove(&mut transcript);
 
-    println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
+    println!(
+        "Proof generated!: Took {} seconds",
+        now.elapsed().as_secs_f32()
+    );
 
     match proof {
         Ok(proof) => {
@@ -38,7 +48,7 @@ fn main() {
                 println!("{}", err);
                 panic!();
             }
-        },
+        }
         Err(err) => {
             println!("{}", err);
             panic!();

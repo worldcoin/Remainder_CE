@@ -2,17 +2,23 @@
 
 use std::marker::PhantomData;
 
-use remainder_shared_types::{FieldExt, transcript::{Transcript, TranscriptError}};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptError},
+    FieldExt,
+};
 
-use crate::{mle::{dense::DenseMle, MleRef}, layer::{LayerId, Claim}};
+use crate::{
+    layer::{Claim, LayerId},
+    mle::{dense::DenseMle, MleRef},
+};
 
-use super::{InputLayer, InputLayerError, MleInputLayer, enum_input_layer::InputLayerEnum};
+use super::{enum_input_layer::InputLayerEnum, InputLayer, InputLayerError, MleInputLayer};
 
 ///An Input Layer that is send to the verifier in the clear
 pub struct PublicInputLayer<F: FieldExt, Tr> {
     mle: DenseMle<F, F>,
     layer_id: LayerId,
-    _marker: PhantomData<Tr>
+    _marker: PhantomData<Tr>,
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
@@ -26,16 +32,29 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         Ok(self.mle.mle.clone())
     }
 
-    fn append_commitment_to_transcript(commitment: &Self::Commitment, transcript: &mut Self::Transcript) -> Result<(), TranscriptError> {
+    fn append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript: &mut Self::Transcript,
+    ) -> Result<(), TranscriptError> {
         transcript.append_field_elements("Public Input Commitment", &commitment)
     }
 
-    fn open(&self, _: &mut Self::Transcript, _: crate::layer::Claim<F>) -> Result<Self::OpeningProof, super::InputLayerError> {
+    fn open(
+        &self,
+        _: &mut Self::Transcript,
+        _: crate::layer::Claim<F>,
+    ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
     }
 
-    fn verify(commitment: &Self::Commitment, opening_proof: &Self::OpeningProof, claim: Claim<F>, transcript: &mut Self::Transcript) -> Result<(), super::InputLayerError> {
-        let mut mle_ref = DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
+    fn verify(
+        commitment: &Self::Commitment,
+        opening_proof: &Self::OpeningProof,
+        claim: Claim<F>,
+        transcript: &mut Self::Transcript,
+    ) -> Result<(), super::InputLayerError> {
+        let mut mle_ref =
+            DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_vars != 0 {
@@ -74,7 +93,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for PublicInputLayer<F, Tr
         Self {
             mle,
             layer_id,
-            _marker: PhantomData
+            _marker: PhantomData,
         }
     }
 }

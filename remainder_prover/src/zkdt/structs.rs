@@ -4,14 +4,12 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{
-    mle::{
-        dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
-        Mle, MleAble, MleIndex,
-    },
+use crate::mle::{
+    dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
+    Mle, MleAble, MleIndex,
 };
-use remainder_shared_types::FieldExt;
 use ark_std::log2;
+use remainder_shared_types::FieldExt;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Chunk, Chunks, Itertools};
 
@@ -116,7 +114,7 @@ impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
 //     type IntoIter = Zip<Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>, Cloned<std::slice::Iter<'a, F>>>;
 
 //     fn into_iter(self) -> Self::IntoIter {
-        
+
 //         self.mle[0]
 //             .iter()
 //             .cloned()

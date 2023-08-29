@@ -30,7 +30,8 @@ pub fn next_power_of_two(n: usize) -> Option<usize> {
 }
 
 const BIT_DECOMPOSITION_LENGTH: usize = 16;
-pub const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
+pub const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 =
+    2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
 const UNSIGNED_DECOMPOSITION_MAX_ARG: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32) - 1;
 
 /// Build a 16 bit signed decomposition of the specified i32, or None if the argument is too large
@@ -52,9 +53,7 @@ pub fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDeco
 /// Build a 16 bit decomposition of the specified u32, or None if the argument is too large
 /// (exceeding UNSIGNED_DECOMPOSITION_MAX_ARG_ABS).
 /// Result is little endian i.e. LSB has index 0.
-pub fn build_unsigned_bit_decomposition<F: FieldExt>(
-    mut value: u32,
-) -> Option<BinDecomp16Bit<F>> {
+pub fn build_unsigned_bit_decomposition<F: FieldExt>(mut value: u32) -> Option<BinDecomp16Bit<F>> {
     if value > UNSIGNED_DECOMPOSITION_MAX_ARG {
         return None;
     }
@@ -180,7 +179,10 @@ mod tests {
         decision_nodes.sort_by_key(|node| node.node_id);
         assert_eq!(decision_nodes[0].node_id, Fr::from(root_id as u64));
         assert_eq!(decision_nodes[0].attr_id, Fr::from(1));
-        assert_eq!(decision_nodes[1].node_id, Fr::from(2 * (root_id as u64) + 1));
+        assert_eq!(
+            decision_nodes[1].node_id,
+            Fr::from(2 * (root_id as u64) + 1)
+        );
     }
 
     #[test]

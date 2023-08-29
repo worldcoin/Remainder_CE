@@ -439,10 +439,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                             index
                         };
                         // --- Access the MLE at that index. Pad with zeros ---
-                        mle_ref
-                            .bookkeeping_table()
-                            .get(index)
-                            .unwrap_or(&zero)
+                        mle_ref.bookkeeping_table().get(index).unwrap_or(&zero)
                     })
                     .fold(F::one(), |acc, eval| acc * eval);
 

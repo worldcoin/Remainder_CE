@@ -49,11 +49,11 @@ extern crate serde_json;
 use crate::zkdt::helpers::*;
 use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, InputAttribute, LeafNode};
 use crate::zkdt::trees::*;
-use remainder_shared_types::FieldExt;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
-use serde::{Deserialize, Serialize};
 use rand::Rng;
+use remainder_shared_types::FieldExt;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 
 /// The trees model resulting from the Python pipeline.
@@ -211,11 +211,13 @@ pub fn circuitize_samples<F: FieldExt>(
         path_ends.push(path_ends_for_tree);
         differences.push(differences_for_tree);
         // calculate the bit decompositions of the visit counts
-        multiplicities.push(multiplicities_for_tree
-                            .into_iter()
-                            .map(build_unsigned_bit_decomposition)
-                            .map(|option| option.unwrap())
-                            .collect());
+        multiplicities.push(
+            multiplicities_for_tree
+                .into_iter()
+                .map(build_unsigned_bit_decomposition)
+                .map(|option| option.unwrap())
+                .collect(),
+        );
     }
 
     CircuitizedSamples {
@@ -319,7 +321,12 @@ impl From<&TreesModel> for PaddedQuantizedTrees {
 
 /// Generate a TreesModel as specified.  Meaning of arguments as per generate_trees().
 /// Scale and bias are chosen randomly.
-pub fn generate_trees_model(n_trees: usize, target_depth: usize, n_features: usize, premature_leaf_proba: f64) -> TreesModel {
+pub fn generate_trees_model(
+    n_trees: usize,
+    target_depth: usize,
+    n_features: usize,
+    premature_leaf_proba: f64,
+) -> TreesModel {
     let mut rng = rand::thread_rng();
     TreesModel {
         trees: (0..n_trees)
@@ -327,7 +334,7 @@ pub fn generate_trees_model(n_trees: usize, target_depth: usize, n_features: usi
             .collect(),
         bias: rng.gen(),
         scale: rng.gen(),
-        n_features: n_features
+        n_features: n_features,
     }
 }
 
@@ -337,7 +344,11 @@ pub fn generate_trees_model(n_trees: usize, target_depth: usize, n_features: usi
 pub fn generate_samples(n_samples: usize, n_features: usize) -> Vec<Vec<u16>> {
     let mut rng = rand::thread_rng();
     (0..n_samples)
-        .map(|_| (0..n_features).map(|_| rng.gen_range(0..(SIGNED_DECOMPOSITION_MAX_ARG_ABS + 1) as u16)).collect())
+        .map(|_| {
+            (0..n_features)
+                .map(|_| rng.gen_range(0..(SIGNED_DECOMPOSITION_MAX_ARG_ABS + 1) as u16))
+                .collect()
+        })
         .collect()
 }
 
@@ -347,7 +358,9 @@ pub fn generate_samples(n_samples: usize, n_features: usize) -> Vec<Vec<u16>> {
 pub fn load_samples(filename: &str) -> Vec<Vec<u16>> {
     let input_arr: Array2<u16> = read_npy(filename).unwrap();
     // check sample values are in bounds
-    assert!(input_arr.iter().all(|&x| x <= SIGNED_DECOMPOSITION_MAX_ARG_ABS as u16));
+    assert!(input_arr
+        .iter()
+        .all(|&x| x <= SIGNED_DECOMPOSITION_MAX_ARG_ABS as u16));
     input_arr.outer_iter().map(|row| row.to_vec()).collect()
 }
 
@@ -355,12 +368,9 @@ pub fn load_samples(filename: &str) -> Vec<Vec<u16>> {
 /// Pre: all threshold values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
 /// [`build_signed_bit_decomposition`]).
 pub fn load_trees_model(filename: &str) -> TreesModel {
-    let file = File::open(filename)
-        .expect(&format!("'{}' should be available.", filename));
-    let trees_model: TreesModel = serde_json::from_reader(file).expect(&format!(
-        "'{}' should be valid TreesModel JSON.",
-        filename
-    ));
+    let file = File::open(filename).expect(&format!("'{}' should be available.", filename));
+    let trees_model: TreesModel = serde_json::from_reader(file)
+        .expect(&format!("'{}' should be valid TreesModel JSON.", filename));
     // FIXME check the thresholds of every node on every tree
     trees_model
 }
@@ -582,7 +592,8 @@ mod tests {
     }
 
     #[test]
-    fn test_documentation() { // TODO remove once the doctests are being run
+    fn test_documentation() {
+        // TODO remove once the doctests are being run
         let n_trees = 3;
         let n_features = 4;
         let depth = 6;

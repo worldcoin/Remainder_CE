@@ -9,14 +9,14 @@ pub mod layer_enum;
 use std::marker::PhantomData;
 
 use ark_std::cfg_into_iter;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use thiserror::Error;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{
-    expression::{Expression, ExpressionError, ExpressionStandard, gather_combine_all_evals},
+    expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
     mle::{
-        beta::{BetaError, BetaTable, compute_beta_over_two_challenges},
+        beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
         MleIndex, MleRef,
     },
     prover::SumcheckProof,
@@ -24,10 +24,12 @@ use crate::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
 };
-use remainder_shared_types::{FieldExt, transcript::{Transcript, TranscriptError}};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptError},
+    FieldExt,
+};
 
 use self::{claims::ClaimError, layer_enum::LayerEnum};
-
 
 /// Type alias for a claim (A point to evaluate at and an evaluation)
 pub type Claim<F> = (Vec<F>, F);
@@ -58,7 +60,7 @@ pub enum LayerError {
     InterpError(InterpError),
     #[error("Transcript Error: {0}")]
     /// Transcript Error
-    TranscriptError(TranscriptError)
+    TranscriptError(TranscriptError),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -76,7 +78,9 @@ pub enum VerificationError {
     #[error("The Oracle query does not match the final claim")]
     /// The Oracle query does not match the final claim
     GKRClaimCheckFailed,
-    #[error("The Challenges generated during sumcheck don't match the claims in the given expression")]
+    #[error(
+        "The Challenges generated during sumcheck don't match the claims in the given expression"
+    )]
     ///The Challenges generated during sumcheck don't match the claims in the given expression
     ChallengeCheckFailed,
 }
@@ -117,10 +121,13 @@ pub trait Layer<F: FieldExt> {
     fn id(&self) -> &LayerId;
 
     ///Get W(l(x)) evaluations
-    fn get_wlx_evaluations(&self, claim_vecs: Vec<Vec<F>>,
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: Vec<Vec<F>>,
         claimed_vals: &mut Vec<F>,
         num_claims: usize,
-        num_idx: usize) -> Result<Vec<F>, ClaimError>;
+        num_idx: usize,
+    ) -> Result<Vec<F>, ClaimError>;
 
     /// Create new ConcreteLayer from a LayerBuilder
     fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self
@@ -131,21 +138,19 @@ pub trait Layer<F: FieldExt> {
 }
 
 /// Default Layer abstraction
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct GKRLayer<F, Tr> {
     id: LayerId,
-    expression: ExpressionStandard<F>,
+    pub(crate) expression: ExpressionStandard<F>,
     beta: Option<BetaTable<F>>,
     #[serde(skip)]
     _marker: PhantomData<Tr>,
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
-
-    /// Ingest a claim, initialize beta tables, and do any other 
+    /// Ingest a claim, initialize beta tables, and do any other
     /// bookkeeping that needs to be done before the sumcheck starts
     fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<(Vec<F>, usize), LayerError> {
-
         // --- `max_round` is total number of rounds of sumcheck which need to be performed ---
         // --- `beta` is the beta table itself, initialized with the challenge coordinate held within `claim` ---
         let (max_round, beta) = {
@@ -178,7 +183,6 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
     /// Computes a round of the sumcheck protocol on this Layer
     fn prove_round(&mut self, round_index: usize, challenge: F) -> Result<Vec<F>, LayerError> {
-
         // --- Grabs the expression/beta table and updates them with the new challenge ---
         let (expression, beta) = self.mut_expression_and_beta();
         let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
@@ -189,8 +193,9 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         // --- Grabs the degree of univariate polynomial we are sending over ---
         let degree = get_round_degree(expression, round_index);
 
-        let prover_sumcheck_message = compute_sumcheck_message(expression, round_index, degree, beta)
-            .map_err(LayerError::ExpressionError)?;
+        let prover_sumcheck_message =
+            compute_sumcheck_message(expression, round_index, degree, beta)
+                .map_err(LayerError::ExpressionError)?;
 
         Ok(prover_sumcheck_message.0)
     }
@@ -227,7 +232,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
 
@@ -237,16 +241,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .unwrap();
 
         // Grabs all of the sumcheck messages from all of the rounds within this layer.
-        // 
+        //
         // Note that the sumcheck messages are g_1(x), ..., g_n(x) for an expression with
         // n iterated variables, where g_i(x) = \sum_{b_{i + 1}, ..., b_n} g(r_1, ..., r_{i - 1}, r_i, b_{i + 1}, ..., b_n)
         // and we always give the evals g_i(0), g_i(1), ..., g_i(d - 1) where `d` is the degree of the ith variable.
-        // 
+        //
         // Additionally, each of the `r_i`s is sampled from the FS transcript and the prover messages
         // (i.e. all of the g_i's) are added to the transcript each time.
         let all_prover_sumcheck_messages: Vec<Vec<F>> = std::iter::once(Ok(first_sumcheck_message))
             .chain((1..num_sumcheck_rounds).map(|round_index| {
-
                 // --- Verifier samples a random challenge \in \mathbb{F} to send to prover ---
                 let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
 
@@ -266,7 +269,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
 
-        self.expression.fix_variable(num_sumcheck_rounds - 1, final_chal);
+        self.expression
+            .fix_variable(num_sumcheck_rounds - 1, final_chal);
         self.beta
             .as_mut()
             .map(|beta| beta.beta_update(num_sumcheck_rounds - 1, final_chal));
@@ -280,7 +284,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         sumcheck_prover_messages: Vec<Vec<F>>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), LayerError> {
-
         // --- Keeps track of challenges u_1, ..., u_n to be bound ---
         let mut challenges = vec![];
 
@@ -332,10 +335,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---
-        let beta_fn_evaluated_at_challenge_point = compute_beta_over_two_challenges(&claim.0, &challenges);
+        let beta_fn_evaluated_at_challenge_point =
+            compute_beta_over_two_challenges(&claim.0, &challenges);
 
         // --- The actual value should just be the product of the two ---
-        let mle_evaluated_at_challenge_coord = expr_evaluated_at_challenge_coord * beta_fn_evaluated_at_challenge_point;
+        let mle_evaluated_at_challenge_coord =
+            expr_evaluated_at_challenge_coord * beta_fn_evaluated_at_challenge_point;
 
         // --- Computing g_n(r_n) ---
         let g_n_evaluated_at_r_n =
@@ -442,56 +447,59 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         &self.id
     }
 
-    fn get_wlx_evaluations(&self, claim_vecs: Vec<Vec<F>>,
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: Vec<Vec<F>>,
         claimed_vals: &mut Vec<F>,
         num_claims: usize,
-        num_idx: usize) -> Result<Vec<F>, ClaimError> {
-            let mut expr = self.expression.clone();
-            //fix variable hella times
-            //evaluate expr on the mutated expr
+        num_idx: usize,
+    ) -> Result<Vec<F>, ClaimError> {
+        let mut expr = self.expression.clone();
+        //fix variable hella times
+        //evaluate expr on the mutated expr
 
-            // get the number of evaluations
-            let num_vars = expr.index_mle_indices(0);
-            let degree = get_round_degree(&expr, 0);
-            // expr.init_beta_tables(prev_layer_claim);
-            let num_evals = (num_vars) * (num_claims); //* degree;
+        // get the number of evaluations
+        let num_vars = expr.index_mle_indices(0);
+        let degree = get_round_degree(&expr, 0);
+        // expr.init_beta_tables(prev_layer_claim);
+        let num_evals = (num_vars) * (num_claims); //* degree;
 
-            // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-            let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-                .map(|idx| {
-                    // get the challenge l(idx)
-                    let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                        .map(|claim_idx| {
-                            let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                                .map(|claim| claim[claim_idx])
-                                .collect();
-                            let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                            res
-                        })
-                        .collect();
+        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+            .map(|idx| {
+                // get the challenge l(idx)
+                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                    .map(|claim_idx| {
+                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                            .map(|claim| claim[claim_idx])
+                            .collect();
+                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
+                        res
+                    })
+                    .collect();
 
-                    // use fix_var to compute W(l(index))
-                    // let mut fix_expr = expr.clone();
-                    // let eval_w_l = fix_expr.evaluate_expr(new_chal);
+                // use fix_var to compute W(l(index))
+                // let mut fix_expr = expr.clone();
+                // let eval_w_l = fix_expr.evaluate_expr(new_chal);
 
-                    let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
-                    beta.table.index_mle_indices(0);
-                    let eval = compute_sumcheck_message(&expr, 0, degree, &beta).unwrap();
-                    let Evals(evals) = eval;
-                    evals[0] + evals[1]
+                let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
+                beta.table.index_mle_indices(0);
+                let eval = compute_sumcheck_message(&expr, 0, degree, &beta).unwrap();
+                let Evals(evals) = eval;
+                evals[0] + evals[1]
 
-                    // this has to be a sum--get the overall evaluation
-                    // match eval_w_l {
-                    //     Ok(evaluation) => Ok(evaluation),
-                    //     Err(_) => Err(ClaimError::ExpressionEvalError)
-                    // }
-                })
-                .collect();
+                // this has to be a sum--get the overall evaluation
+                // match eval_w_l {
+                //     Ok(evaluation) => Ok(evaluation),
+                //     Err(_) => Err(ClaimError::ExpressionEvalError)
+                // }
+            })
+            .collect();
 
-            // concat this with the first k evaluations from the claims to get num_evals evaluations
-            claimed_vals.extend(&next_evals);
-            let wlx_evals = claimed_vals.clone();
-            Ok(wlx_evals)
+        // concat this with the first k evaluations from the claims to get num_evals evaluations
+        claimed_vals.extend(&next_evals);
+        let wlx_evals = claimed_vals.clone();
+        Ok(wlx_evals)
     }
 
     fn get_enum(self) -> LayerEnum<F, Self::Transcript> {

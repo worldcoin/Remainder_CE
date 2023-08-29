@@ -7,7 +7,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -506,8 +506,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// Helper function for `evaluate_expr` to traverse the expression and simply
 /// gather all of the evaluations, combining them as appropriate.
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
-/// within. 
-/// 
+/// within.
+///
 /// TODO!(ryancao): Make this not need to be mutable
 pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     expr: &Exp,
@@ -560,7 +560,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     }
 
     /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
-    /// 
+    ///
     /// Returns the max number of bits that are indexed
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {
@@ -586,6 +586,28 @@ impl<F: FieldExt> ExpressionStandard<F> {
             ExpressionStandard::Constant(_) => curr_index,
         }
     }
+
+    ///traverse an expression mutably changing it's contents
+    pub fn traverse_mut<E>(
+        &mut self,
+        observer_fn: &mut impl FnMut(&mut ExpressionStandard<F>) -> Result<(), E>,
+    ) -> Result<(), E> {
+        match self {
+            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) => observer_fn(self),
+            ExpressionStandard::Negated(exp) => observer_fn(exp),
+            ExpressionStandard::Product(_) => observer_fn(self),
+            ExpressionStandard::Scaled(exp, _) => exp.traverse_mut(observer_fn),
+            ExpressionStandard::Selector(_, lhs, rhs) => {
+                lhs.traverse_mut(observer_fn)?;
+                rhs.traverse_mut(observer_fn)?;
+                observer_fn(self)
+            }
+            ExpressionStandard::Sum(lhs, rhs) => {
+                lhs.traverse_mut(observer_fn)?;
+                rhs.traverse_mut(observer_fn)
+            }
+        }
+    }
 }
 
 impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
@@ -601,7 +623,9 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
                 .field(b)
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionStandard::Mle(_mle_ref) => f.debug_struct("Mle").field("mle_ref", _mle_ref).finish(),
+            ExpressionStandard::Mle(_mle_ref) => {
+                f.debug_struct("Mle").field("mle_ref", _mle_ref).finish()
+            }
             ExpressionStandard::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionStandard::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionStandard::Product(a) => f.debug_tuple("Product").field(a).finish(),
@@ -645,8 +669,8 @@ mod tests {
     use crate::{layer::LayerId, mle::dense::DenseMle};
 
     use super::*;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::One;
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
     // #[test]
     // fn test_expression_operators() {

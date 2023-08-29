@@ -7,5 +7,5 @@ pub mod layer;
 pub mod mle;
 pub mod prover;
 pub mod sumcheck;
-pub mod zkdt;
 pub mod utils;
+pub mod zkdt;

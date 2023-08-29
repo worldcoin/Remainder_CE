@@ -23,9 +23,9 @@
 //! ```
 extern crate serde;
 extern crate serde_json;
-use serde::{Deserialize, Serialize};
-use rand::Rng;
 use crate::zkdt::helpers::SIGNED_DECOMPOSITION_MAX_ARG_ABS;
+use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 /// Enum for representing a tree in a recursive form amenable to manipulation and path
 /// determination (given a sample).
@@ -166,8 +166,7 @@ impl<T: Copy> Node<T> {
     /// `DUMMY_FEATURE_INDEX`, respectively.
     /// Pre: `depth >= self.depth()`
     /// Post: `self.is_perfect()`
-    pub fn perfect_to_depth(&self, depth: usize) -> Node<T>
-    {
+    pub fn perfect_to_depth(&self, depth: usize) -> Node<T> {
         assert!(depth >= 1);
         match self {
             Node::Internal {
@@ -185,8 +184,8 @@ impl<T: Copy> Node<T> {
                 depth,
                 Self::DUMMY_FEATURE_INDEX,
                 Self::DUMMY_THRESHOLD,
-                *value
-                ),
+                *value,
+            ),
         }
     }
 
@@ -306,7 +305,11 @@ pub fn quantize_trees(trees: &[Node<f64>]) -> (Vec<Node<i32>>, f64) {
 /// Node ids are not assigned.
 /// Thresholds are bounded SIGNED_DECOMPOSITION_MAX_ARG_ABS.
 /// Pre: target_depth >= 1; n_features >= 1.
-pub fn generate_tree(target_depth: usize, n_features: usize, premature_leaf_proba: f64) -> Node<f64> {
+pub fn generate_tree(
+    target_depth: usize,
+    n_features: usize,
+    premature_leaf_proba: f64,
+) -> Node<f64> {
     let mut rng = rand::thread_rng();
     let premature_leaf: bool = rng.gen::<f64>() < premature_leaf_proba;
     if (target_depth == 1) | premature_leaf {
@@ -492,9 +495,7 @@ mod tests {
 
     #[test]
     fn test_get_path() {
-        let mut tree = build_small_tree()
-            .map(&|x| x as i32)
-            .perfect_to_depth(3);
+        let mut tree = build_small_tree().map(&|x| x as i32).perfect_to_depth(3);
         tree.assign_id(0);
         let path = tree.get_path(&vec![2_u16, 0_u16]);
         assert_eq!(path.len(), 3);
@@ -545,7 +546,8 @@ mod tests {
     }
 
     #[test]
-    fn test_documentation() { // TODO remove once the doctests are being run
+    fn test_documentation() {
+        // TODO remove once the doctests are being run
         let n_features = 4;
         let depth = 6;
         // start with a random (probably not perfect) tree with f64 leaf values

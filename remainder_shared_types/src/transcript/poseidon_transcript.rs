@@ -1,8 +1,8 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
 use itertools::Itertools;
-use serde::{Serialize, Deserialize};
-use tracing::trace;
 use poseidon::Poseidon;
+use serde::{Deserialize, Serialize};
+use tracing::trace;
 
 use crate::FieldExt;
 
@@ -13,7 +13,7 @@ fn default_sponge<F: FieldExt>() -> Poseidon<F, 3, 2> {
 }
 
 /// A transcript that uses the Poseidon hash function; Useful for recursive proving
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PoseidonTranscript<F: FieldExt> {
     #[serde(skip)]
     #[serde(default = "default_sponge")]

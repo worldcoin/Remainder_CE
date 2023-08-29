@@ -4,13 +4,13 @@ use std::cmp::max;
 use ark_std::log2;
 use itertools::Itertools;
 
-use crate::expression::{ExpressionStandard, Expression};
+use super::structs::{BinDecomp16Bit, DecisionNode, InputAttribute, LeafNode};
+use crate::expression::{Expression, ExpressionStandard};
 use crate::layer::batched::BatchedLayer;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
-use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
 
 struct ProductTreeBuilder<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
@@ -45,34 +45,36 @@ impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
     type Successor = ZeroMleRef<F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle_1.mle_ref()) - 
-        ExpressionStandard::Mle(self.mle_2.mle_ref())
+        ExpressionStandard::Mle(self.mle_1.mle_ref())
+            - ExpressionStandard::Mle(self.mle_2.mle_ref())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let num_vars = max(self.mle_1.num_iterated_vars(), self.mle_2.num_iterated_vars());
+        let num_vars = max(
+            self.mle_1.num_iterated_vars(),
+            self.mle_2.num_iterated_vars(),
+        );
         ZeroMleRef::new(num_vars, prefix_bits, id)
     }
 }
 
 impl<F: FieldExt> EqualityCheck<F> {
     /// creates new difference mle
-    pub fn new(
-        mle_1: DenseMle<F, F>,
-        mle_2: DenseMle<F, F>,
-    ) -> Self {
-        Self {
-            mle_1, mle_2
-        }
+    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+        Self { mle_1, mle_2 }
     }
 
     pub fn new_batched(
         mle_1: Vec<DenseMle<F, F>>,
         mle_2: Vec<DenseMle<F, F>>,
     ) -> BatchedLayer<F, Self> {
-        BatchedLayer::new(mle_1.into_iter().zip(mle_2.into_iter()).map(|(mle_1, mle_2)| Self {
-            mle_1, mle_2
-        }).collect())
+        BatchedLayer::new(
+            mle_1
+                .into_iter()
+                .zip(mle_2.into_iter())
+                .map(|(mle_1, mle_2)| Self { mle_1, mle_2 })
+                .collect(),
+        )
     }
 }
 
@@ -81,25 +83,39 @@ impl<F: FieldExt> EqualityCheck<F> {
 pub struct AttributeConsistencyBuilder<F: FieldExt> {
     mle_input: DenseMle<F, InputAttribute<F>>,
     mle_path: DenseMle<F, DecisionNode<F>>,
-    tree_height: usize
+    tree_height: usize,
 }
 
 impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle_input.attr_id(Some(log2(self.tree_height) as usize))) -
-        ExpressionStandard::Mle(self.mle_path.attr_id())
+        ExpressionStandard::Mle(
+            self.mle_input
+                .attr_id(Some(log2(self.tree_height) as usize)),
+        ) - ExpressionStandard::Mle(self.mle_path.attr_id())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-
-        DenseMle::new_from_iter(self
-            .mle_input
-            .into_iter()
-            .zip(self.mle_path.into_iter())
-            .map(|(InputAttribute { attr_id: input_attr_ids, .. }, DecisionNode { attr_id: path_attr_ids, ..})|
-                input_attr_ids - path_attr_ids), id, prefix_bits)
+        DenseMle::new_from_iter(
+            self.mle_input
+                .into_iter()
+                .zip(self.mle_path.into_iter())
+                .map(
+                    |(
+                        InputAttribute {
+                            attr_id: input_attr_ids,
+                            ..
+                        },
+                        DecisionNode {
+                            attr_id: path_attr_ids,
+                            ..
+                        },
+                    )| input_attr_ids - path_attr_ids,
+                ),
+            id,
+            prefix_bits,
+        )
     }
 }
 
@@ -108,10 +124,12 @@ impl<F: FieldExt> AttributeConsistencyBuilder<F> {
     pub(crate) fn new(
         mle_input: DenseMle<F, InputAttribute<F>>,
         mle_path: DenseMle<F, DecisionNode<F>>,
-        tree_height: usize
+        tree_height: usize,
     ) -> Self {
         Self {
-            mle_input, mle_path, tree_height
+            mle_input,
+            mle_path,
+            tree_height,
         }
     }
 }
@@ -125,7 +143,6 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     type Successor = DenseMle<F, F>;
     //a function that multiplies the parts of the tuple pair-wise
     fn build_expression(&self) -> ExpressionStandard<F> {
-
         // begin sus: feels like there should be a concat (reverse direction) for expression,
         // for splitting the expression
         let split_mle = self.mle.split(F::one());
@@ -135,23 +152,20 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-
         // Create flatmle from tuple mle
         let split_mle = self.mle.split(F::one());
-        DenseMle::new_from_iter(split_mle
-            .into_iter()
-            .map(|Tuple2((a, b))| a * b), id, prefix_bits)
+        DenseMle::new_from_iter(
+            split_mle.into_iter().map(|Tuple2((a, b))| a * b),
+            id,
+            prefix_bits,
+        )
     }
 }
 
 impl<F: FieldExt> SplitProductBuilder<F> {
     /// create new halfed multiplied mle
-    pub fn new(
-        mle: DenseMle<F, F>,
-    ) -> Self {
-        Self {
-            mle
-        }
+    pub fn new(mle: DenseMle<F, F>) -> Self {
+        Self { mle }
     }
 }
 
@@ -164,15 +178,14 @@ pub struct ConcatBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
     type Successor = DenseMle<F, F>;
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Selector(MleIndex::Iterated,
-                                     Box::new(ExpressionStandard::Mle(self.mle_1.mle_ref())),
-                                     Box::new(ExpressionStandard::Mle(self.mle_2.mle_ref())))
+        ExpressionStandard::Selector(
+            MleIndex::Iterated,
+            Box::new(ExpressionStandard::Mle(self.mle_1.mle_ref())),
+            Box::new(ExpressionStandard::Mle(self.mle_2.mle_ref())),
+        )
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let mut concat_mle_vec: Vec<F> = self.mle_1
-            .clone()
-            .into_iter()
-            .collect();
+        let mut concat_mle_vec: Vec<F> = self.mle_1.clone().into_iter().collect();
 
         concat_mle_vec.extend(self.mle_2.clone().into_iter());
         DenseMle::new_from_raw(concat_mle_vec, id, prefix_bits)
@@ -181,13 +194,8 @@ impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
 
 impl<F: FieldExt> ConcatBuilder<F> {
     /// create new leaf node packed
-    pub fn new(
-        mle_1: DenseMle<F, F>,
-        mle_2: DenseMle<F, F>,
-    ) -> Self {
-        Self {
-            mle_1, mle_2
-        }
+    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+        Self { mle_1, mle_2 }
     }
 }
 
@@ -206,21 +214,18 @@ impl<F: FieldExt> LayerBuilder<F> for RMinusXBuilder<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        DenseMle::new_from_iter(self.packed_x.clone().into_iter().map(
-            |x| self.r - x
-        ), id, prefix_bits)
+        DenseMle::new_from_iter(
+            self.packed_x.clone().into_iter().map(|x| self.r - x),
+            id,
+            prefix_bits,
+        )
     }
 }
 
 impl<F: FieldExt> RMinusXBuilder<F> {
     /// create new leaf node packed
-    pub fn new(
-        packed_x: DenseMle<F, F>,
-        r: F,
-    ) -> Self {
-        Self {
-            packed_x, r
-        }
+    pub fn new(packed_x: DenseMle<F, F>, r: F) -> Self {
+        Self { packed_x, r }
     }
 }
 
@@ -236,21 +241,14 @@ impl<F: FieldExt> LayerBuilder<F> for SquaringBuilder<F> {
         ExpressionStandard::products(vec![self.mle.mle_ref(), self.mle.mle_ref()])
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        DenseMle::new_from_iter(self.mle
-            .clone()
-            .into_iter()
-            .map(|x| x * x), id, prefix_bits)
+        DenseMle::new_from_iter(self.mle.clone().into_iter().map(|x| x * x), id, prefix_bits)
     }
 }
 
 impl<F: FieldExt> SquaringBuilder<F> {
     /// create new leaf node packed
-    pub fn new(
-        mle: DenseMle<F, F>,
-    ) -> Self {
-        Self {
-            mle
-        }
+    pub fn new(mle: DenseMle<F, F>) -> Self {
+        Self { mle }
     }
 }
 
@@ -264,19 +262,29 @@ pub struct BitExponentiationBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilder<F> {
     type Successor = DenseMle<F, F>;
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let b_ij = self.bin_decomp.mle_bit_refs()[15-self.bit_index].clone();
-        ExpressionStandard::Sum(Box::new(ExpressionStandard::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
-                                Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(b_ij)))
+        let b_ij = self.bin_decomp.mle_bit_refs()[15 - self.bit_index].clone();
+        ExpressionStandard::Sum(
+            Box::new(ExpressionStandard::products(vec![
+                self.r_minus_x_power.mle_ref(),
+                b_ij.clone(),
+            ])),
+            Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(b_ij)),
+        )
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         //TODO!(fix this so it uses bin_decomp.into_iter)
-        let b_ij = self.bin_decomp.mle_bit_refs()[15-self.bit_index].clone();
-        DenseMle::new_from_iter(self.r_minus_x_power
-            .clone()
-            .into_iter()
-            .zip(b_ij.bookkeeping_table.clone().into_iter())
-            .map(
-            |(r_minus_x_power, b_ij_iter)| (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))), id, prefix_bits)
+        let b_ij = self.bin_decomp.mle_bit_refs()[15 - self.bit_index].clone();
+        DenseMle::new_from_iter(
+            self.r_minus_x_power
+                .clone()
+                .into_iter()
+                .zip(b_ij.bookkeeping_table.clone().into_iter())
+                .map(|(r_minus_x_power, b_ij_iter)| {
+                    (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))
+                }),
+            id,
+            prefix_bits,
+        )
     }
 }
 
@@ -288,7 +296,9 @@ impl<F: FieldExt> BitExponentiationBuilder<F> {
         r_minus_x_power: DenseMle<F, F>,
     ) -> Self {
         Self {
-            bin_decomp, bit_index, r_minus_x_power
+            bin_decomp,
+            bit_index,
+            r_minus_x_power,
         }
     }
 }
@@ -308,24 +318,24 @@ impl<F: FieldExt> LayerBuilder<F> for ProductBuilder<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        DenseMle::new_from_iter(self.prev_prod
-            .clone()
-            .into_iter()
-            .zip(self.multiplier.clone().into_iter())
-            .map(
-            |(prev_prod, multiplier)| prev_prod * multiplier
-        ), id, prefix_bits)
+        DenseMle::new_from_iter(
+            self.prev_prod
+                .clone()
+                .into_iter()
+                .zip(self.multiplier.clone().into_iter())
+                .map(|(prev_prod, multiplier)| prev_prod * multiplier),
+            id,
+            prefix_bits,
+        )
     }
 }
 
 impl<F: FieldExt> ProductBuilder<F> {
     /// create new leaf node packed
-    pub fn new(
-        multiplier: DenseMle<F, F>,
-        prev_prod: DenseMle<F, F>,
-    ) -> Self {
+    pub fn new(multiplier: DenseMle<F, F>, prev_prod: DenseMle<F, F>) -> Self {
         Self {
-            multiplier, prev_prod
+            multiplier,
+            prev_prod,
         }
     }
 }
@@ -334,7 +344,7 @@ impl<F: FieldExt> ProductBuilder<F> {
 pub struct LeafPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, LeafNode<F>>,
     r: F,
-    r_packing: F
+    r_packing: F,
 }
 
 impl<F: FieldExt> LayerBuilder<F> for LeafPackingBuilder<F> {
@@ -342,28 +352,29 @@ impl<F: FieldExt> LayerBuilder<F> for LeafPackingBuilder<F> {
 
     // expressions = r - (x.node_id + r_packing * x.node_val)
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.node_id()) +
-        ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.node_val())), self.r_packing))
+        ExpressionStandard::Constant(self.r)
+            - (ExpressionStandard::Mle(self.mle.node_id())
+                + ExpressionStandard::Scaled(
+                    Box::new(ExpressionStandard::Mle(self.mle.node_val())),
+                    self.r_packing,
+                ))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        DenseMle::new_from_iter(self.mle.into_iter().map(
-            |LeafNode {node_id, node_val}|
-            self.r - (node_id + self.r_packing * node_val)
-        ), id, prefix_bits)
+        DenseMle::new_from_iter(
+            self.mle.into_iter().map(|LeafNode { node_id, node_val }| {
+                self.r - (node_id + self.r_packing * node_val)
+            }),
+            id,
+            prefix_bits,
+        )
     }
 }
 
 impl<F: FieldExt> LeafPackingBuilder<F> {
     /// create new leaf node packed
-    pub(crate) fn new(
-        mle: DenseMle<F, LeafNode<F>>,
-        r: F,
-        r_packing: F
-    ) -> Self {
-        Self {
-            mle, r, r_packing
-        }
+    pub(crate) fn new(mle: DenseMle<F, LeafNode<F>>, r: F, r_packing: F) -> Self {
+        Self { mle, r, r_packing }
     }
 }
 
@@ -371,7 +382,7 @@ impl<F: FieldExt> LeafPackingBuilder<F> {
 pub struct DecisionPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, DecisionNode<F>>,
     r: F,
-    r_packings: (F, F)
+    r_packings: (F, F),
 }
 
 impl<F: FieldExt> LayerBuilder<F> for DecisionPackingBuilder<F> {
@@ -379,29 +390,39 @@ impl<F: FieldExt> LayerBuilder<F> for DecisionPackingBuilder<F> {
 
     // expressions = r - (x.node_id + r_packing[0] * x.attr_id + r_packing[1] * x.threshold)
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.node_id()) +
-        ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.attr_id())), self.r_packings.0) +
-        ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.threshold())), self.r_packings.1))
+        ExpressionStandard::Constant(self.r)
+            - (ExpressionStandard::Mle(self.mle.node_id())
+                + ExpressionStandard::Scaled(
+                    Box::new(ExpressionStandard::Mle(self.mle.attr_id())),
+                    self.r_packings.0,
+                )
+                + ExpressionStandard::Scaled(
+                    Box::new(ExpressionStandard::Mle(self.mle.threshold())),
+                    self.r_packings.1,
+                ))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        DenseMle::new_from_iter(self.mle.into_iter().map(
-            |DecisionNode { node_id, attr_id, threshold }|
-            self.r - (node_id + self.r_packings.0 * attr_id + self.r_packings.1 * threshold)
-        ), id, prefix_bits)
+        DenseMle::new_from_iter(
+            self.mle.into_iter().map(
+                |DecisionNode {
+                     node_id,
+                     attr_id,
+                     threshold,
+                 }| {
+                    self.r - (node_id + self.r_packings.0 * attr_id + self.r_packings.1 * threshold)
+                },
+            ),
+            id,
+            prefix_bits,
+        )
     }
 }
 
 impl<F: FieldExt> DecisionPackingBuilder<F> {
     /// create new decision node packed
-    pub(crate) fn new(
-        mle: DenseMle<F, DecisionNode<F>>,
-        r: F,
-        r_packings: (F, F)
-    ) -> Self {
-        Self {
-            mle, r, r_packings
-        }
+    pub(crate) fn new(mle: DenseMle<F, DecisionNode<F>>, r: F, r_packings: (F, F)) -> Self {
+        Self { mle, r, r_packings }
     }
 }
 
@@ -409,7 +430,7 @@ impl<F: FieldExt> DecisionPackingBuilder<F> {
 pub struct InputPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, InputAttribute<F>>,
     r: F,
-    r_packing: F
+    r_packing: F,
 }
 
 impl<F: FieldExt> LayerBuilder<F> for InputPackingBuilder<F> {
@@ -417,25 +438,31 @@ impl<F: FieldExt> LayerBuilder<F> for InputPackingBuilder<F> {
 
     // expressions = r - (x.attr_id + r_packing * x.attr_val)
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.attr_id(None)) +
-        ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.attr_val(None))), self.r_packing))
+        ExpressionStandard::Constant(self.r)
+            - (ExpressionStandard::Mle(self.mle.attr_id(None))
+                + ExpressionStandard::Scaled(
+                    Box::new(ExpressionStandard::Mle(self.mle.attr_val(None))),
+                    self.r_packing,
+                ))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        DenseMle::new_from_iter(self.mle.into_iter().map(|InputAttribute { attr_id, attr_val }| self.r - (attr_id + self.r_packing * attr_val)), id, prefix_bits)
+        DenseMle::new_from_iter(
+            self.mle
+                .into_iter()
+                .map(|InputAttribute { attr_id, attr_val }| {
+                    self.r - (attr_id + self.r_packing * attr_val)
+                }),
+            id,
+            prefix_bits,
+        )
     }
 }
 
 impl<F: FieldExt> InputPackingBuilder<F> {
     /// create new decision node packed
-    pub(crate) fn new(
-        mle: DenseMle<F, InputAttribute<F>>,
-        r: F,
-        r_packing: F
-    ) -> Self {
-        Self {
-            mle, r, r_packing
-        }
+    pub(crate) fn new(mle: DenseMle<F, InputAttribute<F>>, r: F, r_packing: F) -> Self {
+        Self { mle, r, r_packing }
     }
 }
 
@@ -480,10 +507,16 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_circuit::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles}};
-    use halo2_base::halo2_proofs::halo2curves::{bn256::Fr, FieldExt};
+    use crate::{
+        mle::{dense::DenseMle, MleRef},
+        zkdt::zkdt_circuit::{
+            generate_dummy_mles, generate_dummy_mles_batch, DummyMles, NUM_DUMMY_INPUTS,
+            TREE_HEIGHT,
+        },
+    };
     use ark_ff::Field;
     use ark_std::log2;
+    use halo2_base::halo2_proofs::halo2curves::{bn256::Fr, FieldExt};
 
     #[test]
     fn test_product_tree_builder_next_layer() {
@@ -494,10 +527,11 @@ mod tests {
             (Fr::from(6), Fr::from(7)),
         ];
 
-        let mle = DenseMle::new_from_iter(tuple_vec
-            .clone()
-            .into_iter()
-            .map(Tuple2::from), LayerId::Input(0), None);
+        let mle = DenseMle::new_from_iter(
+            tuple_vec.clone().into_iter().map(Tuple2::from),
+            LayerId::Input(0),
+            None,
+        );
 
         let builder = ProductTreeBuilder { mle };
         let next_layer = builder.next_layer(LayerId::Layer(0), None);
@@ -509,10 +543,12 @@ mod tests {
         );
     }
 
-
     #[test]
     fn test_binary_decomp_builder() {
-        let DummyMles {dummy_binary_decomp_diffs_mle, ..} = generate_dummy_mles::<Fr>();
+        let DummyMles {
+            dummy_binary_decomp_diffs_mle,
+            ..
+        } = generate_dummy_mles::<Fr>();
 
         let first_bin_decomp_bit_mle = dummy_binary_decomp_diffs_mle.mle_bit_refs();
         let _first_bin_decomp_bit_expr =
@@ -522,7 +558,7 @@ mod tests {
             mle: dummy_binary_decomp_diffs_mle,
         };
 
-        let _binary_decomp_expr: ExpressionStandard<_>= binary_decomp_builder.build_expression();
+        let _binary_decomp_expr: ExpressionStandard<_> = binary_decomp_builder.build_expression();
         assert_eq!(1, 1)
     }
 
@@ -535,32 +571,45 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
 
-        let DummyMles {dummy_input_data_mle, ..} = generate_dummy_mles::<Fr>();
+        let DummyMles {
+            dummy_input_data_mle,
+            ..
+        } = generate_dummy_mles::<Fr>();
 
         let (r, r_packing) = (Fr::from(3), Fr::from(5));
-        let input_packing_builder = InputPackingBuilder{
-                                                                                            mle: dummy_input_data_mle.clone(),
-                                                                                            r,
-                                                                                            r_packing
-                                                                                        };
+        let input_packing_builder = InputPackingBuilder {
+            mle: dummy_input_data_mle.clone(),
+            r,
+            r_packing,
+        };
         let input_packed_expression = input_packing_builder.build_expression();
         println!("layer expression: {:?}", input_packed_expression);
 
         let next_layer = input_packing_builder.next_layer(LayerId::Layer(0), None);
-        let next_layer_should_be = dummy_input_data_mle.attr_id(None).bookkeeping_table
-                            .clone().iter()
-                            .zip(dummy_input_data_mle.attr_val(None).bookkeeping_table.clone().iter())
-                            .map(|(a, b)| {r - (a + &(r_packing * b))})
-                            .collect_vec();
+        let next_layer_should_be = dummy_input_data_mle
+            .attr_id(None)
+            .bookkeeping_table
+            .clone()
+            .iter()
+            .zip(
+                dummy_input_data_mle
+                    .attr_val(None)
+                    .bookkeeping_table
+                    .clone()
+                    .iter(),
+            )
+            .map(|(a, b)| r - (a + &(r_packing * b)))
+            .collect_vec();
 
         assert_eq!(next_layer.mle_ref().bookkeeping_table, next_layer_should_be);
         println!("layer mle: {:?}", next_layer.mle_ref().bookkeeping_table);
 
-
         // the attr_id: [0, 1], its values are: [3233, 2380],  r = 3, r_packing = 5
         // characteristic poly w packing: [3 - (0 + 5 * 3233), 3 - (1 + 5 * 2380)], which is [-16162, -11898]
-        assert_eq!(next_layer_should_be, vec![Fr::from(16162).neg(), Fr::from(11898).neg()]);
-
+        assert_eq!(
+            next_layer_should_be,
+            vec![Fr::from(16162).neg(), Fr::from(11898).neg()]
+        );
     }
 
     #[test]
@@ -572,34 +621,50 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
 
-        let DummyMles {dummy_decision_node_paths_mle, ..} = generate_dummy_mles::<Fr>();
+        let DummyMles {
+            dummy_decision_node_paths_mle,
+            ..
+        } = generate_dummy_mles::<Fr>();
 
         let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
-        let input_packing_builder = DecisionPackingBuilder{
-                                                                                            mle: dummy_decision_node_paths_mle.clone(),
-                                                                                            r,
-                                                                                            r_packings
-                                                                                        };
+        let input_packing_builder = DecisionPackingBuilder {
+            mle: dummy_decision_node_paths_mle.clone(),
+            r,
+            r_packings,
+        };
         let input_packed_expression = input_packing_builder.build_expression();
         println!("layer expression: {:?}", input_packed_expression);
 
         let next_layer = input_packing_builder.next_layer(LayerId::Layer(0), None);
-        let next_layer_should_be = dummy_decision_node_paths_mle.node_id().bookkeeping_table
-                            .clone().iter()
-                            .zip(dummy_decision_node_paths_mle.attr_id().bookkeeping_table.clone().iter())
-                            .zip(dummy_decision_node_paths_mle.threshold().bookkeeping_table.clone().iter())
-                            .map(|((a, b), c)| {r - (a + &(r_packings.0 * b) + &(r_packings.1 * c))})
-                            .collect_vec();
+        let next_layer_should_be = dummy_decision_node_paths_mle
+            .node_id()
+            .bookkeeping_table
+            .clone()
+            .iter()
+            .zip(
+                dummy_decision_node_paths_mle
+                    .attr_id()
+                    .bookkeeping_table
+                    .clone()
+                    .iter(),
+            )
+            .zip(
+                dummy_decision_node_paths_mle
+                    .threshold()
+                    .bookkeeping_table
+                    .clone()
+                    .iter(),
+            )
+            .map(|((a, b), c)| r - (a + &(r_packings.0 * b) + &(r_packings.1 * c)))
+            .collect_vec();
 
         assert_eq!(next_layer.mle_ref().bookkeeping_table, next_layer_should_be);
         println!("layer mle: {:?}", next_layer.mle_ref().bookkeeping_table);
-
 
         // the node_id: [0], its attr_id is: [0], its threshold is: [1206].  r = 3, r_packings = 5, 4
         // characteristic poly w packing: [3 - (0 + 5 * 0 + 4 * 1206 )], which is [-4821]
         println!("{:?}", dummy_decision_node_paths_mle);
         assert_eq!(next_layer_should_be, vec![Fr::from(4821).neg()]);
-
     }
 
     #[test]
@@ -611,33 +676,46 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
 
-        let DummyMles {dummy_leaf_node_paths_mle, ..} = generate_dummy_mles::<Fr>();
+        let DummyMles {
+            dummy_leaf_node_paths_mle,
+            ..
+        } = generate_dummy_mles::<Fr>();
 
         let (r, r_packing) = (Fr::from(3), Fr::from(5));
-        let input_packing_builder = LeafPackingBuilder{
-                                                                                            mle: dummy_leaf_node_paths_mle.clone(),
-                                                                                            r,
-                                                                                            r_packing
-                                                                                        };
+        let input_packing_builder = LeafPackingBuilder {
+            mle: dummy_leaf_node_paths_mle.clone(),
+            r,
+            r_packing,
+        };
         let input_packed_expression = input_packing_builder.build_expression();
         println!("layer expression: {:?}", input_packed_expression);
 
         let next_layer = input_packing_builder.next_layer(LayerId::Layer(0), None);
-        let next_layer_should_be = dummy_leaf_node_paths_mle.node_id().bookkeeping_table
-                            .clone().iter()
-                            .zip(dummy_leaf_node_paths_mle.node_val().bookkeeping_table.clone().iter())
-                            .map(|(a, b)| {r - (a + &(r_packing * b))})
-                            .collect_vec();
+        let next_layer_should_be = dummy_leaf_node_paths_mle
+            .node_id()
+            .bookkeeping_table
+            .clone()
+            .iter()
+            .zip(
+                dummy_leaf_node_paths_mle
+                    .node_val()
+                    .bookkeeping_table
+                    .clone()
+                    .iter(),
+            )
+            .map(|(a, b)| r - (a + &(r_packing * b)))
+            .collect_vec();
 
         assert_eq!(next_layer.mle_ref().bookkeeping_table, next_layer_should_be);
         println!("layer mle: {:?}", next_layer.mle_ref().bookkeeping_table);
 
-
         // the node_id: [2], its node_val is: 17299145535799709783. r = 3, r_packing = 5
         // characteristic poly w packing: [3 - (2 + 5 * 17299145535799709783)]
         println!("{:?}", dummy_leaf_node_paths_mle);
-        assert_eq!(next_layer_should_be, vec![ Fr::from(3) - (Fr::from(2) + Fr::from(5) * Fr::from(17299145535799709783 as u64))]);
-
+        assert_eq!(
+            next_layer_should_be,
+            vec![Fr::from(3) - (Fr::from(2) + Fr::from(5) * Fr::from(17299145535799709783 as u64))]
+        );
     }
 
     #[test]
@@ -649,11 +727,16 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
-        let (_,_, _dummy_decision_node_paths_mle_vec,
-            _dummy_leaf_node_paths_mle_vec, _,
+        let (
+            _,
+            _,
+            _dummy_decision_node_paths_mle_vec,
+            _dummy_leaf_node_paths_mle_vec,
+            _,
             dummy_multiplicities_bin_decomp_mle,
             dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle) = generate_dummy_mles_batch::<Fr>();
+            dummy_leaf_nodes_mle,
+        ) = generate_dummy_mles_batch::<Fr>();
 
         println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
         println!("decision nodes: {:?}", dummy_decision_nodes_mle);
@@ -663,75 +746,91 @@ mod tests {
         let another_r = Fr::from(6);
 
         // WHOLE TREE: decision nodes packing
-        let decision_packing_builder = DecisionPackingBuilder{
+        let decision_packing_builder = DecisionPackingBuilder {
             mle: dummy_decision_nodes_mle.clone(),
             r,
-            r_packings
+            r_packings,
         };
         let _ = decision_packing_builder.build_expression();
         let decision_packed = decision_packing_builder.next_layer(LayerId::Layer(0), None);
         // characteristic poly w packing: [3 - (0 + 5 * 0 + 4 * 1206 )], which is [-4821]
-        assert_eq!(decision_packed.mle_ref().bookkeeping_table,
-            vec![ Fr::from(4821).neg()]);
+        assert_eq!(
+            decision_packed.mle_ref().bookkeeping_table,
+            vec![Fr::from(4821).neg()]
+        );
 
         // WHOLE TREE: leaf nodes packing
-        let leaf_packing_builder = LeafPackingBuilder{
+        let leaf_packing_builder = LeafPackingBuilder {
             mle: dummy_leaf_nodes_mle.clone(),
             r,
-            r_packing: another_r
+            r_packing: another_r,
         };
         let _ = leaf_packing_builder.build_expression();
         let leaf_packed = leaf_packing_builder.next_layer(LayerId::Layer(0), None);
         // characteristic poly w packing: [3 - (1 + 6 * 8929665060402191575)]
         // characteristic poly w packing: [3 - (2 + 6 * 17299145535799709783)]
-        assert_eq!(leaf_packed.mle_ref().bookkeeping_table,
-            vec![ Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
-                        Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]);
+        assert_eq!(
+            leaf_packed.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
+                Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))
+            ]
+        );
 
         println!("decision {:?}", decision_packed);
         println!("leaf {:?}", leaf_packed);
 
-        let decision_leaf_concat_builder = ConcatBuilder{
+        let decision_leaf_concat_builder = ConcatBuilder {
             mle_1: decision_packed,
-            mle_2: leaf_packed
+            mle_2: leaf_packed,
         };
         let _ = decision_leaf_concat_builder.build_expression();
         let x_packed = decision_leaf_concat_builder.next_layer(LayerId::Layer(0), None);
-        assert_eq!(x_packed.mle_ref().bookkeeping_table,
-            vec![ Fr::from(4821).neg(),
-                        Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
-                        Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]);
+        assert_eq!(
+            x_packed.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(4821).neg(),
+                Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
+                Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))
+            ]
+        );
 
         // r-x
-        let r_minus_x_builder =  RMinusXBuilder {
+        let r_minus_x_builder = RMinusXBuilder {
             packed_x: x_packed,
             r: another_r,
         };
         let _ = r_minus_x_builder.build_expression();
         let mut r_minus_x = r_minus_x_builder.next_layer(LayerId::Layer(0), None);
-        assert_eq!(r_minus_x.mle_ref().bookkeeping_table,
-            vec![ Fr::from(6+4821),
-                        Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
-                        Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]);
+        assert_eq!(
+            r_minus_x.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(6 + 4821),
+                Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
+                Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))
+            ]
+        );
 
         // b_ij * (r-x) + (1 - b_ij), j = 0
         let prev_prod_builder = BitExponentiationBuilder {
             bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
             bit_index: 0,
-            r_minus_x_power: r_minus_x.clone()
+            r_minus_x_power: r_minus_x.clone(),
         };
         let _ = prev_prod_builder.build_expression();
         let mut prev_prod = prev_prod_builder.next_layer(LayerId::Layer(0), None);
-        assert_eq!(prev_prod.mle_ref().bookkeeping_table,
-            vec![ Fr::from(1),
-                        Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
-                        Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]);
+        assert_eq!(
+            prev_prod.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(1),
+                Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)),
+                Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))
+            ]
+        );
 
         for i in 1..16 {
             // (r-x)^2
-            let r_minus_x_square_builder = SquaringBuilder {
-                mle: r_minus_x
-            };
+            let r_minus_x_square_builder = SquaringBuilder { mle: r_minus_x };
             let _ = r_minus_x_square_builder.build_expression();
             let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(0), None);
 
@@ -739,7 +838,7 @@ mod tests {
             let curr_prod_builder = BitExponentiationBuilder {
                 bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
                 bit_index: i,
-                r_minus_x_power: r_minus_x_square.clone()
+                r_minus_x_power: r_minus_x_square.clone(),
             };
             let _ = curr_prod_builder.build_expression();
             let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(0), None);
@@ -747,24 +846,26 @@ mod tests {
             // PROD(b_ij * (r-x) + (1 - b_ij))
             let prod_builder = ProductBuilder {
                 multiplier: curr_prod,
-                prev_prod
+                prev_prod,
             };
             let _ = prod_builder.build_expression();
             prev_prod = prod_builder.next_layer(LayerId::Layer(0), None);
 
             r_minus_x = r_minus_x_square;
-
         }
 
         // Multiplicities is [256, 59, 197]
-        assert_eq!(prev_prod.mle_ref().bookkeeping_table,
+        assert_eq!(
+            prev_prod.mle_ref().bookkeeping_table,
             vec![
-                    // --- TODO!(ryancao): Is the below fix correct for `pow()`? ---
-                    Fr::from(6+4821).pow(&[256 as u64, 0, 0, 0]),
-                    (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64))).pow(&[59 as u64, 0, 0, 0]),
-                    (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))).pow(&[197 as u64, 0, 0, 0])
-                ]);
-
+                // --- TODO!(ryancao): Is the below fix correct for `pow()`? ---
+                Fr::from(6 + 4821).pow(&[256 as u64, 0, 0, 0]),
+                (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(8929665060402191575 as u64)))
+                    .pow(&[59 as u64, 0, 0, 0]),
+                (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64)))
+                    .pow(&[197 as u64, 0, 0, 0])
+            ]
+        );
     }
 
     #[test]
@@ -776,11 +877,16 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
-        let (_,_, dummy_decision_node_paths_mle_vec,
-            dummy_leaf_node_paths_mle_vec, _,
+        let (
+            _,
+            _,
+            dummy_decision_node_paths_mle_vec,
+            dummy_leaf_node_paths_mle_vec,
+            _,
             dummy_multiplicities_bin_decomp_mle,
             dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle) = generate_dummy_mles_batch::<Fr>();
+            dummy_leaf_nodes_mle,
+        ) = generate_dummy_mles_batch::<Fr>();
 
         println!("multiplicities {:?}", dummy_multiplicities_bin_decomp_mle);
         println!("decision nodes: {:?}", dummy_decision_nodes_mle);
@@ -791,65 +897,78 @@ mod tests {
         let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
         let another_r = Fr::from(6);
 
-
         // ********** MULTISET PART I **********
         // ------ LAYER ID: 0 ------
 
         // WHOLE TREE: decision nodes packing
-        let decision_packing_builder = DecisionPackingBuilder{
+        let decision_packing_builder = DecisionPackingBuilder {
             mle: dummy_decision_nodes_mle.clone(),
             r,
-            r_packings
+            r_packings,
         };
         let _ = decision_packing_builder.build_expression();
         let decision_packed = decision_packing_builder.next_layer(LayerId::Layer(0), None);
         // characteristic poly w packing: [3 - (0 + 5 * 1 + 4 * 2085 )], which is [-8342]
-        assert_eq!(decision_packed.mle_ref().bookkeeping_table,
-            vec![ Fr::from(8342).neg()]);
+        assert_eq!(
+            decision_packed.mle_ref().bookkeeping_table,
+            vec![Fr::from(8342).neg()]
+        );
 
         // WHOLE TREE: leaf nodes packing
-        let leaf_packing_builder = LeafPackingBuilder{
+        let leaf_packing_builder = LeafPackingBuilder {
             mle: dummy_leaf_nodes_mle.clone(),
             r,
-            r_packing: another_r
+            r_packing: another_r,
         };
         let _ = leaf_packing_builder.build_expression();
         let leaf_packed = leaf_packing_builder.next_layer(LayerId::Layer(0), None);
         // characteristic poly w packing: [3 - (1 + 6 * 4845552296702772050)]
         // characteristic poly w packing: [3 - (2 + 6 * 3424474836643299239)]
-        assert_eq!(leaf_packed.mle_ref().bookkeeping_table,
-            vec![ Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
-                        Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))]);
+        assert_eq!(
+            leaf_packed.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
+                Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))
+            ]
+        );
 
         // println!("decision {:?}", decision_packed);
         // println!("leaf {:?}", leaf_packed);
 
         // ------ LAYER ID: 1 ------
 
-        let decision_leaf_concat_builder = ConcatBuilder{
+        let decision_leaf_concat_builder = ConcatBuilder {
             mle_1: decision_packed,
-            mle_2: leaf_packed
+            mle_2: leaf_packed,
         };
         let _ = decision_leaf_concat_builder.build_expression();
         let x_packed = decision_leaf_concat_builder.next_layer(LayerId::Layer(1), None);
-        assert_eq!(x_packed.mle_ref().bookkeeping_table,
-            vec![ Fr::from(8342).neg(),
-                        Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
-                        Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))]);
+        assert_eq!(
+            x_packed.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(8342).neg(),
+                Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
+                Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))
+            ]
+        );
 
         // ------ LAYER ID: 2 ------
 
         // r-x
-        let r_minus_x_builder =  RMinusXBuilder {
+        let r_minus_x_builder = RMinusXBuilder {
             packed_x: x_packed,
             r: another_r,
         };
         let _ = r_minus_x_builder.build_expression();
         let mut r_minus_x = r_minus_x_builder.next_layer(LayerId::Layer(2), None);
-        assert_eq!(r_minus_x.mle_ref().bookkeeping_table,
-            vec![ Fr::from(6+8342),
-                        Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
-                        Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))]);
+        assert_eq!(
+            r_minus_x.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(6 + 8342),
+                Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
+                Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))
+            ]
+        );
 
         // ------ LAYER ID: 3 ------
 
@@ -857,86 +976,90 @@ mod tests {
         let prev_prod_builder = BitExponentiationBuilder {
             bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
             bit_index: 0,
-            r_minus_x_power: r_minus_x.clone()
+            r_minus_x_power: r_minus_x.clone(),
         };
         let _ = prev_prod_builder.build_expression();
         let mut prev_prod = prev_prod_builder.next_layer(LayerId::Layer(3), None);
-        assert_eq!(prev_prod.mle_ref().bookkeeping_table,
-            vec![ Fr::from(1),
-                        Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
-                        Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))]);
-
-
-
+        assert_eq!(
+            prev_prod.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(1),
+                Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)),
+                Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))
+            ]
+        );
 
         for i in 1..16 {
-
             // ------ LAYER ID: 3 ------
             // (r-x)^2 can be put in the same layer as: b_ij * (r-x) + (1 - b_ij), j = 0
             // in general, (r-x)^(2^(j+1)) can be put in the same lyaer as : b_ij * (r-x) + (1 - b_ij), j = j
 
             // (r-x)^2
-            let r_minus_x_square_builder = SquaringBuilder {
-                mle: r_minus_x
-            };
+            let r_minus_x_square_builder = SquaringBuilder { mle: r_minus_x };
             let _ = r_minus_x_square_builder.build_expression();
-            let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(i+2), None);
+            let r_minus_x_square = r_minus_x_square_builder.next_layer(LayerId::Layer(i + 2), None);
 
             // b_ij * (r-x)^2 + (1 - b_ij), j = 1..15
             let curr_prod_builder = BitExponentiationBuilder {
                 bin_decomp: dummy_multiplicities_bin_decomp_mle.clone(),
                 bit_index: i,
-                r_minus_x_power: r_minus_x_square.clone()
+                r_minus_x_power: r_minus_x_square.clone(),
             };
             let _ = curr_prod_builder.build_expression();
-            let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(i+3), None);
+            let curr_prod = curr_prod_builder.next_layer(LayerId::Layer(i + 3), None);
 
             // PROD(b_ij * (r-x) + (1 - b_ij))
             let prod_builder = ProductBuilder {
                 multiplier: curr_prod,
-                prev_prod
+                prev_prod,
             };
             let _ = prod_builder.build_expression();
-            prev_prod = prod_builder.next_layer(LayerId::Layer(i+4), None);
+            prev_prod = prod_builder.next_layer(LayerId::Layer(i + 4), None);
 
             r_minus_x = r_minus_x_square;
-
         }
 
         // ------ NEXT LAYER ID: 20 ------
         // the last layer of prev_prod is LayerId::Layer(15+4) = LayerId::Layer(19)
 
-
         // Multiplicities is [4, 1, 3]
-        assert_eq!(prev_prod.mle_ref().bookkeeping_table,
+        assert_eq!(
+            prev_prod.mle_ref().bookkeeping_table,
             vec![
-                    Fr::from(6+8342).pow(&[4 as u64, 0, 0, 0]),
-                    (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64))).pow(&[1 as u64, 0, 0, 0]),
-                    (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))).pow(&[3 as u64, 0, 0, 0])
-                ]);
-
+                Fr::from(6 + 8342).pow(&[4 as u64, 0, 0, 0]),
+                (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
+                    .pow(&[1 as u64, 0, 0, 0]),
+                (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
+                    .pow(&[3 as u64, 0, 0, 0])
+            ]
+        );
 
         // ------ NEXT LAYER ID: 20 ------
 
         let mut exponentiated_nodes = prev_prod.clone();
         for i in 0..TREE_HEIGHT {
             let prod_builder = SplitProductBuilder {
-                mle: exponentiated_nodes
+                mle: exponentiated_nodes,
             };
             let _ = prod_builder.build_expression();
-            exponentiated_nodes = prod_builder.next_layer(LayerId::Layer(20+i), None);
+            exponentiated_nodes = prod_builder.next_layer(LayerId::Layer(20 + i), None);
         }
         println!("final multiset 1. {:?}", exponentiated_nodes);
 
         // ------ LAST LAYER ID: 20+(TREE_HEIGHT-1)  ------
 
-        assert_eq!(exponentiated_nodes.mle_ref().bookkeeping_table,
-        vec![
-            Fr::from(6+8342).pow(&[4 as u64, 0, 0, 0]) *
-            (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64))).pow(&[1 as u64, 0, 0, 0]) *
-            (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))).pow(&[3 as u64, 0, 0, 0])
-        ]);
-
+        assert_eq!(
+            exponentiated_nodes.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(6 + 8342).pow(&[4 as u64, 0, 0, 0])
+                    * (Fr::from(3)
+                        + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
+                    .pow(&[1 as u64, 0, 0, 0])
+                    * (Fr::from(3)
+                        + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
+                    .pow(&[3 as u64, 0, 0, 0])
+            ]
+        );
 
         // ********** MULTISET PART II **********
         // depending on the implementation / form factor of decision_node_paths_mle / leaf_node_paths_mle
@@ -955,40 +1078,49 @@ mod tests {
         // r-x: 1 layer
         // literally 3 layers + log2(TREE_HEIGHT * NUM_DUMMY_INPUTS) layers for final product (binary product)
 
-        let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> = DenseMle::new_from_raw([Fr::from(1); TREE_HEIGHT].to_vec(), LayerId::Input(0), None);
+        let mut prev_prod_x_path_packed: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw([Fr::from(1); TREE_HEIGHT].to_vec(), LayerId::Input(0), None);
 
         for i in 0..NUM_DUMMY_INPUTS {
-
             // PATH: decision nodes packing
-            let decision_path_packing_builder = DecisionPackingBuilder{
+            let decision_path_packing_builder = DecisionPackingBuilder {
                 mle: dummy_decision_node_paths_mle_vec[i].clone(),
                 r,
-                r_packings
+                r_packings,
             };
             let _ = decision_path_packing_builder.build_expression();
-            let decision_path_packed = decision_path_packing_builder.next_layer(LayerId::Layer(0), None);
-            assert_eq!(decision_path_packed.mle_ref().bookkeeping_table,
-            vec![ Fr::from(8342).neg()]);
+            let decision_path_packed =
+                decision_path_packing_builder.next_layer(LayerId::Layer(0), None);
+            assert_eq!(
+                decision_path_packed.mle_ref().bookkeeping_table,
+                vec![Fr::from(8342).neg()]
+            );
 
             // PATH: leaf nodes packing
-            let leaf_path_packing_builder = LeafPackingBuilder{
+            let leaf_path_packing_builder = LeafPackingBuilder {
                 mle: dummy_leaf_node_paths_mle_vec[i].clone(),
                 r,
-                r_packing: another_r
+                r_packing: another_r,
             };
             let _ = leaf_path_packing_builder.build_expression();
             let leaf_path_packed = leaf_path_packing_builder.next_layer(LayerId::Layer(0), None);
 
             if i == 1 {
-                assert_eq!(leaf_path_packed.mle_ref().bookkeeping_table,
+                assert_eq!(
+                    leaf_path_packed.mle_ref().bookkeeping_table,
                     vec![
-                        (Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
-                    ]);
+                        (Fr::from(3)
+                            - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
+                    ]
+                );
             } else {
-                assert_eq!(leaf_path_packed.mle_ref().bookkeeping_table,
+                assert_eq!(
+                    leaf_path_packed.mle_ref().bookkeeping_table,
                     vec![
-                        (Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
-                    ]);
+                        (Fr::from(3)
+                            - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
+                    ]
+                );
             }
 
             // r, r_packings, another_r: 3, (5, 4), 6
@@ -1003,26 +1135,35 @@ mod tests {
             // DenseMle::new(vec![ Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(17299145535799709783 as u64))]).mle_ref().bookkeeping_table);
             //
 
-            let decision_leaf_path_concat_builder = ConcatBuilder{
+            let decision_leaf_path_concat_builder = ConcatBuilder {
                 mle_1: decision_path_packed,
-                mle_2: leaf_path_packed
+                mle_2: leaf_path_packed,
             };
             let _ = decision_leaf_path_concat_builder.build_expression();
-            let x_path_packed = decision_leaf_path_concat_builder.next_layer(LayerId::Layer(0), None);
+            let x_path_packed =
+                decision_leaf_path_concat_builder.next_layer(LayerId::Layer(0), None);
 
             if i == 1 {
-                assert_eq!(x_path_packed.mle_ref().bookkeeping_table,
-                    vec![Fr::from(8342).neg(),
-                        (Fr::from(3) - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
-                    ]);
+                assert_eq!(
+                    x_path_packed.mle_ref().bookkeeping_table,
+                    vec![
+                        Fr::from(8342).neg(),
+                        (Fr::from(3)
+                            - (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
+                    ]
+                );
             } else {
-                assert_eq!(x_path_packed.mle_ref().bookkeeping_table,
-                    vec![Fr::from(8342).neg(),
-                        (Fr::from(3) - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
-                    ]);
+                assert_eq!(
+                    x_path_packed.mle_ref().bookkeeping_table,
+                    vec![
+                        Fr::from(8342).neg(),
+                        (Fr::from(3)
+                            - (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
+                    ]
+                );
             }
 
-            let r_minus_x_builder =  RMinusXBuilder {
+            let r_minus_x_builder = RMinusXBuilder {
                 packed_x: x_path_packed,
                 r: another_r,
             };
@@ -1030,20 +1171,28 @@ mod tests {
             let curr_x_path_packed = r_minus_x_builder.next_layer(LayerId::Layer(0), None);
 
             if i == 1 {
-                assert_eq!(curr_x_path_packed.mle_ref().bookkeeping_table,
-                    vec![Fr::from(6+8342),
-                        (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
-                    ]);
+                assert_eq!(
+                    curr_x_path_packed.mle_ref().bookkeeping_table,
+                    vec![
+                        Fr::from(6 + 8342),
+                        (Fr::from(3)
+                            + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
+                    ]
+                );
             } else {
-                assert_eq!(curr_x_path_packed.mle_ref().bookkeeping_table,
-                    vec![Fr::from(6+8342),
-                        (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
-                    ]);
+                assert_eq!(
+                    curr_x_path_packed.mle_ref().bookkeeping_table,
+                    vec![
+                        Fr::from(6 + 8342),
+                        (Fr::from(3)
+                            + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
+                    ]
+                );
             }
 
             let prod_builder = ProductBuilder {
                 multiplier: prev_prod_x_path_packed,
-                prev_prod: curr_x_path_packed
+                prev_prod: curr_x_path_packed,
             };
 
             let _ = prod_builder.build_expression();
@@ -1054,59 +1203,78 @@ mod tests {
 
         let mut path_exponentiated = prev_prod_x_path_packed.clone();
 
-        assert_eq!(path_exponentiated.mle_ref().bookkeeping_table,
-        vec![Fr::from(6+8342).pow(&[4 as u64, 0, 0, 0]),
-            (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64))).pow(&[1 as u64, 0, 0, 0]) *
-            (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))).pow(&[3 as u64, 0, 0, 0])
-        ]);
+        assert_eq!(
+            path_exponentiated.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(6 + 8342).pow(&[4 as u64, 0, 0, 0]),
+                (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
+                    .pow(&[1 as u64, 0, 0, 0])
+                    * (Fr::from(3)
+                        + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
+                    .pow(&[3 as u64, 0, 0, 0])
+            ]
+        );
 
         // dbg!(&path_exponentiated, "path exponentiated");
 
         for _ in 0..log2(TREE_HEIGHT) {
             let prod_builder = SplitProductBuilder {
-                mle: path_exponentiated
+                mle: path_exponentiated,
             };
             let _ = prod_builder.build_expression();
             path_exponentiated = prod_builder.next_layer(LayerId::Layer(0), None);
         }
-        assert_eq!(path_exponentiated.mle_ref().bookkeeping_table,
-        vec![Fr::from(6+8342).pow(&[4 as u64, 0, 0, 0]) *
-            (Fr::from(3) + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64))).pow(&[1 as u64, 0, 0, 0]) *
-            (Fr::from(3) + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64))).pow(&[3 as u64, 0, 0, 0])
-        ]);
+        assert_eq!(
+            path_exponentiated.mle_ref().bookkeeping_table,
+            vec![
+                Fr::from(6 + 8342).pow(&[4 as u64, 0, 0, 0])
+                    * (Fr::from(3)
+                        + (Fr::from(1) + Fr::from(6) * Fr::from(4845552296702772050 as u64)))
+                    .pow(&[1 as u64, 0, 0, 0])
+                    * (Fr::from(3)
+                        + (Fr::from(2) + Fr::from(6) * Fr::from(3424474836643299239 as u64)))
+                    .pow(&[3 as u64, 0, 0, 0])
+            ]
+        );
 
         println!("final multiset 2. {:?}", path_exponentiated);
 
-        assert_eq!(exponentiated_nodes.mle_ref().bookkeeping_table,
-            path_exponentiated.mle_ref().bookkeeping_table);
+        assert_eq!(
+            exponentiated_nodes.mle_ref().bookkeeping_table,
+            path_exponentiated.mle_ref().bookkeeping_table
+        );
 
         println!("multi SET!!")
     }
 
     #[test]
     fn test_attribute_consistency() {
-
         let mut zero_vec = vec![];
-        for _ in 0..(TREE_HEIGHT-1) {
+        for _ in 0..(TREE_HEIGHT - 1) {
             zero_vec.push(Fr::from(0));
         }
 
-        let (_,
+        let (
+            _,
             dummy_permuted_input_data_mle_vec,
-            dummy_decision_node_paths_mle_vec,_, _,_, _, _) = generate_dummy_mles_batch::<Fr>();
+            dummy_decision_node_paths_mle_vec,
+            _,
+            _,
+            _,
+            _,
+            _,
+        ) = generate_dummy_mles_batch::<Fr>();
 
         for i in 0..NUM_DUMMY_INPUTS {
             let attribute_consistency_build = AttributeConsistencyBuilder {
                 mle_input: dummy_permuted_input_data_mle_vec[i].clone(),
                 mle_path: dummy_decision_node_paths_mle_vec[i].clone(),
-                tree_height: TREE_HEIGHT
+                tree_height: TREE_HEIGHT,
             };
             let _ = attribute_consistency_build.build_expression();
             let difference_mle = attribute_consistency_build.next_layer(LayerId::Layer(0), None);
 
-            assert_eq!(difference_mle.mle_ref().bookkeeping_table,
-                    zero_vec)
+            assert_eq!(difference_mle.mle_ref().bookkeeping_table, zero_vec)
         }
     }
-
 }
