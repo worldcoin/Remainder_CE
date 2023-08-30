@@ -381,7 +381,7 @@ pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     layer_id: LayerId,
     pub nonzero_gates: Vec<(usize, usize, usize)>,
     pub lhs: DenseMleRef<F>,
-    rhs: DenseMleRef<F>,
+    pub rhs: DenseMleRef<F>,
     beta_g: Option<BetaTable<F>>,
     phase_1_mles: Option<([DenseMleRef<F>; 2], [DenseMleRef<F>; 1])>,
     phase_2_mles: Option<([DenseMleRef<F>; 1], [DenseMleRef<F>; 2])>,
