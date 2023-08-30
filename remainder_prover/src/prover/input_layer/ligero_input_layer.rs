@@ -26,7 +26,7 @@ use super::{enum_input_layer::InputLayerEnum, InputLayer, MleInputLayer};
 
 pub struct LigeroInputLayer<F: FieldExt, Tr> {
     mle: DenseMle<F, F>,
-    layer_id: LayerId,
+    pub(crate) layer_id: LayerId,
     comm: Option<LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>>,
     aux: Option<LcProofAuxiliaryInfo>,
     root: Option<LcRoot<LigeroEncoding<F>, F>>,

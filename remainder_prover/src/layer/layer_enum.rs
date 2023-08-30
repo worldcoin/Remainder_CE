@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use crate::mle::gate::{AddGate, AddGateBatched};
+use crate::{mle::gate::{AddGate, AddGateBatched}, expression::{ExpressionStandard, Expression}};
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
@@ -100,5 +100,18 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
                 layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
             }
         }
+    }
+}
+
+impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
+    ///Gets the size of the Layer as a whole in terms of number of bits
+    pub(crate) fn layer_size(&self) -> usize {
+        let expression = match self {
+            LayerEnum::Gkr(layer) => &layer.expression,
+            LayerEnum::EmptyLayer(layer) => &layer.expr,
+            LayerEnum::AddGate(_) | LayerEnum::AddGateBatched(_) => unimplemented!(),
+        };
+
+        expression.get_expression_size(0)
     }
 }

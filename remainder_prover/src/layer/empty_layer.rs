@@ -132,9 +132,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         };
 
         // // TODO!(ryancao): What the heck is this code doing?
-        // layerwise_expr
-        //     .traverse(&mut observer_fn)
-        //     .map_err(LayerError::ClaimError)?;
+        self.expr
+            .traverse(&mut observer_fn)
+            .map_err(LayerError::ClaimError)?;
 
         Ok(indices.into_iter().zip(claims).collect())
     }

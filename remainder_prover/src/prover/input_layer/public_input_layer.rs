@@ -17,7 +17,7 @@ use super::{enum_input_layer::InputLayerEnum, InputLayer, InputLayerError, MleIn
 ///An Input Layer that is send to the verifier in the clear
 pub struct PublicInputLayer<F: FieldExt, Tr> {
     mle: DenseMle<F, F>,
-    layer_id: LayerId,
+    pub(crate) layer_id: LayerId,
     _marker: PhantomData<Tr>,
 }
 

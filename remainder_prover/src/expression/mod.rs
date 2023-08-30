@@ -608,6 +608,33 @@ impl<F: FieldExt> ExpressionStandard<F> {
             }
         }
     }
+
+    ///Gets the size of an expression in terms of the number of rounds of sumcheck
+    pub fn get_expression_size(&self, curr_size: usize) -> usize {
+        match self {
+            ExpressionStandard::Selector(_, a, b) => {
+                let a_bits = a.get_expression_size(curr_size + 1);
+                let b_bits = b.get_expression_size(curr_size + 1);
+                max(a_bits, b_bits)
+            }
+            ExpressionStandard::Mle(mle_ref) => {
+                mle_ref.mle_indices().len()
+            },
+            ExpressionStandard::Sum(a, b) => {
+                let a_bits = a.get_expression_size(curr_size);
+                let b_bits = b.get_expression_size(curr_size);
+                max(a_bits, b_bits)
+            }
+            ExpressionStandard::Product(mle_refs) => mle_refs
+                .iter()
+                .map(|mle_ref| mle_ref.mle_indices().len())
+                .max()
+                .unwrap_or(curr_size),
+            ExpressionStandard::Scaled(a, _) => a.get_expression_size(curr_size),
+            ExpressionStandard::Negated(a) => a.get_expression_size(curr_size),
+            ExpressionStandard::Constant(_) => curr_size,
+        }
+    }
 }
 
 impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {

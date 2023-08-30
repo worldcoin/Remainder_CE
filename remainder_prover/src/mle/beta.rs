@@ -32,26 +32,20 @@ pub(crate) struct BetaTable<F> {
 pub enum BetaError {
     #[error("claim index is 0, cannot take inverse")]
     ///claim index is 0, cannot take inverse
-    ///claim index is 0, cannot take inverse
     NoInverse,
     #[error("not enough claims to compute beta table")]
-    ///not enough claims to compute beta table
     ///not enough claims to compute beta table
     NotEnoughClaims,
     #[error("cannot make beta table over empty mle list")]
     ///cannot make beta table over empty mle list
-    ///cannot make beta table over empty mle list
     EmptyMleList,
     #[error("cannot update beta table")]
-    ///cannot update beta table
     ///cannot update beta table
     BetaUpdateError,
     #[error("MLE bits were not indexed")]
     ///MLE bits were not indexed
-    ///MLE bits were not indexed
     MleNotIndexedError,
     #[error("Beta table doesn't contain the particular indexed bit")]
-    ///Beta table doesn't contain the particular indexed bit
     ///Beta table doesn't contain the particular indexed bit
     IndexedBitNotFoundError,
 }
@@ -83,7 +77,6 @@ pub(crate) fn compute_new_beta_table<F: FieldExt>(
     challenge: F,
 ) -> Result<Vec<F>, BetaError> {
     let (layer_claims, _) = &beta_table.layer_claim;
-    let curr_beta = beta_table.table.bookkeeping_table();
     let curr_beta = beta_table.table.bookkeeping_table();
 
     // --- This should always be true now, no? ---

@@ -214,6 +214,10 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
     pub fn expression(&self) -> &ExpressionStandard<F> {
         &self.expression
     }
+
+    pub(crate) fn new_raw(id: LayerId, expression: ExpressionStandard<F>) -> Self {
+        GKRLayer { id, expression, beta: None, _marker: PhantomData }
+    }
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
@@ -463,6 +467,25 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let degree = get_round_degree(&expr, 0);
         // expr.init_beta_tables(prev_layer_claim);
         let num_evals = (num_vars) * (num_claims); //* degree;
+
+        dbg!(&claim_vecs);
+
+        debug_assert!({
+            claim_vecs.iter().zip(claimed_vals.iter()).map(|(point, val)| {
+                let mut beta = BetaTable::new((point.to_vec(), F::zero())).unwrap();
+                beta.table.index_mle_indices(0);
+                let eval = compute_sumcheck_message(&mut expr.clone(), 0, degree, &beta).unwrap();
+                let Evals(evals) = eval;
+                let eval = evals[0] + evals[1];
+    
+                if eval == *val {
+                    true
+                } else {
+                    println!("Claim passed into compute_wlx is invalid! point is {:?} claimed val is {:?}, actual eval is {:?}", point, val , eval);
+                    false
+                }
+            }).reduce(|acc, val| acc && val).unwrap()
+        });
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)

@@ -16,7 +16,7 @@ use super::{enum_input_layer::InputLayerEnum, InputLayer, InputLayerError};
 
 pub struct RandomInputLayer<F: FieldExt, Tr> {
     mle: Vec<F>,
-    layer_id: LayerId,
+    pub(crate) layer_id: LayerId,
     _marker: PhantomData<Tr>,
 }
 

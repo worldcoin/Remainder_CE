@@ -173,26 +173,20 @@ pub(crate) fn compute_sumcheck_message<
 
                     let (Evals(first_evals), Evals(second_evals)) = (first, second);
                     if (first_evals.len() == second_evals.len()) && first_evals.len() == 3 {
-                        if max_degree == 2 {
-                            // we need to combine the evals by doing (1-x) * first eval + x * second eval
-                            let first_evals = Evals(
-                                (0..3)
-                                    .map(|idx| first_evals[idx] * (F::one() - F::from(idx as u64)))
-                                    .collect(),
-                            );
+                        // we need to combine the evals by doing (1-x) * first eval + x * second eval
+                        let first_evals = Evals(
+                            first_evals.into_iter().enumerate()
+                                .map(|(idx, first_eval)| first_eval * (F::one() - F::from(idx as u64)))
+                                .collect(),
+                        );
 
-                            let second_evals = Evals(
-                                (0..3)
-                                    .map(|idx| second_evals[idx] * F::from(idx as u64))
-                                    .collect(),
-                            );
+                        let second_evals = Evals(
+                            second_evals.into_iter().enumerate()
+                                .map(|(idx, second_eval)| second_eval * F::from(idx as u64))
+                                .collect(),
+                        );
 
-                            Ok(first_evals + second_evals)
-                        } else {
-                            Err(ExpressionError::EvaluationError(
-                                "Expression has a degree > 2 when the round is on a selector bit",
-                            ))
-                        }
+                        Ok(first_evals + second_evals)
                     } else {
                         Err(ExpressionError::EvaluationError("Expression returns two evals that do not have length 3 on a selector bit"))
                     }

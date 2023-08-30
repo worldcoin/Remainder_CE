@@ -148,3 +148,13 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
         self
     }
 }
+
+impl<F: FieldExt, Tr: Transcript<F>> InputLayerEnum<F, Tr> {
+    pub fn set_layer_id(&mut self, layer_id: LayerId) {
+        match self {
+            InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,
+            InputLayerEnum::PublicInputLayer(layer) => layer.layer_id = layer_id,
+            InputLayerEnum::RandomInputLayer(layer) => layer.layer_id = layer_id,
+        }
+    }
+}

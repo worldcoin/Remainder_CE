@@ -330,6 +330,8 @@ pub trait GKRCircuit<F: FieldExt> {
                     .get_claims()
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
 
+                dbg!(&post_sumcheck_new_claims);
+
                 for (layer_id, claim) in post_sumcheck_new_claims {
                     if let Some(curr_claims) = claims.get_mut(&layer_id) {
                         curr_claims.push(claim);
@@ -465,7 +467,7 @@ pub trait GKRCircuit<F: FieldExt> {
         for output in output_layers.iter() {
             let mle_indices = output.mle_indices();
             let mut claim_chal: Vec<F> = vec![];
-            for (bit, index) in mle_indices.iter().enumerate() {
+            for (bit, index) in mle_indices.iter().filter(|index| !matches!(index, &&MleIndex::Fixed(_))).enumerate() {
                 let challenge = transcript
                     .get_challenge("Setting Output Layer Claim")
                     .unwrap();
