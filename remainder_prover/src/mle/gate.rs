@@ -1213,17 +1213,17 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
-    new_bits: usize,
-    nonzero_gates: Vec<(usize, usize, usize)>,
-    lhs: DenseMleRef<F>,
-    rhs: DenseMleRef<F>,
-    num_vars_l: Option<usize>,
-    num_vars_r: Option<usize>,
+    pub new_bits: usize,
+    pub nonzero_gates: Vec<(usize, usize, usize)>,
+    pub lhs: DenseMleRef<F>,
+    pub rhs: DenseMleRef<F>,
+    pub num_vars_l: Option<usize>,
+    pub num_vars_r: Option<usize>,
     copy_phase_mles: Option<(BetaTable<F>, [DenseMleRef<F>; 2])>,
-    g1_challenges: Option<Vec<F>>,
-    g2_challenges: Option<Vec<F>>,
+    pub g1_challenges: Option<Vec<F>>,
+    pub g2_challenges: Option<Vec<F>>,
     layer_id: LayerId,
-    reduced_gate: Option<AddGate<F, Tr>>,
+    pub reduced_gate: Option<AddGate<F, Tr>>,
     _marker: PhantomData<Tr>,
 }
 
