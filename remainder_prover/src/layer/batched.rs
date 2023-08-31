@@ -1,12 +1,11 @@
 use std::marker::PhantomData;
-
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use thiserror::Error;
 
 use crate::{
     expression::ExpressionStandard,
-    mle::{dense::DenseMleRef, MleIndex, MleRef, zero::ZeroMleRef},
+    mle::{dense::{DenseMleRef, DenseMle}, MleIndex, MleRef, zero::ZeroMleRef, MleAble},
 };
 use remainder_shared_types::FieldExt;
 
@@ -36,6 +35,13 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
     let num_vars = mle_refs[0].mle_indices().len();
     let layer_id = mle_refs[0].get_layer_id().clone();
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
+}
+
+pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
+    let old_layer_id = mles[0].layer_id.clone();
+    let new_bits = log2(mles.len()) as usize;
+    let old_prefix_bits = mles[0].prefix_bits.clone().map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
+    DenseMle::new_from_raw(combine_mles(mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(), new_bits).bookkeeping_table, old_layer_id, old_prefix_bits)
 }
 
 fn combine_expressions<F: FieldExt>(

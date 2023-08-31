@@ -8,6 +8,7 @@ pub mod layer_enum;
 
 use std::marker::PhantomData;
 
+use itertools::{repeat_n, Itertools};
 use ark_std::cfg_into_iter;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use thiserror::Error;
@@ -17,7 +18,7 @@ use crate::{
     expression::{Expression, ExpressionError, ExpressionStandard, gather_combine_all_evals},
     mle::{
         beta::{BetaError, BetaTable, compute_beta_over_two_challenges},
-        MleIndex, MleRef,
+        MleIndex, MleRef, zero,
     },
     prover::SumcheckProof,
     sumcheck::{
@@ -228,8 +229,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
 
+        let val = claim.1.clone();
+
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
+
+        debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
+        
 
         // --- Add prover message to the FS transcript ---
         transcript
@@ -287,6 +293,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // --- First verify that g_1(0) + g_1(1) = \sum_{b_1, ..., b_n} g(b_1, ..., b_n) ---
         // (i.e. the first verification step of sumcheck)
         let mut prev_evals = &sumcheck_prover_messages[0];
+
         if prev_evals[0] + prev_evals[1] != claim.1 {
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
@@ -518,6 +525,21 @@ pub trait LayerBuilder<F: FieldExt> {
         ConcatLayer {
             first: self,
             second: rhs,
+            padding: Padding::None,
+            _marker: PhantomData,
+        }
+    }
+    
+
+    ///Concatonate two layers together with some padding
+    fn concat_with_padding<Other: LayerBuilder<F>>(self, rhs: Other, padding: Padding) -> ConcatLayer<F, Self, Other>
+    where
+        Self: Sized,
+    {
+        ConcatLayer {
+            first: self,
+            second: rhs,
+            padding,
             _marker: PhantomData,
         }
     }
@@ -542,10 +564,16 @@ pub fn from_mle<
     }
 }
 
+pub enum Padding {
+    Right(usize),
+    Left(usize),
+    None
+}
 /// The layerbuilder that represents two layers concatonated together
 pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
     first: A,
     second: B,
+    padding: Padding,
     _marker: PhantomData<F>,
 }
 
@@ -555,10 +583,46 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
     fn build_expression(&self) -> ExpressionStandard<F> {
         let first = self.first.build_expression();
         let second = self.second.build_expression();
-        first.concat(second)
+
+        // return first.concat_expr(second);
+
+        let zero_expression: ExpressionStandard<F> = ExpressionStandard::Constant(F::zero());
+        
+        let first_padded = if let Padding::Left(padding) = self.padding {
+            let mut left = first.clone();
+            for _ in 0..padding {
+                left = zero_expression.clone().concat_expr(left);
+            }
+            left
+        } else {
+            first
+        };
+
+        let second_padded = if let Padding::Right(padding) = self.padding {
+            let mut right = second.clone();
+            for _ in 0..padding {
+                right = zero_expression.clone().concat_expr(right);
+            }
+            right
+        } else {
+            second
+        };
+
+        first_padded.concat_expr(second_padded)
+        // ExpressionStandard::Selector(MleIndex::Iterated, Box::new(first_padded), Box::new(second_padded))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let first_padding = if let Padding::Left(padding) = self.padding {
+            repeat_n(MleIndex::Fixed(false), padding)
+        } else {
+            repeat_n(MleIndex::Fixed(false), 0)
+        };
+        let second_padding = if let Padding::Right(padding) = self.padding {
+            repeat_n(MleIndex::Fixed(false), padding)
+        } else {
+            repeat_n(MleIndex::Fixed(false), 0)
+        };
         (
             self.first.next_layer(
                 id.clone(),
@@ -567,6 +631,8 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
                         .clone()
                         .into_iter()
                         .flatten()
+                        // .chain(std::iter::once(MleIndex::Fixed(true)))
+                        .chain(first_padding)
                         .chain(std::iter::once(MleIndex::Fixed(true)))
                         .collect(),
                 ),
@@ -577,6 +643,8 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
                     prefix_bits
                         .into_iter()
                         .flatten()
+                        // .chain(std::iter::once(MleIndex::Fixed(false)))
+                        .chain(second_padding)
                         .chain(std::iter::once(MleIndex::Fixed(false)))
                         .collect(),
                 ),
