@@ -10,8 +10,8 @@
 //! let depth = 6;
 //! // start with a random (probably not perfect) tree with f64 leaf values
 //! let tree_f64 = generate_tree(depth, n_features, 0.5);
-//! // quantize the leaf values (see also quantize_trees())
-//! let tree = tree_f64.map(&|x| x as i32);
+//! // quantize the leaf values (see also quantize_leaf_values())
+//! let tree = tree_f64.map(&|x| x as i64);
 //! // perfect the tree
 //! let mut perfect_tree = tree.perfect_to_depth(depth);
 //! assert!(perfect_tree.is_perfect());
@@ -19,7 +19,7 @@
 //! perfect_tree.assign_id(0);
 //! // get the path of a sample through the tree
 //! let sample: Vec<u16> = vec![11, 0, 1, 2];
-//! let path: Vec<&Node<i32>> = perfect_tree.get_path(&sample);
+//! let path: Vec<&Node<i64>> = perfect_tree.get_path(&sample);
 //! ```
 extern crate serde;
 extern crate serde_json;
@@ -95,21 +95,6 @@ impl<T: Copy> Node<T> {
                 1 + aggregator(left.depth(aggregator), right.depth(aggregator))
             }
             Node::Leaf { .. } => 1,
-        }
-    }
-
-    /// Aggregate the leaf values using the binary function provided (e.g. `f64::max`).
-    /// Example:
-    /// ```ignore
-    /// let max = tree.aggregate_values(f64::max);
-    /// ```
-    pub fn aggregate_values(&self, operation: fn(T, T) -> T) -> T {
-        match self {
-            Node::Leaf { value, .. } => *value,
-            Node::Internal { left, right, .. } => operation(
-                left.aggregate_values(operation),
-                right.aggregate_values(operation),
-            ),
         }
     }
 
@@ -271,29 +256,27 @@ impl<T: Copy> Node<T> {
     }
 }
 
-const LEAF_QUANTILE_BITWIDTH: u32 = 29; // FIXME why doesn't this work with 32?
+const LEAF_QUANTILE_BITWIDTH: u64 = 52; // 52 is mantissa length of a f64
 /// Given a vector of trees (Node instances) with f64 leaf values, quantize the leaf values
 /// symmetrically, returning the quantized trees and the rescaling factor.  The scale is chosen
-/// such that all possible _aggregate_ scores will fit within the LEAF_QUANTILE_BITWIDTH.
+/// such that no leaf value or sum trees.len() distinct leaf values will exceed
+/// LEAF_QUANTILE_BITWIDTH.
+/// Pre: trees.len() > 0; no leaf values are NaN.
 /// Post: (quantized leaf values) / rescaling ~= (original leaf values)
-pub fn quantize_trees(trees: &[Node<f64>]) -> (Vec<Node<i32>>, f64) {
-    // determine the spread of the scores
-    let max_score: f64 = trees
+pub fn quantize_leaf_values(trees: &[Node<f64>]) -> (Vec<Node<i64>>, f64) {
+    let max_radius = trees
         .iter()
-        .map(|tree| tree.aggregate_values(f64::max))
-        .sum();
-    let min_score: f64 = trees
-        .iter()
-        .map(|tree| tree.aggregate_values(f64::min))
-        .sum();
-    let radius = f64::max(max_score.abs(), min_score.abs());
+        .map(|tree| tree.leaf_value_radius())
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+    let quant_max = ((1_u64) << (LEAF_QUANTILE_BITWIDTH - 1)) - 1;
+    let quant_max_per_tree = quant_max / trees.len() as u64;
 
     // quantize the leaf values
-    let quant_max = ((1_u32) << (LEAF_QUANTILE_BITWIDTH - 1)) - 2;
-    let rescaling = (quant_max as f64) / radius;
-    let qtrees: Vec<Node<i32>> = trees
+    let rescaling = (quant_max_per_tree as f64) / max_radius;
+    let qtrees: Vec<Node<i64>> = trees
         .iter()
-        .map(|tree| tree.map(&|value| (value * rescaling) as i32))
+        .map(|tree| tree.map(&|value| (value * rescaling) as i64))
         .collect();
     (qtrees, rescaling)
 }
@@ -322,6 +305,20 @@ pub fn generate_tree(
             generate_tree(target_depth - 1, n_features, premature_leaf_proba),
             generate_tree(target_depth - 1, n_features, premature_leaf_proba),
         )
+    }
+}
+
+impl Node<f64> {
+    /// Return the minimal non-negative value x such that all leaf values fit within the interval
+    /// [-x, x].
+    /// Pre: No leaf values are NaN.
+    pub fn leaf_value_radius(&self) -> f64 {
+        match self {
+            Node::Leaf { value, .. } => value.abs(),
+            Node::Internal { left, right, .. } => {
+                f64::max(left.leaf_value_radius(), right.leaf_value_radius())
+            }
+        }
     }
 }
 
@@ -389,13 +386,6 @@ mod tests {
     }
 
     #[test]
-    fn test_aggregate_values() {
-        let tree = build_small_tree();
-        assert_eq!(tree.aggregate_values(f64::max), 1.2);
-        assert_eq!(tree.aggregate_values(f64::min), 0.1);
-    }
-
-    #[test]
     fn test_transform_values() {
         let mut tree = build_small_tree();
         tree.transform_values(&|x| -1.0 * x);
@@ -411,8 +401,8 @@ mod tests {
     #[test]
     fn test_map() {
         let tree_f64 = build_small_tree();
-        let tree_i32 = tree_f64.map(&|x| x as i32);
-        if let Node::Internal { right, .. } = tree_i32 {
+        let tree_i64 = tree_f64.map(&|x| x as i64);
+        if let Node::Internal { right, .. } = tree_i64 {
             if let Node::Leaf { value, .. } = *right {
                 assert_eq!(value, 1);
                 return;
@@ -495,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_get_path() {
-        let mut tree = build_small_tree().map(&|x| x as i32).perfect_to_depth(3);
+        let mut tree = build_small_tree().map(&|x| x as i64).perfect_to_depth(3);
         tree.assign_id(0);
         let path = tree.get_path(&vec![2_u16, 0_u16]);
         assert_eq!(path.len(), 3);
@@ -504,21 +494,30 @@ mod tests {
         assert_eq!(path[2].get_id(), Some(4));
     }
 
-    #[test]
-    fn test_quantize_trees() {
-        let value0 = -123.1;
-        let value1 = 145.1;
-        let trees = vec![Node::new_leaf(None, value0), Node::new_leaf(None, value1)];
-        let (qtrees, rescaling) = quantize_trees(&trees);
+    // Helper function
+    fn _test_quantize_leaf_values(leaf_values: &Vec<f64>) {
+        let mut trees: Vec<Node<f64>> = vec![];
+        for value in leaf_values.iter() {
+            trees.push(Node::new_leaf(None, *value));
+        }
+        let (qtrees, rescaling) = quantize_leaf_values(&trees);
         assert_eq!(qtrees.len(), trees.len());
-        if let Node::Leaf { value: qvalue0, .. } = qtrees[0] {
-            assert!((value0 - (qvalue0 as f64) / rescaling).abs() < 1e-5);
-            if let Node::Leaf { value: qvalue1, .. } = qtrees[1] {
-                assert!((value1 - (qvalue1 as f64) / rescaling).abs() < 1e-5);
-                return;
+        for (value, qtree) in leaf_values.iter().zip(qtrees.iter()) {
+            if let Node::Leaf { value: qvalue, .. } = qtree {
+                assert!((value - (*qvalue as f64) / rescaling).abs() < 1e-5);
+            } else {
+                panic!("The quantized trees should have been leaf node");
             }
         }
-        panic!("The quantized trees should each have been leaf nodes");
+    }
+
+    #[test]
+    fn test_quantize_leaf_values() {
+        _test_quantize_leaf_values(&vec![123.11111111111, 145.1]);
+        _test_quantize_leaf_values(&vec![-123.11111111111, 145.1]);
+        _test_quantize_leaf_values(&vec![-0.12311111111111, 145.1]);
+        _test_quantize_leaf_values(&vec![145.1]);
+        _test_quantize_leaf_values(&vec![145.1; 100]);
     }
 
     #[test]
@@ -546,14 +545,29 @@ mod tests {
     }
 
     #[test]
+    fn test_leaf_value_radius() {
+        let left = Node::new_leaf(None, -0.1);
+        let middle = Node::new_leaf(None, 0.2);
+        let right = Node::new_leaf(None, 1.2);
+        let internal = Node::new_internal(None, 0, 2, left.clone(), middle);
+        let tree = Node::new_internal(None, 1, 1, internal.clone(), right);
+        // test for a single leaf
+        assert_eq!(left.leaf_value_radius(), 0.1);
+        // .. for a cherry
+        assert_eq!(internal.leaf_value_radius(), 0.2);
+        // .. for depth 3
+        assert_eq!(tree.leaf_value_radius(), 1.2);
+    }
+
+    #[test]
     fn test_documentation() {
         // TODO remove once the doctests are being run
         let n_features = 4;
         let depth = 6;
         // start with a random (probably not perfect) tree with f64 leaf values
         let tree_f64 = generate_tree(depth, n_features, 0.5);
-        // quantize the leaf values (see also quantize_trees())
-        let tree = tree_f64.map(&|x| x as i32);
+        // quantize the leaf values (see also quantize_leaf_values())
+        let tree = tree_f64.map(&|x| x as i64);
         // perfect the tree
         let mut perfect_tree = tree.perfect_to_depth(depth);
         assert!(perfect_tree.is_perfect());
@@ -561,6 +575,6 @@ mod tests {
         perfect_tree.assign_id(0);
         // get the path of a sample through the tree
         let sample: Vec<u16> = vec![11, 0, 1, 2];
-        let path: Vec<&Node<i32>> = perfect_tree.get_path(&sample);
+        let path: Vec<&Node<i64>> = perfect_tree.get_path(&sample);
     }
 }
