@@ -803,9 +803,5 @@ fn test_gkr_circuit_with_precommit() {
 
     let mut circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
 
-    let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("GKR Prover Transcript");
-    let now = Instant::now();
-
-    test_circuit(circuit, Some(Path::new("./gkr_precommit_proof.json")));
-    // panic!();
+    test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit.json")));
 }

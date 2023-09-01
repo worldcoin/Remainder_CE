@@ -464,14 +464,14 @@ pub enum GateError {
 #[derive(Error, Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
-    layer_id: LayerId,
+    pub layer_id: LayerId,
     pub nonzero_gates: Vec<(usize, usize, usize)>,
     pub lhs: DenseMleRef<F>,
-    rhs: DenseMleRef<F>,
+    pub rhs: DenseMleRef<F>,
     beta_g: Option<BetaTable<F>>,
-    phase_1_mles: Option<([DenseMleRef<F>; 2], [DenseMleRef<F>; 1])>,
-    phase_2_mles: Option<([DenseMleRef<F>; 1], [DenseMleRef<F>; 2])>,
-    num_copy_bits: usize,
+    pub phase_1_mles: Option<([DenseMleRef<F>; 2], [DenseMleRef<F>; 1])>,
+    pub phase_2_mles: Option<([DenseMleRef<F>; 1], [DenseMleRef<F>; 2])>,
+    pub num_copy_bits: usize,
     _marker: PhantomData<Tr>,
 }
 
@@ -1452,17 +1452,17 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
-    new_bits: usize,
-    nonzero_gates: Vec<(usize, usize, usize)>,
-    lhs: DenseMleRef<F>,
-    rhs: DenseMleRef<F>,
-    num_vars_l: Option<usize>,
-    num_vars_r: Option<usize>,
+    pub new_bits: usize,
+    pub nonzero_gates: Vec<(usize, usize, usize)>,
+    pub lhs: DenseMleRef<F>,
+    pub rhs: DenseMleRef<F>,
+    pub num_vars_l: Option<usize>,
+    pub num_vars_r: Option<usize>,
     copy_phase_mles: Option<(BetaTable<F>, [DenseMleRef<F>; 2])>,
-    g1_challenges: Option<Vec<F>>,
-    g2_challenges: Option<Vec<F>>,
-    layer_id: LayerId,
-    reduced_gate: Option<AddGate<F, Tr>>,
+    pub g1_challenges: Option<Vec<F>>,
+    pub g2_challenges: Option<Vec<F>>,
+    pub layer_id: LayerId,
+    pub reduced_gate: Option<AddGate<F, Tr>>,
     _marker: PhantomData<Tr>,
 }
 

@@ -60,7 +60,7 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     ) -> Result<(), E>;
 
     /// Add two expressions together
-    fn concat(self, lhs: Self) -> Self;
+    fn concat_expr(self, lhs: Self) -> Self;
 
     /// Fix the bit corresponding to `round_index` to `challenge` mutating the MleRefs
     /// so they are accurate as Bookeeping Tables
@@ -231,7 +231,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     }
 
     ///Concatenates two expressions together
-    fn concat(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
+    fn concat_expr(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
         ExpressionStandard::Selector(MleIndex::Iterated, Box::new(self), Box::new(lhs))
     }
 
@@ -862,7 +862,7 @@ mod tests {
 
         let expression_2 = ExpressionStandard::Mle(mle_2);
 
-        let mut expression = expression_1.concat(expression_2);
+        let mut expression = expression_1.concat_expr(expression_2);
 
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 3);
@@ -909,7 +909,7 @@ mod tests {
 
         let expression_1 = ExpressionStandard::Mle(mle_1);
 
-        let mut expression = expression_1.concat(ExpressionStandard::Constant(Fr::from(5)));
+        let mut expression = expression_1.concat_expr(ExpressionStandard::Constant(Fr::from(5)));
 
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 3);
@@ -1081,7 +1081,7 @@ mod tests {
 
         let expression = expression * Fr::from(2);
 
-        let mut expression = expression3.concat(expression);
+        let mut expression = expression3.concat_expr(expression);
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 3);
 

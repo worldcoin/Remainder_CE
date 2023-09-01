@@ -112,6 +112,10 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     pub fn new() -> Self {
         Self(vec![])
     }
+
+    pub fn next_layer_id(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl<F: FieldExt, Tr: Transcript<F> + 'static> Default for Layers<F, Tr> {

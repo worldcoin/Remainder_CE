@@ -229,7 +229,7 @@ mod tests {
         // let expression = expression1.clone() * expression;
         let expression = expression1 - expression;
         let expression = expression * Fr::from(2);
-        let _expression = expression3.concat(expression);
+        let _expression = expression3.concat_expr(expression);
 
         // TODO(ryancao): Need to create a layer and fix all the MLE variables...
     }

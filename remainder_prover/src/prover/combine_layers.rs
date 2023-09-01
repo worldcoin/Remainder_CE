@@ -229,11 +229,11 @@ fn combine_expressions<F: FieldExt>(
         let diff = second.get_expression_size(0) - first.get_expression_size(0);
 
         let expr = if diff == 0 {
-            second.concat(first)
+            second.concat_expr(first)
         } else {
             let first = add_padding(first, diff);
 
-            first.concat(second)
+            first.concat_expr(second)
         };
 
         exprs.push(expr);
@@ -248,7 +248,7 @@ fn add_padding<F: FieldExt>(
     num_padding: usize,
 ) -> ExpressionStandard<F> {
     for _ in 0..num_padding {
-        expr = ExpressionStandard::Constant(F::zero()).concat(expr);
+        expr = ExpressionStandard::Constant(F::zero()).concat_expr(expr);
     }
     expr
 }

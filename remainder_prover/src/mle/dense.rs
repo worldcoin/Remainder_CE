@@ -202,6 +202,18 @@ impl<F: FieldExt> DenseMle<F, F> {
             self.prefix_bits.clone(),
         )
     }
+
+    pub fn one(mle_len: usize, layer_id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> DenseMle<F, F> {
+        let mut one_vec = vec![];
+        for _ in 0..mle_len {
+            one_vec.push(F::one())
+        }
+        DenseMle::new_from_raw(
+            one_vec,
+            layer_id,
+            prefix_bits
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
