@@ -119,12 +119,6 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
             _ => Err(CombineError),
         }?;
 
-        if effected_layer == LayerId::Layer(0) {
-            dbg!(&expression);
-            dbg!(expression.get_expression_size(0));
-            dbg!(&new_bits);
-        }
-
         let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
             match expr {
                 ExpressionStandard::Mle(mle) => {

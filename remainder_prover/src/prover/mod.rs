@@ -310,6 +310,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
                     let aggregated_challenges =
                         compute_aggregated_challenges(&layer_claims, agg_chal).unwrap();
+
                     let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
 
                     (
@@ -329,8 +330,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 let post_sumcheck_new_claims = layer
                     .get_claims()
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
-
-                dbg!(&post_sumcheck_new_claims);
 
                 for (layer_id, claim) in post_sumcheck_new_claims {
                     if let Some(curr_claims) = claims.get_mut(&layer_id) {
@@ -480,7 +479,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
                 claim_chal.push(challenge);
             }
-            let claim = (claim_chal, F::zero());
+            let claim = (mle_indices.into_iter().map(|index| index.val().unwrap()).collect(), F::zero());
             let layer_id = output.get_layer_id();
 
             // --- Append claims to either the claim tracking map OR the first (sumchecked) layer's list of claims ---
