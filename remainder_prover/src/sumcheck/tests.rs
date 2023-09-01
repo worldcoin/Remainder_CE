@@ -458,7 +458,7 @@ fn test_dummy_sumcheck_concat() {
     let expression = ExpressionStandard::Mle(mle_ref_1);
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
-    let mut expression = expr2.concat(expression);
+    let mut expression = expr2.concat_expr(expression);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -500,7 +500,7 @@ fn test_dummy_sumcheck_concat_2() {
     let expression = ExpressionStandard::Mle(mle_ref_1);
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
-    let mut expression = expr2.concat(expression);
+    let mut expression = expr2.concat_expr(expression);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -545,7 +545,7 @@ fn test_dummy_sumcheck_concat_aggro() {
     let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
     let expr2 = expression.clone();
 
-    let mut expression = expr2.concat(expression);
+    let mut expression = expr2.concat_expr(expression);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
 
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
@@ -571,8 +571,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     let expression = ExpressionStandard::Mle(mle_ref_1);
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
-    let expression = expr2.clone().concat(expression);
-    let mut expression_aggro = expression.concat(expr2);
+    let expression = expr2.clone().concat_expr(expression);
+    let mut expression_aggro = expression.concat_expr(expr2);
     let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
     let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
     let verifyres =
@@ -596,9 +596,9 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let expression = ExpressionStandard::Mle(mle_ref_1);
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
-    let expression = expr2.clone().concat(expression);
-    let expression_aggro = expression.concat(expr2.clone());
-    let mut expression_aggro_aggro = expression_aggro.concat(expr2);
+    let expression = expr2.clone().concat_expr(expression);
+    let expression_aggro = expression.concat_expr(expr2.clone());
+    let mut expression_aggro_aggro = expression_aggro.concat_expr(expr2);
     let layer_claims = get_dummy_expression_eval(&expression_aggro_aggro, &mut rng);
     let res_messages = dummy_sumcheck(&mut expression_aggro_aggro, &mut rng, layer_claims.clone());
     let verifyres =
@@ -622,8 +622,8 @@ fn test_dummy_sumcheck_sum() {
     let expression = ExpressionStandard::Mle(mle_ref_1);
     let expr2 = ExpressionStandard::Mle(mle_ref_2);
 
-    let expression = expr2.clone().concat(expression);
-    let mut expression_aggro = expression.concat(expr2);
+    let expression = expr2.clone().concat_expr(expression);
+    let mut expression_aggro = expression.concat_expr(expr2);
     let layer_claims = get_dummy_expression_eval(&expression_aggro, &mut rng);
     let res_messages = dummy_sumcheck(&mut expression_aggro, &mut rng, layer_claims.clone());
     let verifyres =
@@ -838,7 +838,7 @@ fn test_dummy_sumcheck_example() {
 
     // let expr_1 = mle.first().expression() + mle.second().expression();
     let expr_2 = mle_2.first().expression() + mle_2.second().expression();
-    let mut expression = expr_1.concat(expr_2);
+    let mut expression = expr_1.concat_expr(expr_2);
 
     let layer_2 = from_mle(
         mle_2,
