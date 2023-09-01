@@ -156,7 +156,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         let (max_round, beta) = {
             let (expression, _) = self.mut_expression_and_beta();
 
-            let mut beta = BetaTable::new(claim).map_err(LayerError::BetaError)?;
+            let mut beta = BetaTable::new(claim.clone()).map_err(LayerError::BetaError)?;
 
             // --- This should always be equivalent to the number of indices within the beta table ---
             let max_round = std::cmp::max(
@@ -177,6 +177,10 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
             .map_err(LayerError::ExpressionError)?;
 
         let Evals(out) = first_round_sumcheck_message;
+
+        dbg!((out[0] + out[1], &claim.1));
+
+        debug_assert!({out[0] + out[1] == claim.1});
 
         Ok((out, max_round))
     }
@@ -294,6 +298,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // --- First verify that g_1(0) + g_1(1) = \sum_{b_1, ..., b_n} g(b_1, ..., b_n) ---
         // (i.e. the first verification step of sumcheck)
         let mut prev_evals = &sumcheck_prover_messages[0];
+        dbg!((prev_evals[0] + prev_evals[1], &claim.1));
         if prev_evals[0] + prev_evals[1] != claim.1 {
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
@@ -468,7 +473,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // expr.init_beta_tables(prev_layer_claim);
         let num_evals = (num_vars) * (num_claims); //* degree;
 
-        dbg!(&claim_vecs);
+        dbg!((&claim_vecs, &claimed_vals));
+        dbg!(&expr);
 
         debug_assert!({
             claim_vecs.iter().zip(claimed_vals.iter()).map(|(point, val)| {

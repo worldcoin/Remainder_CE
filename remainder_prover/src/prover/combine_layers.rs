@@ -119,9 +119,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
             _ => Err(CombineError),
         }?;
 
-        dbg!(&expression);
-        dbg!(expression.get_expression_size(0));
-        dbg!(&new_bits);
+        if effected_layer == LayerId::Layer(0) {
+            dbg!(&expression);
+            dbg!(expression.get_expression_size(0));
+            dbg!(&new_bits);
+        }
 
         let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
             match expr {
@@ -197,9 +199,14 @@ fn combine_expressions<F: FieldExt>(mut exprs: Vec<ExpressionStandard<F>>) -> Ex
 
         let diff = second.get_expression_size(0) - first.get_expression_size(0);
 
-        let first = add_padding(first, diff);
+        let expr = if diff == 0 {
+            second.concat(first)
+        } else {
+            let first = add_padding(first, diff);
 
-        let expr = first.concat(second);
+            first.concat(second)    
+        };
+
 
         exprs.push(expr);
     }
