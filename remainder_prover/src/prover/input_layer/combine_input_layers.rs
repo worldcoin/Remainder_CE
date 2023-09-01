@@ -2,7 +2,11 @@ use std::marker::PhantomData;
 
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_ligero::{
+    ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
+    LcProofAuxiliaryInfo, LcRoot,
+};
+use remainder_shared_types::{transcript::Transcript, FieldExt};
 
 use crate::{
     layer::LayerId,
@@ -10,7 +14,7 @@ use crate::{
     utils::{argsort, pad_to_nearest_power_of_two},
 };
 
-use super::MleInputLayer;
+use super::{ligero_input_layer::LigeroInputLayer, MleInputLayer};
 
 fn get_prefix_bits_from_capacity<F: FieldExt>(
     capacity: u32,
@@ -224,5 +228,22 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     pub fn to_input_layer<I: MleInputLayer<F>>(self) -> I {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
         I::new(final_mle, self.layer_id)
+    }
+
+    /// Turn the builder into an input layer WITH a pre-commitment
+    pub fn to_input_layer_with_precommit<Tr: Transcript<F>>(
+        self,
+        ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+        ligero_aux: LcProofAuxiliaryInfo,
+        ligero_root: LcRoot<LigeroEncoding<F>, F>,
+    ) -> LigeroInputLayer<F, Tr> {
+        let final_mle: DenseMle<F, F> = self.combine_input_mles();
+        LigeroInputLayer::<F, Tr>::new_with_ligero_commitment(
+            final_mle,
+            self.layer_id,
+            ligero_comm,
+            ligero_aux,
+            ligero_root,
+        )
     }
 }

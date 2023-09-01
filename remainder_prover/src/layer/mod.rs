@@ -216,7 +216,12 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
     }
 
     pub(crate) fn new_raw(id: LayerId, expression: ExpressionStandard<F>) -> Self {
-        GKRLayer { id, expression, beta: None, _marker: PhantomData }
+        GKRLayer {
+            id,
+            expression,
+            beta: None,
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -473,7 +478,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                 let eval = compute_sumcheck_message(&mut expr.clone(), 0, degree, &beta).unwrap();
                 let Evals(evals) = eval;
                 let eval = evals[0] + evals[1];
-    
                 if eval == *val {
                     true
                 } else {

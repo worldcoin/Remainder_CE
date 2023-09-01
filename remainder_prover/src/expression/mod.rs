@@ -618,18 +618,48 @@ impl<F: FieldExt> ExpressionStandard<F> {
                 max(a_bits, b_bits)
             }
             ExpressionStandard::Mle(mle_ref) => {
-                mle_ref.mle_indices().iter().filter(|item| matches!(item, &&MleIndex::Iterated | &&MleIndex::IndexedBit(_)| &&MleIndex::Bound(_, _))).collect_vec().len() + curr_size
-            },
+                mle_ref
+                    .mle_indices()
+                    .iter()
+                    .filter(|item| {
+                        matches!(
+                            item,
+                            &&MleIndex::Iterated
+                                | &&MleIndex::IndexedBit(_)
+                                | &&MleIndex::Bound(_, _)
+                        )
+                    })
+                    .collect_vec()
+                    .len()
+                    + curr_size
+            }
             ExpressionStandard::Sum(a, b) => {
                 let a_bits = a.get_expression_size(curr_size);
                 let b_bits = b.get_expression_size(curr_size);
                 max(a_bits, b_bits)
             }
-            ExpressionStandard::Product(mle_refs) => mle_refs
-                .iter()
-                .map(|mle_ref| mle_ref.mle_indices().iter().filter(|item| matches!(item, &&MleIndex::Iterated | &&MleIndex::IndexedBit(_) | &&MleIndex::Bound(_, _))).collect_vec().len())
-                .max()
-                .unwrap_or(0) + curr_size,
+            ExpressionStandard::Product(mle_refs) => {
+                mle_refs
+                    .iter()
+                    .map(|mle_ref| {
+                        mle_ref
+                            .mle_indices()
+                            .iter()
+                            .filter(|item| {
+                                matches!(
+                                    item,
+                                    &&MleIndex::Iterated
+                                        | &&MleIndex::IndexedBit(_)
+                                        | &&MleIndex::Bound(_, _)
+                                )
+                            })
+                            .collect_vec()
+                            .len()
+                    })
+                    .max()
+                    .unwrap_or(0)
+                    + curr_size
+            }
             ExpressionStandard::Scaled(a, _) => a.get_expression_size(curr_size),
             ExpressionStandard::Negated(a) => a.get_expression_size(curr_size),
             ExpressionStandard::Constant(_) => curr_size,

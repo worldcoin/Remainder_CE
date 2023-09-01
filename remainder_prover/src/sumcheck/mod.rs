@@ -175,13 +175,19 @@ pub(crate) fn compute_sumcheck_message<
                     if (first_evals.len() == second_evals.len()) && first_evals.len() == 3 {
                         // we need to combine the evals by doing (1-x) * first eval + x * second eval
                         let first_evals = Evals(
-                            first_evals.into_iter().enumerate()
-                                .map(|(idx, first_eval)| first_eval * (F::one() - F::from(idx as u64)))
+                            first_evals
+                                .into_iter()
+                                .enumerate()
+                                .map(|(idx, first_eval)| {
+                                    first_eval * (F::one() - F::from(idx as u64))
+                                })
                                 .collect(),
                         );
 
                         let second_evals = Evals(
-                            second_evals.into_iter().enumerate()
+                            second_evals
+                                .into_iter()
+                                .enumerate()
                                 .map(|(idx, second_eval)| second_eval * F::from(idx as u64))
                                 .collect(),
                         );

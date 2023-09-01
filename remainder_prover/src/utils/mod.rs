@@ -1,11 +1,14 @@
 use std::iter::repeat_with;
 
 use ark_std::test_rng;
-use itertools::{Itertools, repeat_n};
+use itertools::{repeat_n, Itertools};
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 use remainder_shared_types::FieldExt;
 
-use crate::{layer::LayerId, mle::{dense::DenseMle, MleIndex}};
+use crate::{
+    layer::LayerId,
+    mle::{dense::DenseMle, MleIndex},
+};
 
 /// Returns a zero-padded version of `coeffs` with length padded
 /// to the nearest power of two.
@@ -78,7 +81,7 @@ pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F,
 }
 
 ///returns an iterator that wil give permutations of binary bits of size num_bits
-/// 
+///
 /// 0,0,0 -> 0,0,1 -> 0,1,0 -> 0,1,1 -> 1,0,0 -> 1,0,1 -> 1,1,0 -> 1,1,1
 pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {
     std::iter::successors(

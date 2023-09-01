@@ -1,13 +1,15 @@
 use ark_std::{log2, test_rng, One, UniformRand, Zero};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use itertools::Itertools;
 use rand::Rng;
+use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
-use std::{cmp::max, fs, path::Path, time::Instant};
+use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 use tracing::Level;
 
 use crate::{
     expression::ExpressionStandard,
-    layer::{from_mle, LayerBuilder, LayerId, layer_enum::LayerEnum},
+    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId},
     mle::{
         dense::{DenseMle, Tuple2},
         mle_enum::MleEnum,
@@ -31,12 +33,13 @@ use remainder_shared_types::{
 };
 
 use super::{
+    combine_layers::combine_layers,
     input_layer::{
         combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer, InputLayer,
     },
-    GKRCircuit, GKRError, Layers, Witness, combine_layers::combine_layers,
+    GKRCircuit, GKRError, Layers, Witness,
 };
 
 fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
@@ -88,7 +91,7 @@ fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Pat
 /// Note that we also have the difference thingy (of size 2)
 struct SimpleCircuit<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
-    size: usize
+    size: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
@@ -96,7 +99,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-        let mut input_layer = InputLayerBuilder::new(input_mles, Some(vec![self.size]), LayerId::Input(0));
+        let mut input_layer =
+            InputLayerBuilder::new(input_mles, Some(vec![self.size]), LayerId::Input(0));
         let mle_clone = &self.mle;
 
         // --- Create Layers to be added to ---
@@ -144,8 +148,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
         let circuit_output = layers.add_gkr(output_diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-        // input_layer.combine_input_mles(&input_mles, Some(Box::new(&mut output_input)));
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         let input_layers = vec![input_layer.to_enum()];
@@ -188,8 +190,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-        let mut input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
         let mle_clone = self.mle.clone();
 
         // --- Create Layers to be added to ---
@@ -224,7 +226,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         let first_layer_output = layers.add_gkr(diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         // (layers, vec![first_layer_output.get_enum()], input_layer)
@@ -371,7 +372,8 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         // let mut self_mle_2_clone = self.mle_2.clone();
         let mut input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
-        let mut input_layer = InputLayerBuilder::new(input_mles, Some(vec![self.size]), LayerId::Input(0));
+        let mut input_layer =
+            InputLayerBuilder::new(input_mles, Some(vec![self.size]), LayerId::Input(0));
         let mle_clone = self.mle.clone();
         let mle_2_clone = self.mle_2.clone();
 
@@ -591,18 +593,29 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
         let test_witness = self.test_circuit.synthesize();
         let simple_witness = self.simple_circuit.synthesize();
 
-        let Witness { layers: test_layers, output_layers: test_outputs, input_layers: test_inputs } = test_witness;
+        let Witness {
+            layers: test_layers,
+            output_layers: test_outputs,
+            input_layers: test_inputs,
+        } = test_witness;
 
-        let Witness { layers: mut simple_layers, output_layers: simple_outputs, input_layers: simple_inputs } = simple_witness;
+        let Witness {
+            layers: mut simple_layers,
+            output_layers: simple_outputs,
+            input_layers: simple_inputs,
+        } = simple_witness;
 
-        let input_layers = test_inputs.into_iter().chain(simple_inputs.into_iter().map(|mut input| {
-            let new_layer_id = match input.layer_id() {
-                LayerId::Input(id) => LayerId::Input(id + 1),
-                LayerId::Layer(_) => panic!(),
-            };
-            input.set_layer_id(new_layer_id); 
-            input
-        })).collect();
+        let input_layers = test_inputs
+            .into_iter()
+            .chain(simple_inputs.into_iter().map(|mut input| {
+                let new_layer_id = match input.layer_id() {
+                    LayerId::Input(id) => LayerId::Input(id + 1),
+                    LayerId::Layer(_) => panic!(),
+                };
+                input.set_layer_id(new_layer_id);
+                input
+            }))
+            .collect();
 
         for layer in simple_layers.0.iter_mut() {
             let expression = match layer {
@@ -610,7 +623,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
                 LayerEnum::EmptyLayer(layer) => &mut layer.expr,
                 _ => panic!(),
             };
-    
+
             let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
                 match expr {
                     ExpressionStandard::Mle(mle) => {
@@ -634,15 +647,21 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
                     | ExpressionStandard::Selector(_, _, _) => Ok(()),
                 }
             };
-    
+
             expression.traverse_mut(&mut closure).unwrap();
         }
-    
 
-        let (layers, output_layers) = combine_layers(vec![test_layers, simple_layers], vec![test_outputs, simple_outputs]).unwrap();
+        let (layers, output_layers) = combine_layers(
+            vec![test_layers, simple_layers],
+            vec![test_outputs, simple_outputs],
+        )
+        .unwrap();
 
-
-        Witness { layers, output_layers, input_layers }
+        Witness {
+            layers,
+            output_layers,
+            input_layers,
+        }
     }
 }
 
@@ -669,7 +688,7 @@ fn test_combine_circuit() {
     );
 
     let test_circuit_1: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
-    
+
     let size = 4;
 
     // --- This should be 2^2 ---
@@ -686,7 +705,107 @@ fn test_combine_circuit() {
 
     let simple_circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
 
-    let circuit = CombineCircuit {test_circuit: test_circuit_1, simple_circuit};
+    let circuit = CombineCircuit {
+        test_circuit: test_circuit_1,
+        simple_circuit,
+    };
 
     test_circuit(circuit, None);
+}
+
+/// Circuit which subtracts its two halves, except for the part where one half is
+/// comprised of a pre-committed Ligero input layer and the other half is comprised
+/// of a Ligero input layer which is committed to on the spot.
+struct SimplePrecommitCircuit<F: FieldExt> {
+    mle: DenseMle<F, F>,
+    mle2: DenseMle<F, F>,
+}
+impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        // --- The precommitted input layer MLE is just the first MLE ---
+        let precommitted_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
+        let precommitted_input_layer_builder =
+            InputLayerBuilder::new(precommitted_input_mles, None, LayerId::Input(0));
+
+        // --- The non-precommitted input layer MLE is just the second ---
+        let live_committed_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle2)];
+        let live_committed_input_layer_builder =
+            InputLayerBuilder::new(live_committed_input_mles, None, LayerId::Input(0));
+
+        let mle_clone = self.mle.clone();
+        let mle2_clone = self.mle2.clone();
+
+        // --- Create Layers to be added to ---
+        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        // --- Create a SimpleLayer from the first `mle` within the circuit ---
+        let diff_builder = from_mle(
+            mle_clone.clone(),
+            // --- The expression is a simple diff between the first and second halves ---
+            |_mle| {
+                let first_half = Box::new(ExpressionStandard::Mle(mle_clone.mle_ref()));
+                let second_half = Box::new(ExpressionStandard::Mle(mle2_clone.mle_ref()));
+                let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
+                ExpressionStandard::Sum(first_half, negated_second_half)
+            },
+            // --- The output SHOULD be all zeros ---
+            |_mle, layer_id, prefix_bits| {
+                let num_vars = max(
+                    mle_clone.mle_ref().num_vars(),
+                    mle2_clone.mle_ref().num_vars(),
+                );
+                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+            },
+        );
+
+        // --- Stacks the two aforementioned layers together into a single layer ---
+        // --- Then adds them to the overall circuit ---
+        let first_layer_output = layers.add_gkr(diff_builder);
+
+        // --- We should have two input layers: a single pre-committed and a single regular Ligero layer ---
+        let rho_inv = 4;
+        let (_, ligero_comm, ligero_root, ligero_aux) =
+            remainder_ligero_commit_prove(&self.mle.mle, rho_inv);
+        let precommitted_input_layer: LigeroInputLayer<F, Self::Transcript> =
+            precommitted_input_layer_builder.to_input_layer_with_precommit(
+                ligero_comm,
+                ligero_aux,
+                ligero_root,
+            );
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
+            live_committed_input_layer_builder.to_input_layer();
+
+        Witness {
+            layers,
+            output_layers: vec![first_layer_output.get_enum()],
+            input_layers: vec![
+                precommitted_input_layer.to_enum(),
+                live_committed_input_layer.to_enum(),
+            ],
+        }
+    }
+}
+
+#[test]
+fn test_gkr_circuit_with_precommit() {
+    let mut rng = test_rng();
+    let size = 1 << 5;
+
+    // --- MLE contents ---
+    let items = repeat_with(|| Fr::from(rng.gen::<u64>()))
+        .take(size)
+        .collect_vec();
+
+    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items.clone(), LayerId::Input(0), None);
+    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items.clone(), LayerId::Input(0), None);
+
+    let mut circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
+
+    let mut transcript: PoseidonTranscript<Fr> = PoseidonTranscript::new("GKR Prover Transcript");
+    let now = Instant::now();
+
+    test_circuit(circuit, Some(Path::new("./gkr_precommit_proof.json")));
+    // panic!();
 }

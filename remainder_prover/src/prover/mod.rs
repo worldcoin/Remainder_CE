@@ -199,6 +199,7 @@ pub trait GKRCircuit<F: FieldExt> {
     /// The forward pass, defining the layer relationships and generating the layers
     fn synthesize(&mut self) -> Witness<F, Self::Transcript>;
 
+    /// Calls `synthesize` and also generates commitments from each of the input layers
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut Self::Transcript,
@@ -466,7 +467,11 @@ pub trait GKRCircuit<F: FieldExt> {
         for output in output_layers.iter() {
             let mle_indices = output.mle_indices();
             let mut claim_chal: Vec<F> = vec![];
-            for (bit, index) in mle_indices.iter().filter(|index| !matches!(index, &&MleIndex::Fixed(_))).enumerate() {
+            for (bit, index) in mle_indices
+                .iter()
+                .filter(|index| !matches!(index, &&MleIndex::Fixed(_)))
+                .enumerate()
+            {
                 let challenge = transcript
                     .get_challenge("Setting Output Layer Claim")
                     .unwrap();
@@ -479,7 +484,13 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
                 claim_chal.push(challenge);
             }
-            let claim = (mle_indices.into_iter().map(|index| index.val().unwrap()).collect(), F::zero());
+            let claim = (
+                mle_indices
+                    .into_iter()
+                    .map(|index| index.val().unwrap())
+                    .collect(),
+                F::zero(),
+            );
             let layer_id = output.get_layer_id();
 
             // --- Append claims to either the claim tracking map OR the first (sumchecked) layer's list of claims ---

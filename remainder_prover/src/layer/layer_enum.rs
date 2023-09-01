@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use crate::{mle::gate::{AddGate, AddGateBatched}, expression::{ExpressionStandard, Expression}};
+use crate::{
+    expression::{Expression, ExpressionStandard},
+    mle::gate::{AddGate, AddGateBatched},
+};
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 

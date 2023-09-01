@@ -33,6 +33,7 @@ pub struct LigeroInputLayer<F: FieldExt, Tr> {
     _marker: PhantomData<Tr>,
 }
 
+/// The *actual* Ligero evaluation proof the prover needs to send to the verifier
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct LigeroInputProof<F: FieldExt> {
@@ -42,6 +43,7 @@ pub struct LigeroInputProof<F: FieldExt> {
 
 const RHO_INV: u8 = 4;
 
+/// The *actual* Ligero commitment the prover needs to send to the verifier
 pub type LigeroCommitment<F> = LcRoot<LigeroEncoding<F>, F>;
 
 impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
@@ -52,7 +54,15 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
     type OpeningProof = LigeroInputProof<F>;
 
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        // let orig_input_layer_bookkeeping_table: Vec<F> = pad_to_nearest_power_of_two(self.mle.mle.clone());
+        // --- If we've already generated a commitment (i.e. through `new_with_ligero_commitment()`), ---
+        // --- no need to regenerate the commitment ---
+        match (&self.comm, &self.aux, &self.root) {
+            (Some(_), Some(_), Some(root)) => {
+                return Ok(root.clone());
+            }
+            _ => {}
+        }
+
         let (_, comm, root, aux) = remainder_ligero_commit_prove(&self.mle.mle, RHO_INV);
 
         self.comm = Some(comm);
@@ -143,6 +153,26 @@ impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for LigeroInputLayer<F, Tr
             comm: None,
             aux: None,
             root: None,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
+    /// Creates new Ligero input layer WITH a precomputed Ligero commitment
+    pub fn new_with_ligero_commitment(
+        mle: DenseMle<F, F>,
+        layer_id: LayerId,
+        ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+        ligero_aux: LcProofAuxiliaryInfo,
+        ligero_root: LcRoot<LigeroEncoding<F>, F>,
+    ) -> Self {
+        Self {
+            mle,
+            layer_id,
+            comm: Some(ligero_comm),
+            aux: Some(ligero_aux),
+            root: Some(ligero_root),
             _marker: PhantomData,
         }
     }
