@@ -177,6 +177,7 @@ mod test {
     use ark_std::test_rng;
     use halo2_base::{halo2_proofs::halo2curves::bn256::Fr, utils::ScalarField};
     use rand::Rng;
+    use remainder_shared_types::FieldExt;
     use std::ops::Range;
 
     #[test]
