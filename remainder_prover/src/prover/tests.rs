@@ -588,9 +588,6 @@ fn test_gkr_circuit_with_precommit() {
         PoseidonTranscript::new("GKR Prover Transcript");
     let now = Instant::now();
 
-
-
-
     match circuit.prove(&mut transcript) {
         Ok(proof) => {
             println!(

@@ -21,7 +21,7 @@ What's our plan here?
 // --- Constants ---
 pub const DUMMY_INPUT_LEN: usize = 1 << 6; // was 1 << 5
 pub const NUM_DUMMY_INPUTS: usize = 8;
-pub const TREE_HEIGHT: usize = 8; // was 9
+pub const TREE_HEIGHT: usize = 9; // was 9
 const NUM_DECISION_NODES: u64 = 2_u64.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u64 = NUM_DECISION_NODES + 1;
 
@@ -144,7 +144,7 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
     let mut binary_repr_arr = [F::zero(); 16];
     for (idx, item) in binary_repr_arr.iter_mut().enumerate() {
         let char_repr = binary_repr.chars().nth(idx).unwrap();
-        assert!(char_repr == '0' || char_repr == '1');
+        debug_assert!(char_repr == '0' || char_repr == '1');
         *item = if char_repr == '0' {
             F::zero()
         } else {

@@ -81,8 +81,7 @@ pub(crate) fn compute_new_beta_table<F: FieldExt>(
 ) -> Result<Vec<F>, BetaError> {
     let (layer_claims, _) = &beta_table.layer_claim;
     let curr_beta = beta_table.table.bookkeeping_table();
-    let curr_beta = beta_table.table.bookkeeping_table();
-
+    // dbg!(&beta_table.table);
     // --- This should always be true now, no? ---
     if beta_table.relevant_indices.contains(&round_index) {
         let layer_claim = layer_claims[round_index];
@@ -104,6 +103,7 @@ pub(crate) fn compute_new_beta_table<F: FieldExt>(
 
     Err(BetaError::IndexedBitNotFoundError)
 }
+
 /// Splits the beta table by the second most significant bit when we have nested selectors
 /// (the case where the selector bit is not the independent variable)
 pub(crate) fn beta_split<F: FieldExt>(
