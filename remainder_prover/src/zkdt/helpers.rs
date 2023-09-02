@@ -13,6 +13,15 @@ pub fn i32_to_field<F: FieldExt>(value: i32) -> F {
     }
 }
 
+/// Helper function for conversion to field elements, handling negative values.
+pub fn i64_to_field<F: FieldExt>(value: i64) -> F {
+    if value >= 0 {
+        F::from(value as u64)
+    } else {
+        F::from(value.abs() as u64).neg()
+    }
+}
+
 /// Return the first power of two that is greater than or equal to the argument, or None if this
 /// would exceed the range of a u32.
 pub fn next_power_of_two(n: usize) -> Option<usize> {
@@ -30,7 +39,8 @@ pub fn next_power_of_two(n: usize) -> Option<usize> {
 }
 
 const BIT_DECOMPOSITION_LENGTH: usize = 16;
-pub const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
+pub const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 =
+    2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
 const UNSIGNED_DECOMPOSITION_MAX_ARG: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32) - 1;
 
 /// Build a 16 bit signed decomposition of the specified i32, or None if the argument is too large
@@ -52,9 +62,7 @@ pub fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDeco
 /// Build a 16 bit decomposition of the specified u32, or None if the argument is too large
 /// (exceeding UNSIGNED_DECOMPOSITION_MAX_ARG_ABS).
 /// Result is little endian i.e. LSB has index 0.
-pub fn build_unsigned_bit_decomposition<F: FieldExt>(
-    mut value: u32,
-) -> Option<BinDecomp16Bit<F>> {
+pub fn build_unsigned_bit_decomposition<F: FieldExt>(mut value: u32) -> Option<BinDecomp16Bit<F>> {
     if value > UNSIGNED_DECOMPOSITION_MAX_ARG {
         return None;
     }
@@ -114,19 +122,19 @@ fn append_decision_nodes<T: Copy, F: FieldExt>(
 
 /// Return a Vec containing a LeafNode for each Node::Leaf appearing in this tree, in order of
 /// id, where the ids are allocated as in extract_decision_nodes().
-pub fn extract_leaf_nodes<F: FieldExt>(tree: &Node<i32>) -> Vec<LeafNode<F>> {
+pub fn extract_leaf_nodes<F: FieldExt>(tree: &Node<i64>) -> Vec<LeafNode<F>> {
     let mut leaf_nodes = Vec::new();
     append_leaf_nodes(tree, &mut leaf_nodes);
     leaf_nodes
 }
 
 /// Helper function for extract_leaf_nodes.
-fn append_leaf_nodes<F: FieldExt>(tree: &Node<i32>, leaf_nodes: &mut Vec<LeafNode<F>>) {
+fn append_leaf_nodes<F: FieldExt>(tree: &Node<i64>, leaf_nodes: &mut Vec<LeafNode<F>>) {
     match tree {
         Node::Leaf { id, value } => {
             leaf_nodes.push(LeafNode {
                 node_id: F::from(id.unwrap() as u64),
-                node_val: i32_to_field(*value),
+                node_val: i64_to_field(*value),
             });
         }
         Node::Internal { left, right, .. } => {
@@ -192,7 +200,7 @@ mod tests {
         assert_eq!(leaf_nodes[0].node_id, Fr::from(5));
         assert_eq!(leaf_nodes[0].node_val, -Fr::from(3));
         // non-trivial
-        let mut tree = build_small_tree().map(&|x| x as i32);
+        let mut tree = build_small_tree().map(&|x| x as i64);
         tree.assign_id(0);
         let mut leaf_nodes = extract_leaf_nodes::<Fr>(&tree);
         assert_eq!(leaf_nodes.len(), 3);

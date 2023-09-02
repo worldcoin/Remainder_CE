@@ -584,45 +584,5 @@ fn test_gkr_circuit_with_precommit() {
 
     let mut circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
 
-    let mut transcript: PoseidonTranscript<Fr> =
-        PoseidonTranscript::new("GKR Prover Transcript");
-    let now = Instant::now();
-
-    match circuit.prove(&mut transcript) {
-        Ok(proof) => {
-            println!(
-                "proof generated successfully in {}!",
-                now.elapsed().as_secs_f32()
-            );
-
-            let mut f = fs::File::create("./gkr_proof.json").unwrap();
-            to_writer(&mut f, &proof).unwrap();
-            let mut transcript: PoseidonTranscript<Fr> =
-                PoseidonTranscript::new("GKR Verifier Transcript");
-            let now = Instant::now();
-
-            let file = std::fs::File::open("./gkr_proof.json").unwrap();
-
-            let proof_real = from_reader(&file).unwrap();
-
-            match circuit.verify(&mut transcript, proof_real) {
-                Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
-
-    // panic!();
+    test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit.json")));
 }
