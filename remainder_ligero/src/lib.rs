@@ -173,10 +173,14 @@ where
 /// --- For encoding the matrix size and other useful info ---
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LcProofAuxiliaryInfo {
-    rho_inv: u8,
-    encoded_num_cols: usize,
-    orig_num_cols: usize,
-    num_rows: usize,
+    /// Inverse of the encoding rate rho
+    pub rho_inv: u8,
+    /// Number of columns of the encoded matrix
+    pub encoded_num_cols: usize,
+    /// Number of columns of the original matrix
+    pub orig_num_cols: usize,
+    /// Number of rows of the matrix
+    pub num_rows: usize,
 }
 
 /// result of a verifier operation
