@@ -309,18 +309,9 @@ pub fn remainder_ligero_verify<F: FieldExt>(
     let _ = tr.append_field_element("root", root.root);
 
     // --- Reconstruct the encoding (TODO!(ryancao): Deprecate the encoding!) and verify ---
-    let enc =
-        LigeroEncoding::<F>::new_from_dims(proof.get_orig_num_cols(), proof.get_encoded_num_cols());
-    let result = verify(
-        &root.root,
-        &outer_tensor[..],
-        &inner_tensor[..],
-        proof,
-        &enc,
-        tr,
-    )
-    .unwrap();
-
+    let enc = LigeroEncoding::<F>::new_from_dims(proof.get_orig_num_cols(), proof.get_encoded_num_cols());
+    let result = verify(&root.root, &outer_tensor[..], &inner_tensor[..], proof, &enc, tr).unwrap();
+    
     assert_eq!(result, claimed_value);
 }
 

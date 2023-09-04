@@ -159,10 +159,15 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
             let mut beta = BetaTable::new(claim.clone()).map_err(LayerError::BetaError)?;
 
+            let expression_num_indices = expression.index_mle_indices(0);
+            let beta_table_num_indices = beta.table.index_mle_indices(0);
+            // dbg!(&expression_num_indices);
+            // dbg!(&beta_table_num_indices);
+            // dbg!(&expression);
+
             // --- This should always be equivalent to the number of indices within the beta table ---
             let max_round = std::cmp::max(
-                expression.index_mle_indices(0),
-                beta.table.index_mle_indices(0),
+                expression_num_indices, beta_table_num_indices
             );
             (max_round, beta)
         };

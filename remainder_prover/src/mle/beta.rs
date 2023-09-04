@@ -100,6 +100,7 @@ pub(crate) fn compute_new_beta_table<F: FieldExt>(
 
     Err(BetaError::IndexedBitNotFoundError)
 }
+
 /// Splits the beta table by the second most significant bit when we have nested selectors
 /// (the case where the selector bit is not the independent variable)
 pub(crate) fn beta_split<F: FieldExt>(

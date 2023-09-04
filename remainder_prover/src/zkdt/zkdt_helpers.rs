@@ -145,7 +145,7 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
     let mut binary_repr_arr = [F::zero(); 16];
     for (idx, item) in binary_repr_arr.iter_mut().enumerate() {
         let char_repr = binary_repr.chars().nth(idx).unwrap();
-        assert!(char_repr == '0' || char_repr == '1');
+        debug_assert!(char_repr == '0' || char_repr == '1');
         *item = if char_repr == '0' {
             F::zero()
         } else {

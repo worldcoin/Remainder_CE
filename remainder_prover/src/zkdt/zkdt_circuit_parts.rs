@@ -8,10 +8,11 @@ use std::io::Empty;
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder}};
+use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef}, prover::input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}};
 use crate::{prover::{GKRCircuit, Layers, Witness}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
-use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, AttributeConsistencyBuilderZeroRef}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
+
+use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
 
 pub struct PermutationCircuit<F: FieldExt> {
     pub dummy_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
@@ -1127,6 +1128,71 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     }
 }
 
+struct BinaryRecompCircuit<F: FieldExt> {
+    decision_node_path_mle: DenseMle<F, DecisionNode<F>>,
+    permuted_inputs_mle: DenseMle<F, InputAttribute<F>>,
+    diff_signed_bin_decomp: DenseMle<F, BinDecomp16Bit<F>>,
+}
+impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+
+        // --- Inputs to the circuit are just these three MLEs ---
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_path_mle), Box::new(&mut self.permuted_inputs_mle), Box::new(&mut self.diff_signed_bin_decomp)];
+        let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+
+        // --- Create `Layers` struct to add layers to ---
+        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        // --- First we create the positive binary recomp ---
+        let pos_bin_recomp_builder = BinaryRecompBuilder::new(self.diff_signed_bin_decomp.clone());
+        let pos_bin_recomp_mle = layers.add_gkr(pos_bin_recomp_builder);
+
+        // --- Next, we create the diff ---
+        // TODO!(ryancao): Combine this and the above layer!!!
+        let diff_builder = NodePathDiffBuilder::new(
+            self.decision_node_path_mle.clone(),
+            self.permuted_inputs_mle.clone()
+        );
+        let raw_diff_mle = layers.add_gkr(diff_builder);
+
+        // --- Finally, we create the checker ---
+        let recomp_checker_builder = BinaryRecompCheckerBuilder::new(
+            raw_diff_mle,
+            self.diff_signed_bin_decomp.clone(),
+            pos_bin_recomp_mle,
+        );
+        let recomp_checker_mle = layers.add_gkr(recomp_checker_builder);
+
+        // --- Create input layers ---
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
+
+        Witness { layers, output_layers: vec![recomp_checker_mle.get_enum()], input_layers: vec![live_committed_input_layer.to_enum()] }
+    }
+
+}
+
+struct PartialBitsCheckerCircuit<F: FieldExt> {
+    permuted_inputs_mle: DenseMle<F, InputAttribute<F>>,
+    num_vars_to_grab: usize,
+}
+impl<F: FieldExt> GKRCircuit<F> for PartialBitsCheckerCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.permuted_inputs_mle)];
+        let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+
+        let mut layers = Layers::new();
+        let builder = PartialBitsCheckerBuilder::new(self.permuted_inputs_mle.clone(), self.num_vars_to_grab);
+        let result = layers.add_gkr(builder);
+
+        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
+        Witness { layers, output_layers: vec![result.get_enum()], input_layers: vec![input_layer.to_enum()] }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
@@ -1135,10 +1201,80 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
     use rand::Rng;
 
-    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, generate_mles_batch_catboost_single_tree, BatchedCatboostMles}, zkdt_circuit_parts::PermutationCircuitNonBatched}, prover::GKRCircuit};
+    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::{PartialBitsCheckerCircuit, BinaryRecompCircuit, PermutationCircuitNonBatched}}, prover::GKRCircuit};
+    use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
 
     use super::{PermutationCircuit, AttributeConsistencyCircuitNonBatched, MultiSetCircuit, TestCircuit, AttributeConsistencyCircuit};
-    use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
+    #[test]
+    fn test_partial_bits_checker() {
+        let DummyMles { 
+            dummy_permuted_input_data_mle,
+            // dummy_decision_node_paths_mle,
+            // dummy_binary_decomp_diffs_mle,
+            ..
+        } = generate_dummy_mles();
+
+        let mut circuit = PartialBitsCheckerCircuit::<Fr> {
+            permuted_inputs_mle: dummy_permuted_input_data_mle,
+            num_vars_to_grab: 1,
+        };
+
+        let mut transcript = PoseidonTranscript::new("Bin Recomp Circuit Transcript");
+        let now = Instant::now();
+        let proof = circuit.prove(&mut transcript);
+        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
+
+        match proof {
+            Ok(proof) => {
+                let mut transcript = PoseidonTranscript::new("Bin Recomp Circuit Transcript");
+                let result = circuit.verify(&mut transcript, proof);
+                if let Err(err) = result {
+                    println!("{}", err);
+                    panic!();
+                }
+            },
+            Err(err) => {
+                println!("{}", err);
+                panic!();
+            }
+        }
+    }
+
+    #[test]
+    fn test_bin_recomp_circuit() {
+        let DummyMles { 
+            dummy_permuted_input_data_mle,
+            dummy_decision_node_paths_mle,
+            dummy_binary_decomp_diffs_mle,
+            ..
+        } = generate_dummy_mles();
+
+        let mut circuit = BinaryRecompCircuit::<Fr> {
+            decision_node_path_mle: dummy_decision_node_paths_mle,
+            permuted_inputs_mle: dummy_permuted_input_data_mle,
+            diff_signed_bin_decomp: dummy_binary_decomp_diffs_mle,
+        };
+
+        let mut transcript = PoseidonTranscript::new("Bin Recomp Circuit Transcript");
+        let now = Instant::now();
+        let proof = circuit.prove(&mut transcript);
+        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
+
+        match proof {
+            Ok(proof) => {
+                let mut transcript = PoseidonTranscript::new("Bin Recomp Circuit Transcript");
+                let result = circuit.verify(&mut transcript, proof);
+                if let Err(err) = result {
+                    println!("{}", err);
+                    panic!();
+                }
+            },
+            Err(err) => {
+                println!("{}", err);
+                panic!();
+            }
+        }
+    }
 
     #[test]
     fn test_permutation_circuit_catboost_non_batched() {

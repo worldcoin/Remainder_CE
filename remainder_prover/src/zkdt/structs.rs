@@ -116,7 +116,7 @@ impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
 //     type IntoIter = Zip<Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>, Cloned<std::slice::Iter<'a, F>>>;
 
 //     fn into_iter(self) -> Self::IntoIter {
-        
+
 //         self.mle[0]
 //             .iter()
 //             .cloned()
@@ -417,6 +417,7 @@ impl<F: FieldExt> MleAble<F> for InputAttribute<F> {
 impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// MleRef grabbing just the list of attribute IDs
     pub(crate) fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
+
         // --- Default to the entire (component of) the MLE ---
         let num_vars = num_vars.unwrap_or(self.num_iterated_vars() - 1);
 
@@ -428,7 +429,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let concrete_len = cmp::min(len, self.mle[0].to_vec().len());
 
         DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec()[..concrete_len].to_vec(),
+            bookkeeping_table: self.mle[0][0..concrete_len].to_vec(),
             // --- [0; 0, ..., 0; b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
             mle_indices: self
@@ -438,11 +439,11 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 .flatten()
                 .chain(
                     std::iter::once(MleIndex::Fixed(false))
+                        .chain(repeat_n(MleIndex::Iterated, num_vars))
                         .chain(repeat_n(
                             MleIndex::Fixed(false),
                             self.num_iterated_vars() - 1 - num_vars,
-                        ))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars)),
+                        )),
                 )
                 .collect_vec(),
             num_vars,
@@ -467,7 +468,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let concrete_len = cmp::min(len, self.mle[1].to_vec().len());
 
         DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec()[..concrete_len].to_vec(),
+            bookkeeping_table: self.mle[1][..concrete_len].to_vec(),
             // --- [1; 0, ..., 0; b_1, ..., b_n] ---
             // Note that the zeros are there to prefix all the things we chunked out
             // TODO!(ryancao): Does this give us the endian-ness we want???
@@ -478,11 +479,11 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 .flatten()
                 .chain(
                     std::iter::once(MleIndex::Fixed(true))
+                        .chain(repeat_n(MleIndex::Iterated, num_vars))
                         .chain(repeat_n(
                             MleIndex::Fixed(false),
                             self.num_iterated_vars() - 1 - num_vars,
-                        ))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars)),
+                        )),
                 )
                 .collect_vec(),
             num_vars,
@@ -517,21 +518,20 @@ impl<F: FieldExt> MleAble<F> for BinDecomp16Bit<F> {
     }
 
     fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
-        // let items: Vec<BinDecomp16Bit<F>> = items
-        //     .iter()
-        //     .flatten()
-        //     .cloned()
-        //     .chunks(16)
-        //     .into_iter()
-        //     .map(|chunk| {
-        //         let bits = chunk.collect_vec();
-        //         BinDecomp16Bit {
-        //             bits: bits.try_into().unwrap(),
-        //         }
-        //     })
-        //     .collect_vec();
-        // items.into_iter()
-        todo!()
+        let elems = (0..items[0].len()).into_iter().map(
+            |idx| {
+                let bits = items.into_iter().map(
+                    |item| {
+                        item[idx]
+                    }
+                ).collect_vec();
+                BinDecomp16Bit {
+                    bits: bits.try_into().unwrap(),
+                }
+            }
+        ).collect_vec();
+
+        elems.into_iter()
     }
 
     fn num_vars(items: &Self::Repr) -> usize {
