@@ -7,11 +7,11 @@ pub mod poseidon_transcript;
 #[derive(Error, Debug, Clone)]
 pub enum TranscriptError {
     #[error("The challenges generated don't match challenges given!")]
-    TranscriptMatchError
+    TranscriptMatchError,
 }
 
 ///A type that is responsible for FS over the interative version of the protocol
-pub trait Transcript<F> {
+pub trait Transcript<F>: Clone {
     ///Create an empty transcript
     fn new(label: &'static str) -> Self;
 

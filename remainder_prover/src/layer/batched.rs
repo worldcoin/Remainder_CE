@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::{
     expression::ExpressionStandard,
-    mle::{dense::{DenseMleRef, DenseMle}, MleIndex, MleRef, zero::ZeroMleRef, MleAble},
+    mle::{dense::{DenseMleRef, DenseMle}, zero::ZeroMleRef, MleIndex, MleRef, MleAble},
 };
 use remainder_shared_types::FieldExt;
 
@@ -258,7 +258,14 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
                     //         .chain(prefix_bits.clone().into_iter().flatten())
                     //         .collect_vec(),
                     // ),
-                    Some(prefix_bits.clone().into_iter().flatten().chain(repeat_n(MleIndex::Iterated, new_bits)).collect_vec())
+                    Some(
+                        prefix_bits
+                            .clone()
+                            .into_iter()
+                            .flatten()
+                            .chain(repeat_n(MleIndex::Iterated, new_bits))
+                            .collect_vec(),
+                    ),
                 )
             })
             .collect()
@@ -267,48 +274,69 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
 
 #[cfg(test)]
 mod tests {
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::test_rng;
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use itertools::Itertools;
 
-    use crate::{layer::{from_mle, LayerBuilder, LayerId}, mle::{Mle, dense::DenseMle, MleIndex}, sumcheck::tests::{get_dummy_claim, dummy_sumcheck, verify_sumcheck_messages}, expression::ExpressionStandard};
+    use crate::{
+        expression::ExpressionStandard,
+        layer::{from_mle, LayerBuilder, LayerId},
+        mle::{dense::DenseMle, Mle, MleIndex},
+        sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
+    };
 
     use super::BatchedLayer;
 
-    
     #[test]
     fn test_batched_layer() {
         let mut rng = test_rng();
-        let expression_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| -> ExpressionStandard<Fr> {mle1.mle_ref().expression() + mle2.mle_ref().expression()};
-        let layer_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>), layer_id, prefix_bits| -> DenseMle<Fr, Fr> {
-            DenseMle::new_from_iter(mle1
-                .clone()
-                .into_iter()
-                .zip(mle2.clone().into_iter())
-                .map(|(first, second)| first + second), layer_id, prefix_bits)
-        };        
+        let expression_builder =
+            |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| -> ExpressionStandard<Fr> {
+                mle1.mle_ref().expression() + mle2.mle_ref().expression()
+            };
+        let layer_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>),
+                             layer_id,
+                             prefix_bits|
+         -> DenseMle<Fr, Fr> {
+            DenseMle::new_from_iter(
+                mle1.clone()
+                    .into_iter()
+                    .zip(mle2.clone().into_iter())
+                    .map(|(first, second)| first + second),
+                layer_id,
+                prefix_bits,
+            )
+        };
         let output: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)], LayerId::Input(0), Some(vec![MleIndex::Iterated]));
-            let mut second = DenseMle::new_from_raw(vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)], LayerId::Input(0), Some(vec![MleIndex::Iterated]));
+            let mut first = DenseMle::new_from_raw(
+                vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)],
+                LayerId::Input(0),
+                Some(vec![MleIndex::Iterated]),
+            );
+            let mut second = DenseMle::new_from_raw(
+                vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)],
+                LayerId::Input(0),
+                Some(vec![MleIndex::Iterated]),
+            );
             (first, second)
         };
-        let builder = from_mle(
-            output,
-            expression_builder,
-            layer_builder,
-        );
+        let builder = from_mle(output, expression_builder, layer_builder);
 
         let output_2: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)], LayerId::Input(0), Some(vec![MleIndex::Iterated]));
-            let mut second = DenseMle::new_from_raw(vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)], LayerId::Input(0), Some(vec![MleIndex::Iterated]));
+            let mut first = DenseMle::new_from_raw(
+                vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)],
+                LayerId::Input(0),
+                Some(vec![MleIndex::Iterated]),
+            );
+            let mut second = DenseMle::new_from_raw(
+                vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)],
+                LayerId::Input(0),
+                Some(vec![MleIndex::Iterated]),
+            );
             (first, second)
         };
 
-        let builder_2 = from_mle(
-            output_2,
-            expression_builder,
-            layer_builder,
-        );
+        let builder_2 = from_mle(output_2, expression_builder, layer_builder);
 
         let layer_builder = BatchedLayer::new(vec![builder, builder_2]);
 
@@ -316,7 +344,14 @@ mod tests {
 
         let output = layer_builder.next_layer(LayerId::Layer(0), None);
 
-        let output_real = DenseMle::new_from_iter(output[0].clone().into_iter().interleave(output[1].clone().into_iter()), LayerId::Layer(0), None);
+        let output_real = DenseMle::new_from_iter(
+            output[0]
+                .clone()
+                .into_iter()
+                .interleave(output[1].clone().into_iter()),
+            LayerId::Layer(0),
+            None,
+        );
 
         let layer_claims = get_dummy_claim(output_real.mle_ref(), &mut rng, None);
 

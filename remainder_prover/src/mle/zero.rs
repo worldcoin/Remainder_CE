@@ -8,16 +8,16 @@ use serde::{Deserialize, Serialize};
 use crate::layer::{Claim, LayerId};
 use remainder_shared_types::FieldExt;
 
-use super::{MleIndex, MleRef, mle_enum::MleEnum};
+use super::{mle_enum::MleEnum, MleIndex, MleRef};
 
 ///An MLERef that is only zeros; Typically used for the output layer
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroMleRef<F> {
-    mle_indices: Vec<MleIndex<F>>,
+    pub(crate) mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     num_vars: usize,
-    layer_id: LayerId,
+    pub(crate) layer_id: LayerId,
     zero: [F; 1],
     indexed: bool,
 }

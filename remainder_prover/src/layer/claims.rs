@@ -209,11 +209,11 @@ mod tests {
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::{dense::DenseMle, Mle};
     use rand::Rng;
-    use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
-    
+    use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
+
     use super::*;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::test_rng;
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
     #[test]
     fn test_get_claim() {
@@ -245,7 +245,11 @@ mod tests {
 
         let mut expr = ExpressionStandard::Mle(mle_ref);
 
-        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer = from_mle(
+            mle1,
+            |mle| mle.mle_ref().expression(),
+            |_, _, _| unimplemented!(),
+        );
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
         let mut expr_copy = expr.clone();
 
@@ -287,7 +291,11 @@ mod tests {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
-        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer = from_mle(
+            mle1,
+            |mle| mle.mle_ref().expression(),
+            |_, _, _| unimplemented!(),
+        );
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(1), Fr::from(2)];
@@ -348,7 +356,11 @@ mod tests {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
-        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer = from_mle(
+            mle1,
+            |mle| mle.mle_ref().expression(),
+            |_, _, _| unimplemented!(),
+        );
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
@@ -410,7 +422,11 @@ mod tests {
         let mut expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
         let mut expr_copy = expr.clone();
 
-        let layer = from_mle((mle1, mle2), |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]), |_, _, _| unimplemented!());
+        let layer = from_mle(
+            (mle1, mle2),
+            |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]),
+            |_, _, _| unimplemented!(),
+        );
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
@@ -471,7 +487,11 @@ mod tests {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
-        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer = from_mle(
+            mle1,
+            |mle| mle.mle_ref().expression(),
+            |_, _, _| unimplemented!(),
+        );
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
@@ -532,7 +552,11 @@ mod tests {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
-        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer = from_mle(
+            mle1,
+            |mle| mle.mle_ref().expression(),
+            |_, _, _| unimplemented!(),
+        );
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
@@ -581,7 +605,11 @@ mod tests {
         let mut expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
-        let layer = from_mle(mle1, |mle| mle.mle_ref().expression(), |_, _, _| unimplemented!());
+        let layer = from_mle(
+            mle1,
+            |mle| mle.mle_ref().expression(),
+            |_, _, _| unimplemented!(),
+        );
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(1), Fr::from(2)];

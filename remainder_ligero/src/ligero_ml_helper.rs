@@ -5,7 +5,6 @@ use remainder_shared_types::FieldExt;
 /// Initializes with every iterated combination of the bits in `challenge_coord`.
 /// TODO!(ryancao): Is this going in the correct endian-ness order?
 fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
-
     // --- For each of the challenge coordinates ---
     challenge_coord
         .into_iter()
@@ -14,48 +13,47 @@ fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
             current_tensor
                 .clone()
                 .into_iter()
-                .map(|tensor_val| {
-                    tensor_val * (F::one() - challenge)
-                })
+                .map(|tensor_val| tensor_val * (F::one() - challenge))
                 .chain(
-                    current_tensor.into_iter().map(|tensor_val| {
-                        tensor_val * challenge
-                    })
+                    current_tensor
+                        .into_iter()
+                        .map(|tensor_val| tensor_val * challenge),
                 )
                 .collect_vec()
-            }
-        )
+        })
 }
 
 /// Returns `b^T` and `a` tensors for multilinear evaluation
 /// such that b^T M a is the evaluation
-/// 
+///
 /// ---
-/// 
+///
 /// ## Example
-/// 
+///
 /// M:
 /// [a_{00}, a_{01}, a_{02}, a_{03}]
 /// [a_{04}, a_{05}, a_{06}, a_{07}]
-/// 
+///
 /// b:
 /// [(1 - x_2), x_2]
-/// 
+///
 /// a:
 /// [(1 - x_0)(1 - x_1), x_0(1 - x_1), (1 - x_0)x_1, x_0x_1]
 pub fn get_ml_inner_outer_tensors<F: FieldExt>(
     challenge_coord: &Vec<F>,
     num_rows: usize,
-    orig_num_cols: usize)
--> (Vec<F>, Vec<F>) {
-
+    orig_num_cols: usize,
+) -> (Vec<F>, Vec<F>) {
     // --- Okay we need to actually think about this one ---
     // --- First assert that num_rows and orig_num_cols are both powers of 2 ---
     assert!(num_rows.is_power_of_two());
     assert!(orig_num_cols.is_power_of_two());
 
     // --- The number of rows + number of columns needs to equal 2^{total number of variables} ---
-    assert_eq!(num_rows * orig_num_cols, 2_usize.pow(challenge_coord.len() as u32));
+    assert_eq!(
+        num_rows * orig_num_cols,
+        2_usize.pow(challenge_coord.len() as u32)
+    );
 
     // "a" tensor
     let orig_num_cols_num_vars = log2(orig_num_cols) as usize;
@@ -64,7 +62,9 @@ pub fn get_ml_inner_outer_tensors<F: FieldExt>(
 
     // "b" tensor
     let num_rows_num_vars = log2(num_rows) as usize;
-    let outer_tensor = initialize_tensor(&challenge_coord[orig_num_cols_num_vars..orig_num_cols_num_vars + num_rows_num_vars]);
+    let outer_tensor = initialize_tensor(
+        &challenge_coord[orig_num_cols_num_vars..orig_num_cols_num_vars + num_rows_num_vars],
+    );
     assert_eq!(outer_tensor.len(), num_rows);
 
     (inner_tensor, outer_tensor)
@@ -73,20 +73,27 @@ pub fn get_ml_inner_outer_tensors<F: FieldExt>(
 /// Simply evaluates an MLE (specified via coefficients, i.e. evaluations over the
 /// boolean hypercube), over the given challenge point.
 /// TODO!(ryancao): Do we need to account for endian-ness here?
-pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(mle_coeffs: &Vec<F>, challenge_coord: &Vec<F>) -> F {
-
+pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
+    mle_coeffs: &Vec<F>,
+    challenge_coord: &Vec<F>,
+) -> F {
     assert!(mle_coeffs.len().is_power_of_two());
     assert_eq!(log2(mle_coeffs.len()), challenge_coord.len() as u32);
 
     let one = F::one();
-    let reduced_bookkeeping_table = challenge_coord.into_iter().fold(mle_coeffs.clone(), |bookkeeping_table, new_challenge| {
-
-        // --- Grab every pair of elements and use the formula ---
-        bookkeeping_table.chunks(2).into_iter().map(|elem_tuple| {
-            elem_tuple[0] * (one - new_challenge) + elem_tuple[1] * new_challenge
-        }).collect_vec()
-
-    });
+    let reduced_bookkeeping_table =
+        challenge_coord
+            .into_iter()
+            .fold(mle_coeffs.clone(), |bookkeeping_table, new_challenge| {
+                // --- Grab every pair of elements and use the formula ---
+                bookkeeping_table
+                    .chunks(2)
+                    .into_iter()
+                    .map(|elem_tuple| {
+                        elem_tuple[0] * (one - new_challenge) + elem_tuple[1] * new_challenge
+                    })
+                    .collect_vec()
+            });
 
     assert_eq!(reduced_bookkeeping_table.len(), 1);
     reduced_bookkeeping_table[0]
@@ -94,9 +101,8 @@ pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(mle_coeffs: &Vec<F>, chall
 
 #[test]
 fn test_initialize_tensor() {
-
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::{test_rng, One};
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use rand::Rng;
 
     let mut rng = test_rng();
@@ -123,13 +129,12 @@ fn test_initialize_tensor() {
 
     let result_tensor = initialize_tensor(&challenge_coord);
     assert_eq!(expected_tensor, result_tensor);
-
 }
 
 #[test]
 fn test_split_tensor() {
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::{test_rng, One};
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use rand::Rng;
 
     let mut rng = test_rng();
@@ -165,9 +170,11 @@ fn test_split_tensor() {
 
     let inner_tensor_num_vars = 3;
     let outer_tensor_num_vars = 2;
-    let (result_inner_tensor, result_outer_tensor) = 
-        get_ml_inner_outer_tensors(&challenge_coord, 2_usize.pow(outer_tensor_num_vars), 2_usize.pow(inner_tensor_num_vars));
+    let (result_inner_tensor, result_outer_tensor) = get_ml_inner_outer_tensors(
+        &challenge_coord,
+        2_usize.pow(outer_tensor_num_vars),
+        2_usize.pow(inner_tensor_num_vars),
+    );
     assert_eq!(expected_inner_tensor, result_inner_tensor);
     assert_eq!(expected_outer_tensor, result_outer_tensor);
-
 }

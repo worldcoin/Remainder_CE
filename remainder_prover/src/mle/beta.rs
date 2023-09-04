@@ -6,7 +6,7 @@ use ark_crypto_primitives::crh::sha256::digest::CtOutput;
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::layer::{Claim, LayerId};
 use remainder_shared_types::FieldExt;
@@ -32,32 +32,26 @@ pub(crate) struct BetaTable<F> {
 pub enum BetaError {
     #[error("claim index is 0, cannot take inverse")]
     ///claim index is 0, cannot take inverse
-    ///claim index is 0, cannot take inverse
     NoInverse,
     #[error("not enough claims to compute beta table")]
-    ///not enough claims to compute beta table
     ///not enough claims to compute beta table
     NotEnoughClaims,
     #[error("cannot make beta table over empty mle list")]
     ///cannot make beta table over empty mle list
-    ///cannot make beta table over empty mle list
     EmptyMleList,
     #[error("cannot update beta table")]
-    ///cannot update beta table
     ///cannot update beta table
     BetaUpdateError,
     #[error("MLE bits were not indexed")]
     ///MLE bits were not indexed
-    ///MLE bits were not indexed
     MleNotIndexedError,
     #[error("Beta table doesn't contain the particular indexed bit")]
-    ///Beta table doesn't contain the particular indexed bit
     ///Beta table doesn't contain the particular indexed bit
     IndexedBitNotFoundError,
 }
 
 /// Computes \tilde{\beta}((x_1, ..., x_n), (y_1, ..., y_n))
-/// 
+///
 /// Panics if `challenge_one` and `challenge_two` don't have
 /// the same length!
 pub fn compute_beta_over_two_challenges<F: FieldExt>(
@@ -68,9 +62,12 @@ pub fn compute_beta_over_two_challenges<F: FieldExt>(
 
     // --- Formula is just \prod_i (x_i * y_i) + (1 - x_i) * (1 - y_i) ---
     let one = F::one();
-    challenge_one.into_iter().zip(challenge_two.into_iter()).fold(F::one(), |acc, (x_i, y_i)| {
-        acc * ((*x_i * y_i) + (one - x_i) * (one - y_i))
-    })
+    challenge_one
+        .into_iter()
+        .zip(challenge_two.into_iter())
+        .fold(F::one(), |acc, (x_i, y_i)| {
+            acc * ((*x_i * y_i) + (one - x_i) * (one - y_i))
+        })
 }
 
 /// `fix_variable` for a beta table.

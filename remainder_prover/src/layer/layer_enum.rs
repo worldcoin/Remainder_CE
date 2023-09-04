@@ -1,12 +1,15 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use remainder_shared_types::{FieldExt, transcript::Transcript};
+use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use crate::mle::gate::{AddGate, AddGateBatched};
+use crate::{
+    expression::{Expression, ExpressionStandard},
+    mle::gate::{AddGate, AddGateBatched},
+};
 
-use super::{GKRLayer, Layer, empty_layer::EmptyLayer};
+use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 ///An enum representing all the possible kinds of Layers
 pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
@@ -15,7 +18,7 @@ pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     ///An Addition Gate
     AddGate(AddGate<F, Tr>),
     AddGateBatched(AddGateBatched<F, Tr>),
-    EmptyLayer(EmptyLayer<F, Tr>)
+    EmptyLayer(EmptyLayer<F, Tr>),
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
@@ -43,7 +46,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         match self {
             LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
             LayerEnum::AddGate(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
-            LayerEnum::AddGateBatched(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
+            LayerEnum::AddGateBatched(layer) => {
+                layer.verify_rounds(claim, sumcheck_rounds, transcript)
+            }
             LayerEnum::EmptyLayer(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
         }
     }
@@ -68,7 +73,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
 
     fn new<L: super::LayerBuilder<F>>(builder: L, id: super::LayerId) -> Self
     where
-        Self: Sized {
+        Self: Sized,
+    {
         LayerEnum::Gkr(GKRLayer::new(builder, id))
     }
 
@@ -76,15 +82,39 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         self
     }
 
-    fn get_wlx_evaluations(&self, claim_vecs: Vec<Vec<F>>,
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: Vec<Vec<F>>,
         claimed_vals: &mut Vec<F>,
         num_claims: usize,
-        num_idx: usize) -> Result<Vec<F>, super::claims::ClaimError> {
+        num_idx: usize,
+    ) -> Result<Vec<F>, super::claims::ClaimError> {
         match self {
-            LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals,num_claims, num_idx),
-            LayerEnum::AddGate(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx),
-            LayerEnum::AddGateBatched(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx),
-            LayerEnum::EmptyLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx),
+            LayerEnum::Gkr(layer) => {
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+            }
+            LayerEnum::AddGate(layer) => {
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+            }
+            LayerEnum::AddGateBatched(layer) => {
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+            }
+            LayerEnum::EmptyLayer(layer) => {
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+            }
         }
+    }
+}
+
+impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
+    ///Gets the size of the Layer as a whole in terms of number of bits
+    pub(crate) fn layer_size(&self) -> usize {
+        let expression = match self {
+            LayerEnum::Gkr(layer) => &layer.expression,
+            LayerEnum::EmptyLayer(layer) => &layer.expr,
+            LayerEnum::AddGate(_) | LayerEnum::AddGateBatched(_) => unimplemented!(),
+        };
+
+        expression.get_expression_size(0)
     }
 }
