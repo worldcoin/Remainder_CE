@@ -663,20 +663,20 @@ impl<F: FieldExt> LayerBuilder<F> for NodePathDiffBuilder<F> {
     fn build_expression(&self) -> ExpressionStandard<F> {
         let decision_node_thr_mle_ref = self.decision_node_path_mle.threshold();
         let permuted_inputs_val_mle_ref = self.permuted_inputs_mle.attr_val(Some(decision_node_thr_mle_ref.num_vars()));
-        let expr = ExpressionStandard::Mle(permuted_inputs_val_mle_ref) - ExpressionStandard::Mle(decision_node_thr_mle_ref);
-        expr
+
+        ExpressionStandard::Mle(permuted_inputs_val_mle_ref) - ExpressionStandard::Mle(decision_node_thr_mle_ref)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
 
+        // --- TODO!(ryancao): Should we really be using MleRef here? ---
         let decision_node_thr_mle_ref = self.decision_node_path_mle.threshold();
         let permuted_inputs_val_mle_ref = self.permuted_inputs_mle.attr_val(Some(decision_node_thr_mle_ref.num_vars()));
 
         let diff_iter = self.decision_node_path_mle.into_iter().zip(permuted_inputs_val_mle_ref.bookkeeping_table()).map(|(decision_node, attr_val)| {
             *attr_val - decision_node.threshold
         });
-        let ret_mle = DenseMle::new_from_iter(diff_iter, id, prefix_bits);
-        ret_mle
+        DenseMle::new_from_iter(diff_iter, id, prefix_bits)
     }
 }
 impl<F: FieldExt> NodePathDiffBuilder<F> {
@@ -734,6 +734,9 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompCheckerBuilder<F> {
             }
         );
 
+        let diff_signed_bit_decomp_mle_sign_ref = self.diff_signed_bit_decomp_mle.mle_bit_refs()[0].clone();
+        let sign_bit_iter = diff_signed_bit_decomp_mle_sign_ref.bookkeeping_table().iter();
+
         // --- Compute the formula from above ---
         let ret_mle_iter = self.positive_recomp_mle.into_iter().zip(sign_bit_iter.zip(self.input_path_diff_mle.into_iter())).map(
             |(positive_recomp, (sign_bit, diff))| {
@@ -765,6 +768,7 @@ impl<F: FieldExt> BinaryRecompCheckerBuilder<F> {
 /// Simply for testing the part where we only grab some bits from the MLE
 pub struct PartialBitsCheckerBuilder<F: FieldExt> {
     permuted_inputs_mle: DenseMle<F, InputAttribute<F>>,
+    decision_node_paths_mle: DenseMle<F, DecisionNode<F>>,
     num_vars_to_grab: usize,
 }
 impl<F: FieldExt> LayerBuilder<F> for PartialBitsCheckerBuilder<F> {
@@ -774,23 +778,27 @@ impl<F: FieldExt> LayerBuilder<F> for PartialBitsCheckerBuilder<F> {
 
         // --- Grab MLE refs ---
         let permuted_inputs_mle_ref = self.permuted_inputs_mle.attr_id(Some(self.num_vars_to_grab));
+        let decision_node_paths_mle_ref = self.decision_node_paths_mle.threshold();
 
         // --- Actual expression is just subtracting from itself ---
-        ExpressionStandard::Mle(permuted_inputs_mle_ref.clone()) - ExpressionStandard::Mle(permuted_inputs_mle_ref)
+        ExpressionStandard::Mle(permuted_inputs_mle_ref.clone()) - ExpressionStandard::Mle(permuted_inputs_mle_ref) + 
+        ExpressionStandard::Mle(decision_node_paths_mle_ref.clone()) - ExpressionStandard::Mle(decision_node_paths_mle_ref)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        ZeroMleRef::new(self.num_vars_to_grab, prefix_bits, id)
+        ZeroMleRef::new(self.decision_node_paths_mle.num_iterated_vars(), prefix_bits, id)
     }
 }
 impl<F: FieldExt> PartialBitsCheckerBuilder<F> {
     /// Constructor
     pub fn new(
         permuted_inputs_mle: DenseMle<F, InputAttribute<F>>,
+        decision_node_paths_mle: DenseMle<F, DecisionNode<F>>,
         num_vars_to_grab: usize,
     ) -> Self {
         Self {
             permuted_inputs_mle,
+            decision_node_paths_mle,
             num_vars_to_grab
         }
     }

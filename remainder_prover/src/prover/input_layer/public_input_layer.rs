@@ -36,7 +36,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
 
     fn verify(commitment: &Self::Commitment, _: &Self::OpeningProof, claim: Claim<F>, _: &mut Self::Transcript) -> Result<(), super::InputLayerError> {
         let mut mle_ref = DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
-        dbg!(&mle_ref);
+
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_vars != 0 {
@@ -54,8 +54,6 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         if eval == claim {
             Ok(())
         } else {
-            dbg!(&eval);
-            dbg!(&claim);
             Err(InputLayerError::PublicInputVerificationFailed)
         }
     }

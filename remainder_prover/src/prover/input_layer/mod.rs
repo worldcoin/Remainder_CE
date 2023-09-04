@@ -92,6 +92,7 @@ pub trait InputLayer<F: FieldExt> {
             Ok(wlx_evals)
     }
 
+    /// Computes `l(r^{\star})`
     fn compute_aggregated_challenges(
         &self,
         claims: &[Claim<F>],

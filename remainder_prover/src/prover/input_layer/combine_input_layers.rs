@@ -20,7 +20,6 @@ fn get_prefix_bits_from_capacity<F: FieldExt>(
             MleIndex::Fixed(bit_val == 1)
         })
         .collect()
-    // dbg!(&result);
     // result
 }
 
@@ -70,9 +69,10 @@ pub struct InputLayerBuilder<F> {
 }
 
 impl<F: FieldExt> InputLayerBuilder<F> {
-    ///Creates a new InputLayerBuilder that will yield an InputLayer from many Mles
+    /// Creates a new InputLayerBuilder that will yield an InputLayer from many MLEs
     /// 
-    /// extra_mle_num_vars refers to the length of any mles you want to be a part of this input_layer but haven't yet generated the data for
+    /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this 
+    /// input_layer, but haven't yet generated the data for
     pub fn new(mut input_mles: Vec<Box<&mut (dyn Mle<F> + 'static)>>, extra_mle_num_vars: Option<Vec<usize>>, layer_id: LayerId) -> Self {
         let extra_mle_indices = InputLayerBuilder::index_input_mles(&mut input_mles, extra_mle_num_vars);
         let input_mles = input_mles.into_iter().map(|mle| dyn_clone::clone_box(*mle)).collect_vec();
@@ -171,8 +171,6 @@ impl<F: FieldExt> InputLayerBuilder<F> {
             // --- Grab from the list of input MLEs OR the input-output MLE if the index calls for it ---
             let input_mle = &input_mles[input_mle_idx];
 
-            // dbg!(input_mle.get_padded_evaluations());
-
             // --- Basically, everything is stored in big-endian (including bookkeeping tables ---
             // --- and indices), BUT the indexing functions all happen as if we're interpreting ---
             // --- the indices as little-endian. Therefore we need to merge the input MLEs via ---
@@ -181,8 +179,6 @@ impl<F: FieldExt> InputLayerBuilder<F> {
             // --- "little-endian" ---
             //TODO!(Please get rid of this stupid thing)
             let inverted_input_mle = invert_mle_bookkeeping_table(input_mle.get_padded_evaluations());
-
-            // dbg!(&inverted_input_mle);
 
             // --- Fold the new (padded) bookkeeping table with the old ones ---
             // let padded_bookkeeping_table = input_mle.get_padded_evaluations();

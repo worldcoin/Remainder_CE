@@ -57,7 +57,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
-use super::zkdt_helpers::{BatchedDummyMles, DummyData};
+use super::zkdt_helpers::{BatchedDummyMles, ZKDTCircuitData};
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
@@ -404,7 +404,7 @@ pub fn load_raw_trees_model(filename: &str) -> RawTreesModel {
 }
 
 /// currently gives all the batched data associated with the 0th tree
-pub fn load_upshot_data_single_tree_batch<F: FieldExt>() -> (DummyData<F>, (usize, usize)) {
+pub fn load_upshot_data_single_tree_batch<F: FieldExt>() -> (ZKDTCircuitData<F>, (usize, usize)) {
     let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
     let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
     // use just a small batch
@@ -419,7 +419,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>() -> (DummyData<F>, (usiz
     let tree_height = ctrees.depth;
     let input_len = csamples.samples[0].len();
 
-    (DummyData::new(
+    (ZKDTCircuitData::new(
         csamples.samples,
         csamples.permuted_samples[0].clone(),
         csamples.decision_paths[0].clone(),

@@ -1175,20 +1175,22 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
 
 struct PartialBitsCheckerCircuit<F: FieldExt> {
     permuted_inputs_mle: DenseMle<F, InputAttribute<F>>,
+    decision_node_paths_mle: DenseMle<F, DecisionNode<F>>,
     num_vars_to_grab: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for PartialBitsCheckerCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.permuted_inputs_mle)];
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.permuted_inputs_mle), Box::new(&mut self.decision_node_paths_mle)];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
 
         let mut layers = Layers::new();
-        let builder = PartialBitsCheckerBuilder::new(self.permuted_inputs_mle.clone(), self.num_vars_to_grab);
+        let builder = PartialBitsCheckerBuilder::new(self.permuted_inputs_mle.clone(), self.decision_node_paths_mle.clone(), self.num_vars_to_grab);
         let result = layers.add_gkr(builder);
 
         let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
+
         Witness { layers, output_layers: vec![result.get_enum()], input_layers: vec![input_layer.to_enum()] }
     }
 }
@@ -1199,9 +1201,10 @@ mod tests {
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::{test_rng, UniformRand};
+    use itertools::Itertools;
     use rand::Rng;
 
-    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::{PartialBitsCheckerCircuit, BinaryRecompCircuit, PermutationCircuitNonBatched}}, prover::GKRCircuit};
+    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::{PartialBitsCheckerCircuit, BinaryRecompCircuit, PermutationCircuitNonBatched}, structs::{InputAttribute, DecisionNode}}, prover::GKRCircuit, mle::dense::DenseMle, layer::LayerId};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
 
     use super::{PermutationCircuit, AttributeConsistencyCircuitNonBatched, MultiSetCircuit, TestCircuit, AttributeConsistencyCircuit};
@@ -1209,13 +1212,59 @@ mod tests {
     fn test_partial_bits_checker() {
         let DummyMles { 
             dummy_permuted_input_data_mle,
-            // dummy_decision_node_paths_mle,
+            dummy_decision_node_paths_mle,
             // dummy_binary_decomp_diffs_mle,
             ..
         } = generate_dummy_mles();
 
+        // let mut rng = test_rng();
+
+        // let dummy_permuted_input_data = vec![
+        //     InputAttribute { attr_id: Fr::from(rng.gen::<u64>()), attr_val: Fr::from(rng.gen::<u64>()) },
+        //     InputAttribute { attr_id: Fr::from(rng.gen::<u64>()), attr_val: Fr::from(rng.gen::<u64>()) },
+        //     InputAttribute { attr_id: Fr::from(rng.gen::<u64>()), attr_val: Fr::from(rng.gen::<u64>()) },
+        //     InputAttribute { attr_id: Fr::from(rng.gen::<u64>()), attr_val: Fr::from(rng.gen::<u64>()) },
+        //     InputAttribute { attr_id: Fr::from(rng.gen::<u64>()), attr_val: Fr::from(rng.gen::<u64>()) },
+        //     InputAttribute { attr_id: Fr::from(rng.gen::<u64>()), attr_val: Fr::from(rng.gen::<u64>()) },
+        //     InputAttribute { attr_id: Fr::from(rng.gen::<u64>()), attr_val: Fr::from(rng.gen::<u64>()) },
+        //     InputAttribute { attr_id: Fr::from(rng.gen::<u64>()), attr_val: Fr::from(rng.gen::<u64>()) }
+        // ];
+
+        // let dummy_decision_node_paths = vec![
+        //     DecisionNode{ node_id: Fr::from(rng.gen::<u64>()), attr_id: Fr::from(rng.gen::<u64>()), threshold: Fr::from(rng.gen::<u64>()) },
+        //     DecisionNode{ node_id: Fr::from(rng.gen::<u64>()), attr_id: Fr::from(rng.gen::<u64>()), threshold: Fr::from(rng.gen::<u64>()) },
+        //     // DecisionNode{ node_id: Fr::one(), attr_id: Fr::one(), threshold: Fr::one() },
+        //     // DecisionNode{ node_id: Fr::from(4), attr_id: Fr::from(4), threshold: Fr::from(4) }
+        // ];
+
+    //     let dummy_permuted_input_data = (0..4).map(|idx| {
+    //          InputAttribute { attr_id: Fr::from(idx + 17), attr_val: Fr::from(idx + 18) }
+    //     }).collect_vec();
+    //     let dummy_decision_node_paths = (0..2).map(|idx| {
+    //         DecisionNode{ node_id: Fr::from(idx + 1), attr_id: Fr::from(idx + 2), threshold: Fr::from(idx + 3) }
+    //    }).collect_vec();
+
+        // let dummy_permuted_input_data_mle = DenseMle::new_from_iter(
+        //     dummy_permuted_input_data
+        //         .clone()
+        //         .into_iter()
+        //         .map(InputAttribute::from),
+        //     LayerId::Input(0),
+        //     None,
+        // );
+        
+        // let dummy_decision_node_paths_mle = DenseMle::new_from_iter(
+        //     dummy_decision_node_paths
+        //         .clone()
+        //         .into_iter()
+        //         .map(DecisionNode::from),
+        //     LayerId::Input(0),
+        //     None,
+        // );
+
         let mut circuit = PartialBitsCheckerCircuit::<Fr> {
             permuted_inputs_mle: dummy_permuted_input_data_mle,
+            decision_node_paths_mle: dummy_decision_node_paths_mle,
             num_vars_to_grab: 1,
         };
 
@@ -1241,17 +1290,25 @@ mod tests {
     }
 
     #[test]
-    fn test_bin_recomp_circuit() {
-        let DummyMles { 
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle,
+    fn test_bin_recomp_circuit_non_batched() {
+        // let DummyMles { 
+        //     dummy_permuted_input_data_mle,
+        //     dummy_decision_node_paths_mle,
+        //     dummy_binary_decomp_diffs_mle,
+        //     ..
+        // } = generate_dummy_mles();
+
+        let (BatchedCatboostMles {
             dummy_binary_decomp_diffs_mle,
-            ..
-        } = generate_dummy_mles();
+            dummy_decision_nodes_mle,
+            dummy_permuted_input_data_mle, ..
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+
+        dbg!(_tree_height);
 
         let mut circuit = BinaryRecompCircuit::<Fr> {
-            decision_node_path_mle: dummy_decision_node_paths_mle,
-            permuted_inputs_mle: dummy_permuted_input_data_mle,
+            decision_node_path_mle: dummy_decision_nodes_mle,
+            permuted_inputs_mle: dummy_permuted_input_data_mle[0].clone(),
             diff_signed_bin_decomp: dummy_binary_decomp_diffs_mle,
         };
 

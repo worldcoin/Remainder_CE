@@ -317,15 +317,16 @@ pub trait GKRCircuit<F: FieldExt> {
             }
 
             let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1 {
+
                 // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
                 let wlx_evaluations = input_layer.compute_claim_wlx(&layer_claims).map_err(|err| GKRError::ErrorWhenProvingLayer(*layer_id, LayerError::ClaimError(err)))?;
+
                 let relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
 
                 transcript.append_field_elements("Claim Aggregation Wlx_evaluations", &relevant_wlx_evaluations).unwrap();
 
                 // --- Next, sample r^\star from the transcript ---
                 let agg_chal = transcript.get_challenge("Challenge for claim aggregation").unwrap();
-
                 let aggregated_challenges = input_layer.compute_aggregated_challenges(&layer_claims, agg_chal).map_err(|err| GKRError::ErrorWhenProvingLayer(*layer_id, LayerError::ClaimError(err)))?;
                 let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
 
@@ -335,7 +336,6 @@ pub trait GKRCircuit<F: FieldExt> {
             };
 
             let opening_proof = input_layer.open(transcript, layer_claim).map_err(|err| GKRError::InputLayerError(err))?;
-
 
             Ok(InputLayerProof {
                 layer_id: *layer_id,
