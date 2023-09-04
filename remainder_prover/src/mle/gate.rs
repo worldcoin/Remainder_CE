@@ -211,6 +211,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         else {
             return Err(LayerError::LayerNotReady)
         }
+
+        
         let mut fixed_mle_indices_v: Vec<F> = vec![];
 
         // check the right side of the sum (f3(v)) against the challenges made to bind that variable

@@ -37,7 +37,7 @@ use self::input_layer::{InputLayer, enum_input_layer::{InputLayerEnum, Commitmen
 ///  New  type for containing the list of Layers that make up the GKR circuit
 /// 
 /// Literally just a Vec of pointers to various layer types!
-pub struct Layers<F: FieldExt, Tr: Transcript<F>>(Vec<LayerEnum<F, Tr>>);
+pub struct Layers<F: FieldExt, Tr: Transcript<F>>(pub Vec<LayerEnum<F, Tr>>);
 
 impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add a layer to a list of layers
@@ -61,10 +61,15 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     pub fn add_add_gate(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_copy_bits: usize) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
         let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits);
-        let num_vars = lhs.num_vars();
+        let max_gate_val = nonzero_gates.clone().into_iter().fold(
+            0, 
+            |acc, (z, _, _)| {
+                std::cmp::max(acc, z)
+            }
+        );
         self.0.push(gate.get_enum());
 
-        let mut sum_table = vec![F::zero(); 1 << num_vars];
+        let mut sum_table = vec![F::zero(); max_gate_val + 1];
         nonzero_gates.into_iter().for_each(
             |(z, x, y)| {
                 let sum_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero()) + 
@@ -218,6 +223,7 @@ pub trait GKRCircuit<F: FieldExt> {
             // --- or the global set of claims we need to eventually prove ---
             if let Some(curr_claims) = claims.get_mut(&layer_id) {
                 curr_claims.push(claim);
+                
             } else {
                 claims.insert(layer_id, vec![claim]);
             }
@@ -296,7 +302,8 @@ pub trait GKRCircuit<F: FieldExt> {
 
         let input_layer_proofs = input_layers.into_iter().zip(commitments).map(|(input_layer, commitment)| {
             let layer_id = input_layer.layer_id();
-
+            
+            
             let layer_claims = claims
                 .get(&layer_id)
                 .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
@@ -414,6 +421,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 .get(&layer_id)
                 .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
 
+
             // --- Append claims to the FS transcript... TODO!(ryancao): Do we actually need to do this??? ---
             for claim in layer_claims {
                 transcript
@@ -429,11 +437,9 @@ pub trait GKRCircuit<F: FieldExt> {
             let mut prev_claim = layer_claims[0].clone();
             if layer_claims.len() > 1 {
                 // --- Perform the claim aggregation verification, first sampling `r` ---
-
                 let all_wlx_evaluations: Vec<F> = layer_claims.into_iter().map(
                     |(_, val)| *val
                 ).chain(wlx_evaluations.clone().into_iter()).collect();
-
                 transcript
                     .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
                     .unwrap();
@@ -448,9 +454,8 @@ pub trait GKRCircuit<F: FieldExt> {
                             LayerError::AggregationError,
                         )
                     })?;
-
-                   
             }
+            
 
             // --- Performs the actual sumcheck verification step ---
             layer
@@ -472,6 +477,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
             }
         }
+
 
         for input_layer in input_layer_proofs {
             let input_layer_id = input_layer.layer_id;

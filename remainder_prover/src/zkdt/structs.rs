@@ -517,21 +517,20 @@ impl<F: FieldExt> MleAble<F> for BinDecomp16Bit<F> {
     }
 
     fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
-        // let items: Vec<BinDecomp16Bit<F>> = items
-        //     .iter()
-        //     .flatten()
-        //     .cloned()
-        //     .chunks(16)
-        //     .into_iter()
-        //     .map(|chunk| {
-        //         let bits = chunk.collect_vec();
-        //         BinDecomp16Bit {
-        //             bits: bits.try_into().unwrap(),
-        //         }
-        //     })
-        //     .collect_vec();
-        // items.into_iter()
-        todo!()
+        let elems = (0..items[0].len()).into_iter().map(
+            |idx| {
+                let bits = items.into_iter().map(
+                    |item| {
+                        item[idx]
+                    }
+                ).collect_vec();
+                BinDecomp16Bit {
+                    bits: bits.try_into().unwrap(),
+                }
+            }
+        ).collect_vec();
+
+        elems.into_iter()
     }
 
     fn num_vars(items: &Self::Repr) -> usize {

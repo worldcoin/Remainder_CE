@@ -1,10 +1,10 @@
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 
-use crate::{prover::{GKRCircuit, Layers, input_layer::InputLayer, Witness}, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex, mle_enum::MleEnum}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
+use crate::{prover::{GKRCircuit, Layers, input_layer::{InputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, ligero_input_layer::LigeroInputLayer}, Witness}, mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex, mle_enum::MleEnum}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBit, OneMinusSignBit, SignBitProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
+use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBit, OneMinusSignBit, SignBitProductBuilder, DumbBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
 
 pub struct PermutationCircuit<F: FieldExt> {
     pub dummy_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
@@ -112,14 +112,24 @@ pub struct PathCheckCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
 
-    fn synthesize(&mut self) -> (Layers<F, Self::Transcript>, Vec<Box<dyn MleRef<F = F>>>, InputLayer<F>) {
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
 
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_paths_mle), Box::new(&mut self.leaf_node_paths_mle), Box::new(&mut self.bin_decomp_diff_mle)];
+        let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
+        let input_layer = input_layer_builder.to_input_layer::<PublicInputLayer<F, _>>().to_enum();
+
+        let pos_sign_bit_builder = OneMinusSignBit::new(self.bin_decomp_diff_mle.clone());
+        let pos_sign_bits = layers.add_gkr(pos_sign_bit_builder);
+       
+        let neg_sign_bit_builder = SignBit::new(self.bin_decomp_diff_mle.clone());
+        let neg_sign_bits = layers.add_gkr(neg_sign_bit_builder);
+        
         let prev_node_left_builder = PrevNodeLeftBuilderDecision::new(
             self.decision_node_paths_mle.clone());
 
         let prev_node_right_builder = PrevNodeRightBuilderDecision::new(
-                self.decision_node_paths_mle.clone());
+            self.decision_node_paths_mle.clone());
 
         let curr_node_decision_builder = CurrNodeBuilderDecision::new(
             self.decision_node_paths_mle.clone());
@@ -127,47 +137,72 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
         let curr_node_leaf_builder = CurrNodeBuilderLeaf::new(
             self.leaf_node_paths_mle.clone());
 
-        let decision_leaf_diff = self.decision_node_paths_mle.num_iterated_vars() - self.leaf_node_paths_mle.num_iterated_vars();
+        let curr_decision = layers.add_gkr(curr_node_decision_builder);
+        let curr_leaf = layers.add::<_, EmptyLayer<F, Self::Transcript>>(curr_node_leaf_builder);
 
-        let curr_node_decision_leaf = curr_node_decision_builder.concat_with_padding(curr_node_leaf_builder, Padding::Right(decision_leaf_diff));
-        let (curr_decision, curr_leaf) = layers.add_gkr(curr_node_decision_leaf);
-
-        let curr_node_decision_leaf_builder = ConcatBuilder::new(curr_decision, curr_leaf);
-        
-        let prev_node_left_mle_ref = layers.add_gkr(prev_node_left_builder).mle_ref();
-        let prev_node_right_mle_ref = layers.add_gkr(prev_node_right_builder).mle_ref();
+        let curr_node_decision_leaf_builder = ConcatBuilder::new(curr_decision.clone(), curr_leaf.clone());
         let curr_node_decision_leaf_mle_ref = layers.add_gkr(curr_node_decision_leaf_builder).mle_ref();
+        let prev_node_right_mle_ref = layers.add_gkr(prev_node_right_builder).mle_ref();
+        let prev_node_left_mle_ref = layers.add_gkr(prev_node_left_builder).mle_ref();
+        
+        let nonzero_gates = create_wiring_from_num_bits(1 << (prev_node_left_mle_ref.num_vars() - self.num_copy));
+         
+        let res_negative = layers.add_add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref.clone(), self.num_copy);
+        let res_positive = layers.add_add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref.clone(), self.num_copy);
 
-        let nonzero_gates = create_wiring_from_num_bits(curr_node_decision_leaf_mle_ref.num_vars() - self.num_copy);
+        let sign_bit_sum_builder: SignBitProductBuilder<F> = SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative);
+        let final_res = layers.add_gkr(sign_bit_sum_builder);
 
-        // let res_negative = layers.add_add_gate_batched(self.num_copy, nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref);
-        // let res_positive = layers.add_add_gate_batched(self.num_copy, nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref);
+        let witness: Witness<F, Self::Transcript> = Witness {
+            layers,
+            output_layers: vec![final_res.get_enum()],
+            input_layers: vec![input_layer]
+        };
 
-        let res_negative = layers.add_add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref, self.num_copy);
-        let res_positive = layers.add_add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref, self.num_copy);
+        witness
+    }
+}
 
-        let neg_sign_bit_builder = SignBit::new(self.bin_decomp_diff_mle.clone());
-        let neg_sign_bits = layers.add_gkr(neg_sign_bit_builder);
+pub struct OneMinusCheckCircuit<F: FieldExt> {
+    pub bin_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
+}
+
+impl<F: FieldExt> GKRCircuit<F> for OneMinusCheckCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.bin_decomp_diff_mle)];
+        let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
+        let input_layer = input_layer_builder.to_input_layer::<PublicInputLayer<F, _>>().to_enum();
 
         let pos_sign_bit_builder = OneMinusSignBit::new(self.bin_decomp_diff_mle.clone());
         let pos_sign_bits = layers.add_gkr(pos_sign_bit_builder);
 
-        let sign_bit_sum_builder = SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative);
-        let final_res = layers.add_gkr(sign_bit_sum_builder);
+        let dumb = DumbBuilder::new(pos_sign_bits);
+        let dumber = layers.add_gkr(dumb);
 
-        let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_paths_mle), Box::new(&mut self.leaf_node_paths_mle), Box::new(&mut self.bin_decomp_diff_mle)];
+
+        let witness: Witness<F, Self::Transcript> = Witness {
+            layers,
+            output_layers: vec![dumber.get_enum()],
+            input_layers: vec![input_layer]
+        };
+
         
-        let mut input_layer = InputLayer::<F>::new_from_mles(&mut input_mles, None);
-        input_layer.combine_input_mles(&input_mles, None);
-
-        (layers, vec![Box::new(final_res)], input_layer)
+        witness
     }
 }
 
+
 fn create_wiring_from_num_bits(num_bits: usize) -> Vec<(usize, usize, usize)> {
-    (0..(num_bits-1)).into_iter().map(
-        |idx| (idx, idx + 1, idx)
-    ).collect_vec()
+    let mut gates = (0.. (num_bits-1)).into_iter().map(
+        |idx| (idx, 2*(idx + 1), idx)
+    ).collect_vec();
+    gates.push((num_bits-1, 1, num_bits-1));
+
+    gates
 }
 
 struct AttributeConsistencyCircuit<F: FieldExt> {
@@ -188,7 +223,6 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
         );
 
         let difference_mle = layers.add_gkr(attribute_consistency_builder);
-
 
         todo!()
         // (layers, vec![difference_mle.mle_ref().get_enum()], todo!())
@@ -345,7 +379,7 @@ mod tests {
     use ark_std::{test_rng, UniformRand};
     use rand::Rng;
 
-    use crate::{zkdt::zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles}, prover::GKRCircuit};
+    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles}, zkdt_circuit_parts::{PathCheckCircuit, OneMinusCheckCircuit, }}, prover::GKRCircuit};
     use super::{PermutationCircuit, AttributeConsistencyCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
 
@@ -375,6 +409,81 @@ mod tests {
         let proof = circuit.prove(&mut transcript);
 
         println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
+
+        match proof {
+            Ok(proof) => {
+                let mut transcript = PoseidonTranscript::new("Permutation Circuit Verifier Transcript");
+                let result = circuit.verify(&mut transcript, proof);
+                if let Err(err) = result {
+                    println!("{}", err);
+                    panic!();
+                }
+            },
+            Err(err) => {
+                println!("{}", err);
+                panic!();
+            }
+        }
+    }
+
+    #[test]
+    fn test_path_circuit() {
+
+        let DummyMles::<Fr> {
+            dummy_decision_node_paths_mle,
+            dummy_leaf_node_paths_mle, 
+            dummy_binary_decomp_diffs_mle, ..
+        } = generate_dummy_mles();
+
+        //let num_copy_bits = log2(dummy_decision_node_paths_mle.len());
+        //let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
+
+        let mut circuit = PathCheckCircuit {
+            decision_node_paths_mle: dummy_decision_node_paths_mle, 
+            leaf_node_paths_mle: dummy_leaf_node_paths_mle,
+            bin_decomp_diff_mle: dummy_binary_decomp_diffs_mle,
+            num_copy: 0,
+        };
+        let now = Instant::now();
+        let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
+        let proof = circuit.prove(&mut transcript);
+        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
+
+
+        match proof {
+            Ok(proof) => {
+                let mut transcript = PoseidonTranscript::new("Permutation Circuit Verifier Transcript");
+                let result = circuit.verify(&mut transcript, proof);
+                if let Err(err) = result {
+                    println!("{}", err);
+                    panic!();
+                }
+            },
+            Err(err) => {
+                println!("{}", err);
+                panic!();
+            }
+        }
+    }
+
+    #[test]
+    fn test_one_minus_circuit() {
+
+        let DummyMles::<Fr> { 
+            dummy_binary_decomp_diffs_mle, ..
+        } = generate_dummy_mles();
+
+        //let num_copy_bits = log2(dummy_decision_node_paths_mle.len());
+        //let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
+
+        let mut circuit = OneMinusCheckCircuit {
+            bin_decomp_diff_mle: dummy_binary_decomp_diffs_mle,
+        };
+        let now = Instant::now();
+        let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
+        let proof = circuit.prove(&mut transcript);
+        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
+
 
         match proof {
             Ok(proof) => {

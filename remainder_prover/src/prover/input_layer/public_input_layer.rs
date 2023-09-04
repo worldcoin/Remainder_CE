@@ -42,10 +42,8 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         let eval = if mle_ref.num_vars != 0 {
             let mut eval = None;
             for &chal in claim.0.iter() {
-                if chal != F::one() && chal != F::zero() {
-                    eval = mle_ref.fix_variable(curr_bit, chal);
-                    curr_bit += 1;
-                }
+                eval = mle_ref.fix_variable(curr_bit, chal);
+                curr_bit += 1;
             }
 
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?

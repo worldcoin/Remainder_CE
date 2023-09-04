@@ -11,7 +11,7 @@ pub mod public_input_layer;
 pub mod random_input_layer;
 pub mod enum_input_layer;
 
-use crate::{layer::{LayerId, Claim, claims::ClaimError}, mle::{Mle, dense::DenseMle, MleIndex, MleRef}, utils::argsort, sumcheck::evaluate_at_a_point};
+use crate::{layer::{LayerId, Claim, claims::ClaimError}, mle::{Mle, dense::DenseMle, MleIndex, MleRef}, utils::argsort, sumcheck::evaluate_at_a_point, zkdt::helpers::get_field_val_as_usize_vec};
 
 use self::enum_input_layer::InputLayerEnum;
 

@@ -1,12 +1,14 @@
 //!The LayerBuilders that build the ZKDT Circuit
 use std::cmp::max;
 
-use ark_std::log2;
+use ark_crypto_primitives::crh::sha256::digest::typenum::Zero;
+use ark_std::{log2, cfg_into_iter};
 use itertools::Itertools;
 
 use crate::expression::{ExpressionStandard, Expression};
 use crate::layer::batched::BatchedLayer;
 use crate::layer::{LayerBuilder, LayerId};
+use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
@@ -169,13 +171,36 @@ impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
                                      Box::new(ExpressionStandard::Mle(self.mle_2.mle_ref())))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let mut concat_mle_vec: Vec<F> = self.mle_1
-            .clone()
-            .into_iter()
-            .collect();
+        let max_num_var = std::cmp::max(self.mle_1.num_iterated_vars(), self.mle_2.num_iterated_vars());
+        let interleave_size = 1 << (max_num_var + 1);
+        let range_size = 1 << max_num_var;
+        let mut interleaved_mle_vec = vec![F::zero(); interleave_size];
+        let zero = &F::zero();
+        let first_mle_ref = self.mle_1.mle_ref();
+        let second_mle_ref = self.mle_2.mle_ref();
 
-        concat_mle_vec.extend(self.mle_2.clone().into_iter());
-        DenseMle::new_from_raw(concat_mle_vec, id, prefix_bits)
+        (0..range_size).into_iter().for_each(
+            |idx| {
+                let mle_1_idx = 1 << self.mle_1.num_iterated_vars();
+                let mle_2_idx = 1 << self.mle_2.num_iterated_vars();
+
+                let index_1 = {
+                    if idx >= mle_1_idx { idx % mle_1_idx } else { idx }
+                };
+
+                let index_2 = {
+                    if idx >= mle_2_idx { idx % mle_2_idx } else { idx }
+                };
+
+                let first_mle_val = first_mle_ref.bookkeeping_table.get(index_1).unwrap_or(zero);
+                let second_mle_val = second_mle_ref.bookkeeping_table.get(index_2).unwrap_or(zero);
+                interleaved_mle_vec[idx*2] = *first_mle_val;
+                interleaved_mle_vec[idx*2 + 1] = *second_mle_val;
+
+            }
+        );
+
+        DenseMle::new_from_raw(interleaved_mle_vec, id, prefix_bits)
     }
 }
 
@@ -486,14 +511,16 @@ impl<F: FieldExt> LayerBuilder<F> for SignBit<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[0].clone())
+        let exp = ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[0].clone());
+        exp
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        DenseMle::new_from_iter(self
+        let res = DenseMle::new_from_iter(self
             .bit_decomp_diff_mle.into_iter()
             .map(|sign_bit|
-                sign_bit.bits[0]), id, prefix_bits)
+                sign_bit.bits[0]), id, prefix_bits);
+        res
     }
 }
 
@@ -515,14 +542,18 @@ impl<F: FieldExt> LayerBuilder<F> for OneMinusSignBit<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[0].clone())
+        let exp =  ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[0].clone());
+        exp
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        DenseMle::new_from_iter(self
+        let ret = DenseMle::new_from_iter(self
             .bit_decomp_diff_mle.into_iter()
-            .map(|sign_bit|
-                (F::one() - sign_bit.bits[0])), id, prefix_bits)
+            .map(|sign_bit| {
+                F::one() - sign_bit.bits[0]
+            }
+            ), id, prefix_bits);
+        ret
     }
 }
 
@@ -536,6 +567,35 @@ impl<F: FieldExt> OneMinusSignBit<F> {
     }
 }
 
+pub struct DumbBuilder<F: FieldExt> {
+    mle: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for DumbBuilder<F> {
+    type Successor = ZeroMleRef<F>;
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        let exp = ExpressionStandard::Mle(self.mle.mle_ref()) + ExpressionStandard::Negated(Box::new(ExpressionStandard::Mle(self.mle.mle_ref())));
+        exp
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let num_vars = self.mle.num_iterated_vars();
+        let zero_mle: ZeroMleRef<F> = ZeroMleRef::new(num_vars, prefix_bits, id);
+        zero_mle
+    }
+}
+
+impl<F: FieldExt> DumbBuilder<F> {
+    pub fn new(
+        mle: DenseMle<F, F>
+    ) -> Self {
+        Self {
+            mle
+        }
+    }
+}
+
 pub struct SignBitProductBuilder<F: FieldExt> {
     pos_bit_mle: DenseMle<F, F>,
     neg_bit_mle: DenseMle<F, F>,
@@ -544,6 +604,7 @@ pub struct SignBitProductBuilder<F: FieldExt> {
 }
 
 impl<F: FieldExt> LayerBuilder<F> for SignBitProductBuilder<F> {
+
     type Successor = ZeroMleRef<F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
@@ -552,7 +613,15 @@ impl<F: FieldExt> LayerBuilder<F> for SignBitProductBuilder<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-
+        let hello = DenseMle::new_from_iter(
+            self.pos_bit_mle.into_iter().zip(self.pos_bit_sum.into_iter()).zip(
+                self.neg_bit_mle.into_iter().zip(self.neg_bit_sum.into_iter())
+            ).map(
+                |((pos_bit, pos_val), (neg_bit, neg_val))| {
+                    (pos_bit * pos_val) + (neg_bit * neg_val)
+                }
+            ), id, prefix_bits.clone()
+        );
         ZeroMleRef::new(self.pos_bit_mle.num_iterated_vars(), prefix_bits, id)
     }
 }
@@ -581,8 +650,9 @@ impl<F: FieldExt> LayerBuilder<F> for PrevNodeLeftBuilderDecision<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Negated(Box::new(ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle_path_decision.node_id())), F::from(2_u64)) + 
-        ExpressionStandard::Constant(F::one())))
+        let exp = ExpressionStandard::Negated(Box::new(ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle_path_decision.node_id())), F::from(2_u64)) + 
+        ExpressionStandard::Constant(F::one())));
+        exp
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -590,7 +660,7 @@ impl<F: FieldExt> LayerBuilder<F> for PrevNodeLeftBuilderDecision<F> {
             .mle_path_decision
             .into_iter()
             .map(|DecisionNode { node_id: path_node_id, ..}|
-                ((F::from(2_u64) * path_node_id )+ F::one()).neg()), id, prefix_bits)
+                ((F::from(2_u64) * path_node_id)+ F::one()).neg()), id, prefix_bits)
     }
 }
 
@@ -621,7 +691,7 @@ impl<F: FieldExt> LayerBuilder<F> for PrevNodeRightBuilderDecision<F> {
             .mle_path_decision
             .into_iter()
             .map(|DecisionNode { node_id: path_node_id, ..}|
-                ((F::from(2_u64) * path_node_id )+ F::from(2_u64)).neg()), id, prefix_bits)
+                ((F::from(2_u64) * path_node_id) + F::from(2_u64)).neg()), id, prefix_bits)
     }
 }
 

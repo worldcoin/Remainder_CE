@@ -1,4 +1,6 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
+use std::iter::repeat_with;
+
 use itertools::Itertools;
 use serde::{Serialize, Deserialize};
 use tracing::trace;
@@ -61,6 +63,8 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         let output = self.sponge.squeeze();
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
         Ok(output)
+
+    //    Ok(F::from(7_u64))
     }
 
     fn get_challenges(
@@ -71,6 +75,8 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         let output = (0..len).map(|_| self.sponge.squeeze()).collect_vec();
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
         Ok(output)
+
+    //    Ok(repeat_with(|| F::from(7_u64)).take(len).collect_vec())
     }
 }
 

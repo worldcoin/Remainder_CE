@@ -526,15 +526,14 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
-        let mut input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0)).to_input_layer::<PublicInputLayer<F, _>>().to_enum();
-        let mle_clone = self.mle.clone();
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0)).to_input_layer::<PublicInputLayer<F, _>>().to_enum();
 
         // --- Create Layers to be added to ---
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let num_vars = self.mle.mle_ref().num_vars();
+        let num_vars = self.mle.mle_ref().bookkeeping_table().len();
 
         (0..num_vars).for_each(
             |idx| {
@@ -544,13 +543,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
 
         let first_layer_output = layers.add_add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), 0);
 
-        // --- Stacks the two aforementioned layers together into a single layer ---
-        // --- Then adds them to the overall circuit ---
-        // let first_layer_output = layers.add_gkr(diff_builder);
-
-        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
-
         // (layers, vec![first_layer_output.mle_ref().get_enum()], input_layer)
         Witness {layers, output_layers: vec![first_layer_output.mle_ref().get_enum()], input_layers: vec![input_layer]}
     }
@@ -559,9 +551,9 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
 #[test]
 fn test_gkr_gate_simplest_circuit() {
     let mut rng = test_rng();
-    let size = 1 << 4;
+    let size = 1 << 7;
 
-    // --- This should be 2^2 ---
+    // --- This should be 2^7 ---
     let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
             let num = Fr::from(rng.gen::<u64>());
@@ -579,11 +571,6 @@ fn test_gkr_gate_simplest_circuit() {
         LayerId::Input(0),
         None,
     );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input,
-    //     None,
-    // );
 
     let mut circuit: SimplestGateCircuit<Fr> = SimplestGateCircuit { mle, negmle };
 

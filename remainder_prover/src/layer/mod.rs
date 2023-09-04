@@ -9,6 +9,7 @@ pub mod layer_enum;
 use std::marker::PhantomData;
 
 use ark_std::cfg_into_iter;
+use itertools::repeat_n;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use thiserror::Error;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -22,7 +23,7 @@ use crate::{
     prover::SumcheckProof,
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
-    },
+    }, zkdt::helpers::get_field_val_as_usize_vec,
 };
 use remainder_shared_types::{FieldExt, transcript::{Transcript, TranscriptError}};
 
@@ -150,7 +151,6 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         // --- `beta` is the beta table itself, initialized with the challenge coordinate held within `claim` ---
         let (max_round, beta) = {
             let (expression, _) = self.mut_expression_and_beta();
-
             let mut beta = BetaTable::new(claim).map_err(LayerError::BetaError)?;
 
             // --- This should always be equivalent to the number of indices within the beta table ---
@@ -287,7 +287,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // --- First verify that g_1(0) + g_1(1) = \sum_{b_1, ..., b_n} g(b_1, ..., b_n) ---
         // (i.e. the first verification step of sumcheck)
         let mut prev_evals = &sumcheck_prover_messages[0];
+        
         if prev_evals[0] + prev_evals[1] != claim.1 {
+            dbg!(&claim.1);
+            dbg!(&claim);
+            dbg!(prev_evals[0] + prev_evals[1]);
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
             ));
@@ -491,6 +495,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             // concat this with the first k evaluations from the claims to get num_evals evaluations
             claimed_vals.extend(&next_evals);
             let wlx_evals = claimed_vals.clone();
+            //let wlx_evals = next_evals.clone();
             Ok(wlx_evals)
     }
 
@@ -518,6 +523,20 @@ pub trait LayerBuilder<F: FieldExt> {
         ConcatLayer {
             first: self,
             second: rhs,
+            padding: Padding::None,
+            _marker: PhantomData,
+        }
+    }
+
+    ///Concatonate two layers together with some padding
+    fn concat_with_padding<Other: LayerBuilder<F>>(self, rhs: Other, padding: Padding) -> ConcatLayer<F, Self, Other>
+    where
+        Self: Sized,
+    {
+        ConcatLayer {
+            first: self,
+            second: rhs,
+            padding,
             _marker: PhantomData,
         }
     }
@@ -542,10 +561,17 @@ pub fn from_mle<
     }
 }
 
+pub enum Padding {
+    Right(usize),
+    Left(usize),
+    None
+}
+
 /// The layerbuilder that represents two layers concatonated together
 pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
     first: A,
     second: B,
+    padding: Padding,
     _marker: PhantomData<F>,
 }
 
@@ -559,6 +585,16 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let first_padding = if let Padding::Left(padding) = self.padding {
+            repeat_n(MleIndex::Fixed(false), padding)
+        } else {
+            repeat_n(MleIndex::Fixed(false), 0)
+        };
+        let second_padding = if let Padding::Right(padding) = self.padding {
+            repeat_n(MleIndex::Fixed(false), padding)
+        } else {
+            repeat_n(MleIndex::Fixed(false), 0)
+        };
         (
             self.first.next_layer(
                 id.clone(),
@@ -567,6 +603,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
                         .clone()
                         .into_iter()
                         .flatten()
+                        .chain(first_padding)
                         .chain(std::iter::once(MleIndex::Fixed(true)))
                         .collect(),
                 ),
@@ -577,6 +614,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
                     prefix_bits
                         .into_iter()
                         .flatten()
+                        .chain(second_padding)
                         .chain(std::iter::once(MleIndex::Fixed(false)))
                         .collect(),
                 ),
