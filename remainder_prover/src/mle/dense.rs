@@ -15,7 +15,7 @@ use crate::{expression::ExpressionStandard, layer::Claim};
 use crate::layer::LayerId;
 use remainder_shared_types::FieldExt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 ///An [Mle] that is dense
 pub struct DenseMle<F, T: Send + Sync + Clone + Debug + MleAble<F>> {
     ///The underlying data
@@ -107,13 +107,21 @@ impl<'a, F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> IntoIterator
 //     }
 // }
 
+/// Takes the individual bookkeeping tables from the MleRefs within an MLE
+/// and merges them with padding, using a little-endian representation
+/// merge strategy. Assumes that ALL MleRefs are the same size.
 pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
+
+    // --- All the items within should be the same size ---
     let max_size = items
         .iter()
         .map(|mle_ref| mle_ref.len())
         .max().unwrap();
+
     let part_size = 1 << log2(max_size);
     let part_count = 2_u32.pow(log2(L)) as usize;
+
+    // --- Number of "part" slots which need to filled with padding ---
     let padding_count = part_count - L;
     let total_size = part_size * part_count;
     let total_padding: usize = total_size - max_size * part_count;
@@ -124,9 +132,13 @@ pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items
     //     items
     // }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
 
-    (0..max_size).flat_map(|index| {
+    let result = (0..max_size).flat_map(|index| {
         items.iter().map(move |item| item.get(index).unwrap_or(&F::zero()).clone()).chain(repeat_n(F::zero(), padding_count))
-    }).chain(repeat_n(F::zero(), total_padding)).collect()
+    }).chain(repeat_n(F::zero(), total_padding)).collect();
+
+    result
+
+
 }
 
 impl<F: FieldExt> MleAble<F> for F {
