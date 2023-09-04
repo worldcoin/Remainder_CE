@@ -4,14 +4,13 @@ use remainder_shared_types::FieldExt;
 /// FieldHashFnDigest gives you a trait which is basically `Digest` but compatible
 /// with FieldExt-based hash functions.
 pub trait FieldHashFnDigest<F: FieldExt> {
-
     /// Parameters to pass into `new_with_params` such that a digest instance
     /// with specific hash function parameters can be created.
     type HashFnParams;
 
     /// (FieldHashFnDigest) Create new hasher instance with default params
     fn new() -> Self;
-    
+
     /// (FieldHashFnDigest) Create new hasher instance but with given params
     fn new_with_params(params: Self::HashFnParams) -> Self;
 

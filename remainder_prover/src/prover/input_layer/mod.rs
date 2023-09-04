@@ -1,20 +1,27 @@
 //! Trait for dealing with InputLayer
 
-use ark_std::{log2, cfg_into_iter, cfg_iter};
-use rayon::prelude::*;
+use ark_std::{cfg_into_iter, cfg_iter, log2};
 use itertools::Itertools;
-use remainder_shared_types::{FieldExt, transcript::{Transcript, TranscriptError}};
+use rayon::prelude::*;
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptError},
+    FieldExt,
+};
 use thiserror::Error;
 pub mod combine_input_layers;
+pub mod enum_input_layer;
 pub mod ligero_input_layer;
 pub mod public_input_layer;
 pub mod random_input_layer;
-pub mod enum_input_layer;
 
-use crate::{layer::{LayerId, Claim, claims::ClaimError}, mle::{Mle, dense::DenseMle, MleIndex, MleRef}, utils::argsort, sumcheck::evaluate_at_a_point};
+use crate::{
+    layer::{claims::ClaimError, Claim, LayerId},
+    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
+    sumcheck::evaluate_at_a_point,
+    utils::argsort,
+};
 
 use self::enum_input_layer::InputLayerEnum;
-
 
 #[derive(Error, Clone, Debug)]
 pub enum InputLayerError {
@@ -32,64 +39,71 @@ pub trait InputLayer<F: FieldExt> {
 
     fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
 
-    fn append_commitment_to_transcript(commitment: &Self::Commitment, transcript: &mut Self::Transcript) -> Result<(), TranscriptError>;
+    fn append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript: &mut Self::Transcript,
+    ) -> Result<(), TranscriptError>;
 
-    fn open(&self, transcript: &mut Self::Transcript, claim: Claim<F>) -> Result<Self::OpeningProof, InputLayerError>;
+    fn open(
+        &self,
+        transcript: &mut Self::Transcript,
+        claim: Claim<F>,
+    ) -> Result<Self::OpeningProof, InputLayerError>;
 
-    fn verify(commitment: &Self::Commitment, opening_proof: &Self::OpeningProof, claim: Claim<F>, transcript: &mut Self::Transcript) -> Result<(), InputLayerError>;
+    fn verify(
+        commitment: &Self::Commitment,
+        opening_proof: &Self::OpeningProof,
+        claim: Claim<F>,
+        transcript: &mut Self::Transcript,
+    ) -> Result<(), InputLayerError>;
 
     fn layer_id(&self) -> &LayerId;
 
     fn get_padded_mle(&self) -> DenseMle<F, F>;
 
-    fn compute_claim_wlx(
-        &self,
-        claims: &[Claim<F>],
-    ) -> Result<Vec<F>, ClaimError> {
-            let mut mle = self.get_padded_mle().clone().mle_ref();
-            let num_claims = claims.len();
-            let (claim_vecs, mut claimed_vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
-            let num_idx = claim_vecs[0].len();
+    fn compute_claim_wlx(&self, claims: &[Claim<F>]) -> Result<Vec<F>, ClaimError> {
+        let mut mle = self.get_padded_mle().clone().mle_ref();
+        let num_claims = claims.len();
+        let (claim_vecs, mut claimed_vals): (Vec<Vec<F>>, Vec<F>) =
+            cfg_iter!(claims).cloned().unzip();
+        let num_idx = claim_vecs[0].len();
 
-            //fix variable hella times
-            //evaluate expr on the mutated expr
+        //fix variable hella times
+        //evaluate expr on the mutated expr
 
-            // get the number of evaluations
-            let num_vars = mle.index_mle_indices(0);
-            let num_evals = (num_vars) * (num_claims); 
+        // get the number of evaluations
+        let num_vars = mle.index_mle_indices(0);
+        let num_evals = (num_vars) * (num_claims);
 
-            // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-            let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-                .map(|idx| {
-                    // get the challenge l(idx)
-                    let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                        .map(|claim_idx| {
-                            let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                                .map(|claim| claim[claim_idx])
-                                .collect();
-                            let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                            res
-                        })
-                        .collect();
+        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+            .map(|idx| {
+                // get the challenge l(idx)
+                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                    .map(|claim_idx| {
+                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                            .map(|claim| claim[claim_idx])
+                            .collect();
+                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
+                        res
+                    })
+                    .collect();
 
-                    let mut fix_mle = mle.clone();
-                    let eval = {
-                        new_chal.into_iter().enumerate().for_each(
-                            |(idx, chal)| {
-                                fix_mle.fix_variable(idx, chal);
-                            }
-                        ); 
-                        fix_mle.bookkeeping_table[0]
-                    }; 
-                    eval
+                let mut fix_mle = mle.clone();
+                let eval = {
+                    new_chal.into_iter().enumerate().for_each(|(idx, chal)| {
+                        fix_mle.fix_variable(idx, chal);
+                    });
+                    fix_mle.bookkeeping_table[0]
+                };
+                eval
+            })
+            .collect();
 
-                })
-                .collect();
-
-            // concat this with the first k evaluations from the claims to get num_evals evaluations
-            claimed_vals.extend(&next_evals);
-            let wlx_evals = claimed_vals.clone();
-            Ok(wlx_evals)
+        // concat this with the first k evaluations from the claims to get num_evals evaluations
+        claimed_vals.extend(&next_evals);
+        let wlx_evals = claimed_vals.clone();
+        Ok(wlx_evals)
     }
 
     fn compute_aggregated_challenges(
@@ -98,12 +112,12 @@ pub trait InputLayer<F: FieldExt> {
         rstar: F,
     ) -> Result<Vec<F>, ClaimError> {
         let (claim_vecs, _): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
-    
+
         if claims.is_empty() {
             return Err(ClaimError::ClaimAggroError);
         }
         let num_idx = claim_vecs[0].len();
-    
+
         // get the claim (r = l(r*))
         let r: Vec<F> = cfg_into_iter!(0..num_idx)
             .map(|idx| {
@@ -113,7 +127,7 @@ pub trait InputLayer<F: FieldExt> {
                 evaluate_at_a_point(&evals, rstar).unwrap()
             })
             .collect();
-    
+
         Ok(r)
     }
 

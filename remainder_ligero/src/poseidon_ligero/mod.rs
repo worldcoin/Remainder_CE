@@ -2,11 +2,11 @@
 /// but working with Poseidon hash function and FieldExt
 pub mod poseidon_digest;
 
-use std::convert::TryInto;
-use std::marker::PhantomData;
-use remainder_shared_types::FieldExt;
 use self::poseidon_digest::FieldHashFnDigest;
 use poseidon::Poseidon;
+use remainder_shared_types::FieldExt;
+use std::convert::TryInto;
+use std::marker::PhantomData;
 
 /// Poseidon Sponge Hasher struct with implementation for FieldHashFnDigest
 #[derive(Clone)]
@@ -23,7 +23,9 @@ fn get_new_halo2_sponge<F: FieldExt>() -> Poseidon<F, 3, 2> {
     Poseidon::<F, 3, 2>::new(8, 57)
 }
 
-fn get_new_halo2_sponge_with_params<F: FieldExt>(poseidon_params: PoseidonParams) -> Poseidon<F, 3, 2> {
+fn get_new_halo2_sponge_with_params<F: FieldExt>(
+    poseidon_params: PoseidonParams,
+) -> Poseidon<F, 3, 2> {
     Poseidon::<F, 3, 2>::new(poseidon_params.full_rounds, poseidon_params.partial_rounds)
 }
 
@@ -47,13 +49,15 @@ impl PoseidonParams {
     /// Constructs a new PoseidonParams
     pub fn new(full_rounds: usize, partial_rounds: usize, rate: usize, width: usize) -> Self {
         Self {
-            full_rounds, partial_rounds, rate, width
+            full_rounds,
+            partial_rounds,
+            rate,
+            width,
         }
     }
 }
 
 impl<F: FieldExt> FieldHashFnDigest<F> for PoseidonSpongeHasher<F> {
-
     type HashFnParams = PoseidonParams;
 
     // --- DON'T USE THESE ---
@@ -99,7 +103,8 @@ impl<F: FieldExt> FieldHashFnDigest<F> for PoseidonSpongeHasher<F> {
     // --- TODO!(ryancao): What is the point of this again? ---
     fn chain(mut self, data: &[F]) -> Self
     where
-        Self: Sized {
+        Self: Sized,
+    {
         self.update(data);
         self
     }
@@ -136,12 +141,10 @@ impl<F: FieldExt> FieldHashFnDigest<F> for PoseidonSpongeHasher<F> {
         sponge.update(data);
         sponge.squeeze()
     }
-
 }
 
 /// For Merkle tree hashing stuff
 pub trait MerkleCRHHasher<F: FieldExt> {
-
     /// TODO!(ryancao): Trait bounds on this?
     type Output;
 
