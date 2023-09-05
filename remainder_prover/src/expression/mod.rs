@@ -7,7 +7,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -60,7 +60,7 @@ pub trait Expression<F: FieldExt>: Debug + Sized {
     ) -> Result<(), E>;
 
     /// Add two expressions together
-    fn concat(self, lhs: Self) -> Self;
+    fn concat_expr(self, lhs: Self) -> Self;
 
     /// Fix the bit corresponding to `round_index` to `challenge` mutating the MleRefs
     /// so they are accurate as Bookeeping Tables
@@ -231,7 +231,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     }
 
     ///Concatenates two expressions together
-    fn concat(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
+    fn concat_expr(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
         ExpressionStandard::Selector(MleIndex::Iterated, Box::new(lhs), Box::new(self))
     }
 
@@ -506,8 +506,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// Helper function for `evaluate_expr` to traverse the expression and simply
 /// gather all of the evaluations, combining them as appropriate.
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
-/// within. 
-/// 
+/// within.
+///
 /// TODO!(ryancao): Make this not need to be mutable
 pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     expr: &Exp,
@@ -560,7 +560,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     }
 
     /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
-    /// 
+    ///
     /// Returns the max number of bits that are indexed
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {
@@ -586,6 +586,85 @@ impl<F: FieldExt> ExpressionStandard<F> {
             ExpressionStandard::Constant(_) => curr_index,
         }
     }
+
+    ///traverse an expression mutably changing it's contents
+    pub fn traverse_mut<E>(
+        &mut self,
+        observer_fn: &mut impl FnMut(&mut ExpressionStandard<F>) -> Result<(), E>,
+    ) -> Result<(), E> {
+        match self {
+            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) => observer_fn(self),
+            ExpressionStandard::Negated(exp) => observer_fn(exp),
+            ExpressionStandard::Product(_) => observer_fn(self),
+            ExpressionStandard::Scaled(exp, _) => exp.traverse_mut(observer_fn),
+            ExpressionStandard::Selector(_, lhs, rhs) => {
+                lhs.traverse_mut(observer_fn)?;
+                rhs.traverse_mut(observer_fn)?;
+                observer_fn(self)
+            }
+            ExpressionStandard::Sum(lhs, rhs) => {
+                lhs.traverse_mut(observer_fn)?;
+                rhs.traverse_mut(observer_fn)
+            }
+        }
+    }
+
+    ///Gets the size of an expression in terms of the number of rounds of sumcheck
+    pub fn get_expression_size(&self, curr_size: usize) -> usize {
+        match self {
+            ExpressionStandard::Selector(mle_index, a, b) => {
+                let a_bits = a.get_expression_size(curr_size + 1);
+                let b_bits = b.get_expression_size(curr_size + 1);
+                max(a_bits, b_bits)
+            }
+            ExpressionStandard::Mle(mle_ref) => {
+                mle_ref
+                    .mle_indices()
+                    .iter()
+                    .filter(|item| {
+                        matches!(
+                            item,
+                            &&MleIndex::Iterated
+                                | &&MleIndex::IndexedBit(_)
+                                | &&MleIndex::Bound(_, _)
+                        )
+                    })
+                    .collect_vec()
+                    .len()
+                    + curr_size
+            }
+            ExpressionStandard::Sum(a, b) => {
+                let a_bits = a.get_expression_size(curr_size);
+                let b_bits = b.get_expression_size(curr_size);
+                max(a_bits, b_bits)
+            }
+            ExpressionStandard::Product(mle_refs) => {
+                mle_refs
+                    .iter()
+                    .map(|mle_ref| {
+                        mle_ref
+                            .mle_indices()
+                            .iter()
+                            .filter(|item| {
+                                matches!(
+                                    item,
+                                    &&MleIndex::Iterated
+                                        | &&MleIndex::IndexedBit(_)
+                                        | &&MleIndex::Bound(_, _)
+                                )
+                            })
+                            .collect_vec()
+                            .len()
+                    })
+                    .max()
+                    .unwrap_or(0)
+                    + curr_size
+            }
+            ExpressionStandard::Scaled(a, _) => a.get_expression_size(curr_size),
+            ExpressionStandard::Negated(a) => a.get_expression_size(curr_size),
+            ExpressionStandard::Constant(_) => curr_size,
+        }
+    }
 }
 
 impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
@@ -601,7 +680,9 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
                 .field(b)
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionStandard::Mle(_mle_ref) => f.debug_struct("Mle").field("mle_ref", _mle_ref).finish(),
+            ExpressionStandard::Mle(_mle_ref) => {
+                f.debug_struct("Mle").field("mle_ref", _mle_ref).finish()
+            }
             ExpressionStandard::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionStandard::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
             ExpressionStandard::Product(a) => f.debug_tuple("Product").field(a).finish(),
@@ -645,8 +726,8 @@ mod tests {
     use crate::{layer::LayerId, mle::dense::DenseMle};
 
     use super::*;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::One;
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
     // #[test]
     // fn test_expression_operators() {
@@ -781,7 +862,7 @@ mod tests {
 
         let expression_2 = ExpressionStandard::Mle(mle_2);
 
-        let mut expression = expression_1.concat(expression_2);
+        let mut expression = expression_1.concat_expr(expression_2);
 
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 3);
@@ -828,7 +909,7 @@ mod tests {
 
         let expression_1 = ExpressionStandard::Mle(mle_1);
 
-        let mut expression = expression_1.concat(ExpressionStandard::Constant(Fr::from(5)));
+        let mut expression = expression_1.concat_expr(ExpressionStandard::Constant(Fr::from(5)));
 
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 3);
@@ -1000,7 +1081,7 @@ mod tests {
 
         let expression = expression * Fr::from(2);
 
-        let mut expression = expression3.concat(expression);
+        let mut expression = expression3.concat_expr(expression);
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 3);
 

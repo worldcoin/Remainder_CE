@@ -9,11 +9,12 @@
 //! let n_features = 4;
 //! let depth = 6;
 //! // start with some random (probably not perfect) trees with f64 leaf values
-//! let trees_model = generate_trees_model(n_trees, depth, n_features, 0.5);
+//! // start with some random (probably not perfect) trees with f64 leaf values
+//! let raw_trees_model = generate_raw_trees_model(n_trees, depth, n_features, 0.5);
 //! // pad the trees, assign ids and quantize the leaf values
-//! let pqtrees: PaddedQuantizedTrees = (&trees_model).into();
+//! let trees_model: TreesModel = (&raw_trees_model).into();
 //! // circuitize the trees (converts to DecisionNode<F>, LeafNode<F>)
-//! let ctrees: CircuitizedTrees<Fr> = (&pqtrees).into();
+//! let ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
 //! ```
 //!
 //! # Circuitizing samples (c.f. [`CircuitizedSamples`])
@@ -21,16 +22,16 @@
 //! Continuing the above example:
 //!
 //! ```
-//! // generate some samples to play with
 //! let n_samples = 10;
-//! let samples = generate_samples(n_samples, n_features);
-//! // notice: circuitize_samples takes pqtrees, not ctrees!
-//! let csamples = circuitize_samples::<Fr>(&samples, &pqtrees);
+//! let raw_samples = generate_raw_samples(n_samples, n_features);
+//! let samples = to_samples(&raw_samples, &trees_model);
+//! // notice: circuitize_samples takes trees_model, not ctrees!
+//! let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
 //! ```
 //!
 //! # Generating trees and samples for benchmarking
 //!
-//! Use the [`generate_trees_model`] and [`generate_samples`] functions (see above for example
+//! Use the [`generate_raw_trees_model`] and [`generate_raw_samples`] functions (see above for example
 //! usage).
 //!
 //! # Loading existing tree models & their samples
@@ -39,8 +40,8 @@
 //! pipeline.
 //!
 //! ```
-//! let trees_model: TreesModel = load_trees_model("src/zkdt/test_qtrees.json");
-//! let samples: Vec<Vec<u16>> = load_samples("src/zkdt/test_samples_10x6.npy");
+//! let raw_trees_model: RawTreesModel = load_raw_trees_model("src/zkdt/test_qtrees.json");
+//! let raw_samples: RawSamples = load_raw_samples("src/zkdt/test_samples_10x6.npy");
 //! ```
 
 extern crate serde;
@@ -52,25 +53,26 @@ use crate::zkdt::trees::*;
 use remainder_shared_types::FieldExt;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
-use serde::{Deserialize, Serialize};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
+
+use super::zkdt_helpers::{BatchedDummyMles, ZKDTCircuitData};
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TreesModel {
+pub struct RawTreesModel {
     trees: Vec<Node<f64>>,
     bias: f64,
     scale: f64,
     n_features: usize,
 }
 
-/// Intermediate representation used for deriving CircuitizedTrees and CircuitizedSamples (given
-/// samples to circuitize).
-/// For properties, see PaddedQuantizedTrees.from().
-pub struct PaddedQuantizedTrees {
-    trees: Vec<Node<i32>>,
+/// Used for deriving CircuitizedTrees and CircuitizedSamples (given samples to circuitize).
+/// For properties, see TreesModel.from().
+pub struct TreesModel {
+    trees: Vec<Node<i64>>,
     depth: usize,
     scaling: f64,
 }
@@ -88,48 +90,62 @@ pub struct CircuitizedTrees<F: FieldExt> {
     scaling: f64,
 }
 
-type Sample<F> = Vec<InputAttribute<F>>;
-/// Represents the circuitization of a batch of samples with respect to a PaddedQuantizedTrees.
+/// Represents the circuitization of a batch of samples with respect to a TreesModel.
 /// Bit decompositions are little endian.
 /// `differences` is a signed decomposition, with the sign bit at the end.
-/// Each vector in `multiplicities` has length `2.pow(pqtrees.depth)`.
+/// Each vector in `multiplicities` has length `2.pow(trees_model.depth)`.
 pub struct CircuitizedSamples<F: FieldExt> {
-    samples: Vec<Sample<F>>,                        // indexed by samples
-    permuted_samples: Vec<Vec<Sample<F>>>,          // indexed by trees, samples
+    samples: Vec<Vec<InputAttribute<F>>>,                        // indexed by samples
+    permuted_samples: Vec<Vec<Vec<InputAttribute<F>>>>,          // indexed by trees, samples
     decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
     differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,  // indexed by trees, samples, steps in path
     path_ends: Vec<Vec<LeafNode<F>>>,               // indexed by trees, samples
     multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,    // indexed by trees, tree nodes
 }
 
-/// Circuitize the provided batch of samples using the specified PaddedQuantizedTrees instance,
+/// Output of [`to_samples`], input to [`circuitize_samples`].
+pub struct Samples {
+    values: Vec<Vec<u16>>,
+    sample_length: usize
+}
+
+/// Prepare the provided RawSamples for processing by the TreesModel by repeating and padding the
+/// raw sample values.
+/// Pre: raw_samples.values.len() > 0.
+pub fn to_samples(raw_samples: &RawSamples, trees_model: &TreesModel) -> Samples {
+    // repeat and pad the attributes of the sample
+    let values: Vec<Vec<u16>> = raw_samples.values
+        .iter()
+        .map(|x| repeat_and_pad(x, trees_model.depth - 1, 0_u16))
+        .collect();
+    let sample_length = values[0].len();
+    Samples {
+        values: values,
+        sample_length: sample_length
+    }
+}
+
+/// Circuitize the provided batch of samples using the specified TreesModel instance,
 /// returning a CircuitizedSamples instance.
 /// See documentation of CircuitizedSamples.
 /// The length of each returned Sample instance (both in `samples` and `permuted_samples`) is
-/// `next_power_of_two((pqtrees.depth - 1) * values_array[0].len())`
+/// `next_power_of_two((trees_model.depth - 1) * values_array[0].len())`
 /// Pre: `values_array.len() > 0`.
 pub fn circuitize_samples<F: FieldExt>(
-    values_array: &[Vec<u16>],
-    pqtrees: &PaddedQuantizedTrees,
+    samples_in: &Samples,
+    trees_model: &TreesModel,
 ) -> CircuitizedSamples<F> {
-    // repeat and pad the attributes of the sample
-    let values_array: Vec<Vec<u16>> = values_array
-        .iter()
-        .map(|x| repeat_and_pad(x, pqtrees.depth - 1, 0_u16))
-        .collect();
-    let sample_length = values_array[0].len();
-
-    let mut samples: Vec<Sample<F>> = vec![];
-    let mut permuted_samples: Vec<Vec<Sample<F>>> = vec![];
+    let mut samples: Vec<Vec<InputAttribute<F>>> = vec![];
+    let mut permuted_samples: Vec<Vec<Vec<InputAttribute<F>>>> = vec![];
     let mut decision_paths: Vec<Vec<Vec<DecisionNode<F>>>> = vec![];
     let mut path_ends: Vec<Vec<LeafNode<F>>> = vec![];
     let mut differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>> = vec![];
     let mut multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
 
-    // build the samples array
-    for values in &values_array {
+    // convert the samples to field elements
+    for values_row in &samples_in.values {
         samples.push(
-            values
+            values_row
                 .iter()
                 .enumerate()
                 .map(|(index, value)| InputAttribute {
@@ -140,22 +156,22 @@ pub fn circuitize_samples<F: FieldExt>(
         );
     }
 
-    for tree in &pqtrees.trees {
+    for tree in &trees_model.trees {
         // initialize the node visit counts "multiplicities"
-        let mut multiplicities_for_tree: Vec<u32> = vec![0_u32; 2_usize.pow(pqtrees.depth as u32)];
-        let mut permuted_samples_for_tree: Vec<Sample<F>> = vec![];
+        let mut multiplicities_for_tree: Vec<u32> = vec![0_u32; 2_usize.pow(trees_model.depth as u32)];
+        let mut permuted_samples_for_tree: Vec<Vec<InputAttribute<F>>> = vec![];
         let mut decision_paths_for_tree: Vec<Vec<DecisionNode<F>>> = vec![];
         let mut path_ends_for_tree: Vec<LeafNode<F>> = vec![];
         let mut differences_for_tree: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
 
-        for (values, sample) in values_array.iter().zip(samples.iter()) {
+        for (values_row, sample) in samples_in.values.iter().zip(samples.iter()) {
             // get the path
-            let path = tree.get_path(&values);
+            let path = tree.get_path(&values_row);
 
             // derive data from decision path
             let mut decision_path = vec![];
-            let mut permuted_sample: Sample<F> = vec![];
-            let mut attribute_visits = vec![0; sample_length];
+            let mut permuted_sample: Vec<InputAttribute<F>> = vec![];
+            let mut attribute_visits = vec![0; samples_in.sample_length];
             let mut differences_for_tree_and_sample = vec![];
             for node in &path[..path.len() - 1] {
                 if let Node::Internal {
@@ -171,7 +187,7 @@ pub fn circuitize_samples<F: FieldExt>(
                         threshold: F::from(*threshold as u64),
                     });
                     // calculate the bit decompositions of the differences
-                    let difference = (values[*feature_index] as i32) - (*threshold as i32);
+                    let difference = (values_row[*feature_index] as i32) - (*threshold as i32);
                     differences_for_tree_and_sample
                         .push(build_signed_bit_decomposition::<F>(difference).unwrap());
                     // accumulate the multiplicities for this tree
@@ -184,7 +200,7 @@ pub fn circuitize_samples<F: FieldExt>(
                 }
             }
             // populate the remaining attributes of the permuted sample
-            for idx in 0..sample_length {
+            for idx in 0..samples_in.sample_length {
                 if attribute_visits[idx] == 0 {
                     permuted_sample.push(sample[idx]);
                 }
@@ -198,10 +214,11 @@ pub fn circuitize_samples<F: FieldExt>(
             if let Node::Leaf { id, value } = path[path.len() - 1] {
                 path_ends_for_tree.push(LeafNode {
                     node_id: F::from(id.unwrap() as u64),
-                    node_val: i32_to_field(*value),
+                    node_val: i64_to_field(*value),
                 });
                 // accumulate multiplicity for leaf node
-                multiplicities_for_tree[id.unwrap() as usize] += 1;
+                // TODO!(ende): discuss the plus one here
+                multiplicities_for_tree[id.unwrap() as usize + 1] += 1;
             } else {
                 panic!("Last item in path should be a Node::Leaf");
             }
@@ -211,11 +228,13 @@ pub fn circuitize_samples<F: FieldExt>(
         path_ends.push(path_ends_for_tree);
         differences.push(differences_for_tree);
         // calculate the bit decompositions of the visit counts
-        multiplicities.push(multiplicities_for_tree
-                            .into_iter()
-                            .map(build_unsigned_bit_decomposition)
-                            .map(|option| option.unwrap())
-                            .collect());
+        multiplicities.push(
+            multiplicities_for_tree
+                .into_iter()
+                .map(build_unsigned_bit_decomposition)
+                .map(|option| option.unwrap())
+                .collect(),
+        );
     }
 
     CircuitizedSamples {
@@ -228,18 +247,18 @@ pub fn circuitize_samples<F: FieldExt>(
     }
 }
 
-impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
-    /// Extract the DecisionNode and LeafNode instances from the PaddedQuantizedTrees instance to
+impl<F: FieldExt> From<&TreesModel> for CircuitizedTrees<F> {
+    /// Extract the DecisionNode and LeafNode instances from the TreesModel instance to
     /// obtain a CircuitizedTrees.
-    fn from(pqtrees: &PaddedQuantizedTrees) -> Self {
+    fn from(trees_model: &TreesModel) -> Self {
         // extract, sort & pad the decision nodes
         let mut decision_nodes = vec![];
         let dummy_node = DecisionNode {
-            node_id: F::from(2_u64.pow(pqtrees.depth as u32) - 1),
+            node_id: F::from(2_u64.pow(trees_model.depth as u32) - 1),
             attr_id: F::from(0_u64),
             threshold: F::from(0_u64),
         };
-        for tree in &pqtrees.trees {
+        for tree in &trees_model.trees {
             let mut tree_decision_nodes = extract_decision_nodes(&tree);
             tree_decision_nodes.sort_by_key(|node| node.node_id);
             // add a dummy node to make length a power of two
@@ -248,7 +267,7 @@ impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
         }
         // extract and sort the leaf nodes
         let mut leaf_nodes = vec![];
-        for tree in &pqtrees.trees {
+        for tree in &trees_model.trees {
             let mut tree_leaf_nodes = extract_leaf_nodes(&tree);
             tree_leaf_nodes.sort_by_key(|node| node.node_id);
             leaf_nodes.push(tree_leaf_nodes);
@@ -257,48 +276,48 @@ impl<F: FieldExt> From<&PaddedQuantizedTrees> for CircuitizedTrees<F> {
         CircuitizedTrees {
             decision_nodes: decision_nodes,
             leaf_nodes: leaf_nodes,
-            depth: pqtrees.depth,
-            scaling: pqtrees.scaling,
+            depth: trees_model.depth,
+            scaling: trees_model.scaling,
         }
     }
 }
 
-impl From<&TreesModel> for PaddedQuantizedTrees {
-    /// Given a TreesModel object representing a decision tree model operating on u32 samples, prepare the model for circuitization:
+impl From<&RawTreesModel> for TreesModel {
+    /// Given a RawTreesModel object representing a decision tree model operating on u32 samples, prepare the model for circuitization:
     /// 1. scale and bias are folded into the leaf values;
-    /// 2. leaf values are symmetrically quantized to i32;
+    /// 2. leaf values are symmetrically quantized to i64;
     /// 3. all trees are padded such that they are all perfect and of uniform depth (without modifying
     ///    the predictions of any tree) where the uniform depth is chosen to be 2^l + 1 for minimal l >= 0;
     /// 4. ids are assigned to all nodes (as per assign_id());
     /// 5. the feature indexes are transformed according to
-    ///      idx -> (depth_of_node - 1) * trees_model.n_features + idx
+    ///      idx -> (depth_of_node - 1) * raw_trees_model.n_features + idx
     ///    thereby ensuring that each feature index occurs only once on each descent path.
-    /// The resulting PaddedQuantizedTrees incorporates all the tree instances, the (uniform) depth
+    /// The resulting TreesModel incorporates all the tree instances, the (uniform) depth
     /// of the trees, and the scaling factor to approximately undo the quantization (via division)
     /// after aggregating the scores.
-    fn from(trees_model: &TreesModel) -> Self {
-        let mut trees_f64 = trees_model.trees.clone();
+    fn from(raw_trees_model: &RawTreesModel) -> Self {
+        let mut trees_f64 = raw_trees_model.trees.clone();
         // fold scale into all trees
         for tree in &mut trees_f64 {
-            tree.transform_values(&|value| trees_model.scale * value);
+            tree.transform_values(&|value| raw_trees_model.scale * value);
         }
         // fold bias into first tree
-        trees_f64[0].transform_values(&|value| value + trees_model.bias);
+        trees_f64[0].transform_values(&|value| value + raw_trees_model.bias);
 
         // quantize the leaf values
-        let (qtrees, rescaling) = quantize_trees(&trees_f64);
+        let (qtrees, rescaling) = quantize_leaf_values(&trees_f64);
 
         // pad the trees for perfection
         let max_depth = qtrees
             .iter()
-            .map(|tree: &Node<i32>| tree.depth(std::cmp::max))
+            .map(|tree: &Node<i64>| tree.depth(std::cmp::max))
             .max()
             .unwrap();
         let target_depth = next_power_of_two(max_depth - 1).unwrap() + 1;
         // insert DecisionNodes where needed to perfect each tree
-        let mut qtrees: Vec<Node<i32>> = qtrees
+        let mut qtrees: Vec<Node<i64>> = qtrees
             .iter()
-            .map(|tree: &Node<i32>| tree.perfect_to_depth(target_depth))
+            .map(|tree: &Node<i64>| tree.perfect_to_depth(target_depth))
             .collect();
         // assign ids to all nodes
         for tree in &mut qtrees {
@@ -306,10 +325,10 @@ impl From<&TreesModel> for PaddedQuantizedTrees {
         }
         // transform feature indices such that they never repeat along a path
         for tree in &mut qtrees {
-            tree.offset_feature_indices(trees_model.n_features);
+            tree.offset_feature_indices(raw_trees_model.n_features);
         }
 
-        PaddedQuantizedTrees {
+        TreesModel {
             trees: qtrees,
             depth: target_depth,
             scaling: rescaling,
@@ -317,52 +336,99 @@ impl From<&TreesModel> for PaddedQuantizedTrees {
     }
 }
 
-/// Generate a TreesModel as specified.  Meaning of arguments as per generate_trees().
+/// Generate a RawTreesModel as specified.  Meaning of arguments as per generate_trees().
 /// Scale and bias are chosen randomly.
-pub fn generate_trees_model(n_trees: usize, target_depth: usize, n_features: usize, premature_leaf_proba: f64) -> TreesModel {
+pub fn generate_raw_trees_model(
+    n_trees: usize,
+    target_depth: usize,
+    n_features: usize,
+    premature_leaf_proba: f64,
+) -> RawTreesModel {
     let mut rng = rand::thread_rng();
-    TreesModel {
+    RawTreesModel {
         trees: (0..n_trees)
             .map(|_| generate_tree(target_depth, n_features, premature_leaf_proba))
             .collect(),
         bias: rng.gen(),
         scale: rng.gen(),
-        n_features: n_features
+        n_features: n_features,
     }
 }
 
-/// Generate an array of samples for input into the trees model.
-/// Values less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
+/// Output of load_raw_samples, for conversion (using a TreesModel) to a Samples instance.
+/// Values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
 /// [`build_signed_bit_decomposition`]).
-pub fn generate_samples(n_samples: usize, n_features: usize) -> Vec<Vec<u16>> {
+pub struct RawSamples {
+    values: Vec<Vec<u16>>,
+    sample_length: usize
+}
+
+/// Generate an array of samples for input into the trees model.
+pub fn generate_raw_samples(n_samples: usize, n_features: usize) -> RawSamples {
     let mut rng = rand::thread_rng();
-    (0..n_samples)
-        .map(|_| (0..n_features).map(|_| rng.gen_range(0..(SIGNED_DECOMPOSITION_MAX_ARG_ABS + 1) as u16)).collect())
-        .collect()
+    let values = (0..n_samples)
+        .map(|_| {
+            (0..n_features)
+                .map(|_| rng.gen_range(0..(SIGNED_DECOMPOSITION_MAX_ARG_ABS + 1) as u16))
+                .collect()
+        })
+        .collect();
+    RawSamples {
+        values: values,
+        sample_length: n_features
+    }
 }
 
 /// Load a 2d array of samples from a `.npy` file.
-/// Pre: all values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
-/// [`build_signed_bit_decomposition`]).
-pub fn load_samples(filename: &str) -> Vec<Vec<u16>> {
+pub fn load_raw_samples(filename: &str) -> RawSamples {
     let input_arr: Array2<u16> = read_npy(filename).unwrap();
     // check sample values are in bounds
-    assert!(input_arr.iter().all(|&x| x <= SIGNED_DECOMPOSITION_MAX_ARG_ABS as u16));
-    input_arr.outer_iter().map(|row| row.to_vec()).collect()
+    assert!(input_arr
+        .iter()
+        .all(|&x| x <= SIGNED_DECOMPOSITION_MAX_ARG_ABS as u16));
+    RawSamples {
+        values: input_arr.outer_iter().map(|row| row.to_vec()).collect(),
+        sample_length: input_arr.shape()[1]
+    }
 }
 
 /// Load a trees model from a JSON file.
+/// WARNING: note the pre-condition.  No checks are performed.
 /// Pre: all threshold values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
 /// [`build_signed_bit_decomposition`]).
-pub fn load_trees_model(filename: &str) -> TreesModel {
-    let file = File::open(filename)
-        .expect(&format!("'{}' should be available.", filename));
-    let trees_model: TreesModel = serde_json::from_reader(file).expect(&format!(
-        "'{}' should be valid TreesModel JSON.",
-        filename
-    ));
-    // FIXME check the thresholds of every node on every tree
-    trees_model
+pub fn load_raw_trees_model(filename: &str) -> RawTreesModel {
+    let file = File::open(filename).expect(&format!("'{}' should be available.", filename));
+    let raw_trees_model: RawTreesModel = serde_json::from_reader(file)
+        .expect(&format!("'{}' should be valid RawTreesModel JSON.", filename));
+    raw_trees_model
+}
+
+/// currently gives all the batched data associated with the 0th tree
+pub fn load_upshot_data_single_tree_batch<F: FieldExt>() -> (ZKDTCircuitData<F>, (usize, usize)) {
+    let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
+    let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+    // use just a small batch
+    raw_samples.values = raw_samples.values[0..2].to_vec();
+
+    let trees_model: TreesModel = (&raw_trees_model).into();
+    let samples: Samples = to_samples(&raw_samples, &trees_model);
+    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
+
+    let csamples = circuitize_samples::<F>(&samples, &trees_model);
+
+    let tree_height = ctrees.depth;
+    let input_len = csamples.samples[0].len();
+
+    (ZKDTCircuitData::new(
+        csamples.samples,
+        csamples.permuted_samples[0].clone(),
+        csamples.decision_paths[0].clone(),
+        csamples.path_ends[0].clone(),
+        csamples.differences[0].clone(),
+        csamples.multiplicities[0].clone(),
+        ctrees.decision_nodes[0].clone(),
+        ctrees.leaf_nodes[0].clone(),
+    ), (tree_height, input_len))
 }
 
 #[cfg(test)]
@@ -385,45 +451,50 @@ mod tests {
     }
 
     #[test]
-    fn test_trees_model_loading() {
+    fn test_raw_trees_model_loading() {
         let filename = "src/zkdt/test_qtrees.json";
-        let trees_model = load_trees_model(filename);
+        let raw_trees_model = load_raw_trees_model(filename);
     }
 
     #[test]
     fn test_numpy_loading() {
         let filename = "src/zkdt/test_samples_10x6.npy";
-        let samples = load_samples(filename);
-        assert_eq!(samples.len(), 10);
+        let raw_samples = load_raw_samples(filename);
+        assert_eq!(raw_samples.values.len(), 10);
     }
 
     #[test]
     fn test_circuitize_samples() {
         let sample_length = 5;
-        let samples = vec![
+        let values = vec![
             vec![0_u16; sample_length],
             vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
             vec![2_u16; sample_length],
         ];
+        let raw_samples = RawSamples {
+            values: values,
+            sample_length: sample_length
+        };
         let tree = build_small_tree();
-        let trees_model = TreesModel {
+        let raw_trees_model = RawTreesModel {
             trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
             bias: 1.1,
             scale: 6.6,
             n_features: sample_length,
         };
-        let pqtrees: PaddedQuantizedTrees = (&trees_model).into();
-        let csamples = circuitize_samples::<Fr>(&samples, &pqtrees);
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let samples = to_samples(&raw_samples, &trees_model);
+        let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
         // check size of outer dimensions
-        let n_trees = trees_model.trees.len();
+        let n_trees = raw_trees_model.trees.len();
         let repeated_sample_length =
-            next_power_of_two((pqtrees.depth - 1) * sample_length).unwrap();
-        assert_eq!(csamples.samples.len(), samples.len());
+            next_power_of_two((trees_model.depth - 1) * sample_length).unwrap();
+        assert_eq!(csamples.samples.len(), samples.values.len());
 
         // check dimensions of permuted samples
         assert_eq!(csamples.permuted_samples.len(), n_trees);
         for permuted_samples_for_tree in &csamples.permuted_samples {
-            assert_eq!(permuted_samples_for_tree.len(), samples.len());
+            assert_eq!(permuted_samples_for_tree.len(), samples.values.len());
             for permuted_sample in permuted_samples_for_tree {
                 assert_eq!(permuted_sample.len(), repeated_sample_length);
             }
@@ -440,9 +511,9 @@ mod tests {
         // check the dimension of the decision paths
         assert_eq!(csamples.decision_paths.len(), n_trees);
         for decision_paths_for_tree in &csamples.decision_paths {
-            assert_eq!(decision_paths_for_tree.len(), samples.len());
+            assert_eq!(decision_paths_for_tree.len(), samples.values.len());
             for decision_path in decision_paths_for_tree {
-                assert_eq!(decision_path.len(), pqtrees.depth - 1);
+                assert_eq!(decision_path.len(), trees_model.depth - 1);
             }
         }
         // check decision path contents for one combination
@@ -454,7 +525,7 @@ mod tests {
         // check the dimension of the path_ends
         assert_eq!(csamples.path_ends.len(), n_trees);
         for path_ends_for_tree in &csamples.path_ends {
-            assert_eq!(path_ends_for_tree.len(), samples.len());
+            assert_eq!(path_ends_for_tree.len(), samples.values.len());
         }
         // check the contents
         let path_ends_for_tree = &csamples.path_ends[0];
@@ -464,9 +535,9 @@ mod tests {
         // check the dimensions of the differences
         assert_eq!(csamples.differences.len(), n_trees);
         for differences_for_tree in &csamples.differences {
-            assert_eq!(differences_for_tree.len(), samples.len());
+            assert_eq!(differences_for_tree.len(), samples.values.len());
             for differences in differences_for_tree {
-                assert_eq!(differences.len(), pqtrees.depth - 1);
+                assert_eq!(differences.len(), trees_model.depth - 1);
             }
         }
         // check contents
@@ -479,7 +550,7 @@ mod tests {
 
         // check the multiplicities
         let multiplicities = csamples.multiplicities;
-        let n_nodes = 2_usize.pow(pqtrees.depth as u32); // includes dummy node
+        let n_nodes = 2_usize.pow(trees_model.depth as u32); // includes dummy node
         assert_eq!(multiplicities.len(), n_trees);
         for multiplicities_for_tree in &multiplicities {
             assert_eq!(multiplicities_for_tree.len(), n_nodes);
@@ -489,7 +560,8 @@ mod tests {
             assert_eq!(multiplicity.bits[1], Fr::from(1));
             assert_eq!(multiplicity.bits[2], Fr::from(0));
             // dummy node id has multiplicity 0
-            let multiplicity = &multiplicities_for_tree[n_nodes - 1];
+            // TODO!(ende): because of the plus 1 above, changes here from `n_nodes - 1` to `n_nodes / 2 - 1`
+            let multiplicity = &multiplicities_for_tree[n_nodes / 2 - 1];
             for bit in multiplicity.bits {
                 assert_eq!(bit, Fr::from(0));
             }
@@ -497,19 +569,19 @@ mod tests {
     }
 
     #[test]
-    fn test_padded_quantized_trees_from() {
+    fn test_trees_model_from() {
         let tree = build_small_tree();
-        let trees_model = TreesModel {
+        let raw_trees_model = RawTreesModel {
             trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
             bias: 1.1,
             scale: 6.6,
             n_features: 11,
         };
-        let pqtrees: PaddedQuantizedTrees = (&trees_model).into();
-        assert_eq!(pqtrees.trees.len(), 2);
-        assert_eq!(pqtrees.depth, 3);
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        assert_eq!(trees_model.trees.len(), 2);
+        assert_eq!(trees_model.depth, 3);
         // check trees are as claimed
-        for tree in &pqtrees.trees {
+        for tree in &trees_model.trees {
             assert_eq!(tree.depth(std::cmp::max), 3);
             assert!(tree.is_perfect());
             assert_eq!(tree.get_id().unwrap(), 0);
@@ -519,15 +591,15 @@ mod tests {
     #[test]
     fn test_circuitized_trees_from() {
         let tree = build_small_tree();
-        let trees_model = TreesModel {
+        let raw_trees_model = RawTreesModel {
             trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
             bias: 1.1,
             scale: 6.6,
             n_features: 11,
         };
-        let pqtrees: PaddedQuantizedTrees = (&trees_model).into();
-        let ctrees: CircuitizedTrees<Fr> = (&pqtrees).into();
-        assert_eq!(ctrees.depth, pqtrees.depth);
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
+        assert_eq!(ctrees.depth, trees_model.depth);
         // check decision nodes
         for tree_dns in &ctrees.decision_nodes {
             assert_eq!(tree_dns.len(), 4);
@@ -548,58 +620,80 @@ mod tests {
         acc_score += ctrees.leaf_nodes[0][0].node_val;
         acc_score += ctrees.leaf_nodes[1][0].node_val;
         // check that the quantized scores accumulated as expected
-        let expected_score = trees_model.scale * (0.1 + 3.0) + trees_model.bias;
-        let quant_score = (expected_score * ctrees.scaling) as i32;
+        let expected_score = raw_trees_model.scale * (0.1 + 3.0) + raw_trees_model.bias;
+        let quant_score = (expected_score * ctrees.scaling) as i64;
         let f_quant_score = if quant_score >= 0 {
             Fr::from(quant_score as u64)
         } else {
             -Fr::from(quant_score.abs() as u64)
         };
         // just check that's it's close
-        assert_eq!(f_quant_score, acc_score + Fr::from(1));
+        assert_eq!(f_quant_score, acc_score);
     }
 
     #[test]
-    fn test_generate_trees_model() {
+    fn test_generate_raw_trees_model() {
         let target_depth = 3;
         let n_features = 6;
         let n_trees = 11;
-        let trees_model = generate_trees_model(n_trees, target_depth, n_features, 0.5);
-        assert_eq!(trees_model.n_features, n_features);
-        assert_eq!(trees_model.trees.len(), n_trees);
-        for tree in &trees_model.trees {
+        let raw_trees_model = generate_raw_trees_model(n_trees, target_depth, n_features, 0.5);
+        assert_eq!(raw_trees_model.n_features, n_features);
+        assert_eq!(raw_trees_model.trees.len(), n_trees);
+        for tree in &raw_trees_model.trees {
             assert!(tree.depth(std::cmp::max) <= target_depth);
         }
     }
 
     #[test]
-    fn test_generate_samples() {
-        let samples = generate_samples(10, 3);
-        assert_eq!(samples.len(), 10);
-        for sample in &samples {
-            assert_eq!(sample.len(), 3);
+    fn test_generate_raw_samples() {
+        let raw_samples = generate_raw_samples(10, 3);
+        assert_eq!(raw_samples.values.len(), 10);
+        for row in &raw_samples.values {
+            assert_eq!(row.len(), 3);
         }
     }
 
     #[test]
-    fn test_documentation() { // TODO remove once the doctests are being run
+    fn test_documentation() {
+        // TODO remove once the doctests are being run
         let n_trees = 3;
         let n_features = 4;
         let depth = 6;
         // start with some random (probably not perfect) trees with f64 leaf values
-        let trees_model = generate_trees_model(n_trees, depth, n_features, 0.5);
+        let raw_trees_model = generate_raw_trees_model(n_trees, depth, n_features, 0.5);
         // pad the trees, assign ids and quantize the leaf values
-        let pqtrees: PaddedQuantizedTrees = (&trees_model).into();
+        let trees_model: TreesModel = (&raw_trees_model).into();
         // circuitize the trees (converts to DecisionNode<F>, LeafNode<F>)
-        let ctrees: CircuitizedTrees<Fr> = (&pqtrees).into();
+        let ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
         // .. continued
         // generate some samples to play with
         let n_samples = 10;
-        let samples = generate_samples(n_samples, n_features);
-        // notice: circuitize_samples takes pqtrees, not ctrees!
-        let csamples = circuitize_samples::<Fr>(&samples, &pqtrees);
+        let raw_samples = generate_raw_samples(n_samples, n_features);
+        let samples = to_samples(&raw_samples, &trees_model);
+        // notice: circuitize_samples takes trees_model, not ctrees!
+        let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
         // .. continued
-        let trees_model: TreesModel = load_trees_model("src/zkdt/test_qtrees.json");
-        let samples: Vec<Vec<u16>> = load_samples("src/zkdt/test_samples_10x6.npy");
+        // for this to work, those files need to be in place:
+        // 1. remainder_prover/upshot_data/test_qtrees.json
+        // 2. remainder_prover/upshot_data/test_samples_10x6.npy
+        let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/test_qtrees.json");
+        let raw_samples: RawSamples = load_raw_samples("upshot_data/test_samples_10x6.npy");
+    }
+
+    #[test]
+    fn test_upshot_loading_and_circuitization() {
+        // for this to work, those files need to be in place:
+        // 1. remainder_prover/upshot_data/upshot-quantized-samples.npy
+        // 2. remainder_prover/upshot_data/quantized-upshot-model.json
+        let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
+        let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+        // use just a small batch
+        raw_samples.values = raw_samples.values[0..4].to_vec();
+
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let samples = to_samples(&raw_samples, &trees_model);
+
+        let ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
+        let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
     }
 }

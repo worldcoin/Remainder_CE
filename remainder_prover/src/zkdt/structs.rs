@@ -14,12 +14,13 @@ use remainder_shared_types::FieldExt;
 use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Chunk, Chunks, Itertools};
+use serde::{Serialize, Deserialize};
 
 /// --- Path nodes within the tree and in the path hint ---
 /// Used for the following components of the (circuit) input:
 /// a)
-#[derive(Copy, Debug, Clone)]
-pub struct DecisionNode<F: FieldExt> {
+#[derive(Copy, Debug, Clone, Serialize, Deserialize)]
+pub struct DecisionNode<F> {
     ///The id of this node in the tree
     pub(crate) node_id: F,
     ///The id of the attribute this node involves
@@ -28,9 +29,9 @@ pub struct DecisionNode<F: FieldExt> {
     pub(crate) threshold: F,
 }
 
-#[derive(Copy, Debug, Clone)]
+#[derive(Copy, Debug, Clone, Serialize, Deserialize)]
 ///The Leafs of the tree
-pub struct LeafNode<F: FieldExt> {
+pub struct LeafNode<F> {
     ///The id of this leaf in the tree
     pub(crate) node_id: F,
     ///The value of this leaf
@@ -41,8 +42,8 @@ pub struct LeafNode<F: FieldExt> {
 /// Used for the following components of the (circuit) input:
 /// a) The binary decomposition of the path node hints (i.e. x.val - path_x.thr)
 /// b) The binary decomposition of the multiplicity coefficients $c_j$
-#[derive(Copy, Debug, Clone, PartialEq)]
-pub struct BinDecomp16Bit<F: FieldExt> {
+#[derive(Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BinDecomp16Bit<F> {
     ///The 16 bits that make up this decomposition
     ///
     /// Should all be 1 or 0
@@ -53,8 +54,8 @@ pub struct BinDecomp16Bit<F: FieldExt> {
 /// Used for the following components of the (circuit) input:
 /// a) The actual input attributes, i.e. x
 /// b) The permuted input attributes, i.e. \bar{x}
-#[derive(Copy, Debug, Clone, PartialEq)]
-pub struct InputAttribute<F: FieldExt> {
+#[derive(Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InputAttribute<F> {
     // pub attr_idx: F,
     ///The attr id of this input
     pub(crate) attr_id: F,
@@ -116,7 +117,7 @@ impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
 //     type IntoIter = Zip<Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>, Cloned<std::slice::Iter<'a, F>>>;
 
 //     fn into_iter(self) -> Self::IntoIter {
-        
+
 //         self.mle[0]
 //             .iter()
 //             .cloned()
@@ -165,6 +166,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 .into_iter()
                 .flatten()
                 .chain(
+                    // --- NOTE that prefix bits HAVE to be in little-endian ---
                     std::iter::once(MleIndex::Fixed(false))
                         .chain(std::iter::once(MleIndex::Fixed(false)))
                         .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
@@ -193,8 +195,9 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 .into_iter()
                 .flatten()
                 .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(std::iter::once(MleIndex::Fixed(true)))
+                    // --- NOTE that prefix bits HAVE to be in little-endian ---
+                    std::iter::once(MleIndex::Fixed(true))
+                        .chain(std::iter::once(MleIndex::Fixed(false)))
                         .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
                 )
                 .collect_vec(),
@@ -215,14 +218,16 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
             bookkeeping_table: self.mle[2].to_vec(),
             // --- [1, 0, b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
+            // Answer: Lol not originally. The above comment is for ease of readability in big-endian
             mle_indices: self
                 .prefix_bits
                 .clone()
                 .into_iter()
                 .flatten()
                 .chain(
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(std::iter::once(MleIndex::Fixed(false)))
+                    // --- NOTE that prefix bits HAVE to be in little-endian ---
+                    std::iter::once(MleIndex::Fixed(false))
+                        .chain(std::iter::once(MleIndex::Fixed(true)))
                         .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
                 )
                 .collect_vec(),
@@ -417,6 +422,7 @@ impl<F: FieldExt> MleAble<F> for InputAttribute<F> {
 impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// MleRef grabbing just the list of attribute IDs
     pub(crate) fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
+
         // --- Default to the entire (component of) the MLE ---
         let num_vars = num_vars.unwrap_or(self.num_iterated_vars() - 1);
 
@@ -428,7 +434,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let concrete_len = cmp::min(len, self.mle[0].to_vec().len());
 
         DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec()[..concrete_len].to_vec(),
+            bookkeeping_table: self.mle[0][0..concrete_len].to_vec(),
             // --- [0; 0, ..., 0; b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
             mle_indices: self
@@ -438,11 +444,16 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 .flatten()
                 .chain(
                     std::iter::once(MleIndex::Fixed(false))
+                        .chain(repeat_n(MleIndex::Iterated, num_vars))
                         .chain(repeat_n(
                             MleIndex::Fixed(false),
                             self.num_iterated_vars() - 1 - num_vars,
-                        ))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars)),
+                        )),
+                    // repeat_n(MleIndex::Iterated, num_vars)
+                    // .chain(repeat_n(
+                    //             MleIndex::Fixed(false),
+                    //             self.num_iterated_vars() - 1 - num_vars))
+                    // .chain(std::iter::once(MleIndex::Fixed(false)))
                 )
                 .collect_vec(),
             num_vars,
@@ -467,7 +478,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let concrete_len = cmp::min(len, self.mle[1].to_vec().len());
 
         DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec()[..concrete_len].to_vec(),
+            bookkeeping_table: self.mle[1][..concrete_len].to_vec(),
             // --- [1; 0, ..., 0; b_1, ..., b_n] ---
             // Note that the zeros are there to prefix all the things we chunked out
             // TODO!(ryancao): Does this give us the endian-ness we want???
@@ -478,11 +489,16 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 .flatten()
                 .chain(
                     std::iter::once(MleIndex::Fixed(true))
+                        .chain(repeat_n(MleIndex::Iterated, num_vars))
                         .chain(repeat_n(
                             MleIndex::Fixed(false),
                             self.num_iterated_vars() - 1 - num_vars,
-                        ))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars)),
+                        )),
+                    // repeat_n(MleIndex::Iterated, num_vars)
+                    // .chain(repeat_n(
+                    //             MleIndex::Fixed(false),
+                    //             self.num_iterated_vars() - 1 - num_vars))
+                    // .chain(std::iter::once(MleIndex::Fixed(true)))
                 )
                 .collect_vec(),
             num_vars,
@@ -577,10 +593,12 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
         let mut ret: Vec<DenseMleRef<F>> = vec![];
 
         for bit_idx in 0..16 {
-            let first_prefix = (bit_idx % 16) >= 8;
-            let second_prefix = (bit_idx % 8) >= 4;
-            let third_prefix = (bit_idx % 4) >= 2;
-            let fourth_prefix = (bit_idx % 2) >= 1;
+            // --- Prefix bits need to be *literally* represented in little-endian ---
+            let first_prefix = (bit_idx % 2) >= 1;
+            let second_prefix = (bit_idx % 4) >= 2;
+            let third_prefix = (bit_idx % 8) >= 4;
+            let fourth_prefix = (bit_idx % 16) >= 8;
+
             let bit_mle_ref = DenseMleRef {
                 bookkeeping_table: self.mle[bit_idx].to_vec(),
                 // --- [0, 0, 0, 0, b_1, ..., b_n] ---

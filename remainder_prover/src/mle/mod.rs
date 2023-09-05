@@ -1,9 +1,9 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use core::fmt::Debug;
 use dyn_clone::DynClone;
 use serde::{Deserialize, Serialize};
-use core::fmt::Debug;
 
 use crate::layer::Claim;
 use crate::layer::LayerId;
@@ -15,9 +15,9 @@ use dyn_clonable::*;
 pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
-pub mod zero;
 pub mod gate;
 pub mod mle_enum;
+pub mod zero;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
@@ -41,7 +41,7 @@ where
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-pub trait MleRef: Debug + Send + Sync + Serialize + for <'de> Deserialize<'de> {
+pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     ///The Field Element this MleRef refers to
     type F: FieldExt;
 

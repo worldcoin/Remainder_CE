@@ -1,13 +1,18 @@
 use crate::layer::LayerId;
 use crate::mle::dense::DenseMle;
 use remainder_shared_types::FieldExt;
+use serde::{Serialize, Deserialize};
+use serde_json::{to_writer, from_reader};
 
+use super::constants::CACHED_BATCHED_MLES_FILE;
+use super::dt2zkdt::load_upshot_data_single_tree_batch;
 use super::structs::*;
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use std::collections::HashMap;
+use std::fs;
 use std::iter::zip;
 
 /*
@@ -144,7 +149,7 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
     let mut binary_repr_arr = [F::zero(); 16];
     for (idx, item) in binary_repr_arr.iter_mut().enumerate() {
         let char_repr = binary_repr.chars().nth(idx).unwrap();
-        assert!(char_repr == '0' || char_repr == '1');
+        debug_assert!(char_repr == '0' || char_repr == '1');
         *item = if char_repr == '0' {
             F::zero()
         } else {
@@ -157,7 +162,9 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
     }
 }
 
-struct DummyData<F: FieldExt> {
+/// dummydata input form factor for circuit inputs
+#[derive(Serialize, Deserialize)]
+pub struct ZKDTCircuitData<F> {
     dummy_input_data: Vec<Vec<InputAttribute<F>>>, // Input attributes
     dummy_permuted_input_data: Vec<Vec<InputAttribute<F>>>, // Permuted input attributes
     dummy_decision_node_paths: Vec<Vec<DecisionNode<F>>>, // Paths (decision node part only)
@@ -168,12 +175,37 @@ struct DummyData<F: FieldExt> {
     dummy_leaf_nodes: Vec<LeafNode<F>>,            // Actual tree leaf nodes
 }
 
+impl<F: FieldExt> ZKDTCircuitData<F> {
+    /// creates new dummydata
+    pub fn new(
+        dummy_input_data: Vec<Vec<InputAttribute<F>>>, 
+        dummy_permuted_input_data: Vec<Vec<InputAttribute<F>>>,
+        dummy_decision_node_paths: Vec<Vec<DecisionNode<F>>>,
+        dummy_leaf_node_paths: Vec<LeafNode<F>>,     
+        dummy_binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>,
+        dummy_multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>,
+        dummy_decision_nodes: Vec<DecisionNode<F>>,  
+        dummy_leaf_nodes: Vec<LeafNode<F>>,          
+    ) -> ZKDTCircuitData<F> {
+        ZKDTCircuitData {
+            dummy_input_data,
+            dummy_permuted_input_data,
+            dummy_decision_node_paths,
+            dummy_leaf_node_paths,
+            dummy_binary_decomp_diffs,
+            dummy_multiplicities_bin_decomp,
+            dummy_decision_nodes,
+            dummy_leaf_nodes,
+        }
+    }
+}
+
 /// Need to generate dummy circuit inputs, starting with the input data
 /// Then get the path data and binary decomp stuff
 /// TODO!(ryancao): add the attribute index field to `InputAttribute<F>`
 /// -- Actually, scratch the above: we might be getting rid of `attr_id`s
 /// altogether and replacing with `attr_idx` everywhere (as suggested by Ben!)
-fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
+fn generate_dummy_data<F: FieldExt>() -> ZKDTCircuitData<F> {
     // --- Get the RNG ---
     let mut rng = test_rng();
 
@@ -369,7 +401,7 @@ fn generate_dummy_data<F: FieldExt>() -> DummyData<F> {
         })
         .collect_vec();
 
-    DummyData {
+    ZKDTCircuitData {
         dummy_input_data,
         dummy_permuted_input_data,
         dummy_decision_node_paths,
@@ -435,10 +467,114 @@ pub struct BatchedDummyMles<F: FieldExt> {
     pub dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
 }
 
+// #[derive(Serialize, Deserialize)]
+pub struct BatchedCatboostMles<F: FieldExt> {
+    pub dummy_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub dummy_permuted_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub dummy_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>,
+    pub dummy_leaf_node_paths_mle: Vec<DenseMle<F, LeafNode<F>>>,
+    pub dummy_binary_decomp_diffs_mle: DenseMle<F, BinDecomp16Bit<F>>,
+    pub dummy_multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
+    pub dummy_multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
+    pub dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+    pub dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+}
+
+/// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
+/// to a file for ease of reading (i.e. faster testing, mostly lol)
+pub fn write_mles_batch_catboost_single_tree<F: FieldExt>() {
+    let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>();
+    let mut f = fs::File::create(CACHED_BATCHED_MLES_FILE).unwrap();
+    to_writer(&mut f, &loaded_zkdt_circuit_data).unwrap();
+}
+
+/// Reads the cached results from [`load_upshot_data_single_tree_batch`] and returns them.
+pub fn read_upshot_data_single_tree_branch_from_file<F: FieldExt>() -> (ZKDTCircuitData<F>, (usize, usize)) {
+    let file = std::fs::File::open(CACHED_BATCHED_MLES_FILE).unwrap();
+    from_reader(&file).unwrap()
+}
+
+/// Generates circuit data in batched form for a single Catboost tree
+pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>() -> (BatchedCatboostMles<F>, (usize, usize)) {
+    // --- First generate the dummy data ---
+    let (ZKDTCircuitData {
+        // dummy_attr_idx_data,
+        dummy_input_data,
+        // dummy_permutation_indices,
+        dummy_permuted_input_data,
+        dummy_decision_node_paths,
+        dummy_leaf_node_paths,
+        dummy_binary_decomp_diffs,
+        mut dummy_multiplicities_bin_decomp,
+        dummy_decision_nodes,
+        dummy_leaf_nodes,
+    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_file::<F>();
+
+    let decision_len = 2_usize.pow(tree_height as u32 - 1);
+    let dummy_multiplicities_bin_decomp_leaf = dummy_multiplicities_bin_decomp.split_off(decision_len);
+    let dummy_multiplicities_bin_decomp_decision = dummy_multiplicities_bin_decomp;
+
+    // --- Generate MLEs for each ---
+    // TODO!(ryancao): Change this into batched form
+    // let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
+    let dummy_input_data_mle = dummy_input_data.into_iter().map(|input| DenseMle::new_from_iter(input
+        .clone()
+        .into_iter()
+        .map(InputAttribute::from), LayerId::Input(0), None)).collect_vec();
+    // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
+    let dummy_permuted_input_data_mle = dummy_permuted_input_data
+        .iter().map(|datum| DenseMle::new_from_iter(datum
+            .clone()
+            .into_iter()
+            .map(InputAttribute::from), LayerId::Input(0), None)).collect();
+    let dummy_decision_node_paths_mle = dummy_decision_node_paths
+        .iter()
+        .map(|path|
+            DenseMle::new_from_iter(path
+            .clone()
+            .into_iter(), LayerId::Input(0), None))
+        .collect();
+    let dummy_leaf_node_paths_mle = dummy_leaf_node_paths
+        .into_iter()
+        .map(|path| DenseMle::new_from_iter([path].into_iter(), LayerId::Input(0), None))
+        .collect();
+    let dummy_binary_decomp_diffs_mle = DenseMle::new_from_iter(dummy_binary_decomp_diffs[0]
+        .clone()
+        .into_iter()
+        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
+    let dummy_multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp_decision
+        .clone()
+        .into_iter()
+        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
+    let dummy_multiplicities_bin_decomp_mle_leaf = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp_leaf
+        .clone()
+        .into_iter()
+        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
+    let dummy_decision_nodes_mle = DenseMle::new_from_iter(dummy_decision_nodes
+        .clone()
+        .into_iter()
+        .map(DecisionNode::from), LayerId::Input(0), None);
+    let dummy_leaf_nodes_mle = DenseMle::new_from_iter(dummy_leaf_nodes
+        .clone()
+        .into_iter()
+        .map(LeafNode::from), LayerId::Input(0), None);
+
+    (BatchedCatboostMles {
+        dummy_input_data_mle,
+        dummy_permuted_input_data_mle,
+        dummy_decision_node_paths_mle,
+        dummy_leaf_node_paths_mle,
+        dummy_binary_decomp_diffs_mle,
+        dummy_multiplicities_bin_decomp_mle_decision,
+        dummy_multiplicities_bin_decomp_mle_leaf,
+        dummy_decision_nodes_mle,
+        dummy_leaf_nodes_mle,
+    }, (tree_height, input_len))
+}
 
 pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
     // --- First generate the dummy data ---
-    let DummyData {
+    let ZKDTCircuitData {
         // dummy_attr_idx_data,
         dummy_input_data,
         // dummy_permutation_indices,
@@ -519,7 +655,7 @@ pub(crate) struct DummyMles<F: FieldExt> {
 /// into MLE form factor.
 pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
     // --- First generate the dummy data ---
-    let DummyData {
+    let ZKDTCircuitData {
         dummy_input_data,
         dummy_permuted_input_data,
         dummy_decision_node_paths,
@@ -620,12 +756,19 @@ mod tests {
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::test_rng;
 
+    /// Literally just calls the [`write_mles_batch_catboost_single_tree`] function
+    /// to write the preprocessed stuff to file so we can load it in later
+    #[test]
+    fn test_write_mles_batch_catboost_single_tree() {
+        write_mles_batch_catboost_single_tree::<Fr>();
+    }
+
     /// Checks that bits within the diff binary decomp and the multiplicity
     /// binary decomp are all either 0 or 1
     #[test]
     fn dummy_bits_are_binary_test() {
         // --- First generate the dummy data ---
-        let DummyData {
+        let ZKDTCircuitData {
             dummy_binary_decomp_diffs,
             dummy_multiplicities_bin_decomp,
             ..
@@ -799,7 +942,7 @@ mod tests {
     #[test]
     fn dummy_binary_recomp_test() {
         // --- First generate the dummy data ---
-        let DummyData {
+        let ZKDTCircuitData {
             dummy_permuted_input_data,
             dummy_decision_node_paths,
             dummy_binary_decomp_diffs,
