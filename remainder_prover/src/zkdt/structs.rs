@@ -8,7 +8,7 @@ use crate::{
     mle::{
         dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
         Mle, MleAble, MleIndex, MleRef,
-    }, layer::{batched::combine_mles, LayerId},
+    }, layer::{batched::combine_mles_refs, LayerId},
 };
 use rayon::vec;
 use remainder_shared_types::FieldExt;
@@ -290,19 +290,19 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
             .clone().into_iter().map(
                 |x| x.node_id()
             ).collect_vec();
-        let combined_node_id_mle_ref = combine_mles(batch_node_id_mle_ref, batched_bits as usize);
+        let combined_node_id_mle_ref = combine_mles_refs(batch_node_id_mle_ref, batched_bits as usize);
     
         let batch_attr_id_mle_ref = decision_mle_batch
             .clone().into_iter().map(
                 |x| x.attr_id()
             ).collect_vec();
-        let combined_attr_id_mle_ref = combine_mles(batch_attr_id_mle_ref, batched_bits as usize);
+        let combined_attr_id_mle_ref = combine_mles_refs(batch_attr_id_mle_ref, batched_bits as usize);
 
         let batch_threshold_mle_ref = decision_mle_batch
             .into_iter().map(
                 |x| x.threshold()
             ).collect_vec();
-        let combined_threshold_mle_ref = combine_mles(batch_threshold_mle_ref, batched_bits as usize);
+        let combined_threshold_mle_ref = combine_mles_refs(batch_threshold_mle_ref, batched_bits as usize);
     
         let combined_decision= vec![
             combined_node_id_mle_ref,
@@ -598,14 +598,14 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
             .clone().into_iter().map(
                 |x| x.attr_id(None)
             ).collect_vec();
-        let combined_attr_id_mle_ref = combine_mles(batch_attr_id_mle_ref, batched_bits as usize);
+        let combined_attr_id_mle_ref = combine_mles_refs(batch_attr_id_mle_ref, batched_bits as usize);
     
         let batch_attr_val_mle_ref = input_mle_batch
             .into_iter().map(
                 |x| x.attr_val(None)
             ).collect_vec();
     
-        let combined_attr_val_mle_ref = combine_mles(batch_attr_val_mle_ref, batched_bits as usize);
+        let combined_attr_val_mle_ref = combine_mles_refs(batch_attr_val_mle_ref, batched_bits as usize);
     
         let combined_input_attribute= vec![
             combined_attr_id_mle_ref,

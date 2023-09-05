@@ -63,6 +63,8 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         let output = self.sponge.squeeze();
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
         Ok(output)
+
+ //       Ok(F::from(6_u64))
     }
 
     fn get_challenges(
@@ -73,6 +75,9 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         let output = (0..len).map(|_| self.sponge.squeeze()).collect_vec();
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
         Ok(output)
+
+        // let output = (0..len).map(|_| F::from(6_u64)).collect_vec();
+        // Ok(output)
     }
 }
 
