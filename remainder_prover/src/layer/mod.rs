@@ -13,8 +13,6 @@ use ark_std::cfg_into_iter;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use thiserror::Error;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use thiserror::Error;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},

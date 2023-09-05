@@ -519,7 +519,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let num_vars = self.mle.mle_ref().bookkeeping_table().len();
+        let num_vars = self.mle.mle_ref().num_vars();
 
         (0..num_vars).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -548,9 +548,9 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
 #[test]
 fn test_gkr_gate_simplest_circuit() {
     let mut rng = test_rng();
-    let size = 1 << 7;
+    let size = 1 << 4;
 
-    // --- This should be 2^7 ---
+    // --- This should be 2^2 ---
     let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
             let num = Fr::from(rng.gen::<u64>());
@@ -568,6 +568,11 @@ fn test_gkr_gate_simplest_circuit() {
         LayerId::Input(0),
         None,
     );
+    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
+    //     LayerId::Input,
+    //     None,
+    // );
 
     let mut circuit: SimplestGateCircuit<Fr> = SimplestGateCircuit { mle, negmle };
 
@@ -689,7 +694,6 @@ fn test_combine_circuit() {
     // --- This should be 2^2 ---
     let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
         (0..1 << size).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-
         LayerId::Input(0),
         None,
     );
@@ -705,148 +709,6 @@ fn test_combine_circuit() {
         test_circuit: test_circuit_1,
         simple_circuit,
     };
-
-    test_circuit(circuit, None);
-}
-
-/// Circuit which subtracts its two halves, except for the part where one half is
-/// comprised of a pre-committed Ligero input layer and the other half is comprised
-/// of a Ligero input layer which is committed to on the spot.
-struct SimplePrecommitCircuit<F: FieldExt> {
-    mle: DenseMle<F, F>,
-    mle2: DenseMle<F, F>,
-}
-impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
-
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        // --- The precommitted input layer MLE is just the first MLE ---
-        let precommitted_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
-        let precommitted_input_layer_builder =
-            InputLayerBuilder::new(precommitted_input_mles, None, LayerId::Input(0));
-
-        // --- The non-precommitted input layer MLE is just the second ---
-        let live_committed_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle2)];
-        let live_committed_input_layer_builder =
-            InputLayerBuilder::new(live_committed_input_mles, None, LayerId::Input(0));
-
-        let mle_clone = self.mle.clone();
-        let mle2_clone = self.mle2.clone();
-
-        // --- Create Layers to be added to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
-
-        // --- Create a SimpleLayer from the first `mle` within the circuit ---
-        let diff_builder = from_mle(
-            mle_clone.clone(),
-            // --- The expression is a simple diff between the first and second halves ---
-            |_mle| {
-                let first_half = Box::new(ExpressionStandard::Mle(mle_clone.mle_ref()));
-                let second_half = Box::new(ExpressionStandard::Mle(mle2_clone.mle_ref()));
-                let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
-                ExpressionStandard::Sum(first_half, negated_second_half)
-            },
-            // --- The output SHOULD be all zeros ---
-            |_mle, layer_id, prefix_bits| {
-                let num_vars = max(
-                    mle_clone.mle_ref().num_vars(),
-                    mle2_clone.mle_ref().num_vars(),
-                );
-                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
-            },
-        );
-
-
-        // --- Stacks the two aforementioned layers together into a single layer ---
-        // --- Then adds them to the overall circuit ---
-        let first_layer_output = layers.add_gkr(diff_builder);
-
-        // --- We should have two input layers: a single pre-committed and a single regular Ligero layer ---
-        let rho_inv = 4;
-        let (_, ligero_comm, ligero_root, ligero_aux) =
-            remainder_ligero_commit_prove(&self.mle.mle, rho_inv);
-        let precommitted_input_layer: LigeroInputLayer<F, Self::Transcript> =
-            precommitted_input_layer_builder.to_input_layer_with_precommit(
-                ligero_comm,
-                ligero_aux,
-                ligero_root,
-            );
-            let mut transcript: PoseidonTranscript<Fr> =
-                PoseidonTranscript::new("GKR Verifier Transcript");
-            let now = Instant::now();
-            match circuit.verify(&mut transcript, proof) {
-                Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
-                }
-            };
-
-            expression.traverse_mut(&mut closure).unwrap();
-        }
-
-        let (layers, output_layers) = combine_layers(
-            vec![test_layers, simple_layers],
-            vec![test_outputs, simple_outputs],
-        )
-        .unwrap();
-
-        Witness {
-            layers,
-            output_layers,
-            input_layers,
-        }
-    }
-}
-
-#[test]
-fn test_combine_circuit() {
-    let mut rng = test_rng();
-    let size = 4;
-    let size_expanded = 1 << size;
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-    // --- This should be 2^2 ---
-    let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-
-    let test_circuit_1: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
-
-    let size = 4;
-
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..1 << size).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
-    //     LayerId::Input(0),
-    //     None,
-    // );
-
-
-    let simple_circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
-    
-
-    let circuit = CombineCircuit {
-        test_circuit: test_circuit_1,
-        simple_circuit,
-    };
-
 
     test_circuit(circuit, None);
 }

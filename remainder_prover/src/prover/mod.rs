@@ -113,6 +113,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         );
 
         let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
+        dbg!(&res_mle);
         res_mle
 
         //ZeroMleRef::new(*num_vars, None, id.clone())
