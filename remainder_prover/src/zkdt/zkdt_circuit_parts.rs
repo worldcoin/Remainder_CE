@@ -845,6 +845,21 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        
+        let mut dummy_decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.dummy_decision_node_paths_mle_vec.clone());
+        let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.dummy_leaf_node_paths_mle_vec.clone());
+
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            Box::new(&mut dummy_decision_node_paths_mle_vec_combined),
+            Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
+            Box::new(&mut self.dummy_decision_nodes_mle),
+            Box::new(&mut self.dummy_leaf_nodes_mle),
+            Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_decision),
+            Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_leaf),
+        ];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         // layer 0: x
@@ -1140,11 +1155,15 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             path_product
         );
 
-        let difference_mle = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
+        let circuit_output = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
 
         println!("Multiset circuit finished, number of layers {:?}", layers.next_layer_id());
 
-        todo!()
+        Witness {
+            layers,
+            output_layers: vec![circuit_output.get_enum()],
+            input_layers: vec![input_layer.to_enum()],
+        }
     }
 }
 
