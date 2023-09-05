@@ -8,7 +8,8 @@ use std::io::Empty;
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef}, prover::input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}};
+
+use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles, combine_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef}, prover::input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}};
 use crate::{prover::{GKRCircuit, Layers, Witness}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
@@ -109,6 +110,73 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_paths_mle), Box::new(&mut self.leaf_node_paths_mle), Box::new(&mut self.bin_decomp_diff_mle)];
+        let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
+        let input_layer = input_layer_builder.to_input_layer::<PublicInputLayer<F, _>>().to_enum();
+
+        let pos_sign_bit_builder = OneMinusSignBit::new(self.bin_decomp_diff_mle.clone());
+        let pos_sign_bits = layers.add_gkr(pos_sign_bit_builder);
+       
+        let neg_sign_bit_builder = SignBit::new(self.bin_decomp_diff_mle.clone());
+        let neg_sign_bits = layers.add_gkr(neg_sign_bit_builder);
+        
+        let prev_node_left_builder = PrevNodeLeftBuilderDecision::new(
+            self.decision_node_paths_mle.clone());
+
+        let prev_node_right_builder = PrevNodeRightBuilderDecision::new(
+            self.decision_node_paths_mle.clone());
+
+        let curr_node_decision_builder = CurrNodeBuilderDecision::new(
+            self.decision_node_paths_mle.clone());
+
+        let curr_node_leaf_builder = CurrNodeBuilderLeaf::new(
+            self.leaf_node_paths_mle.clone());
+
+        let curr_decision = layers.add_gkr(curr_node_decision_builder);
+        let curr_leaf = layers.add::<_, EmptyLayer<F, Self::Transcript>>(curr_node_leaf_builder);
+
+        let curr_node_decision_leaf_builder = ConcatBuilder::new(curr_decision.clone(), curr_leaf.clone());
+        let curr_node_decision_leaf_mle_ref = layers.add_gkr(curr_node_decision_leaf_builder).mle_ref();
+        let prev_node_right_mle_ref = layers.add_gkr(prev_node_right_builder).mle_ref();
+        let prev_node_left_mle_ref = layers.add_gkr(prev_node_left_builder).mle_ref();
+        
+        let nonzero_gates = create_wiring_from_num_bits(1 << (prev_node_left_mle_ref.num_vars() - self.num_copy));
+         
+        let res_negative = layers.add_add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref.clone(), self.num_copy);
+        let res_positive = layers.add_add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref.clone(), self.num_copy);
+
+        let sign_bit_sum_builder: SignBitProductBuilder<F> = SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative);
+        let final_res = layers.add_gkr(sign_bit_sum_builder);
+
+        let witness: Witness<F, Self::Transcript> = Witness {
+            layers,
+            output_layers: vec![final_res.get_enum()],
+            input_layers: vec![input_layer]
+        };
+
+        witness
+    }
+}
+
+pub struct PathCheckCircuitBatched<F: FieldExt> {
+    pub decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>, 
+    pub leaf_node_paths_mle: Vec<DenseMle<F, LeafNode<F>>>,
+    pub bin_decomp_diff_mle: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
+    pub num_copy: usize,
+}
+
+impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        let interleaved_decision = self.decision_node_paths_mle.clone().into_iter().map(|mle| {
+            combine_mles(vec![mle.node_id(), mle.attr_id(), mle.threshold()], 2);
+        }).collect_vec();
+
+        let mut combined_decision = combine_mle_refs(all_first_seconds);
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_paths_mle), Box::new(&mut self.leaf_node_paths_mle), Box::new(&mut self.bin_decomp_diff_mle)];
         let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
