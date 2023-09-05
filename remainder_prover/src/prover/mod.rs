@@ -21,9 +21,9 @@ use crate::{
         gate::AddGate,
         MleRef,
     },
-    mle::{mle_enum::MleEnum, MleIndex},
-    sumcheck::evaluate_at_a_point,
-    utils::pad_to_nearest_power_of_two,
+    mle::{MleIndex, mle_enum::MleEnum},
+    mle::{gate::{AddGateBatched}},
+    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point
 };
 
 // use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
@@ -86,22 +86,57 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         num_copy_bits: usize,
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
-        let gate: AddGate<F, Tr> = AddGate::new(
-            id.clone(),
-            nonzero_gates.clone(),
-            lhs.clone(),
-            rhs.clone(),
-            num_copy_bits,
+        let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits);
+        let max_gate_val = nonzero_gates.clone().into_iter().fold(
+            0, 
+            |acc, (z, _, _)| {
+                std::cmp::max(acc, z)
+            }
         );
-        let num_vars = lhs.num_vars();
         self.0.push(gate.get_enum());
 
-        let mut sum_table = vec![F::zero(); 1 << num_vars];
-        nonzero_gates.into_iter().for_each(|(z, x, y)| {
-            let sum_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero())
-                + *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
-            sum_table[z] = sum_val;
-        });
+        let mut sum_table = vec![F::zero(); max_gate_val + 1];
+        nonzero_gates.into_iter().for_each(
+            |(z, x, y)| {
+                let sum_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero()) + 
+                *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
+                sum_table[z] = sum_val;
+                
+            }
+        );
+
+        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
+        res_mle
+
+        //ZeroMleRef::new(*num_vars, None, id.clone())
+    }
+
+    /// Add an AddGate to a list of layers
+    pub fn add_add_gate_batched(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_copy_bits: usize) -> DenseMle<F, F> {
+        let id = LayerId::Layer(self.0.len());
+        let gate: AddGateBatched<F, Tr> = AddGateBatched::new(num_copy_bits, nonzero_gates.clone(), lhs.clone(), rhs.clone(), id.clone());
+        let max_gate_val = nonzero_gates.clone().into_iter().fold(
+            0, 
+            |acc, (z, _, _)| {
+                std::cmp::max(acc, z)
+            }
+        );
+        let num_copy_vars = 1 << num_copy_bits;
+        let sum_table_num_entries = (max_gate_val + 1) * num_copy_vars;
+        self.0.push(gate.get_enum());
+
+
+        let mut sum_table = vec![F::zero(); 1 << sum_table_num_entries];
+        (0..num_copy_vars).into_iter().for_each(|idx|
+            {
+                nonzero_gates.clone().into_iter().for_each(
+                    |(z_ind, x_ind, y_ind)| {
+                        let f2_val = *lhs.bookkeeping_table().get(idx + (x_ind * num_copy_vars)).unwrap_or(&F::zero());
+                        let f3_val = *rhs.bookkeeping_table().get(idx + (y_ind * num_copy_vars)).unwrap_or(&F::zero());
+                        sum_table[idx + (z_ind * num_copy_vars)] = f2_val + f3_val;
+                    }
+                );
+            });
 
         let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
         res_mle

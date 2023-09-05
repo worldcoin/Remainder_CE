@@ -215,29 +215,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         // compute the sum over all the variables of the gate function
         let beta_u = BetaTable::new((first_u_challenges.clone(), bound_lhs)).unwrap();
         let beta_v = BetaTable::new((last_v_challenges.clone(), bound_rhs)).unwrap();
-        let beta_g = self.beta_g.as_ref().unwrap();
-        let f_1_uv =
-            self.nonzero_gates
-                .clone()
-                .into_iter()
-                .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g
-                        .table
-                        .bookkeeping_table()
-                        .get(z_ind)
-                        .unwrap_or(&F::zero());
-                    let ux = *beta_u
-                        .table
-                        .bookkeeping_table()
-                        .get(x_ind)
-                        .unwrap_or(&F::zero());
-                    let vy = *beta_v
-                        .table
-                        .bookkeeping_table()
-                        .get(y_ind)
-                        .unwrap_or(&F::zero());
-                    acc + gz * ux * vy
-                });
+        let beta_g = BetaTable::new((claim.0, F::zero())).unwrap();
+        let f_1_uv = self.nonzero_gates.clone().into_iter().fold(
+            F::zero(), |acc, (z_ind, x_ind, y_ind)| {
+                let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
+                let ux = *beta_u.table.bookkeeping_table().get(x_ind).unwrap_or(&F::zero());
+                let vy = *beta_v.table.bookkeeping_table().get(y_ind).unwrap_or(&F::zero());
+                acc + gz * ux * vy
+            }
+        );
 
         // get the fully evaluated "expression"
         let fully_evaluated = f_1_uv * (bound_lhs + bound_rhs);
@@ -1152,14 +1138,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 
             // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
             // this essentially takes in the two mles bound only at the copy bits
-            let mut reduced_gate: AddGate<F, Tr> = AddGate::new(
-                self.layer_id.clone(),
-                self.nonzero_gates.clone(),
-                self.lhs.clone(),
-                self.rhs.clone(),
-                self.new_bits,
-            );
-            let next_messages = reduced_gate.prove_rounds(next_claims, transcript).unwrap();
+            let mut reduced_gate: AddGate<F, Tr> = AddGate::new(self.layer_id.clone(), self.nonzero_gates.clone(), self.lhs.clone(), self.rhs.clone(), self.new_bits);
+            self.reduced_gate = Some(reduced_gate);
+            let next_messages = self.reduced_gate.as_mut().unwrap().prove_rounds(next_claims, transcript).unwrap();
 
             // we scale the messages by the bound beta table (g2, w) where g2 is the challenge
             // from the claim on the copy bits and w is the challenge point we bind the copy bits to
@@ -1235,83 +1216,35 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         last_v_challenges.push(final_chal);
 
         // we want to grab the mutated bookkeeping tables from the "reduced_gate", this is the non-batched version
-        let ([_, lhs_reduced], _) = self
-            .reduced_gate
-            .as_ref()
-            .unwrap()
-            .phase_1_mles
-            .as_ref()
-            .unwrap()
-            .clone();
-        fix_var_gate(
-            &mut self
-                .reduced_gate
-                .as_mut()
-                .unwrap()
-                .phase_2_mles
-                .as_mut()
-                .unwrap()
-                .1,
-            num_v - 1,
-            final_chal,
-        );
-        let (_, [_, rhs_reduced]) = self
-            .reduced_gate
-            .as_ref()
-            .unwrap()
-            .phase_2_mles
-            .as_ref()
-            .unwrap()
-            .clone();
+        let ([_, lhs_reduced], _) = self.reduced_gate.as_ref().unwrap().phase_1_mles.as_ref().unwrap().clone();
+        let (_, [_, rhs_reduced]) = self.reduced_gate.as_ref().unwrap().phase_2_mles.as_ref().unwrap().clone();
 
         // since the original mles are batched, the challenges are the concat of the copy bits and the variable bound bits
-        let lhs_challenges = [
-            first_copy_challenges.clone().as_slice(),
-            first_u_challenges.clone().as_slice(),
-        ]
-        .concat();
-        let rhs_challenges = [
-            first_copy_challenges.clone().as_slice(),
-            last_v_challenges.clone().as_slice(),
-        ]
-        .concat();
+        let lhs_challenges = [first_copy_challenges.clone().as_slice(), first_u_challenges.clone().as_slice()].concat();
+        let rhs_challenges = [first_copy_challenges.clone().as_slice(), last_v_challenges.clone().as_slice()].concat();
+
+        let g2_challenges = claim.0[..self.new_bits].to_vec();
+        let g1_challenges = claim.0[self.new_bits..].to_vec();
 
         // compute the gate function bound at those variables
         let beta_u = BetaTable::new((first_u_challenges.clone(), F::zero())).unwrap();
         let beta_v = BetaTable::new((last_v_challenges.clone(), F::zero())).unwrap();
-        let beta_g = BetaTable::new((self.g1_challenges.clone().unwrap(), F::zero())).unwrap();
-        let f_1_uv =
-            self.nonzero_gates
-                .clone()
-                .into_iter()
-                .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g
-                        .table
-                        .bookkeeping_table()
-                        .get(z_ind)
-                        .unwrap_or(&F::zero());
-                    let ux = *beta_u
-                        .table
-                        .bookkeeping_table()
-                        .get(x_ind)
-                        .unwrap_or(&F::zero());
-                    let vy = *beta_v
-                        .table
-                        .bookkeeping_table()
-                        .get(y_ind)
-                        .unwrap_or(&F::zero());
-                    acc + gz * ux * vy
-                });
+        let beta_g = BetaTable::new((g1_challenges, F::zero())).unwrap();
+        let f_1_uv = self.nonzero_gates.clone().into_iter().fold(
+            F::zero(), |acc, (z_ind, x_ind, y_ind)| {
+                let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
+                let ux = *beta_u.table.bookkeeping_table().get(x_ind).unwrap_or(&F::zero());
+                let vy = *beta_v.table.bookkeeping_table().get(y_ind).unwrap_or(&F::zero());
+                acc + gz * ux * vy
+            }
+        );
 
         // check that the original mles have been bound correctly -- this is what we get from the reduced gate
         check_fully_bound(&mut [lhs_reduced.clone()], lhs_challenges.clone()).unwrap();
         check_fully_bound(&mut [rhs_reduced.clone()], rhs_challenges.clone()).unwrap();
         let f2_bound = lhs_reduced.bookkeeping_table()[0];
         let f3_bound = rhs_reduced.bookkeeping_table()[0];
-        let beta_bound = compute_beta_over_two_challenges(
-            &self.g2_challenges.clone().unwrap(),
-            &first_copy_challenges,
-        );
+        let beta_bound = compute_beta_over_two_challenges(&g2_challenges, &first_copy_challenges);
 
         // compute the final result of the bound expression
         let final_result = beta_bound * (f_1_uv * (f2_bound + f3_bound));
@@ -1360,7 +1293,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             );
         }
         let val = lhs_reduced.bookkeeping_table()[0];
-        claims.push((self.id().clone(), (fixed_mle_indices_u, val)));
+        claims.push((self.lhs.get_layer_id(), (fixed_mle_indices_u, val)));
 
         // grab the claim on the right sum
         let mut fixed_mle_indices_v: Vec<F> = vec![];
@@ -1372,7 +1305,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             );
         }
         let val = rhs_reduced.bookkeeping_table()[0];
-        claims.push((self.id().clone(), (fixed_mle_indices_v, val)));
+        claims.push((self.rhs.get_layer_id(), (fixed_mle_indices_v, val)));
 
         Ok(claims)
     }
