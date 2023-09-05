@@ -620,7 +620,7 @@ impl<F: FieldExt> LayerBuilder<F> for SignBit<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let exp = ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[0].clone());
+        let exp = ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[15].clone());
         exp
     }
 
@@ -628,7 +628,7 @@ impl<F: FieldExt> LayerBuilder<F> for SignBit<F> {
         let res = DenseMle::new_from_iter(self
             .bit_decomp_diff_mle.into_iter()
             .map(|sign_bit|
-                sign_bit.bits[0]), id, prefix_bits);
+                sign_bit.bits[15]), id, prefix_bits);
         res
     }
 }
@@ -651,7 +651,7 @@ impl<F: FieldExt> LayerBuilder<F> for OneMinusSignBit<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let exp =  ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[0].clone());
+        let exp =  ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[15].clone());
         dbg!(&exp);
         exp
     }
@@ -660,7 +660,7 @@ impl<F: FieldExt> LayerBuilder<F> for OneMinusSignBit<F> {
         let ret = DenseMle::new_from_iter(self
             .bit_decomp_diff_mle.into_iter()
             .map(|sign_bit| {
-                F::one() - sign_bit.bits[0]
+                F::one() - sign_bit.bits[15]
             }
             ), id, prefix_bits);
         dbg!(&ret);
