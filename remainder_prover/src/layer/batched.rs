@@ -171,7 +171,7 @@ fn combine_expressions_helper<F: FieldExt>(
     }
 }
 
-fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> DenseMleRef<F> {
+pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> DenseMleRef<F> {
     let old_indices = mles[0].mle_indices();
     let old_num_vars = mles[0].num_vars();
     let layer_id = mles[0].get_layer_id();

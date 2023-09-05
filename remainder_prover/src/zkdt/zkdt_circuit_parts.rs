@@ -28,60 +28,59 @@ pub struct PermutationCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+
+        let mut dummy_input_data_mle_combined = DenseMle::combine_mle_batch(self.dummy_input_data_mle_vec.clone());
+        let mut dummy_permuted_input_data_mle_combined = DenseMle::combine_mle_batch(self.dummy_permuted_input_data_mle_vec.clone());
+
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            Box::new(&mut dummy_input_data_mle_combined),
+            Box::new(&mut dummy_permuted_input_data_mle_combined),
+        ];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         let batch_bits = log2(self.dummy_input_data_mle_vec.len()) as usize;
     
     
-        let input_packing_builder = BatchedLayer::new(self.dummy_input_data_mle_vec.iter().map(|input_data_mle| {
-            let mut input_data_mle = input_data_mle.clone();
-            input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
-            InputPackingBuilder::new(
-                input_data_mle,
-                self.r,
-                self.r_packing
-            )
-        }).collect_vec());
+        let input_packing_builder = BatchedLayer::new(
+            self.dummy_input_data_mle_vec.iter().map(
+                |input_data_mle| {
+                    let mut input_data_mle = input_data_mle.clone();
+                    input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                    InputPackingBuilder::new(
+                        input_data_mle,
+                        self.r,
+                        self.r_packing
+                    )
+                }).collect_vec());
 
-        let input_permuted_packing_builder = BatchedLayer::new(self.dummy_permuted_input_data_mle_vec.iter().map(|input_data_mle| {
-            let mut input_data_mle = input_data_mle.clone();
-            input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
-            InputPackingBuilder::new(
-                input_data_mle,
-                self.r,
-                self.r_packing
-            )
-        }).collect_vec());
+        let input_permuted_packing_builder = BatchedLayer::new(
+            self.dummy_permuted_input_data_mle_vec.iter().map(
+                |input_data_mle| {
+                    let mut input_data_mle = input_data_mle.clone();
+                    input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                    InputPackingBuilder::new(
+                        input_data_mle,
+                        self.r,
+                        self.r_packing
+                    )
+                }).collect_vec());
 
         let packing_builders = input_packing_builder.concat(input_permuted_packing_builder);
-        // let mut expression: crate::expression::ExpressionStandard<F> = packing_builders.build_expression();
-        // let num_vars = expression.index_mle_indices(0);
-        // let degree = get_round_degree(&expression, 0);    
-        // let (_, next) = packing_builders.next_layer(LayerId::Layer(0), None);
-
-        // let eval = {
-        //     let mut beta = BetaTable::new((vec![F::zero(), F::one(), F::zero(), F::zero(), F::zero(), F::zero(), F::zero(), F::zero(), F::zero()], F::zero())).unwrap();
-        //     beta.table.index_mle_indices(0);
-        //     let eval = compute_sumcheck_message(&expression, 0, degree, &beta).unwrap();
-        //     let Evals(evals) = eval;
-        //     evals[0] + evals[1]
-        // };
-
-        // let next = next.mle_ref();
-        // let val = next.bookkeeping_table()[1];
-        // dbg!(eval, val);
-
-        // assert_eq!(eval, val);
 
         let (mut input_packed, mut input_permuted_packed) = layers.add_gkr(packing_builders);
 
         for _ in 0..log2(self.input_len) {
-            let prod_builder = BatchedLayer::new(input_packed.into_iter().map(|input_packed| SplitProductBuilder::new(
-                input_packed
-            )).collect());
-            let prod_permuted_builder = BatchedLayer::new(input_permuted_packed.into_iter().map(|input_permuted_packed| SplitProductBuilder::new(
-                input_permuted_packed
-            )).collect());
+            let prod_builder = BatchedLayer::new(
+                input_packed.into_iter().map(
+                    |input_packed| SplitProductBuilder::new(input_packed)
+                ).collect());
+            let prod_permuted_builder = BatchedLayer::new(
+                input_permuted_packed.into_iter().map(
+                    |input_permuted_packed| SplitProductBuilder::new(input_permuted_packed)
+                ).collect());
             let split_product_builders = prod_builder.concat(prod_permuted_builder);
             (input_packed, input_permuted_packed) = layers.add_gkr(split_product_builders);
         }
@@ -93,9 +92,13 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
 
         let difference_mle = layers.add_gkr(difference_builder);
 
-        let difference_mle = combine_zero_mle_ref(difference_mle);
+        let circuit_output = combine_zero_mle_ref(difference_mle);
 
-        todo!()
+        Witness {
+            layers,
+            output_layers: vec![circuit_output.get_enum()],
+            input_layers: vec![input_layer.to_enum()],
+        }
     }
 }
 
