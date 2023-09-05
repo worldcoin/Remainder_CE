@@ -325,6 +325,34 @@ impl<F: FieldExt> SquaringBuilder<F> {
     }
 }
 
+/// takes a densemleref that is all zeros and returns a zeromleref as the successor 
+pub struct ZeroBuilder<F: FieldExt> {
+    mle: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
+    type Successor = ZeroMleRef<F>;
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.mle.mle_ref())
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+
+        let mle_num_vars = self.mle.num_iterated_vars();
+        ZeroMleRef::new(mle_num_vars, prefix_bits, id)
+    }
+}
+
+impl<F: FieldExt> ZeroBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        mle: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            mle
+        }
+    }
+}
+
 /// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
 pub struct BitExponentiationBuilder<F: FieldExt> {
     bin_decomp: DenseMle<F, BinDecomp16Bit<F>>,
