@@ -5,6 +5,7 @@ pub mod combine_layers;
 pub mod input_layer;
 #[cfg(test)]
 mod tests;
+pub mod test_helper_circuits;
 
 use std::collections::HashMap;
 
@@ -294,9 +295,15 @@ pub trait GKRCircuit<F: FieldExt> {
                         .unwrap();
                 }
 
+                // --- If it's an empty layer, skip the claim aggregation ---
+                let empty_layer = layer_claims.iter().fold(true, |acc, claim| {
+                    acc && claim.0.len() == 0
+                });
+
                 // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
                 // --- claim aggregation protocol. We ONLY aggregate if need be! ---
-                let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1 {
+                let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1 && !empty_layer {
+
                     // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
                     let wlx_evaluations = compute_claim_wlx(&layer_claims, &layer).unwrap();
                     let relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
@@ -532,9 +539,9 @@ pub trait GKRCircuit<F: FieldExt> {
             // --- Perform the claim aggregation verification, first sampling `r` ---
             // --- Note that we ONLY do this if need be! ---
             let mut prev_claim = layer_claims[0].clone();
+
             if layer_claims.len() > 1 {
                 // --- Perform the claim aggregation verification, first sampling `r` ---
-
                 let all_wlx_evaluations: Vec<F> = layer_claims
                     .into_iter()
                     .map(|(_, val)| *val)

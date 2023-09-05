@@ -58,7 +58,8 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
             debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
-
+            dbg!(&eval);
+            dbg!(&claim);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
             (vec![], mle_ref.bookkeeping_table[0])

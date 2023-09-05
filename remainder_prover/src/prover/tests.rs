@@ -9,7 +9,7 @@ use tracing::Level;
 
 use crate::{
     expression::ExpressionStandard,
-    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId},
+    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer},
     mle::{
         dense::{DenseMle, Tuple2},
         mle_enum::MleEnum,
@@ -39,7 +39,7 @@ use super::{
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer, InputLayer,
     },
-    GKRCircuit, GKRError, Layers, Witness,
+    GKRCircuit, GKRError, Layers, Witness, test_helper_circuits::{EmptyLayerBuilder, EmptyLayerSubBuilder, EmptyLayerAddBuilder},
 };
 
 fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
@@ -716,6 +716,12 @@ fn test_combine_circuit() {
 /// Circuit which subtracts its two halves, except for the part where one half is
 /// comprised of a pre-committed Ligero input layer and the other half is comprised
 /// of a Ligero input layer which is committed to on the spot.
+/// 
+/// The circuit itself produces independent claims on its two input MLEs, and is basically
+/// two indpendent circuits via the fact that it basically subtracts each input MLE
+/// from itself and calls that the output layer. In particular, this allows us to test
+/// whether Halo2 generates the same VK given that we have the same pre-committed Ligero layer
+/// but a DIFFERENT live-committed Ligero layer
 struct SimplePrecommitCircuit<F: FieldExt> {
     mle: DenseMle<F, F>,
     mle2: DenseMle<F, F>,
@@ -732,7 +738,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         // --- The non-precommitted input layer MLE is just the second ---
         let live_committed_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle2)];
         let live_committed_input_layer_builder =
-            InputLayerBuilder::new(live_committed_input_mles, None, LayerId::Input(0));
+            InputLayerBuilder::new(live_committed_input_mles, None, LayerId::Input(1));
 
         let mle_clone = self.mle.clone();
         let mle2_clone = self.mle2.clone();
@@ -745,24 +751,35 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
             mle_clone.clone(),
             // --- The expression is a simple diff between the first and second halves ---
             |_mle| {
-                let first_half = Box::new(ExpressionStandard::Mle(mle_clone.mle_ref()));
-                let second_half = Box::new(ExpressionStandard::Mle(mle2_clone.mle_ref()));
-                let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
-                ExpressionStandard::Sum(first_half, negated_second_half)
+                let first_half = ExpressionStandard::Mle(_mle.mle_ref());
+                let second_half = ExpressionStandard::Mle(_mle.mle_ref());
+                first_half - second_half
             },
             // --- The output SHOULD be all zeros ---
             |_mle, layer_id, prefix_bits| {
-                let num_vars = max(
-                    mle_clone.mle_ref().num_vars(),
-                    mle2_clone.mle_ref().num_vars(),
-                );
-                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+                ZeroMleRef::new(mle_clone.mle_ref().num_vars(), prefix_bits, layer_id)
+            },
+        );
+
+        // --- Similarly as the above, but with the circuit's second MLE ---
+        let diff_builder_2 = from_mle(
+            mle2_clone.clone(),
+            // --- The expression is a simple diff between the first and second halves ---
+            |_mle| {
+                let first_half = ExpressionStandard::Mle(_mle.mle_ref());
+                let second_half = ExpressionStandard::Mle(_mle.mle_ref());
+                first_half - second_half
+            },
+            // --- The output SHOULD be all zeros ---
+            |_mle, layer_id, prefix_bits| {
+                ZeroMleRef::new(mle2_clone.mle_ref().num_vars(), prefix_bits, layer_id)
             },
         );
 
         // --- Stacks the two aforementioned layers together into a single layer ---
         // --- Then adds them to the overall circuit ---
-        let first_layer_output = layers.add_gkr(diff_builder);
+        let first_layer_output_1 = layers.add_gkr(diff_builder);
+        let first_layer_output_2 = layers.add_gkr(diff_builder_2);
 
         // --- We should have two input layers: a single pre-committed and a single regular Ligero layer ---
         let rho_inv = 4;
@@ -779,7 +796,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
 
         Witness {
             layers,
-            output_layers: vec![first_layer_output.get_enum()],
+            output_layers: vec![first_layer_output_1.get_enum(), first_layer_output_2.get_enum()],
             input_layers: vec![
                 precommitted_input_layer.to_enum(),
                 live_committed_input_layer.to_enum(),
@@ -797,11 +814,79 @@ fn test_gkr_circuit_with_precommit() {
     let items = repeat_with(|| Fr::from(rng.gen::<u64>()))
         .take(size)
         .collect_vec();
+    let items2 = repeat_with(|| Fr::from(rng.gen::<u64>()))
+        .take(size)
+        .collect_vec();
 
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items.clone(), LayerId::Input(0), None);
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items.clone(), LayerId::Input(0), None);
+    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items2, LayerId::Input(1), None);
 
     let mut circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
 
     test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit.json")));
+}
+
+/// Circuit which has an empty layer as an intermediate layer with multiple claims going both
+/// to and from it, to thoroughly test the expected behavior of the `EmptyLayer`.
+/// 
+/// Note that all three MLEs have size 2! The structure of the circuit is as follows:
+/// * The two empty layer src MLEs' elements are each multiplied together and then added between
+/// the two to yield a single empty layer.
+/// * Next, that empty layer's MLE is subtracted from the first MLE
+/// * Finally, that empty layer's MLE is added to the second MLE
+struct EmptyLayerTestCircuit<F: FieldExt> {
+    mle: DenseMle<F, F>,
+    mle2: DenseMle<F, F>,
+    empty_layer_src_mle: DenseMle<F, F>,
+    other_empty_layer_src_mle: DenseMle<F, F>
+}
+impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        // --- We're not testing commitments here; just use PublicInputLayer ---
+        let input_layer =
+            InputLayerBuilder::new(vec![
+                Box::new(&mut self.mle),
+                Box::new(&mut self.mle2),
+                Box::new(&mut self.empty_layer_src_mle),
+                Box::new(&mut self.other_empty_layer_src_mle)
+            ], None, LayerId::Input(0)).to_input_layer::<PublicInputLayer<F, _>>();
+
+        // --- Create Layers to be added to ---
+        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        // --- Creates empty layer and adds to circuit ---
+        let empty_layer_builder = EmptyLayerBuilder::new(self.empty_layer_src_mle.clone(), self.other_empty_layer_src_mle.clone());
+        let empty_layer_result = layers.add::<_, EmptyLayer<F, Self::Transcript>>(empty_layer_builder);
+
+        // --- Subtracts from `self.mle` ---
+        let sub_builder = EmptyLayerSubBuilder::new(empty_layer_result.clone(), self.mle.clone());
+        let sub_result = layers.add_gkr(sub_builder);
+
+        // --- Adds to `self.mle2` ---
+        let add_builder = EmptyLayerAddBuilder::new(empty_layer_result, self.mle2.clone());
+        let add_result = layers.add_gkr(add_builder);
+
+        Witness {
+            layers,
+            output_layers: vec![sub_result.get_enum(), add_result.get_enum()],
+            input_layers: vec![
+                input_layer.to_enum(),
+            ],
+        }
+    }
+}
+
+#[test]
+fn test_empty_layer_circuit() {
+
+    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(14), Fr::from(14)], LayerId::Input(0), None);
+    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(14).neg(), Fr::from(14).neg()], LayerId::Input(0), None);
+    let empty_layer_src_mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(1), Fr::from(2)], LayerId::Input(0), None);
+    let other_empty_layer_src_mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(4)], LayerId::Input(0), None);
+
+    let circuit: EmptyLayerTestCircuit<Fr> = EmptyLayerTestCircuit { mle, mle2, empty_layer_src_mle, other_empty_layer_src_mle };
+
+    test_circuit(circuit, None);
 }
