@@ -213,13 +213,18 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         &self,
         observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
     ) -> Result<(), E> {
+        let result = observer_fn(self)?;
         match self {
-            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) => observer_fn(self),
-            ExpressionStandard::Negated(exp) => observer_fn(exp),
-            ExpressionStandard::Product(_) => observer_fn(self),
-            ExpressionStandard::Scaled(exp, _) => exp.traverse(observer_fn),
+            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Product(_) => {
+                Ok(result)
+            },
+            ExpressionStandard::Negated(exp) => {
+                exp.traverse(observer_fn)
+            },
+            ExpressionStandard::Scaled(exp, _) => {
+                exp.traverse(observer_fn)
+            }
             ExpressionStandard::Selector(_, lhs, rhs) => {
-                observer_fn(self)?;
                 lhs.traverse(observer_fn)?;
                 rhs.traverse(observer_fn)
             }
@@ -592,15 +597,21 @@ impl<F: FieldExt> ExpressionStandard<F> {
         &mut self,
         observer_fn: &mut impl FnMut(&mut ExpressionStandard<F>) -> Result<(), E>,
     ) -> Result<(), E> {
+        // dbg!(&self);
+        let result = observer_fn(self)?;
         match self {
-            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) => observer_fn(self),
-            ExpressionStandard::Negated(exp) => observer_fn(exp),
-            ExpressionStandard::Product(_) => observer_fn(self),
-            ExpressionStandard::Scaled(exp, _) => exp.traverse_mut(observer_fn),
+            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Product(_) => {
+                Ok(result)
+            },
+            ExpressionStandard::Negated(exp) => {
+                exp.traverse_mut(observer_fn)
+            },
+            ExpressionStandard::Scaled(exp, _) => {
+                exp.traverse_mut(observer_fn)
+            }
             ExpressionStandard::Selector(_, lhs, rhs) => {
                 lhs.traverse_mut(observer_fn)?;
-                rhs.traverse_mut(observer_fn)?;
-                observer_fn(self)
+                rhs.traverse_mut(observer_fn)
             }
             ExpressionStandard::Sum(lhs, rhs) => {
                 lhs.traverse_mut(observer_fn)?;

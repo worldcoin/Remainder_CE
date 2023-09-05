@@ -4,7 +4,7 @@ pub mod combine_layers;
 /// For the input layer to the GKR circuit
 pub mod input_layer;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 pub mod test_helper_circuits;
 
 use std::collections::HashMap;
