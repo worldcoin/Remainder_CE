@@ -728,24 +728,24 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompCheckerBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
 
         // --- Collect b_s ---
-        let sign_bit_iter = self.diff_signed_bit_decomp_mle.into_iter().map(
-            |bin_decomp| {
-                bin_decomp.bits[bin_decomp.bits.len() - 1]
-            }
-        );
+        // let sign_bit_iter = self.diff_signed_bit_decomp_mle.into_iter().map(
+        //     |bin_decomp| {
+        //         bin_decomp.bits[bin_decomp.bits.len() - 1]
+        //     }
+        // );
 
-        let diff_signed_bit_decomp_mle_sign_ref = self.diff_signed_bit_decomp_mle.mle_bit_refs()[self.diff_signed_bit_decomp_mle.mle_bit_refs().len() - 1].clone();
-        let sign_bit_iter = diff_signed_bit_decomp_mle_sign_ref.bookkeeping_table().iter();
+        // let diff_signed_bit_decomp_mle_sign_ref = self.diff_signed_bit_decomp_mle.mle_bit_refs()[self.diff_signed_bit_decomp_mle.mle_bit_refs().len() - 1].clone();
+        // let sign_bit_iter = diff_signed_bit_decomp_mle_sign_ref.bookkeeping_table().iter();
 
-        // --- Compute the formula from above ---
-        let ret_mle_iter = self.positive_recomp_mle.into_iter().zip(sign_bit_iter.zip(self.input_path_diff_mle.into_iter())).map(
-            |(positive_recomp, (sign_bit, diff))| {
-                positive_recomp - diff + F::from(2) * sign_bit * diff
-            }
-        );
+        // // --- Compute the formula from above ---
+        // let ret_mle_iter = self.positive_recomp_mle.into_iter().zip(sign_bit_iter.zip(self.input_path_diff_mle.into_iter())).map(
+        //     |(positive_recomp, (sign_bit, diff))| {
+        //         positive_recomp - diff + F::from(2) * sign_bit * diff
+        //     }
+        // );
 
-        let actual_result = DenseMle::new_from_iter(ret_mle_iter, id, prefix_bits.clone());
-        dbg!(actual_result);
+        // let actual_result = DenseMle::new_from_iter(ret_mle_iter, id, prefix_bits.clone());
+        // dbg!(actual_result);
 
         ZeroMleRef::new(self.positive_recomp_mle.num_iterated_vars(), prefix_bits, id)
     }
