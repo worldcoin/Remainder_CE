@@ -23,6 +23,8 @@ pub struct PermutationCircuit<F: FieldExt> {
     pub num_inputs: usize
 }
 
+
+
 impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {

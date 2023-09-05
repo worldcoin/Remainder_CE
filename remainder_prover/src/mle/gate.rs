@@ -170,7 +170,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         // compute the sum over all the variables of the gate function
         let beta_u = BetaTable::new((first_u_challenges.clone(), bound_lhs)).unwrap();
         let beta_v = BetaTable::new((last_v_challenges.clone(), bound_rhs)).unwrap();
-        let beta_g = self.beta_g.as_ref().unwrap();
+        let beta_g = BetaTable::new((claim.0, F::zero())).unwrap();
         let f_1_uv = self.nonzero_gates.clone().into_iter().fold(
             F::zero(), |acc, (z_ind, x_ind, y_ind)| {
                 let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
@@ -1082,10 +1082,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         let lhs_challenges = [first_copy_challenges.clone().as_slice(), first_u_challenges.clone().as_slice()].concat();
         let rhs_challenges = [first_copy_challenges.clone().as_slice(), last_v_challenges.clone().as_slice()].concat();
 
+        let g2_challenges = claim.0[..self.new_bits].to_vec();
+        let g1_challenges = claim.0[self.new_bits..].to_vec();
+
         // compute the gate function bound at those variables
         let beta_u = BetaTable::new((first_u_challenges.clone(), F::zero())).unwrap();
         let beta_v = BetaTable::new((last_v_challenges.clone(), F::zero())).unwrap();
-        let beta_g = BetaTable::new((self.g1_challenges.clone().unwrap(), F::zero())).unwrap();
+        let beta_g = BetaTable::new((g1_challenges, F::zero())).unwrap();
         let f_1_uv = self.nonzero_gates.clone().into_iter().fold(
             F::zero(), |acc, (z_ind, x_ind, y_ind)| {
                 let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
@@ -1100,7 +1103,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         check_fully_bound(&mut [rhs_reduced.clone()], rhs_challenges.clone()).unwrap();
         let f2_bound = lhs_reduced.bookkeeping_table()[0];
         let f3_bound = rhs_reduced.bookkeeping_table()[0];
-        let beta_bound = compute_beta_over_two_challenges(&self.g2_challenges.clone().unwrap(), &first_copy_challenges);
+        let beta_bound = compute_beta_over_two_challenges(&g2_challenges, &first_copy_challenges);
 
         // compute the final result of the bound expression
         let final_result = beta_bound * (f_1_uv * (f2_bound + f3_bound));

@@ -231,6 +231,63 @@ fn test_gkr_simplest_circuit() {
     // panic!();
 }
 
+/// Circuit which just subtracts its two halves! No input-output layer needed.
+struct SimplestBatchedCircuit<F: FieldExt> {
+    batched_mle: Vec<DenseMle<F, Tuple2<F>>>,
+}
+impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
+
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+
+        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.batched_mle[0])];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let mle_clone = self.batched_mle[0].clone();
+
+        // --- Create Layers to be added to ---
+        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+
+        // --- Create a SimpleLayer from the first `mle` within the circuit ---
+        let diff_builder = from_mle(
+            mle_clone,
+            // --- The expression is a simple diff between the first and second halves ---
+            |mle| {
+                let first_half = Box::new(ExpressionStandard::Mle(mle.first()));
+                let second_half = Box::new(ExpressionStandard::Mle(mle.second()));
+                let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
+                ExpressionStandard::Sum(first_half, negated_second_half)
+            },
+            // --- The witness generation simply zips the two halves and subtracts them ---
+            |mle, layer_id, prefix_bits| {
+                // DenseMle::new_from_iter(
+                //     mle.into_iter()
+                //         .map(|Tuple2((first, second))| first - second),
+                //     layer_id,
+                //     prefix_bits,
+                // )
+                // --- The output SHOULD be all zeros ---
+                let num_vars = max(mle.first().num_vars(), mle.second().num_vars());
+                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+            },
+        );
+
+        // --- Stacks the two aforementioned layers together into a single layer ---
+        // --- Then adds them to the overall circuit ---
+        let first_layer_output = layers.add_gkr(diff_builder);
+
+        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+
+        // (layers, vec![first_layer_output.get_enum()], input_layer)
+        Witness { layers, output_layers: vec![first_layer_output.get_enum()], input_layers: vec![input_layer.to_enum()] };
+        todo!()
+    }
+}
+
+
+
 ///This circuit checks how RandomLayer works by multiplying the MLE by a constant, taking in that result as advice in a publiclayer and doing an equality check on the result of the mult and the advice
 struct RandomCircuit<F: FieldExt> {
     mle: DenseMle<F, F>
