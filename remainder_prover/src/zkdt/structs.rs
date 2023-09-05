@@ -279,6 +279,44 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
             indexed: false,
         }
     }
+
+    /// for input layer stuff
+    /// TODO!(ende): refactor
+    pub(crate) fn combine_mle_batch(decision_mle_batch: Vec<DenseMle<F, DecisionNode<F>>>) -> DenseMle<F, F> {
+        
+        let batched_bits = log2(decision_mle_batch.len());
+
+        let batch_node_id_mle_ref = decision_mle_batch
+            .clone().into_iter().map(
+                |x| x.node_id()
+            ).collect_vec();
+        let combined_node_id_mle_ref = combine_mles(batch_node_id_mle_ref, batched_bits as usize);
+    
+        let batch_attr_id_mle_ref = decision_mle_batch
+            .clone().into_iter().map(
+                |x| x.attr_id()
+            ).collect_vec();
+        let combined_attr_id_mle_ref = combine_mles(batch_attr_id_mle_ref, batched_bits as usize);
+
+        let batch_threshold_mle_ref = decision_mle_batch
+            .into_iter().map(
+                |x| x.threshold()
+            ).collect_vec();
+        let combined_threshold_mle_ref = combine_mles(batch_threshold_mle_ref, batched_bits as usize);
+    
+        let combined_decision= vec![
+            combined_node_id_mle_ref,
+            combined_attr_id_mle_ref,
+            combined_threshold_mle_ref
+        ];
+        
+        let combined_mle_input_attribute = combine_mle_refs(
+            combined_decision
+        );
+
+        combined_mle_input_attribute
+    }
+
 }
 
 // --- Leaf node ---
