@@ -991,7 +991,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
             // this essentially takes in the two mles bound only at the copy bits
             let mut reduced_gate: AddGate<F, Tr> = AddGate::new(self.layer_id.clone(), self.nonzero_gates.clone(), self.lhs.clone(), self.rhs.clone(), self.new_bits);
-            let next_messages = reduced_gate.prove_rounds(next_claims, transcript).unwrap();
+            self.reduced_gate = Some(reduced_gate);
+            let next_messages = self.reduced_gate.as_mut().unwrap().prove_rounds(next_claims, transcript).unwrap();
 
             // we scale the messages by the bound beta table (g2, w) where g2 is the challenge
             // from the claim on the copy bits and w is the challenge point we bind the copy bits to
@@ -1075,7 +1076,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 
         // we want to grab the mutated bookkeeping tables from the "reduced_gate", this is the non-batched version
         let ([_, lhs_reduced], _) = self.reduced_gate.as_ref().unwrap().phase_1_mles.as_ref().unwrap().clone();
-        fix_var_gate(&mut self.reduced_gate.as_mut().unwrap().phase_2_mles.as_mut().unwrap().1, num_v - 1, final_chal);
         let (_, [_, rhs_reduced]) = self.reduced_gate.as_ref().unwrap().phase_2_mles.as_ref().unwrap().clone();
 
         // since the original mles are batched, the challenges are the concat of the copy bits and the variable bound bits
@@ -1131,7 +1131,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             fixed_mle_indices_u.push(index.val().ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?);
         }
         let val = lhs_reduced.bookkeeping_table()[0];
-        claims.push((self.id().clone(), (fixed_mle_indices_u, val)));
+        claims.push((self.lhs.get_layer_id(), (fixed_mle_indices_u, val)));
 
         // grab the claim on the right sum
         let mut fixed_mle_indices_v: Vec<F> = vec![];
@@ -1139,7 +1139,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             fixed_mle_indices_v.push(index.val().ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?);
         }
         let val = rhs_reduced.bookkeeping_table()[0];
-        claims.push((self.id().clone(), (fixed_mle_indices_v, val)));
+        claims.push((self.rhs.get_layer_id(), (fixed_mle_indices_v, val)));
 
         Ok(claims)
     }
