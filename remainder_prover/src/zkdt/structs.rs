@@ -7,9 +7,10 @@ use std::{
 use crate::{
     mle::{
         dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
-        Mle, MleAble, MleIndex,
-    },
+        Mle, MleAble, MleIndex, MleRef,
+    }, layer::{batched::combine_mles, LayerId},
 };
+use rayon::vec;
 use remainder_shared_types::FieldExt;
 use ark_std::log2;
 // use derive_more::{From, Into};
@@ -72,6 +73,48 @@ pub struct InputAttribute<F> {
 //     pub attr_id: F,
 //     // pub attr_val: F,
 // }
+
+/// for input layer stuff
+/// TODO!(ende): refactor
+/// Takes the individual bookkeeping tables from the MleRefs within an MLE
+/// and merges them with padding, using a little-endian representation
+/// merge strategy. Assumes that ALL MleRefs are the same size.
+pub(crate) fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
+
+    let num_fields = items.len();
+
+    // --- All the items within should be the same size ---
+    let max_size = items
+        .iter()
+        .map(|mle_ref| mle_ref.bookkeeping_table.len())
+        .max().unwrap();
+
+    let part_size = 1 << log2(max_size);
+    let part_count = 2_u32.pow(log2(num_fields)) as usize;
+
+    // --- Number of "part" slots which need to filled with padding ---
+    let padding_count = part_count - num_fields;
+    let total_size = part_size * part_count;
+    let total_padding: usize = total_size - max_size * part_count;
+
+    // items.into_iter().cloned().map(|mut items| {
+    //     let padding = part_size - items.len();
+    //     items.extend(repeat_n(F::zero(), padding));
+    //     items
+    // }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
+
+    let result = (0..max_size)
+        .flat_map(|index| {
+            items
+                .iter()
+                .map(move |item| item.bookkeeping_table().get(index).unwrap_or(&F::zero()).clone())
+                .chain(repeat_n(F::zero(), padding_count))
+        })
+        .chain(repeat_n(F::zero(), total_padding))
+        .collect_vec();
+
+    DenseMle::new_from_raw(result, LayerId::Input(0), None)
+}
 
 // Personally for the above, just give me a Vec<u32> and that should be great!
 impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
@@ -236,6 +279,44 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
             indexed: false,
         }
     }
+
+    /// for input layer stuff
+    /// TODO!(ende): refactor
+    pub(crate) fn combine_mle_batch(decision_mle_batch: Vec<DenseMle<F, DecisionNode<F>>>) -> DenseMle<F, F> {
+        
+        let batched_bits = log2(decision_mle_batch.len());
+
+        let batch_node_id_mle_ref = decision_mle_batch
+            .clone().into_iter().map(
+                |x| x.node_id()
+            ).collect_vec();
+        let combined_node_id_mle_ref = combine_mles(batch_node_id_mle_ref, batched_bits as usize);
+    
+        let batch_attr_id_mle_ref = decision_mle_batch
+            .clone().into_iter().map(
+                |x| x.attr_id()
+            ).collect_vec();
+        let combined_attr_id_mle_ref = combine_mles(batch_attr_id_mle_ref, batched_bits as usize);
+
+        let batch_threshold_mle_ref = decision_mle_batch
+            .into_iter().map(
+                |x| x.threshold()
+            ).collect_vec();
+        let combined_threshold_mle_ref = combine_mles(batch_threshold_mle_ref, batched_bits as usize);
+    
+        let combined_decision= vec![
+            combined_node_id_mle_ref,
+            combined_attr_id_mle_ref,
+            combined_threshold_mle_ref
+        ];
+        
+        let combined_mle_input_attribute = combine_mle_refs(
+            combined_decision
+        );
+
+        combined_mle_input_attribute
+    }
+
 }
 
 // --- Leaf node ---
@@ -505,6 +586,37 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
+    }
+
+    /// for input layer stuff
+    /// TODO!(ende): refactor
+    pub(crate) fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, InputAttribute<F>>>) -> DenseMle<F, F> {
+        
+        let batched_bits = log2(input_mle_batch.len());
+
+        let batch_attr_id_mle_ref = input_mle_batch
+            .clone().into_iter().map(
+                |x| x.attr_id(None)
+            ).collect_vec();
+        let combined_attr_id_mle_ref = combine_mles(batch_attr_id_mle_ref, batched_bits as usize);
+    
+        let batch_attr_val_mle_ref = input_mle_batch
+            .into_iter().map(
+                |x| x.attr_val(None)
+            ).collect_vec();
+    
+        let combined_attr_val_mle_ref = combine_mles(batch_attr_val_mle_ref, batched_bits as usize);
+    
+        let combined_input_attribute= vec![
+            combined_attr_id_mle_ref,
+            combined_attr_val_mle_ref
+        ];
+        
+        let combined_mle_input_attribute = combine_mle_refs(
+            combined_input_attribute
+        );
+
+        combined_mle_input_attribute
     }
 }
 
