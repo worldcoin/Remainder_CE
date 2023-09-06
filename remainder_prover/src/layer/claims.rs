@@ -208,7 +208,7 @@ type LayersClaim<F: FieldExt> = Vec<Claims<F>>;
 pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &Claims<F>,
     layer: &impl Layer<F>,
-    rstar: F,
+    r_star: F,
 ) -> Result<(Claim<F>, Vec<F>), ClaimError> {
     let num_claims = claims.get_num_claims();
     let num_indices = claims.get_num_vars();
