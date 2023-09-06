@@ -415,6 +415,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.bookkeeping_table = new.collect();
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
+            dbg!(&self);
             Some((
                 self.mle_indices
                     .iter()
