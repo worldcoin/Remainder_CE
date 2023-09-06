@@ -452,6 +452,8 @@ pub enum GateError {
 pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     pub layer_id: LayerId,
     pub nonzero_gates: Vec<(usize, usize, usize)>,
+    pub lhs_num_vars: usize,
+    pub rhs_num_vars: usize,
     pub lhs: DenseMleRef<F>,
     pub rhs: DenseMleRef<F>,
     beta_g: Option<BetaTable<F>>,
@@ -471,14 +473,16 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
         num_copy_bits: usize,
     ) -> AddGate<F, Tr> {
         AddGate {
-            layer_id: layer_id,
-            nonzero_gates: nonzero_gates,
-            lhs: lhs,
-            rhs: rhs,
+            layer_id,
+            nonzero_gates,
+            lhs_num_vars: lhs.num_vars(),
+            rhs_num_vars: rhs.num_vars(),
+            lhs,
+            rhs,
             beta_g: None,
             phase_1_mles: None,
             phase_2_mles: None,
-            num_copy_bits: num_copy_bits,
+            num_copy_bits,
             _marker: PhantomData,
         }
     }
@@ -1374,7 +1378,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 /// * `new_bits` - number of bits in p2
 /// * `nonzero_gates` - Same as `AddGate` (non-batched)
 /// * `lhs` - MLEs on the left side to be added.
-/// * `rhs` - MLEs on the right side to be added
+/// * `rhs` - MLEs on the right side to be added.
 /// * `num_vars_l` - Length of `x` (as in f_2(x))
 /// * `num_vars_r` - Length of `y` (as in f_3(y))
 /// * `copy_phase_mles` - List of MLEs for when we're binding the vars representing the batched bits
