@@ -285,16 +285,21 @@ pub trait GKRCircuit<F: FieldExt> {
             let mut claim = None;
             let bits = output.index_mle_indices(0);
 
-            // --- Evaluate each output MLE at a random challenge point ---
-            for bit in 0..bits {
-                let challenge = transcript
-                    .get_challenge("Setting Output Layer Claim")
-                    .unwrap();
-                claim = output.fix_variable(bit, challenge);
-            }
+            let claim = if bits != 0 {
+                // --- Evaluate each output MLE at a random challenge point ---
+                for bit in 0..bits {
+                    let challenge = transcript
+                        .get_challenge("Setting Output Layer Claim")
+                        .unwrap();
+                    claim = output.fix_variable(bit, challenge);
+                }
+    
+                // --- Gather the claim and layer ID ---
+                claim.unwrap()  
+            } else {
+                (vec![], output.bookkeeping_table()[0])
+            };
 
-            // --- Gather the claim and layer ID ---
-            let claim = claim.unwrap();
             let layer_id = output.get_layer_id();
 
             // --- Add the claim to either the set of current claims we're proving ---
@@ -403,6 +408,9 @@ pub trait GKRCircuit<F: FieldExt> {
                 let layer_claims = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+
+                // dbg!("prover claims");
+                // dbg!(&layer_claims);
 
                 // --- Add the claimed values to the FS transcript ---
                 for claim in layer_claims {
@@ -575,6 +583,7 @@ pub trait GKRCircuit<F: FieldExt> {
             // --- Note that we ONLY do this if need be! ---
             let mut prev_claim = layer_claims[0].clone();
 
+            // dbg!(&layer_claims);
             if layer_claims.len() > 1 {
                 // --- Perform the claim aggregation verification, first sampling `r` ---
                 let all_wlx_evaluations: Vec<F> = layer_claims
@@ -626,6 +635,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 .get(&input_layer_id)
                 .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
 
+            // dbg!(&input_layer_claims);
+
             // --- Add the claimed values to the FS transcript ---
             for claim in input_layer_claims {
                 transcript
@@ -645,6 +656,8 @@ pub trait GKRCircuit<F: FieldExt> {
                     .map(|(_, val)| *val)
                     .chain(input_layer.input_layer_wlx_evaluations.clone().into_iter())
                     .collect();
+
+                // dbg!(&all_input_wlx_evaluations);
 
                 // --- Add the aggregation step to the transcript ---
                 transcript

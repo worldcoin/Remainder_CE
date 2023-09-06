@@ -286,7 +286,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         
         let batched_bits = log2(decision_mle_batch.len());
 
-        let input_mle_batch_ref_combined = decision_mle_batch
+        let decision_mle_batch_ref_combined = decision_mle_batch
             .clone()
             .into_iter().map(
                 |x| {
@@ -296,9 +296,9 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 }
             ).collect_vec();
 
-        let input_mle_batch_ref_combined_ref =  combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
+        let decision_mle_batch_ref_combined_ref =  combine_mles(decision_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(input_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(decision_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
     }
 
 }
@@ -425,28 +425,20 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
         
         let batched_bits = log2(leaf_mle_batch.len());
 
-        let batch_node_id_mle_ref = leaf_mle_batch
-            .clone().into_iter().map(
-                |x| x.node_id()
+        let leaf_mle_batch_ref_combined = leaf_mle_batch
+            .clone()
+            .into_iter().map(
+                |x| {
+                    combine_mle_refs(
+                        vec![x.node_id(), x.node_val()]
+                    ).mle_ref()
+                }
             ).collect_vec();
-        let combined_node_id_mle_ref = combine_mles(batch_node_id_mle_ref, batched_bits as usize);
-    
-        let batch_node_val_mle_ref = leaf_mle_batch
-            .clone().into_iter().map(
-                |x| x.node_val()
-            ).collect_vec();
-        let combined_node_val_mle_ref = combine_mles(batch_node_val_mle_ref, batched_bits as usize);
-    
-        let combined_decision= vec![
-            combined_node_id_mle_ref,
-            combined_node_val_mle_ref,
-        ];
-        
-        let combined_mle_input_attribute = combine_mle_refs(
-            combined_decision
-        );
 
-        combined_mle_input_attribute
+        let leaf_mle_batch_ref_combined_ref =  combine_mles(leaf_mle_batch_ref_combined, batched_bits as usize);
+
+        DenseMle::new_from_raw(leaf_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+
     }
 }
 

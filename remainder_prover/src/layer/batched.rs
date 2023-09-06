@@ -185,7 +185,7 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
         })
         .collect_vec();
 
-    // let mut count: usize = 0;
+    let mut count: usize = 0;
 
     // for mle_index in old_indices {
     //     match mle_index {

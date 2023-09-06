@@ -51,7 +51,7 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
                     // TODO!(ende) fix this atrocious fixed(false)
-                    input_data_mle.add_prefix_bits(Some(input_prefix_bits[0].clone().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    input_data_mle.add_prefix_bits(Some(dummy_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     InputPackingBuilder::new(
                         input_data_mle,
                         self.r,
@@ -64,7 +64,7 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
                     // TODO!(ende) fix this atrocious fixed(true)
-                    input_data_mle.add_prefix_bits(Some(input_prefix_bits[1].clone().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    input_data_mle.add_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     InputPackingBuilder::new(
                         input_data_mle,
                         self.r,
@@ -810,10 +810,10 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
                     .map(|(input_data_mle, decision_path_mle)| {
 
                         let mut input_data_mle = input_data_mle.clone();
-                        input_data_mle.add_prefix_bits(Some(input_prefix_bits[0].clone().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        input_data_mle.add_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         let mut decision_path_mle = decision_path_mle.clone();
-                        decision_path_mle.add_prefix_bits(Some(input_prefix_bits[1].clone().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        decision_path_mle.add_prefix_bits(Some(dummy_decision_node_paths_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         AttributeConsistencyBuilderZeroRef::new(
                             input_data_mle,
@@ -855,24 +855,29 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.dummy_leaf_node_paths_mle_vec.clone());
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut dummy_decision_node_paths_mle_vec_combined),
-            Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
             Box::new(&mut self.dummy_decision_nodes_mle),
             Box::new(&mut self.dummy_leaf_nodes_mle),
             Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_decision),
             Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_leaf),
+            Box::new(&mut dummy_decision_node_paths_mle_vec_combined),
+            Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         // layer 0: x
+        let mut dummy_decision_nodes_mle = self.dummy_decision_nodes_mle.clone();
+        dummy_decision_nodes_mle.add_prefix_bits(self.dummy_decision_nodes_mle.get_prefix_bits());
         let decision_packing_builder = DecisionPackingBuilder::new(
-            self.dummy_decision_nodes_mle.clone(), self.r, self.r_packings);
+            dummy_decision_nodes_mle, self.r, self.r_packings);
 
+        let mut dummy_leaf_nodes_mle = self.dummy_leaf_nodes_mle.clone();
+        dummy_leaf_nodes_mle.add_prefix_bits(self.dummy_leaf_nodes_mle.get_prefix_bits());
         let leaf_packing_builder = LeafPackingBuilder::new(
-            self.dummy_leaf_nodes_mle.clone(), self.r, self.r_packings.0
+            dummy_leaf_nodes_mle, self.r, self.r_packings.0
         );
 
         let packing_builders = decision_packing_builder.concat(leaf_packing_builder);
@@ -888,15 +893,19 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let r_minus_x_builders = r_minus_x_builder_decision.concat(r_minus_x_builder_leaf);
         let (r_minus_x_power_decision, r_minus_x_power_leaf) = layers.add_gkr(r_minus_x_builders);
 
+        let mut dummy_multiplicities_bin_decomp_mle_decision = self.dummy_multiplicities_bin_decomp_mle_decision.clone();
+        dummy_multiplicities_bin_decomp_mle_decision.add_prefix_bits(self.dummy_multiplicities_bin_decomp_mle_decision.get_prefix_bits());
         // layer 2, part 1: (r - x) * b_ij + (1 - b_ij)
         let prev_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
-            self.dummy_multiplicities_bin_decomp_mle_decision.clone(),
+            dummy_multiplicities_bin_decomp_mle_decision.clone(),
             0,
             r_minus_x_power_decision.clone()
         );
 
+        let mut dummy_multiplicities_bin_decomp_mle_leaf = self.dummy_multiplicities_bin_decomp_mle_leaf.clone();
+        dummy_multiplicities_bin_decomp_mle_leaf.add_prefix_bits(self.dummy_multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
-            self.dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+            dummy_multiplicities_bin_decomp_mle_leaf.clone(),
             0,
             r_minus_x_power_leaf.clone()
         );
@@ -916,13 +925,13 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         // layer 3, part 1: (r - x)^2 * b_ij + (1 - b_ij)
         let prev_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
-            self.dummy_multiplicities_bin_decomp_mle_decision.clone(),
+            dummy_multiplicities_bin_decomp_mle_decision.clone(),
             1,
             r_minus_x_power_decision.clone()
         );
 
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
-            self.dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+            dummy_multiplicities_bin_decomp_mle_leaf.clone(),
             1,
             r_minus_x_power_leaf.clone()
         );
@@ -957,13 +966,13 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
             // layer 4, part 2
             let curr_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
-                self.dummy_multiplicities_bin_decomp_mle_decision.clone(),
+                dummy_multiplicities_bin_decomp_mle_decision.clone(),
                 i,
                 r_minus_x_power_decision.clone()
             );
 
             let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
-                self.dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+                dummy_multiplicities_bin_decomp_mle_leaf.clone(),
                 i,
                 r_minus_x_power_leaf.clone()
             );
@@ -997,13 +1006,13 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         // layer 17, part 1
         let curr_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
-            self.dummy_multiplicities_bin_decomp_mle_decision.clone(),
+            dummy_multiplicities_bin_decomp_mle_decision.clone(),
             15,
             r_minus_x_power_decision.clone()
         );
 
         let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
-            self.dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+            dummy_multiplicities_bin_decomp_mle_leaf.clone(),
             15,
             r_minus_x_power_leaf.clone()
         );
@@ -1079,7 +1088,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             self.dummy_decision_node_paths_mle_vec.iter().map(
                 |decision_node_mle| {
                     let mut decision_node_mle = decision_node_mle.clone();
-                    decision_node_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                    decision_node_mle.add_prefix_bits(Some(dummy_decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     DecisionPackingBuilder::new(
                         decision_node_mle.clone(),
                         self.r,
@@ -1092,7 +1101,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             self.dummy_leaf_node_paths_mle_vec.iter().map(
                 |leaf_node_mle| {
                     let mut leaf_node_mle = leaf_node_mle.clone();
-                    leaf_node_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                    leaf_node_mle.add_prefix_bits(Some(dummy_leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     LeafPackingBuilder::new(
                         leaf_node_mle.clone(),
                         self.r,
@@ -1491,25 +1500,7 @@ mod tests {
             r_packings: (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())),
             tree_height,
         };
-        // TODO!(ende) clear this when debug is done
 
-        let mut transcript = PoseidonTranscript::new("Batched Multiset Circuit Prover Transcript");
-
-        let proof = circuit.prove(&mut transcript);
-
-        match proof {
-            Ok(proof) => {
-                let mut transcript = PoseidonTranscript::new("Batched Multiset Circuit Verifier Transcript");
-                let result = circuit.verify(&mut transcript, proof);
-                if let Err(err) = result {
-                    println!("{}", err);
-                    panic!();
-                }
-            },
-            Err(err) => {
-                println!("{}", err);
-                panic!();
-            }
-        }
+        test_circuit(circuit, None);
     }
 }
