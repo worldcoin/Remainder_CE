@@ -349,6 +349,34 @@ impl<F: FieldExt> SquaringBuilder<F> {
     }
 }
 
+/// takes a densemleref that is all zeros and returns a zeromleref as the successor 
+pub struct ZeroBuilder<F: FieldExt> {
+    mle: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
+    type Successor = ZeroMleRef<F>;
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.mle.mle_ref())
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+
+        let mle_num_vars = self.mle.num_iterated_vars();
+        ZeroMleRef::new(mle_num_vars, prefix_bits, id)
+    }
+}
+
+impl<F: FieldExt> ZeroBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        mle: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            mle
+        }
+    }
+}
+
 /// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
 pub struct BitExponentiationBuilder<F: FieldExt> {
     bin_decomp: DenseMle<F, BinDecomp16Bit<F>>,
@@ -897,7 +925,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompBuilder<F> {
         // TODO!(ryancao): Rewrite this expression but as a tree
         let b_s_initial_acc = ExpressionStandard::Constant(F::zero());
 
-        bit_mle_refs.into_iter().enumerate().skip(1).fold(
+        bit_mle_refs.into_iter().rev().enumerate().skip(1).fold(
             b_s_initial_acc,
             |acc_expr, (bit_idx, bin_decomp_mle)| {
 
@@ -918,7 +946,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompBuilder<F> {
 
         let result_iter = self.diff_signed_bin_decomp.into_iter().map(
             |signed_bin_decomp| {
-                signed_bin_decomp.bits.into_iter().enumerate().skip(1).fold(F::zero(), |acc, (bit_idx, cur_bit)| {
+                signed_bin_decomp.bits.into_iter().rev().enumerate().skip(1).fold(F::zero(), |acc, (bit_idx, cur_bit)| {
                     let base = F::from(2_u64.pow((16 - (bit_idx + 1)) as u32));
                     acc + base * cur_bit
                 })
@@ -1002,7 +1030,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompCheckerBuilder<F> {
 
         // --- Grab MLE refs ---
         let positive_recomp_mle_ref = self.positive_recomp_mle.mle_ref();
-        let signed_bit_mle_ref = self.diff_signed_bit_decomp_mle.mle_bit_refs()[0].clone();
+        let signed_bit_mle_ref = self.diff_signed_bit_decomp_mle.mle_bit_refs()[self.diff_signed_bit_decomp_mle.mle_bit_refs().len() - 1].clone();
         let diff_mle_ref = self.input_path_diff_mle.mle_ref();
 
         // --- LHS of addition ---
@@ -1018,24 +1046,24 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompCheckerBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
 
         // --- Collect b_s ---
-        let sign_bit_iter = self.diff_signed_bit_decomp_mle.into_iter().map(
-            |bin_decomp| {
-                bin_decomp.bits[0]
-            }
-        );
+        // let sign_bit_iter = self.diff_signed_bit_decomp_mle.into_iter().map(
+        //     |bin_decomp| {
+        //         bin_decomp.bits[bin_decomp.bits.len() - 1]
+        //     }
+        // );
 
-        let diff_signed_bit_decomp_mle_sign_ref = self.diff_signed_bit_decomp_mle.mle_bit_refs()[0].clone();
-        let sign_bit_iter = diff_signed_bit_decomp_mle_sign_ref.bookkeeping_table().iter();
+        // let diff_signed_bit_decomp_mle_sign_ref = self.diff_signed_bit_decomp_mle.mle_bit_refs()[self.diff_signed_bit_decomp_mle.mle_bit_refs().len() - 1].clone();
+        // let sign_bit_iter = diff_signed_bit_decomp_mle_sign_ref.bookkeeping_table().iter();
 
-        // --- Compute the formula from above ---
-        let ret_mle_iter = self.positive_recomp_mle.into_iter().zip(sign_bit_iter.zip(self.input_path_diff_mle.into_iter())).map(
-            |(positive_recomp, (sign_bit, diff))| {
-                positive_recomp - diff + F::from(2) * sign_bit * diff
-            }
-        );
+        // // --- Compute the formula from above ---
+        // let ret_mle_iter = self.positive_recomp_mle.into_iter().zip(sign_bit_iter.zip(self.input_path_diff_mle.into_iter())).map(
+        //     |(positive_recomp, (sign_bit, diff))| {
+        //         positive_recomp - diff + F::from(2) * sign_bit * diff
+        //     }
+        // );
 
-        let actual_result = DenseMle::new_from_iter(ret_mle_iter, id, prefix_bits.clone());
-        dbg!(actual_result);
+        // let actual_result = DenseMle::new_from_iter(ret_mle_iter, id, prefix_bits.clone());
+        // dbg!(actual_result);
 
         ZeroMleRef::new(self.positive_recomp_mle.num_iterated_vars(), prefix_bits, id)
     }

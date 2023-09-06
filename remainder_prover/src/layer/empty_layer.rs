@@ -150,7 +150,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
-        todo!()
+        unimplemented!()
     }
 
     fn new<L: super::LayerBuilder<F>>(builder: L, id: LayerId) -> Self

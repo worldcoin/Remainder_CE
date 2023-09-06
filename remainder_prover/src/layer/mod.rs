@@ -403,6 +403,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     // --- This is super jank ---
                     let mut fixed_mle_indices: Vec<F> = vec![];
                     for mle_idx in mle_indices {
+                        if let None = mle_idx.val() {
+                            dbg!("We got a nothing");
+                            dbg!(&mle_idx);
+                            dbg!(&mle_indices);
+                            dbg!(&mle_ref);
+                        }
                         fixed_mle_indices.push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
                     }
 
@@ -411,6 +417,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
                     // --- Grab the actual value that the claim is supposed to evaluate to ---
                     if mle_ref.bookkeeping_table().len() != 1 {
+                        dbg!(&mle_ref.bookkeeping_table);
                         return Err(ClaimError::MleRefMleError);
                     }
                     let claimed_value = mle_ref.bookkeeping_table()[0];
@@ -712,10 +719,13 @@ impl<
     type Successor = S;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        (self.expression_builder)(&self.mle)
+        let hi = (self.expression_builder)(&self.mle);
+        // dbg!(&hi);
+        hi
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        // dbg!(&id);
         (self.layer_builder)(&self.mle, id, prefix_bits)
     }
 }

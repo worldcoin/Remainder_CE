@@ -1,4 +1,5 @@
 use crate::layer::LayerId;
+use crate::mle::MleRef;
 use crate::mle::dense::DenseMle;
 use remainder_shared_types::FieldExt;
 use serde::{Serialize, Deserialize};
@@ -178,14 +179,14 @@ pub struct ZKDTCircuitData<F> {
 impl<F: FieldExt> ZKDTCircuitData<F> {
     /// creates new dummydata
     pub fn new(
-        dummy_input_data: Vec<Vec<InputAttribute<F>>>, 
+        dummy_input_data: Vec<Vec<InputAttribute<F>>>,
         dummy_permuted_input_data: Vec<Vec<InputAttribute<F>>>,
         dummy_decision_node_paths: Vec<Vec<DecisionNode<F>>>,
-        dummy_leaf_node_paths: Vec<LeafNode<F>>,     
+        dummy_leaf_node_paths: Vec<LeafNode<F>>,
         dummy_binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>,
         dummy_multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>,
-        dummy_decision_nodes: Vec<DecisionNode<F>>,  
-        dummy_leaf_nodes: Vec<LeafNode<F>>,          
+        dummy_decision_nodes: Vec<DecisionNode<F>>,
+        dummy_leaf_nodes: Vec<LeafNode<F>>,
     ) -> ZKDTCircuitData<F> {
         ZKDTCircuitData {
             dummy_input_data,
@@ -486,6 +487,7 @@ pub fn write_mles_batch_catboost_single_tree<F: FieldExt>() {
     let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>();
     let mut f = fs::File::create(CACHED_BATCHED_MLES_FILE).unwrap();
     to_writer(&mut f, &loaded_zkdt_circuit_data).unwrap();
+    panic!()
 }
 
 /// Reads the cached results from [`load_upshot_data_single_tree_batch`] and returns them.
@@ -527,7 +529,7 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>() -> (BatchedCatboo
             .clone()
             .into_iter()
             .map(InputAttribute::from), LayerId::Input(0), None)).collect();
-    let dummy_decision_node_paths_mle = dummy_decision_node_paths
+    let dummy_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>> = dummy_decision_node_paths
         .iter()
         .map(|path|
             DenseMle::new_from_iter(path

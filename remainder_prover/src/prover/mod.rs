@@ -5,6 +5,7 @@ pub mod combine_layers;
 pub mod input_layer;
 #[cfg(test)]
 mod tests;
+pub mod test_helper_circuits;
 
 use std::collections::HashMap;
 
@@ -20,9 +21,9 @@ use crate::{
         gate::AddGate,
         MleRef,
     },
-    mle::{mle_enum::MleEnum, MleIndex},
-    sumcheck::evaluate_at_a_point,
-    utils::pad_to_nearest_power_of_two,
+    mle::{MleIndex, mle_enum::MleEnum},
+    mle::{gate::{AddGateBatched}},
+    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point
 };
 
 // use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
@@ -85,14 +86,6 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         num_copy_bits: usize,
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
-        let gate: AddGate<F, Tr> = AddGate::new(
-            id.clone(),
-            nonzero_gates.clone(),
-            lhs.clone(),
-            rhs.clone(),
-            num_copy_bits,
-        );
-        let num_vars = lhs.num_vars();
         let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits);
         let max_gate_val = nonzero_gates.clone().into_iter().fold(
             0, 
@@ -111,6 +104,39 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
                 
             }
         );
+
+        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
+        res_mle
+
+        //ZeroMleRef::new(*num_vars, None, id.clone())
+    }
+
+    /// Add an AddGate to a list of layers
+    pub fn add_add_gate_batched(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_copy_bits: usize) -> DenseMle<F, F> {
+        let id = LayerId::Layer(self.0.len());
+        let gate: AddGateBatched<F, Tr> = AddGateBatched::new(num_copy_bits, nonzero_gates.clone(), lhs.clone(), rhs.clone(), id.clone());
+        let max_gate_val = nonzero_gates.clone().into_iter().fold(
+            0, 
+            |acc, (z, _, _)| {
+                std::cmp::max(acc, z)
+            }
+        );
+        let num_copy_vars = 1 << num_copy_bits;
+        let sum_table_num_entries = (max_gate_val + 1) * num_copy_vars;
+        self.0.push(gate.get_enum());
+
+
+        let mut sum_table = vec![F::zero(); 1 << sum_table_num_entries];
+        (0..num_copy_vars).into_iter().for_each(|idx|
+            {
+                nonzero_gates.clone().into_iter().for_each(
+                    |(z_ind, x_ind, y_ind)| {
+                        let f2_val = *lhs.bookkeeping_table().get(idx + (x_ind * num_copy_vars)).unwrap_or(&F::zero());
+                        let f3_val = *rhs.bookkeeping_table().get(idx + (y_ind * num_copy_vars)).unwrap_or(&F::zero());
+                        sum_table[idx + (z_ind * num_copy_vars)] = f2_val + f3_val;
+                    }
+                );
+            });
 
         let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
         dbg!(&res_mle);
@@ -306,9 +332,15 @@ pub trait GKRCircuit<F: FieldExt> {
                         .unwrap();
                 }
 
+                // --- If it's an empty layer, skip the claim aggregation ---
+                let empty_layer = layer_claims.iter().fold(true, |acc, claim| {
+                    acc && claim.0.len() == 0
+                });
+
                 // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
                 // --- claim aggregation protocol. We ONLY aggregate if need be! ---
-                let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1 {
+                let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1 && !empty_layer {
+
                     // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
                     let wlx_evaluations = compute_claim_wlx(&layer_claims, &layer).unwrap();
                     let relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
@@ -373,6 +405,9 @@ pub trait GKRCircuit<F: FieldExt> {
                 let layer_claims = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+
+                // dbg!("prover claims");
+                // dbg!(&layer_claims);
 
                 // --- Add the claimed values to the FS transcript ---
                 for claim in layer_claims {
@@ -545,9 +580,10 @@ pub trait GKRCircuit<F: FieldExt> {
             // --- Perform the claim aggregation verification, first sampling `r` ---
             // --- Note that we ONLY do this if need be! ---
             let mut prev_claim = layer_claims[0].clone();
+
+            // dbg!(&layer_claims);
             if layer_claims.len() > 1 {
                 // --- Perform the claim aggregation verification, first sampling `r` ---
-
                 let all_wlx_evaluations: Vec<F> = layer_claims
                     .into_iter()
                     .map(|(_, val)| *val)
@@ -599,6 +635,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 .get(&input_layer_id)
                 .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
 
+            // dbg!(&input_layer_claims);
+
             // --- Add the claimed values to the FS transcript ---
             for claim in input_layer_claims {
                 transcript
@@ -618,6 +656,8 @@ pub trait GKRCircuit<F: FieldExt> {
                     .map(|(_, val)| *val)
                     .chain(input_layer.input_layer_wlx_evaluations.clone().into_iter())
                     .collect();
+
+                // dbg!(&all_input_wlx_evaluations);
 
                 // --- Add the aggregation step to the transcript ---
                 transcript
