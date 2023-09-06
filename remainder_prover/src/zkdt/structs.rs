@@ -74,7 +74,7 @@ pub struct InputAttribute<F> {
 //     // pub attr_val: F,
 // }
 
-/// for input layer stuff
+/// for input layer stuff, combining refs together
 /// TODO!(ende): refactor
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
@@ -624,29 +624,48 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         
         let batched_bits = log2(input_mle_batch.len());
 
-        let batch_attr_id_mle_ref = input_mle_batch
-            .clone().into_iter().map(
-                |x| x.attr_id(None)
-            ).collect_vec();
-        let combined_attr_id_mle_ref = combine_mles(batch_attr_id_mle_ref, batched_bits as usize);
-    
-        let batch_attr_val_mle_ref = input_mle_batch
+        let input_mle_batch_ref_combined = input_mle_batch
+            .clone()
             .into_iter().map(
-                |x| x.attr_val(None)
+                |x| {
+                    combine_mle_refs(
+                        vec![x.attr_id(None), x.attr_val(None)]
+                    ).mle_ref()
+                }
             ).collect_vec();
-    
-        let combined_attr_val_mle_ref = combine_mles(batch_attr_val_mle_ref, batched_bits as usize);
-    
-        let combined_input_attribute= vec![
-            combined_attr_id_mle_ref,
-            combined_attr_val_mle_ref
-        ];
-        
-        let combined_mle_input_attribute = combine_mle_refs(
-            combined_input_attribute
-        );
 
-        combined_mle_input_attribute
+        let input_mle_batch_ref_combined_ref =  combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
+
+        DenseMle::new_from_raw(input_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+
+        // let batch_attr_id_mle_ref = input_mle_batch
+        //     .clone().into_iter().map(
+        //         |x| x.attr_id(None)
+        //     ).collect_vec();
+        // let combined_attr_id_mle_ref = combine_mles(batch_attr_id_mle_ref, batched_bits as usize);
+    
+        // let batch_attr_val_mle_ref = input_mle_batch
+        //     .into_iter().map(
+        //         |x| x.attr_val(None)
+        //     ).collect_vec();
+        // let combined_attr_val_mle_ref = combine_mles(batch_attr_val_mle_ref, batched_bits as usize);
+    
+        // let combined_mle_input_attribute = DenseMle::new_from_raw(
+        //     vec![combined_attr_id_mle_ref.bookkeeping_table(), combined_attr_val_mle_ref.bookkeeping_table()],
+        //     LayerId::Input(0),
+        //     None,
+        // );
+        // combined_mle_input_attribute
+        // let combined_input_attribute= vec![
+        //     combined_attr_id_mle_ref,
+        //     combined_attr_val_mle_ref
+        // ];
+        
+        // let combined_mle_input_attribute = combine_mle_refs(
+        //     combined_input_attribute
+        // );
+
+        // combined_mle_input_attribute
     }
 }
 
