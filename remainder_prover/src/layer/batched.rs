@@ -185,7 +185,7 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
         })
         .collect_vec();
 
-    // let mut count: usize = 0;
+    let mut count: usize = 0;
 
     // for mle_index in old_indices {
     //     match mle_index {
@@ -199,11 +199,11 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
     // }
 
     // let mle_indices = old_indices[..count].iter().cloned().chain(repeat_n(MleIndex::Iterated, new_bits)).chain(old_indices[count..].iter().cloned()).collect_vec();
-    // let mle_indices = repeat_n(MleIndex::Iterated, new_bits).chain(old_indices.iter().cloned()).collect_vec();
+    let mle_indices = repeat_n(MleIndex::Iterated, new_bits).chain(old_indices.iter().cloned()).collect_vec();
 
     DenseMleRef {
         bookkeeping_table: out,
-        mle_indices: old_indices.to_vec(),
+        mle_indices: mle_indices,
         num_vars: old_num_vars + new_bits,
         layer_id,
         indexed: false,

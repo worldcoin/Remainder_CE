@@ -9,7 +9,7 @@ use tracing::Level;
 
 use crate::{
     expression::ExpressionStandard,
-    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer},
+    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, combine_zero_mle_ref}},
     mle::{
         dense::{DenseMle, Tuple2},
         mle_enum::MleEnum,
@@ -19,7 +19,7 @@ use crate::{
     prover::input_layer::{enum_input_layer::CommitmentEnum, MleInputLayer},
     utils::get_random_mle,
     zkdt::{
-        structs::{BinDecomp16Bit, DecisionNode, InputAttribute, LeafNode},
+        structs::{BinDecomp16Bit, DecisionNode, InputAttribute, LeafNode, combine_mle_refs},
         zkdt_layer::{
             AttributeConsistencyBuilder, BitExponentiationBuilder, ConcatBuilder,
             DecisionPackingBuilder, EqualityCheck, InputPackingBuilder, LeafPackingBuilder,
@@ -275,52 +275,93 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
-        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.batched_mle[0])];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let mle_clone = self.batched_mle[0].clone();
+        let all_first_seconds = self.batched_mle.clone().into_iter().map(|mle| {
+            combine_mles(vec![mle.first(), mle.second()], 1)
+        }).collect_vec();
+
+        let mut combined_all = combine_mle_refs(all_first_seconds);
+
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut combined_all)];
+        let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
 
         // --- Create Layers to be added to ---
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
-        let diff_builder = from_mle(
-            mle_clone,
-            // --- The expression is a simple diff between the first and second halves ---
+        let diff_builders = self.batched_mle.clone().into_iter().map(
             |mle| {
-                let first_half = Box::new(ExpressionStandard::Mle(mle.first()));
-                let second_half = Box::new(ExpressionStandard::Mle(mle.second()));
-                let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
-                ExpressionStandard::Sum(first_half, negated_second_half)
-            },
-            // --- The witness generation simply zips the two halves and subtracts them ---
-            |mle, layer_id, prefix_bits| {
-                // DenseMle::new_from_iter(
-                //     mle.into_iter()
-                //         .map(|Tuple2((first, second))| first - second),
-                //     layer_id,
-                //     prefix_bits,
-                // )
-                // --- The output SHOULD be all zeros ---
-                let num_vars = max(mle.first().num_vars(), mle.second().num_vars());
-                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
-            },
-        );
+                let diff_builder = from_mle(
+                    mle,
+                    // --- The expression is a simple diff between the first and second halves ---
+                    |mle| {
+                        let first_half = ExpressionStandard::Mle(mle.first());
+                        let second_half = ExpressionStandard::Mle(mle.second());
+                        first_half - second_half
+                    },
+                    // --- The witness generation simply zips the two halves and subtracts them ---
+                    |mle, layer_id, prefix_bits| {
+                        // let hi = DenseMle::new_from_iter(
+                        //     mle.into_iter()
+                        //         .map(|Tuple2((first, second))| first - second),
+                        //     layer_id,
+                        //     prefix_bits.clone(),
+                        // );
+                        // dbg!(&hi.mle_ref().bookkeeping_table);
+                        // --- The output SHOULD be all zeros ---
+                        let num_vars = max(mle.first().num_vars(), mle.second().num_vars());
+                        ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+                    },
+                );
+                diff_builder
+            }
+        ).collect_vec();
+        
 
-        // --- Stacks the two aforementioned layers together into a single layer ---
-        // --- Then adds them to the overall circuit ---
-        let first_layer_output = layers.add_gkr(diff_builder);
+        let batched_builder = BatchedLayer::new(diff_builders);
+
+        let batched_result = layers.add_gkr(batched_builder);
+
+
+        let batched_zero = combine_zero_mle_ref(batched_result);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
 
         // (layers, vec![first_layer_output.get_enum()], input_layer)
-        Witness { layers, output_layers: vec![first_layer_output.get_enum()], input_layers: vec![input_layer.to_enum()] };
-        todo!()
+        Witness { layers, output_layers: vec![batched_zero.get_enum()], input_layers: vec![input_layer.to_enum()] }
     }
 }
 
+#[test]
+fn test_gkr_simplest_batched_circuit() {
+    let mut rng = test_rng();
+    let size = 1 << 3;
 
+    let batch_size = 1 << 2;
+    // --- This should be 2^2 ---
+    let batched_mle: Vec<DenseMle<Fr, Tuple2<Fr>>> = (0..batch_size).map(|idx1| {
+        DenseMle::new_from_iter(
+        (0..size).map(|idx| {
+            let num = Fr::from(rng.gen::<u64>());
+            //let second_num = Fr::from(rng.gen::<u64>());
+            // let num = Fr::from(idx + idx1);
+            (num, num).into()
+        }),
+        LayerId::Input(0),
+        None)
+    }).collect_vec();
+    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
+    //     LayerId::Input(0),
+    //     None,
+    // );
+
+    let circuit: SimplestBatchedCircuit<Fr> = SimplestBatchedCircuit { batched_mle };
+
+    test_circuit(circuit, None);
+
+    // panic!();
+}
 
 ///This circuit checks how RandomLayer works by multiplying the MLE by a constant, taking in that result as advice in a publiclayer and doing an equality check on the result of the mult and the advice
 struct RandomCircuit<F: FieldExt> {
