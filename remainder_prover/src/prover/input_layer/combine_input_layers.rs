@@ -75,6 +75,17 @@ pub struct InputLayerBuilder<F> {
 }
 
 impl<F: FieldExt> InputLayerBuilder<F> {
+
+    /// Fetches the prefix bits of mles for Layer::layer(0)
+    /// These prefix bits need to be added before the batching bits
+    pub fn fetch_prefix_bits(&self) -> Vec<Vec<MleIndex<F>>> {
+        self.mles.clone().into_iter().map(
+            |x| {
+                x.get_prefix_bits().unwrap()
+            }
+        ).collect_vec()
+    }
+
     /// Creates a new InputLayerBuilder that will yield an InputLayer from many MLEs
     /// 
     /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this 
@@ -134,6 +145,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
                         total_num_vars,
                         input_mle.num_iterated_vars(),
                     );
+                    println!("prefix_bits added {:?}", prefix_bits);
                     input_mle.add_prefix_bits(Some(prefix_bits));
                     current_padded_usage += 2_u32.pow(input_mle.num_iterated_vars() as u32);
                 } else {
