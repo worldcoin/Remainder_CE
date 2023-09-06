@@ -285,16 +285,21 @@ pub trait GKRCircuit<F: FieldExt> {
             let mut claim = None;
             let bits = output.index_mle_indices(0);
 
-            // --- Evaluate each output MLE at a random challenge point ---
-            for bit in 0..bits {
-                let challenge = transcript
-                    .get_challenge("Setting Output Layer Claim")
-                    .unwrap();
-                claim = output.fix_variable(bit, challenge);
-            }
+            let claim = if bits != 0 {
+                // --- Evaluate each output MLE at a random challenge point ---
+                for bit in 0..bits {
+                    let challenge = transcript
+                        .get_challenge("Setting Output Layer Claim")
+                        .unwrap();
+                    claim = output.fix_variable(bit, challenge);
+                }
+    
+                // --- Gather the claim and layer ID ---
+                claim.unwrap()  
+            } else {
+                (vec![], output.bookkeeping_table()[0])
+            };
 
-            // --- Gather the claim and layer ID ---
-            let claim = claim.unwrap();
             let layer_id = output.get_layer_id();
 
             // --- Add the claim to either the set of current claims we're proving ---
