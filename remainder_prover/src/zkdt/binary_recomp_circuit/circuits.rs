@@ -8,6 +8,7 @@ use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex}, zkdt::structs::{Decis
 
 use super::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder};
 
+/// Batched version of the binary recomposition circuit (see below)!
 pub struct BinaryRecompCircuitBatched<F: FieldExt> {
     batched_decision_node_path_mle: Vec<DenseMle<F, DecisionNode<F>>>,
     batched_permuted_inputs_mle: Vec<DenseMle<F, InputAttribute<F>>>,
@@ -110,13 +111,15 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
             }
         ).collect_vec());
 
-        let recomp_checker_mle = layers.add_gkr(batched_recomp_checker_builder);
+        // --- Grab output layer and flatten ---
+        let batched_recomp_checker_result_mle = layers.add_gkr(batched_recomp_checker_builder);
+        let flattened_batched_recomp_checker_result_mle = combine_zero_mle_ref(batched_recomp_checker_result_mle);
 
         // --- Create input layers ---
         // TODO!(ryancao): Change this back to Ligero
         let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
 
-        Witness { layers, output_layers: vec![combine_zero_mle_ref(recomp_checker_mle).get_enum()], input_layers: vec![live_committed_input_layer.to_enum()] }
+        Witness { layers, output_layers: vec![flattened_batched_recomp_checker_result_mle.get_enum()], input_layers: vec![live_committed_input_layer.to_enum()] }
     }
 }
 impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
