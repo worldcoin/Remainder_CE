@@ -39,65 +39,60 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
 
         // --- First we create the positive binary recomp builder ---
-        let pos_bin_recomp_builders = (0..num_subcircuit_copies).map(|idx| {
-            let mut diff_signed_bit_decomp_mle = self.batched_diff_signed_bin_decomp_mle[idx].clone();
+        let pos_bin_recomp_builders = self.batched_diff_signed_bin_decomp_mle.iter_mut().map(|diff_signed_bit_decomp_mle| {
             // --- Prefix bits should be [input_prefix_bits], [dataparallel_bits] ---
             // TODO!(ryancao): Note that strictly speaking we shouldn't be adding dataparallel bits but need to for
             // now for a specific batching scenario
             diff_signed_bit_decomp_mle.add_prefix_bits(
                 Some(
-                    combined_batched_diff_signed_bin_decomp_mle.prefix_bits.iter().flatten().cloned().chain(
+                    combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 )
             );
-            BinaryRecompBuilder::new(diff_signed_bit_decomp_mle)
+            BinaryRecompBuilder::new(diff_signed_bit_decomp_mle.clone())
         }).collect();
-        let batched_bin_recomp_builder = BatchedLayer::new(pos_bin_recomp_builders);
-        let batched_pos_bin_recomp_mle = layers.add_gkr(batched_bin_recomp_builder);
 
-        // --- Next, we create the diff ---
+        let batched_bin_recomp_builder = BatchedLayer::new(pos_bin_recomp_builders);
+
+        // --- Next, we create the diff builder ---
         let batched_diff_builder = BatchedLayer::new(
-            (0..num_subcircuit_copies).map(|idx| {
-                let mut decision_node_path_mle = self.batched_decision_node_path_mle[idx].clone();
-                let mut permuted_inputs_mle = self.batched_permuted_inputs_mle[idx].clone();
+            self.batched_decision_node_path_mle.iter_mut().zip(
+                self.batched_permuted_inputs_mle.iter_mut()
+            ).map(|(decision_node_path_mle, permuted_inputs_mle)| {
 
                 // --- Add prefix bits and batching bits to both (same comment as above) ---
                 decision_node_path_mle.add_prefix_bits(Some(
-                    combined_batched_decision_node_path_mle.prefix_bits.iter().flatten().cloned().chain(
+                    combined_batched_decision_node_path_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
                 permuted_inputs_mle.add_prefix_bits(Some(
-                    combined_batched_permuted_inputs_mle.prefix_bits.iter().flatten().cloned().chain(
+                    combined_batched_permuted_inputs_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
 
-            NodePathDiffBuilder::new(decision_node_path_mle, permuted_inputs_mle)
+            NodePathDiffBuilder::new(decision_node_path_mle.clone(), permuted_inputs_mle.clone())
         }).collect_vec());
 
-        // --- TODO!(ryancao): This debug doesn't make sense ---
-        // let diff = combined_batched_diff_signed_bin_decomp_mle.num_iterated_vars() - max(combined_batched_decision_node_path_mle.num_iterated_vars(), combined_batched_permuted_inputs_mle.num_iterated_vars());
-        // debug_assert!(diff == 0);
+        // --- Concatenate the previous two builders and add them to the circuit ---
+        let builder = batched_bin_recomp_builder.concat(batched_diff_builder);
+        let (batched_pos_bin_recomp_mle, batched_raw_diff_mle) = layers.add_gkr(builder);
 
-        let batched_raw_diff_mle = layers.add_gkr(batched_diff_builder);
-
-        // TODO!(ryancao): Add this in after things are working
-        // let builder = batched_bin_recomp_builder.concat(diff_builder);
-        // let (batched_pos_bin_recomp_mle, batched_raw_diff_mle) = layers.add_gkr(builder);
-
-        let batched_recomp_checker_builder = BatchedLayer::new((0..num_dataparallel_bits).map(|idx| {
-
-                // --- Grab non-dataparallel MLEs from the batch ---
-                let pos_bin_recomp_mle = batched_pos_bin_recomp_mle[idx].clone();
-                let raw_diff_mle = batched_raw_diff_mle[idx].clone();
-                let mut diff_signed_bit_decomp_mle = self.batched_diff_signed_bin_decomp_mle[idx].clone();
+        // --- Finally, the recomp checker ---
+        let batched_recomp_checker_builder = BatchedLayer::new(
+            self.batched_diff_signed_bin_decomp_mle.iter_mut().zip(
+                batched_pos_bin_recomp_mle.into_iter().zip(
+                    batched_raw_diff_mle.into_iter()
+                )
+            )
+            .map(|(diff_signed_bit_decomp_mle, (pos_bin_recomp_mle, raw_diff_mle))| {
 
                 // --- Add prefix bits to the thing which was indexed earlier ---
                 diff_signed_bit_decomp_mle.add_prefix_bits(
                     Some(
-                        combined_batched_diff_signed_bin_decomp_mle.prefix_bits.iter().flatten().cloned().chain(
+                        combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                             repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                         ).collect_vec()
                     )
@@ -105,7 +100,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
 
                 BinaryRecompCheckerBuilder::new(
                     raw_diff_mle,
-                    diff_signed_bit_decomp_mle,
+                    diff_signed_bit_decomp_mle.clone(),
                     pos_bin_recomp_mle,
                 )
             }
@@ -117,7 +112,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
 
         // --- Create input layers ---
         // TODO!(ryancao): Change this back to Ligero
-        let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
 
         Witness { layers, output_layers: vec![flattened_batched_recomp_checker_result_mle.get_enum()], input_layers: vec![live_committed_input_layer.to_enum()] }
     }
