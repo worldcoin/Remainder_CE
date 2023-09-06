@@ -42,7 +42,7 @@ use super::{
     GKRCircuit, GKRError, Layers, Witness, test_helper_circuits::{EmptyLayerBuilder, EmptyLayerSubBuilder, EmptyLayerAddBuilder},
 };
 
-fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
+pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
     let now = Instant::now();
 
@@ -178,7 +178,7 @@ fn test_gkr_simple_circuit() {
     // );
 
     let mut circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
-    test_circuit(circuit, None);
+    test_circuit(circuit, Some(Path::new("simple_circuit.json")));
 }
 
 /// Circuit which just subtracts its two halves! No input-output layer needed.
@@ -260,7 +260,7 @@ fn test_gkr_simplest_circuit() {
 
     let mut circuit: SimplestCircuit<Fr> = SimplestCircuit { mle };
 
-    test_circuit(circuit, None);
+    test_circuit(circuit, Some(Path::new("simplest_circuit.json")));
 
     // panic!();
 }
@@ -920,5 +920,5 @@ fn test_empty_layer_circuit() {
 
     let circuit: EmptyLayerTestCircuit<Fr> = EmptyLayerTestCircuit { mle, mle2, empty_layer_src_mle, other_empty_layer_src_mle };
 
-    test_circuit(circuit, None);
+    test_circuit(circuit, Some(Path::new("empty_layer_proof.json")));
 }

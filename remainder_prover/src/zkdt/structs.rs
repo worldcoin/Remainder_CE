@@ -434,6 +434,36 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
             indexed: false,
         }
     }
+
+    /// for input layer stuff
+    /// TODO!(ende): refactor
+    pub(crate) fn combine_mle_batch(leaf_mle_batch: Vec<DenseMle<F, LeafNode<F>>>) -> DenseMle<F, F> {
+        
+        let batched_bits = log2(leaf_mle_batch.len());
+
+        let batch_node_id_mle_ref = leaf_mle_batch
+            .clone().into_iter().map(
+                |x| x.node_id()
+            ).collect_vec();
+        let combined_node_id_mle_ref = combine_mles(batch_node_id_mle_ref, batched_bits as usize);
+    
+        let batch_node_val_mle_ref = leaf_mle_batch
+            .clone().into_iter().map(
+                |x| x.node_val()
+            ).collect_vec();
+        let combined_node_val_mle_ref = combine_mles(batch_node_val_mle_ref, batched_bits as usize);
+    
+        let combined_decision= vec![
+            combined_node_id_mle_ref,
+            combined_node_val_mle_ref,
+        ];
+        
+        let combined_mle_input_attribute = combine_mle_refs(
+            combined_decision
+        );
+
+        combined_mle_input_attribute
+    }
 }
 
 // --- Input attribute ---

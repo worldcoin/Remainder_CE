@@ -37,7 +37,8 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
             Box::new(&mut dummy_permuted_input_data_mle_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        // TODO!(ende) change back to ligero
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
@@ -845,6 +846,21 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        
+        let mut dummy_decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.dummy_decision_node_paths_mle_vec.clone());
+        let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.dummy_leaf_node_paths_mle_vec.clone());
+
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            Box::new(&mut dummy_decision_node_paths_mle_vec_combined),
+            Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
+            Box::new(&mut self.dummy_decision_nodes_mle),
+            Box::new(&mut self.dummy_leaf_nodes_mle),
+            Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_decision),
+            Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_leaf),
+        ];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         // layer 0: x
@@ -1140,11 +1156,15 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             path_product
         );
 
-        let difference_mle = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
+        let circuit_output = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
 
         println!("Multiset circuit finished, number of layers {:?}", layers.next_layer_id());
 
-        todo!()
+        Witness {
+            layers,
+            output_layers: vec![circuit_output.get_enum()],
+            input_layers: vec![input_layer.to_enum()],
+        }
     }
 }
 
@@ -1226,6 +1246,7 @@ mod tests {
 
     use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::{PartialBitsCheckerCircuit, BinaryRecompCircuit, PermutationCircuitNonBatched}, structs::{InputAttribute, DecisionNode}}, prover::GKRCircuit, mle::{dense::DenseMle, MleRef}, layer::LayerId};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
+    use crate::prover::tests::test_circuit;
 
     use super::{PermutationCircuit, AttributeConsistencyCircuitNonBatched, MultiSetCircuit, TestCircuit, AttributeConsistencyCircuit};
     #[test]
@@ -1414,28 +1435,7 @@ mod tests {
             num_inputs: dummy_input_len,
         };
 
-        let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
-
-        let now = Instant::now();
-
-        let proof = circuit.prove(&mut transcript);
-
-        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
-
-        match proof {
-            Ok(proof) => {
-                let mut transcript = PoseidonTranscript::new("Permutation Circuit Verifier Transcript");
-                let result = circuit.verify(&mut transcript, proof);
-                if let Err(err) = result {
-                    println!("{}", err);
-                    panic!();
-                }
-            },
-            Err(err) => {
-                println!("{}", err);
-                panic!();
-            }
-        }
+        test_circuit(circuit, None);
     }
 
     #[test]
