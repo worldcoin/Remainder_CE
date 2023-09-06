@@ -44,6 +44,10 @@ where
     fn add_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>) {
         self.prefix_bits = new_bits;
     }
+
+    fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>> {
+        self.prefix_bits.clone()
+    }
 }
 
 impl<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> DenseMle<F, T> {

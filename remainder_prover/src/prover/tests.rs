@@ -9,7 +9,7 @@ use tracing::Level;
 
 use crate::{
     expression::ExpressionStandard,
-    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer, batched::{combine_mles_refs, BatchedLayer, combine_zero_mle_ref}},
+    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, combine_zero_mle_ref}},
     mle::{
         dense::{DenseMle, Tuple2},
         mle_enum::MleEnum,
@@ -42,7 +42,7 @@ use super::{
     GKRCircuit, GKRError, Layers, Witness, test_helper_circuits::{EmptyLayerBuilder, EmptyLayerSubBuilder, EmptyLayerAddBuilder},
 };
 
-fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
+pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
     let now = Instant::now();
 
@@ -178,7 +178,7 @@ fn test_gkr_simple_circuit() {
     // );
 
     let mut circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
-    test_circuit(circuit, None);
+    test_circuit(circuit, Some(Path::new("simple_circuit.json")));
 }
 
 /// Circuit which just subtracts its two halves! No input-output layer needed.
@@ -260,7 +260,7 @@ fn test_gkr_simplest_circuit() {
 
     let mut circuit: SimplestCircuit<Fr> = SimplestCircuit { mle };
 
-    test_circuit(circuit, None);
+    test_circuit(circuit, Some(Path::new("simplest_circuit.json")));
 
     // panic!();
 }
@@ -276,7 +276,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
         let all_first_seconds = self.batched_mle.clone().into_iter().map(|mle| {
-            combine_mles_refs(vec![mle.first(), mle.second()], 1)
+            combine_mles(vec![mle.first(), mle.second()], 1)
         }).collect_vec();
 
         let mut combined_all = combine_mle_refs(all_first_seconds);
@@ -919,6 +919,138 @@ fn test_empty_layer_circuit() {
     let other_empty_layer_src_mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(4)], LayerId::Input(0), None);
 
     let circuit: EmptyLayerTestCircuit<Fr> = EmptyLayerTestCircuit { mle, mle2, empty_layer_src_mle, other_empty_layer_src_mle };
+
+    test_circuit(circuit, Some(Path::new("empty_layer_proof.json")));
+}
+
+struct CombineCircuit<F: FieldExt> {
+    test_circuit: TestCircuit<F>,
+    simple_circuit: SimpleCircuit<F>,
+}
+
+impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let test_witness = self.test_circuit.synthesize();
+        let simple_witness = self.simple_circuit.synthesize();
+
+        let Witness {
+            layers: test_layers,
+            output_layers: test_outputs,
+            input_layers: test_inputs,
+        } = test_witness;
+
+        let Witness {
+            layers: mut simple_layers,
+            output_layers: simple_outputs,
+            input_layers: simple_inputs,
+        } = simple_witness;
+
+        let input_layers = test_inputs
+            .into_iter()
+            .chain(simple_inputs.into_iter().map(|mut input| {
+                let new_layer_id = match input.layer_id() {
+                    LayerId::Input(id) => LayerId::Input(id + 1),
+                    LayerId::Layer(_) => panic!(),
+                };
+                input.set_layer_id(new_layer_id);
+                input
+            }))
+            .collect();
+
+        for layer in simple_layers.0.iter_mut() {
+            let expression = match layer {
+                LayerEnum::Gkr(layer) => &mut layer.expression,
+                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
+                _ => panic!(),
+            };
+
+            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
+                match expr {
+                    ExpressionStandard::Mle(mle) => {
+                        if mle.layer_id == LayerId::Input(0) {
+                            mle.layer_id = LayerId::Input(1)
+                        }
+                        Ok(())
+                    }
+                    ExpressionStandard::Product(mles) => {
+                        for mle in mles {
+                            if mle.layer_id == LayerId::Input(0) {
+                                mle.layer_id = LayerId::Input(1)
+                            }
+                        }
+                        Ok(())
+                    }
+                    ExpressionStandard::Constant(_)
+                    | ExpressionStandard::Scaled(_, _)
+                    | ExpressionStandard::Sum(_, _)
+                    | ExpressionStandard::Negated(_)
+                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
+                }
+            };
+
+            expression.traverse_mut(&mut closure).unwrap();
+        }
+
+        let (layers, output_layers) = combine_layers(
+            vec![test_layers, simple_layers],
+            vec![test_outputs, simple_outputs],
+        )
+        .unwrap();
+
+        Witness {
+            layers,
+            output_layers,
+            input_layers,
+        }
+    }
+}
+
+#[test]
+fn test_combine_circuit() {
+    let mut rng = test_rng();
+    let size = 4;
+    let size_expanded = 1 << size;
+    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+    // tracing::subscriber::set_global_default(subscriber)
+    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+
+    // --- This should be 2^2 ---
+    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+        LayerId::Input(0),
+        None,
+    );
+    // --- This should be 2^2 ---
+    let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+        LayerId::Input(0),
+        None,
+    );
+
+    let test_circuit_1: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
+
+    let size = 4;
+
+    // --- This should be 2^2 ---
+    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        (0..1 << size).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+        LayerId::Input(0),
+        None,
+    );
+    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+    //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
+    //     LayerId::Input(0),
+    //     None,
+    // );
+
+    let simple_circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
+
+    let circuit = CombineCircuit {
+        test_circuit: test_circuit_1,
+        simple_circuit,
+    };
 
     test_circuit(circuit, None);
 }
