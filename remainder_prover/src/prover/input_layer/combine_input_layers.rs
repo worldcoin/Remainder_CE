@@ -145,7 +145,6 @@ impl<F: FieldExt> InputLayerBuilder<F> {
                         total_num_vars,
                         input_mle.num_iterated_vars(),
                     );
-                    println!("prefix_bits added {:?}", prefix_bits);
                     input_mle.add_prefix_bits(Some(prefix_bits));
                     current_padded_usage += 2_u32.pow(input_mle.num_iterated_vars() as u32);
                 } else {

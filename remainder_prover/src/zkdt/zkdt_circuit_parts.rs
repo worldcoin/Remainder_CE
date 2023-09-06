@@ -855,14 +855,15 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.dummy_leaf_node_paths_mle_vec.clone());
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut dummy_decision_node_paths_mle_vec_combined),
-            Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
             Box::new(&mut self.dummy_decision_nodes_mle),
             Box::new(&mut self.dummy_leaf_nodes_mle),
             Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_decision),
             Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_leaf),
+            Box::new(&mut dummy_decision_node_paths_mle_vec_combined),
+            Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
