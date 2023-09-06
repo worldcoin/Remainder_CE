@@ -1,3 +1,4 @@
+use ark_std::log2;
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
 use crate::{mle::{dense::DenseMle, Mle, MleRef}, zkdt::structs::{DecisionNode, InputAttribute, BinDecomp16Bit}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, ligero_input_layer::LigeroInputLayer, InputLayer}, Layers}, layer::LayerId};
@@ -23,13 +24,25 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
         // --- Inputs to the circuit are just these three MLEs ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut combined_batched_decision_node_path_mle), Box::new(&mut combined_batched_permuted_inputs_mle), Box::new(&mut combined_batched_diff_signed_bin_decomp_mle)];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        // let input_layer_prefix_bits = input_layer_builder.fetch
+        // let input_layer_prefix_bits = input_layer_builder.fetch_prefix_bits();
+
+        // --- Dataparallel/batching stuff + sanitychecks ---
+        let num_subcircuit_copies = self.batched_decision_node_path_mle.len();
+        let num_dataparallel_bits = log2(num_subcircuit_copies) as usize;
+        debug_assert_eq!(num_dataparallel_bits, log2(self.batched_permuted_inputs_mle.len()) as usize);
+        debug_assert_eq!(num_dataparallel_bits, log2(self.batched_diff_signed_bin_decomp_mle.len()) as usize);
 
         // --- Create `Layers` struct to add layers to ---
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
 
-        // --- First we create the positive binary recomp ---
-        let pos_bin_recomp_builder = BinaryRecompBuilder::new(self.diff_signed_bin_decomp.clone());
+        // --- First we create the positive binary recomp builder ---
+        let pos_bin_recomp_builders = (0..num_subcircuit_copies).map(|idx| {
+            let diff_signed_bit_decomp_mle = self.batched_diff_signed_bin_decomp_mle[idx].clone();
+            diff_signed_bit_decomp_mle.add_prefix_bits(combined_batched_diff_signed_bin_decomp_mle.prefix_bits);
+            BinaryRecompBuilder::new(diff_signed_bit_decomp_mle)
+        }).collect();
+
+        
         let pos_bin_recomp_mle = layers.add_gkr(pos_bin_recomp_builder);
 
         // --- Next, we create the diff ---
