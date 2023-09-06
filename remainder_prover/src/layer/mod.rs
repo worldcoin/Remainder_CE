@@ -195,6 +195,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         // --- Grabs the expression/beta table and updates them with the new challenge ---
         let (expression, beta) = self.mut_expression_and_beta();
         let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
+        //dbg!(&expression);
         expression.fix_variable(round_index - 1, challenge);
         beta.beta_update(round_index - 1, challenge)
             .map_err(LayerError::BetaError)?;
@@ -256,6 +257,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
 
+        dbg!(&self.id);
+        dbg!(&self.expression);
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
         
 

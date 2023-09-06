@@ -9,11 +9,11 @@ use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles, combine_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef}, prover::input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}};
+use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles, combine_mles_refs, unflatten_mle}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef}, prover::input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, enum_input_layer::InputLayerEnum}};
 use crate::{prover::{GKRCircuit, Layers, Witness}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBit, OneMinusSignBit, SignBitProductBuilder, DumbBuilder, BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}};
+use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBit, OneMinusSignBit, SignBitProductBuilder, DumbBuilder, BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, combine_mle_refs}};
 
 pub struct PermutationCircuit<F: FieldExt> {
     pub dummy_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
@@ -175,51 +175,150 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
     type Transcript = PoseidonTranscript<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let num_copy_bits = log2(self.num_copy) as usize;
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
 
         let interleaved_decision = self.decision_node_paths_mle.clone().into_iter().map(|mle| {
-            combine_mles(vec![mle.node_id(), mle.attr_id(), mle.threshold()], 2);
+            combine_mles_refs(vec![mle.node_id(), mle.attr_id(), mle.threshold()], 2)
         }).collect_vec();
 
-        let mut combined_decision = combine_mle_refs(all_first_seconds);
+        let mut combined_decision: DenseMle<F, F> = combine_mle_refs(interleaved_decision);
 
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_paths_mle), Box::new(&mut self.leaf_node_paths_mle), Box::new(&mut self.bin_decomp_diff_mle)];
+        let interleaved_leaf = self.leaf_node_paths_mle.clone().into_iter().map(|mle| {
+            combine_mles_refs(vec![mle.node_id(), mle.node_val()], 1)
+        }).collect_vec();
+
+        let mut combined_leaf: DenseMle<F, F> = combine_mle_refs(interleaved_leaf);
+
+        let bin_decomp_interleaved = self.bin_decomp_diff_mle.clone().into_iter().map(|mle| {
+            combine_mles_refs(mle.mle_bit_refs(), 4)
+        }).collect_vec();
+
+        let mut combined_bit: DenseMle<F, F> = combine_mle_refs(bin_decomp_interleaved);
+
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut combined_decision), Box::new(&mut combined_leaf), Box::new(&mut combined_bit)];
         let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
-        let input_layer = input_layer_builder.to_input_layer::<PublicInputLayer<F, _>>().to_enum();
-
-        let pos_sign_bit_builder = OneMinusSignBit::new(self.bin_decomp_diff_mle.clone());
-        let pos_sign_bits = layers.add_gkr(pos_sign_bit_builder);
-       
-        let neg_sign_bit_builder = SignBit::new(self.bin_decomp_diff_mle.clone());
-        let neg_sign_bits = layers.add_gkr(neg_sign_bit_builder);
+        let input_layer: InputLayerEnum<F, Self::Transcript> = input_layer_builder.to_input_layer::<PublicInputLayer<F, _>>().to_enum();
         
-        let prev_node_left_builder = PrevNodeLeftBuilderDecision::new(
-            self.decision_node_paths_mle.clone());
+        let pos_builders = self.bin_decomp_diff_mle.clone().into_iter().map(
+            |bin_decomp_mle| {
+                OneMinusSignBit::new(bin_decomp_mle)
+            }
+        ).collect_vec();
+        let pos_batched_builder = BatchedLayer::new(pos_builders);
 
-        let prev_node_right_builder = PrevNodeRightBuilderDecision::new(
-            self.decision_node_paths_mle.clone());
+        let neg_builders = self.bin_decomp_diff_mle.clone().into_iter().map(
+            |bin_decomp_mle| {
+                SignBit::new(bin_decomp_mle)
+            }
+        ).collect_vec();
+        let neg_batched_builder = BatchedLayer::new(neg_builders);
 
-        let curr_node_decision_builder = CurrNodeBuilderDecision::new(
-            self.decision_node_paths_mle.clone());
-
-        let curr_node_leaf_builder = CurrNodeBuilderLeaf::new(
-            self.leaf_node_paths_mle.clone());
-
-        let curr_decision = layers.add_gkr(curr_node_decision_builder);
-        let curr_leaf = layers.add::<_, EmptyLayer<F, Self::Transcript>>(curr_node_leaf_builder);
-
-        let curr_node_decision_leaf_builder = ConcatBuilder::new(curr_decision.clone(), curr_leaf.clone());
-        let curr_node_decision_leaf_mle_ref = layers.add_gkr(curr_node_decision_leaf_builder).mle_ref();
-        let prev_node_right_mle_ref = layers.add_gkr(prev_node_right_builder).mle_ref();
-        let prev_node_left_mle_ref = layers.add_gkr(prev_node_left_builder).mle_ref();
+        let pos_sign_bits = layers.add_gkr(pos_batched_builder);
+        let neg_sign_bits = layers.add_gkr(neg_batched_builder);
         
-        let nonzero_gates = create_wiring_from_num_bits(1 << (prev_node_left_mle_ref.num_vars() - self.num_copy));
-         
-        let res_negative = layers.add_add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref.clone(), self.num_copy);
-        let res_positive = layers.add_add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref.clone(), self.num_copy);
+        let prev_node_left_builders = self.decision_node_paths_mle.clone().into_iter().map(
+            |dec_mle| {
+                PrevNodeLeftBuilderDecision::new(
+                    dec_mle)
+            }
+        ).collect_vec();
 
-        let sign_bit_sum_builder: SignBitProductBuilder<F> = SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative);
-        let final_res = layers.add_gkr(sign_bit_sum_builder);
+        let prev_left_batched_builder = BatchedLayer::new(prev_node_left_builders);
+
+        let prev_node_right_builders = self.decision_node_paths_mle.clone().into_iter().map(
+            |dec_mle| {
+                PrevNodeRightBuilderDecision::new(
+                    dec_mle)
+            }
+        ).collect_vec();
+
+        let prev_right_batched_builder = BatchedLayer::new(prev_node_right_builders);
+
+        let curr_node_decision_builders = self.decision_node_paths_mle.clone().into_iter().map(
+            |dec_mle| {
+                CurrNodeBuilderDecision::new(
+                    dec_mle
+                )
+            }
+        ).collect_vec();
+
+        let curr_decision_batched_builder = BatchedLayer::new(curr_node_decision_builders);
+
+        let curr_node_leaf_builders = self.leaf_node_paths_mle.clone().into_iter().map(
+            |leaf_mle| {
+                CurrNodeBuilderLeaf::new(
+                    leaf_mle
+                )
+            }
+        ).collect_vec();
+
+        let curr_leaf_batched_builder = BatchedLayer::new(curr_node_leaf_builders);
+    
+        let curr_decision = layers.add_gkr(curr_decision_batched_builder);
+        let curr_leaf = layers.add_gkr(curr_leaf_batched_builder);
+
+        let curr_dec_leaf_builders = curr_decision.into_iter().zip(curr_leaf.into_iter()).map(
+            |(dec_mle, leaf_mle)| {
+                let dec_mle_fix: DenseMle<F, F> = DenseMle::new_from_raw(dec_mle.mle_ref().bookkeeping_table, dec_mle.layer_id, None);
+                let leaf_mle_fix: DenseMle<F, F> = DenseMle::new_from_raw(leaf_mle.mle_ref().bookkeeping_table, leaf_mle.layer_id, None);
+                ConcatBuilder::new(dec_mle_fix, leaf_mle_fix)
+            }
+        ).collect_vec();
+
+        let curr_dec_leaf_batched_builder = BatchedLayer::new(curr_dec_leaf_builders);
+
+        let curr_node_decision_leaf = layers.add_gkr(curr_dec_leaf_batched_builder);
+
+        dbg!(&curr_node_decision_leaf);
+        let prev_node_right = layers.add_gkr(prev_right_batched_builder);
+        let prev_node_left = layers.add_gkr(prev_left_batched_builder);
+
+        let combined_curr = unbatch_mles(curr_node_decision_leaf);
+        dbg!(&combined_curr);
+        let combined_prev_right = unbatch_mles(prev_node_right);
+        let combined_prev_left = unbatch_mles(prev_node_left);
+        
+        let nonzero_gates = create_wiring_from_num_bits(1 << (combined_prev_left.num_iterated_vars() - num_copy_bits));
+
+        let res_neg = layers.add_add_gate_batched(nonzero_gates.clone(), combined_curr.clone().mle_ref(), combined_prev_left.mle_ref(), num_copy_bits);
+        let res_pos = layers.add_add_gate_batched(nonzero_gates, combined_curr.clone().mle_ref(), combined_prev_right.mle_ref(), num_copy_bits);
+
+        let neg_sign_bits_fix = neg_sign_bits.into_iter().map(
+            |neg_sign_bit_mle| {
+                let no_prefix_mle: DenseMle<F, F> = DenseMle::new_from_raw(neg_sign_bit_mle.mle_ref().bookkeeping_table, neg_sign_bit_mle.layer_id, None);
+                no_prefix_mle
+            }
+        ).collect_vec();
+
+        let pos_sign_bits_fix = pos_sign_bits.into_iter().map(
+            |pos_sign_bit_mle| {
+                let no_prefix_mle: DenseMle<F, F> = DenseMle::new_from_raw(pos_sign_bit_mle.mle_ref().bookkeeping_table, pos_sign_bit_mle.layer_id, None);
+                no_prefix_mle
+            }
+        ).collect_vec();
+
+        let res_neg_unflat = unflatten_mle(res_neg, num_copy_bits);
+        let res_pos_unflat = unflatten_mle(res_pos, num_copy_bits);
+
+        dbg!(&neg_sign_bits_fix, &res_neg_unflat, &pos_sign_bits_fix, &res_pos_unflat);
+
+        let sign_bit_product_builders = (pos_sign_bits_fix.into_iter().zip(neg_sign_bits_fix.into_iter())).zip(res_pos_unflat.into_iter().zip(res_neg_unflat.into_iter())).map(
+            |((pos_sign_bits, neg_sign_bits), (res_positive, res_negative))| {
+                dbg!(&pos_sign_bits);
+                dbg!(&pos_sign_bits.mle_ref().mle_indices());
+                dbg!(&neg_sign_bits);
+                dbg!(&res_positive);
+                dbg!(&res_negative);
+                SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative)
+            }
+        ).collect_vec();
+
+
+        let sign_bit_product_batched_builder = BatchedLayer::new(sign_bit_product_builders);
+
+        let sign_product_res = layers.add_gkr(sign_bit_product_batched_builder);
+        let final_res = combine_zero_mle_ref(sign_product_res);
 
         let witness: Witness<F, Self::Transcript> = Witness {
             layers,
@@ -265,6 +364,7 @@ impl<F: FieldExt> GKRCircuit<F> for OneMinusCheckCircuit<F> {
 
 
 fn create_wiring_from_num_bits(num_bits: usize) -> Vec<(usize, usize, usize)> {
+    dbg!(&num_bits);
     let mut gates = (0.. (num_bits-1)).into_iter().map(
         |idx| (idx, 2*(idx + 1), idx)
     ).collect_vec();
@@ -1394,7 +1494,7 @@ mod tests {
     use itertools::Itertools;
     use rand::Rng;
 
-    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::{PartialBitsCheckerCircuit, BinaryRecompCircuit, PermutationCircuitNonBatched, PathCheckCircuit, OneMinusCheckCircuit}, structs::{InputAttribute, DecisionNode}}, prover::GKRCircuit, mle::dense::DenseMle, layer::LayerId};
+    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::{PartialBitsCheckerCircuit, BinaryRecompCircuit, PermutationCircuitNonBatched, PathCheckCircuit, OneMinusCheckCircuit, PathCheckCircuitBatched}, structs::{InputAttribute, DecisionNode}}, prover::GKRCircuit, mle::dense::DenseMle, layer::LayerId};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
 
     use super::{PermutationCircuit, AttributeConsistencyCircuitNonBatched, MultiSetCircuit, TestCircuit, AttributeConsistencyCircuit};
@@ -1673,6 +1773,55 @@ mod tests {
             leaf_node_paths_mle: dummy_leaf_node_paths_mle[0].clone(),
             bin_decomp_diff_mle: dummy_binary_decomp_diffs_mle[0].clone(),
             num_copy: 0,
+        };
+        let now = Instant::now();
+        let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
+        let proof = circuit.prove(&mut transcript);
+        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
+
+
+        match proof {
+            Ok(proof) => {
+                let mut transcript = PoseidonTranscript::new("Permutation Circuit Verifier Transcript");
+                let result = circuit.verify(&mut transcript, proof);
+                if let Err(err) = result {
+                    println!("{}", err);
+                    panic!();
+                }
+            },
+            Err(err) => {
+                println!("{}", err);
+                panic!();
+            }
+        }
+    }
+
+    #[test]
+    fn test_path_circuit_catboost_batched() {
+
+        let (BatchedCatboostMles {
+            dummy_decision_node_paths_mle,
+            dummy_leaf_node_paths_mle,
+            dummy_binary_decomp_diffs_mle, ..
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+
+        // let DummyMles::<Fr> {
+        //     dummy_decision_node_paths_mle,
+        //     dummy_leaf_node_paths_mle, 
+        //     dummy_binary_decomp_diffs_mle, ..
+        // } = generate_dummy_mles();
+
+        // let num_copy_bits = log2(dummy_decision_node_paths_mle.len());
+        // let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
+
+        let num_copy = dummy_decision_node_paths_mle.len();
+        dbg!(&num_copy);
+
+        let mut circuit = PathCheckCircuitBatched {
+            decision_node_paths_mle: dummy_decision_node_paths_mle.clone(), 
+            leaf_node_paths_mle: dummy_leaf_node_paths_mle.clone(),
+            bin_decomp_diff_mle: dummy_binary_decomp_diffs_mle.clone(),
+            num_copy,
         };
         let now = Instant::now();
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");

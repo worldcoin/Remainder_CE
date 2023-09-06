@@ -1142,6 +1142,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             // this essentially takes in the two mles bound only at the copy bits
             let mut reduced_gate: AddGate<F, Tr> = AddGate::new(self.layer_id.clone(), self.nonzero_gates.clone(), self.lhs.clone(), self.rhs.clone(), self.new_bits);
             self.reduced_gate = Some(reduced_gate);
+            dbg!(&self.lhs);
+            dbg!(&self.rhs);
             let next_messages = self.reduced_gate.as_mut().unwrap().prove_rounds(next_claims, transcript).unwrap();
 
             // we scale the messages by the bound beta table (g2, w) where g2 is the challenge

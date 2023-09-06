@@ -691,7 +691,6 @@ impl<F: FieldExt> LayerBuilder<F> for OneMinusSignBit<F> {
                 F::one() - sign_bit.bits[15]
             }
             ), id, prefix_bits);
-        dbg!(&ret);
         ret
     }
 }
@@ -747,8 +746,10 @@ impl<F: FieldExt> LayerBuilder<F> for SignBitProductBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Product(vec![self.pos_bit_mle.mle_ref(), self.pos_bit_sum.mle_ref()]) + 
-        ExpressionStandard::Product(vec![self.neg_bit_mle.mle_ref(), self.neg_bit_sum.mle_ref()])
+        let yes = ExpressionStandard::Product(vec![self.pos_bit_mle.mle_ref(), self.pos_bit_sum.mle_ref()]) + 
+        ExpressionStandard::Product(vec![self.neg_bit_mle.mle_ref(), self.neg_bit_sum.mle_ref()]);
+        // dbg!(&yes);
+        yes
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {

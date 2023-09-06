@@ -114,6 +114,8 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add an AddGate to a list of layers
     pub fn add_add_gate_batched(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_copy_bits: usize) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
+        // dbg!(&lhs);
+        // dbg!(&rhs);
         let gate: AddGateBatched<F, Tr> = AddGateBatched::new(num_copy_bits, nonzero_gates.clone(), lhs.clone(), rhs.clone(), id.clone());
         let max_gate_val = nonzero_gates.clone().into_iter().fold(
             0, 
@@ -126,7 +128,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         self.0.push(gate.get_enum());
 
 
-        let mut sum_table = vec![F::zero(); 1 << sum_table_num_entries];
+        let mut sum_table = vec![F::zero(); sum_table_num_entries];
         (0..num_copy_vars).into_iter().for_each(|idx|
             {
                 nonzero_gates.clone().into_iter().for_each(
@@ -139,7 +141,6 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
             });
 
         let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
-        dbg!(&res_mle);
         res_mle
 
         //ZeroMleRef::new(*num_vars, None, id.clone())
