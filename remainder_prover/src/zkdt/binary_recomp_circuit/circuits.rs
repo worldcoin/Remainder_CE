@@ -1,7 +1,8 @@
 use ark_std::log2;
+use itertools::{repeat_n, Itertools};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use crate::{mle::{dense::DenseMle, Mle, MleRef}, zkdt::structs::{DecisionNode, InputAttribute, BinDecomp16Bit}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, ligero_input_layer::LigeroInputLayer, InputLayer}, Layers}, layer::LayerId};
+use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex}, zkdt::structs::{DecisionNode, InputAttribute, BinDecomp16Bit}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, ligero_input_layer::LigeroInputLayer, InputLayer}, Layers}, layer::{LayerId, batched::BatchedLayer}};
 
 use super::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder};
 
@@ -15,8 +16,8 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
-        // --- For the input layer, we need to first merge all of the input MLEs FIRST by mle_idx, then by batched index ---
-        // --- This assures that (going left-to-right in terms of the bits) we have [input_prefix_bits] [batched_bits], [mle_idx], [iterated_bits] ---
+        // --- For the input layer, we need to first merge all of the input MLEs FIRST by mle_idx, then by dataparallel index ---
+        // --- This assures that (going left-to-right in terms of the bits) we have [input_prefix_bits], [dataparallel_bits], [mle_idx], [iterated_bits] ---
         let mut combined_batched_decision_node_path_mle = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.batched_decision_node_path_mle.clone());
         let mut combined_batched_permuted_inputs_mle = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.batched_permuted_inputs_mle.clone());
         let mut combined_batched_diff_signed_bin_decomp_mle = DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(self.batched_diff_signed_bin_decomp_mle.clone());
@@ -24,7 +25,6 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
         // --- Inputs to the circuit are just these three MLEs ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut combined_batched_decision_node_path_mle), Box::new(&mut combined_batched_permuted_inputs_mle), Box::new(&mut combined_batched_diff_signed_bin_decomp_mle)];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        // let input_layer_prefix_bits = input_layer_builder.fetch_prefix_bits();
 
         // --- Dataparallel/batching stuff + sanitychecks ---
         let num_subcircuit_copies = self.batched_decision_node_path_mle.len();
@@ -38,12 +38,20 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
         // --- First we create the positive binary recomp builder ---
         let pos_bin_recomp_builders = (0..num_subcircuit_copies).map(|idx| {
             let diff_signed_bit_decomp_mle = self.batched_diff_signed_bin_decomp_mle[idx].clone();
-            diff_signed_bit_decomp_mle.add_prefix_bits(combined_batched_diff_signed_bin_decomp_mle.prefix_bits);
+            // --- Prefix bits should be [input_prefix_bits], [dataparallel_bits] ---
+            // TODO!(ryancao): Note that strictly speaking we shouldn't be adding dataparallel bits but need to for
+            // now for a specific batching scenario
+            diff_signed_bit_decomp_mle.add_prefix_bits(
+                Some(
+                    combined_batched_diff_signed_bin_decomp_mle.prefix_bits.unwrap_or(vec![]).into_iter().chain(
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
+                    ).collect_vec()
+                )
+            );
             BinaryRecompBuilder::new(diff_signed_bit_decomp_mle)
         }).collect();
-
-        
-        let pos_bin_recomp_mle = layers.add_gkr(pos_bin_recomp_builder);
+        let batched_bin_recomp_builder = BatchedLayer::new(pos_bin_recomp_builders);
+        let batched_pos_bin_recomp_mle = layers.add_gkr(batched_bin_recomp_builder);
 
         // --- Next, we create the diff ---
         // TODO!(ryancao): Combine this and the above layer!!!
