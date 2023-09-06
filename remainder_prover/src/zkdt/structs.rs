@@ -785,4 +785,31 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
 
         ret
     }
+
+    /// Combines the bookkeeping tables of each of the MleRefs within a
+    /// `DenseMle<F, BinDecomp16Bit<F>>` into a single interleaved bookkeeping
+    /// table such that referring to the merged table using little-endian indexing
+    /// bits, followed by the appropriate MleRef indexing bits, gets us the same
+    /// result as only using the same MleRef indexing bits on each MleRef from
+    /// the `DenseMle<F, BinDecomp16Bit<F>>`.
+    /// 
+    /// TODO!(ende): refactor
+    pub(crate) fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, BinDecomp16Bit<F>>>) -> DenseMle<F, F> {
+        
+        let batched_bits = log2(input_mle_batch.len());
+
+        let input_mle_batch_ref_combined = input_mle_batch
+            .clone()
+            .into_iter().map(
+                |x| {
+                    combine_mle_refs(
+                        x.mle_bit_refs()
+                    ).mle_ref()
+                }
+            ).collect_vec();
+
+        let input_mle_batch_ref_combined_ref =  combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
+
+        DenseMle::new_from_raw(input_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+    }
 }
