@@ -3,7 +3,7 @@ use ark_crypto_primitives::sponge::poseidon::get_default_poseidon_parameters_int
 use ark_ff::BigInteger;
 use rayon::{iter::Split, vec};
 use tracing_subscriber::fmt::layer;
-use std::io::Empty;
+use std::{io::Empty, iter};
 
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
@@ -49,7 +49,8 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
             self.dummy_input_data_mle_vec.iter().map(
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
-                    input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                    // TODO!(ende) fix this atrocious fixed(false)
+                    input_data_mle.add_prefix_bits(Some(iter::once(MleIndex::Fixed(false)).chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     InputPackingBuilder::new(
                         input_data_mle,
                         self.r,
@@ -61,7 +62,8 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
             self.dummy_permuted_input_data_mle_vec.iter().map(
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
-                    input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                    // TODO!(ende) fix this atrocious fixed(true)
+                    input_data_mle.add_prefix_bits(Some(iter::once(MleIndex::Fixed(true)).chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     InputPackingBuilder::new(
                         input_data_mle,
                         self.r,
