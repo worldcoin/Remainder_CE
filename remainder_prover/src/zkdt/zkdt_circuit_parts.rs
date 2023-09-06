@@ -3,7 +3,7 @@ use ark_crypto_primitives::sponge::poseidon::get_default_poseidon_parameters_int
 use ark_ff::BigInteger;
 use rayon::{iter::Split, vec};
 use tracing_subscriber::fmt::layer;
-use std::io::Empty;
+use std::{io::Empty, iter};
 
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
@@ -37,6 +37,7 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
             Box::new(&mut dummy_permuted_input_data_mle_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
         // TODO!(ende) change back to ligero
 
@@ -49,7 +50,8 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
             self.dummy_input_data_mle_vec.iter().map(
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
-                    input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                    // TODO!(ende) fix this atrocious fixed(false)
+                    input_data_mle.add_prefix_bits(Some(input_prefix_bits[0].clone().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     InputPackingBuilder::new(
                         input_data_mle,
                         self.r,
@@ -61,7 +63,8 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
             self.dummy_permuted_input_data_mle_vec.iter().map(
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
-                    input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                    // TODO!(ende) fix this atrocious fixed(true)
+                    input_data_mle.add_prefix_bits(Some(input_prefix_bits[1].clone().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     InputPackingBuilder::new(
                         input_data_mle,
                         self.r,
@@ -792,6 +795,7 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
             Box::new(&mut dummy_decision_node_paths_mle_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+        let input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
@@ -806,10 +810,10 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
                     .map(|(input_data_mle, decision_path_mle)| {
 
                         let mut input_data_mle = input_data_mle.clone();
-                        input_data_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                        input_data_mle.add_prefix_bits(Some(input_prefix_bits[0].clone().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         let mut decision_path_mle = decision_path_mle.clone();
-                        decision_path_mle.add_prefix_bits(Some(repeat_n(MleIndex::Iterated, batch_bits).collect_vec()));
+                        decision_path_mle.add_prefix_bits(Some(input_prefix_bits[1].clone().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         AttributeConsistencyBuilderZeroRef::new(
                             input_data_mle,
@@ -1562,24 +1566,8 @@ mod tests {
             tree_height
         };
 
-        let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Prover Transcript");
+        test_circuit(circuit, None);
 
-        let proof = circuit.prove(&mut transcript);
-
-        match proof {
-            Ok(proof) => {
-                let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Verifier Transcript");
-                let result = circuit.verify(&mut transcript, proof);
-                if let Err(err) = result {
-                    println!("{}", err);
-                    panic!();
-                }
-            },
-            Err(err) => {
-                println!("{}", err);
-                panic!();
-            }
-        }
     }
 
     #[test]

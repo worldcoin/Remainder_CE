@@ -9,7 +9,7 @@ use tracing::Level;
 
 use crate::{
     expression::ExpressionStandard,
-    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer, batched::{combine_mles_refs, BatchedLayer, combine_zero_mle_ref}},
+    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, combine_zero_mle_ref}},
     mle::{
         dense::{DenseMle, Tuple2},
         mle_enum::MleEnum,
@@ -276,7 +276,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
         let all_first_seconds = self.batched_mle.clone().into_iter().map(|mle| {
-            combine_mles_refs(vec![mle.first(), mle.second()], 1)
+            combine_mles(vec![mle.first(), mle.second()], 1)
         }).collect_vec();
 
         let mut combined_all = combine_mle_refs(all_first_seconds);

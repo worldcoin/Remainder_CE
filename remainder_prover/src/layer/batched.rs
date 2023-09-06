@@ -41,7 +41,7 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     let old_layer_id = mles[0].layer_id.clone();
     let new_bits = log2(mles.len()) as usize;
     let old_prefix_bits = mles[0].prefix_bits.clone().map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
-    DenseMle::new_from_raw(combine_mles_refs(mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(), new_bits).bookkeeping_table, old_layer_id, old_prefix_bits)
+    DenseMle::new_from_raw(combine_mles(mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(), new_bits).bookkeeping_table, old_layer_id, old_prefix_bits)
 }
 
 fn combine_expressions<F: FieldExt>(
@@ -90,7 +90,7 @@ fn combine_expressions_helper<F: FieldExt>(
                 })
                 .try_collect()?;
 
-            Ok(ExpressionStandard::Mle(combine_mles_refs(mles, new_bits)))
+            Ok(ExpressionStandard::Mle(combine_mles(mles, new_bits)))
         }
         ExpressionStandard::Sum(_, _) => {
             let out: Vec<(ExpressionStandard<F>, ExpressionStandard<F>)> = exprs
@@ -129,7 +129,7 @@ fn combine_expressions_helper<F: FieldExt>(
 
             Ok(ExpressionStandard::Product(
                 out.into_iter()
-                    .map(|mles| combine_mles_refs(mles, new_bits))
+                    .map(|mles| combine_mles(mles, new_bits))
                     .collect_vec(),
             ))
         }
@@ -171,7 +171,8 @@ fn combine_expressions_helper<F: FieldExt>(
     }
 }
 
-pub fn combine_mles_refs<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> DenseMleRef<F> {
+/// for batching
+pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> DenseMleRef<F> {
     let old_indices = mles[0].mle_indices();
     let old_num_vars = mles[0].num_vars();
     let layer_id = mles[0].get_layer_id();

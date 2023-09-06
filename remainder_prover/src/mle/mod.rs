@@ -38,6 +38,8 @@ where
     fn get_padded_evaluations(&self) -> Vec<F>;
 
     fn add_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
+
+    fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>>;
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
