@@ -187,10 +187,10 @@ impl <F: FieldExt> Combine2Circuits<F> {
             dummy_permuted_input_data_mle,
             dummy_decision_node_paths_mle,
             dummy_leaf_node_paths_mle,
-            dummy_multiplicities_bin_decomp_mle_decision,
-            dummy_multiplicities_bin_decomp_mle_leaf,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<F>();
+            mut dummy_multiplicities_bin_decomp_mle_decision,
+            mut dummy_multiplicities_bin_decomp_mle_leaf,
+            mut dummy_decision_nodes_mle,
+            mut dummy_leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<F>();
             
         
         // deal w input 
@@ -204,6 +204,10 @@ impl <F: FieldExt> Combine2Circuits<F> {
             Box::new(&mut dummy_permuted_input_data_mle_combined),
             Box::new(&mut dummy_decision_node_paths_mle_combined),
             Box::new(&mut dummy_leaf_node_paths_mle_combined),
+            Box::new(&mut dummy_multiplicities_bin_decomp_mle_decision),
+            Box::new(&mut dummy_multiplicities_bin_decomp_mle_leaf),
+            Box::new(&mut dummy_decision_nodes_mle),
+            Box::new(&mut dummy_leaf_nodes_mle),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
         let input_prefix_bits = input_layer.fetch_prefix_bits(); // for debug purpose
