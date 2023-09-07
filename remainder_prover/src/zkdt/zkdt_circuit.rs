@@ -484,19 +484,23 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
 
         let (mut permutation_circuit,
             mut attribute_consistency_circuit,
+            mut multiset_circuit,
             input_layer) = self.create_sub_circuits();
 
         let permutation_witness = permutation_circuit.yield_sub_circuit();
         let attribute_consistency_witness = attribute_consistency_circuit.yield_sub_circuit();
+        let multiset_consistency_witness = multiset_circuit.yield_sub_circuit();
 
         let (layers, output_layers) = combine_layers(
             vec![
                 permutation_witness.layers,
-                attribute_consistency_witness.layers
+                attribute_consistency_witness.layers,
+                multiset_consistency_witness.layers
             ],
             vec![
                 permutation_witness.output_layers,
-                attribute_consistency_witness.output_layers
+                attribute_consistency_witness.output_layers,
+                multiset_consistency_witness.output_layers
             ],
         )
         .unwrap();
@@ -513,6 +517,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
     fn create_sub_circuits(&mut self) -> (
             PermutationSubCircuit<F>,
             AttributeConsistencySubCircuit<F>,
+            MultiSetSubCircuit<F>,
             InputLayerEnum<F, PoseidonTranscript<F>>) {
 
         let mut rng = test_rng();
@@ -564,12 +569,26 @@ impl <F: FieldExt> CombinedCircuits<F> {
         let mut attribute_consistency_circuit = AttributeConsistencySubCircuit {
             permuted_input_data_mle_vec,
             permuted_input_data_mle_vec_combined,
-            decision_node_paths_mle_vec,
-            decision_node_paths_mle_vec_combined,
+            decision_node_paths_mle_vec: decision_node_paths_mle_vec.clone(),
+            decision_node_paths_mle_vec_combined: decision_node_paths_mle_vec_combined.clone(),
             tree_height,
         };
 
-        (permutation_circuit, attribute_consistency_circuit, input_layer.to_enum())
+        let mut multiset_circuit = MultiSetSubCircuit {
+            decision_nodes_mle,
+            leaf_nodes_mle,
+            multiplicities_bin_decomp_mle_decision,
+            multiplicities_bin_decomp_mle_leaf,
+            decision_node_paths_mle_vec,
+            decision_node_paths_mle_vec_combined,
+            leaf_node_paths_mle_vec,
+            leaf_node_paths_mle_vec_combined,
+            r: F::from(rng.gen::<u64>()),
+            r_packings: (F::from(rng.gen::<u64>()), F::from(rng.gen::<u64>())),
+            tree_height,
+        };
+
+        (permutation_circuit, attribute_consistency_circuit, multiset_circuit, input_layer.to_enum())
     }
 }
 
@@ -608,7 +627,7 @@ mod tests {
     use super::{CombinedCircuits, PermutationSubCircuit, AttributeConsistencySubCircuit};
 
     #[test]
-    fn test_combine_circuit() {
+    fn test_combine_circuits() {
 
         let batched_catboost_mles = generate_mles_batch_catboost_single_tree::<Fr>();
 
