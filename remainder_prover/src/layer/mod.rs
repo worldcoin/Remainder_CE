@@ -256,13 +256,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         dbg!(&self.id);
-        dbg!(&self.expression);
         dbg!(&claim);
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
-
+        dbg!(&self.expression);
         
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
-        
 
         // --- Add prover message to the FS transcript ---
         transcript

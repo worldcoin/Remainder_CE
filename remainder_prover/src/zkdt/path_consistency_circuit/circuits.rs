@@ -17,11 +17,14 @@ pub fn create_wiring_from_num_bits(num_bits: usize) -> Vec<(usize, usize, usize)
     gates
 }
 
+/// For checking whether a path is consistent (i.e. all children of
+/// parent nodes is either 2i + 1 or 2i + 2, where `i` is the parent's
+/// node ID)
 pub struct PathCheckCircuit<F: FieldExt> {
-    pub decision_node_paths_mle: DenseMle<F, DecisionNode<F>>, 
-    pub leaf_node_paths_mle: DenseMle<F, LeafNode<F>>,
-    pub bin_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
-    pub num_copy: usize,
+    decision_node_paths_mle: DenseMle<F, DecisionNode<F>>, 
+    leaf_node_paths_mle: DenseMle<F, LeafNode<F>>,
+    bin_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
+    num_copy: usize,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
@@ -77,11 +80,28 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
         witness
     }
 }
+impl<F: FieldExt> PathCheckCircuit<F> {
+    /// Constructor
+    pub fn new(
+        decision_node_paths_mle: DenseMle<F, DecisionNode<F>>, 
+        leaf_node_paths_mle: DenseMle<F, LeafNode<F>>,
+        bin_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
+        num_copy: usize,
+    ) -> Self {
+        Self {
+            decision_node_paths_mle,
+            leaf_node_paths_mle,
+            bin_decomp_diff_mle,
+            num_copy,
+        }
+    }
+}
 
+/// Same as above, but batched version!
 pub struct PathCheckCircuitBatched<F: FieldExt> {
-    pub batched_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>, 
-    pub batched_leaf_node_paths_mle: Vec<DenseMle<F, LeafNode<F>>>,
-    pub batched_bin_decomp_diff_mle: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
+    batched_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>, 
+    batched_leaf_node_paths_mle: Vec<DenseMle<F, LeafNode<F>>>,
+    batched_bin_decomp_diff_mle: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
@@ -91,7 +111,6 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
         let num_copy = self.batched_decision_node_paths_mle.len();
         let num_copy_bits = log2(num_copy) as usize;
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
-
 
         let mut combined_decision = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.batched_decision_node_paths_mle.clone());
         let mut combined_leaf = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.batched_leaf_node_paths_mle.clone());
@@ -125,8 +144,8 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
         ).collect_vec();
         let neg_batched_builder = BatchedLayer::new(neg_builders);
 
-        let pos_sign_bits = layers.add_gkr(pos_batched_builder);
-        let neg_sign_bits = layers.add_gkr(neg_batched_builder);
+        let pos_sign_bits = layers.add_gkr(pos_batched_builder); // ID is 0
+        let neg_sign_bits = layers.add_gkr(neg_batched_builder); // ID is 1
 
         let prev_node_left_builders = self.batched_decision_node_paths_mle.iter_mut().map(
             |dec_mle| {
@@ -180,8 +199,8 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
 
         let curr_leaf_batched_builder = BatchedLayer::new(curr_node_leaf_builders);
     
-        let curr_decision = layers.add_gkr(curr_decision_batched_builder);
-        let curr_leaf = layers.add_gkr(curr_leaf_batched_builder);
+        let curr_decision = layers.add_gkr(curr_decision_batched_builder); // ID is 2
+        let curr_leaf = layers.add_gkr(curr_leaf_batched_builder); // ID is 3
 
         let curr_dec_leaf_builders = curr_decision.into_iter().zip(curr_leaf.into_iter()).map(
             |(dec_mle, leaf_mle)| {
@@ -192,22 +211,35 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
         ).collect_vec();
 
         let curr_dec_leaf_batched_builder = BatchedLayer::new(curr_dec_leaf_builders);
-        let curr_node_decision_leaf = layers.add_gkr(curr_dec_leaf_batched_builder);
+        let curr_node_decision_leaf = layers.add_gkr(curr_dec_leaf_batched_builder); // ID is 4
         dbg!(&curr_node_decision_leaf);
 
+        let prev_node_right = layers.add_gkr(prev_right_batched_builder); // ID is 5
+        let prev_node_left = layers.add_gkr(prev_left_batched_builder); // ID is 6
 
-        let prev_node_right = layers.add_gkr(prev_right_batched_builder);
-        let prev_node_left = layers.add_gkr(prev_left_batched_builder);
-
+        // --- Okay so we need to unbatch by FIRST grabbing all of the decisions and leaves on both sides ---
+        // --- Then flattening those first ---
+        // --- Then merging with each other the batched versions ---
+        // We have to do this because that's what the batched expression expects
+        // Unfortunately we'll have to rewire the gates after this
         let flattened_curr = unbatch_mles(curr_node_decision_leaf);
         dbg!(&flattened_curr);
+
+        // --- Debug ---
+        let mut flattened_curr_ref_clone = flattened_curr.clone().mle_ref();
+        flattened_curr_ref_clone.index_mle_indices(0);
+        for (idx, chal) in vec![1, 2, 1, 2, 1].into_iter().enumerate() {
+            flattened_curr_ref_clone.fix_variable(idx, F::from(chal));
+            dbg!(&flattened_curr_ref_clone);
+        }
+
         let flattened_prev_right = unbatch_mles(prev_node_right);
         let flattened_prev_left = unbatch_mles(prev_node_left);
         
         let nonzero_gates = create_wiring_from_num_bits(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
 
-        let res_neg = layers.add_add_gate_batched(nonzero_gates.clone(), flattened_curr.clone().mle_ref(), flattened_prev_left.mle_ref(), num_copy_bits);
-        let res_pos = layers.add_add_gate_batched(nonzero_gates, flattened_curr.clone().mle_ref(), flattened_prev_right.mle_ref(), num_copy_bits);
+        let res_neg = layers.add_add_gate_batched(nonzero_gates.clone(), flattened_curr.clone().mle_ref(), flattened_prev_left.mle_ref(), num_copy_bits); // ID is 7
+        let res_pos = layers.add_add_gate_batched(nonzero_gates, flattened_curr.clone().mle_ref(), flattened_prev_right.mle_ref(), num_copy_bits); // ID is 8
 
         // let neg_sign_bits_fix = neg_sign_bits.into_iter().map(
         //     |neg_sign_bit_mle| {
@@ -239,11 +271,10 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
             }
         ).collect_vec();
 
-
         let sign_bit_product_batched_builder = BatchedLayer::new(sign_bit_product_builders);
 
-        let sign_product_res = layers.add_gkr(sign_bit_product_batched_builder);
-        let final_res = combine_zero_mle_ref(sign_product_res);
+        let sign_product_res = layers.add_gkr(sign_bit_product_batched_builder); // ID is 9
+        let final_res = combine_zero_mle_ref(sign_product_res); // ID is 10
 
         let witness: Witness<F, Self::Transcript> = Witness {
             layers,
@@ -252,6 +283,20 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
         };
 
         witness
+    }
+}
+impl<F: FieldExt> PathCheckCircuitBatched<F> {
+    /// Constructor
+    pub fn new(
+        batched_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>, 
+        batched_leaf_node_paths_mle: Vec<DenseMle<F, LeafNode<F>>>,
+        batched_bin_decomp_diff_mle: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
+    ) -> Self {
+        Self {
+            batched_decision_node_paths_mle,
+            batched_leaf_node_paths_mle,
+            batched_bin_decomp_diff_mle
+        }
     }
 }
 

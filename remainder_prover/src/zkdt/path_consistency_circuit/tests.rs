@@ -26,12 +26,12 @@ mod tests {
         //let num_copy_bits = log2(dummy_decision_node_paths_mle.len());
         //let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
 
-        let mut circuit = PathCheckCircuit {
-            decision_node_paths_mle: dummy_decision_node_paths_mle[0].clone(), 
-            leaf_node_paths_mle: dummy_leaf_node_paths_mle[0].clone(),
-            bin_decomp_diff_mle: dummy_binary_decomp_diffs_mle[0].clone(),
-            num_copy: 0,
-        };
+        let mut circuit = PathCheckCircuit::new(
+            dummy_decision_node_paths_mle[0].clone(), 
+            dummy_leaf_node_paths_mle[0].clone(),
+            dummy_binary_decomp_diffs_mle[0].clone(),
+            0,
+        );
         let now = Instant::now();
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
         let proof = circuit.prove(&mut transcript);
@@ -72,16 +72,15 @@ mod tests {
         // let num_copy_bits = log2(dummy_decision_node_paths_mle.len());
         // let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
 
-        let mut circuit = PathCheckCircuitBatched {
-            batched_decision_node_paths_mle: dummy_decision_node_paths_mle.clone(), 
-            batched_leaf_node_paths_mle: dummy_leaf_node_paths_mle.clone(),
-            batched_bin_decomp_diff_mle: dummy_binary_decomp_diffs_mle.clone(),
-        };
+        let mut circuit = PathCheckCircuitBatched::new(
+            dummy_decision_node_paths_mle.clone(), 
+            dummy_leaf_node_paths_mle.clone(),
+            dummy_binary_decomp_diffs_mle.clone(),
+        );
         let now = Instant::now();
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
         let proof = circuit.prove(&mut transcript);
         println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
-
 
         match proof {
             Ok(proof) => {

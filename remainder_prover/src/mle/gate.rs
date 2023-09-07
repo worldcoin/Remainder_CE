@@ -45,7 +45,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
             .ok_or(GateError::Phase1InitError)
             .unwrap();
 
-        dbg!(&first_message);
+        // dbg!(&first_message);
 
         let mut challenges: Vec<F> = vec![];
         transcript
@@ -157,7 +157,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
             sumcheck_rounds.extend(sumcheck_rounds_y.into_iter());
             // sumcheck rounds (binding y)
 
-            dbg!(&sumcheck_rounds);
+            // dbg!(&sumcheck_rounds);
 
             Ok(sumcheck_rounds.into())
         } else {
@@ -1179,7 +1179,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             //     .collect();
             sumcheck_rounds.extend(next_messages.0);
 
-            dbg!(&sumcheck_rounds);
+            // dbg!(&sumcheck_rounds);
 
             return Ok(sumcheck_rounds.into());
         } else {

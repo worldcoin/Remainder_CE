@@ -70,7 +70,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
 
         self.counter += 1;
 
-        Ok(F::from(self.counter as u64))
+        Ok(F::from((self.counter % 2 + 1) as u64))
         //Ok(output)
 
     }

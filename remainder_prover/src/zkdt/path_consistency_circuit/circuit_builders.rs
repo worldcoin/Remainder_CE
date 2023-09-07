@@ -2,7 +2,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef, Mle}, zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode}, layer::{LayerBuilder, LayerId}, expression::ExpressionStandard};
 
-
+/// b_s grabbing
 pub struct SignBit<F: FieldExt> {
     bit_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
 }
@@ -25,6 +25,7 @@ impl<F: FieldExt> LayerBuilder<F> for SignBit<F> {
 }
 
 impl<F: FieldExt> SignBit<F> {
+    /// Constructor
     pub fn new(
         bit_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>
     ) -> Self {
@@ -34,6 +35,7 @@ impl<F: FieldExt> SignBit<F> {
     }
 }
 
+/// 1 - b_s
 pub struct OneMinusSignBit<F: FieldExt> {
     bit_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
 }
@@ -59,6 +61,7 @@ impl<F: FieldExt> LayerBuilder<F> for OneMinusSignBit<F> {
 }
 
 impl<F: FieldExt> OneMinusSignBit<F> {
+    /// Constructor
     pub fn new(
         bit_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>
     ) -> Self {
@@ -68,7 +71,7 @@ impl<F: FieldExt> OneMinusSignBit<F> {
     }
 }
 
-
+/// Testing purposes only!
 pub struct SignBitProductBuilder<F: FieldExt> {
     pos_bit_mle: DenseMle<F, F>,
     neg_bit_mle: DenseMle<F, F>,
@@ -103,6 +106,7 @@ impl<F: FieldExt> LayerBuilder<F> for SignBitProductBuilder<F> {
 }
 
 impl<F: FieldExt> SignBitProductBuilder<F> {
+    /// Constructor
     pub fn new(
         pos_bit_mle: DenseMle<F, F>,
         neg_bit_mle: DenseMle<F, F>,
@@ -141,6 +145,7 @@ impl<F: FieldExt> LayerBuilder<F> for PrevNodeLeftBuilderDecision<F> {
 }
 
 impl<F: FieldExt> PrevNodeLeftBuilderDecision<F> {
+    /// Constructor
     pub fn new(
         mle_path_decision: DenseMle<F, DecisionNode<F>>
     ) -> Self {
@@ -172,6 +177,7 @@ impl<F: FieldExt> LayerBuilder<F> for PrevNodeRightBuilderDecision<F> {
 }
 
 impl<F: FieldExt> PrevNodeRightBuilderDecision<F> {
+    /// Constructor
     pub fn new(
         mle_path_decision: DenseMle<F, DecisionNode<F>>
     ) -> Self {
@@ -202,6 +208,7 @@ impl<F: FieldExt> LayerBuilder<F> for CurrNodeBuilderDecision<F> {
 }
 
 impl<F: FieldExt> CurrNodeBuilderDecision<F> {
+    /// Constructor
     pub fn new(
         mle_path_decision: DenseMle<F, DecisionNode<F>>
     ) -> Self {
@@ -232,6 +239,7 @@ impl<F: FieldExt> LayerBuilder<F> for CurrNodeBuilderLeaf<F> {
 }
 
 impl<F: FieldExt> CurrNodeBuilderLeaf<F> {
+    /// Constructor
     pub fn new(
         mle_path_leaf: DenseMle<F, LeafNode<F>>
     ) -> Self {
@@ -241,7 +249,7 @@ impl<F: FieldExt> CurrNodeBuilderLeaf<F> {
     }
 }
 
-// --- FOR TESTING ONLY ---
+/// FOR TESTING ONLY
 pub struct DumbBuilder<F: FieldExt> {
     mle: DenseMle<F, F>,
 }
@@ -262,6 +270,7 @@ impl<F: FieldExt> LayerBuilder<F> for DumbBuilder<F> {
 }
 
 impl<F: FieldExt> DumbBuilder<F> {
+    /// Constructor
     pub fn new(
         mle: DenseMle<F, F>
     ) -> Self {

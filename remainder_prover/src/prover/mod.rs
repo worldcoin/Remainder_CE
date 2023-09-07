@@ -114,8 +114,9 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add an AddGate to a list of layers
     pub fn add_add_gate_batched(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_copy_bits: usize) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
-        // dbg!(&lhs);
-        // dbg!(&rhs);
+        dbg!(&id);
+        dbg!(&lhs);
+        dbg!(&rhs);
         let gate: AddGateBatched<F, Tr> = AddGateBatched::new(num_copy_bits, nonzero_gates.clone(), lhs.clone(), rhs.clone(), id.clone());
         let max_gate_val = nonzero_gates.clone().into_iter().fold(
             0, 
