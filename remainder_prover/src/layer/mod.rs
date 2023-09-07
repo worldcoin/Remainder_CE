@@ -30,7 +30,10 @@ use remainder_shared_types::{
     FieldExt,
 };
 
-use self::{claims::ClaimError, layer_enum::LayerEnum};
+use self::{
+    claims::{Claim, ClaimError},
+    layer_enum::LayerEnum,
+};
 
 #[derive(Error, Debug, Clone)]
 /// Errors to do with working with a Layer
@@ -156,7 +159,8 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         let (max_round, beta) = {
             let (expression, _) = self.mut_expression_and_beta();
 
-            let mut beta = BetaTable::new(claim).map_err(LayerError::BetaError)?;
+            let mut beta =
+                BetaTable::new(claim.get_point().clone()).map_err(LayerError::BetaError)?;
 
             // --- This should always be equivalent to the number of indices within the beta table ---
             let max_round = std::cmp::max(
@@ -232,7 +236,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-        let val = claim.1.clone();
+        let val = claim.get_result().clone();
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
@@ -295,7 +299,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // (i.e. the first verification step of sumcheck)
         let mut prev_evals = &sumcheck_prover_messages[0];
 
-        if prev_evals[0] + prev_evals[1] != claim.1 {
+        if prev_evals[0] + prev_evals[1] != claim.get_result() {
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
             ));
@@ -341,7 +345,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---
         let beta_fn_evaluated_at_challenge_point =
-            compute_beta_over_two_challenges(&claim.0, &challenges);
+            compute_beta_over_two_challenges(claim.get_point(), &challenges);
 
         // --- The actual value should just be the product of the two ---
         let mle_evaluated_at_challenge_coord =
@@ -398,7 +402,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     let claimed_value = mle_ref.bookkeeping_table()[0];
 
                     // --- Construct the claim ---
-                    let claim: Claim<F> = (fixed_mle_indices, claimed_value);
+                    let claim: Claim<F> = Claim::new(fixed_mle_indices, claimed_value);
 
                     // --- Push it into the list of claims ---
                     // --- Also push the layer_id ---
@@ -427,7 +431,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let claimed_value = mle_ref.bookkeeping_table()[0];
 
                         // --- Construct the claim ---
-                        let claim: Claim<F> = (fixed_mle_indices, claimed_value);
+                        let claim: Claim<F> = Claim::new(fixed_mle_indices, claimed_value);
 
                         // --- Push it into the list of claims ---
                         // --- Also push the layer_id ---
@@ -487,7 +491,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                 // let mut fix_expr = expr.clone();
                 // let eval_w_l = fix_expr.evaluate_expr(new_chal);
 
-                let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
+                let mut beta = BetaTable::new(new_chal).unwrap();
                 beta.table.index_mle_indices(0);
                 let eval = compute_sumcheck_message(&expr, 0, degree, &beta).unwrap();
                 let Evals(evals) = eval;

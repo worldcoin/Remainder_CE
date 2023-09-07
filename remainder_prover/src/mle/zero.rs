@@ -5,10 +5,10 @@
 use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{Claim, LayerId};
+use crate::layer::{claims::Claim, LayerId};
 use remainder_shared_types::FieldExt;
 
-use super::{MleIndex, MleRef, mle_enum::MleEnum};
+use super::{mle_enum::MleEnum, MleIndex, MleRef};
 
 ///An MLERef that is only zeros; Typically used for the output layer
 #[derive(Debug, Clone, Serialize, Deserialize)]

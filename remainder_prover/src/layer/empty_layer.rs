@@ -30,7 +30,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
     fn prove_rounds(
         &mut self,
-        _: super::Claim<F>,
+        _: Claim<F>,
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let eval =
@@ -41,11 +41,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
     fn verify_rounds(
         &mut self,
-        claim: super::Claim<F>,
+        claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
         _: &mut Self::Transcript,
     ) -> Result<(), LayerError> {
-        if sumcheck_rounds[0][0] != claim.1 {
+        if sumcheck_rounds[0][0] != claim.get_result() {
             return Err(LayerError::VerificationError(
                 super::VerificationError::GKRClaimCheckFailed,
             ));
@@ -93,7 +93,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                     let claimed_value = mle_ref.bookkeeping_table()[0];
 
                     // --- Construct the claim ---
-                    let claim: Claim<F> = (fixed_mle_indices, claimed_value);
+                    let claim: Claim<F> = Claim::new(fixed_mle_indices, claimed_value);
 
                     // --- Push it into the list of claims ---
                     // --- Also push the layer_id ---
@@ -122,7 +122,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                         let claimed_value = mle_ref.bookkeeping_table()[0];
 
                         // --- Construct the claim ---
-                        let claim: Claim<F> = (fixed_mle_indices, claimed_value);
+                        let claim: Claim<F> = Claim::new(fixed_mle_indices, claimed_value);
 
                         // --- Push it into the list of claims ---
                         // --- Also push the layer_id ---
@@ -149,8 +149,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: Vec<Vec<F>>,
-        claimed_vals: &mut Vec<F>,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
