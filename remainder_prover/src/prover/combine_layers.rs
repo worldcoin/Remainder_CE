@@ -46,7 +46,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
                 .map(|size| total_size - size)
                 .collect_vec();
             let max_extra_bits = extra_bits.iter().max().unwrap();
-            let sorted_indices = argsort(&layer_sizes.collect_vec(), true);
+            let sorted_indices = argsort(&layer_sizes.collect_vec(), false);
             let mut bit_indices = bits_iter::<F>(*max_extra_bits);
             //Go through the list of layers from largest to smallest
             //When a layer is added it comsumes a possible permutation of bits from the iterator
@@ -54,13 +54,13 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             sorted_indices
                 .into_iter()
                 .map(|index| {
-                    let bits = bit_indices.next().ok_or(CombineError).unwrap();
-                    if bits.len() != extra_bits[index] {
-                        let diff = bits.len() - extra_bits[index];
+                    if *max_extra_bits != extra_bits[index] {
+                        let diff = max_extra_bits - extra_bits[index];
                         for _ in 0..((1 << diff) - 1) {
                             let _ = bit_indices.next();
                         }
                     }
+                    let bits = bit_indices.next().ok_or(CombineError).unwrap();
                     (index, bits[0..extra_bits[index]].to_vec())
                 })
                 //resort them in thier original order so that the zip later works
@@ -71,12 +71,14 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
         .filter(|item: &Vec<Vec<MleIndex<F>>>| item.len() > 1)
         .collect_vec();
 
+    dbg!(&bit_counts);
+
     //The layers of the circuit are the inner vec
     let layer_bits = (0..layers.len())
         .map(|index| {
             bit_counts
                 .iter()
-                .map(|bit_counts| bit_counts[index].clone())
+                .map(|bit_counts| bit_counts.get(index).cloned().unwrap_or_default())
                 .collect_vec()
         })
         .collect_vec();
@@ -212,6 +214,8 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
 fn combine_expressions<F: FieldExt>(
     mut exprs: Vec<ExpressionStandard<F>>,
 ) -> ExpressionStandard<F> {
+    let floor_size = exprs.iter().map(|expr| expr.get_expression_size(0)).min().unwrap();
+
     loop {
         if exprs.len() == 1 {
             break exprs.remove(0);
@@ -224,19 +228,19 @@ fn combine_expressions<F: FieldExt>(
         });
 
         let first = exprs.remove(0);
+        let first_size = first.get_expression_size(0);
         let second = exprs.remove(0);
 
         let diff = second.get_expression_size(0) - first.get_expression_size(0);
 
-        let expr = if diff == 0 {
+        let first = add_padding(first, diff);
+
+        let expr = if first_size == floor_size {
             second.concat_expr(first)
         } else {
-            let first = add_padding(first, diff);
-
             first.concat_expr(second)
         };
-
-        exprs.push(expr);
+        exprs.insert(0, expr);
     }
 }
 

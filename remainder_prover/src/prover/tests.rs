@@ -268,6 +268,7 @@ fn test_gkr_simplest_circuit() {
 /// Circuit which just subtracts its two halves! No input-output layer needed.
 struct SimplestBatchedCircuit<F: FieldExt> {
     batched_mle: Vec<DenseMle<F, Tuple2<F>>>,
+    batch_bits: usize
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
 
@@ -289,7 +290,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let diff_builders = self.batched_mle.clone().into_iter().map(
-            |mle| {
+            |mut mle| {
+                mle.add_prefix_bits(Some(vec![MleIndex::Iterated; self.batch_bits]));
                 let diff_builder = from_mle(
                     mle,
                     // --- The expression is a simple diff between the first and second halves ---
@@ -356,7 +358,7 @@ fn test_gkr_simplest_batched_circuit() {
     //     None,
     // );
 
-    let circuit: SimplestBatchedCircuit<Fr> = SimplestBatchedCircuit { batched_mle };
+    let circuit: SimplestBatchedCircuit<Fr> = SimplestBatchedCircuit { batched_mle, batch_bits: 2 };
 
     test_circuit(circuit, None);
 
@@ -1210,6 +1212,215 @@ fn test_complex_batch_gkr() {
     )}).collect();
 
     let circuit = BatchedTestCircuit { mle, mle_2, size };
+
+    test_circuit(circuit, None);
+}
+
+struct Combine3Circuit<F: FieldExt> {
+    test_circuit: TestCircuit<F>,
+    simple_circuit: SimpleCircuit<F>,
+    batch_circuit: SimplestBatchedCircuit<F>,
+}
+
+impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        let test_witness = self.test_circuit.synthesize();
+        let simple_witness = self.simple_circuit.synthesize();
+        let batch_witness = self.batch_circuit.synthesize();
+
+        let Witness {
+            layers: test_layers,
+            output_layers: test_outputs,
+            input_layers: test_inputs,
+        } = test_witness;
+
+        let Witness {
+            layers: mut simple_layers,
+            output_layers: simple_outputs,
+            input_layers: simple_inputs,
+        } = simple_witness;
+
+        let Witness {
+            layers: mut batch_layers,
+            output_layers: batch_outputs,
+            input_layers: batch_inputs,
+        } = batch_witness;
+
+        // for input vv
+        let input_layers: Vec<InputLayerEnum<F, PoseidonTranscript<F>>> = test_inputs
+            .into_iter()
+            .chain(simple_inputs.into_iter().map(|mut input| {
+                let new_layer_id = match input.layer_id() {
+                    LayerId::Input(id) => LayerId::Input(id + 1),
+                    LayerId::Layer(_) => panic!(),
+                };
+                input.set_layer_id(new_layer_id);
+                input
+            }))
+            .chain(batch_inputs.into_iter().map(|mut input| {
+                let new_layer_id = match input.layer_id() {
+                    LayerId::Input(id) => LayerId::Input(id + 2),
+                    LayerId::Layer(_) => panic!(),
+                };
+                input.set_layer_id(new_layer_id);
+                input
+            }))
+            .collect();
+
+        for layer in simple_layers.0.iter_mut() {
+            let expression = match layer {
+                LayerEnum::Gkr(layer) => &mut layer.expression,
+                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
+                _ => panic!(),
+            };
+
+            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
+                match expr {
+                    ExpressionStandard::Mle(mle) => {
+                        if mle.layer_id == LayerId::Input(0) {
+                            mle.layer_id = LayerId::Input(1)
+                        }
+                        Ok(())
+                    }
+                    ExpressionStandard::Product(mles) => {
+                        for mle in mles {
+                            if mle.layer_id == LayerId::Input(0) {
+                                mle.layer_id = LayerId::Input(1)
+                            }
+                        }
+                        Ok(())
+                    }
+                    ExpressionStandard::Constant(_)
+                    | ExpressionStandard::Scaled(_, _)
+                    | ExpressionStandard::Sum(_, _)
+                    | ExpressionStandard::Negated(_)
+                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
+                }
+            };
+
+            expression.traverse_mut(&mut closure).unwrap();
+        }
+
+            // for input ^^
+
+        for layer in batch_layers.0.iter_mut() {
+            let expression = match layer {
+                LayerEnum::Gkr(layer) => &mut layer.expression,
+                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
+                _ => panic!(),
+            };
+
+            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
+                match expr {
+                    ExpressionStandard::Mle(mle) => {
+                        if mle.layer_id == LayerId::Input(0) {
+                            mle.layer_id = LayerId::Input(2)
+                        }
+                        Ok(())
+                    }
+                    ExpressionStandard::Product(mles) => {
+                        for mle in mles {
+                            if mle.layer_id == LayerId::Input(0) {
+                                mle.layer_id = LayerId::Input(2)
+                            }
+                        }
+                        Ok(())
+                    }
+                    ExpressionStandard::Constant(_)
+                    | ExpressionStandard::Scaled(_, _)
+                    | ExpressionStandard::Sum(_, _)
+                    | ExpressionStandard::Negated(_)
+                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
+                }
+            };
+
+            expression.traverse_mut(&mut closure).unwrap();
+        }
+
+        let (layers, output_layers) = combine_layers(
+            vec![test_layers, simple_layers, batch_layers],
+            vec![test_outputs, simple_outputs, batch_outputs],
+        )
+        .unwrap();
+
+        Witness {
+            layers,
+            output_layers,
+            input_layers,
+        }
+    }
+}
+
+#[test]
+fn test_combine_3_circuit() {
+    let mut rng = test_rng();
+    let size = 4;
+    let size_expanded = 1 << size;
+    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+    // tracing::subscriber::set_global_default(subscriber)
+    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+
+    // --- This should be 2^2 ---
+    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+        LayerId::Input(0),
+        None,
+    );
+    // --- This should be 2^2 ---
+    let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+        LayerId::Input(0),
+        None,
+    );
+
+    let test_circuit_1: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
+
+    let size = 4;
+
+    // --- This should be 2^2 ---
+    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        (0..1 << size).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+        LayerId::Input(0),
+        None,
+    );
+    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+    //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
+    //     LayerId::Input(0),
+    //     None,
+    // );
+
+    let simple_circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
+
+    let size = 1 << 3;
+
+    let batch_size = 1 << 2;
+    // --- This should be 2^2 ---
+    let batched_mle: Vec<DenseMle<Fr, Tuple2<Fr>>> = (0..batch_size).map(|idx1| {
+        DenseMle::new_from_iter(
+        (0..size).map(|idx| {
+            let num = Fr::from(rng.gen::<u64>());
+            //let second_num = Fr::from(rng.gen::<u64>());
+            // let num = Fr::from(idx + idx1);
+            (num, num).into()
+        }),
+        LayerId::Input(0),
+        None)
+    }).collect_vec();
+    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
+    //     LayerId::Input(0),
+    //     None,
+    // );
+
+    let batch_circuit = SimplestBatchedCircuit { batched_mle, batch_bits: 2 };
+
+    let circuit = Combine3Circuit {
+        test_circuit: test_circuit_1,
+        simple_circuit,
+        batch_circuit,
+    };
 
     test_circuit(circuit, None);
 }
