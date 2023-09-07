@@ -10,4 +10,7 @@ pub mod helpers;
 pub mod zkdt_layer;
 pub mod zkdt_circuit_parts;
 pub mod zkdt_circuit;
+/// For cache-ing and other auxiliary things
 pub mod constants;
+/// Binary recomp circuit component
+pub mod binary_recomp_circuit;

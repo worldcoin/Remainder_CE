@@ -1,6 +1,7 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
-use std::iter::repeat_with;
+use std::{iter::repeat_with, ops::Range};
 
+use ark_std::{test_rng, rand::{Rng, distributions::uniform::SampleRange}};
 use itertools::Itertools;
 use poseidon::Poseidon;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,7 @@ pub struct PoseidonTranscript<F: FieldExt> {
     #[serde(skip)]
     #[serde(default = "default_sponge")]
     sponge: Poseidon<F, 3, 2>,
+    counter: usize,
 }
 
 impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
@@ -31,6 +33,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         // let params = PoseidonConfig::new(8, 60, 5, mds, ark, 2, 1);
         Self {
             sponge: default_sponge(),
+            counter: 1,
         }
     }
 
@@ -41,6 +44,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
     ) -> Result<(), TranscriptError> {
         trace!(module = "Transcript", "Absorbing: {}, {:?}", label, element);
         self.sponge.update(&[element]);
+        // dbg!(&element);
         Ok(())
     }
 
@@ -55,16 +59,19 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
             label,
             elements
         );
+        // dbg!(&elements);
         self.sponge.update(&elements);
         Ok(())
     }
 
     fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptError> {
-        // let output = self.sponge.squeeze();
-        // trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
-        // Ok(output)
-
-        Ok(F::from(1_u64))
+        let output = self.sponge.squeeze();
+        trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
+        // dbg!(&output);
+        Ok(output)
+        // self.counter = self.counter*2 + 11;
+        // // dbg!(self.counter);
+        // Ok(F::from(self.counter as u64))
     }
 
     fn get_challenges(
@@ -72,8 +79,11 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         label: &'static str,
         len: usize,
     ) -> Result<Vec<F>, TranscriptError> {
-        // let output = (0..len).map(|_| self.sponge.squeeze()).collect_vec();
-        // trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
+        let output = (0..len).map(|_| self.sponge.squeeze()).collect_vec();
+        trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
+        Ok(output)
+
+        // let output = (0..len).map(|idx| F::from(idx as u64)).collect_vec();
         // Ok(output)
 
         Ok(repeat_with(|| F::from(1_u64)).take(len).collect_vec())

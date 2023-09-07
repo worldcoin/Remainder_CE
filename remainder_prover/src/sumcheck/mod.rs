@@ -115,7 +115,31 @@ impl<F: FieldExt> Mul<&F> for Evals<F> {
 /// value (e.g. if all variables are bound and/or the expression is just over
 /// a constant), or a vector of evals at 0, ..., deg - 1 for an expression
 /// where there are iterated variables.
+/// 
+/// Binary mult tree
+/// []
+/// [] [] []
+/// [] []
+/// []
+/// V_i(b_1, ..., b_n) = V_{i + 1}(0, b_1, ..., b_n) + V_{i + 1}(1, b_1, ..., b_n)
+/// \tilde{V_i}(g_1, ..., g_n) = \sum_{b_1, ..., b_n} \beta(g, b) * 
+///     (\tilde{V_{i + 1}}(0, b_1, ..., b_n) + \tilde{V_{i + 1}}(1, b_1, ..., b_n))
 ///
+/// \tilde{V_i}(g_1, ..., g_n) = c_1
+/// P -> g_1(x) = \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * 
+///     (\tilde{V_{i + 1}}(0, x, b_2, ..., b_n) + \tilde{V_{i + 1}}(1, x, b_2, ..., b_n)) + 3
+/// 
+/// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * \tilde{V_{i + 1}}(0, x, ..., b_n) + 
+/// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * \tilde{V_{i + 1}}(1, x, ..., b_n) * \tilde{V_{i + 1}}(1, x, ..., b_n)+ 
+/// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * 3
+/// 
+/// beta_table = \beta(g, b_1, b_2, ..., b_n)
+/// 
+/// g_1(x) = g_{11}(x) = /// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * \tilde{V_{i + 1}}(0, x, ..., b_n) + 
+/// + g_{12}(x) =  \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * \tilde{V_{i + 1}}(1, x, ..., b_n) * \tilde{V_{i + 1}}(1, x, ..., b_n)+ 
+/// + g_{13}(x) = /// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * 3
+/// 
+/// g_1(0) + g_1(1) = c_1
 /// # Arguments
 /// * `expr` - The actual expression to evaluate
 /// * `round_index` - The sumcheck round index, I think??
@@ -135,6 +159,11 @@ pub(crate) fn compute_sumcheck_message<
     max_degree: usize,
     beta_table: &BetaTable<F>,
 ) -> Result<Evals<F>, ExpressionError> {
+
+    // --- TODO!(ryancao): (From Zhenfei): So we can probably cache this beta table evaluation somehow
+    // and then use those evals many times and not have to do this over and over again
+    // Zhenfei's idea: Just memoize
+
     // --- Constant evaluation is just Sum(k) ---
     let constant = |constant, beta_mle_ref: &DenseMleRef<F>| {
         // need to actually treat this like a 'scaled' because there is a beta table
@@ -155,6 +184,8 @@ pub(crate) fn compute_sumcheck_message<
         Ok(beta_eval * constant)
     };
 
+    // V_i(b_1, ..., b_n) = ((1 - b1) * (V_{i + 1}(0, 0, b2, ..., bn) + V_{i + 1}(0, 0, b2, ..., bn))) + 
+    // b1 * (V_{i + 1}(0, 0, b2, ..., bn) * V_{i + 1}(0, 0, b2, ..., bn)))
     let selector = |index: &MleIndex<F>, a, b| match index {
         MleIndex::IndexedBit(indexed_bit) => {
             match Ord::cmp(&round_index, indexed_bit) {
@@ -284,7 +315,7 @@ pub(crate) fn compute_sumcheck_message<
 ///
 /// # Errors:
 /// - MleError::EmptyMleList -- when there are zero MLEs within the list
-/// - MleError::NotIndexedError -- when ANY MLE is not fully indexed
+/// - TODO!(ryancao || vishady): MleError::NotIndexedError -- when ANY MLE is not fully indexed
 pub fn evaluate_mle_ref_product<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
@@ -366,7 +397,6 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
 
                         // let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
                         let step = second - first;
-
                         let successors =
                             std::iter::successors(Some(second), move |item| Some(*item + step));
                         //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1

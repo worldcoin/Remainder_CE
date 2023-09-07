@@ -86,7 +86,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         num_copy_bits: usize,
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
-        let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits);
+        let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits, None);
         let max_gate_val = nonzero_gates.clone().into_iter().fold(
             0, 
             |acc, (z, _, _)| {
@@ -139,6 +139,8 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
                     }
                 );
             });
+
+        dbg!(&sum_table);
 
         let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
         res_mle
