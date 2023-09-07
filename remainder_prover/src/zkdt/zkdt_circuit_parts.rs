@@ -343,13 +343,14 @@ struct MultiSetCircuit<F: FieldExt> {
     leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
     r: F,
     r_packings: (F, F),
-    tree_height: usize,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+
+        let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
         
         let mut dummy_decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.decision_node_paths_mle_vec.clone());
         let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.leaf_node_paths_mle_vec.clone());
@@ -552,7 +553,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let mut exponentiated_decision = prev_prod_decision;
         let mut exponentiated_leaf = prev_prod_leaf;
 
-        for _ in 0..self.tree_height-1 {
+        for _ in 0..tree_height-1 {
 
             // layer 20, or i+20
             let prod_builder_decision = SplitProductBuilder::new(
@@ -948,7 +949,6 @@ mod tests {
             leaf_node_paths_mle_vec,
             r: Fr::from(rng.gen::<u64>()),
             r_packings: (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())),
-            tree_height,
         };
 
         test_circuit(circuit, None);
