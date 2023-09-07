@@ -9,7 +9,7 @@ use std::{io::Empty, iter};
 use ark_std::{log2, test_rng};
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum}, combine_layers::combine_layers}};
+use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
 use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
@@ -20,8 +20,6 @@ use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
 pub struct FSPermutationCircuit<F: FieldExt> {
     pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
     pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,      // batched
-    pub r: F,
-    pub r_packing: F,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
@@ -45,7 +43,30 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
             let input_prefix_bits = input_layer.fetch_prefix_bits();
             let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
             // TODO!(ende) change back to ligero
-    
+            let mut input_layer = input_layer.to_enum();
+
+            let input_commit = input_layer
+                .commit()
+                .map_err(|err| GKRError::InputLayerError(err))?;
+                InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript).unwrap();
+            
+
+            // FS 
+            let random_r = RandomInputLayer::new(transcript, 1, LayerId::Input(1));
+            let r_mle = random_r.get_mle();
+            let mut random_r = random_r.to_enum();
+            let random_r_commit = random_r
+                .commit()
+                .map_err(|err| GKRError::InputLayerError(err))?;
+
+            let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(2));
+            let r_packing_mle = random_r_packing.get_mle();
+            let mut random_r_packing = random_r_packing.to_enum();
+            let random_r_packing_commit = random_r_packing
+                .commit()
+                .map_err(|err| GKRError::InputLayerError(err))?;
+            // FS
+
             let mut layers: Layers<_, Self::Transcript> = Layers::new();
     
             let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
@@ -57,10 +78,10 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
                         let mut input_data_mle = input_data_mle.clone();
                         // TODO!(ende) fix this atrocious fixed(false)
                         input_data_mle.add_prefix_bits(Some(dummy_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
-                        InputPackingBuilder::new(
+                        FSInputPackingBuilder::new(
                             input_data_mle,
-                            self.r,
-                            self.r_packing
+                            r_mle.clone(),
+                            r_packing_mle.clone()
                         )
                     }).collect_vec());
     
@@ -70,10 +91,10 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
                         let mut input_data_mle = input_data_mle.clone();
                         // TODO!(ende) fix this atrocious fixed(true)
                         input_data_mle.add_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
-                        InputPackingBuilder::new(
+                        FSInputPackingBuilder::new(
                             input_data_mle,
-                            self.r,
-                            self.r_packing
+                            r_mle.clone(),
+                            r_packing_mle.clone()
                         )
                     }).collect_vec());
     
@@ -104,12 +125,15 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
     
             let circuit_output = combine_zero_mle_ref(difference_mle);
     
-            Witness {
-                layers,
-                output_layers: vec![circuit_output.get_enum()],
-                input_layers: vec![input_layer.to_enum()],
-            };
-            todo!()
+            Ok((
+                Witness {
+                    layers,
+                    output_layers: vec![circuit_output.get_enum()],
+                    input_layers: vec![input_layer, random_r, random_r_packing],
+                },
+                vec![input_commit, random_r_commit, random_r_packing_commit],
+            ))
+
     }
 }
 
@@ -343,13 +367,14 @@ struct MultiSetCircuit<F: FieldExt> {
     leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
     r: F,
     r_packings: (F, F),
-    tree_height: usize,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+
+        let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
         
         let mut dummy_decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.decision_node_paths_mle_vec.clone());
         let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.leaf_node_paths_mle_vec.clone());
@@ -552,7 +577,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let mut exponentiated_decision = prev_prod_decision;
         let mut exponentiated_leaf = prev_prod_leaf;
 
-        for _ in 0..self.tree_height-1 {
+        for _ in 0..tree_height-1 {
 
             // layer 20, or i+20
             let prod_builder_decision = SplitProductBuilder::new(
@@ -694,7 +719,7 @@ mod tests {
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     use crate::prover::tests::test_circuit;
 
-    use super::{PermutationCircuit, NonBatchedAttributeConsistencyCircuit, MultiSetCircuit, AttributeConsistencyCircuit};
+    use super::{PermutationCircuit, NonBatchedAttributeConsistencyCircuit, MultiSetCircuit, AttributeConsistencyCircuit, FSPermutationCircuit};
 
     #[test]
     fn test_permutation_circuit_catboost_non_batched() {
@@ -948,7 +973,23 @@ mod tests {
             leaf_node_paths_mle_vec,
             r: Fr::from(rng.gen::<u64>()),
             r_packings: (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())),
-            tree_height,
+        };
+
+        test_circuit(circuit, None);
+    }
+
+    #[test]
+    fn test_fs_permutation_circuit_catboost_batched() {
+        let mut rng = test_rng();
+
+        let (BatchedCatboostMles {
+            input_data_mle_vec,
+            permuted_input_data_mle_vec, ..
+        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+
+        let mut circuit = FSPermutationCircuit {
+            input_data_mle_vec,
+            permuted_input_data_mle_vec,
         };
 
         test_circuit(circuit, None);

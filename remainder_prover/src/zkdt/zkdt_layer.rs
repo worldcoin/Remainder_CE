@@ -543,6 +543,42 @@ impl<F: FieldExt> DecisionPackingBuilder<F> {
     }
 }
 
+/// packs input x, FS version
+pub struct FSInputPackingBuilder<F: FieldExt> {
+    mle: DenseMle<F, InputAttribute<F>>,
+    r_mle: DenseMle<F, F>,
+    r_packing_mle: DenseMle<F, F>
+}
+
+impl<F: FieldExt> LayerBuilder<F> for FSInputPackingBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    // expressions = r - (x.attr_id + r_packing * x.attr_val)
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.mle.attr_id(None)) +
+        ExpressionStandard::products(vec![self.mle.attr_val(None), self.r_packing_mle.mle_ref()]))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let r = self.r_mle.mle_ref().bookkeeping_table[0];
+        let r_packing = self.r_packing_mle.mle_ref().bookkeeping_table[0];
+        DenseMle::new_from_iter(self.mle.into_iter().map(|InputAttribute { attr_id, attr_val }| r - (attr_id + r_packing * attr_val)), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> FSInputPackingBuilder<F> {
+    /// create new decision node packed
+    pub(crate) fn new(
+        mle: DenseMle<F, InputAttribute<F>>,
+        r_mle: DenseMle<F, F>,
+        r_packing_mle: DenseMle<F, F>
+    ) -> Self {
+        Self {
+            mle, r_mle, r_packing_mle
+        }
+    }
+}
+
 /// packs input x
 pub struct InputPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, InputAttribute<F>>,
