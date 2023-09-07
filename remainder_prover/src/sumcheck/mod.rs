@@ -203,7 +203,7 @@ pub(crate) fn compute_sumcheck_message<
                     let second: Evals<F> = a?;
 
                     let (Evals(first_evals), Evals(second_evals)) = (first, second);
-                    if (first_evals.len() == second_evals.len()) && first_evals.len() == 3 {
+                    if (first_evals.len() == second_evals.len()) {
                         // we need to combine the evals by doing (1-x) * first eval + x * second eval
                         let first_evals = Evals(
                             first_evals
@@ -498,12 +498,20 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                 acc
             },
         );
+        let eval_count = degree + 1;
 
-        let evals = vec![
-            partials[0],
-            partials[1],
-            F::from(2_u64) * partials[1] - partials[0],
-        ];
+        let step: F = partials[1] - partials[0];
+        let mut counter = 2;
+        let evals =
+        std::iter::once(partials[0]).chain(std::iter::successors(Some(partials[1]), move |item| if counter < eval_count {counter += 1; Some(*item + step)} else {None})).collect_vec();
+
+        debug_assert!(evals.len() == eval_count);
+
+        // let evals = vec![
+        //     partials[0],
+        //     partials[1],
+        //     F::from(2_u64) * step,
+        // ];
 
         Ok(Evals(evals))
     }

@@ -1,5 +1,7 @@
 //!Utilities for combining sub-circuits
 
+use std::cmp::min;
+
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -7,7 +9,7 @@ use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionStandard},
-    layer::{from_mle, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
+    layer::{from_mle, layer_enum::LayerEnum, GKRLayer, Layer, LayerId, empty_layer::EmptyLayer},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };
@@ -25,20 +27,29 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
     mut output_layers: Vec<Vec<MleEnum<F>>>,
 ) -> Result<(Layers<F, Tr>, Vec<MleEnum<F>>), CombineError> {
     let layer_count = layers.iter().map(|layers| layers.0.len()).max().unwrap();
+    let subcircuit_count = layers.len();
 
     let interpolated_layers = (0..layer_count).map(|layer_idx| {
         layers
-            .iter()
-            .filter_map(|layers| layers.0.get(layer_idx))
+            .iter().enumerate()
+            .filter_map(|(subcircuit_idx, layers)| {
+                if let Some(layer) = layers.0.get(layer_idx) {
+                    Some((subcircuit_idx, layer))
+                } else {
+                    None
+                }
+            })
             .collect_vec()
     });
 
     //The variants of the layer to be combined is the inner vec
     let bit_counts: Vec<Vec<Vec<MleIndex<F>>>> = interpolated_layers
-        .clone()
         .map(|layers| {
+            let layer_id = layers[0].1.id();
             // bits_iter(log2(layers.len()) as usize).collect_vec()
-            let layer_sizes = layers.iter().map(|layer| layer.layer_size());
+            let layer_sizes = layers.iter().map(|layer| layer.1.layer_size());
+            let layer_sizes_concrete = layer_sizes.clone().collect_vec();
+            dbg!(layer_sizes_concrete);
             let total_size = log2(layer_sizes.clone().map(|size| 1 << size).sum()) as usize;
 
             let extra_bits = layer_sizes
@@ -48,6 +59,8 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             let max_extra_bits = extra_bits.iter().max().unwrap();
             let sorted_indices = argsort(&layer_sizes.collect_vec(), false);
             let mut bit_indices = bits_iter::<F>(*max_extra_bits);
+
+            let mut sorted_and_padded_bits = vec![vec![]; subcircuit_count];
             //Go through the list of layers from largest to smallest
             //When a layer is added it comsumes a possible permutation of bits from the iterator
             //If the layer is larger than the smallest layer, then it will consume all the permutations of the bits it's using in it's sumcheck
@@ -64,9 +77,11 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
                     (index, bits[0..extra_bits[index]].to_vec())
                 })
                 //resort them in thier original order so that the zip later works
-                .sorted_by(|(index_first, _), (index_second, _)| index_first.cmp(index_second))
-                .map(|(_, bits)| bits)
-                .collect_vec()
+                .for_each(|(index, bits)| {
+                    sorted_and_padded_bits[layers[index].0] = bits;
+                });
+
+            sorted_and_padded_bits
         })
         .filter(|item: &Vec<Vec<MleIndex<F>>>| item.len() > 1)
         .collect_vec();
@@ -129,7 +144,12 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
 
             let expression = combine_expressions(expressions);
 
-            Ok(GKRLayer::new_raw(layer_id, expression).get_enum())
+            if expression.get_expression_size(0) == 0 {
+                Ok(EmptyLayer::new_raw(layer_id, expression).get_enum())
+            } else {
+                Ok(GKRLayer::new_raw(layer_id, expression).get_enum())
+            }
+
         })
         .try_collect()?;
 
@@ -216,31 +236,39 @@ fn combine_expressions<F: FieldExt>(
 ) -> ExpressionStandard<F> {
     let floor_size = exprs.iter().map(|expr| expr.get_expression_size(0)).min().unwrap();
 
+    exprs.sort_by(|first, second| {
+        first
+            .get_expression_size(0)
+            .cmp(&second.get_expression_size(0))
+    });
+
+    let mut exprs = exprs.into_iter().enumerate().collect_vec();
+
     loop {
         if exprs.len() == 1 {
-            break exprs.remove(0);
+            break exprs.remove(0).1;
         }
 
         exprs.sort_by(|first, second| {
-            first
+            first.1
                 .get_expression_size(0)
-                .cmp(&second.get_expression_size(0))
+                .cmp(&second.1.get_expression_size(0))
         });
 
-        let first = exprs.remove(0);
+        let (first_index, first) = exprs.remove(0);
         let first_size = first.get_expression_size(0);
-        let second = exprs.remove(0);
+        let (second_index, second) = exprs.remove(0);
 
         let diff = second.get_expression_size(0) - first.get_expression_size(0);
 
         let first = add_padding(first, diff);
 
-        let expr = if first_size == floor_size {
+        let expr = if first_index < second_index {
             second.concat_expr(first)
         } else {
             first.concat_expr(second)
         };
-        exprs.insert(0, expr);
+        exprs.insert(0, (min(first_index, second_index), expr));
     }
 }
 
