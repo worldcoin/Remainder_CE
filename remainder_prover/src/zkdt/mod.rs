@@ -14,3 +14,5 @@ pub mod zkdt_circuit;
 pub mod constants;
 /// Binary recomp circuit component
 pub mod binary_recomp_circuit;
+/// Path consistency circuit component
+pub mod path_consistency_circuit;

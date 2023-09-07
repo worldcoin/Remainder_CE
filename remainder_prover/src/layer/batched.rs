@@ -59,11 +59,10 @@ pub fn unflatten_mle<F: FieldExt>(flattened_mle: DenseMle<F, F>, num_copy_bits: 
                     *val
                 }
             ).collect_vec();
-            let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(individual_mle_table, flattened_mle.layer_id, None);
+            let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(individual_mle_table, flattened_mle.layer_id, Some(repeat_n(MleIndex::Iterated, num_copy_bits).collect_vec()));
             individual_mle
         }
     ).collect_vec();
-    dbg!(unflat.len());
     unflat
 }
 

@@ -255,10 +255,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let val = claim.1.clone();
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
-        let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
-
         dbg!(&self.id);
         dbg!(&self.expression);
+        dbg!(&claim);
+        let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
+
+        
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
         
 
