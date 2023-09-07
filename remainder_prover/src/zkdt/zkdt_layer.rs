@@ -142,7 +142,7 @@ impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilderZeroRef<F> {
         //     .map(|(InputAttribute { attr_id: input_attr_ids, .. }, DecisionNode { attr_id: path_attr_ids, ..})|
         //         input_attr_ids - path_attr_ids), id, prefix_bits)
 
-        let num_vars = self.mle_path.num_iterated_vars();
+        let num_vars = self.mle_path.num_iterated_vars() - 2;
         ZeroMleRef::new(num_vars, prefix_bits, id)
     }
 }

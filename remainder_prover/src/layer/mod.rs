@@ -491,6 +491,23 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // expr.init_beta_tables(prev_layer_claim);
         let num_evals = (num_vars) * (num_claims); //* degree;
 
+        debug_assert!({
+            claim_vecs.iter().map(|claim| claim.len()).fold(Ok(None), |acc, thing| {
+                if let Ok(Some(acc)) = acc {
+                    if acc == thing {
+                        Ok(Some(acc))
+                    } else {
+                        Err(format!("Claims are of different len on layer {:?}", self.id))
+                    }
+                } else if let Ok(None) = acc {
+                    Ok(Some(thing))
+                } else {
+                    Err(format!("Claims are of different len on layer {:?}", self.id))
+                }
+            }).unwrap();
+            true
+        });
+
         // debug_assert!({
         //     claim_vecs.iter().zip(claimed_vals.iter()).map(|(point, val)| {
         //         let mut beta = BetaTable::new((point.to_vec(), F::zero())).unwrap();
