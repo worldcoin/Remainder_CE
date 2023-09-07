@@ -304,6 +304,8 @@ pub trait GKRCircuit<F: FieldExt> {
 
             let layer_id = output.get_layer_id();
 
+            dbg!(layer_id, &claim);
+
             // --- Add the claim to either the set of current claims we're proving ---
             // --- or the global set of claims we need to eventually prove ---
             if let Some(curr_claims) = claims.get_mut(&layer_id) {
@@ -384,6 +386,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 let post_sumcheck_new_claims = layer
                     .get_claims()
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+
+                dbg!(layer_id, &post_sumcheck_new_claims);
 
                 for (layer_id, claim) in post_sumcheck_new_claims {
                     if let Some(curr_claims) = claims.get_mut(&layer_id) {
