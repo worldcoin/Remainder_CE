@@ -25,8 +25,6 @@ fn main() {
         permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
         r: Fr::from(rng.gen::<u64>()),
         r_packing: Fr::from(rng.gen::<u64>()),
-        input_len: 700,
-        num_inputs: 1,
     };
 
     let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");

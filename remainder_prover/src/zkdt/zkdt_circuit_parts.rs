@@ -10,19 +10,114 @@ use ark_std::{log2, test_rng};
 use itertools::{Itertools, repeat_n};
 
 use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum}, combine_layers::combine_layers}};
-use crate::{prover::{GKRCircuit, Layers, Witness}, mle::{mle_enum::MleEnum}};
+use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
 use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, zkdt_helpers::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}};
 
+use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
+
+pub struct FSPermutationCircuit<F: FieldExt> {
+    pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
+    pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,      // batched
+    pub r: F,
+    pub r_packing: F,
+}
+
+impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        unimplemented!()
+    }
+
+    fn synthesize_and_commit(
+            &mut self,
+            transcript: &mut Self::Transcript,
+        ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
+            let mut dummy_input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.input_data_mle_vec.clone());
+            let mut dummy_permuted_input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.permuted_input_data_mle_vec.clone());
+    
+            let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+                Box::new(&mut dummy_input_data_mle_combined),
+                Box::new(&mut dummy_permuted_input_data_mle_combined),
+            ];
+            let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+            let input_prefix_bits = input_layer.fetch_prefix_bits();
+            let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+            // TODO!(ende) change back to ligero
+    
+            let mut layers: Layers<_, Self::Transcript> = Layers::new();
+    
+            let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
+        
+        
+            let input_packing_builder = BatchedLayer::new(
+                self.input_data_mle_vec.iter().map(
+                    |input_data_mle| {
+                        let mut input_data_mle = input_data_mle.clone();
+                        // TODO!(ende) fix this atrocious fixed(false)
+                        input_data_mle.add_prefix_bits(Some(dummy_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        InputPackingBuilder::new(
+                            input_data_mle,
+                            self.r,
+                            self.r_packing
+                        )
+                    }).collect_vec());
+    
+            let input_permuted_packing_builder = BatchedLayer::new(
+                self.permuted_input_data_mle_vec.iter().map(
+                    |input_data_mle| {
+                        let mut input_data_mle = input_data_mle.clone();
+                        // TODO!(ende) fix this atrocious fixed(true)
+                        input_data_mle.add_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        InputPackingBuilder::new(
+                            input_data_mle,
+                            self.r,
+                            self.r_packing
+                        )
+                    }).collect_vec());
+    
+            let packing_builders = input_packing_builder.concat(input_permuted_packing_builder);
+    
+            let (mut input_packed, mut input_permuted_packed) = layers.add_gkr(packing_builders);
+    
+            let input_len = 1 << (self.input_data_mle_vec[0].num_iterated_vars() - 1);
+            for _ in 0..log2(input_len) {
+                let prod_builder = BatchedLayer::new(
+                    input_packed.into_iter().map(
+                        |input_packed| SplitProductBuilder::new(input_packed)
+                    ).collect());
+                let prod_permuted_builder = BatchedLayer::new(
+                    input_permuted_packed.into_iter().map(
+                        |input_permuted_packed| SplitProductBuilder::new(input_permuted_packed)
+                    ).collect());
+                let split_product_builders = prod_builder.concat(prod_permuted_builder);
+                (input_packed, input_permuted_packed) = layers.add_gkr(split_product_builders);
+            }
+    
+            let difference_builder = EqualityCheck::new_batched(
+                input_packed,
+                input_permuted_packed,
+            );
+    
+            let difference_mle = layers.add_gkr(difference_builder);
+    
+            let circuit_output = combine_zero_mle_ref(difference_mle);
+    
+            Witness {
+                layers,
+                output_layers: vec![circuit_output.get_enum()],
+                input_layers: vec![input_layer.to_enum()],
+            };
+            todo!()
+    }
+}
 
 pub struct PermutationCircuit<F: FieldExt> {
     pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
     pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,      // batched
     pub r: F,
     pub r_packing: F,
-    pub input_len: usize,
-    pub num_inputs: usize
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
@@ -76,7 +171,8 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
 
         let (mut input_packed, mut input_permuted_packed) = layers.add_gkr(packing_builders);
 
-        for _ in 0..log2(self.input_len) {
+        let input_len = 1 << (self.input_data_mle_vec[0].num_iterated_vars() - 1);
+        for _ in 0..log2(input_len) {
             let prod_builder = BatchedLayer::new(
                 input_packed.into_iter().map(
                     |input_packed| SplitProductBuilder::new(input_packed)
@@ -656,8 +752,6 @@ mod tests {
             permuted_input_data_mle_vec,
             r: Fr::from(rng.gen::<u64>()),
             r_packing: Fr::from(rng.gen::<u64>()),
-            input_len: input_len,
-            num_inputs: dummy_input_len,
         };
 
         test_circuit(circuit, None);
@@ -677,8 +771,6 @@ mod tests {
             permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
             r: Fr::from(rng.gen::<u64>()),
             r_packing: Fr::from(rng.gen::<u64>()),
-            input_len: DUMMY_INPUT_LEN * (TREE_HEIGHT - 1),
-            num_inputs: 1,
         };
 
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
@@ -813,7 +905,6 @@ mod tests {
         //     r: Fr::rand(&mut rng),
         //     r_packings: (Fr::rand(&mut rng), Fr::rand(&mut rng)),
         //     tree_height: TREE_HEIGHT,
-        //     num_inputs: NUM_DUMMY_INPUTS,
         // };
 
         // let mut transcript = PoseidonTranscript::new("Multiset Circuit Prover Transcript");
