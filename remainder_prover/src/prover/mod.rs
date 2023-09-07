@@ -126,7 +126,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         self.0.push(gate.get_enum());
 
 
-        let mut sum_table = vec![F::zero(); 1 << sum_table_num_entries];
+        let mut sum_table = vec![F::zero(); sum_table_num_entries];
         (0..num_copy_vars).into_iter().for_each(|idx|
             {
                 nonzero_gates.clone().into_iter().for_each(
@@ -137,6 +137,8 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
                     }
                 );
             });
+
+        dbg!(&sum_table);
 
         let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
         res_mle

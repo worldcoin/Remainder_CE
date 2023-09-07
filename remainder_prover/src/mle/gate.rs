@@ -1189,6 +1189,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             let prev_at_r = evaluate_at_a_point(prev_evals, challenge)
                 .map_err(|err| LayerError::InterpError(err))?;
             if prev_at_r != curr_evals[0] + curr_evals[1] {
+                dbg!(&i);
+                dbg!(&prev_at_r);
+                dbg!(&curr_evals);
                 return Err(LayerError::VerificationError(
                     VerificationError::SumcheckFailed,
                 ));

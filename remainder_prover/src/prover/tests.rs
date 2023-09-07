@@ -614,7 +614,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let num_vars = self.mle.mle_ref().num_vars();
+        let num_vars = 1 << self.mle.mle_ref().num_vars();
 
         (0..num_vars).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -652,15 +652,15 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let num_vars = self.mle.mle_ref().num_vars();
+        let table_size = 1 << (self.mle.mle_ref().num_vars() - self.batch_bits);
 
-        (0..num_vars).for_each(
+        (0..table_size).for_each(
             |idx| {
                 nonzero_gates.push((idx, idx, idx));
             }
         );
 
-        let first_layer_output = layers.add_add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), 0);
+        let first_layer_output = layers.add_add_gate_batched(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), self.batch_bits);
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
@@ -720,7 +720,7 @@ fn test_gkr_gate_batched_simplest_circuit() {
         }),
         LayerId::Input(0),
         // this is the batched bits
-        Some(vec![MleIndex::Iterated; 2]),
+        None,
     );
 
     let negmle = DenseMle::new_from_iter(
@@ -730,8 +730,11 @@ fn test_gkr_gate_batched_simplest_circuit() {
         ), 
         LayerId::Input(0),
         // this is the batched bits
-        Some(vec![MleIndex::Iterated; 2]),
+        None,
     );
+
+    dbg!(&mle);
+    dbg!(&negmle);
     // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
     //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
     //     LayerId::Input,

@@ -1,6 +1,7 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
-use std::iter::repeat_with;
+use std::{iter::repeat_with, ops::Range};
 
+use ark_std::{test_rng, rand::{Rng, distributions::uniform::SampleRange}};
 use itertools::Itertools;
 use poseidon::Poseidon;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,7 @@ pub struct PoseidonTranscript<F: FieldExt> {
     #[serde(skip)]
     #[serde(default = "default_sponge")]
     sponge: Poseidon<F, 3, 2>,
+    counter: usize,
 }
 
 impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
@@ -31,6 +33,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         // let params = PoseidonConfig::new(8, 60, 5, mds, ark, 2, 1);
         Self {
             sponge: default_sponge(),
+            counter: 1,
         }
     }
 
@@ -63,8 +66,9 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         let output = self.sponge.squeeze();
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
         Ok(output)
-
- //       Ok(F::from(6_u64))
+        // self.counter = self.counter*2 + 11;
+        // dbg!(self.counter);
+        // Ok(F::from(self.counter as u64))
     }
 
     fn get_challenges(
@@ -76,7 +80,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
         Ok(output)
 
-        // let output = (0..len).map(|_| F::from(6_u64)).collect_vec();
+        // let output = (0..len).map(|idx| F::from(idx as u64)).collect_vec();
         // Ok(output)
     }
 }
