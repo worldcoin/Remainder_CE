@@ -947,7 +947,8 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
             input_layers: simple_inputs,
         } = simple_witness;
 
-        let input_layers = test_inputs
+        /// for input vv
+        let input_layers: Vec<InputLayerEnum<F, PoseidonTranscript<F>>> = test_inputs
             .into_iter()
             .chain(simple_inputs.into_iter().map(|mut input| {
                 let new_layer_id = match input.layer_id() {
@@ -992,6 +993,8 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
 
             expression.traverse_mut(&mut closure).unwrap();
         }
+
+        /// for input ^^
 
         let (layers, output_layers) = combine_layers(
             vec![test_layers, simple_layers],
