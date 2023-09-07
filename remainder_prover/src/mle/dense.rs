@@ -11,7 +11,7 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
-use crate::layer::LayerId;
+use crate::{layer::{LayerId, batched::combine_mles}, zkdt::structs::combine_mle_refs};
 use crate::{expression::ExpressionStandard, layer::Claim};
 use remainder_shared_types::FieldExt;
 
@@ -338,6 +338,25 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
+    }
+
+    pub(crate) fn combine_mle_batch(decision_mle_batch: Vec<DenseMle<F, Tuple2<F>>>) -> DenseMle<F, F> {
+        
+        let batched_bits = log2(decision_mle_batch.len());
+
+        let decision_mle_batch_ref_combined = decision_mle_batch
+            .clone()
+            .into_iter().map(
+                |x| {
+                    combine_mle_refs(
+                        vec![x.first(), x.second()]
+                    ).mle_ref()
+                }
+            ).collect_vec();
+
+        let decision_mle_batch_ref_combined_ref =  combine_mles(decision_mle_batch_ref_combined, batched_bits as usize);
+
+        DenseMle::new_from_raw(decision_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
     }
 }
 
