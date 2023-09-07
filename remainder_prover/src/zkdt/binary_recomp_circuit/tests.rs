@@ -9,7 +9,7 @@ mod tests {
     use itertools::Itertools;
     use rand::Rng;
 
-    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::PermutationCircuitNonBatched, structs::{InputAttribute, DecisionNode}, binary_recomp_circuit::circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit, BinaryRecompCircuitBatched}}, prover::GKRCircuit, mle::{dense::DenseMle, MleRef}, layer::LayerId};
+    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::NonBatchedPermutationCircuit, structs::{InputAttribute, DecisionNode}, binary_recomp_circuit::circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit, BinaryRecompCircuitBatched}}, prover::GKRCircuit, mle::{dense::DenseMle, MleRef}, layer::LayerId};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     use crate::prover::tests::test_circuit;
 
@@ -106,15 +106,15 @@ mod tests {
         // } = generate_dummy_mles();
 
         let (BatchedCatboostMles {
-            dummy_binary_decomp_diffs_mle,
-            dummy_decision_node_paths_mle,
-            dummy_permuted_input_data_mle, ..
+            binary_decomp_diffs_mle_vec,
+            decision_node_paths_mle_vec,
+            permuted_input_data_mle_vec, ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         let mut circuit = BinaryRecompCircuit::<Fr>::new(
-            dummy_decision_node_paths_mle[0].clone(),
-            dummy_permuted_input_data_mle[0].clone(),
-            dummy_binary_decomp_diffs_mle[0].clone(),
+            decision_node_paths_mle_vec[0].clone(),
+            permuted_input_data_mle_vec[0].clone(),
+            binary_decomp_diffs_mle_vec[0].clone(),
         );
 
         let mut transcript = PoseidonTranscript::new("Bin Recomp Circuit Transcript");
@@ -150,15 +150,15 @@ mod tests {
         // } = generate_dummy_mles();
 
         let (BatchedCatboostMles {
-            dummy_binary_decomp_diffs_mle,
-            dummy_decision_node_paths_mle,
-            dummy_permuted_input_data_mle, ..
+            binary_decomp_diffs_mle_vec,
+            decision_node_paths_mle_vec,
+            permuted_input_data_mle_vec, ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         let mut circuit = BinaryRecompCircuitBatched::new(
-            dummy_decision_node_paths_mle,
-            dummy_permuted_input_data_mle,
-            dummy_binary_decomp_diffs_mle,
+            decision_node_paths_mle_vec,
+            permuted_input_data_mle_vec,
+            binary_decomp_diffs_mle_vec,
         );
 
         let mut transcript = PoseidonTranscript::new("Bin Recomp Circuit Transcript");
