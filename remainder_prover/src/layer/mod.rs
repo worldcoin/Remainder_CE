@@ -491,21 +491,38 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // expr.init_beta_tables(prev_layer_claim);
         let num_evals = (num_vars) * (num_claims); //* degree;
 
-        // debug_assert!({
-        //     claim_vecs.iter().zip(claimed_vals.iter()).map(|(point, val)| {
-        //         let mut beta = BetaTable::new((point.to_vec(), F::zero())).unwrap();
-        //         beta.table.index_mle_indices(0);
-        //         let eval = compute_sumcheck_message(&mut expr.clone(), 0, degree, &beta).unwrap();
-        //         let Evals(evals) = eval;
-        //         let eval = evals[0] + evals[1];
-        //         if eval == *val {
-        //             true
-        //         } else {
-        //             println!("Claim passed into compute_wlx is invalid! point is {:?} claimed val is {:?}, actual eval is {:?}", point, val , eval);
-        //             false
-        //         }
-        //     }).reduce(|acc, val| acc && val).unwrap()
-        // });
+        debug_assert!({
+            claim_vecs.iter().map(|claim| claim.len()).fold(Ok(None), |acc, thing| {
+                if let Ok(Some(acc)) = acc {
+                    if acc == thing {
+                        Ok(Some(acc))
+                    } else {
+                        Err(format!("Claims are of different len on layer {:?}", self.id))
+                    }
+                } else if let Ok(None) = acc {
+                    Ok(Some(thing))
+                } else {
+                    Err(format!("Claims are of different len on layer {:?}", self.id))
+                }
+            }).unwrap();
+            true
+        });
+
+        debug_assert!({
+            claim_vecs.iter().zip(claimed_vals.iter()).map(|(point, val)| {
+                let mut beta = BetaTable::new((point.to_vec(), F::zero())).unwrap();
+                beta.table.index_mle_indices(0);
+                let eval = compute_sumcheck_message(&mut expr.clone(), 0, degree, &beta).unwrap();
+                let Evals(evals) = eval;
+                let eval = evals[0] + evals[1];
+                if eval == *val {
+                    true
+                } else {
+                    println!("Claim passed into compute_wlx is invalid! point is {:?} claimed val is {:?}, actual eval is {:?}", point, val , eval);
+                    false
+                }
+            }).reduce(|acc, val| acc && val).unwrap()
+        });
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)

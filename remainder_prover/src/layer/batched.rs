@@ -31,7 +31,7 @@ impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
 }
 
 pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMleRef<F> {
-    let new_bits = log2(mle_refs.len()) as usize;
+    let new_bits = 0;
     let num_vars = mle_refs[0].mle_indices().len();
     let layer_id = mle_refs[0].get_layer_id().clone();
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
