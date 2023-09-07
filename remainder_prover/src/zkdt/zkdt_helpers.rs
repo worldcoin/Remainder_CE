@@ -470,15 +470,15 @@ pub struct BatchedDummyMles<F: FieldExt> {
 
 // #[derive(Serialize, Deserialize)]
 pub struct BatchedCatboostMles<F: FieldExt> {
-    pub dummy_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
-    pub dummy_permuted_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
-    pub dummy_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>,
-    pub dummy_leaf_node_paths_mle: Vec<DenseMle<F, LeafNode<F>>>,
-    pub dummy_binary_decomp_diffs_mle: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
-    pub dummy_multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
-    pub dummy_multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
-    pub dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
-    pub dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+    pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
+    pub leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,
+    pub binary_decomp_diffs_mle_vec: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
+    pub multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
+    pub multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
+    pub decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+    pub leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
 }
 
 /// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
@@ -566,15 +566,15 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>() -> (BatchedCatboo
         .map(LeafNode::from), LayerId::Input(0), None);
 
     (BatchedCatboostMles {
-        dummy_input_data_mle,
-        dummy_permuted_input_data_mle,
-        dummy_decision_node_paths_mle,
-        dummy_leaf_node_paths_mle,
-        dummy_binary_decomp_diffs_mle,
-        dummy_multiplicities_bin_decomp_mle_decision,
-        dummy_multiplicities_bin_decomp_mle_leaf,
-        dummy_decision_nodes_mle,
-        dummy_leaf_nodes_mle,
+        input_data_mle_vec: dummy_input_data_mle,
+        permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
+        decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
+        leaf_node_paths_mle_vec: dummy_leaf_node_paths_mle,
+        binary_decomp_diffs_mle_vec: dummy_binary_decomp_diffs_mle,
+        multiplicities_bin_decomp_mle_decision: dummy_multiplicities_bin_decomp_mle_decision,
+        multiplicities_bin_decomp_mle_leaf: dummy_multiplicities_bin_decomp_mle_leaf,
+        decision_nodes_mle: dummy_decision_nodes_mle,
+        leaf_nodes_mle: dummy_leaf_nodes_mle,
     }, (tree_height, input_len))
 }
 

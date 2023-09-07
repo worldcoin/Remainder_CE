@@ -17,8 +17,8 @@ use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck
 
 
 pub struct PermutationCircuit<F: FieldExt> {
-    pub dummy_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
-    pub dummy_permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,      // batched
+    pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
+    pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,      // batched
     pub r: F,
     pub r_packing: F,
     pub input_len: usize,
@@ -29,8 +29,8 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
-        let mut dummy_input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.dummy_input_data_mle_vec.clone());
-        let mut dummy_permuted_input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.dummy_permuted_input_data_mle_vec.clone());
+        let mut dummy_input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.input_data_mle_vec.clone());
+        let mut dummy_permuted_input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.permuted_input_data_mle_vec.clone());
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut dummy_input_data_mle_combined),
@@ -43,11 +43,11 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
-        let batch_bits = log2(self.dummy_input_data_mle_vec.len()) as usize;
+        let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
     
     
         let input_packing_builder = BatchedLayer::new(
-            self.dummy_input_data_mle_vec.iter().map(
+            self.input_data_mle_vec.iter().map(
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
                     // TODO!(ende) fix this atrocious fixed(false)
@@ -60,7 +60,7 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
                 }).collect_vec());
 
         let input_permuted_packing_builder = BatchedLayer::new(
-            self.dummy_permuted_input_data_mle_vec.iter().map(
+            self.permuted_input_data_mle_vec.iter().map(
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
                     // TODO!(ende) fix this atrocious fixed(true)
@@ -106,29 +106,10 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
     }
 }
 
-struct TestCircuit<F: FieldExt> {
-    dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
-    dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
-    dummy_multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
-    dummy_multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
-    dummy_decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
-    dummy_leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
-    r: F,
-    r_packings: (F, F),
-    tree_height: usize,
-}
-
-impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        todo!()
-    }
-}
-
 /// permutation circuit, non batched version
 pub struct NonBatchedPermutationCircuit<F: FieldExt> {
-    dummy_input_data_mle: DenseMle<F, InputAttribute<F>>,
-    dummy_permuted_input_data_mle: DenseMle<F, InputAttribute<F>>,
+    input_data_mle: DenseMle<F, InputAttribute<F>>,
+    permuted_input_data_mle: DenseMle<F, InputAttribute<F>>,
     r: F,
     r_packing: F,
     input_len: usize,
@@ -141,12 +122,12 @@ impl<F: FieldExt> GKRCircuit<F> for NonBatchedPermutationCircuit<F> {
 
         // layer 0: packing
         let input_packing_builder: InputPackingBuilder<F> = InputPackingBuilder::new(
-            self.dummy_input_data_mle.clone(),
+            self.input_data_mle.clone(),
             self.r,
             self.r_packing);
 
         let input_permuted_packing_builder: InputPackingBuilder<F> = InputPackingBuilder::new(
-            self.dummy_permuted_input_data_mle.clone(),
+            self.permuted_input_data_mle.clone(),
             self.r,
             self.r_packing);
 
@@ -177,8 +158,8 @@ impl<F: FieldExt> GKRCircuit<F> for NonBatchedPermutationCircuit<F> {
 }
 
 struct NonBatchedAttributeConsistencyCircuit<F: FieldExt> {
-    dummy_permuted_input_data_mle_vec: DenseMle<F, InputAttribute<F>>,
-    dummy_decision_node_paths_mle_vec: DenseMle<F, DecisionNode<F>>,
+    permuted_input_data_mle_vec: DenseMle<F, InputAttribute<F>>,
+    decision_node_paths_mle_vec: DenseMle<F, DecisionNode<F>>,
     tree_height: usize,
 }
 
@@ -188,8 +169,8 @@ impl<F: FieldExt> GKRCircuit<F> for NonBatchedAttributeConsistencyCircuit<F> {
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         let attribute_consistency_builder = AttributeConsistencyBuilder::new(
-            self.dummy_permuted_input_data_mle_vec.clone(),
-            self.dummy_decision_node_paths_mle_vec.clone(),
+            self.permuted_input_data_mle_vec.clone(),
+            self.decision_node_paths_mle_vec.clone(),
             self.tree_height
         );
 
@@ -200,8 +181,8 @@ impl<F: FieldExt> GKRCircuit<F> for NonBatchedAttributeConsistencyCircuit<F> {
 }
 
 struct AttributeConsistencyCircuit<F: FieldExt> {
-    dummy_permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-    dummy_decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
+    permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
+    decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
     tree_height: usize,
 }
 
@@ -209,8 +190,8 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
-        let mut dummy_permuted_input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.dummy_permuted_input_data_mle_vec.clone());
-        let mut dummy_decision_node_paths_mle_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.dummy_decision_node_paths_mle_vec.clone());
+        let mut dummy_permuted_input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.permuted_input_data_mle_vec.clone());
+        let mut dummy_decision_node_paths_mle_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.decision_node_paths_mle_vec.clone());
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut dummy_permuted_input_data_mle_combined),
@@ -222,13 +203,13 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
-        let batch_bits = log2(self.dummy_permuted_input_data_mle_vec.len()) as usize;
+        let batch_bits = log2(self.permuted_input_data_mle_vec.len()) as usize;
     
         let attribute_consistency_builder = BatchedLayer::new(
 
-            self.dummy_permuted_input_data_mle_vec
+            self.permuted_input_data_mle_vec
                     .iter()
-                    .zip(self.dummy_decision_node_paths_mle_vec.iter())
+                    .zip(self.decision_node_paths_mle_vec.iter())
                     .map(|(input_data_mle, decision_path_mle)| {
 
                         let mut input_data_mle = input_data_mle.clone();
@@ -257,12 +238,12 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
 }
 
 struct MultiSetCircuit<F: FieldExt> {
-    dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
-    dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
-    dummy_multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
-    dummy_multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
-    dummy_decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
-    dummy_leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
+    decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+    leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+    multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
+    multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
+    decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
+    leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
     r: F,
     r_packings: (F, F),
     tree_height: usize,
@@ -273,14 +254,14 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         
-        let mut dummy_decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.dummy_decision_node_paths_mle_vec.clone());
-        let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.dummy_leaf_node_paths_mle_vec.clone());
+        let mut dummy_decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.decision_node_paths_mle_vec.clone());
+        let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.leaf_node_paths_mle_vec.clone());
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut self.dummy_decision_nodes_mle),
-            Box::new(&mut self.dummy_leaf_nodes_mle),
-            Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_decision),
-            Box::new(&mut self.dummy_multiplicities_bin_decomp_mle_leaf),
+            Box::new(&mut self.decision_nodes_mle),
+            Box::new(&mut self.leaf_nodes_mle),
+            Box::new(&mut self.multiplicities_bin_decomp_mle_decision),
+            Box::new(&mut self.multiplicities_bin_decomp_mle_leaf),
             Box::new(&mut dummy_decision_node_paths_mle_vec_combined),
             Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
         ];
@@ -291,13 +272,13 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
         // layer 0: x
-        let mut dummy_decision_nodes_mle = self.dummy_decision_nodes_mle.clone();
-        dummy_decision_nodes_mle.add_prefix_bits(self.dummy_decision_nodes_mle.get_prefix_bits());
+        let mut dummy_decision_nodes_mle = self.decision_nodes_mle.clone();
+        dummy_decision_nodes_mle.add_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
         let decision_packing_builder = DecisionPackingBuilder::new(
             dummy_decision_nodes_mle, self.r, self.r_packings);
 
-        let mut dummy_leaf_nodes_mle = self.dummy_leaf_nodes_mle.clone();
-        dummy_leaf_nodes_mle.add_prefix_bits(self.dummy_leaf_nodes_mle.get_prefix_bits());
+        let mut dummy_leaf_nodes_mle = self.leaf_nodes_mle.clone();
+        dummy_leaf_nodes_mle.add_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
         let leaf_packing_builder = LeafPackingBuilder::new(
             dummy_leaf_nodes_mle, self.r, self.r_packings.0
         );
@@ -315,8 +296,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let r_minus_x_builders = r_minus_x_builder_decision.concat(r_minus_x_builder_leaf);
         let (r_minus_x_power_decision, r_minus_x_power_leaf) = layers.add_gkr(r_minus_x_builders);
 
-        let mut dummy_multiplicities_bin_decomp_mle_decision = self.dummy_multiplicities_bin_decomp_mle_decision.clone();
-        dummy_multiplicities_bin_decomp_mle_decision.add_prefix_bits(self.dummy_multiplicities_bin_decomp_mle_decision.get_prefix_bits());
+        let mut dummy_multiplicities_bin_decomp_mle_decision = self.multiplicities_bin_decomp_mle_decision.clone();
+        dummy_multiplicities_bin_decomp_mle_decision.add_prefix_bits(self.multiplicities_bin_decomp_mle_decision.get_prefix_bits());
         // layer 2, part 1: (r - x) * b_ij + (1 - b_ij)
         let prev_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
             dummy_multiplicities_bin_decomp_mle_decision.clone(),
@@ -324,8 +305,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             r_minus_x_power_decision.clone()
         );
 
-        let mut dummy_multiplicities_bin_decomp_mle_leaf = self.dummy_multiplicities_bin_decomp_mle_leaf.clone();
-        dummy_multiplicities_bin_decomp_mle_leaf.add_prefix_bits(self.dummy_multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
+        let mut dummy_multiplicities_bin_decomp_mle_leaf = self.multiplicities_bin_decomp_mle_leaf.clone();
+        dummy_multiplicities_bin_decomp_mle_leaf.add_prefix_bits(self.multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
             dummy_multiplicities_bin_decomp_mle_leaf.clone(),
             0,
@@ -500,14 +481,14 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         // **** below is all decision nodes on the path multiplied ****
         println!("Nodes exponentiated, number of layers {:?}", layers.next_layer_id());
 
-        let bit_difference = self.dummy_decision_node_paths_mle_vec[0].num_iterated_vars() - self.dummy_leaf_node_paths_mle_vec[0].num_iterated_vars();
+        let bit_difference = self.decision_node_paths_mle_vec[0].num_iterated_vars() - self.leaf_node_paths_mle_vec[0].num_iterated_vars();
 
         // layer 0: packing
 
-        let batch_bits = log2(self.dummy_decision_node_paths_mle_vec.len()) as usize;
+        let batch_bits = log2(self.decision_node_paths_mle_vec.len()) as usize;
 
         let decision_path_packing_builder = BatchedLayer::new(
-            self.dummy_decision_node_paths_mle_vec.iter().map(
+            self.decision_node_paths_mle_vec.iter().map(
                 |decision_node_mle| {
                     let mut decision_node_mle = decision_node_mle.clone();
                     decision_node_mle.add_prefix_bits(Some(dummy_decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
@@ -520,7 +501,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             ).collect_vec());
 
         let leaf_path_packing_builder = BatchedLayer::new(
-            self.dummy_leaf_node_paths_mle_vec.iter().map(
+            self.leaf_node_paths_mle_vec.iter().map(
                 |leaf_node_mle| {
                     let mut leaf_node_mle = leaf_node_mle.clone();
                     leaf_node_mle.add_prefix_bits(Some(dummy_leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
@@ -616,20 +597,20 @@ mod tests {
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     use crate::prover::tests::test_circuit;
 
-    use super::{PermutationCircuit, NonBatchedAttributeConsistencyCircuit, MultiSetCircuit, TestCircuit, AttributeConsistencyCircuit};
+    use super::{PermutationCircuit, NonBatchedAttributeConsistencyCircuit, MultiSetCircuit, AttributeConsistencyCircuit};
 
     #[test]
     fn test_permutation_circuit_catboost_non_batched() {
         let mut rng = test_rng();
 
         let (BatchedCatboostMles {
-            dummy_input_data_mle,
-            dummy_permuted_input_data_mle, ..
+            input_data_mle_vec,
+            permuted_input_data_mle_vec, ..
         }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         let mut circuit = NonBatchedPermutationCircuit {
-            dummy_input_data_mle: dummy_input_data_mle[0].clone(),
-            dummy_permuted_input_data_mle: dummy_permuted_input_data_mle[0].clone(),
+            input_data_mle: input_data_mle_vec[0].clone(),
+            permuted_input_data_mle: permuted_input_data_mle_vec[0].clone(),
             r: Fr::from(rng.gen::<u64>()),
             r_packing: Fr::from(rng.gen::<u64>()),
             input_len,
@@ -664,15 +645,15 @@ mod tests {
         let mut rng = test_rng();
 
         let (BatchedCatboostMles {
-            dummy_input_data_mle,
-            dummy_permuted_input_data_mle, ..
+            input_data_mle_vec,
+            permuted_input_data_mle_vec, ..
         }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
-        let dummy_input_len = dummy_input_data_mle.len();
+        let dummy_input_len = input_data_mle_vec.len();
 
         let mut circuit = PermutationCircuit {
-            dummy_input_data_mle_vec: dummy_input_data_mle,
-            dummy_permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
+            input_data_mle_vec,
+            permuted_input_data_mle_vec,
             r: Fr::from(rng.gen::<u64>()),
             r_packing: Fr::from(rng.gen::<u64>()),
             input_len: input_len,
@@ -692,8 +673,8 @@ mod tests {
         } = generate_dummy_mles_batch();
 
         let mut circuit = PermutationCircuit {
-            dummy_input_data_mle_vec: dummy_input_data_mle,
-            dummy_permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
+            input_data_mle_vec: dummy_input_data_mle,
+            permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
             r: Fr::from(rng.gen::<u64>()),
             r_packing: Fr::from(rng.gen::<u64>()),
             input_len: DUMMY_INPUT_LEN * (TREE_HEIGHT - 1),
@@ -733,8 +714,8 @@ mod tests {
         } = generate_dummy_mles();
 
         let mut circuit = NonBatchedAttributeConsistencyCircuit {
-            dummy_permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
+            permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
+            decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
             tree_height: TREE_HEIGHT,
         };
 
@@ -762,13 +743,13 @@ mod tests {
     fn test_attribute_consistency_circuit_catboost_non_batched() {
 
         let (BatchedCatboostMles {
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle, ..
+            permuted_input_data_mle_vec,
+            decision_node_paths_mle_vec, ..
         }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         let mut circuit = NonBatchedAttributeConsistencyCircuit {
-            dummy_permuted_input_data_mle_vec: dummy_permuted_input_data_mle[0].clone(),
-            dummy_decision_node_paths_mle_vec: dummy_decision_node_paths_mle[0].clone(),
+            permuted_input_data_mle_vec: permuted_input_data_mle_vec[0].clone(),
+            decision_node_paths_mle_vec: decision_node_paths_mle_vec[0].clone(),
             tree_height: tree_height,
         };
 
@@ -796,13 +777,13 @@ mod tests {
     fn test_attribute_consistency_circuit_catboost_batched() {
 
         let (BatchedCatboostMles {
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle, ..
+            permuted_input_data_mle_vec,
+            decision_node_paths_mle_vec, ..
         }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         let mut circuit = AttributeConsistencyCircuit {
-            dummy_permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
+            permuted_input_data_mle_vec,
+            decision_node_paths_mle_vec,
             tree_height
         };
 
@@ -856,68 +837,24 @@ mod tests {
     }
 
     #[test]
-    fn test_test_circuit() {
-
-        let mut rng = test_rng();
-
-        let (BatchedCatboostMles {dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_multiplicities_bin_decomp_mle_decision,
-            dummy_multiplicities_bin_decomp_mle_leaf,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle, ..}, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
-
-        let mut circuit = TestCircuit {
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
-            dummy_multiplicities_bin_decomp_mle_decision,
-            dummy_multiplicities_bin_decomp_mle_leaf,
-            dummy_decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle_vec: dummy_leaf_node_paths_mle,
-            r: Fr::from(2),
-            r_packings: (Fr::from(5), Fr::from(4)),
-            tree_height,
-        };
-
-        let mut transcript = PoseidonTranscript::new("Concat Batch Circuit Prover Transcript");
-
-        let proof = circuit.prove(&mut transcript);
-
-        match proof {
-            Ok(proof) => {
-                let mut transcript = PoseidonTranscript::new("Concat Batch Circuit Verifier Transcript");
-                let result = circuit.verify(&mut transcript, proof);
-                if let Err(err) = result {
-                    println!("{}", err);
-                    panic!();
-                }
-            },
-            Err(err) => {
-                println!("{}", err);
-                panic!();
-            }
-        }
-    }
-
-    #[test]
     fn test_multiset_circuit_catboost_batched() {
 
         let mut rng = test_rng();
 
-        let (BatchedCatboostMles {dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_multiplicities_bin_decomp_mle_decision,
-            dummy_multiplicities_bin_decomp_mle_leaf,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        let (BatchedCatboostMles {decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
+            multiplicities_bin_decomp_mle_decision,
+            multiplicities_bin_decomp_mle_leaf,
+            decision_nodes_mle,
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         let mut circuit = MultiSetCircuit {
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle,
-            dummy_multiplicities_bin_decomp_mle_decision,
-            dummy_multiplicities_bin_decomp_mle_leaf,
-            dummy_decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle_vec: dummy_leaf_node_paths_mle,
+            decision_nodes_mle,
+            leaf_nodes_mle,
+            multiplicities_bin_decomp_mle_decision,
+            multiplicities_bin_decomp_mle_leaf,
+            decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
             r: Fr::from(rng.gen::<u64>()),
             r_packings: (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())),
             tree_height,

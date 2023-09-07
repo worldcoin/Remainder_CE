@@ -1255,11 +1255,11 @@ mod tests {
     fn test_attribute_consistency_builder_catboost() {
 
         let (BatchedCatboostMles {
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle, ..
+            permuted_input_data_mle_vec,
+            decision_node_paths_mle_vec, ..
         }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
-        let num_dummy_inputs = dummy_permuted_input_data_mle.len();
+        let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
         let mut zero_vec = vec![];
         for _ in 0..(tree_height-1) {
@@ -1268,8 +1268,8 @@ mod tests {
 
         for i in 0..num_dummy_inputs {
             let attribute_consistency_build = AttributeConsistencyBuilder {
-                mle_input: dummy_permuted_input_data_mle[i].clone(),
-                mle_path: dummy_decision_node_paths_mle[i].clone(),
+                mle_input: permuted_input_data_mle_vec[i].clone(),
+                mle_path: decision_node_paths_mle_vec[i].clone(),
                 tree_height: tree_height
             };
             let _ = attribute_consistency_build.build_expression();
@@ -1284,11 +1284,11 @@ mod tests {
     fn test_permutation_builder_catboost() {
 
         let (BatchedCatboostMles {
-            dummy_input_data_mle,
-            dummy_permuted_input_data_mle, ..
+            input_data_mle_vec,
+            permuted_input_data_mle_vec, ..
         }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
-        let num_dummy_inputs = dummy_permuted_input_data_mle.len();
+        let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
         let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
         let another_r = Fr::from(6);
@@ -1297,7 +1297,7 @@ mod tests {
         for i in 0..num_dummy_inputs {
 
             let input_packing_builder = InputPackingBuilder{
-                mle: dummy_input_data_mle[i].clone(),
+                mle: input_data_mle_vec[i].clone(),
                 r,
                 r_packing
             };
@@ -1305,7 +1305,7 @@ mod tests {
             let input_packed = input_packing_builder.next_layer(LayerId::Layer(0), None);
 
             let permuted_input_packing_builder = InputPackingBuilder{
-                mle: dummy_permuted_input_data_mle[i].clone(),
+                mle: permuted_input_data_mle_vec[i].clone(),
                 r,
                 r_packing
             };
@@ -1346,14 +1346,14 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
-        let (BatchedCatboostMles {dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_multiplicities_bin_decomp_mle_decision,
-            dummy_multiplicities_bin_decomp_mle_leaf,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        let (BatchedCatboostMles {decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
+            multiplicities_bin_decomp_mle_decision,
+            multiplicities_bin_decomp_mle_leaf,
+            decision_nodes_mle,
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
-        let num_dummy_inputs = dummy_decision_node_paths_mle.len();
+        let num_dummy_inputs = decision_node_paths_mle_vec.len();
 
         // println!("node_paths nodes: {:?}", dummy_decision_node_paths_mle);
         // println!("leaf_paths nodes: {:?}", dummy_leaf_node_paths_mle);
@@ -1371,7 +1371,7 @@ mod tests {
 
         // WHOLE TREE: decision nodes packing
         let decision_packing_builder = DecisionPackingBuilder{
-            mle: dummy_decision_nodes_mle.clone(),
+            mle: decision_nodes_mle.clone(),
             r,
             r_packings
         };
@@ -1380,7 +1380,7 @@ mod tests {
 
         // WHOLE TREE: leaf nodes packing
         let leaf_packing_builder = LeafPackingBuilder{
-            mle: dummy_leaf_nodes_mle.clone(),
+            mle: leaf_nodes_mle.clone(),
             r,
             r_packing: another_r
         };
@@ -1408,7 +1408,7 @@ mod tests {
 
         // b_ij * (r-x) + (1 - b_ij), j = 0
         let prev_prod_builder_decision = BitExponentiationBuilderCatBoost {
-            bin_decomp: dummy_multiplicities_bin_decomp_mle_decision.clone(),
+            bin_decomp: multiplicities_bin_decomp_mle_decision.clone(),
             bit_index: 0,
             r_minus_x_power: r_minus_x_decision.clone()
         };
@@ -1416,7 +1416,7 @@ mod tests {
         let mut prev_prod_decision = prev_prod_builder_decision.next_layer(LayerId::Layer(2), None);
 
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost {
-            bin_decomp: dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+            bin_decomp: multiplicities_bin_decomp_mle_leaf.clone(),
             bit_index: 0,
             r_minus_x_power: r_minus_x_leaf.clone()
         };
@@ -1444,7 +1444,7 @@ mod tests {
 
             // b_ij * (r-x)^2 + (1 - b_ij), j = 1..15
             let curr_prod_builder_decision = BitExponentiationBuilderCatBoost {
-                bin_decomp: dummy_multiplicities_bin_decomp_mle_decision.clone(),
+                bin_decomp: multiplicities_bin_decomp_mle_decision.clone(),
                 bit_index: i,
                 r_minus_x_power: r_minus_x_square_decision.clone()
             };
@@ -1452,7 +1452,7 @@ mod tests {
             let curr_prod_decision = curr_prod_builder_decision.next_layer(LayerId::Layer(i+2), None);
 
             let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost {
-                bin_decomp: dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+                bin_decomp: multiplicities_bin_decomp_mle_leaf.clone(),
                 bit_index: i,
                 r_minus_x_power: r_minus_x_square_leaf.clone()
             };
@@ -1538,7 +1538,7 @@ mod tests {
 
             // PATH: decision nodes packing
             let decision_path_packing_builder = DecisionPackingBuilder{
-                mle: dummy_decision_node_paths_mle[i].clone(),
+                mle: decision_node_paths_mle_vec[i].clone(),
                 r,
                 r_packings
             };
@@ -1547,7 +1547,7 @@ mod tests {
 
             // PATH: leaf nodes packing
             let leaf_path_packing_builder = LeafPackingBuilder{
-                mle: dummy_leaf_node_paths_mle[i].clone(),
+                mle: leaf_node_paths_mle_vec[i].clone(),
                 r,
                 r_packing: another_r
             };
