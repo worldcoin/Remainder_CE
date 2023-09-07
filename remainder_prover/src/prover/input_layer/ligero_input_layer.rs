@@ -99,7 +99,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
 
         let ligero_eval_proof: LigeroProof<F> = remainder_ligero_eval_prove(
             &self.mle.mle,
-            &claim.0,
+            claim.get_point(),
             transcript,
             aux.clone(),
             comm,
@@ -126,8 +126,8 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
             &ligero_eval_proof,
             ligero_aux.clone(),
             transcript,
-            &claim.0,
-            claim.1,
+            claim.get_point(),
+            claim.get_result(),
         );
         Ok(())
     }

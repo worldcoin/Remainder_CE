@@ -35,32 +35,56 @@ pub enum ClaimError {
     #[error("Should be evaluating to a sum")]
     ///Should be evaluating to a sum
     ExpressionEvalError,
-    #[error("Number of variables mismatch.")]
-    /// Number of variables mismatch when building `ClaimGroup<F>`.
+    #[error("All claims in a group should agree on the number of variables")]
     NumVarsMismatch,
-    #[error("Point coordinate index out of bounds.")]
-    IndexOutOfBounds,
+    #[error("All claims in a group should agree the destination layer field")]
+    LayerIdMismatch,
 }
 
 /// A claim contains a `point` \in F^n along with the `result` \in F
 /// that an associated layer MLE is expected to evaluate to. In other
 /// words, if `W : F^n -> F` is the MLE, then the claim asserts:
-/// `W(point) == result`.
+/// `W(point) == result`. It can optionally maintain additional
+/// source/destination layer information through `from_layer_id` and
+/// `to_layer_id`.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub(crate) struct Claim<F> {
+pub struct Claim<F> {
     /// The point in F^n where the layer MLE is to be evaluated on.
     point: Vec<F>,
     /// The expected result of evaluating this layer's MLE on `point`.
     result: F,
+    /// The layer ID of the layer that produced this claim (if any);
+    /// origin layer.
+    from_layer_id: Option<LayerId>,
+    /// The layer ID of the layer containing the MLE this claim refers
+    /// to (if any); destination layer.
+    to_layer_id: Option<LayerId>,
 }
 
-impl<F: FieldExt> Claim<F> {
-    pub fn new(point: Vec<F>, result: F) -> Self {
-        Self { point, result }
+impl<F: Clone> Claim<F> {
+    /// Generate new raw claim without any origin/destination
+    /// information.
+    pub fn new_raw(point: Vec<F>, result: F) -> Self {
+        Self {
+            point,
+            result,
+            from_layer_id: None,
+            to_layer_id: None,
+        }
     }
 
-    pub fn get_point(&self) -> &Vec<F> {
-        &self.point
+    pub fn new(
+        point: Vec<F>,
+        result: F,
+        from_layer_id: Option<LayerId>,
+        to_layer_id: Option<LayerId>,
+    ) -> Self {
+        Self {
+            point,
+            result,
+            from_layer_id,
+            to_layer_id,
+        }
     }
 
     /// The length of the `point` vector.
@@ -68,22 +92,39 @@ impl<F: FieldExt> Claim<F> {
         self.point.len()
     }
 
+    pub fn get_point(&self) -> &Vec<F> {
+        &self.point
+    }
+
     pub fn get_result(&self) -> F {
-        self.result
+        self.result.clone()
+    }
+
+    pub fn get_from_layer_id(&self) -> Option<LayerId> {
+        self.from_layer_id
+    }
+
+    pub fn get_to_layer_id(&self) -> Option<LayerId> {
+        self.to_layer_id
     }
 }
 
-/// A list of claims in F^n
-/// all originating from the same layer with ID `from_layer_id`.
-/// Invariant: All claims are on the same number of variables, i.e.
-/// their points are elements of F^n for some common n among all
-/// claims.
-#[derive(Clone)]
-pub(crate) struct ClaimGroup<F> {
+/// A collection of claims for the same layer with an API accessing
+/// the matrix of claim points in a column-wise fashion. Useful for
+/// aggregating claims.
+/// Invariant: All claims have to agree on `to_layer_id` and on the
+/// number of variables.
+#[derive(Clone, Debug)]
+pub struct ClaimGroup<F> {
     /// A vector of claims in F^n.
     claims: Vec<Claim<F>>,
-    /// The layer ID of the source layer.
-    from_layer_id: LayerId,
+    /// The common layer ID of all claims stored in this group.
+    /// TODO(Makis): This is currently redundant information.
+    layer_id: Option<LayerId>,
+    /// A 2D matrix with the claim's points as its rows.
+    /// TODO(Makis): This is redundant information. Remove it and use
+    /// iterators.
+    points_matrix: Vec<Vec<F>>,
     /// The points in `claims` is effectively a matrix of elements in
     /// F. We also store the transpose of this matrix for convenient
     /// access.
@@ -96,14 +137,15 @@ pub(crate) struct ClaimGroup<F> {
     result_vector: Vec<F>,
 }
 
-impl<F: FieldExt> ClaimGroup<F> {
-    /// Build a ClaimGroup<F> struct through a vector of claims.
-    pub fn new(claims: Vec<Claim<F>>, from_layer_id: LayerId) -> Result<Self, ClaimError> {
+impl<F: Copy + Clone> ClaimGroup<F> {
+    /// Build a ClaimGroup<F> struct from a vector of claims.
+    pub fn new(claims: Vec<Claim<F>>) -> Result<Self, ClaimError> {
         let num_claims = claims.len();
         if num_claims == 0 {
             return Ok(Self {
                 claims: vec![],
-                from_layer_id,
+                layer_id: None,
+                points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
             });
@@ -112,11 +154,29 @@ impl<F: FieldExt> ClaimGroup<F> {
 
         // Check all claims match on the number of variables.
         if !claims
+            .clone()
             .into_iter()
             .all(|claim| claim.get_num_vars() == num_vars)
         {
             return Err(ClaimError::NumVarsMismatch);
         }
+
+        // Check all claims match on the `to_layer_id` field.
+        let layer_id = claims[0].get_to_layer_id();
+        if !claims
+            .clone()
+            .into_iter()
+            .all(|claim| claim.get_to_layer_id() == layer_id)
+        {
+            return Err(ClaimError::LayerIdMismatch);
+        }
+
+        // Populate the points_matrix
+        let points_matrix: Vec<_> = claims
+            .clone()
+            .into_iter()
+            .map(|claim| -> Vec<F> { claim.get_point().clone() })
+            .collect();
 
         // Compute the claim points transpose.
         let claim_points_transpose: Vec<Vec<F>> = (0..num_vars)
@@ -128,7 +188,8 @@ impl<F: FieldExt> ClaimGroup<F> {
 
         Ok(Self {
             claims,
-            from_layer_id,
+            layer_id,
+            points_matrix,
             claim_points_transpose,
             result_vector,
         })
@@ -148,8 +209,8 @@ impl<F: FieldExt> ClaimGroup<F> {
         self.claims[0].get_num_vars()
     }
 
-    pub fn get_from_layer_id(&self) -> LayerId {
-        self.from_layer_id
+    pub fn get_layer_id(&self) -> Option<LayerId> {
+        self.layer_id
     }
 
     /// Returns the i-th result.
@@ -181,34 +242,37 @@ impl<F: FieldExt> ClaimGroup<F> {
         &self.claim_points_transpose
     }
 
-    pub fn get_result_vector(&self) -> &Vec<F> {
+    // Return a 2D-matrix with the claim points as its rows
+    pub fn get_points_matrix(&self) -> &Vec<Vec<F>> {
+        &self.points_matrix
+    }
+
+    pub fn get_results(&self) -> &Vec<F> {
         &self.result_vector
     }
-}
 
-/// Type for storing all the claims to/from a layer.
-type LayersClaim<F: FieldExt> = Vec<ClaimGroup<F>>;
+    /// Returns the i-th claim.
+    pub fn get_claim(&self, i: usize) -> &Claim<F> {
+        &self.claims[i]
+    }
+}
 
 pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     claims: &ClaimGroup<F>,
     r_star: F,
 ) -> Result<Vec<F>, ClaimError> {
-    let num_claims = claims.get_num_claims();
-    let num_vars = claims.get_num_vars();
-
-    let challenge_matrix_transpose = claims.get_claim_points_transpose();
-    debug_assert_eq!(challenge_matrix_transpose.len(), num_vars);
-
     if claims.is_empty() {
         return Err(ClaimError::ClaimAggroError);
     }
-    debug_assert_eq!(challenge_matrix_transpose[0].len(), num_claims);
+
+    let num_claims = claims.get_num_claims();
+    let num_vars = claims.get_num_vars();
 
     // Compute r = l(r*).
     let r: Vec<F> = cfg_into_iter!(0..num_vars)
         .map(|idx| {
-            let evals = challenge_matrix_transpose[idx];
-            evaluate_at_a_point(&evals, r_star).unwrap()
+            let evals = claims.get_points_column(idx);
+            evaluate_at_a_point(evals, r_star).unwrap()
         })
         .collect();
 
@@ -219,16 +283,17 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer: &impl Layer<F>,
 ) -> Result<Vec<F>, ClaimError> {
-    let num_claims = claims.get_num_claims();
-    let num_vars = claims.get_num_vars();
-
-    let results = claims.get_result_vector();
-    let challenge_matrix_transpose = claims.get_claim_points_transpose();
-    debug_assert_eq!(challenge_matrix_transpose.len(), num_vars);
-
     if claims.is_empty() {
         return Err(ClaimError::ClaimAggroError);
     }
+
+    let num_claims = claims.get_num_claims();
+    let num_vars = claims.get_num_vars();
+
+    let results = claims.get_results();
+    let challenge_matrix_transpose = claims.get_claim_points_transpose();
+
+    debug_assert_eq!(challenge_matrix_transpose.len(), num_vars);
     debug_assert_eq!(challenge_matrix_transpose[0].len(), num_claims);
 
     // Get the evals [W(l(0)), W(l(1)), ... ]
@@ -244,6 +309,10 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     claims: &ClaimGroup<F>,
     r_star: F,
 ) -> Result<Claim<F>, ClaimError> {
+    if claims.is_empty() {
+        return Err(ClaimError::ClaimAggroError);
+    }
+
     let num_claims = claims.get_num_claims();
     let num_vars = claims.get_num_vars();
 
@@ -258,7 +327,7 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     let r = compute_aggregated_challenges(claims, r_star)?;
     let q_rstar = evaluate_at_a_point(wlx, r_star).unwrap();
 
-    let aggregated_claim: Claim<F> = Claim::new(r, q_rstar);
+    let aggregated_claim: Claim<F> = Claim::new(r, q_rstar, claims.get_layer_id(), None);
     Ok(aggregated_claim)
 }
 
@@ -307,11 +376,11 @@ mod tests {
                 let mut exp = expr.clone();
                 exp.index_mle_indices(0);
                 let result = exp.evaluate_expr(point.clone()).unwrap();
-                Claim::new(point.clone(), result)
+                Claim::new_raw(point.clone(), result)
             })
             .collect();
 
-        ClaimGroup::new(claims_vector, LayerId::Output(0)).unwrap()
+        ClaimGroup::new(claims_vector).unwrap()
     }
 
     /// Builds an expression corresponding to the MLE of a function
@@ -345,7 +414,7 @@ mod tests {
         let r = compute_aggregated_challenges(claims, r_star).unwrap();
         let wlx = compute_claim_wlx(claims, layer).unwrap();
         let claimed_val = evaluate_at_a_point(&wlx, r_star).unwrap();
-        Claim::new(r, claimed_val)
+        Claim::new_raw(r, claimed_val)
     }
 
     /// Compute l* = l(r*).
@@ -366,7 +435,7 @@ mod tests {
         let mut expr = expr.clone();
         expr.index_mle_indices(0);
         let result = expr.evaluate_expr(l_star.clone()).unwrap();
-        Claim::new(l_star.clone(), result)
+        Claim::new_raw(l_star.clone(), result)
     }
 
     // ----------------------------------------------------------

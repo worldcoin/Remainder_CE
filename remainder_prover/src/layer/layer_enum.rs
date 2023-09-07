@@ -52,7 +52,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         }
     }
 
-    fn get_claims(&self) -> Result<Vec<(super::LayerId, Claim<F>)>, super::LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
             LayerEnum::AddGate(layer) => layer.get_claims(),

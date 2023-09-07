@@ -59,13 +59,13 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
 
         let eval = if mle_ref.num_vars != 0 {
             let mut eval = None;
-            for (curr_bit, &chal) in claim.0.iter().enumerate() {
+            for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
 
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            (vec![], mle_ref.bookkeeping_table[0])
+            Claim::new_raw(vec![], mle_ref.bookkeeping_table[0])
         };
 
         if eval == claim {
