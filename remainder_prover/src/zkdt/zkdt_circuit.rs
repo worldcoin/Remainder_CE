@@ -142,14 +142,14 @@ impl<F: FieldExt> AttributeConsistencySubCircuit<F> {
 }
 
 pub struct MultiSetSubCircuit<F: FieldExt> {
-    dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
-    dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
-    dummy_multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
-    dummy_multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
-    dummy_decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
-    dummy_decision_node_paths_mle_vec_combined: DenseMle<F, F>,
-    dummy_leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
-    dummy_leaf_node_paths_mle_vec_combined: DenseMle<F, F>,
+    decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+    leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+    multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
+    multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
+    decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
+    decision_node_paths_mle_vec_combined: DenseMle<F, F>,
+    leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
+    leaf_node_paths_mle_vec_combined: DenseMle<F, F>,
     r: F,
     r_packings: (F, F),
     tree_height: usize,
@@ -161,15 +161,15 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
         let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
 
         // layer 0: x
-        let mut dummy_decision_nodes_mle = self.dummy_decision_nodes_mle.clone();
-        dummy_decision_nodes_mle.add_prefix_bits(self.dummy_decision_nodes_mle.get_prefix_bits());
+        let mut decision_nodes_mle = self.decision_nodes_mle.clone();
+        decision_nodes_mle.add_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
         let decision_packing_builder = DecisionPackingBuilder::new(
-            dummy_decision_nodes_mle, self.r, self.r_packings);
+            decision_nodes_mle, self.r, self.r_packings);
 
-        let mut dummy_leaf_nodes_mle = self.dummy_leaf_nodes_mle.clone();
-        dummy_leaf_nodes_mle.add_prefix_bits(self.dummy_leaf_nodes_mle.get_prefix_bits());
+        let mut leaf_nodes_mle = self.leaf_nodes_mle.clone();
+        leaf_nodes_mle.add_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
         let leaf_packing_builder = LeafPackingBuilder::new(
-            dummy_leaf_nodes_mle, self.r, self.r_packings.0
+            leaf_nodes_mle, self.r, self.r_packings.0
         );
 
         let packing_builders = decision_packing_builder.concat(leaf_packing_builder);
@@ -185,19 +185,19 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
         let r_minus_x_builders = r_minus_x_builder_decision.concat(r_minus_x_builder_leaf);
         let (r_minus_x_power_decision, r_minus_x_power_leaf) = layers.add_gkr(r_minus_x_builders);
 
-        let mut dummy_multiplicities_bin_decomp_mle_decision = self.dummy_multiplicities_bin_decomp_mle_decision.clone();
-        dummy_multiplicities_bin_decomp_mle_decision.add_prefix_bits(self.dummy_multiplicities_bin_decomp_mle_decision.get_prefix_bits());
+        let mut multiplicities_bin_decomp_mle_decision = self.multiplicities_bin_decomp_mle_decision.clone();
+        multiplicities_bin_decomp_mle_decision.add_prefix_bits(self.multiplicities_bin_decomp_mle_decision.get_prefix_bits());
         // layer 2, part 1: (r - x) * b_ij + (1 - b_ij)
         let prev_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
-            dummy_multiplicities_bin_decomp_mle_decision.clone(),
+            multiplicities_bin_decomp_mle_decision.clone(),
             0,
             r_minus_x_power_decision.clone()
         );
 
-        let mut dummy_multiplicities_bin_decomp_mle_leaf = self.dummy_multiplicities_bin_decomp_mle_leaf.clone();
-        dummy_multiplicities_bin_decomp_mle_leaf.add_prefix_bits(self.dummy_multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
+        let mut multiplicities_bin_decomp_mle_leaf = self.multiplicities_bin_decomp_mle_leaf.clone();
+        multiplicities_bin_decomp_mle_leaf.add_prefix_bits(self.multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
-            dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+            multiplicities_bin_decomp_mle_leaf.clone(),
             0,
             r_minus_x_power_leaf.clone()
         );
@@ -217,13 +217,13 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
 
         // layer 3, part 1: (r - x)^2 * b_ij + (1 - b_ij)
         let prev_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
-            dummy_multiplicities_bin_decomp_mle_decision.clone(),
+            multiplicities_bin_decomp_mle_decision.clone(),
             1,
             r_minus_x_power_decision.clone()
         );
 
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
-            dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+            multiplicities_bin_decomp_mle_leaf.clone(),
             1,
             r_minus_x_power_leaf.clone()
         );
@@ -258,13 +258,13 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
 
             // layer 4, part 2
             let curr_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
-                dummy_multiplicities_bin_decomp_mle_decision.clone(),
+                multiplicities_bin_decomp_mle_decision.clone(),
                 i,
                 r_minus_x_power_decision.clone()
             );
 
             let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
-                dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+                multiplicities_bin_decomp_mle_leaf.clone(),
                 i,
                 r_minus_x_power_leaf.clone()
             );
@@ -298,13 +298,13 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
 
         // layer 17, part 1
         let curr_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
-            dummy_multiplicities_bin_decomp_mle_decision.clone(),
+            multiplicities_bin_decomp_mle_decision.clone(),
             15,
             r_minus_x_power_decision.clone()
         );
 
         let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
-            dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+            multiplicities_bin_decomp_mle_leaf.clone(),
             15,
             r_minus_x_power_leaf.clone()
         );
@@ -370,17 +370,17 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
         // **** below is all decision nodes on the path multiplied ****
         println!("Nodes exponentiated, number of layers {:?}", layers.next_layer_id());
 
-        let bit_difference = self.dummy_decision_node_paths_mle_vec[0].num_iterated_vars() - self.dummy_leaf_node_paths_mle_vec[0].num_iterated_vars();
+        let bit_difference = self.decision_node_paths_mle_vec[0].num_iterated_vars() - self.leaf_node_paths_mle_vec[0].num_iterated_vars();
 
         // layer 0: packing
 
-        let batch_bits = log2(self.dummy_decision_node_paths_mle_vec.len()) as usize;
+        let batch_bits = log2(self.decision_node_paths_mle_vec.len()) as usize;
 
         let decision_path_packing_builder = BatchedLayer::new(
-            self.dummy_decision_node_paths_mle_vec.iter().map(
+            self.decision_node_paths_mle_vec.iter().map(
                 |decision_node_mle| {
                     let mut decision_node_mle = decision_node_mle.clone();
-                    decision_node_mle.add_prefix_bits(Some(self.dummy_decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    decision_node_mle.add_prefix_bits(Some(self.decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     DecisionPackingBuilder::new(
                         decision_node_mle.clone(),
                         self.r,
@@ -390,10 +390,10 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
             ).collect_vec());
 
         let leaf_path_packing_builder = BatchedLayer::new(
-            self.dummy_leaf_node_paths_mle_vec.iter().map(
+            self.leaf_node_paths_mle_vec.iter().map(
                 |leaf_node_mle| {
                     let mut leaf_node_mle = leaf_node_mle.clone();
-                    leaf_node_mle.add_prefix_bits(Some(self.dummy_leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    leaf_node_mle.add_prefix_bits(Some(self.leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     LeafPackingBuilder::new(
                         leaf_node_mle.clone(),
                         self.r,
