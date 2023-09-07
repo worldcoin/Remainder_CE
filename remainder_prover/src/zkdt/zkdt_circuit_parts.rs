@@ -28,7 +28,68 @@ pub struct PermutationSubCircuit<F: FieldExt> {
 
 impl<F: FieldExt> PermutationSubCircuit<F> {
     fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
-        todo!()
+        let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
+
+        let batch_bits = log2(self.dummy_input_data_mle_vec.len()) as usize;
+    
+    
+        let input_packing_builder = BatchedLayer::new(
+            self.dummy_input_data_mle_vec.iter().map(
+                |input_data_mle| {
+                    let mut input_data_mle = input_data_mle.clone();
+                    // TODO!(ende) fix this atrocious fixed(false)
+                    input_data_mle.add_prefix_bits(Some(self.dummy_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    InputPackingBuilder::new(
+                        input_data_mle,
+                        self.r,
+                        self.r_packing
+                    )
+                }).collect_vec());
+
+        let input_permuted_packing_builder = BatchedLayer::new(
+            self.dummy_permuted_input_data_mle_vec.iter().map(
+                |input_data_mle| {
+                    let mut input_data_mle = input_data_mle.clone();
+                    // TODO!(ende) fix this atrocious fixed(true)
+                    input_data_mle.add_prefix_bits(Some(self.dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    InputPackingBuilder::new(
+                        input_data_mle,
+                        self.r,
+                        self.r_packing
+                    )
+                }).collect_vec());
+
+        let packing_builders = input_packing_builder.concat(input_permuted_packing_builder);
+
+        let (mut input_packed, mut input_permuted_packed) = layers.add_gkr(packing_builders);
+
+        for _ in 0..log2(self.input_len) {
+            let prod_builder = BatchedLayer::new(
+                input_packed.into_iter().map(
+                    |input_packed| SplitProductBuilder::new(input_packed)
+                ).collect());
+            let prod_permuted_builder = BatchedLayer::new(
+                input_permuted_packed.into_iter().map(
+                    |input_permuted_packed| SplitProductBuilder::new(input_permuted_packed)
+                ).collect());
+            let split_product_builders = prod_builder.concat(prod_permuted_builder);
+            (input_packed, input_permuted_packed) = layers.add_gkr(split_product_builders);
+        }
+
+        let difference_builder = EqualityCheck::new_batched(
+            input_packed,
+            input_permuted_packed,
+        );
+
+        let difference_mle = layers.add_gkr(difference_builder);
+
+        let circuit_output = combine_zero_mle_ref(difference_mle);
+
+        Witness {
+            layers,
+            output_layers: vec![circuit_output.get_enum()],
+            input_layers: vec![],
+        }
     }
 }
 
@@ -42,7 +103,39 @@ pub struct AttributeConsistencySubCircuit<F: FieldExt> {
 
 impl<F: FieldExt> AttributeConsistencySubCircuit<F> {
     fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
-        todo!()
+        let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
+
+        let batch_bits = log2(self.dummy_permuted_input_data_mle_vec.len()) as usize;
+    
+        let attribute_consistency_builder = BatchedLayer::new(
+
+            self.dummy_permuted_input_data_mle_vec
+                    .iter()
+                    .zip(self.dummy_decision_node_paths_mle_vec.iter())
+                    .map(|(input_data_mle, decision_path_mle)| {
+
+                        let mut input_data_mle = input_data_mle.clone();
+                        input_data_mle.add_prefix_bits(Some(self.dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+
+                        let mut decision_path_mle = decision_path_mle.clone();
+                        decision_path_mle.add_prefix_bits(Some(self.dummy_decision_node_paths_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+
+                        AttributeConsistencyBuilderZeroRef::new(
+                            input_data_mle,
+                            decision_path_mle,
+                            self.tree_height
+                        )
+
+        }).collect_vec());
+
+        let difference_mle = layers.add_gkr(attribute_consistency_builder);
+        let circuit_output = combine_zero_mle_ref(difference_mle);
+
+        Witness {
+            layers,
+            output_layers: vec![circuit_output.get_enum()],
+            input_layers: vec![],
+        }
     }
 }
 
