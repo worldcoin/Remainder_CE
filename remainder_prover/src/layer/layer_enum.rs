@@ -6,6 +6,8 @@ use crate::mle::gate::{AddGate, AddGateBatched};
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
+use super::claims::Claim;
+
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 ///An enum representing all the possible kinds of Layers
@@ -23,7 +25,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
 
     fn prove_rounds(
         &mut self,
-        claim: super::Claim<F>,
+        claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<crate::prover::SumcheckProof<F>, super::LayerError> {
         match self {
@@ -36,7 +38,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
 
     fn verify_rounds(
         &mut self,
-        claim: super::Claim<F>,
+        claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), super::LayerError> {
@@ -50,7 +52,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         }
     }
 
-    fn get_claims(&self) -> Result<Vec<(super::LayerId, super::Claim<F>)>, super::LayerError> {
+    fn get_claims(&self) -> Result<Vec<(super::LayerId, Claim<F>)>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
             LayerEnum::AddGate(layer) => layer.get_claims(),

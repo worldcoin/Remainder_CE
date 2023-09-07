@@ -10,9 +10,9 @@ use itertools::{repeat_n, Itertools, MapInto};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
-use super::{Mle, MleAble, MleIndex, MleRef, mle_enum::MleEnum};
-use crate::{expression::ExpressionStandard, layer::Claim};
+use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
 use crate::layer::LayerId;
+use crate::{expression::ExpressionStandard, layer::claims::Claim};
 use remainder_shared_types::FieldExt;
 
 #[derive(Clone, Debug)]
@@ -107,11 +107,10 @@ impl<'a, F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> IntoIterator
 //     }
 // }
 
-pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
-    let max_size = items
-        .iter()
-        .map(|mle_ref| mle_ref.len())
-        .max().unwrap();
+pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(
+    items: &[Vec<F>; L],
+) -> Vec<F> {
+    let max_size = items.iter().map(|mle_ref| mle_ref.len()).max().unwrap();
     let part_size = 1 << log2(max_size);
     let part_count = 2_u32.pow(log2(L)) as usize;
     let padding_count = part_count - L;
@@ -124,9 +123,15 @@ pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items
     //     items
     // }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
 
-    (0..max_size).flat_map(|index| {
-        items.iter().map(move |item| item.get(index).unwrap_or(&F::zero()).clone()).chain(repeat_n(F::zero(), padding_count))
-    }).chain(repeat_n(F::zero(), total_padding)).collect()
+    (0..max_size)
+        .flat_map(|index| {
+            items
+                .iter()
+                .map(move |item| item.get(index).unwrap_or(&F::zero()).clone())
+                .chain(repeat_n(F::zero(), padding_count))
+        })
+        .chain(repeat_n(F::zero(), total_padding))
+        .collect()
 }
 
 impl<F: FieldExt> MleAble<F> for F {
@@ -198,16 +203,16 @@ impl<F: FieldExt> DenseMle<F, F> {
         )
     }
 
-    pub fn one(mle_len: usize, layer_id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> DenseMle<F, F> {
+    pub fn one(
+        mle_len: usize,
+        layer_id: LayerId,
+        prefix_bits: Option<Vec<MleIndex<F>>>,
+    ) -> DenseMle<F, F> {
         let mut one_vec = vec![];
         for _ in 0..mle_len {
             one_vec.push(F::one())
         }
-        DenseMle::new_from_raw(
-            one_vec,
-            layer_id,
-            prefix_bits
-        )
+        DenseMle::new_from_raw(one_vec, layer_id, prefix_bits)
     }
 }
 
@@ -279,7 +284,6 @@ impl<F: FieldExt> From<(F, F)> for Tuple2<F> {
 impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     ///Gets an MleRef to the first element in the tuple
     pub fn first(&'_ self) -> DenseMleRef<F> {
-
         // --- Number of *remaining* iterated variables ---
         let new_num_iterated_vars = self.num_iterated_vars - 1;
 
@@ -402,8 +406,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.bookkeeping_table = new.collect();
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
-            Some((
-                
+            Some(Claim::new(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
@@ -456,7 +459,8 @@ mod tests {
         mle_ref.fix_variable(1, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
+        let mle_exp: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
     #[test]
@@ -478,7 +482,8 @@ mod tests {
         mle_ref.fix_variable(1, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
+        let mle_exp: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
@@ -502,7 +507,8 @@ mod tests {
         mle_ref.fix_variable(2, Fr::from(2));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
+        let mle_exp: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
@@ -528,7 +534,8 @@ mod tests {
         mle_ref.fix_variable(2, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(26)];
-        let mle_exp: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
+        let mle_exp: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
@@ -546,7 +553,8 @@ mod tests {
         ];
 
         //DON'T do this normally, it clones the vec, if you have a flat MLE just use Mle::new
-        let mle_iter = DenseMle::new_from_iter(mle_vec.clone().into_iter(), LayerId::Input(0), None);
+        let mle_iter =
+            DenseMle::new_from_iter(mle_vec.clone().into_iter(), LayerId::Input(0), None);
 
         let mle_new: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
 
@@ -591,7 +599,8 @@ mod tests {
             Fr::from(7),
         ];
 
-        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec.clone(), LayerId::Input(0), None);
+        let mle: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec.clone(), LayerId::Input(0), None);
 
         let mle_ref: DenseMleRef<Fr> = mle.mle_ref();
 

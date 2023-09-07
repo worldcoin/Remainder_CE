@@ -1,13 +1,13 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::FieldExt;
 
-use super::{zero::ZeroMleRef, dense::DenseMleRef, MleRef, MleIndex};
+use super::{dense::DenseMleRef, zero::ZeroMleRef, MleIndex, MleRef};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MleEnum<F> {
     Dense(DenseMleRef<F>),
-    Zero(ZeroMleRef<F>)
+    Zero(ZeroMleRef<F>),
 }
 
 impl<F: FieldExt> MleRef for MleEnum<F> {
@@ -34,7 +34,11 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         }
     }
 
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<crate::layer::Claim<Self::F>> {
+    fn fix_variable(
+        &mut self,
+        round_index: usize,
+        challenge: Self::F,
+    ) -> Option<crate::layer::claims::Claim<Self::F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable(round_index, challenge),
             MleEnum::Zero(item) => item.fix_variable(round_index, challenge),
@@ -69,8 +73,7 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
     fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {
         match self {
             MleEnum::Dense(item) => item.push_mle_indices(new_indices),
-            MleEnum::Zero(item) => item.push_mle_indices(new_indices)
+            MleEnum::Zero(item) => item.push_mle_indices(new_indices),
         }
     }
-
 }
