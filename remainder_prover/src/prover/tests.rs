@@ -4,6 +4,7 @@ use itertools::{Itertools, repeat_n};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
+use tracing::Level;
 use std::{cmp::max, fs, path::Path, time::Instant, iter::repeat_with};
 
 
@@ -892,6 +893,10 @@ fn test_gkr_circuit_with_precommit() {
 
 #[test]
 fn test_random_layer_circuit() {
+
+    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+    // tracing::subscriber::set_global_default(subscriber)
+    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
     let mut rng = test_rng();
 

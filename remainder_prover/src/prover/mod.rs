@@ -304,8 +304,6 @@ pub trait GKRCircuit<F: FieldExt> {
 
             let layer_id = output.get_layer_id();
 
-            dbg!(layer_id, &claim);
-
             // --- Add the claim to either the set of current claims we're proving ---
             // --- or the global set of claims we need to eventually prove ---
             if let Some(curr_claims) = claims.get_mut(&layer_id) {

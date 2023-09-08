@@ -179,18 +179,14 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
 
     // --- TODO!(ryancao): SUPER hacky fix for the random packing constants ---
     // --- Basically if all the MLEs are exactly the same, we don't combine at all ---
-    if matches!(layer_id, LayerId::Input(_)) {
-        dbg!("Got here at all");
+    if matches!(layer_id, LayerId::Input(_)) && old_num_vars == 0 {
         let all_same = (0..mles[0].bookkeeping_table().len()).fold(true, |acc, idx| {
             acc && mles.iter().skip(1).fold(true, |inner_acc, mle| {
                 inner_acc && (mles[0].bookkeeping_table()[idx] == mle.bookkeeping_table()[idx])
             })
         });
         if all_same {
-            dbg!("Got all same");
             return mles[0].clone();
-        } else {
-            dbg!("Nope didn't get all same");
         }
     }
 
