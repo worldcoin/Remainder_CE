@@ -1,6 +1,6 @@
 //! Miscellaneous helper functions for `dt2zkdt`.
 use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode};
-use crate::zkdt::trees::*;
+use crate::zkdt::data_pipeline::trees::*;
 use remainder_shared_types::FieldExt;
 use std::iter::repeat;
 

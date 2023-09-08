@@ -5,9 +5,9 @@ use remainder_shared_types::FieldExt;
 use serde::{Serialize, Deserialize};
 use serde_json::{to_writer, from_reader};
 
-use super::constants::CACHED_BATCHED_MLES_FILE;
+use super::super::constants::CACHED_BATCHED_MLES_FILE;
 use super::dt2zkdt::load_upshot_data_single_tree_batch;
-use super::structs::*;
+use super::super::structs::*;
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};

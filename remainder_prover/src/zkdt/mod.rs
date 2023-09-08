@@ -3,9 +3,7 @@
 /// Example structs for zkDT circuit
 pub mod structs;
 /// Concrete circuit implementation
-pub mod dummy_data_generator;
-pub mod dt2zkdt;
-pub mod trees;
+pub mod data_pipeline;
 pub mod helpers;
 pub mod builders;
 pub mod zkdt_circuit_parts;
