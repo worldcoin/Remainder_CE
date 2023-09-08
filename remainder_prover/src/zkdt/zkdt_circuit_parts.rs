@@ -9,7 +9,7 @@ use std::{io::Empty, iter};
 use ark_std::{log2, test_rng};
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder, FSDecisionPackingBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
+use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
 use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
@@ -781,12 +781,12 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             let mut dummy_decision_nodes_mle = self.decision_nodes_mle.clone();
             dummy_decision_nodes_mle.add_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
             let decision_packing_builder = FSDecisionPackingBuilder::new(
-                dummy_decision_nodes_mle, r_mle, r_packing_mle, r_packing_another_mle);
+                dummy_decision_nodes_mle, r_mle.clone(), r_packing_mle.clone(), r_packing_another_mle);
     
             let mut dummy_leaf_nodes_mle = self.leaf_nodes_mle.clone();
             dummy_leaf_nodes_mle.add_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
-            let leaf_packing_builder = LeafPackingBuilder::new(
-                dummy_leaf_nodes_mle, self.r, self.r_packings.0
+            let leaf_packing_builder = FSLeafPackingBuilder::new(
+                dummy_leaf_nodes_mle, r_mle, r_packing_mle
             );
     
             let packing_builders = decision_packing_builder.concat(leaf_packing_builder);
