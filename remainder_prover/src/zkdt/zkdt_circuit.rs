@@ -24,8 +24,6 @@ pub struct PermutationSubCircuit<F: FieldExt> {
     pub permuted_input_data_mle_combined: DenseMle<F, F>,
     pub r: F,
     pub r_packing: F,
-    pub input_len: usize,
-    pub num_inputs: usize
 }
 
 impl<F: FieldExt> PermutationSubCircuit<F> {
@@ -65,7 +63,8 @@ impl<F: FieldExt> PermutationSubCircuit<F> {
 
         let (mut input_packed, mut input_permuted_packed) = layers.add_gkr(packing_builders);
 
-        for _ in 0..log2(self.input_len) {
+        let input_len = 1 << (self.input_data_mle_vec[0].num_iterated_vars() - 1);
+        for _ in 0..log2(input_len) {
             let prod_builder = BatchedLayer::new(
                 input_packed.into_iter().map(
                     |input_packed| SplitProductBuilder::new(input_packed)
@@ -100,11 +99,13 @@ pub struct AttributeConsistencySubCircuit<F: FieldExt> {
     permuted_input_data_mle_vec_combined: DenseMle<F, F>,
     decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
     decision_node_paths_mle_vec_combined: DenseMle<F, F>,
-    tree_height: usize,
 }
 
 impl<F: FieldExt> AttributeConsistencySubCircuit<F> {
     fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
+
+        let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
+
         let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
 
         let batch_bits = log2(self.permuted_input_data_mle_vec.len()) as usize;
@@ -125,7 +126,7 @@ impl<F: FieldExt> AttributeConsistencySubCircuit<F> {
                         AttributeConsistencyBuilderZeroRef::new(
                             input_data_mle,
                             decision_path_mle,
-                            self.tree_height
+                            tree_height
                         )
 
         }).collect_vec());
@@ -152,11 +153,12 @@ pub struct MultiSetSubCircuit<F: FieldExt> {
     leaf_node_paths_mle_vec_combined: DenseMle<F, F>,
     r: F,
     r_packings: (F, F),
-    tree_height: usize,
 }
 
 impl<F: FieldExt> MultiSetSubCircuit<F> {
     fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
+
+        let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
 
         let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
 
@@ -344,7 +346,7 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
         let mut exponentiated_decision = prev_prod_decision;
         let mut exponentiated_leaf = prev_prod_leaf;
 
-        for _ in 0..self.tree_height-1 {
+        for _ in 0..tree_height-1 {
 
             // layer 20, or i+20
             let prod_builder_decision = SplitProductBuilder::new(
@@ -609,8 +611,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             permuted_input_data_mle_combined: permuted_input_data_mle_vec_combined.clone(),
             r: F::from(rng.gen::<u64>()),
             r_packing: F::from(rng.gen::<u64>()),
-            input_len,
-            num_inputs: dummy_input_len,
         };
 
         let attribute_consistency_circuit = AttributeConsistencySubCircuit {
@@ -618,7 +618,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             permuted_input_data_mle_vec_combined,
             decision_node_paths_mle_vec: decision_node_paths_mle_vec.clone(),
             decision_node_paths_mle_vec_combined: decision_node_paths_mle_vec_combined.clone(),
-            tree_height,
         };
 
         let multiset_circuit = MultiSetSubCircuit {
@@ -632,7 +631,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             leaf_node_paths_mle_vec_combined,
             r: F::from(rng.gen::<u64>()),
             r_packings: (F::from(rng.gen::<u64>()), F::from(rng.gen::<u64>())),
-            tree_height,
         };
 
         let binary_recomp_circuit_batched = BinaryRecompCircuitBatched::new(
