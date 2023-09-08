@@ -543,6 +543,50 @@ impl<F: FieldExt> DecisionPackingBuilder<F> {
     }
 }
 
+/// packs decision node mles, FS version
+pub struct FSDecisionPackingBuilder<F: FieldExt> {
+    mle: DenseMle<F, DecisionNode<F>>,
+    r_mle: DenseMle<F, F>,
+    r_packing_mle: DenseMle<F, F>,
+    r_packing_another_mle: DenseMle<F, F>
+}
+
+impl<F: FieldExt> LayerBuilder<F> for FSDecisionPackingBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    // expressions = r - (x.node_id + r_packing[0] * x.attr_id + r_packing[1] * x.threshold)
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.mle.node_id()) +
+        ExpressionStandard::products(vec![self.mle.attr_id(), self.r_packing_mle.mle_ref()]) +
+        ExpressionStandard::products(vec![self.mle.threshold(), self.r_packing_another_mle.mle_ref()]))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let r = self.r_mle.mle_ref().bookkeeping_table[0];
+        let r_packing = self.r_packing_mle.mle_ref().bookkeeping_table[0];
+        let r_packing_another = self.r_packing_another_mle.mle_ref().bookkeeping_table[0];
+
+        DenseMle::new_from_iter(self.mle.into_iter().map(
+            |DecisionNode { node_id, attr_id, threshold }|
+            r - (node_id + r_packing * attr_id + r_packing_another * threshold)
+        ), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> FSDecisionPackingBuilder<F> {
+    /// create new decision node packed
+    pub(crate) fn new(
+        mle: DenseMle<F, DecisionNode<F>>,
+        r_mle: DenseMle<F, F>,
+        r_packing_mle: DenseMle<F, F>,
+        r_packing_another_mle: DenseMle<F, F>
+    ) -> Self {
+        Self {
+            mle, r_mle, r_packing_mle, r_packing_another_mle
+        }
+    }
+}
+
 /// packs input x, FS version
 pub struct FSInputPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, InputAttribute<F>>,
