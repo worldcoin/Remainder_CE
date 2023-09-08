@@ -64,7 +64,7 @@ pub trait InputLayer<F: FieldExt> {
     fn compute_claim_wlx(&self, claims: &ClaimGroup<F>) -> Result<Vec<F>, ClaimError> {
         let mut mle = self.get_padded_mle().clone().mle_ref();
         let num_claims = claims.get_num_claims();
-        let claim_vecs = claims.get_points_matrix();
+        let claim_vecs = claims.get_claim_points_matrix();
         let claimed_vals = claims.get_results();
         let num_idx = claims.get_num_vars();
 
@@ -111,7 +111,7 @@ pub trait InputLayer<F: FieldExt> {
         claims: &ClaimGroup<F>,
         rstar: F,
     ) -> Result<Vec<F>, ClaimError> {
-        let claim_vecs = claims.get_points_matrix();
+        let claim_vecs = claims.get_claim_points_matrix();
 
         if claims.is_empty() {
             return Err(ClaimError::ClaimAggroError);

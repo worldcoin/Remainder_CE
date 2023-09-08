@@ -73,6 +73,8 @@ impl<F: Clone> Claim<F> {
         }
     }
 
+    /// Generate new claim, potentially with origin/destination
+    /// information.
     pub fn new(
         point: Vec<F>,
         result: F,
@@ -92,18 +94,22 @@ impl<F: Clone> Claim<F> {
         self.point.len()
     }
 
+    /// Returns the point vector in F^n.
     pub fn get_point(&self) -> &Vec<F> {
         &self.point
     }
 
+    /// Returns the expected result.
     pub fn get_result(&self) -> F {
         self.result.clone()
     }
 
+    /// Returns the source Layer ID.
     pub fn get_from_layer_id(&self) -> Option<LayerId> {
         self.from_layer_id
     }
 
+    /// Returns the destination Layer ID.
     pub fn get_to_layer_id(&self) -> Option<LayerId> {
         self.to_layer_id
     }
@@ -121,15 +127,16 @@ pub struct ClaimGroup<F> {
     /// The common layer ID of all claims stored in this group.
     /// TODO(Makis): This is currently redundant information.
     layer_id: Option<LayerId>,
+    /// -------------- BEGIN: TEMPORARY ---------------------
+    /// TODO(Makis): The following field are all redundant but provides
+    /// an easy way to access the information stored in `ClaimGroup`
+    /// in either row-wise or a column-wise manner. Consider using
+    /// iterators instead!
     /// A 2D matrix with the claim's points as its rows.
-    /// TODO(Makis): This is redundant information. Remove it and use
-    /// iterators.
-    points_matrix: Vec<Vec<F>>,
+    claim_points_matrix: Vec<Vec<F>>,
     /// The points in `claims` is effectively a matrix of elements in
     /// F. We also store the transpose of this matrix for convenient
     /// access.
-    /// TODO(Makis): Consider only providing iterator access instead
-    /// of storing separate, redundant copies.
     claim_points_transpose: Vec<Vec<F>>,
     /// A vector of `self.get_num_claims()` elements.
     /// For each claim i, stores the expected result of the i-th
@@ -138,14 +145,20 @@ pub struct ClaimGroup<F> {
 }
 
 impl<F: Copy + Clone> ClaimGroup<F> {
-    /// Build a ClaimGroup<F> struct from a vector of claims.
+    /// Builds a ClaimGroup<F> struct from a vector of claims.
+    /// Also populates all the redundant fields for easy access to
+    /// rows/columns.
+    /// If the claims do not all agree on the number of variables, a
+    /// `ClaimError::NumVarsMismatch` is returned.
+    /// If the claims do not all agree on the `to_layer_id`, a
+    /// `ClaimError::LayerIdMismatch` is returned.
     pub fn new(claims: Vec<Claim<F>>) -> Result<Self, ClaimError> {
         let num_claims = claims.len();
         if num_claims == 0 {
             return Ok(Self {
                 claims: vec![],
                 layer_id: None,
-                points_matrix: vec![],
+                claim_points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
             });
@@ -189,16 +202,18 @@ impl<F: Copy + Clone> ClaimGroup<F> {
         Ok(Self {
             claims,
             layer_id,
-            points_matrix,
+            claim_points_matrix: points_matrix,
             claim_points_transpose,
             result_vector,
         })
     }
 
+    /// Returns the number of claims stored in this group.
     pub fn get_num_claims(&self) -> usize {
         self.claims.len()
     }
 
+    /// Returns true if the group contains no claims.
     pub fn is_empty(&self) -> bool {
         self.claims.is_empty()
     }
@@ -209,6 +224,8 @@ impl<F: Copy + Clone> ClaimGroup<F> {
         self.claims[0].get_num_vars()
     }
 
+    /// Returns the common destination layer ID of all the claims
+    /// stored in this group.
     pub fn get_layer_id(&self) -> Option<LayerId> {
         self.layer_id
     }
@@ -220,43 +237,51 @@ impl<F: Copy + Clone> ClaimGroup<F> {
         self.claims[i].get_result()
     }
 
-    /// Returns the i-th point.
+    /// Returns reference to the i-th point vector.
     /// Panics if i is not in the range
     /// 0 <= i < `self.get_num_claims()`.
     pub fn get_challenge(&self, i: usize) -> &Vec<F> {
         &self.claims[i].get_point()
     }
 
-    /// Returns a vector of `self.get_num_claims()` elements, the j-th
-    /// entry of which is the i-th coordinate of the j-th claim's
-    /// point.
+    /// Returns a reference to a vector of `self.get_num_claims()`
+    /// elements, the j-th entry of which is the i-th coordinate of
+    /// the j-th claim's point. In other words, it returns the i-th
+    /// column of the matrix containing the claim points as its rows.
     /// Panics if i is not in the range: 0 <= i < `self.get_num_vars()`.
     pub fn get_points_column(&self, i: usize) -> &Vec<F> {
         &self.claim_points_transpose[i]
     }
 
-    /// Returns an "n x m" matrix where n = `self.get_num_vars()` and
-    /// m = `self.get_num_claims()`, containing the claim points as
-    /// its columns.
+    /// Returns a reference to an "m x n" matrix where n =
+    /// `self.get_num_vars()` and m = `self.get_num_claims()` with the
+    /// claim points as its rows.
+    pub fn get_claim_points_matrix(&self) -> &Vec<Vec<F>> {
+        &self.claim_points_matrix
+    }
+
+    /// Returns a reference to an "n x m" matrix where n =
+    /// `self.get_num_vars()` and m = `self.get_num_claims()`,
+    /// containing the claim points as its columns.
     pub fn get_claim_points_transpose(&self) -> &Vec<Vec<F>> {
         &self.claim_points_transpose
     }
 
-    // Return a 2D-matrix with the claim points as its rows
-    pub fn get_points_matrix(&self) -> &Vec<Vec<F>> {
-        &self.points_matrix
-    }
-
+    /// Returns a reference to a vector with m =
+    /// `self.get_num_claims()` elements containing the results of all
+    /// claims.
     pub fn get_results(&self) -> &Vec<F> {
         &self.result_vector
     }
 
-    /// Returns the i-th claim.
+    /// Returns a reference to the i-th claim.
     pub fn get_claim(&self, i: usize) -> &Claim<F> {
         &self.claims[i]
     }
 }
 
+/// Returns the challenge point when aggregating `claims` using
+/// challenge `r_star`. An error is returned if `claims` is empty.
 pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     claims: &ClaimGroup<F>,
     r_star: F,
@@ -265,13 +290,14 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
         return Err(ClaimError::ClaimAggroError);
     }
 
-    let num_claims = claims.get_num_claims();
     let num_vars = claims.get_num_vars();
 
     // Compute r = l(r*).
     let r: Vec<F> = cfg_into_iter!(0..num_vars)
         .map(|idx| {
             let evals = claims.get_points_column(idx);
+            // Interpolate the value l(r*) from the values
+            // l(0), l(1), ..., l(m-1) where m = # of claims.
             evaluate_at_a_point(evals, r_star).unwrap()
         })
         .collect();
@@ -279,6 +305,24 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     Ok(r)
 }
 
+/// Aggregates `claims` into a single claim using challenge `r_star`.
+/// Returns the aggregated claim and the wlx evaluations.
+pub(crate) fn aggregate_claims<F: FieldExt>(
+    claims: &ClaimGroup<F>,
+    layer: &impl Layer<F>,
+    r_star: F,
+) -> Result<(Claim<F>, Vec<F>), ClaimError> {
+    let r = compute_aggregated_challenges(claims, r_star)?;
+    let wlx = compute_claim_wlx(claims, layer)?;
+    // TODO(Makis): Propagate error here.
+    let q_star = evaluate_at_a_point(&wlx, r_star).unwrap();
+    return Ok((Claim::new_raw(r, q_star), wlx));
+}
+
+/// Returns a vector of evaluations of W(l(x)). There should be enough
+/// evaluations to uniquely characterize the polynomial q(x) =
+/// W(l(x)). This is a wrapper around `Layer<F>::get_wlx_evaluations`.
+/// An error is returned if `claims` is empty.
 pub(crate) fn compute_claim_wlx<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer: &impl Layer<F>,
@@ -291,20 +335,23 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
     let num_vars = claims.get_num_vars();
 
     let results = claims.get_results();
-    let points_matrix = claims.get_points_matrix();
+    let points_matrix = claims.get_claim_points_matrix();
 
     debug_assert_eq!(points_matrix.len(), num_claims);
     debug_assert_eq!(points_matrix[0].len(), num_vars);
 
-    // Get the evals [W(l(0)), W(l(1)), ... ]
+    // Get the evals [W(l(0)), W(l(1)), ..., W(l(degree_upper_bound)) ]
     let wlx = layer.get_wlx_evaluations(points_matrix, results, num_claims, num_vars)?;
 
     Ok(wlx)
 }
 
-/// verifies the claim aggregation
+/// Aggregates `claims` into a single claim on challenge point
+/// `r_star` using the `wlx` evaluations of W(l(x)).
+/// This function is used by the verifier in the process of verifying
+/// claim aggregation.
 pub(crate) fn verify_aggregate_claim<F: FieldExt>(
-    wlx: &Vec<F>, // synonym for qx
+    wlx: &Vec<F>, // synonym for q(x)
     claims: &ClaimGroup<F>,
     r_star: F,
 ) -> Result<Claim<F>, ClaimError> {
@@ -313,7 +360,6 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     }
 
     let num_claims = claims.get_num_claims();
-    let num_vars = claims.get_num_vars();
 
     // Check q(0), q(1) equals the claimed value -- i.e. W(l(0)),
     // W(l(1)), etc.
@@ -404,6 +450,15 @@ mod tests {
         (expr, layer)
     }
 
+    /// Returns a random MLE expression with an associated GKR layer.
+    fn build_random_mle(
+        num_vars: usize,
+    ) -> (ExpressionStandard<Fr>, GKRLayer<Fr, PoseidonTranscript<Fr>>) {
+        let mut rng = test_rng();
+        let mle_evals: Vec<Fr> = (0..num_vars).map(|_| Fr::from(rng.gen::<u64>())).collect();
+        expr_and_layer_from_evals(mle_evals)
+    }
+
     fn claim_aggregation_wrapper(
         expr: &ExpressionStandard<Fr>,
         layer: &impl Layer<Fr>,
@@ -439,7 +494,8 @@ mod tests {
 
     // ----------------------------------------------------------
 
-    /// Test claim aggregation small mle
+    /// Test claim aggregation small MLE on 2 variables
+    /// with 2 claims.
     #[test]
     fn test_aggro_claim_1() {
         let mle_evals = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
@@ -468,7 +524,8 @@ mod tests {
         assert_eq!(aggregated_claim, expected_claim);
     }
 
-    /// Test claim aggregation on another small mle
+    /// Test claim aggregation on another small MLE on 2 variables
+    /// with 3 claims.
     #[test]
     fn test_aggro_claim_2() {
         let mle_evals = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
@@ -494,33 +551,21 @@ mod tests {
         assert_eq!(aggregated_claim, expected_claim);
     }
 
-    /// Test claim aggregation for 3 claims on a random MLE on 8
+    /// Test claim aggregation for 3 claims on a random MLE on 3
     /// variables with random challenge.
     #[test]
     fn test_aggro_claim_3() {
-        let mut rng = test_rng();
-        let mle_evals = vec![
-            Fr::from(rng.gen::<u64>()),
-            Fr::from(rng.gen::<u64>()),
-            Fr::from(rng.gen::<u64>()),
-            Fr::from(rng.gen::<u64>()),
-            Fr::from(rng.gen::<u64>()),
-            Fr::from(rng.gen::<u64>()),
-            Fr::from(rng.gen::<u64>()),
-            Fr::from(rng.gen::<u64>()),
-        ];
-
         let points = vec![
             vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)],
             vec![Fr::from(123), Fr::from(482), Fr::from(241)],
             vec![Fr::from(92108), Fr::from(29014), Fr::from(524)],
         ];
-
+        let mut rng = test_rng();
         let r_star = Fr::from(rng.gen::<u64>());
 
         // ---------------
 
-        let (expr, layer) = expr_and_layer_from_evals(mle_evals);
+        let (expr, layer) = build_random_mle(3);
         let claims = claims_from_expr_and_points(&expr, &points);
 
         let l_star = compute_l_star(&claims, &r_star);
@@ -531,19 +576,22 @@ mod tests {
         assert_eq!(aggregated_claim, expected_claim);
     }
 
-    /// Test claim aggregation on a RANDOM mle
+    /// Test claim aggregation on a random, product MLE on 3 variables
+    /// (1 + 2) with 3 claims.
     #[test]
     fn test_aggro_claim_4() {
         let mut rng = test_rng();
-        let mle_v1 = vec![Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())];
-        let mle_v2 = vec![
+        let mle1_evals = vec![Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())];
+        let mle2_evals = vec![
             Fr::from(rng.gen::<u64>()),
             Fr::from(rng.gen::<u64>()),
             Fr::from(rng.gen::<u64>()),
             Fr::from(rng.gen::<u64>()),
         ];
-        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
-        let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+
+        let mut rng = test_rng();
+        let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle1_evals, LayerId::Input(0), None);
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle2_evals, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
@@ -725,7 +773,6 @@ mod tests {
         assert_ne!(res, claim_fixed_vars);
     }
 
-    /*
     #[test]
     fn test_verify_claim_aggro() {
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
@@ -762,9 +809,11 @@ mod tests {
         let rchal = Fr::from(2).neg();
 
         let claim_group = ClaimGroup::new(claims).unwrap();
-        let aggr_claim = claim_aggregation_wrapper(&expr, &layer, &claim_group, rchal);
+        let (res, wlx) = aggregate_claims(&claim_group, &layer, rchal).unwrap();
         let rounds = expr.index_mle_indices(0);
-        let verify_result = verify_aggregate_claim(&wlx, &claims, rchal).unwrap();
+        let verify_result = verify_aggregate_claim(&wlx, &claim_group, rchal).unwrap();
+
+        // Makis; This test isn't verifying anything apart form the
+        // fact that no errors are produced :/
     }
-    */
 }
