@@ -45,7 +45,6 @@ impl<F: FieldExt> LayerBuilder<F> for OneMinusSignBit<F> {
 
     fn build_expression(&self) -> ExpressionStandard<F> {
         let exp =  ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[15].clone());
-        dbg!(&exp);
         exp
     }
 
@@ -100,7 +99,6 @@ impl<F: FieldExt> LayerBuilder<F> for SignBitProductBuilder<F> {
                 }
             ), id, prefix_bits.clone()
         );
-        dbg!(&hello);
         ZeroMleRef::new(self.pos_bit_mle.num_iterated_vars(), prefix_bits, id)
     }
 }

@@ -97,67 +97,69 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         if f_2.bookkeeping_table.len() == 1 {
             let f_at_u = f_2.bookkeeping_table[0];
             let u_challenges = (challenges.clone(), F::zero());
-
             let first_message = self.init_phase_2(u_challenges, f_at_u).unwrap().into_iter().map(
                 |eval| {
                     eval * self.beta_scaled.unwrap_or(F::one())
                 }
             ).collect_vec();
-            let (phase_2_lhs, phase_2_rhs) = self
-                .phase_2_mles
-                .as_mut()
-                .ok_or(GateError::Phase2InitError)
-                .unwrap();
 
-            transcript
-                .append_field_elements("Initial Sumcheck evaluations", &first_message)
-                .unwrap();
+            if self.rhs_num_vars > 0 {
+                let (phase_2_lhs, phase_2_rhs) = self
+                    .phase_2_mles
+                    .as_mut()
+                    .ok_or(GateError::Phase2InitError)
+                    .unwrap();
 
-            let num_rounds_phase2 = self.rhs.num_vars();
+                transcript
+                    .append_field_elements("Initial Sumcheck evaluations", &first_message)
+                    .unwrap();
 
-            // bind y, the right side of the sum
-            let sumcheck_rounds_y: Vec<Vec<F>> = std::iter::once(Ok(first_message))
-                .chain((1..num_rounds_phase2).map(|round| {
-                    let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
-                    challenges.push(challenge);
-                    let eval = prove_round(
-                        round + self.num_copy_bits,
-                        challenge,
-                        phase_2_lhs,
-                        phase_2_rhs,
-                    )
-                    .unwrap().into_iter().map(
-                        |eval| {
-                            eval * self.beta_scaled.unwrap_or(F::one())
-                        }
-                    ).collect_vec();
-                    transcript
-                        .append_field_elements("Sumcheck evaluations", &eval)
-                        .unwrap();
-                    Ok::<_, LayerError>(eval)
-                }))
-                .try_collect()?;
+                let num_rounds_phase2 = self.rhs.num_vars();
 
-            // final round of sumcheck
-            let final_chal = transcript
-                .get_challenge("Final Sumcheck challenge")
-                .unwrap();
-            challenges.push(final_chal);
-            fix_var_gate(
-                phase_2_lhs,
-                num_rounds_phase2 - 1 + self.num_copy_bits,
-                final_chal,
-            );
-            fix_var_gate(
-                phase_2_rhs,
-                num_rounds_phase2 - 1 + self.num_copy_bits,
-                final_chal,
-            );
+                // bind y, the right side of the sum
+                let sumcheck_rounds_y: Vec<Vec<F>> = std::iter::once(Ok(first_message))
+                    .chain((1..num_rounds_phase2).map(|round| {
+                        let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+                        challenges.push(challenge);
+                        let eval = prove_round(
+                            round + self.num_copy_bits,
+                            challenge,
+                            phase_2_lhs,
+                            phase_2_rhs,
+                        )
+                        .unwrap().into_iter().map(
+                            |eval| {
+                                eval * self.beta_scaled.unwrap_or(F::one())
+                            }
+                        ).collect_vec();
+                        transcript
+                            .append_field_elements("Sumcheck evaluations", &eval)
+                            .unwrap();
+                        Ok::<_, LayerError>(eval)
+                    }))
+                    .try_collect()?;
 
-            sumcheck_rounds.extend(sumcheck_rounds_y.into_iter());
-            // sumcheck rounds (binding y)
+                // final round of sumcheck
+                let final_chal = transcript
+                    .get_challenge("Final Sumcheck challenge")
+                    .unwrap();
+                challenges.push(final_chal);
+                fix_var_gate(
+                    phase_2_lhs,
+                    num_rounds_phase2 - 1 + self.num_copy_bits,
+                    final_chal,
+                );
+                fix_var_gate(
+                    phase_2_rhs,
+                    num_rounds_phase2 - 1 + self.num_copy_bits,
+                    final_chal,
+                );
 
-            // dbg!(&sumcheck_rounds);
+                sumcheck_rounds.extend(sumcheck_rounds_y.into_iter());
+                // sumcheck rounds (binding y)
+
+                // dbg!(&sumcheck_rounds);
+            }
 
             Ok(sumcheck_rounds.into())
         } else {
@@ -222,18 +224,51 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
         challenges.push(final_chal);
-        last_v_challenges.push(final_chal);
+        
+
+        if self.rhs_num_vars == 0 {
+            first_u_challenges.push(final_chal);
+        }
+        else {
+            last_v_challenges.push(final_chal);
+        }
 
         // we mutate the mles in the struct as we bind variables, so we can check whether they were bound correctly
         let ([_, lhs], _) = self.phase_1_mles.as_mut().unwrap();
         let (_, [_, rhs]) = self.phase_2_mles.as_mut().unwrap();
         let bound_lhs = check_fully_bound(&mut [lhs.clone()], first_u_challenges.clone()).unwrap();
-        let bound_rhs = check_fully_bound(&mut [rhs.clone()], last_v_challenges.clone()).unwrap();
 
+        
+        let bound_rhs = {
+            if self.rhs_num_vars > 0 {
+                check_fully_bound(&mut [rhs.clone()], last_v_challenges.clone()).unwrap()
+            }
+            else {
+                debug_assert_eq!(rhs.bookkeeping_table.len(), 1);
+                rhs.bookkeeping_table[0]
+            }
+        };
+        
         // compute the sum over all the variables of the gate function
         let beta_u = BetaTable::new((first_u_challenges.clone(), bound_lhs)).unwrap();
-        let beta_v = BetaTable::new((last_v_challenges.clone(), bound_rhs)).unwrap();
-        let beta_g = BetaTable::new((claim.0, F::zero())).unwrap();
+        let beta_v = if last_v_challenges.len() > 0 {
+            BetaTable::new((last_v_challenges.clone(), bound_rhs)).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };        
+        let beta_g = if claim.0.len() > 0 {
+            BetaTable::new((claim.0, F::zero())).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };
         let f_1_uv = self.nonzero_gates.clone().into_iter().fold(
             F::zero(), |acc, (z_ind, x_ind, y_ind)| {
                 let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
@@ -392,7 +427,8 @@ fn compute_full_addgate<F: FieldExt>(
                         .unwrap_or(&F::zero());
                     let ux = lhs.bookkeeping_table().get(x_ind).unwrap_or(&zero);
                     let vy = rhs.bookkeeping_table().get(y_ind).unwrap_or(&zero);
-                    acc + gz * ux * vy
+                    dbg!(&gz, ux, vy);
+                    acc + gz * (*ux + *vy)
                 });
         sum
     } else {
@@ -425,7 +461,8 @@ fn compute_full_addgate<F: FieldExt>(
                                 .bookkeeping_table()
                                 .get(idx + (y_ind * num_copy_idx))
                                 .unwrap_or(&zero);
-                            acc + gz * ux * vy
+                            dbg!(&gz, ux, vy);
+                            acc + gz * (*ux + *vy)
                         },
                     );
                     acc_outer + (g2 * inner_sum)
@@ -542,7 +579,15 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
     ///
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         // --- First compute the bookkeeping table for \beta(g, z) \in \{0, 1\}^{s_i} ---
-        let beta_g = BetaTable::new(claim).unwrap();
+        let beta_g = if claim.0.len() > 0 {
+            BetaTable::new(claim).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };
         self.set_beta_g(beta_g.clone());
 
         // we start indexing at the number of copy bits, because once you get to non-batched add gate, those should be bound
@@ -1165,9 +1210,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
             // this essentially takes in the two mles bound only at the copy bits
             let mut reduced_gate: AddGate<F, Tr> = AddGate::new(self.layer_id.clone(), self.nonzero_gates.clone(), self.lhs.clone(), self.rhs.clone(), self.new_bits, Some(beta_g2));
+            dbg!(&self.lhs.clone());
+            dbg!(&self.rhs.clone());
             self.reduced_gate = Some(reduced_gate);
-            dbg!(&self.lhs);
-            dbg!(&self.rhs);
             let next_messages = self.reduced_gate.as_mut().unwrap().prove_rounds(next_claims, transcript).unwrap();
 
             // we scale the messages by the bound beta table (g2, w) where g2 is the challenge

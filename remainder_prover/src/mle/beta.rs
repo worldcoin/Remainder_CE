@@ -20,11 +20,11 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 /// Beta table struct for a product of mle refs
 pub(crate) struct BetaTable<F> {
-    layer_claim: Claim<F>,
+    pub(crate) layer_claim: Claim<F>,
     ///The bookkeeping table for the beta table
     /// TODO(Get rid of BetaTable's reliance on the DenseMleRef type; Create a shared subtype for the shared behavior)
     pub(crate) table: DenseMleRef<F>,
-    relevant_indices: Vec<usize>,
+    pub(crate) relevant_indices: Vec<usize>,
 }
 
 /// Error handling for beta table construction
