@@ -86,7 +86,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
         .filter(|item: &Vec<Vec<MleIndex<F>>>| item.len() > 1)
         .collect_vec();
 
-    dbg!(&bit_counts);
+    // dbg!(&bit_counts);
 
     //The layers of the circuit are the inner vec
     let layer_bits = (0..layers.len())
