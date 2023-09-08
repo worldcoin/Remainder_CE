@@ -518,7 +518,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                 if eval == *val {
                     true
                 } else {
-                    println!("Claim passed into compute_wlx is invalid! point is {:?} claimed val is {:?}, actual eval is {:?}", point, val , eval);
+                    dbg!(self.id());
+                    dbg!(self.expression());
+                    println!("Claim passed into compute_wlx is invalid! point is {:?} claimed val is {:?}, actual eval is {:?}", point, val, eval);
                     false
                 }
             }).reduce(|acc, val| acc && val).unwrap()

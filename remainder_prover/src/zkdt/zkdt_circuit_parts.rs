@@ -40,7 +40,6 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
                 Box::new(&mut dummy_permuted_input_data_mle_combined),
             ];
             let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-            let input_prefix_bits = input_layer.fetch_prefix_bits();
             let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
             // TODO!(ende) change back to ligero
             let mut input_layer = input_layer.to_enum();
@@ -156,7 +155,6 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
             Box::new(&mut dummy_permuted_input_data_mle_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
         // TODO!(ende) change back to ligero
 

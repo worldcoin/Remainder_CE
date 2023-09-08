@@ -281,7 +281,9 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
     }
 }
 
-///This circuit checks how RandomLayer works by multiplying the MLE by a constant, taking in that result as advice in a publiclayer and doing an equality check on the result of the mult and the advice
+/// This circuit checks how RandomLayer works by multiplying the MLE by a constant, 
+/// taking in that result as advice in a publiclayer and doing an equality check 
+/// on the result of the mult and the advice
 struct RandomCircuit<F: FieldExt> {
     mle: DenseMle<F, F>,
 }
@@ -891,8 +893,10 @@ fn test_gkr_circuit_with_precommit() {
 #[test]
 fn test_random_layer_circuit() {
 
+    let mut rng = test_rng();
+
     let num_vars = 5;
-    let mle = get_random_mle::<Fr>(num_vars);
+    let mle = get_random_mle::<Fr>(num_vars, &mut rng);
     let circuit = RandomCircuit { mle };
 
     test_circuit(circuit, Some(Path::new("./random_proof.json")));

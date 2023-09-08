@@ -14,3 +14,5 @@ pub mod zkdt_circuit;
 pub mod constants;
 /// Binary recomp circuit component
 pub mod binary_recomp_circuit;
+/// For test circuits, mostly for debugging
+pub mod test_circuits;

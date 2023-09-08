@@ -227,6 +227,27 @@ impl<F: FieldExt> DenseMle<F, F> {
             prefix_bits
         )
     }
+
+    /// To combine a batch of `DenseMle<F, F>` into a single `DenseMle<F, F>` 
+    /// appropriately, such that the bit ordering is (batched_bits, (mle_ref_bits), iterated_bits)
+    /// 
+    /// TODO!(ende): refactor
+    pub fn combine_mle_batch(mle_batch: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
+
+        let batched_bits = log2(mle_batch.len());
+
+        let mle_batch_ref_combined = mle_batch
+            .clone()
+            .into_iter().map(
+                |x| {
+                    x.mle_ref()
+                }
+            ).collect_vec();
+
+        let mle_batch_ref_combined_ref =  combine_mles(mle_batch_ref_combined, batched_bits as usize);
+
+        DenseMle::new_from_raw(mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+    }
 }
 
 #[derive(Debug, Clone)]
