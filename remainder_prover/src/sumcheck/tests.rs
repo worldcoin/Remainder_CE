@@ -1,8 +1,10 @@
-/*
 use super::*;
 use crate::{
     expression::ExpressionStandard,
-    layer::{claims::Claim, from_mle, GKRLayer, Layer, LayerBuilder, LayerId},
+    layer::{
+        claims::aggregate_claims, claims::Claim, claims::ClaimGroup, from_mle, GKRLayer, Layer,
+        LayerBuilder, LayerId,
+    },
     mle::{
         beta::compute_beta_over_two_challenges,
         dense::{DenseMle, Tuple2},
@@ -686,12 +688,9 @@ fn test_dummy_sumcheck_subtract() {
     );
     let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
-    let (layer_claims, _) = aggregate_claims(
-        &[first_claim, second_claim],
-        &layer,
-        Fr::from(rng.gen::<u64>()),
-    )
-    .unwrap();
+    let claim_group = ClaimGroup::new(vec![first_claim, second_claim]).unwrap();
+    let (layer_claims, _) =
+        aggregate_claims(&claim_group, &layer, Fr::from(rng.gen::<u64>())).unwrap();
 
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
@@ -756,17 +755,14 @@ fn test_dummy_sumcheck_product_and_claim_aggregate() {
     );
     let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
-    let (layer_claims, _) = aggregate_claims(
-        &[first_claim, second_claim],
-        &layer,
-        Fr::from(rng.gen::<u64>()),
-    )
-    .unwrap();
+    let claim_group = ClaimGroup::new(vec![first_claim, second_claim]).unwrap();
+    let (layer_claims, _) =
+        aggregate_claims(&claim_group, &layer, Fr::from(rng.gen::<u64>())).unwrap();
 
     let layer_claim_real = get_dummy_claim(
         mle_out_fake.mle_ref(),
         &mut rng,
-        Some(layer_claims.0.clone()),
+        Some(layer_claims.get_point().clone()),
     );
 
     assert_eq!(layer_claims, layer_claim_real);
@@ -851,15 +847,15 @@ fn test_dummy_sumcheck_example() {
 
     let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
-    let (layer_claims, _) = aggregate_claims(
-        &[first_claim, second_claim],
-        &layer,
-        Fr::from(rng.gen::<u64>()),
-    )
-    .unwrap();
+    let claim_group = ClaimGroup::new(vec![first_claim, second_claim]).unwrap();
+    let (layer_claims, _) =
+        aggregate_claims(&claim_group, &layer, Fr::from(rng.gen::<u64>())).unwrap();
 
-    let layer_claims_real =
-        get_dummy_claim(output.mle_ref(), &mut rng, Some(layer_claims.0.clone()));
+    let layer_claims_real = get_dummy_claim(
+        output.mle_ref(),
+        &mut rng,
+        Some(layer_claims.get_point().clone()),
+    );
 
     assert_eq!(layer_claims_real, layer_claims);
 
@@ -895,4 +891,3 @@ fn test_dummy_sumcheck_constant() {
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
-*/
