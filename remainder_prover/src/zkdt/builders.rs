@@ -264,6 +264,40 @@ impl<F: FieldExt> ConcatBuilder<F> {
 
 /// Takes x, outputs r-x
 /// first step in exponantiation
+pub struct FSRMinusXBuilder<F: FieldExt> {
+    packed_x: DenseMle<F, F>,
+    r_mle: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for FSRMinusXBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.packed_x.mle_ref()))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let r = self.r_mle.mle_ref().bookkeeping_table[0];
+        DenseMle::new_from_iter(self.packed_x.clone().into_iter().map(
+            |x| r - x
+        ), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> FSRMinusXBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        packed_x: DenseMle<F, F>,
+        r_mle: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            packed_x, r_mle
+        }
+    }
+}
+
+/// Takes x, outputs r-x
+/// first step in exponantiation
 pub struct RMinusXBuilder<F: FieldExt> {
     packed_x: DenseMle<F, F>,
     r: F,

@@ -9,7 +9,7 @@ use std::{io::Empty, iter};
 use ark_std::{log2, test_rng};
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
+use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
 use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
@@ -711,8 +711,6 @@ struct FSMultiSetCircuit<F: FieldExt> {
     multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
     decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
     leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
-    r: F,
-    r_packings: (F, F),
 }
 
 impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
@@ -758,14 +756,21 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
                 .commit()
                 .map_err(|err| GKRError::InputLayerError(err))?;
 
-            let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(2));
+            let random_r_another = RandomInputLayer::new(transcript, 1, LayerId::Input(2));
+            let r_mle_another = random_r_another.get_mle();
+            let mut random_r_another = random_r_another.to_enum();
+            let random_r_another_commit = random_r_another
+                .commit()
+                .map_err(|err| GKRError::InputLayerError(err))?;
+
+            let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(3));
             let r_packing_mle = random_r_packing.get_mle();
             let mut random_r_packing = random_r_packing.to_enum();
             let random_r_packing_commit = random_r_packing
                 .commit()
                 .map_err(|err| GKRError::InputLayerError(err))?;
 
-            let random_r_packing_another = RandomInputLayer::new(transcript, 1, LayerId::Input(3));
+            let random_r_packing_another = RandomInputLayer::new(transcript, 1, LayerId::Input(4));
             let r_packing_another_mle = random_r_packing_another.get_mle();
             let mut random_r_packing_another = random_r_packing_another.to_enum();
             let random_r_packing_another_commit = random_r_packing_another
@@ -781,23 +786,23 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             let mut dummy_decision_nodes_mle = self.decision_nodes_mle.clone();
             dummy_decision_nodes_mle.add_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
             let decision_packing_builder = FSDecisionPackingBuilder::new(
-                dummy_decision_nodes_mle, r_mle.clone(), r_packing_mle.clone(), r_packing_another_mle);
+                dummy_decision_nodes_mle, r_mle.clone(), r_packing_mle.clone(), r_packing_another_mle.clone());
     
             let mut dummy_leaf_nodes_mle = self.leaf_nodes_mle.clone();
             dummy_leaf_nodes_mle.add_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
             let leaf_packing_builder = FSLeafPackingBuilder::new(
-                dummy_leaf_nodes_mle, r_mle, r_packing_mle
+                dummy_leaf_nodes_mle, r_mle.clone(), r_packing_mle.clone()
             );
     
             let packing_builders = decision_packing_builder.concat(leaf_packing_builder);
             let (decision_packed, leaf_packed) = layers.add_gkr(packing_builders);
     
             // layer 1: (r - x)
-            let r_minus_x_builder_decision =  RMinusXBuilder::new(
-                decision_packed, self.r_packings.0
+            let r_minus_x_builder_decision =  FSRMinusXBuilder::new(
+                decision_packed, r_mle_another.clone()
             );
-            let r_minus_x_builder_leaf =  RMinusXBuilder::new(
-                leaf_packed, self.r_packings.0
+            let r_minus_x_builder_leaf =  FSRMinusXBuilder::new(
+                leaf_packed, r_mle_another.clone()
             );
             let r_minus_x_builders = r_minus_x_builder_decision.concat(r_minus_x_builder_leaf);
             let (r_minus_x_power_decision, r_minus_x_power_leaf) = layers.add_gkr(r_minus_x_builders);
@@ -998,10 +1003,11 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
                     |decision_node_mle| {
                         let mut decision_node_mle = decision_node_mle.clone();
                         decision_node_mle.add_prefix_bits(Some(dummy_decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
-                        DecisionPackingBuilder::new(
+                        FSDecisionPackingBuilder::new(
                             decision_node_mle.clone(),
-                            self.r,
-                            self.r_packings
+                            r_mle.clone(),
+                            r_packing_mle.clone(),
+                            r_packing_another_mle.clone()
                         )
                     }
                 ).collect_vec());
@@ -1011,10 +1017,10 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
                     |leaf_node_mle| {
                         let mut leaf_node_mle = leaf_node_mle.clone();
                         leaf_node_mle.add_prefix_bits(Some(dummy_leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
-                        LeafPackingBuilder::new(
+                        FSLeafPackingBuilder::new(
                             leaf_node_mle.clone(),
-                            self.r,
-                            self.r_packings.0
+                            r_mle.clone(),
+                            r_packing_mle.clone(),
                         )
                     }
                 ).collect_vec());
@@ -1027,15 +1033,15 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             let bit_difference = decision_path_packed[0].num_iterated_vars() - leaf_path_packed[0].num_iterated_vars();
     
             let r_minus_x_path_builder_decision = BatchedLayer::new(
-                decision_path_packed.iter().map(|x| RMinusXBuilder::new(
+                decision_path_packed.iter().map(|x| FSRMinusXBuilder::new(
                     x.clone(),
-                    self.r_packings.0
+                    r_mle_another.clone()
                 )).collect_vec());
     
             let r_minus_x_path_builder_leaf = BatchedLayer::new(
-                leaf_path_packed.iter().map(|x| RMinusXBuilder::new(
+                leaf_path_packed.iter().map(|x| FSRMinusXBuilder::new(
                     x.clone(),
-                    self.r_packings.0
+                    r_mle_another.clone()
                 )).collect_vec());
     
             let r_minus_x_path_builders = r_minus_x_path_builder_decision.concat_with_padding(r_minus_x_path_builder_leaf, Padding::Right(bit_difference));
@@ -1081,13 +1087,15 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             let circuit_output = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
     
             println!("Multiset circuit finished, number of layers {:?}", layers.next_layer_id());
-    
-            Witness {
-                layers,
-                output_layers: vec![circuit_output.get_enum()],
-                input_layers: vec![input_layer],
-            };
-            todo!()
+
+            Ok((
+                Witness {
+                    layers,
+                    output_layers: vec![circuit_output.get_enum()],
+                    input_layers: vec![input_layer, random_r, random_r_another, random_r_packing, random_r_packing_another],
+                },
+                vec![input_commit, random_r_commit, random_r_another_commit, random_r_packing_commit, random_r_packing_another_commit],
+            ))
     }
 }
 
