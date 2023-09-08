@@ -57,7 +57,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
-use super::zkdt_helpers::{BatchedDummyMles, ZKDTCircuitData};
+use super::dummy_data_generator::{BatchedDummyMles, ZKDTCircuitData};
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.

@@ -17,7 +17,7 @@ use crate::{
         Mle, MleRef, MleIndex,
     },
     prover::input_layer::enum_input_layer::CommitmentEnum,
-    zkdt::zkdt_layer::{
+    zkdt::builders::{
             EqualityCheck, ZeroBuilder,
         }, utils::get_random_mle,
 };

@@ -3,11 +3,11 @@
 /// Example structs for zkDT circuit
 pub mod structs;
 /// Concrete circuit implementation
-pub mod zkdt_helpers;
+pub mod dummy_data_generator;
 pub mod dt2zkdt;
 pub mod trees;
 pub mod helpers;
-pub mod zkdt_layer;
+pub mod builders;
 pub mod zkdt_circuit_parts;
 pub mod zkdt_circuit;
 /// For cache-ing and other auxiliary things

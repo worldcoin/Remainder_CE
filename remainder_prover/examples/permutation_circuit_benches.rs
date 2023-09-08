@@ -4,7 +4,7 @@ use remainder::{
     prover::GKRCircuit,
     zkdt::{
         zkdt_circuit_parts::PermutationCircuit,
-        zkdt_helpers::{generate_dummy_mles_batch, BatchedDummyMles},
+        dummy_data_generator::{generate_dummy_mles_batch, BatchedDummyMles},
     },
 };
 use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};

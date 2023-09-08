@@ -654,7 +654,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_helpers::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, generate_mles_batch_catboost_single_tree, BatchedCatboostMles, BatchedDummyMles}};
+    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::dummy_data_generator::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, generate_mles_batch_catboost_single_tree, BatchedCatboostMles, BatchedDummyMles}};
     use halo2_base::halo2_proofs::halo2curves::{bn256::Fr, FieldExt};
     use ark_std::log2;
 

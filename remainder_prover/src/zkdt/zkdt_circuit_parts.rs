@@ -9,11 +9,11 @@ use std::{io::Empty, iter};
 use ark_std::{log2, test_rng};
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::zkdt_layer::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
+use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
 use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{zkdt_layer::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, zkdt_helpers::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}};
+use super::{builders::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}};
 
 use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
 
@@ -713,7 +713,7 @@ mod tests {
     use itertools::Itertools;
     use rand::Rng;
 
-    use crate::{zkdt::{zkdt_helpers::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::NonBatchedPermutationCircuit, structs::{InputAttribute, DecisionNode, LeafNode}, binary_recomp_circuit::circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}}, prover::{GKRCircuit, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer}}, mle::{dense::DenseMle, MleRef, Mle}, layer::LayerId};
+    use crate::{zkdt::{dummy_data_generator::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, zkdt_circuit_parts::NonBatchedPermutationCircuit, structs::{InputAttribute, DecisionNode, LeafNode}, binary_recomp_circuit::circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}}, prover::{GKRCircuit, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer}}, mle::{dense::DenseMle, MleRef, Mle}, layer::LayerId};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     use crate::prover::tests::test_circuit;
 
@@ -728,7 +728,7 @@ mod tests {
             permuted_input_data_mle_vec, ..
         }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
-        let mut circuit = NonBatchedPermutationCircuit {
+        let circuit = NonBatchedPermutationCircuit {
             input_data_mle: input_data_mle_vec[0].clone(),
             permuted_input_data_mle: permuted_input_data_mle_vec[0].clone(),
             r: Fr::from(rng.gen::<u64>()),
@@ -736,28 +736,7 @@ mod tests {
             input_len,
         };
 
-        let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
-
-        let now = Instant::now();
-
-        let proof = circuit.prove(&mut transcript);
-
-        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
-
-        match proof {
-            Ok(proof) => {
-                let mut transcript = PoseidonTranscript::new("Permutation Circuit Verifier Transcript");
-                let result = circuit.verify(&mut transcript, proof);
-                if let Err(err) = result {
-                    println!("{}", err);
-                    panic!();
-                }
-            },
-            Err(err) => {
-                println!("{}", err);
-                panic!();
-            }
-        }
+        test_circuit(circuit, None);
     }
 
     #[test]
@@ -768,8 +747,6 @@ mod tests {
             input_data_mle_vec,
             permuted_input_data_mle_vec, ..
         }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
-
-        let dummy_input_len = input_data_mle_vec.len();
 
         let mut circuit = PermutationCircuit {
             input_data_mle_vec,
@@ -790,35 +767,14 @@ mod tests {
             dummy_permuted_input_data_mle, ..
         } = generate_dummy_mles_batch();
 
-        let mut circuit = PermutationCircuit {
+        let circuit = PermutationCircuit {
             input_data_mle_vec: dummy_input_data_mle,
             permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
             r: Fr::from(rng.gen::<u64>()),
             r_packing: Fr::from(rng.gen::<u64>()),
         };
 
-        let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
-
-        let now = Instant::now();
-
-        let proof = circuit.prove(&mut transcript);
-
-        println!("Proof generated!: Took {} seconds", now.elapsed().as_secs_f32());
-
-        match proof {
-            Ok(proof) => {
-                let mut transcript = PoseidonTranscript::new("Permutation Circuit Verifier Transcript");
-                let result = circuit.verify(&mut transcript, proof);
-                if let Err(err) = result {
-                    println!("{}", err);
-                    panic!();
-                }
-            },
-            Err(err) => {
-                println!("{}", err);
-                panic!();
-            }
-        }
+        test_circuit(circuit, None);
     }
 
     #[test]
@@ -829,30 +785,13 @@ mod tests {
             dummy_decision_node_paths_mle, ..
         } = generate_dummy_mles();
 
-        let mut circuit = NonBatchedAttributeConsistencyCircuit {
+        let circuit = NonBatchedAttributeConsistencyCircuit {
             permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
             decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
             tree_height: TREE_HEIGHT,
         };
 
-        let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Prover Transcript");
-
-        let proof = circuit.prove(&mut transcript);
-
-        match proof {
-            Ok(proof) => {
-                let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Verifier Transcript");
-                let result = circuit.verify(&mut transcript, proof);
-                if let Err(err) = result {
-                    println!("{}", err);
-                    panic!();
-                }
-            },
-            Err(err) => {
-                println!("{}", err);
-                panic!();
-            }
-        }
+        test_circuit(circuit, None);
     }
 
     #[test]
@@ -866,27 +805,10 @@ mod tests {
         let mut circuit = NonBatchedAttributeConsistencyCircuit {
             permuted_input_data_mle_vec: permuted_input_data_mle_vec[0].clone(),
             decision_node_paths_mle_vec: decision_node_paths_mle_vec[0].clone(),
-            tree_height: tree_height,
+            tree_height,
         };
 
-        let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Prover Transcript");
-
-        let proof = circuit.prove(&mut transcript);
-
-        match proof {
-            Ok(proof) => {
-                let mut transcript = PoseidonTranscript::new("Attribute Consistency Circuit Verifier Transcript");
-                let result = circuit.verify(&mut transcript, proof);
-                if let Err(err) = result {
-                    println!("{}", err);
-                    panic!();
-                }
-            },
-            Err(err) => {
-                println!("{}", err);
-                panic!();
-            }
-        }
+        test_circuit(circuit, None);
     }
 
     #[test]
@@ -904,50 +826,6 @@ mod tests {
 
         test_circuit(circuit, None);
 
-    }
-
-    #[test]
-    fn test_multiset_circuit_dummy_batched() {
-
-        let mut rng = test_rng();
-
-        let BatchedDummyMles::<Fr> {
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_multiplicities_bin_decomp_mle,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle, ..
-        } = generate_dummy_mles_batch();
-
-        // let mut circuit = MultiSetCircuit {
-        //     dummy_decision_nodes_mle,
-        //     dummy_leaf_nodes_mle,
-        //     dummy_multiplicities_bin_decomp_mle,
-        //     dummy_decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
-        //     dummy_leaf_node_paths_mle_vec: dummy_leaf_node_paths_mle,
-        //     r: Fr::rand(&mut rng),
-        //     r_packings: (Fr::rand(&mut rng), Fr::rand(&mut rng)),
-        //     tree_height: TREE_HEIGHT,
-        // };
-
-        // let mut transcript = PoseidonTranscript::new("Multiset Circuit Prover Transcript");
-
-        // let proof = circuit.prove(&mut transcript);
-
-        // match proof {
-        //     Ok(proof) => {
-        //         let mut transcript = PoseidonTranscript::new("Multiset Circuit Verifier Transcript");
-        //         let result = circuit.verify(&mut transcript, proof);
-        //         if let Err(err) = result {
-        //             println!("{}", err);
-        //             panic!();
-        //         }
-        //     },
-        //     Err(err) => {
-        //         println!("{}", err);
-        //         panic!();
-        //     }
-        // }
     }
 
     #[test]
@@ -978,14 +856,13 @@ mod tests {
 
     #[test]
     fn test_fs_permutation_circuit_catboost_batched() {
-        let mut rng = test_rng();
-
+        
         let (BatchedCatboostMles {
             input_data_mle_vec,
             permuted_input_data_mle_vec, ..
         }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
-        let mut circuit = FSPermutationCircuit {
+        let circuit = FSPermutationCircuit {
             input_data_mle_vec,
             permuted_input_data_mle_vec,
         };
