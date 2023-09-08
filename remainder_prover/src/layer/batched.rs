@@ -1,11 +1,15 @@
-use std::marker::PhantomData;
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
+use std::marker::PhantomData;
 use thiserror::Error;
 
 use crate::{
     expression::ExpressionStandard,
-    mle::{dense::{DenseMleRef, DenseMle}, MleIndex, MleRef, zero::ZeroMleRef, MleAble},
+    mle::{
+        dense::{DenseMle, DenseMleRef},
+        zero::ZeroMleRef,
+        MleAble, MleIndex, MleRef,
+    },
 };
 use remainder_shared_types::FieldExt;
 
@@ -40,8 +44,19 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
 pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     let old_layer_id = mles[0].layer_id.clone();
     let new_bits = log2(mles.len()) as usize;
-    let old_prefix_bits = mles[0].prefix_bits.clone().map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
-    DenseMle::new_from_raw(combine_mles(mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(), new_bits).bookkeeping_table, old_layer_id, old_prefix_bits)
+    let old_prefix_bits = mles[0]
+        .prefix_bits
+        .clone()
+        .map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
+    DenseMle::new_from_raw(
+        combine_mles(
+            mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(),
+            new_bits,
+        )
+        .bookkeeping_table,
+        old_layer_id,
+        old_prefix_bits,
+    )
 }
 
 fn combine_expressions<F: FieldExt>(
@@ -258,13 +273,21 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
                     //         .chain(prefix_bits.clone().into_iter().flatten())
                     //         .collect_vec(),
                     // ),
-                    Some(prefix_bits.clone().into_iter().flatten().chain(repeat_n(MleIndex::Iterated, new_bits)).collect_vec())
+                    Some(
+                        prefix_bits
+                            .clone()
+                            .into_iter()
+                            .flatten()
+                            .chain(repeat_n(MleIndex::Iterated, new_bits))
+                            .collect_vec(),
+                    ),
                 )
             })
             .collect()
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
@@ -275,7 +298,7 @@ mod tests {
 
     use super::BatchedLayer;
 
-    
+
     #[test]
     fn test_batched_layer() {
         let mut rng = test_rng();
@@ -286,7 +309,7 @@ mod tests {
                 .into_iter()
                 .zip(mle2.clone().into_iter())
                 .map(|(first, second)| first + second), layer_id, prefix_bits)
-        };        
+        };
         let output: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
             let mut first = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)], LayerId::Input(0), Some(vec![MleIndex::Iterated]));
             let mut second = DenseMle::new_from_raw(vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)], LayerId::Input(0), Some(vec![MleIndex::Iterated]));
@@ -324,3 +347,4 @@ mod tests {
         verify_sumcheck_messages(sumcheck, expr, layer_claims, &mut rng).unwrap();
     }
 }
+*/

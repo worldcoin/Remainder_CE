@@ -291,14 +291,13 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
     let num_vars = claims.get_num_vars();
 
     let results = claims.get_results();
-    let challenge_matrix_transpose = claims.get_claim_points_transpose();
+    let points_matrix = claims.get_points_matrix();
 
-    debug_assert_eq!(challenge_matrix_transpose.len(), num_vars);
-    debug_assert_eq!(challenge_matrix_transpose[0].len(), num_claims);
+    debug_assert_eq!(points_matrix.len(), num_claims);
+    debug_assert_eq!(points_matrix[0].len(), num_vars);
 
     // Get the evals [W(l(0)), W(l(1)), ... ]
-    let wlx =
-        layer.get_wlx_evaluations(challenge_matrix_transpose, results, num_claims, num_vars)?;
+    let wlx = layer.get_wlx_evaluations(points_matrix, results, num_claims, num_vars)?;
 
     Ok(wlx)
 }
@@ -463,6 +462,9 @@ mod tests {
         let aggregated_claim = claim_aggregation_wrapper(&expr, &layer, &claims, r_star.clone());
         let expected_claim = compute_expected_claim(&expr, &l_star);
 
+        // Compare to W(l_star) computed by hand.
+        assert_eq!(expected_claim.get_result(), Fr::from(551).neg());
+
         assert_eq!(aggregated_claim, expected_claim);
     }
 
@@ -529,7 +531,6 @@ mod tests {
         assert_eq!(aggregated_claim, expected_claim);
     }
 
-    /*
     /// Test claim aggregation on a RANDOM mle
     #[test]
     fn test_aggro_claim_4() {
@@ -568,15 +569,15 @@ mod tests {
             valchal.push(eval.unwrap());
         }
 
-        let claim1: Claim<Fr> = (chals1, valchal[0]);
-        let claim2: Claim<Fr> = (chals2, valchal[1]);
-        let claim3: Claim<Fr> = (chals3, valchal[2] + Fr::one());
+        let claim1: Claim<Fr> = Claim::new_raw(chals1, valchal[0]);
+        let claim2: Claim<Fr> = Claim::new_raw(chals2, valchal[1]);
+        let claim3: Claim<Fr> = Claim::new_raw(chals3, valchal[2] + Fr::one());
 
         let rchal = Fr::from(rng.gen::<u64>());
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
-            .unwrap()
-            .0;
+        let claims: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
+        let claim_group = ClaimGroup::new(claims).unwrap();
+        let res: Claim<Fr> = claim_aggregation_wrapper(&expr, &layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -590,7 +591,7 @@ mod tests {
         expr_copy.index_mle_indices(0);
 
         let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
-        let claim_fixed_vars: Claim<Fr> = (fix_vars, eval_fixed_vars);
+        let claim_fixed_vars: Claim<Fr> = Claim::new_raw(fix_vars, eval_fixed_vars);
         assert_ne!(res, claim_fixed_vars);
     }
 
@@ -633,15 +634,15 @@ mod tests {
             valchal.push(eval.unwrap());
         }
 
-        let claim1: Claim<Fr> = (chals1, valchal[0] - Fr::one());
-        let claim2: Claim<Fr> = (chals2, valchal[1]);
-        let claim3: Claim<Fr> = (chals3, valchal[2]);
+        let claim1: Claim<Fr> = Claim::new_raw(chals1, valchal[0] - Fr::one());
+        let claim2: Claim<Fr> = Claim::new_raw(chals2, valchal[1]);
+        let claim3: Claim<Fr> = Claim::new_raw(chals3, valchal[2]);
 
         let rchal = Fr::from(rng.gen::<u64>());
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
-            .unwrap()
-            .0;
+        let claims_vec: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
+        let claim_group = ClaimGroup::new(claims_vec).unwrap();
+        let res: Claim<Fr> = claim_aggregation_wrapper(&expr, &layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -655,7 +656,7 @@ mod tests {
         expr_copy.index_mle_indices(0);
 
         let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
-        let claim_fixed_vars: Claim<Fr> = (fix_vars, eval_fixed_vars);
+        let claim_fixed_vars: Claim<Fr> = Claim::new_raw(fix_vars, eval_fixed_vars);
         assert_ne!(res, claim_fixed_vars);
     }
 
@@ -698,15 +699,15 @@ mod tests {
             valchal.push(eval.unwrap());
         }
 
-        let claim1: Claim<Fr> = (chals1, valchal[0]);
-        let claim2: Claim<Fr> = (chals2, valchal[1]);
-        let claim3: Claim<Fr> = (chals3, valchal[2] + Fr::one());
+        let claim1: Claim<Fr> = Claim::new_raw(chals1, valchal[0]);
+        let claim2: Claim<Fr> = Claim::new_raw(chals2, valchal[1]);
+        let claim3: Claim<Fr> = Claim::new_raw(chals3, valchal[2] + Fr::one());
 
         let rchal = Fr::from(rng.gen::<u64>());
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
-            .unwrap()
-            .0;
+        let claims_vec: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
+        let claim_group = ClaimGroup::new(claims_vec).unwrap();
+        let res: Claim<Fr> = claim_aggregation_wrapper(&expr, &layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -720,10 +721,11 @@ mod tests {
         expr_copy.index_mle_indices(0);
 
         let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
-        let claim_fixed_vars: Claim<Fr> = (fix_vars, eval_fixed_vars);
+        let claim_fixed_vars: Claim<Fr> = Claim::new_raw(fix_vars, eval_fixed_vars);
         assert_ne!(res, claim_fixed_vars);
     }
 
+    /*
     #[test]
     fn test_verify_claim_aggro() {
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
@@ -752,18 +754,16 @@ mod tests {
             valchal.push(eval.unwrap());
         }
 
-        let claim1: Claim<Fr> = (chals1, valchal[0]);
-        let claim2: Claim<Fr> = (chals2, valchal[1]);
-        let claim3: Claim<Fr> = (chals3, valchal[2]);
+        let claim1: Claim<Fr> = Claim::new_raw(chals1, valchal[0]);
+        let claim2: Claim<Fr> = Claim::new_raw(chals2, valchal[1]);
+        let claim3: Claim<Fr> = Claim::new_raw(chals3, valchal[2]);
         let claims = vec![claim1, claim2, claim3];
 
         let rchal = Fr::from(2).neg();
 
-        let (res, wlx) = aggregate_claims(&claims, &layer, rchal).unwrap();
+        let claim_group = ClaimGroup::new(claims).unwrap();
+        let aggr_claim = claim_aggregation_wrapper(&expr, &layer, &claim_group, rchal);
         let rounds = expr.index_mle_indices(0);
-        // for round in 0..rounds {
-        //     expr.fix
-        // }
         let verify_result = verify_aggregate_claim(&wlx, &claims, rchal).unwrap();
     }
     */

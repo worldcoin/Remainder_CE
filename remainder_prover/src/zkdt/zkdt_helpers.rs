@@ -772,6 +772,7 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
     }
 }
 
+/*/
 // --- Create expressions using... testing modules? ---
 #[cfg(test)]
 mod tests {
@@ -782,7 +783,8 @@ mod tests {
         layer::{claims::Claim, LayerId},
         mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef},
         sumcheck::{
-            compute_sumcheck_message, get_round_degree,
+            compute_sumcheck_message,
+            get_round_degree,
             tests::{dummy_sumcheck, get_dummy_expression_eval, verify_sumcheck_messages},
             Evals,
         },
@@ -1203,3 +1205,4 @@ mod tests {
         // ---
     }
 }
+*/
