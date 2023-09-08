@@ -14,3 +14,5 @@ pub mod constants;
 pub mod binary_recomp_circuit;
 /// For test circuits, mostly for debugging
 pub mod test_circuits;
+
+pub mod attribute_consistency_circuit;
