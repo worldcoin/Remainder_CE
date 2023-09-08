@@ -1,31 +1,22 @@
-use ark_std::{log2, test_rng, One, UniformRand, Zero};
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use itertools::Itertools;
-use rand::Rng;
+use ark_std::log2;
+use itertools::{Itertools, repeat_n};
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
-use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
-use tracing::Level;
+use std::{cmp::max, fs, path::Path, time::Instant};
+
 
 use crate::{
     expression::ExpressionStandard,
-    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, combine_zero_mle_ref}},
+    layer::{from_mle, layer_enum::LayerEnum, LayerBuilder, LayerId, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref}},
     mle::{
         dense::{DenseMle, Tuple2},
-        mle_enum::MleEnum,
         zero::ZeroMleRef,
         Mle, MleRef, MleIndex,
     },
-    prover::input_layer::{enum_input_layer::CommitmentEnum, MleInputLayer},
-    utils::get_random_mle,
-    zkdt::{
-        structs::{BinDecomp16Bit, DecisionNode, InputAttribute, LeafNode, combine_mle_refs},
-        zkdt_layer::{
-            AttributeConsistencyBuilder, BitExponentiationBuilder, ConcatBuilder,
-            DecisionPackingBuilder, EqualityCheck, InputPackingBuilder, LeafPackingBuilder,
-            ProductBuilder, RMinusXBuilder, SplitProductBuilder, SquaringBuilder, ZeroBuilder,
+    prover::input_layer::enum_input_layer::CommitmentEnum,
+    zkdt::zkdt_layer::{
+            EqualityCheck, ZeroBuilder,
         },
-    },
 };
 use remainder_shared_types::{
     transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
@@ -132,7 +123,12 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
             DenseMle::new_from_iter(first_layer_output.into_iter(), LayerId::Input(0), None);
 
         // --- Index the input-output layer ONLY for the input ---
-        input_layer.add_extra_mle(Box::new(&mut output_input));
+        let _ = input_layer.add_extra_mle(Box::new(&mut output_input));
+
+        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+        // The input layer is ready at this point!
+        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layers = vec![input_layer.to_enum()];
 
         // --- Subtract the computed circuit output from the advice circuit output ---
         let output_diff_builder = from_mle(
@@ -147,38 +143,12 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
         // --- Add this final layer to the circuit ---
         let circuit_output = layers.add_gkr(output_diff_builder);
 
-        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
-
-        let input_layers = vec![input_layer.to_enum()];
-
         Witness {
             layers,
             output_layers: vec![circuit_output.get_enum()],
             input_layers,
         }
     }
-}
-
-#[test]
-fn test_gkr_simple_circuit() {
-    let mut rng = test_rng();
-    let size = 5;
-
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..1 << 5).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
-    //     LayerId::Input(0),
-    //     None,
-    // );
-
-    let mut circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
-    test_circuit(circuit, Some(Path::new("simple_circuit.json")));
 }
 
 /// Circuit which just subtracts its two halves! No input-output layer needed.
@@ -228,7 +198,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
-        // (layers, vec![first_layer_output.get_enum()], input_layer)
         Witness {
             layers,
             output_layers: vec![first_layer_output.get_enum()],
@@ -237,37 +206,9 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
     }
 }
 
-#[test]
-fn test_gkr_simplest_circuit() {
-    let mut rng = test_rng();
-    let size = 1 << 4;
-
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            //let second_num = Fr::from(rng.gen::<u64>());
-            (num, num).into()
-        }),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input(0),
-    //     None,
-    // );
-
-    let mut circuit: SimplestCircuit<Fr> = SimplestCircuit { mle };
-
-    test_circuit(circuit, Some(Path::new("simplest_circuit.json")));
-
-    // panic!();
-}
-
 /// Circuit which just subtracts its two halves! No input-output layer needed.
 struct SimplestBatchedCircuit<F: FieldExt> {
-    batched_mle: Vec<DenseMle<F, Tuple2<F>>>,
+    batched_first_second_mle: Vec<DenseMle<F, Tuple2<F>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
 
@@ -275,21 +216,30 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
-        let all_first_seconds = self.batched_mle.clone().into_iter().map(|mle| {
-            combine_mles(vec![mle.first(), mle.second()], 1)
-        }).collect_vec();
-
-        let mut combined_all = combine_mle_refs(all_first_seconds);
-
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut combined_all)];
+        // --- Grab combined 
+        let mut combined_batched_first_second_mle = DenseMle::<F, Tuple2<F>>::combine_mle_batch(self.batched_first_second_mle.clone());
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut combined_batched_first_second_mle)];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+
+        let num_dataparallel_circuit_copies = self.batched_first_second_mle.len();
+        let num_dataparallel_bits = log2(num_dataparallel_circuit_copies) as usize;
 
         // --- Create Layers to be added to ---
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
-        let diff_builders = self.batched_mle.clone().into_iter().map(
+        let diff_builders = self.batched_first_second_mle.iter_mut().map(
             |mle| {
+
+                // --- First add batching bits to the MLE (this is a hacky fix and will be removed) ---
+                mle.add_prefix_bits(
+                    Some(
+                        combined_batched_first_second_mle.get_prefix_bits().iter().flatten().cloned().chain(
+                            repeat_n(MleIndex::Iterated, num_dataparallel_bits)
+                        ).collect_vec()
+                    )
+                );
+
                 let diff_builder = from_mle(
                     mle,
                     // --- The expression is a simple diff between the first and second halves ---
@@ -316,54 +266,21 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
             }
         ).collect_vec();
         
-
+        // --- Convert the vector of builders into a batched builder which can be added to `layers` ---
         let batched_builder = BatchedLayer::new(diff_builders);
-
         let batched_result = layers.add_gkr(batched_builder);
-
-
         let batched_zero = combine_zero_mle_ref(batched_result);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
 
-        // (layers, vec![first_layer_output.get_enum()], input_layer)
         Witness { layers, output_layers: vec![batched_zero.get_enum()], input_layers: vec![input_layer.to_enum()] }
     }
 }
 
-#[test]
-fn test_gkr_simplest_batched_circuit() {
-    let mut rng = test_rng();
-    let size = 1 << 3;
-
-    let batch_size = 1 << 2;
-    // --- This should be 2^2 ---
-    let batched_mle: Vec<DenseMle<Fr, Tuple2<Fr>>> = (0..batch_size).map(|idx1| {
-        DenseMle::new_from_iter(
-        (0..size).map(|idx| {
-            let num = Fr::from(rng.gen::<u64>());
-            //let second_num = Fr::from(rng.gen::<u64>());
-            // let num = Fr::from(idx + idx1);
-            (num, num).into()
-        }),
-        LayerId::Input(0),
-        None)
-    }).collect_vec();
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input(0),
-    //     None,
-    // );
-
-    let circuit: SimplestBatchedCircuit<Fr> = SimplestBatchedCircuit { batched_mle };
-
-    test_circuit(circuit, None);
-
-    // panic!();
-}
-
-///This circuit checks how RandomLayer works by multiplying the MLE by a constant, taking in that result as advice in a publiclayer and doing an equality check on the result of the mult and the advice
+/// This circuit checks how RandomLayer works by multiplying the MLE by a constant, 
+/// taking in that result as advice in a `PublicInputLayer`,
+/// and doing an equality check on the result of the mult and the advice
 struct RandomCircuit<F: FieldExt> {
     mle: DenseMle<F, F>,
 }
@@ -439,20 +356,6 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
     }
 }
 
-#[test]
-fn test_random_layer_circuit() {
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-
-    let num_vars = 5;
-    let mle = get_random_mle::<Fr>(num_vars);
-
-    let mut circuit = RandomCircuit { mle };
-
-    test_circuit(circuit, Some(Path::new("./random_proof.json")));
-}
-
 /// This circuit is a 4k --> k circuit, such that
 /// [x_1, x_2, x_3, x_4] --> [x_1 * x_3, x_2 + x_4] --> [(x_1 * x_3) - (x_2 + x_4)]
 struct TestCircuit<F: FieldExt> {
@@ -468,7 +371,7 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
         // let mut self_mle_clone = self.mle.clone();
         // let mut self_mle_2_clone = self.mle_2.clone();
-        let mut input_mles: Vec<Box<&mut dyn Mle<F>>> =
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
         let mut input_layer =
             InputLayerBuilder::new(input_mles, Some(vec![self.size]), LayerId::Input(0));
@@ -539,7 +442,10 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         // --- then check if the difference between the two is zero ---
         let mut output_input =
             DenseMle::new_from_iter(computed_output.into_iter(), LayerId::Input(0), None);
-        input_layer.add_extra_mle(Box::new(&mut output_input));
+
+        // --- Input layer should be finalized at this point ---
+        let _ = input_layer.add_extra_mle(Box::new(&mut output_input));
+        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         // --- Subtract the computed circuit output from the advice circuit output ---
         let builder5 = from_mle(
@@ -554,46 +460,12 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         // --- Add this final layer to the circuit ---
         let circuit_circuit_output = layers.add_gkr(builder5);
 
-        // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
-
-        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
-
-        // (layers, vec![circuit_circuit_output.get_enum()], input_layer)
         Witness {
             layers,
             output_layers: vec![circuit_circuit_output.get_enum()],
             input_layers: vec![input_layer.to_enum()],
         }
     }
-}
-
-#[test]
-fn test_gkr() {
-    let mut rng = test_rng();
-    let size = 4;
-    let size_expanded = 1 << size;
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-    // --- This should be 2^2 ---
-    let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-
-    let mut circuit: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
-
-    test_circuit(circuit, Some(Path::new("./gkr_proof.json")));
 }
 
 /// Circuit which just subtracts its two halves with gate mle
@@ -606,9 +478,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let mut input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
-        let mut input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0)).to_input_layer::<PublicInputLayer<F, _>>().to_enum();
-        let mle_clone = self.mle.clone();
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0)).to_input_layer::<PublicInputLayer<F, _>>().to_enum();
 
         // --- Create Layers to be added to ---
         let mut layers = Layers::new();
@@ -627,7 +498,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
-        // (layers, vec![first_layer_output.mle_ref().get_enum()], input_layer)
         Witness {layers, output_layers: vec![output_layer_mle.get_enum()], input_layers: vec![input_layer]}
     }
 }
@@ -669,133 +539,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedGateCircuit<F> {
         // (layers, vec![first_layer_output.mle_ref().get_enum()], input_layer)
         Witness {layers, output_layers: vec![output_layer_mle.get_enum()], input_layers: vec![input_layer]}
     }
-}
-
-#[test]
-fn test_gkr_gate_simplest_circuit() {
-    let mut rng = test_rng();
-    let size = 1 << 4;
-
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            num
-        }),
-        LayerId::Input(0),
-        None,
-    );
-
-    let negmle = DenseMle::new_from_iter(
-        mle.mle_ref()
-            .bookkeeping_table
-            .into_iter()
-            .map(|elem| -elem),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input,
-    //     None,
-    // );
-
-    let mut circuit: SimplestGateCircuit<Fr> = SimplestGateCircuit { mle, negmle };
-
-    test_circuit(circuit, Some(Path::new("./gate_proof.json")));
-
-    // panic!();
-}
-
-#[test]
-fn test_gkr_gate_batched_simplest_circuit() {
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-
-    let mut rng = test_rng();
-    let size = 1 << 4;
-
-    // --- This should be 2^4 ---
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            num
-        }),
-        LayerId::Input(0),
-        // this is the batched bits
-        None,
-    );
-
-    let negmle = DenseMle::new_from_iter(
-        mle.mle_ref().bookkeeping_table.into_iter().map(
-            |elem|
-            -elem
-        ), 
-        LayerId::Input(0),
-        // this is the batched bits
-        None,
-    );
-
-    dbg!(&mle);
-    dbg!(&negmle);
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input,
-    //     None,
-    // );
-
-    let circuit: SimplestBatchedGateCircuit<Fr> = SimplestBatchedGateCircuit { mle, negmle, batch_bits: 2 };
-
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof.json")));
-
-    // panic!();
-}
-
-#[test]
-fn test_gkr_gate_batched_simplest_circuit_uneven() {
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-
-    let mut rng = test_rng();
-    let size = 1 << 4;
-    let size2 = 1 << 3;
-
-    // --- This should be 2^4 ---
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            num
-        }),
-        LayerId::Input(0),
-        // this is the batched bits
-        None,
-    );
-
-    let negmle = DenseMle::new_from_iter(
-        mle.mle_ref().bookkeeping_table[0..size2].into_iter().map(
-            |elem|
-            -elem
-        ), 
-        LayerId::Input(0),
-        // this is the batched bits
-        None,
-    );
-
-    dbg!(&mle);
-    dbg!(&negmle);
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input,
-    //     None,
-    // );
-
-    let circuit: SimplestBatchedGateCircuit<Fr> = SimplestBatchedGateCircuit { mle, negmle, batch_bits: 2 };
-
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof_uneven.json")));
-
-    // panic!();
 }
 
 /// Circuit which subtracts its two halves, except for the part where one half is
@@ -890,27 +633,6 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
     }
 }
 
-#[test]
-fn test_gkr_circuit_with_precommit() {
-    let mut rng = test_rng();
-    let size = 1 << 5;
-
-    // --- MLE contents ---
-    let items = repeat_with(|| Fr::from(rng.gen::<u64>()))
-        .take(size)
-        .collect_vec();
-    let items2 = repeat_with(|| Fr::from(rng.gen::<u64>()))
-        .take(size)
-        .collect_vec();
-
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items, LayerId::Input(0), None);
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items2, LayerId::Input(1), None);
-
-    let mut circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
-
-    test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit.json")));
-}
-
 /// Circuit which has an empty layer as an intermediate layer with multiple claims going both
 /// to and from it, to thoroughly test the expected behavior of the `EmptyLayer`.
 /// 
@@ -963,19 +685,6 @@ impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
     }
 }
 
-#[test]
-fn test_empty_layer_circuit() {
-
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(14), Fr::from(14)], LayerId::Input(0), None);
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(14).neg(), Fr::from(14).neg()], LayerId::Input(0), None);
-    let empty_layer_src_mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(1), Fr::from(2)], LayerId::Input(0), None);
-    let other_empty_layer_src_mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(4)], LayerId::Input(0), None);
-
-    let circuit: EmptyLayerTestCircuit<Fr> = EmptyLayerTestCircuit { mle, mle2, empty_layer_src_mle, other_empty_layer_src_mle };
-
-    test_circuit(circuit, Some(Path::new("empty_layer_proof.json")));
-}
-
 struct CombineCircuit<F: FieldExt> {
     test_circuit: TestCircuit<F>,
     simple_circuit: SimpleCircuit<F>,
@@ -1000,7 +709,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
             input_layers: simple_inputs,
         } = simple_witness;
 
-        /// for input vv
+        // for input vv
         let input_layers: Vec<InputLayerEnum<F, PoseidonTranscript<F>>> = test_inputs
             .into_iter()
             .chain(simple_inputs.into_iter().map(|mut input| {
@@ -1047,8 +756,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
             expression.traverse_mut(&mut closure).unwrap();
         }
 
-        /// for input ^^
-
+        // for input ^^
         let (layers, output_layers) = combine_layers(
             vec![test_layers, simple_layers],
             vec![test_outputs, simple_outputs],
@@ -1063,50 +771,308 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
     }
 }
 
-#[test]
-fn test_combine_circuit() {
-    let mut rng = test_rng();
-    let size = 4;
-    let size_expanded = 1 << size;
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+#[cfg(test)]
+mod tests {
+    use std::{path::Path, iter::repeat_with};
 
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-    // --- This should be 2^2 ---
-    let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
+    use ark_std::test_rng;
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use itertools::Itertools;
+    use rand::Rng;
 
-    let test_circuit_1: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
+    use crate::{mle::dense::{DenseMle, Tuple2}, layer::LayerId, utils::get_random_mle};
 
-    let size = 4;
+    use super::{SimpleCircuit, test_circuit, SimplestCircuit, TestCircuit, CombineCircuit, EmptyLayerTestCircuit, SimplePrecommitCircuit, SimplestGateCircuit, SimplestBatchedGateCircuit, RandomCircuit, SimplestBatchedCircuit};
 
-    // --- This should be 2^2 ---
-    let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-        (0..1 << size).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 2), Fr::from(idx + 2)).into()),
-    //     LayerId::Input(0),
-    //     None,
-    // );
+    // ------------------------------------ BASIC REGULAR CIRCUITS ------------------------------------
 
-    let simple_circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
+    #[test]
+    fn test_gkr_simple_circuit() {
+        let mut rng = test_rng();
+        let size = 5;
 
-    let circuit = CombineCircuit {
-        test_circuit: test_circuit_1,
-        simple_circuit,
-    };
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..1 << 5).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+            LayerId::Input(0),
+            None,
+        );
 
-    test_circuit(circuit, None);
+        let circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
+        test_circuit(circuit, Some(Path::new("simple_circuit.json")));
+    }
+
+    #[test]
+    fn test_gkr_simplest_circuit() {
+        let mut rng = test_rng();
+        let size = 1 << 4;
+
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size).map(|_| {
+                let num = Fr::from(rng.gen::<u64>());
+                //let second_num = Fr::from(rng.gen::<u64>());
+                (num, num).into()
+            }),
+            LayerId::Input(0),
+            None,
+        );
+
+        let circuit: SimplestCircuit<Fr> = SimplestCircuit { mle };
+        test_circuit(circuit, Some(Path::new("simplest_circuit.json")));
+    }
+
+    #[test]
+    fn test_test_circuit() {
+        let mut rng = test_rng();
+        let size = 4;
+        let size_expanded = 1 << size;
+
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+            LayerId::Input(0),
+            None,
+        );
+        // --- This should be 2^2 ---
+        let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+            LayerId::Input(0),
+            None,
+        );
+
+        let circuit: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
+
+        test_circuit(circuit, Some(Path::new("./gkr_proof.json")));
+    }
+
+    // ------------------------------------ REGULAR DATAPARALLEL TESTING CIRCUITS ------------------------------------
+
+    #[test]
+    fn test_gkr_simplest_batched_circuit() {
+        let mut rng = test_rng();
+        let size = 1 << 3;
+
+        let batch_size = 1 << 2;
+        // --- This should be 2^2 ---
+        let batched_mle: Vec<DenseMle<Fr, Tuple2<Fr>>> = (0..batch_size).map(|idx1| {
+            DenseMle::new_from_iter(
+            (0..size).map(|idx| {
+                let num = Fr::from(rng.gen::<u64>());
+                //let second_num = Fr::from(rng.gen::<u64>());
+                // let num = Fr::from(idx + idx1);
+                (num, num).into()
+            }),
+            LayerId::Input(0),
+            None)
+        }).collect_vec();
+        // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+        //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
+        //     LayerId::Input(0),
+        //     None,
+        // );
+
+        let circuit: SimplestBatchedCircuit<Fr> = SimplestBatchedCircuit { batched_first_second_mle: batched_mle };
+        test_circuit(circuit, None);
+    }
+
+    // ------------------------------------ COMMITMENT TESTING CIRCUITS ------------------------------------
+
+    #[test]
+    fn test_gkr_circuit_with_precommit() {
+        let mut rng = test_rng();
+        let size = 1 << 5;
+
+        // --- MLE contents ---
+        let items = repeat_with(|| Fr::from(rng.gen::<u64>()))
+            .take(size)
+            .collect_vec();
+        let items2 = repeat_with(|| Fr::from(rng.gen::<u64>()))
+            .take(size)
+            .collect_vec();
+
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items, LayerId::Input(0), None);
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(items2, LayerId::Input(1), None);
+
+        let circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
+
+        test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit.json")));
+    }
+
+    // ------------------------------------ INPUT LAYER TESTING CIRCUITS ------------------------------------
+
+    #[test]
+    fn test_random_layer_circuit() {
+
+        let num_vars = 5;
+        let mle = get_random_mle::<Fr>(num_vars);
+        let circuit = RandomCircuit { mle };
+
+        test_circuit(circuit, Some(Path::new("./random_proof.json")));
+    }
+
+    // ------------------------------------ GATE CIRCUITS ------------------------------------
+
+    #[test]
+    fn test_gkr_gate_simplest_circuit() {
+        let mut rng = test_rng();
+        let size = 1 << 4;
+
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+            (0..size).map(|_| {
+                let num = Fr::from(rng.gen::<u64>());
+                num
+            }),
+            LayerId::Input(0),
+            None,
+        );
+
+        let negmle = DenseMle::new_from_iter(
+            mle.mle_ref()
+                .bookkeeping_table
+                .into_iter()
+                .map(|elem| -elem),
+            LayerId::Input(0),
+            None,
+        );
+
+        let circuit: SimplestGateCircuit<Fr> = SimplestGateCircuit { mle, negmle };
+
+        test_circuit(circuit, Some(Path::new("./gate_proof.json")));
+
+        // panic!();
+    }
+
+    #[test]
+    fn test_gkr_gate_batched_simplest_circuit() {
+        // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+        // tracing::subscriber::set_global_default(subscriber)
+        //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+
+        let mut rng = test_rng();
+        let size = 1 << 4;
+
+        // --- This should be 2^4 ---
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+            (0..size).map(|_| {
+                let num = Fr::from(rng.gen::<u64>());
+                num
+            }),
+            LayerId::Input(0),
+            // this is the batched bits
+            None,
+        );
+
+        let negmle = DenseMle::new_from_iter(
+            mle.mle_ref().bookkeeping_table.into_iter().map(
+                |elem|
+                -elem
+            ), 
+            LayerId::Input(0),
+            // this is the batched bits
+            None,
+        );
+
+        let circuit: SimplestBatchedGateCircuit<Fr> = SimplestBatchedGateCircuit { mle, negmle, batch_bits: 2 };
+
+        test_circuit(circuit, Some(Path::new("./gate_batch_proof.json")));
+    }
+
+    #[test]
+    fn test_gkr_gate_batched_simplest_circuit_uneven() {
+        // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+        // tracing::subscriber::set_global_default(subscriber)
+        //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+
+        let mut rng = test_rng();
+        let size = 1 << 4;
+        let size2 = 1 << 3;
+
+        // --- This should be 2^4 ---
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+            (0..size).map(|_| {
+                let num = Fr::from(rng.gen::<u64>());
+                num
+            }),
+            LayerId::Input(0),
+            // These are NOT the batched bits
+            None,
+        );
+
+        let negmle = DenseMle::new_from_iter(
+            mle.mle_ref().bookkeeping_table[0..size2].into_iter().map(
+                |elem|
+                -elem
+            ), 
+            LayerId::Input(0),
+            // These are NOT the batched bits
+            None,
+        );
+
+        let circuit: SimplestBatchedGateCircuit<Fr> = SimplestBatchedGateCircuit { mle, negmle, batch_bits: 2 };
+
+        test_circuit(circuit, Some(Path::new("./gate_batch_proof_uneven.json")));
+    }
+
+    // ------------------------------------ EMPTY LAYER CIRCUITS ------------------------------------
+
+    #[test]
+    fn test_empty_layer_circuit() {
+
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(14), Fr::from(14)], LayerId::Input(0), None);
+        let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(14).neg(), Fr::from(14).neg()], LayerId::Input(0), None);
+        let empty_layer_src_mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(1), Fr::from(2)], LayerId::Input(0), None);
+        let other_empty_layer_src_mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vec![Fr::from(3), Fr::from(4)], LayerId::Input(0), None);
+
+        let circuit: EmptyLayerTestCircuit<Fr> = EmptyLayerTestCircuit { mle, mle2, empty_layer_src_mle, other_empty_layer_src_mle };
+
+        test_circuit(circuit, Some(Path::new("empty_layer_proof.json")));
+    }
+
+    // ------------------------------------ CIRCUIT COMBINATOR CIRCUITS ------------------------------------
+
+    #[test]
+    fn test_combine_circuit() {
+        let mut rng = test_rng();
+        let size = 4;
+        let size_expanded = 1 << size;
+        // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+        // tracing::subscriber::set_global_default(subscriber)
+        //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+            LayerId::Input(0),
+            None,
+        );
+        // --- This should be 2^2 ---
+        let mle_2: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..size_expanded).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+            LayerId::Input(0),
+            None,
+        );
+
+        let test_circuit_1: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
+
+        let size = 4;
+
+        // --- This should be 2^2 ---
+        let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+            (0..1 << size).map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
+            LayerId::Input(0),
+            None,
+        );
+
+        let simple_circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
+
+        let circuit = CombineCircuit {
+            test_circuit: test_circuit_1,
+            simple_circuit,
+        };
+
+        test_circuit(circuit, None);
+    }
+    
 }
