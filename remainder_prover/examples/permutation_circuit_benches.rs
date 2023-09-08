@@ -3,7 +3,7 @@ use rand::Rng;
 use remainder::{
     prover::GKRCircuit,
     zkdt::{
-        zkdt_circuit_parts::PermutationCircuit,
+        permutation_circuit::circuits::PermutationCircuit,
         data_pipeline::dummy_data_generator::{generate_dummy_mles_batch, BatchedDummyMles},
     },
 };
@@ -20,12 +20,12 @@ fn main() {
         ..
     } = generate_dummy_mles_batch();
 
-    let mut circuit = PermutationCircuit {
-        input_data_mle_vec: dummy_input_data_mle,
-        permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
-        r: Fr::from(rng.gen::<u64>()),
-        r_packing: Fr::from(rng.gen::<u64>()),
-    };
+    let mut circuit = PermutationCircuit::new(
+        dummy_input_data_mle,
+        dummy_permuted_input_data_mle,
+        Fr::from(rng.gen::<u64>()),
+        Fr::from(rng.gen::<u64>()),
+    );
 
     let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
 

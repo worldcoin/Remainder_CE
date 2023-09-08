@@ -16,3 +16,4 @@ pub mod binary_recomp_circuit;
 pub mod test_circuits;
 
 pub mod attribute_consistency_circuit;
+pub mod permutation_circuit;
