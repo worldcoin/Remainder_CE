@@ -34,8 +34,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
     ) -> Result<SumcheckProof<F>, LayerError> {
 
         let first_message = self
-            .init_phase_1(claim.clone())
-            .expect("could not evaluate original lhs and rhs");
+            .init_phase_1(claim)
+            .expect("could not evaluate original lhs and rhs")
+            .into_iter().map(|eval| {
+                eval * self.beta_scaled.unwrap_or(F::one())
+            }).collect_vec();
         let phase_1_mles = self
             .phase_1_mles
             .as_mut()
@@ -89,7 +92,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
             // (this transition checks that we did the bookkeeping optimization correctly between each phase)
             let f_at_u = f_2.bookkeeping_table[0];
             let u_challenges = (challenges.clone(), F::zero());
-            let first_message = self.init_phase_2(u_challenges, f_at_u).unwrap();
+            let first_message = self
+                .init_phase_2(u_challenges, f_at_u)
+                .expect("could not evaluate original lhs and rhs")
+                .into_iter().map(|eval| {
+                    eval * self.beta_scaled.unwrap_or(F::one())
+                }).collect_vec();
 
             if self.rhs_num_vars > 0 {
                 
@@ -685,7 +693,6 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
 
         // return the first sumcheck message of this phase
         let hello = compute_sumcheck_message_mul_gate(&phase_2_mles, self.num_copy_bits);
-        dbg!(&hello);
         hello
     }
 
@@ -726,8 +733,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
         }
 
         // do the final binding of phase 1
-        let final_chal = F::from(rng.gen::<u64>());
-        // let final_chal = F::from(2_u64);
+        // let final_chal = F::from(rng.gen::<u64>());
+        let final_chal = F::from(2_u64);
         // let final_chal = F::one();
         challenges.push(final_chal);
         fix_var_gate(
@@ -822,8 +829,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
             }
         }
 
-        let final_chal = F::from(rng.gen::<u64>());
-        // let final_chal = F::one() + F::one();
+        // let final_chal = F::from(rng.gen::<u64>());
+        let final_chal = F::one() + F::one();
         // let final_chal = F::one();
         challenges.push(final_chal);
         last_v_challenges.push(final_chal);

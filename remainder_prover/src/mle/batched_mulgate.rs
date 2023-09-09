@@ -71,6 +71,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
 
         if beta_g2.table.bookkeeping_table.len() == 1 {
             let beta_g2 = beta_g2.table.bookkeeping_table()[0];
+            dbg!("HELLOOOO");
+            dbg!(&self.lhs);
+            dbg!(&self.rhs);
             let next_claims = (self.g1_challenges.clone().unwrap(), F::zero());
 
             // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
@@ -124,9 +127,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
             let prev_at_r = evaluate_at_a_point(prev_evals, challenge)
                 .map_err(|err| LayerError::InterpError(err))?;
             
+            dbg!(&self.lhs);
+            dbg!(&self.rhs);
             dbg!(&i);
-            dbg!(&prev_at_r);
-            // dbg!(&prev_evals);
+            // dbg!(&prev_at_r);
+            dbg!(&challenge);
+            dbg!(&prev_evals);
             dbg!(&curr_evals);
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
@@ -482,7 +488,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
         // --- At the same time, we're binding the LHS and RHS actual bookkeeping tables over the copy bits ---
         // TODO!(ryancao): Is there a better way we can do that?
         for round in 1..(num_rounds_copy_phase) {
-            challenge = Some(F::from(rng.gen::<u64>()));
+            // challenge = Some(F::from(rng.gen::<u64>()));
+            challenge = Some(F::from(2_u64));
             let chal = challenge.unwrap();
             challenges.push(chal);
 
@@ -494,9 +501,9 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
         }
 
         // final challenge of binding the copy bits
-        // let final_chal = F::one() + F::one();
+         let final_chal = F::one() + F::one();
         // let final_chal = F::one();
-        let final_chal = F::from(rng.gen::<u64>());
+        //let final_chal = F::from(rng.gen::<u64>());
         challenges.push(final_chal);
         beta_g2
             .beta_update(num_rounds_copy_phase - 1, final_chal)
@@ -512,6 +519,10 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
 
         // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
         // TODO!(ryancao): Can we get rid of the clones here somehow (for `lhs` and `rhs`)?
+        dbg!("HELLOOOO");
+        dbg!(&lhs);
+        dbg!(&rhs);
+        
         let reduced_gate: MulGate<F, Tr> = MulGate::new(
             self.layer_id.clone(),
             self.nonzero_gates.clone(),
@@ -532,6 +543,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
         // mutate the message from the non-batched case to include the last challenge from copy phase
         next_messages[0] = (next_first.clone(), Some(final_chal));
 
+        
         // scale it by the bound beta value
         let scaled_next_messages: Vec<(Vec<F>, Option<F>)> = next_messages
             .into_iter()
@@ -580,6 +592,9 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
         for i in 1..(num_rounds) {
             let (evals, challenge) = &messages[i];
             let curr_evals = evals;
+            dbg!(&challenge);
+            dbg!(&curr_evals);
+            dbg!(&prev_evals);
             let chal = (challenge).unwrap();
             // --- Evaluate the previous round's polynomial at the random challenge point, i.e. g_{i - 1}(r_i) ---
             let prev_at_r = evaluate_at_a_point(prev_evals, challenge.unwrap())
@@ -605,8 +620,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
         }
 
         // last challenge
-        let final_chal = F::from(rng.gen::<u64>());
-        // let final_chal = F::one() + F::one();
+        // let final_chal = F::from(rng.gen::<u64>());
+        let final_chal = F::one() + F::one();
         // let final_chal = F::one();
         challenges.push(final_chal);
         last_v_challenges.push(final_chal);
