@@ -71,8 +71,8 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         self.counter += 1;
 
         // Ok(F::from((self.counter % 2 + 1) as u64))
-        // Ok(output)
-        Ok(F::one() + F::one())
+        Ok(output)
+        // Ok(F::one() + F::one())
 
     }
 
@@ -81,11 +81,11 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         label: &'static str,
         len: usize,
     ) -> Result<Vec<F>, TranscriptError> {
-        // let output = (0..len).map(|_| self.sponge.squeeze()).collect_vec();
-        // trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
-        // Ok(output)
+        let output = (0..len).map(|_| self.sponge.squeeze()).collect_vec();
+        trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
+        Ok(output)
 
-        Ok(repeat_with(|| F::one() + F::one()).take(len).collect_vec())
+        // Ok(repeat_with(|| F::one() + F::one()).take(len).collect_vec())
     }
 }
 
