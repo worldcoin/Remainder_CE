@@ -6,7 +6,6 @@ pub mod structs;
 pub mod data_pipeline;
 pub mod helpers;
 pub mod builders;
-pub mod zkdt_circuit_parts;
 pub mod zkdt_circuit;
 /// For cache-ing and other auxiliary things
 pub mod constants;
@@ -17,3 +16,4 @@ pub mod test_circuits;
 
 pub mod attribute_consistency_circuit;
 pub mod permutation_circuit;
+pub mod multiset_circuit;

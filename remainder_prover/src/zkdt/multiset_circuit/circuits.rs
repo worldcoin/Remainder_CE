@@ -9,15 +9,15 @@ use std::{io::Empty, iter};
 use ark_std::{log2, test_rng};
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
+use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, FSInputPackingBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
 use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{builders::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}};
+use super::super::{builders::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}};
 
 use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
 
-struct MultiSetCircuit<F: FieldExt> {
+pub(crate) struct MultiSetCircuit<F: FieldExt> {
     decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
     leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
     multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
@@ -26,6 +26,30 @@ struct MultiSetCircuit<F: FieldExt> {
     leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
     r: F,
     r_packings: (F, F),
+}
+
+impl<F: FieldExt> MultiSetCircuit<F> {
+    pub fn new(
+        decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+        leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+        multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
+        multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
+        decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
+        leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
+        r: F,
+        r_packings: (F, F),
+    ) -> Self {
+        Self {
+            decision_nodes_mle,
+            leaf_nodes_mle,
+            multiplicities_bin_decomp_mle_decision,
+            multiplicities_bin_decomp_mle_leaf,
+            decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
+            r,
+            r_packings
+        }
+    }
 }
 
 impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
@@ -365,13 +389,33 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
     }
 }
 
-struct FSMultiSetCircuit<F: FieldExt> {
+pub(crate) struct FSMultiSetCircuit<F: FieldExt> {
     decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
     leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
     multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
     multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
     decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
     leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
+}
+
+impl<F: FieldExt> FSMultiSetCircuit<F> {
+    pub fn new(
+        decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
+        leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+        multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
+        multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
+        decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
+        leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
+    ) -> Self {
+        Self {
+            decision_nodes_mle,
+            leaf_nodes_mle,
+            multiplicities_bin_decomp_mle_decision,
+            multiplicities_bin_decomp_mle_leaf,
+            decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec
+        }
+    }
 }
 
 impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
@@ -757,71 +801,5 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
                 },
                 vec![input_commit, random_r_commit, random_r_another_commit, random_r_packing_commit, random_r_packing_another_commit],
             ))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Instant;
-
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use ark_std::{test_rng, UniformRand};
-    use itertools::Itertools;
-    use rand::Rng;
-
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, structs::{InputAttribute, DecisionNode, LeafNode}, binary_recomp_circuit::circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}}, prover::{GKRCircuit, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer}}, mle::{dense::DenseMle, MleRef, Mle}, layer::LayerId};
-    use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
-    use crate::prover::tests::test_circuit;
-
-    use super::{MultiSetCircuit, FSMultiSetCircuit};
-
-    #[test]
-    fn test_multiset_circuit_catboost_batched() {
-
-        let mut rng = test_rng();
-
-        let (BatchedCatboostMles {decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
-
-        let mut circuit = MultiSetCircuit {
-            decision_nodes_mle,
-            leaf_nodes_mle,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-            r: Fr::from(rng.gen::<u64>()),
-            r_packings: (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())),
-        };
-
-        test_circuit(circuit, None);
-    }
-
-
-
-    #[test]
-    fn test_fs_multiset_circuit_catboost_batched() {
-
-        let (BatchedCatboostMles {decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
-
-        let circuit = FSMultiSetCircuit {
-            decision_nodes_mle,
-            leaf_nodes_mle,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-        };
-
-        test_circuit(circuit, None);
     }
 }
