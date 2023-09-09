@@ -480,6 +480,8 @@ pub enum GateError {
     EmptyMleList,
     #[error("bound indices fail to match challenge")]
     EvaluateBoundIndicesDontMatch,
+    #[error("Beta table not indexed")]
+    BetaTableNotIndexed,
 }
 
 /// very (not) cool addgate
@@ -610,6 +612,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
                 a_hg_rhs[x_ind] = a_hg_rhs[x_ind] + (beta_g_at_z * f_3_at_y);
             });
 
+        // dbg!(&a_hg_rhs);
         // --- We need to multiply h_g(x) by f_2(x) ---
         let mut phase_1_mles = [
             DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0), None).mle_ref(),
@@ -711,8 +714,9 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
 
         // sumcheck rounds (binding x)
         for round in 1..(num_rounds_phase1) {
-            challenge = Some(F::from(rng.gen::<u64>()));
-            //challenge = Some(F::one());
+            // challenge = Some(F::from(rng.gen::<u64>()));
+            // challenge = Some(F::one() + F::one());
+            challenge = Some(F::one());
             let chal = challenge.unwrap();
             challenges.push(chal);
             let eval =
@@ -721,8 +725,9 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
         }
 
         // do the final binding of phase 1
-        let final_chal = F::from(rng.gen::<u64>());
-        //let final_chal = F::from(2_u64);
+        // let final_chal = F::from(rng.gen::<u64>());
+        // let final_chal = F::from(2_u64);
+        let final_chal = F::one();
         challenges.push(final_chal);
         fix_var_gate(
             phase_1_mles,
@@ -750,8 +755,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
 
             // sumcheck rounds (binding y)
             for round in 1..num_rounds_phase2 {
-                challenge = Some(F::from(rng.gen::<u64>()));
-                //challenge = Some(F::one());
+                // challenge = Some(F::from(rng.gen::<u64>()));
+                challenge = Some(F::one() + F::one());
                 let chal = challenge.unwrap();
                 challenges.push(chal);
                 let eval = prove_round(round + self.num_copy_bits, chal, phase_2_mles)
@@ -814,8 +819,9 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
             }
         }
 
-        let final_chal = F::from(rng.gen::<u64>());
-        //let final_chal = F::one();
+        // let final_chal = F::from(rng.gen::<u64>());
+        // let final_chal = F::one() + F::one();
+        let final_chal = F::one();
         challenges.push(final_chal);
         last_v_challenges.push(final_chal);
 
