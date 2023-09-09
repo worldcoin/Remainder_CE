@@ -471,8 +471,8 @@ mod tests {
 
     // ------- Helper functions for claim aggregation tests -------
 
-    /// Builds `ClaimGroup<Fr>` by evaluation an expression `expr` on each
-    /// point in `points`.
+    /// Builds `ClaimGroup<Fr>` by evaluation an expression `expr` on
+    /// each point in `points`.
     fn claims_from_expr_and_points(
         expr: &ExpressionStandard<Fr>,
         points: &Vec<Vec<Fr>>,
@@ -485,20 +485,14 @@ mod tests {
                 Claim::new_raw(point.clone(), result)
             })
             .collect();
-
         ClaimGroup::new(claims_vector).unwrap()
     }
 
-    /// Builds an expression corresponding to the MLE of a function
-    /// whose evaluations on the boolean hypercube are given by
-    /// `mle_evals`, along with a dummy GKR layer.
-    fn expr_and_layer_from_evals(
-        mle_evals: Vec<Fr>,
-    ) -> (ExpressionStandard<Fr>, GKRLayer<Fr, PoseidonTranscript<Fr>>) {
+    /// Builds GKR layer whose MLE is the function whose evaluations
+    /// on the boolean hypercube are given by `mle_evals`.
+    fn layer_from_evals(mle_evals: Vec<Fr>) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
         let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0), None);
         let mle_ref = mle.mle_ref();
-
-        let mut expr = ExpressionStandard::Mle(mle_ref);
 
         let layer = from_mle(
             mle,
@@ -508,22 +502,19 @@ mod tests {
 
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
-        (expr, layer)
+        layer
     }
 
     /// Returns a random MLE expression with an associated GKR layer.
-    fn build_random_mle(
-        num_vars: usize,
-    ) -> (ExpressionStandard<Fr>, GKRLayer<Fr, PoseidonTranscript<Fr>>) {
+    fn build_random_mle(num_vars: usize) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
         let mut rng = test_rng();
         let mle_evals: Vec<Fr> = (0..num_vars).map(|_| Fr::from(rng.gen::<u64>())).collect();
-        expr_and_layer_from_evals(mle_evals)
+        layer_from_evals(mle_evals)
     }
 
     /// Wraps around either the back-end or front-end claim
     /// aggregation function.
     fn claim_aggregation_wrapper(
-        expr: &ExpressionStandard<Fr>,
         layer: &impl Layer<Fr>,
         claims: &ClaimGroup<Fr>,
         r_star: Fr,
@@ -548,8 +539,11 @@ mod tests {
     }
 
     // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
-    fn compute_expected_claim(expr: &ExpressionStandard<Fr>, l_star: &Vec<Fr>) -> Claim<Fr> {
-        let mut expr = expr.clone();
+    fn compute_expected_claim(
+        layer: &GKRLayer<Fr, PoseidonTranscript<Fr>>,
+        l_star: &Vec<Fr>,
+    ) -> Claim<Fr> {
+        let mut expr = layer.expression().clone();
         expr.index_mle_indices(0);
         let result = expr.evaluate_expr(l_star.clone()).unwrap();
         Claim::new_raw(l_star.clone(), result)
@@ -570,16 +564,16 @@ mod tests {
 
         // ---------------
 
-        let (expr, layer) = expr_and_layer_from_evals(mle_evals);
-        let claims = claims_from_expr_and_points(&expr, &points);
+        let layer = layer_from_evals(mle_evals);
+        let claims = claims_from_expr_and_points(layer.expression(), &points);
 
         let l_star = compute_l_star(&claims, &r_star);
 
         // Compare to l(10) computed by hand.
         assert_eq!(l_star, vec![Fr::from(7).neg(), Fr::from(43)]);
 
-        let aggregated_claim = claim_aggregation_wrapper(&expr, &layer, &claims, r_star.clone());
-        let expected_claim = compute_expected_claim(&expr, &l_star);
+        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
         assert_eq!(expected_claim.get_result(), Fr::from(551).neg());
@@ -601,15 +595,15 @@ mod tests {
 
         // ---------------
 
-        let (expr, layer) = expr_and_layer_from_evals(mle_evals);
-        let claims = claims_from_expr_and_points(&expr, &points);
+        let layer = layer_from_evals(mle_evals);
+        let claims = claims_from_expr_and_points(layer.expression(), &points);
 
         let l_star = compute_l_star(&claims, &r_star);
 
         // TODO: Assert l_star was computed correctly.
 
-        let aggregated_claim = claim_aggregation_wrapper(&expr, &layer, &claims, r_star.clone());
-        let expected_claim = compute_expected_claim(&expr, &l_star);
+        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let expected_claim = compute_expected_claim(&layer, &l_star);
 
         assert_eq!(aggregated_claim, expected_claim);
     }
@@ -628,13 +622,13 @@ mod tests {
 
         // ---------------
 
-        let (expr, layer) = build_random_mle(3);
-        let claims = claims_from_expr_and_points(&expr, &points);
+        let layer = build_random_mle(3);
+        let claims = claims_from_expr_and_points(layer.expression(), &points);
 
         let l_star = compute_l_star(&claims, &r_star);
 
-        let aggregated_claim = claim_aggregation_wrapper(&expr, &layer, &claims, r_star.clone());
-        let expected_claim = compute_expected_claim(&expr, &l_star);
+        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let expected_claim = compute_expected_claim(&layer, &l_star);
 
         assert_eq!(aggregated_claim, expected_claim);
     }
@@ -688,7 +682,7 @@ mod tests {
 
         let claims: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
         let claim_group = ClaimGroup::new(claims).unwrap();
-        let res: Claim<Fr> = claim_aggregation_wrapper(&expr, &layer, &claim_group, rchal);
+        let res: Claim<Fr> = claim_aggregation_wrapper(&layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -753,7 +747,7 @@ mod tests {
 
         let claims_vec: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
         let claim_group = ClaimGroup::new(claims_vec).unwrap();
-        let res: Claim<Fr> = claim_aggregation_wrapper(&expr, &layer, &claim_group, rchal);
+        let res: Claim<Fr> = claim_aggregation_wrapper(&layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -818,7 +812,7 @@ mod tests {
 
         let claims_vec: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
         let claim_group = ClaimGroup::new(claims_vec).unwrap();
-        let res: Claim<Fr> = claim_aggregation_wrapper(&expr, &layer, &claim_group, rchal);
+        let res: Claim<Fr> = claim_aggregation_wrapper(&layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -851,8 +845,8 @@ mod tests {
 
         // ---------------
 
-        let (expr, layer) = expr_and_layer_from_evals(mle_evals);
-        let claims = claims_from_expr_and_points(&expr, &points);
+        let layer = layer_from_evals(mle_evals);
+        let claims = claims_from_expr_and_points(layer.expression(), &points);
 
         // W(l(0)), W(l(1)) computed by hand.
         assert_eq!(claims.get_result(0), Fr::from(163));
@@ -866,8 +860,8 @@ mod tests {
         let wlx = compute_claim_wlx(&claims, &layer).unwrap();
         assert_eq!(wlx, vec![Fr::from(163), Fr::from(1015), Fr::from(2269)]);
 
-        let aggregated_claim = claim_aggregation_wrapper(&expr, &layer, &claims, r_star.clone());
-        let expected_claim = compute_expected_claim(&expr, &l_star);
+        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
         assert_eq!(expected_claim.get_result(), Fr::from(26773));
@@ -890,8 +884,8 @@ mod tests {
 
         // ---------------
 
-        let (expr, layer) = expr_and_layer_from_evals(mle_evals);
-        let claims = claims_from_expr_and_points(&expr, &points);
+        let layer = layer_from_evals(mle_evals);
+        let claims = claims_from_expr_and_points(layer.expression(), &points);
 
         // W(l(0)), W(l(1)) computed by hand.
         assert_eq!(claims.get_result(0), Fr::from(163));
@@ -905,8 +899,8 @@ mod tests {
         // Compare to l(10) computed by hand.
         assert_eq!(l_star, vec![Fr::from(11), Fr::from(3), Fr::from(5)]);
 
-        let aggregated_claim = claim_aggregation_wrapper(&expr, &layer, &claims, r_star.clone());
-        let expected_claim = compute_expected_claim(&expr, &l_star);
+        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
         assert_eq!(expected_claim.get_result(), Fr::from(6203));
