@@ -1,5 +1,6 @@
 //!Utilities involving the claims a layer makes
 
+use ark_crypto_primitives::crh::sha256::digest::typenum::Or;
 use remainder_shared_types::FieldExt;
 
 use crate::sumcheck::*;
@@ -13,6 +14,8 @@ use super::Layer;
 use crate::layer::LayerId;
 
 use serde::{Deserialize, Serialize};
+
+use core::cmp::Ordering;
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims
@@ -305,9 +308,67 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     Ok(r)
 }
 
-/// Aggregates `claims` into a single claim using challenge `r_star`.
-/// Returns the aggregated claim and the wlx evaluations.
+/// Aggregates all `claims` in a `layer` to a single claim using
+/// challenge `r_star`.
+/// This is a front-end function for claim aggregation. Layer
+/// source/destination information can improve performance when present.
 pub(crate) fn aggregate_claims<F: FieldExt>(
+    claims: &[Claim<F>],
+    layer: &impl Layer<F>,
+    r_star: F,
+) -> Result<(Claim<F>, Vec<F>), ClaimError> {
+    // Maintain a local copy of claims for sorting.
+    let mut claims: Vec<Claim<F>> = claims.clone().to_vec();
+
+    // Sort claims by `from_layer_id` field.
+    claims.sort_by(|claim1, claim2| {
+        match (claim1.get_from_layer_id(), claim2.get_from_layer_id()) {
+            (Some(id1), Some(id2)) => id1.cmp(&id2),
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        }
+    });
+
+    // Remove mutability of claims.
+    let claims = claims;
+
+    // Intermediate results container.
+    let mut resulting_claims: Vec<Claim<F>> = vec![];
+
+    // Merge sequences of claims with the same source layer ID.
+    let mut start_index = 0;
+    for (idx, claim) in (&claims).into_iter().skip(1).enumerate() {
+        if claim.get_from_layer_id() != claims[idx - 1].get_from_layer_id() {
+            let end_index = idx;
+
+            // All claims in the range (start_index..end_index) have
+            // the same `from_layer_id` and therefore are expected to
+            // have a lot of columns in common so aggregating them as
+            // a group is probably more efficient.
+            let claim_group = ClaimGroup::new(claims[start_index..end_index].to_vec()).unwrap();
+            resulting_claims.push(
+                aggregate_similar_claims(&claim_group, layer, r_star)
+                    .unwrap()
+                    .0,
+            );
+
+            start_index = end_index;
+        }
+    }
+
+    // Finally, aggregate all intermediate claims.
+    aggregate_claims(&resulting_claims, layer, r_star)
+}
+
+/// Aggregates "similar" `claims` into a single claim using challenge
+/// `r_star`. Similarity in this context means that there is a
+/// significant number of coordinates on which all claim points agree
+/// on. Returns the aggregated claim and the wlx evaluations.
+/// WARNING: Claim aggregation is performed in a single step. This is
+/// a back-end function which ignores any claim source/destination
+/// information. Use ??? instead for merging all claims in a layer!
+pub(crate) fn aggregate_similar_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer: &impl Layer<F>,
     r_star: F,
@@ -459,6 +520,8 @@ mod tests {
         expr_and_layer_from_evals(mle_evals)
     }
 
+    /// Wraps around either the back-end or front-end claim
+    /// aggregation function.
     fn claim_aggregation_wrapper(
         expr: &ExpressionStandard<Fr>,
         layer: &impl Layer<Fr>,
@@ -774,6 +837,84 @@ mod tests {
     }
 
     #[test]
+    fn test_aggro_claim_common_suffix1() {
+        // MLE on 3 variables (2^3 = 8 evals)
+        let mle_evals: Vec<Fr> = vec![1, 2, 42, 4, 5, 6, 7, 17]
+            .into_iter()
+            .map(Fr::from)
+            .collect();
+        let points = vec![
+            vec![Fr::from(1), Fr::from(3), Fr::from(5)],
+            vec![Fr::from(2), Fr::from(4), Fr::from(5)],
+        ];
+        let r_star = Fr::from(10);
+
+        // ---------------
+
+        let (expr, layer) = expr_and_layer_from_evals(mle_evals);
+        let claims = claims_from_expr_and_points(&expr, &points);
+
+        // W(l(0)), W(l(1)) computed by hand.
+        assert_eq!(claims.get_result(0), Fr::from(163));
+        assert_eq!(claims.get_result(1), Fr::from(1015));
+
+        let l_star = compute_l_star(&claims, &r_star);
+
+        // Compare to l(10) computed by hand.
+        assert_eq!(l_star, vec![Fr::from(11), Fr::from(13), Fr::from(5)]);
+
+        let wlx = compute_claim_wlx(&claims, &layer).unwrap();
+        assert_eq!(wlx, vec![Fr::from(163), Fr::from(1015), Fr::from(2269)]);
+
+        let aggregated_claim = claim_aggregation_wrapper(&expr, &layer, &claims, r_star.clone());
+        let expected_claim = compute_expected_claim(&expr, &l_star);
+
+        // Compare to W(l_star) computed by hand.
+        assert_eq!(expected_claim.get_result(), Fr::from(26773));
+
+        assert_eq!(aggregated_claim, expected_claim);
+    }
+
+    #[test]
+    fn test_aggro_claim_common_suffix2() {
+        // MLE on 3 variables (2^3 = 8 evals)
+        let mle_evals: Vec<Fr> = vec![1, 2, 42, 4, 5, 6, 7, 17]
+            .into_iter()
+            .map(Fr::from)
+            .collect();
+        let points = vec![
+            vec![Fr::from(1), Fr::from(3), Fr::from(5)],
+            vec![Fr::from(2), Fr::from(3), Fr::from(5)],
+        ];
+        let r_star = Fr::from(10);
+
+        // ---------------
+
+        let (expr, layer) = expr_and_layer_from_evals(mle_evals);
+        let claims = claims_from_expr_and_points(&expr, &points);
+
+        // W(l(0)), W(l(1)) computed by hand.
+        assert_eq!(claims.get_result(0), Fr::from(163));
+        assert_eq!(claims.get_result(1), Fr::from(767));
+
+        let l_star = compute_l_star(&claims, &r_star);
+
+        let wlx = compute_claim_wlx(&claims, &layer).unwrap();
+        assert_eq!(wlx, vec![Fr::from(163), Fr::from(767)]);
+
+        // Compare to l(10) computed by hand.
+        assert_eq!(l_star, vec![Fr::from(11), Fr::from(3), Fr::from(5)]);
+
+        let aggregated_claim = claim_aggregation_wrapper(&expr, &layer, &claims, r_star.clone());
+        let expected_claim = compute_expected_claim(&expr, &l_star);
+
+        // Compare to W(l_star) computed by hand.
+        assert_eq!(expected_claim.get_result(), Fr::from(6203));
+
+        assert_eq!(aggregated_claim, expected_claim);
+    }
+
+    #[test]
     fn test_verify_claim_aggro() {
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
@@ -809,7 +950,7 @@ mod tests {
         let rchal = Fr::from(2).neg();
 
         let claim_group = ClaimGroup::new(claims).unwrap();
-        let (res, wlx) = aggregate_claims(&claim_group, &layer, rchal).unwrap();
+        let (res, wlx) = aggregate_similar_claims(&claim_group, &layer, rchal).unwrap();
         let rounds = expr.index_mle_indices(0);
         let verify_result = verify_aggregate_claim(&wlx, &claim_group, rchal).unwrap();
 

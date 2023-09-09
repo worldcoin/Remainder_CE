@@ -35,6 +35,8 @@ use self::{
     layer_enum::LayerEnum,
 };
 
+use core::cmp::Ordering;
+
 #[derive(Error, Debug, Clone)]
 /// Errors to do with working with a Layer
 pub enum LayerError {
@@ -86,7 +88,7 @@ pub enum VerificationError {
     ChallengeCheckFailed,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, PartialOrd)]
 ///  The location of a layer within the GKR circuit
 pub enum LayerId {
     /// An Mle located in the input layer
@@ -95,6 +97,20 @@ pub enum LayerId {
     Layer(usize),
     /// An MLE located in the output layer.
     Output(usize),
+}
+
+impl Ord for LayerId {
+    fn cmp(&self, layer2: &LayerId) -> Ordering {
+        match (self, layer2) {
+            (LayerId::Input(id1), LayerId::Input(id2)) => id1.cmp(&id2),
+            (LayerId::Input(id1), _) => Ordering::Less,
+            (LayerId::Layer(id1), LayerId::Input(id2)) => Ordering::Greater,
+            (LayerId::Layer(id1), LayerId::Layer(id2)) => id1.cmp(&id2),
+            (LayerId::Layer(id1), _) => Ordering::Less,
+            (LayerId::Output(id1), LayerId::Output(id2)) => id1.cmp(&id2),
+            (LayerId::Output(id1), _) => Ordering::Greater,
+        }
+    }
 }
 
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
@@ -477,6 +493,31 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let degree = get_round_degree(&expr, 0);
         // expr.init_beta_tables(prev_layer_claim);
         let num_evals = (num_vars) * (num_claims); //* degree;
+
+        let mut degree_reduction = num_vars as i64;
+        for j in 0..num_vars {
+            for i in 1..num_claims {
+                if claim_vecs[i][j] != claim_vecs[i - 1][j] {
+                    degree_reduction -= 1;
+                    break;
+                }
+            }
+        }
+        assert!(degree_reduction >= 0);
+
+        // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
+        // points. W : F^n -> F is a multi-linear polynomial on
+        // `num_vars` variables and l : F -> F^n is a canonical
+        // polynomial passing through `num_claims` points so its degree is
+        // at most `num_claims - 1`. This imposes an upper
+        // bound of `num_vars * (num_claims - 1)` to the degree of P.
+        // However, the actual degree of P might be lower.
+        // For any coordinate `i` such that all claims agree
+        // on that coordinate, we can quickly deduce that `l_i(x)` is a
+        // constant polynomial of degree zero instead of `num_claims -
+        // 1` which brings down the total degree by the same amount.
+        let num_evals =
+            (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
