@@ -1556,7 +1556,15 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
 
         // create two separate beta tables for each, as they are handled differently
         let mut beta_g2 = BetaTable::new((g2_challenges.clone(), F::zero())).unwrap();
-        let beta_g1 = BetaTable::new((g1_challenges.clone(), F::zero())).unwrap();
+        let beta_g1 = if g1_challenges.len() > 0 {
+            BetaTable::new((g1_challenges.clone(), F::zero())).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };  
 
         // the bookkeeping tables of this phase must have size 2^copy_bits (refer to vibe check B))
         let num_copy_vars = 1 << self.new_bits;
