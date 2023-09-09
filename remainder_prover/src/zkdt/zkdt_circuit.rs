@@ -19,9 +19,7 @@ use std::{marker::PhantomData, path::Path};
 
 pub struct PermutationSubCircuit<F: FieldExt> {
     pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,               // batched
-    pub input_data_mle_combined: DenseMle<F, F>,
     pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,      // batched
-    pub permuted_input_data_mle_combined: DenseMle<F, F>,
     r_mle: DenseMle<F, F>,
     r_packing_mle: DenseMle<F, F>,
 }
@@ -38,7 +36,7 @@ impl<F: FieldExt> PermutationSubCircuit<F> {
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
                     // TODO!(ende) fix this atrocious fixed(false)
-                    input_data_mle.add_prefix_bits(Some(self.input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    input_data_mle.add_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     FSInputPackingBuilder::new(
                         input_data_mle,
                         self.r_mle.clone(),
@@ -51,7 +49,7 @@ impl<F: FieldExt> PermutationSubCircuit<F> {
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
                     // TODO!(ende) fix this atrocious fixed(true)
-                    input_data_mle.add_prefix_bits(Some(self.permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    input_data_mle.add_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     FSInputPackingBuilder::new(
                         input_data_mle,
                         self.r_mle.clone(),
@@ -96,9 +94,7 @@ impl<F: FieldExt> PermutationSubCircuit<F> {
 
 pub struct AttributeConsistencySubCircuit<F: FieldExt> {
     permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-    permuted_input_data_mle_vec_combined: DenseMle<F, F>,
     decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
-    decision_node_paths_mle_vec_combined: DenseMle<F, F>,
 }
 
 impl<F: FieldExt> AttributeConsistencySubCircuit<F> {
@@ -118,10 +114,10 @@ impl<F: FieldExt> AttributeConsistencySubCircuit<F> {
                     .map(|(input_data_mle, decision_path_mle)| {
 
                         let mut input_data_mle = input_data_mle.clone();
-                        input_data_mle.add_prefix_bits(Some(self.permuted_input_data_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        input_data_mle.add_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         let mut decision_path_mle = decision_path_mle.clone();
-                        decision_path_mle.add_prefix_bits(Some(self.decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        decision_path_mle.add_prefix_bits(Some(decision_path_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         AttributeConsistencyBuilderZeroRef::new(
                             input_data_mle,
@@ -148,9 +144,7 @@ pub struct MultiSetSubCircuit<F: FieldExt> {
     multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
     multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
     decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>, // batched
-    decision_node_paths_mle_vec_combined: DenseMle<F, F>,
     leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,         // batched
-    leaf_node_paths_mle_vec_combined: DenseMle<F, F>,
     r_mle: DenseMle<F, F>,
     r_mle_another: DenseMle<F, F>,
     r_packing_mle: DenseMle<F, F>,
@@ -392,7 +386,7 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
             self.decision_node_paths_mle_vec.iter().map(
                 |decision_node_mle| {
                     let mut decision_node_mle = decision_node_mle.clone();
-                    decision_node_mle.add_prefix_bits(Some(self.decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    decision_node_mle.add_prefix_bits(Some(decision_node_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     FSDecisionPackingBuilder::new(
                         decision_node_mle.clone(),
                         self.r_mle.clone(),
@@ -406,7 +400,7 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
             self.leaf_node_paths_mle_vec.iter().map(
                 |leaf_node_mle| {
                     let mut leaf_node_mle = leaf_node_mle.clone();
-                    leaf_node_mle.add_prefix_bits(Some(self.leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    leaf_node_mle.add_prefix_bits(Some(leaf_node_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     FSLeafPackingBuilder::new(
                         leaf_node_mle.clone(),
                         self.r_mle.clone(),
@@ -647,18 +641,14 @@ impl <F: FieldExt> CombinedCircuits<F> {
         // construct the circuits
         let permutation_circuit = PermutationSubCircuit {
             input_data_mle_vec,
-            input_data_mle_combined,
             permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
-            permuted_input_data_mle_combined: permuted_input_data_mle_vec_combined.clone(),
             r_mle: r_mle.clone(),
             r_packing_mle: r_packing_mle.clone(),
         };
 
         let attribute_consistency_circuit = AttributeConsistencySubCircuit {
             permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
-            permuted_input_data_mle_vec_combined,
             decision_node_paths_mle_vec: decision_node_paths_mle_vec.clone(),
-            decision_node_paths_mle_vec_combined: decision_node_paths_mle_vec_combined.clone(),
         };
 
         let multiset_circuit = MultiSetSubCircuit {
@@ -667,9 +657,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_node_paths_mle_vec: decision_node_paths_mle_vec.clone(),
-            decision_node_paths_mle_vec_combined,
             leaf_node_paths_mle_vec,
-            leaf_node_paths_mle_vec_combined,
             r_mle: r_mle.clone(),
             r_mle_another,
             r_packing_mle: r_packing_mle.clone(),
