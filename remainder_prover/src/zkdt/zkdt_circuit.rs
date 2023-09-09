@@ -488,7 +488,7 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
 
 
 pub struct CombinedCircuits<F: FieldExt> {
-    batched_catboost_mles: (BatchedCatboostMles<F>, (usize, usize))
+    batched_catboost_mles: BatchedCatboostMles<F>
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
@@ -508,17 +508,6 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
             mut multiset_circuit,
             mut binary_recomp_circuit_batched,
 
-            // --- Prefix bits ---
-            input_data_mle_vec_input_prefix_bits,
-            permuted_input_data_mle_vec_input_prefix_bits,
-            decision_node_paths_mle_vec_input_prefix_bits,
-            leaf_node_paths_mle_vec_input_prefix_bits,
-            multiplicities_bin_decomp_mle_decision_input_prefix_bits,
-            multiplicities_bin_decomp_mle_leaf_input_prefix_bits,
-            decision_nodes_mle_input_prefix_bits,
-            leaf_nodes_mle_input_prefix_bits,
-            binary_decomp_diffs_mle_vec_input_prefix_bits,
-
             // --- Input layer ---
             input_layers,
             inpunt_layers_commits
@@ -527,10 +516,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
         let permutation_witness = permutation_circuit.yield_sub_circuit();
         let attribute_consistency_witness = attribute_consistency_circuit.yield_sub_circuit();
         let multiset_consistency_witness = multiset_circuit.yield_sub_circuit();
-        let binary_recomp_circuit_batched_witness = binary_recomp_circuit_batched.yield_sub_circuit(
-            decision_node_paths_mle_vec_input_prefix_bits,
-            permuted_input_data_mle_vec_input_prefix_bits,
-            binary_decomp_diffs_mle_vec_input_prefix_bits);
+        let binary_recomp_circuit_batched_witness = binary_recomp_circuit_batched.yield_sub_circuit();
 
         let (layers, output_layers) = combine_layers(
             vec![
@@ -565,30 +551,21 @@ impl <F: FieldExt> CombinedCircuits<F> {
             AttributeConsistencySubCircuit<F>,
             MultiSetSubCircuit<F>,
             BinaryRecompCircuitBatched<F>,
-            Option<Vec<MleIndex<F>>>, // input_data_mle_vec_input_prefix_bits
-            Option<Vec<MleIndex<F>>>, // permuted_input_data_mle_vec_input_prefix_bits
-            Option<Vec<MleIndex<F>>>, // decision_node_paths_mle_vec_input_prefix_bits
-            Option<Vec<MleIndex<F>>>, // leaf_node_paths_mle_vec_input_prefix_bits
-            Option<Vec<MleIndex<F>>>, // multiplicities_bin_decomp_mle_decision_input_prefix_bits
-            Option<Vec<MleIndex<F>>>, // multiplicities_bin_decomp_mle_leaf_input_prefix_bits
-            Option<Vec<MleIndex<F>>>, // decision_nodes_mle_input_prefix_bits
-            Option<Vec<MleIndex<F>>>, // leaf_nodes_mle_input_prefix_bits
-            Option<Vec<MleIndex<F>>>, // binary_decomp_diffs_mle_vec_input_prefix_bits
             Vec<InputLayerEnum<F, PoseidonTranscript<F>>>, // input layers, including random layers
             Vec<CommitmentEnum<F>> // input layers' commitments
         ), GKRError> {
 
-        let (BatchedCatboostMles {
-            input_data_mle_vec,
-            permuted_input_data_mle_vec,
-            decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
+        let BatchedCatboostMles {
+            mut input_data_mle_vec,
+            mut permuted_input_data_mle_vec,
+            mut decision_node_paths_mle_vec,
+            mut leaf_node_paths_mle_vec,
             mut multiplicities_bin_decomp_mle_decision,
             mut multiplicities_bin_decomp_mle_leaf,
             mut decision_nodes_mle,
             mut leaf_nodes_mle,
-            binary_decomp_diffs_mle_vec,
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<F>();
+            mut binary_decomp_diffs_mle_vec,
+        } = self.batched_catboost_mles.clone();
 
         // deal w input
         let mut input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_data_mle_vec.clone());
@@ -597,6 +574,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
         let mut leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(leaf_node_paths_mle_vec.clone());
         let mut combined_batched_diff_signed_bin_decomp_mle = DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(binary_decomp_diffs_mle_vec.clone());
 
+        // put them into input layer
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut input_data_mle_combined),
             Box::new(&mut permuted_input_data_mle_vec_combined),
@@ -609,7 +587,24 @@ impl <F: FieldExt> CombinedCircuits<F> {
             Box::new(&mut combined_batched_diff_signed_bin_decomp_mle),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        // let input_prefix_bits = input_layer.fetch_prefix_bits(); // for debug purpose
+
+        // add prefix bits to vectors
+        for input_data_mle in input_data_mle_vec.iter_mut() {
+            input_data_mle.add_prefix_bits(input_data_mle_combined.get_prefix_bits());
+        }
+        for permuted_input_data_mle in permuted_input_data_mle_vec.iter_mut() {
+            permuted_input_data_mle.add_prefix_bits(permuted_input_data_mle_vec_combined.get_prefix_bits())
+        }
+        for decision_node_paths_mle in decision_node_paths_mle_vec.iter_mut() {
+            decision_node_paths_mle.add_prefix_bits(decision_node_paths_mle_vec_combined.get_prefix_bits())
+        }
+        for leaf_node_paths_mle in leaf_node_paths_mle_vec.iter_mut() {
+            leaf_node_paths_mle.add_prefix_bits(leaf_node_paths_mle_vec_combined.get_prefix_bits())
+        }
+        for binary_decomp_diffs_mle in binary_decomp_diffs_mle_vec.iter_mut() {
+            binary_decomp_diffs_mle.add_prefix_bits(combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits())
+        }
+
         let input_layer: PublicInputLayer<F, PoseidonTranscript<F>> = input_layer.to_input_layer();
         let mut input_layer = input_layer.to_enum();
 
@@ -648,17 +643,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             .map_err(|err| GKRError::InputLayerError(err))?;
 
         // FS
-
-        // --- Grab input layer prefix bits to save for later ---
-        let input_data_mle_combined_input_prefix_bits = input_data_mle_combined.get_prefix_bits();
-        let permuted_input_data_mle_vec_combined_input_prefix_bits = permuted_input_data_mle_vec_combined.get_prefix_bits();
-        let decision_node_paths_mle_vec_combined_input_prefix_bits = decision_node_paths_mle_vec_combined.get_prefix_bits();
-        let leaf_node_paths_mle_vec_combined_input_prefix_bits = leaf_node_paths_mle_vec_combined.get_prefix_bits();
-        let multiplicities_bin_decomp_mle_decision_input_prefix_bits = multiplicities_bin_decomp_mle_decision.get_prefix_bits();
-        let multiplicities_bin_decomp_mle_leaf_input_prefix_bits = multiplicities_bin_decomp_mle_leaf.get_prefix_bits();
-        let decision_nodes_mle_input_prefix_bits = decision_nodes_mle.get_prefix_bits();
-        let leaf_nodes_mle_input_prefix_bits = leaf_nodes_mle.get_prefix_bits();
-        let combined_batched_diff_signed_bin_decomp_mle_input_prefix_bits = combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits();
 
         // construct the circuits
         let permutation_circuit = PermutationSubCircuit {
@@ -704,17 +688,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             attribute_consistency_circuit, 
             multiset_circuit, 
             binary_recomp_circuit_batched, 
-
-            // --- Prefix bits ---
-            input_data_mle_combined_input_prefix_bits,
-            permuted_input_data_mle_vec_combined_input_prefix_bits,
-            decision_node_paths_mle_vec_combined_input_prefix_bits,
-            leaf_node_paths_mle_vec_combined_input_prefix_bits,
-            multiplicities_bin_decomp_mle_decision_input_prefix_bits,
-            multiplicities_bin_decomp_mle_leaf_input_prefix_bits,
-            decision_nodes_mle_input_prefix_bits,
-            leaf_nodes_mle_input_prefix_bits,
-            combined_batched_diff_signed_bin_decomp_mle_input_prefix_bits,
 
             // --- Input layers ---
             vec![
@@ -773,7 +746,7 @@ mod tests {
     #[test]
     fn test_combine_circuits() {
 
-        let batched_catboost_mles = generate_mles_batch_catboost_single_tree::<Fr>();
+        let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         let combined_circuit = CombinedCircuits {
             batched_catboost_mles

@@ -469,6 +469,7 @@ pub struct BatchedDummyMles<F: FieldExt> {
 }
 
 // #[derive(Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct BatchedCatboostMles<F: FieldExt> {
     pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
     pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
