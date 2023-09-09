@@ -703,11 +703,13 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
             }
         );
 
-        let pos_mul_output = 
-            layers.add_mul_gate_batched(nonzero_gates.clone(), self.mle_1.mle_ref(), self.mle_2.mle_ref(), self.batch_bits);
+        dbg!(&nonzero_gates);
 
         let neg_mul_output = 
-            layers.add_mul_gate_batched(nonzero_gates.clone(), self.mle_1.mle_ref(), self.neg_mle_2.mle_ref(), self.batch_bits);
+        layers.add_mul_gate_batched(nonzero_gates.clone(), self.mle_1.mle_ref(), self.neg_mle_2.mle_ref(), self.batch_bits);
+
+        let pos_mul_output = 
+        layers.add_mul_gate_batched(nonzero_gates.clone(), self.mle_1.mle_ref(), self.mle_2.mle_ref(), self.batch_bits);
 
         let add_gate_layer_output =
             layers.add_add_gate_batched(nonzero_gates, pos_mul_output.mle_ref(), neg_mul_output.mle_ref(), self.batch_bits);
@@ -733,8 +735,8 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
 
     let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            // let num = Fr::one();
+            // let num = Fr::from(rng.gen::<u64>());
+            let num = Fr::one();
             num
         }),
         LayerId::Input(0),
@@ -743,8 +745,8 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
 
     let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            // let num = Fr::one();
+            // let num = Fr::from(rng.gen::<u64>());
+            let num = Fr::one();
             num
         }),
         LayerId::Input(0),

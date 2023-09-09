@@ -1264,16 +1264,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
             let prev_at_r = evaluate_at_a_point(prev_evals, challenge)
                 .map_err(|err| LayerError::InterpError(err))?;
-            
-            dbg!(&i);
-            dbg!(&prev_at_r);
-            // dbg!(&prev_evals);
-            dbg!(&curr_evals);
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
-                // return Err(LayerError::VerificationError(
-                //     VerificationError::SumcheckFailed,
-                // ));
+                return Err(LayerError::VerificationError(
+                    VerificationError::SumcheckFailed,
+                ));
             };
             transcript
                 .append_field_elements("Sumcheck evaluations", &curr_evals)
@@ -1297,8 +1292,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
         challenges.push(final_chal);
-
-        dbg!(final_chal);
 
         // this belongs in the last challenge bound to y
         last_v_challenges.push(final_chal);
