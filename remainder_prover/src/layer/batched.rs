@@ -31,7 +31,7 @@ impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
 }
 
 pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMleRef<F> {
-    let new_bits = log2(mle_refs.len()) as usize;
+    let new_bits = 0;
     let num_vars = mle_refs[0].mle_indices().len();
     let layer_id = mle_refs[0].get_layer_id().clone();
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
@@ -198,6 +198,19 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
     let old_indices = mles[0].mle_indices();
     let old_num_vars = mles[0].num_vars();
     let layer_id = mles[0].get_layer_id();
+
+    // --- TODO!(ryancao): SUPER hacky fix for the random packing constants ---
+    // --- Basically if all the MLEs are exactly the same, we don't combine at all ---
+    if matches!(layer_id, LayerId::Input(_)) && old_num_vars == 0 {
+        let all_same = (0..mles[0].bookkeeping_table().len()).fold(true, |acc, idx| {
+            acc && mles.iter().skip(1).fold(true, |inner_acc, mle| {
+                inner_acc && (mles[0].bookkeeping_table()[idx] == mle.bookkeeping_table()[idx])
+            })
+        });
+        if all_same {
+            return mles[0].clone();
+        }
+    }
 
     let out = (0..mles[0].bookkeeping_table.len())
         .flat_map(|index| {

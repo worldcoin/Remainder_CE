@@ -129,6 +129,99 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
             batched_diff_signed_bin_decomp_mle,
         }
     }
+
+    /// This does exactly the same thing as `synthesize()` above, but
+    /// takes in prefix bits for each of the input layer MLEs as opposed
+    /// to synthesizing its own input layer.
+    pub fn yield_sub_circuit(&mut self) -> Witness<F, <BinaryRecompCircuitBatched<F> as GKRCircuit<F>>::Transcript> {
+
+        // --- NOTE: There is no input layer creation, since this gets handled in the large circuit ---
+
+        // --- Dataparallel/batching stuff + sanitychecks ---
+        let num_subcircuit_copies = self.batched_decision_node_path_mle.len();
+        let num_dataparallel_bits = log2(num_subcircuit_copies) as usize;
+        debug_assert_eq!(num_dataparallel_bits, log2(self.batched_permuted_inputs_mle.len()) as usize);
+        debug_assert_eq!(num_dataparallel_bits, log2(self.batched_diff_signed_bin_decomp_mle.len()) as usize);
+
+        // --- Create `Layers` struct to add layers to ---
+        let mut layers: Layers<F, <BinaryRecompCircuitBatched<F> as GKRCircuit<F>>::Transcript> = Layers::new();
+
+        let batched_diff_signed_bin_decomp_mle_prefix_bits = self.batched_diff_signed_bin_decomp_mle[0].get_prefix_bits();
+        // --- First we create the positive binary recomp builder ---
+        let pos_bin_recomp_builders = self.batched_diff_signed_bin_decomp_mle.iter_mut().map(
+            |diff_signed_bit_decomp_mle| {
+            // --- Prefix bits should be [input_prefix_bits], [dataparallel_bits] ---
+            // TODO!(ryancao): Note that strictly speaking we shouldn't be adding dataparallel bits but need to for
+            // now for a specific batching scenario
+            diff_signed_bit_decomp_mle.add_prefix_bits(
+                Some(
+                    diff_signed_bit_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
+                    ).collect_vec()
+                )
+            );
+            BinaryRecompBuilder::new(diff_signed_bit_decomp_mle.clone())
+        }).collect();
+
+        let batched_bin_recomp_builder = BatchedLayer::new(pos_bin_recomp_builders);
+
+        // --- Next, we create the diff builder ---
+        let batched_diff_builder = BatchedLayer::new(
+            self.batched_decision_node_path_mle.iter_mut().zip(
+                self.batched_permuted_inputs_mle.iter_mut()
+            ).map(|(decision_node_path_mle, permuted_inputs_mle)| {
+
+                // --- Add prefix bits and batching bits to both (same comment as above) ---
+                decision_node_path_mle.add_prefix_bits(Some(
+                    decision_node_path_mle.get_prefix_bits().iter().flatten().cloned().chain(
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
+                    ).collect_vec()
+                ));
+                permuted_inputs_mle.add_prefix_bits(Some(
+                    permuted_inputs_mle.get_prefix_bits().iter().flatten().cloned().chain(
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
+                    ).collect_vec()
+                ));
+
+            NodePathDiffBuilder::new(decision_node_path_mle.clone(), permuted_inputs_mle.clone())
+        }).collect_vec());
+
+        // --- Concatenate the previous two builders and add them to the circuit ---
+        let builder = batched_bin_recomp_builder.concat(batched_diff_builder);
+        let (batched_pos_bin_recomp_mle, batched_raw_diff_mle) = layers.add_gkr(builder);
+
+        // --- Finally, the recomp checker ---
+        let batched_recomp_checker_builder = BatchedLayer::new(
+            self.batched_diff_signed_bin_decomp_mle.iter_mut().zip(
+                batched_pos_bin_recomp_mle.into_iter().zip(
+                    batched_raw_diff_mle.into_iter()
+                )
+            )
+            .map(|(diff_signed_bit_decomp_mle, (pos_bin_recomp_mle, raw_diff_mle))| {
+
+                // --- Add prefix bits to the thing which was indexed earlier ---
+                diff_signed_bit_decomp_mle.add_prefix_bits(
+                    Some(
+                        batched_diff_signed_bin_decomp_mle_prefix_bits.iter().flatten().cloned().chain(
+                            repeat_n(MleIndex::Iterated, num_dataparallel_bits)
+                        ).collect_vec()
+                    )
+                );
+
+                BinaryRecompCheckerBuilder::new(
+                    raw_diff_mle,
+                    diff_signed_bit_decomp_mle.clone(),
+                    pos_bin_recomp_mle,
+                )
+            }
+        ).collect_vec());
+
+        // --- Grab output layer and flatten ---
+        let batched_recomp_checker_result_mle = layers.add_gkr(batched_recomp_checker_builder);
+        let flattened_batched_recomp_checker_result_mle = combine_zero_mle_ref(batched_recomp_checker_result_mle);
+
+        Witness { layers, output_layers: vec![flattened_batched_recomp_checker_result_mle.get_enum()], input_layers: vec![] }
+    }
 }
 
 /// Checks that the binary recomposition of the differences

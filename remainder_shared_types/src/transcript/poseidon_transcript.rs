@@ -74,6 +74,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         Ok(output)
         // Ok(F::one() + F::one())
 
+        // Ok(F::from(10))
     }
 
     fn get_challenges(

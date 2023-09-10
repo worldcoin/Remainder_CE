@@ -170,4 +170,12 @@ impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
     pub fn expression(&self) -> &ExpressionStandard<F> {
         &self.expr
     }
+
+    pub(crate) fn new_raw(id: LayerId, expr: ExpressionStandard<F>) -> Self {
+        Self {
+            id,
+            expr,
+            _marker: PhantomData
+        }
+    }
 }

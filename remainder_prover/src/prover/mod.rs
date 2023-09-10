@@ -389,6 +389,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .map(|mut layer| {
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_id = layer.id().clone();
+                // dbg!(layer_id);
                 let layer_claims = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
@@ -450,6 +451,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 let post_sumcheck_new_claims = layer
                     .get_claims()
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+
+                // dbg!(layer_id, &post_sumcheck_new_claims);
 
                 for (layer_id, claim) in post_sumcheck_new_claims {
                     if let Some(curr_claims) = claims.get_mut(&layer_id) {

@@ -224,7 +224,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         DenseMle::new_from_raw(re_inverted_final_bookkeeping_table, self.layer_id, None)
     }
 
-    ///Turn this builder into a real input layer
+    /// Turn this builder into a real input layer
     pub fn to_input_layer<I: MleInputLayer<F>>(self) -> I {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
         I::new(final_mle, self.layer_id)
