@@ -2,7 +2,7 @@ use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex}, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, combine_mle_refs}, zkdt_layer::ConcatBuilder}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, unbatch_mles, unflatten_mle, combine_zero_mle_ref}}};
+use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex}, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, combine_mle_refs}, zkdt_layer::{ConcatBuilder, ZeroBuilder}}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, unbatch_mles, unflatten_mle, combine_zero_mle_ref}}};
 
 use super::circuit_builders::{OneMinusSignBit, SignBit, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBitProductBuilder, DumbBuilder};
 
@@ -449,26 +449,45 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
         let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
         let input_layer: InputLayerEnum<F, Self::Transcript> = input_layer_builder.to_input_layer::<PublicInputLayer<F, _>>().to_enum();
         
-       
-        let pos_builders = self.batched_bin_decomp_diff_mle.iter_mut().map(
+        self.batched_bin_decomp_diff_mle.iter_mut().for_each(
             |bin_decomp_mle| {
                 bin_decomp_mle.add_prefix_bits(Some(
                     combined_bit.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_copy_bits)
                     ).collect_vec()
                 ));
+            }
+        );
+
+        self.batched_decision_node_paths_mle.iter_mut().for_each(
+            |dec_mle| {
+                dec_mle.add_prefix_bits(Some(
+                    combined_decision.get_prefix_bits().iter().flatten().cloned().chain(
+                        repeat_n(MleIndex::Iterated, num_copy_bits)
+                    ).collect_vec()
+                ));
+            }
+        );
+
+        self.batched_leaf_node_paths_mle.iter_mut().for_each(
+            |leaf_mle| {
+                leaf_mle.add_prefix_bits(Some(
+                    combined_leaf.get_prefix_bits().iter().flatten().cloned().chain(
+                        repeat_n(MleIndex::Iterated, num_copy_bits)
+                    ).collect_vec()
+                ));
+            }
+        );
+       
+        let pos_builders = self.batched_bin_decomp_diff_mle.iter().map(
+            |bin_decomp_mle| {
                 OneMinusSignBit::new(bin_decomp_mle.clone())
             }
         ).collect_vec();
         let pos_batched_builder = BatchedLayer::new(pos_builders);
 
-        let neg_builders = self.batched_bin_decomp_diff_mle.iter_mut().map(
+        let neg_builders = self.batched_bin_decomp_diff_mle.iter().map(
             |bin_decomp_mle| {
-                bin_decomp_mle.add_prefix_bits(Some(
-                    combined_bit.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
-                    ).collect_vec()
-                ));
                 SignBit::new(bin_decomp_mle.clone())
             }
         ).collect_vec();
@@ -477,52 +496,32 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
         let pos_sign_bits = layers.add_gkr(pos_batched_builder); // ID is 0
         let neg_sign_bits = layers.add_gkr(neg_batched_builder); // ID is 1
 
-        let prev_node_left_builders = self.batched_decision_node_paths_mle.iter_mut().map(
+        let prev_node_left_builders = self.batched_decision_node_paths_mle.iter().map(
             |dec_mle| {
-                dec_mle.add_prefix_bits(Some(
-                    combined_decision.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
-                    ).collect_vec()
-                ));
                 PrevNodeLeftBuilderDecision::new(dec_mle.clone())
             }
         ).collect_vec();
 
         let prev_left_batched_builder = BatchedLayer::new(prev_node_left_builders);
 
-        let prev_node_right_builders = self.batched_decision_node_paths_mle.iter_mut().map(
+        let prev_node_right_builders = self.batched_decision_node_paths_mle.iter().map(
             |dec_mle| {
-                dec_mle.add_prefix_bits(Some(
-                    combined_decision.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
-                    ).collect_vec()
-                ));
                 PrevNodeRightBuilderDecision::new(dec_mle.clone())
             }
         ).collect_vec();
 
         let prev_right_batched_builder = BatchedLayer::new(prev_node_right_builders);
 
-        let curr_node_decision_builders = self.batched_decision_node_paths_mle.iter_mut().map(
+        let curr_node_decision_builders = self.batched_decision_node_paths_mle.iter().map(
             |dec_mle| {
-                dec_mle.add_prefix_bits(Some(
-                    combined_decision.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
-                    ).collect_vec()
-                ));
                 CurrNodeBuilderDecision::new(dec_mle.clone())
             }
         ).collect_vec();
 
         let curr_decision_batched_builder = BatchedLayer::new(curr_node_decision_builders);
 
-        let curr_node_leaf_builders = self.batched_leaf_node_paths_mle.iter_mut().map(
+        let curr_node_leaf_builders = self.batched_leaf_node_paths_mle.iter().map(
             |leaf_mle| {
-                leaf_mle.add_prefix_bits(Some(
-                    combined_decision.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
-                    ).collect_vec()
-                ));
                 CurrNodeBuilderLeaf::new(leaf_mle.clone())
             }
         ).collect_vec();
@@ -531,8 +530,8 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
     
         let curr_decision = layers.add_gkr(curr_decision_batched_builder); // ID is 2
         let curr_leaf = layers.add_gkr(curr_leaf_batched_builder); // ID is 3
-        let prev_node_right = layers.add_gkr(prev_right_batched_builder); // ID is 5
-        let prev_node_left = layers.add_gkr(prev_left_batched_builder); // ID is 6    
+        let prev_node_right = layers.add_gkr(prev_right_batched_builder); // ID is 4
+        let prev_node_left = layers.add_gkr(prev_left_batched_builder); // ID is 5    
         
         let flattened_curr_dec = unbatch_mles(curr_decision.clone());
         let flattened_curr_leaf = unbatch_mles(curr_leaf.clone());
@@ -547,25 +546,36 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
         let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
         let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
          
-        let res_neg_dec = layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.clone().mle_ref(), flattened_prev_left.clone().mle_ref(), num_copy_bits); // ID is 7
-        let res_neg_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_curr_leaf.clone().mle_ref(), flattened_prev_left.mle_ref(), num_copy_bits); // ID is 7
-        let flattened_pos = unbatch_mles(pos_sign_bits.clone());
-        let flattened_neg = unbatch_mles(neg_sign_bits.clone());
-
-        let res_pos_dec = layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.clone().mle_ref(), flattened_prev_right.clone().mle_ref(), num_copy_bits); // ID is 8
-        let res_pos_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_curr_leaf.clone().mle_ref(), flattened_prev_right.mle_ref(), num_copy_bits); // ID is 8
+        let res_neg_dec = layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.clone().mle_ref(), flattened_prev_left.clone().mle_ref(), num_copy_bits); // ID is 6
+        let res_pos_dec = layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.clone().mle_ref(), flattened_prev_right.clone().mle_ref(), num_copy_bits); // ID is 7
+        
+        let res_neg_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.clone().mle_ref(), num_copy_bits); // ID is 8
+        let res_pos_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.clone().mle_ref(), num_copy_bits); // ID is 9
 
         let nonzero_gates_mul_decision = decision_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
         let nonzero_gates_mul_leaf = leaf_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
         
-        let dec_pos_prod = layers.add_mul_gate(nonzero_gates_mul_decision.clone(), flattened_pos.clone().mle_ref(), res_pos_dec.clone().mle_ref(), num_copy_bits);
-        let dec_neg_prod = layers.add_mul_gate(nonzero_gates_mul_decision.clone(), flattened_neg.clone().mle_ref(), res_neg_dec.clone().mle_ref(), num_copy_bits);
-        let leaf_pos_prod = layers.add_mul_gate(nonzero_gates_mul_leaf.clone(), flattened_pos.clone().mle_ref(), res_pos_leaf.clone().mle_ref(), num_copy_bits);
-        let leaf_neg_prod = layers.add_mul_gate(nonzero_gates_mul_leaf.clone(), flattened_neg.clone().mle_ref(), res_neg_leaf.clone().mle_ref(), num_copy_bits);
+        let flattened_pos = unbatch_mles(pos_sign_bits.clone());
+        let flattened_neg = unbatch_mles(neg_sign_bits.clone());
+
+        let dec_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.clone().mle_ref(), res_pos_dec.clone().mle_ref(), num_copy_bits); // ID is 10 
+        let dec_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_neg.clone().mle_ref(), res_neg_dec.clone().mle_ref(), num_copy_bits); // ID is 11  
+        let leaf_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.clone().mle_ref(), res_pos_leaf.clone().mle_ref(), num_copy_bits); // ID is 12  
+        let leaf_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_neg.clone().mle_ref(), res_neg_leaf.clone().mle_ref(), num_copy_bits); // ID is 13  
+
+        let dec_pos_zero = ZeroBuilder::new(dec_pos_prod); 
+        let dec_neg_zero = ZeroBuilder::new(dec_neg_prod); 
+        let leaf_pos_zero = ZeroBuilder::new(leaf_pos_prod);
+        let leaf_neg_zero = ZeroBuilder::new(leaf_neg_prod);
+
+        let dec_pos_zero_mle = layers.add_gkr(dec_pos_zero); // ID is 14
+        let dec_neg_zero_mle = layers.add_gkr(dec_neg_zero); // ID is 15
+        let leaf_pos_zero_mle = layers.add_gkr(leaf_pos_zero); // ID is 16
+        let leaf_neg_zero_mle = layers.add_gkr(leaf_neg_zero); // ID is 17
 
         let witness: Witness<F, Self::Transcript> = Witness {
             layers,
-            output_layers: vec![dec_pos_prod.mle_ref().get_enum(), dec_neg_prod.mle_ref().get_enum(), leaf_pos_prod.mle_ref().get_enum(), leaf_neg_prod.mle_ref().get_enum()],
+            output_layers: vec![dec_pos_zero_mle.get_enum(), dec_neg_zero_mle.get_enum(), leaf_pos_zero_mle.get_enum(), leaf_neg_zero_mle.get_enum()],
             input_layers: vec![input_layer]
         };
 

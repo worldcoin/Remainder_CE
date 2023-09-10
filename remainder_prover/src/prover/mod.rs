@@ -129,17 +129,17 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         );
         self.0.push(gate.get_enum());
 
-        let mut sum_table = vec![F::zero(); max_gate_val + 1];
+        let mut mul_table = vec![F::zero(); max_gate_val + 1];
         nonzero_gates.into_iter().for_each(
             |(z, x, y)| {
-                let sum_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero()) * 
+                let mul_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero()) * 
                 *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
-                sum_table[z] = sum_val;
+                mul_table[z] = mul_val;
                 
             }
         );
 
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
+        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(mul_table, id, None);
         res_mle
 
         //ZeroMleRef::new(*num_vars, None, id.clone())
@@ -192,18 +192,20 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         self.0.push(gate.get_enum());
 
 
-        let mut sum_table = vec![F::zero(); sum_table_num_entries];
+        let mut mul_table = vec![F::zero(); sum_table_num_entries];
         (0..num_copy_vars).into_iter().for_each(|idx|
             {
                 nonzero_gates.clone().into_iter().for_each(
                     |(z_ind, x_ind, y_ind)| {
                         let f2_val = *lhs.bookkeeping_table().get(idx + (x_ind * num_copy_vars)).unwrap_or(&F::zero());
                         let f3_val = *rhs.bookkeeping_table().get(idx + (y_ind * num_copy_vars)).unwrap_or(&F::zero());
-                        sum_table[idx + (z_ind * num_copy_vars)] = f2_val * f3_val;
+                        mul_table[idx + (z_ind * num_copy_vars)] = f2_val * f3_val;
                     }
                 );
             });
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
+
+        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(mul_table, id, None);
+
         res_mle
 
         //ZeroMleRef::new(*num_vars, None, id.clone())

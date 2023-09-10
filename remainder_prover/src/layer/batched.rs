@@ -244,7 +244,6 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
 
         let hi = combine_expressions(exprs)
             .expect("Expressions fed into BatchedLayer don't have the same structure!");
-        dbg!(&hi);
         hi
     }
 

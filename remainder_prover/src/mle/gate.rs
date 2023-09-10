@@ -1210,8 +1210,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
             // this essentially takes in the two mles bound only at the copy bits
             let mut reduced_gate: AddGate<F, Tr> = AddGate::new(self.layer_id.clone(), self.nonzero_gates.clone(), self.lhs.clone(), self.rhs.clone(), self.new_bits, Some(beta_g2));
-            dbg!(&self.lhs.clone());
-            dbg!(&self.rhs.clone());
             self.reduced_gate = Some(reduced_gate);
             let next_messages = self.reduced_gate.as_mut().unwrap().prove_rounds(next_claims, transcript).unwrap();
 
@@ -1294,7 +1292,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         challenges.push(final_chal);
 
         // this belongs in the last challenge bound to y
-        last_v_challenges.push(final_chal);
+        if self.rhs.num_vars() == 0 {
+            first_u_challenges.push(final_chal);
+        }
+        else {
+            last_v_challenges.push(final_chal);
+        }
 
         // we want to grab the mutated bookkeeping tables from the "reduced_gate", this is the non-batched version
         let ([_, lhs_reduced], _) = self.reduced_gate.as_ref().unwrap().phase_1_mles.as_ref().unwrap().clone();
@@ -1309,8 +1312,24 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 
         // compute the gate function bound at those variables
         let beta_u = BetaTable::new((first_u_challenges.clone(), F::zero())).unwrap();
-        let beta_v = BetaTable::new((last_v_challenges.clone(), F::zero())).unwrap();
-        let beta_g = BetaTable::new((g1_challenges, F::zero())).unwrap();
+        let beta_v = if last_v_challenges.len() > 0 {
+            BetaTable::new((last_v_challenges.clone(), F::zero())).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        }; 
+        let beta_g = if g1_challenges.len() > 0 {
+            BetaTable::new((g1_challenges, F::zero())).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };
         let f_1_uv = self.nonzero_gates.clone().into_iter().fold(
             F::zero(), |acc, (z_ind, x_ind, y_ind)| {
                 let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());

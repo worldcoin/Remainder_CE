@@ -20,15 +20,19 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-
-        dbg!("Batched mulgate claim :)");
-        dbg!(&claim, -claim.1);
-
         // initialization, first message comes from here
         let first_message = self
             .init_copy_phase(claim.clone())
             .expect("could not evaluate original lhs and rhs");
-        let beta_g1 = BetaTable::new((self.g1_challenges.clone().unwrap(), F::zero())).unwrap();
+        let beta_g1 = if self.g1_challenges.clone().unwrap().len() > 0 {
+            BetaTable::new((self.g1_challenges.clone().unwrap(), F::zero())).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };  
         let mut beta_g2 = self.beta_g2.as_mut().unwrap();
         let (mut lhs, mut rhs) = (&mut self.lhs, &mut self.rhs);
 
@@ -71,9 +75,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
 
         if beta_g2.table.bookkeeping_table.len() == 1 {
             let beta_g2 = beta_g2.table.bookkeeping_table()[0];
-            dbg!("HELLOOOO");
-            dbg!(&self.lhs);
-            dbg!(&self.rhs);
+            // dbg!("HELLOOOO");
+            // dbg!(&self.lhs);
+            // dbg!(&self.rhs);
             let next_claims = (self.g1_challenges.clone().unwrap(), F::zero());
 
             // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
@@ -126,14 +130,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
             let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
             let prev_at_r = evaluate_at_a_point(prev_evals, challenge)
                 .map_err(|err| LayerError::InterpError(err))?;
-            
-            dbg!(&self.lhs);
-            dbg!(&self.rhs);
-            dbg!(&i);
-            // dbg!(&prev_at_r);
-            dbg!(&challenge);
-            dbg!(&prev_evals);
-            dbg!(&curr_evals);
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 dbg!("Yeah we're failing here");
@@ -164,10 +160,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
             .unwrap();
         challenges.push(final_chal);
 
-        dbg!(final_chal);
-
         // this belongs in the last challenge bound to y
-        last_v_challenges.push(final_chal);
+        if self.rhs.num_vars() == 0 {
+            first_u_challenges.push(final_chal);
+        }
+        else {
+            last_v_challenges.push(final_chal);
+        }
 
         // we want to grab the mutated bookkeeping tables from the "reduced_gate", this is the non-batched version
         let [_, lhs_reduced] = self.reduced_gate.as_ref().unwrap().phase_1_mles.as_ref().unwrap().clone();
@@ -182,8 +181,25 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
 
         // compute the gate function bound at those variables
         let beta_u = BetaTable::new((first_u_challenges.clone(), F::zero())).unwrap();
-        let beta_v = BetaTable::new((last_v_challenges.clone(), F::zero())).unwrap();
-        let beta_g = BetaTable::new((g1_challenges, F::zero())).unwrap();
+        let beta_v = if last_v_challenges.len() > 0 {
+            BetaTable::new((last_v_challenges.clone(), F::zero())).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };    
+
+        let beta_g = if g1_challenges.len() > 0 {
+            BetaTable::new((g1_challenges.clone(), F::zero())).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };  
         let f_1_uv = self.nonzero_gates.clone().into_iter().fold(
             F::zero(), |acc, (z_ind, x_ind, y_ind)| {
                 let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
@@ -432,7 +448,15 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
         // create two separate beta tables for each, as they are handled differently
         let mut beta_g2 = BetaTable::new((g2_challenges.clone(), F::zero())).unwrap();
         beta_g2.table.index_mle_indices(0);
-        let beta_g1 = BetaTable::new((g1_challenges.clone(), F::zero())).unwrap();
+        let beta_g1 = if g1_challenges.len() > 0 {
+            BetaTable::new((g1_challenges.clone(), F::zero())).unwrap()
+        } else {
+            BetaTable {
+                layer_claim: (vec![], F::zero()),
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            }
+        };  
 
         // index original bookkeeping tables to send over to the non-batched mul gate after the copy phase
         self.lhs.index_mle_indices(0);
@@ -449,7 +473,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
         // result of initializing is the first sumcheck message!
         // --- Basically beta(g_2, p_2) * a_f2(p_2) * a_f3(p_2) ---
         // compute_sumcheck_message_copy_phase_mul(&mut [a_f2_mle, a_f3_mle], &mut beta_g2, 0)
-        dbg!("In init copy phase before passing to libra giraffe");
+        // dbg!("In init copy phase before passing to libra giraffe");
         // dbg!(&self.lhs);
         // dbg!(&self.rhs);
         // dbg!(&beta_g2.table);

@@ -57,6 +57,8 @@ pub trait InputLayer<F: FieldExt> {
     fn get_padded_mle(&self) -> DenseMle<F, F>;
 
     fn compute_claim_wlx(&self, claims: &[Claim<F>]) -> Result<Vec<F>, ClaimError> {
+
+        dbg!(&claims);
         let mut mle = self.get_padded_mle().clone().mle_ref();
         let num_claims = claims.len();
         let (claim_vecs, mut claimed_vals): (Vec<Vec<F>>, Vec<F>) =
