@@ -442,10 +442,10 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
             }
         };
 
-        let partials = (0..1 << (range_var)).into_iter().fold(
-            // #[cfg(feature = "parallel")]
-            // || vec![F::zero(); eval_count],
-            // #[cfg(not(feature = "parallel"))]
+        let partials = cfg_into_iter!((0..1 << (range_var))).fold(
+            #[cfg(feature = "parallel")]
+            || vec![F::zero(); eval_count],
+            #[cfg(not(feature = "parallel"))]
             vec![F::zero(); eval_count],
             |mut acc, index| {
                 let beta_idx_0 = if beta_ref.num_vars() < beta_max_num_vars {
@@ -497,6 +497,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
         );
 
         #[cfg(feature = "parallel")]
+        
         let partials = partials.reduce(
             || vec![F::zero(); eval_count],
             |mut acc, partial| {

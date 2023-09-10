@@ -2,7 +2,7 @@ use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex}, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, combine_mle_refs}, zkdt_layer::{ConcatBuilder, ZeroBuilder}}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, unbatch_mles, unflatten_mle, combine_zero_mle_ref}}};
+use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex}, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, combine_mle_refs}, builders::{ConcatBuilder, ZeroBuilder}}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, unbatch_mles, unflatten_mle, combine_zero_mle_ref}}};
 
 use super::circuit_builders::{OneMinusSignBit, SignBit, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBitProductBuilder, DumbBuilder};
 
@@ -19,7 +19,6 @@ pub fn create_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
 
 /// Helper!
 pub fn decision_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
-    dbg!(&size);
     let mut gates = (0 .. (size-1)).into_iter().map(
         |idx| (idx, idx + 1, idx)
     ).collect_vec();

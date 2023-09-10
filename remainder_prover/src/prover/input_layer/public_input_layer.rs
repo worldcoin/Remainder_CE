@@ -52,7 +52,6 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_vars != 0 {
-            dbg!(&claim);
             let mut eval = None;
             for (curr_bit, &chal) in claim.0.iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);

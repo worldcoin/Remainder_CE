@@ -1,6 +1,7 @@
 //! Miscellaneous helper functions for `dt2zkdt`.
 use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode};
 use crate::zkdt::data_pipeline::trees::*;
+use remainder_ligero::utils::get_least_significant_bits_to_usize_little_endian;
 use remainder_shared_types::FieldExt;
 use std::iter::repeat;
 

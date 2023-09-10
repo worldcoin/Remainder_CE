@@ -4,7 +4,7 @@ mod tests {
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
-    use crate::{zkdt::{zkdt_helpers::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, path_consistency_circuit::circuits::{PathCheckCircuit, PathCheckCircuitBatched, PathCheckCircuitBatchedMul}}, prover::GKRCircuit};
+    use crate::{zkdt::{path_consistency_circuit::circuits::{PathCheckCircuit, PathCheckCircuitBatched, PathCheckCircuitBatchedMul}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}}, prover::GKRCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     
 
@@ -12,9 +12,9 @@ mod tests {
     fn test_path_circuit_catboost() {
 
         let (BatchedCatboostMles {
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle, ..
+            decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
+            binary_decomp_diffs_mle_vec, ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         // let DummyMles::<Fr> {
@@ -27,9 +27,9 @@ mod tests {
         //let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
 
         let mut circuit = PathCheckCircuit::new(
-            dummy_decision_node_paths_mle[0].clone(), 
-            dummy_leaf_node_paths_mle[0].clone(),
-            dummy_binary_decomp_diffs_mle[0].clone(),
+            decision_node_paths_mle_vec[0].clone(), 
+            leaf_node_paths_mle_vec[0].clone(),
+            binary_decomp_diffs_mle_vec[0].clone(),
             0,
         );
         let now = Instant::now();
@@ -58,9 +58,9 @@ mod tests {
     fn test_path_mul_circuit_catboost() {
 
         let (BatchedCatboostMles {
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle, ..
+            decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
+            binary_decomp_diffs_mle_vec, ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         // let DummyMles::<Fr> {
@@ -73,9 +73,9 @@ mod tests {
         //let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
 
         let mut circuit = PathCheckCircuit::new(
-            dummy_decision_node_paths_mle[0].clone(), 
-            dummy_leaf_node_paths_mle[0].clone(),
-            dummy_binary_decomp_diffs_mle[0].clone(),
+            decision_node_paths_mle_vec[0].clone(), 
+            leaf_node_paths_mle_vec[0].clone(),
+            binary_decomp_diffs_mle_vec[0].clone(),
             0,
         );
         let now = Instant::now();
@@ -104,9 +104,9 @@ mod tests {
     fn test_path_circuit_catboost_batched() {
 
         let (BatchedCatboostMles {
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle, ..
+            decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
+            binary_decomp_diffs_mle_vec, ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         // let DummyMles::<Fr> {
@@ -119,9 +119,9 @@ mod tests {
         // let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
 
         let mut circuit = PathCheckCircuitBatched::new(
-            dummy_decision_node_paths_mle.clone(), 
-            dummy_leaf_node_paths_mle.clone(),
-            dummy_binary_decomp_diffs_mle.clone(),
+            decision_node_paths_mle_vec.clone(), 
+            leaf_node_paths_mle_vec.clone(),
+            binary_decomp_diffs_mle_vec.clone(),
         );
         let now = Instant::now();
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
@@ -148,9 +148,9 @@ mod tests {
     fn test_path_circuit_catboost_batched_mulgate() {
 
         let (BatchedCatboostMles {
-            dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_binary_decomp_diffs_mle, ..
+            decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
+            binary_decomp_diffs_mle_vec, ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
         // let DummyMles::<Fr> {
@@ -163,9 +163,9 @@ mod tests {
         // let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
 
         let mut circuit = PathCheckCircuitBatchedMul::new(
-            dummy_decision_node_paths_mle.clone(), 
-            dummy_leaf_node_paths_mle.clone(),
-            dummy_binary_decomp_diffs_mle.clone(),
+            decision_node_paths_mle_vec.clone(), 
+            leaf_node_paths_mle_vec.clone(),
+            binary_decomp_diffs_mle_vec.clone(),
         );
         let now = Instant::now();
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
