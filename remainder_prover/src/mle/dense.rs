@@ -11,7 +11,7 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
-use crate::layer::LayerId;
+use crate::{layer::{LayerId, batched::combine_mles}, zkdt::structs::combine_mle_refs};
 use crate::{expression::ExpressionStandard, layer::Claim};
 use remainder_shared_types::FieldExt;
 
@@ -227,6 +227,27 @@ impl<F: FieldExt> DenseMle<F, F> {
             prefix_bits
         )
     }
+
+    /// To combine a batch of `DenseMle<F, F>` into a single `DenseMle<F, F>` 
+    /// appropriately, such that the bit ordering is (batched_bits, (mle_ref_bits), iterated_bits)
+    /// 
+    /// TODO!(ende): refactor
+    pub fn combine_mle_batch(mle_batch: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
+
+        let batched_bits = log2(mle_batch.len());
+
+        let mle_batch_ref_combined = mle_batch
+            .clone()
+            .into_iter().map(
+                |x| {
+                    x.mle_ref()
+                }
+            ).collect_vec();
+
+        let mle_batch_ref_combined_ref =  combine_mles(mle_batch_ref_combined, batched_bits as usize);
+
+        DenseMle::new_from_raw(mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -338,6 +359,29 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
             layer_id: self.layer_id.clone(),
             indexed: false,
         }
+    }
+
+    /// To combine a batch of `DenseMle<F, Tuple2<F>>` into a single `DenseMle<F, F>` 
+    /// appropriately, such that the bit ordering is (batched_bits, mle_ref_bits, iterated_bits)
+    /// 
+    /// TODO!(ende): refactor
+    pub fn combine_mle_batch(tuple2_mle_batch: Vec<DenseMle<F, Tuple2<F>>>) -> DenseMle<F, F> {
+
+        let batched_bits = log2(tuple2_mle_batch.len());
+
+        let tuple2_mle_batch_ref_combined = tuple2_mle_batch
+            .clone()
+            .into_iter().map(
+                |x| {
+                    combine_mle_refs(
+                        vec![x.first(), x.second()]
+                    ).mle_ref()
+                }
+            ).collect_vec();
+
+        let tuple2_mle_batch_ref_combined_ref =  combine_mles(tuple2_mle_batch_ref_combined, batched_bits as usize);
+
+        DenseMle::new_from_raw(tuple2_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
     }
 }
 
