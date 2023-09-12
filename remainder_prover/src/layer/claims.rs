@@ -58,7 +58,7 @@ pub struct Claim<F> {
     result: F,
     /// The layer ID of the layer that produced this claim (if any);
     /// origin layer.
-    from_layer_id: Option<LayerId>,
+    pub from_layer_id: Option<LayerId>,
     /// The layer ID of the layer containing the MLE this claim refers
     /// to (if any); destination layer.
     to_layer_id: Option<LayerId>,
@@ -126,7 +126,7 @@ impl<F: Clone> Claim<F> {
 #[derive(Clone, Debug)]
 pub struct ClaimGroup<F> {
     /// A vector of claims in F^n.
-    claims: Vec<Claim<F>>,
+    pub claims: Vec<Claim<F>>,
     /// The common layer ID of all claims stored in this group.
     /// TODO(Makis): This is currently redundant information.
     layer_id: Option<LayerId>,
@@ -281,6 +281,12 @@ impl<F: Copy + Clone> ClaimGroup<F> {
     pub fn get_claim(&self, i: usize) -> &Claim<F> {
         &self.claims[i]
     }
+
+    /// Returns a reference to a vector of claims contained in this
+    /// group.
+    pub fn get_claim_vector(&self) -> &Vec<Claim<F>> {
+        &self.claims
+    }
 }
 
 /// Returns the challenge point when aggregating `claims` using
@@ -347,18 +353,17 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
             // have a lot of columns in common so aggregating them as
             // a group is probably more efficient.
             let claim_group = ClaimGroup::new(claims[start_index..end_index].to_vec()).unwrap();
-            resulting_claims.push(
-                aggregate_similar_claims(&claim_group, layer, r_star)
-                    .unwrap()
-                    .0,
-            );
+            resulting_claims.push(Claim::new_raw(
+                compute_aggregated_challenges(&claim_group, r_star).unwrap(),
+                F::zero(),
+            ));
 
             start_index = end_index;
         }
     }
 
     // Finally, aggregate all intermediate claims.
-    aggregate_claims(&resulting_claims, layer, r_star)
+    aggregate_similar_claims(&ClaimGroup::new(resulting_claims).unwrap(), layer, r_star)
 }
 
 /// Aggregates "similar" `claims` into a single claim using challenge
@@ -512,9 +517,21 @@ mod tests {
         layer_from_evals(mle_evals)
     }
 
-    /// Wraps around either the back-end or front-end claim
-    /// aggregation function.
-    fn claim_aggregation_wrapper(
+    /// Wraps around high-level claim aggregation with Layer ID
+    /// information.
+    fn claim_aggregation_front_end_wrapper(
+        layer: &impl Layer<Fr>,
+        claims: &ClaimGroup<Fr>,
+        r_star: Fr,
+    ) -> Claim<Fr> {
+        aggregate_claims(claims.get_claim_vector(), layer, r_star)
+            .unwrap()
+            .0
+    }
+
+    /// Wraps around low-level claim aggregation WITHOUT Layer ID
+    /// information.
+    fn claim_aggregation_back_end_wrapper(
         layer: &impl Layer<Fr>,
         claims: &ClaimGroup<Fr>,
         r_star: Fr,
@@ -572,7 +589,7 @@ mod tests {
         // Compare to l(10) computed by hand.
         assert_eq!(l_star, vec![Fr::from(7).neg(), Fr::from(43)]);
 
-        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
@@ -602,7 +619,7 @@ mod tests {
 
         // TODO: Assert l_star was computed correctly.
 
-        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         assert_eq!(aggregated_claim, expected_claim);
@@ -627,7 +644,7 @@ mod tests {
 
         let l_star = compute_l_star(&claims, &r_star);
 
-        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         assert_eq!(aggregated_claim, expected_claim);
@@ -682,7 +699,7 @@ mod tests {
 
         let claims: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
         let claim_group = ClaimGroup::new(claims).unwrap();
-        let res: Claim<Fr> = claim_aggregation_wrapper(&layer, &claim_group, rchal);
+        let res: Claim<Fr> = claim_aggregation_back_end_wrapper(&layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -747,7 +764,7 @@ mod tests {
 
         let claims_vec: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
         let claim_group = ClaimGroup::new(claims_vec).unwrap();
-        let res: Claim<Fr> = claim_aggregation_wrapper(&layer, &claim_group, rchal);
+        let res: Claim<Fr> = claim_aggregation_back_end_wrapper(&layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -812,7 +829,7 @@ mod tests {
 
         let claims_vec: Vec<Claim<Fr>> = vec![claim1, claim2, claim3];
         let claim_group = ClaimGroup::new(claims_vec).unwrap();
-        let res: Claim<Fr> = claim_aggregation_wrapper(&layer, &claim_group, rchal);
+        let res: Claim<Fr> = claim_aggregation_back_end_wrapper(&layer, &claim_group, rchal);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -860,7 +877,7 @@ mod tests {
         let wlx = compute_claim_wlx(&claims, &layer).unwrap();
         assert_eq!(wlx, vec![Fr::from(163), Fr::from(1015), Fr::from(2269)]);
 
-        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
@@ -899,11 +916,61 @@ mod tests {
         // Compare to l(10) computed by hand.
         assert_eq!(l_star, vec![Fr::from(11), Fr::from(3), Fr::from(5)]);
 
-        let aggregated_claim = claim_aggregation_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
         assert_eq!(expected_claim.get_result(), Fr::from(6203));
+
+        assert_eq!(aggregated_claim, expected_claim);
+    }
+
+    #[test]
+    fn test_aggro_claim_smart_merge1() {
+        // MLE on 3 variables (2^3 = 8 evals)
+        let mle_evals: Vec<Fr> = vec![1, 2, 42, 4, 5, 6, 7, 17]
+            .into_iter()
+            .map(Fr::from)
+            .collect();
+        let points = vec![
+            vec![Fr::from(1), Fr::from(2), Fr::from(3)],
+            vec![Fr::from(2), Fr::from(2), Fr::from(3)],
+            vec![Fr::from(4), Fr::from(5), Fr::from(6)],
+            vec![Fr::from(5), Fr::from(5), Fr::from(6)],
+        ];
+        let r_star = Fr::from(10);
+
+        // ---------------
+
+        let layer = layer_from_evals(mle_evals);
+        let mut claims = claims_from_expr_and_points(layer.expression(), &points);
+
+        // ---- FOR TESTING ONLY ----
+        claims.claims[0].from_layer_id = Some(LayerId::Layer(0));
+        claims.claims[1].from_layer_id = Some(LayerId::Layer(0));
+        claims.claims[2].from_layer_id = Some(LayerId::Layer(1));
+        claims.claims[3].from_layer_id = Some(LayerId::Layer(1));
+        // --------------------------
+
+        // W(l(0)), W(l(1)) computed by hand.
+        assert_eq!(claims.get_result(0), Fr::from(72));
+        assert_eq!(claims.get_result(1), Fr::from(283));
+        assert_eq!(claims.get_result(2), Fr::from(4044));
+        assert_eq!(claims.get_result(3), Fr::from(5290));
+
+        let l_star = compute_l_star(&claims, &r_star);
+
+        // Compare to l(10) computed by hand.
+        assert_eq!(l_star, vec![Fr::from(11), Fr::from(13), Fr::from(5)]);
+
+        let wlx = compute_claim_wlx(&claims, &layer).unwrap();
+        // assert_eq!(wlx, vec![Fr::from(163), Fr::from(1015), Fr::from(2269)]);
+
+        let aggregated_claim = claim_aggregation_front_end_wrapper(&layer, &claims, r_star.clone());
+        let expected_claim = compute_expected_claim(&layer, &l_star);
+
+        // Compare to W(l_star) computed by hand.
+        // assert_eq!(expected_claim.get_result(), Fr::from(26773));
 
         assert_eq!(aggregated_claim, expected_claim);
     }
