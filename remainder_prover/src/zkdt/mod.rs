@@ -17,3 +17,5 @@ pub mod test_circuits;
 pub mod attribute_consistency_circuit;
 pub mod permutation_circuit;
 pub mod multiset_circuit;
+/// Path consistency circuit component
+pub mod path_consistency_circuit;

@@ -14,12 +14,7 @@ pub mod ligero_input_layer;
 pub mod public_input_layer;
 pub mod random_input_layer;
 
-use crate::{
-    layer::{claims::ClaimError, Claim, LayerId},
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
-    sumcheck::evaluate_at_a_point,
-    utils::argsort,
-};
+use crate::{layer::{LayerId, Claim, claims::ClaimError}, mle::{Mle, dense::DenseMle, MleIndex, MleRef}, utils::argsort, sumcheck::evaluate_at_a_point};
 
 use self::enum_input_layer::InputLayerEnum;
 
@@ -62,6 +57,7 @@ pub trait InputLayer<F: FieldExt> {
     fn get_padded_mle(&self) -> DenseMle<F, F>;
 
     fn compute_claim_wlx(&self, claims: &[Claim<F>]) -> Result<Vec<F>, ClaimError> {
+
         let mut mle = self.get_padded_mle().clone().mle_ref();
         let num_claims = claims.len();
         let (claim_vecs, mut claimed_vals): (Vec<Vec<F>>, Vec<F>) =

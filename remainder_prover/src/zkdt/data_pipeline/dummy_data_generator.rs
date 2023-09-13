@@ -27,7 +27,7 @@ What's our plan here?
 // --- Constants ---
 pub const DUMMY_INPUT_LEN: usize = 1 << 6; // was 1 << 5
 pub const NUM_DUMMY_INPUTS: usize = 8;
-pub const TREE_HEIGHT: usize = 9; // was 9
+pub const TREE_HEIGHT: usize = 9; // was 9 // was 8
 const NUM_DECISION_NODES: u64 = 2_u64.pow(TREE_HEIGHT as u32 - 1) - 1;
 const NUM_LEAF_NODES: u64 = NUM_DECISION_NODES + 1;
 
@@ -462,7 +462,7 @@ pub struct BatchedDummyMles<F: FieldExt> {
     pub dummy_permuted_input_data_mle: Vec<DenseMle<F, InputAttribute<F>>>,
     pub dummy_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>>,
     pub dummy_leaf_node_paths_mle: Vec<DenseMle<F, LeafNode<F>>>,
-    pub dummy_binary_decomp_diffs_mle: DenseMle<F, BinDecomp16Bit<F>>,
+    pub dummy_binary_decomp_diffs_mle: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
     pub dummy_multiplicities_bin_decomp_mle: DenseMle<F, BinDecomp16Bit<F>>,
     pub dummy_decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
     pub dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
@@ -545,10 +545,10 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>() -> (BatchedCatboo
         .iter()
         .map(|dummy_binary_decomp_diff|
             DenseMle::new_from_iter(dummy_binary_decomp_diff
-            .clone()
-            .into_iter(),
-            LayerId::Input(0), None))
-        .collect();
+                .clone()
+                .into_iter()
+                .map(BinDecomp16Bit::from), LayerId::Input(0), None))
+        .collect_vec();
     let dummy_multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp_decision
         .clone()
         .into_iter()
@@ -618,10 +618,14 @@ pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
         .into_iter()
         .map(|path| DenseMle::new_from_iter([path].into_iter(), LayerId::Input(0), None))
         .collect();
-    let dummy_binary_decomp_diffs_mle = DenseMle::new_from_iter(dummy_binary_decomp_diffs[0]
-        .clone()
-        .into_iter()
-        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
+    let dummy_binary_decomp_diffs_mle = dummy_binary_decomp_diffs
+        .iter()
+        .map(|dummy_binary_decomp_diff|
+            DenseMle::new_from_iter(dummy_binary_decomp_diff
+                .clone()
+                .into_iter()
+                .map(BinDecomp16Bit::from), LayerId::Input(0), None))
+        .collect_vec();
     let dummy_multiplicities_bin_decomp_mle = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp
         .clone()
         .into_iter()

@@ -1,6 +1,7 @@
 //! Miscellaneous helper functions for `dt2zkdt`.
 use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode};
 use crate::zkdt::data_pipeline::trees::*;
+use remainder_ligero::utils::get_least_significant_bits_to_usize_little_endian;
 use remainder_shared_types::FieldExt;
 use std::iter::repeat;
 
@@ -144,6 +145,17 @@ fn append_leaf_nodes<F: FieldExt>(tree: &Node<i64>, leaf_nodes: &mut Vec<LeafNod
     }
 }
 
+pub fn get_field_val_as_usize_vec<F: FieldExt>(value: F) -> Vec<usize> {
+    let value_le_bytes = value.to_bytes_le().to_vec();
+    let first_result = get_least_significant_bits_to_usize_little_endian(value_le_bytes.clone(), 64);
+    let second_result = get_least_significant_bits_to_usize_little_endian(value_le_bytes[8..].to_vec(), 64);
+    let third_result = get_least_significant_bits_to_usize_little_endian(value_le_bytes[16..].to_vec(), 64);
+    let fourth_result = get_least_significant_bits_to_usize_little_endian(value_le_bytes[24..].to_vec(), 64);
+    return vec![first_result, second_result, third_result, fourth_result];
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,6 +173,14 @@ mod tests {
         let right = Node::new_leaf(None, 1.2);
         let internal = Node::new_internal(None, 0, 2, left, middle);
         Node::new_internal(None, 1, 1, internal, right)
+    }
+
+    #[test]
+    fn test_least_significant_bits_limbs() {
+        let hi = Fr::from(1).neg();
+        let fr_limbs = get_field_val_as_usize_vec(hi);
+        dbg!(fr_limbs);
+        // return vec![first_result, second_result, third_result, fourth_result];
     }
 
     #[test]

@@ -199,8 +199,8 @@ pub(crate) fn compute_sumcheck_message<
                 // --- over should just be values. The result is that if you plug in 0, you get ---
                 // --- the first value, and if you plug in 1 you get the second ---
                 std::cmp::Ordering::Equal => {
-                    let first = b?;
-                    let second: Evals<F> = a?;
+                    let first = a?;
+                    let second: Evals<F> = b?;
 
                     let (Evals(first_evals), Evals(second_evals)) = (first, second);
                     if (first_evals.len() == second_evals.len()) {
@@ -239,7 +239,7 @@ pub(crate) fn compute_sumcheck_message<
 
             // --- Just r * V[2i + 1] + (1 - r) * V[2i] ---
             // --- (I.e. the selector formulation after the selector bit is bound to `r` above) ---
-            Ok((a * coeff) + (b * coeff_neg))
+            Ok((b * coeff) + (a * coeff_neg))
         }
         _ => Err(ExpressionError::InvalidMleIndex),
     };
@@ -316,12 +316,6 @@ pub(crate) fn compute_sumcheck_message<
 /// # Errors:
 /// - MleError::EmptyMleList -- when there are zero MLEs within the list
 /// - TODO!(ryancao || vishady): MleError::NotIndexedError -- when ANY MLE is not fully indexed
-/// 
-/// 2(1-x)(1-b2) + 3(x)(1-b2) + 4(1-x)(b2) - 3(x)b2
-/// 3(1-x)       + 5(x)
-/// 6            + 15         + 12         - 15
-/// 
-/// 
 pub fn evaluate_mle_ref_product<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
@@ -336,22 +330,25 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
     if !beta_ref.indexed() {
         return Err(MleError::NotIndexedError);
     }
+    // dbg!(&mle_refs);
+    // dbg!(&beta_ref);
 
     // --- Gets the total number of iterated variables across all MLEs within this product ---
-    let mut max_num_vars = mle_refs
+    let max_num_vars = mle_refs
         .iter()
         .map(|mle_ref| mle_ref.num_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
-    max_num_vars = std::cmp::max(max_num_vars, beta_ref.num_vars());
+    let beta_max_num_vars = std::cmp::max(max_num_vars, beta_ref.num_vars());
+    //max_num_vars = std::cmp::max(max_num_vars, beta_ref.num_vars());
 
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
         let eval_count = degree + 1;
 
         //iterate across all pairs of evaluations
-        let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
+        let evals = cfg_into_iter!((0..1 << (beta_max_num_vars - 1))).fold(
             #[cfg(feature = "parallel")]
             || vec![F::zero(); eval_count],
             #[cfg(not(feature = "parallel"))]
@@ -360,7 +357,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                 // compute the beta successors the same way it's done for each mle. do it outside the loop
                 // because it only needs to be done once per product of mles
                 let zero = F::zero();
-                let idx = if beta_ref.num_vars() < max_num_vars {
+                let idx = if beta_ref.num_vars() < beta_max_num_vars {
                     let max = 1 << beta_ref.num_vars();
                     (index * 2) % max
                 } else {
@@ -385,7 +382,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                     .iter()
                     .map(|mle_ref| {
                         let zero = F::zero();
-                        let index = if mle_ref.num_vars() < max_num_vars {
+                        let index = if mle_ref.num_vars() < beta_max_num_vars {
                             let max = 1 << mle_ref.num_vars();
                             (index * 2) % max
                         } else {
@@ -435,13 +432,23 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
         // beta table still has an independent variable so we have a line
         let eval_count = 2;
 
-        let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
+        let range_var = {
+            if (beta_max_num_vars - 1) >= max_num_vars {
+                beta_max_num_vars - 1
+            }
+            // should never be the case
+            else {
+                max_num_vars
+            }
+        };
+
+        let partials = cfg_into_iter!((0..1 << (range_var))).fold(
             #[cfg(feature = "parallel")]
             || vec![F::zero(); eval_count],
             #[cfg(not(feature = "parallel"))]
             vec![F::zero(); eval_count],
             |mut acc, index| {
-                let beta_idx_0 = if beta_ref.num_vars() < max_num_vars {
+                let beta_idx_0 = if beta_ref.num_vars() < beta_max_num_vars {
                     let max = 1 << beta_ref.num_vars();
                     (index * 2) % max
                 } else {
@@ -467,7 +474,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                     .iter()
                     // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
-                        let index = if mle_ref.num_vars() < max_num_vars {
+                        let index = if mle_ref.num_vars() < beta_max_num_vars {
                             // max = 2^{num_vars}; index := index % 2^{num_vars}
                             let max = 1 << mle_ref.num_vars();
                             index % max
@@ -480,6 +487,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                     .fold(F::one(), |acc, eval| acc * eval);
 
                 let beta_evals = [beta_at_0, beta_at_1];
+                
                 // multiply the beta evals by the product of the resulting mles
                 acc.iter_mut()
                     .zip(beta_evals.iter())
@@ -489,6 +497,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
         );
 
         #[cfg(feature = "parallel")]
+        
         let partials = partials.reduce(
             || vec![F::zero(); eval_count],
             |mut acc, partial| {

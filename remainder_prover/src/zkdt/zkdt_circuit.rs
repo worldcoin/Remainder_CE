@@ -13,7 +13,7 @@ use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, laye
 use crate::{prover::{GKRCircuit, Layers, Witness}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, ConcatBuilder, FSRMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::{circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, circuits::BinaryRecompCircuitBatched}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}};
+use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, ConcatBuilder, FSRMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::{circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, circuits::BinaryRecompCircuitBatched}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul};
 use std::{marker::PhantomData, path::Path};
 
 
@@ -501,6 +501,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
             mut attribute_consistency_circuit,
             mut multiset_circuit,
             mut binary_recomp_circuit_batched,
+            mut path_consistency_circuit_batched,
 
             // --- Input layer ---
             input_layers,
@@ -512,7 +513,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
         let multiset_consistency_witness = multiset_circuit.yield_sub_circuit();
         let binary_recomp_circuit_batched_witness = binary_recomp_circuit_batched.yield_sub_circuit();
 
-        let (layers, output_layers) = combine_layers(
+        let (mut combined_circuit_layers, mut combined_circuit_output_layers) = combine_layers(
             vec![
                 permutation_witness.layers,
                 attribute_consistency_witness.layers,
@@ -528,10 +529,16 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
         )
         .unwrap();
 
+        // --- Manually add the layers and output layers from the circuit involving gate MLEs ---
+        let updated_combined_output_layers = path_consistency_circuit_batched.add_subcircuit_layers_to_combined_layers(
+            &mut combined_circuit_layers, 
+            combined_circuit_output_layers);
+        
+
         Ok((
             Witness {
-                layers,
-                output_layers,
+                layers: combined_circuit_layers,
+                output_layers: updated_combined_output_layers,
                 input_layers,
             },
             inpunt_layers_commits,
@@ -545,6 +552,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
             AttributeConsistencySubCircuit<F>,
             MultiSetSubCircuit<F>,
             BinaryRecompCircuitBatched<F>,
+            PathCheckCircuitBatchedMul<F>,
             Vec<InputLayerEnum<F, PoseidonTranscript<F>>>, // input layers, including random layers
             Vec<CommitmentEnum<F>> // input layers' commitments
         ), GKRError> {
@@ -657,7 +665,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_node_paths_mle_vec: decision_node_paths_mle_vec.clone(),
-            leaf_node_paths_mle_vec,
+            leaf_node_paths_mle_vec: leaf_node_paths_mle_vec.clone(),
             r_mle: r_mle.clone(),
             r_mle_another,
             r_packing_mle: r_packing_mle.clone(),
@@ -665,9 +673,15 @@ impl <F: FieldExt> CombinedCircuits<F> {
         };
 
         let binary_recomp_circuit_batched = BinaryRecompCircuitBatched::new(
+            decision_node_paths_mle_vec.clone(),
+            permuted_input_data_mle_vec.clone(),
+            binary_decomp_diffs_mle_vec.clone(),
+        );
+
+        let path_consistency_circuit_batched = PathCheckCircuitBatchedMul::new(
             decision_node_paths_mle_vec,
-            permuted_input_data_mle_vec,
-            binary_decomp_diffs_mle_vec,
+            leaf_node_paths_mle_vec,
+            binary_decomp_diffs_mle_vec
         );
 
         Ok((
@@ -675,7 +689,8 @@ impl <F: FieldExt> CombinedCircuits<F> {
             permutation_circuit, 
             attribute_consistency_circuit, 
             multiset_circuit, 
-            binary_recomp_circuit_batched, 
+            binary_recomp_circuit_batched,
+            path_consistency_circuit_batched,
 
             // --- Input layers ---
             vec![
@@ -725,11 +740,11 @@ mod tests {
     use itertools::Itertools;
     use rand::Rng;
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, structs::{InputAttribute, DecisionNode, LeafNode}, binary_recomp_circuit::circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}}, prover::{GKRCircuit, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer}}, mle::{dense::DenseMle, MleRef, Mle}, layer::LayerId};
-    use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
+    use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
+    
     use crate::prover::tests::test_circuit;
 
-    use super::{CombinedCircuits, PermutationSubCircuit, AttributeConsistencySubCircuit};
+    use super::CombinedCircuits;
 
     #[test]
     fn test_combine_circuits() {

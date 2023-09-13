@@ -10,9 +10,9 @@ use std::marker::PhantomData;
 
 use itertools::{repeat_n, Itertools};
 use ark_std::cfg_into_iter;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use thiserror::Error;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
@@ -23,12 +23,15 @@ use crate::{
     prover::SumcheckProof,
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
-    },
+    
+    }, zkdt::helpers::get_field_val_as_usize_vec,
 };
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
     FieldExt,
 };
+
+
 
 use self::{claims::ClaimError, layer_enum::LayerEnum};
 
@@ -192,6 +195,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         // --- Grabs the expression/beta table and updates them with the new challenge ---
         let (expression, beta) = self.mut_expression_and_beta();
         let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
+        //dbg!(&expression);
         expression.fix_variable(round_index - 1, challenge);
         beta.beta_update(round_index - 1, challenge)
             .map_err(LayerError::BetaError)?;
@@ -253,8 +257,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
 
-        debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
+        if val != first_sumcheck_message[0] + first_sumcheck_message[1] {
+            dbg!(&self.expression);
+        }
         
+        debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
 
         // --- Add prover message to the FS transcript ---
         transcript
@@ -627,11 +634,14 @@ pub fn from_mle<
     }
 }
 
+
+
 pub enum Padding {
     Right(usize),
     Left(usize),
     None
 }
+
 /// The layerbuilder that represents two layers concatonated together
 pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
     first: A,
@@ -694,7 +704,6 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
                         .clone()
                         .into_iter()
                         .flatten()
-                        // .chain(std::iter::once(MleIndex::Fixed(true)))
                         .chain(first_padding)
                         .chain(std::iter::once(MleIndex::Fixed(true)))
                         .collect(),
@@ -706,7 +715,6 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
                     prefix_bits
                         .into_iter()
                         .flatten()
-                        // .chain(std::iter::once(MleIndex::Fixed(false)))
                         .chain(second_padding)
                         .chain(std::iter::once(MleIndex::Fixed(false)))
                         .collect(),

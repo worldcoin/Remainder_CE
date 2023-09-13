@@ -237,7 +237,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 
     ///Concatenates two expressions together
     fn concat_expr(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
-        ExpressionStandard::Selector(MleIndex::Iterated, Box::new(self), Box::new(lhs))
+        ExpressionStandard::Selector(MleIndex::Iterated, Box::new(lhs), Box::new(self))
     }
 
     fn fix_variable(&mut self, round_index: usize, challenge: F) {
@@ -378,7 +378,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                                     sum,
                                     product,
                                     scaled,
-                                    &beta_mle_second,
+                                    &beta_mle_first,
                                     round_index,
                                 ),
                                 b.evaluate_sumcheck(
@@ -389,7 +389,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
                                     sum,
                                     product,
                                     scaled,
-                                    &beta_mle_first,
+                                    &beta_mle_second,
                                     round_index,
                                 ),
                             )
@@ -522,7 +522,7 @@ pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
         |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
             // --- Selector bit must be bound ---
             if let MleIndex::Bound(val, _) = idx {
-                return Ok(*val * lhs? + (F::one() - val) * rhs?);
+                return Ok(*val * rhs? + (F::one() - val) * lhs?);
             }
             Err(ExpressionError::SelectorBitNotBoundError)
         };

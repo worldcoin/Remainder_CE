@@ -67,11 +67,13 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
     fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptError> {
         let output = self.sponge.squeeze();
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
-        // dbg!(&output);
+
+        self.counter += 1;
+
+        // Ok(F::from((self.counter % 2 + 1) as u64))
         Ok(output)
-        // self.counter = self.counter*2 + 11;
-        // // dbg!(self.counter);
-        // Ok(F::from(self.counter as u64))
+        // Ok(F::one() + F::one())
+
         // Ok(F::from(10))
     }
 
@@ -84,8 +86,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
         Ok(output)
 
-        // let output = (0..len).map(|idx| F::from(idx as u64)).collect_vec();
-        // Ok(output)
+        // Ok(repeat_with(|| F::one() + F::one()).take(len).collect_vec())
     }
 }
 

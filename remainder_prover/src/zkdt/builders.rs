@@ -1,7 +1,8 @@
 //!The LayerBuilders that build the ZKDT Circuit
 use std::cmp::max;
 
-use ark_std::log2;
+use ark_crypto_primitives::crh::sha256::digest::typenum::Zero;
+use ark_std::{log2, cfg_into_iter};
 use itertools::Itertools;
 
 use crate::expression::{ExpressionStandard, Expression};
@@ -240,13 +241,36 @@ impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
                                      Box::new(ExpressionStandard::Mle(self.mle_2.mle_ref())))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let mut concat_mle_vec: Vec<F> = self.mle_1
-            .clone()
-            .into_iter()
-            .collect();
+        let max_num_var = std::cmp::max(self.mle_1.num_iterated_vars(), self.mle_2.num_iterated_vars());
+        let interleave_size = 1 << (max_num_var + 1);
+        let range_size = 1 << max_num_var;
+        let mut interleaved_mle_vec = vec![F::zero(); interleave_size];
+        let zero = &F::zero();
+        let first_mle_ref = self.mle_1.mle_ref();
+        let second_mle_ref = self.mle_2.mle_ref();
 
-        concat_mle_vec.extend(self.mle_2.clone().into_iter());
-        DenseMle::new_from_raw(concat_mle_vec, id, prefix_bits)
+        (0..range_size).into_iter().for_each(
+            |idx| {
+                let mle_1_idx = 1 << self.mle_1.num_iterated_vars();
+                let mle_2_idx = 1 << self.mle_2.num_iterated_vars();
+
+                let index_1 = {
+                    if idx >= mle_1_idx { idx % mle_1_idx } else { idx }
+                };
+
+                let index_2 = {
+                    if idx >= mle_2_idx { idx % mle_2_idx } else { idx }
+                };
+
+                let first_mle_val = first_mle_ref.bookkeeping_table.get(index_1).unwrap_or(zero);
+                let second_mle_val = second_mle_ref.bookkeeping_table.get(index_2).unwrap_or(zero);
+                interleaved_mle_vec[idx*2] = *first_mle_val;
+                interleaved_mle_vec[idx*2 + 1] = *second_mle_val;
+
+            }
+        );
+
+        DenseMle::new_from_raw(interleaved_mle_vec, id, prefix_bits)
     }
 }
 
@@ -768,6 +792,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
         ZeroMleRef::new(self.mle.num_iterated_vars() + 4, prefix_bits, id)
     }
 }
+
 
 #[cfg(test)]
 mod tests {
