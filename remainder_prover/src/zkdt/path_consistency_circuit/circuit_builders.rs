@@ -11,7 +11,7 @@ impl<F: FieldExt> LayerBuilder<F> for SignBit<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let exp = ExpressionStandard::Mle(self.bit_decomp_diff_mle.mle_bit_refs()[15].clone());
+        let exp = self.bit_decomp_diff_mle.mle_bit_refs()[15].clone().expression();
         exp
     }
 
