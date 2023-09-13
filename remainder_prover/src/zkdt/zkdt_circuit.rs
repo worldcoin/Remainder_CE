@@ -482,7 +482,7 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
 
 
 pub struct CombinedCircuits<F: FieldExt> {
-    batched_catboost_mles: BatchedCatboostMles<F>
+    pub batched_catboost_mles: BatchedCatboostMles<F>
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
