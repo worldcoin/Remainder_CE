@@ -93,15 +93,18 @@ pub struct CircuitizedTrees<F: FieldExt> {
 /// Represents the circuitization of a batch of samples with respect to a TreesModel.
 /// Bit decompositions are little endian.
 /// `differences` is a signed decomposition, with the sign bit at the end.
-/// Each vector in `multiplicities` has length `2.pow(trees_model.depth)`.
+/// Each vector in `node_multiplicities` has length `2.pow(trees_model.depth)`.
 pub struct CircuitizedSamples<F: FieldExt> {
     samples: Vec<Vec<InputAttribute<F>>>,                        // indexed by samples
-    permuted_samples: Vec<Vec<Vec<InputAttribute<F>>>>,          // indexed by trees, samples
+    permuted_samples: Vec<Vec<Vec<InputAttribute<F>>>>,          // indexed by trees, samples FIXME
+                                                                 // not a permutation anymore
     decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
+    attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,          // indexed by samples, then by attribute index
     differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,  // indexed by trees, samples, steps in path
     path_ends: Vec<Vec<LeafNode<F>>>,               // indexed by trees, samples
-    multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,    // indexed by trees, tree nodes
+    node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,    // indexed by trees, tree nodes
 }
+// TODO BinDecomp4Bit
 
 /// Output of [`to_samples`], input to [`circuitize_samples`].
 pub struct Samples {
