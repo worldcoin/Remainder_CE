@@ -17,3 +17,4 @@ pub mod test_circuits;
 pub mod attribute_consistency_circuit;
 pub mod permutation_circuit;
 pub mod multiset_circuit;
+pub mod input_multiset_circuit;
