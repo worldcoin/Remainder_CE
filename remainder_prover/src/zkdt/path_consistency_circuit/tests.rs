@@ -15,7 +15,7 @@ mod tests {
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec, ..
-        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         // let DummyMles::<Fr> {
         //     dummy_decision_node_paths_mle,
@@ -61,7 +61,7 @@ mod tests {
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec, ..
-        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         // let DummyMles::<Fr> {
         //     dummy_decision_node_paths_mle,
@@ -107,7 +107,7 @@ mod tests {
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec, ..
-        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         // let DummyMles::<Fr> {
         //     dummy_decision_node_paths_mle,
@@ -151,7 +151,7 @@ mod tests {
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec, ..
-        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         // let DummyMles::<Fr> {
         //     dummy_decision_node_paths_mle,

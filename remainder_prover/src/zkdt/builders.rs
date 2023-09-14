@@ -1436,7 +1436,7 @@ mod tests {
         let (BatchedCatboostMles {
             permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
@@ -1465,7 +1465,7 @@ mod tests {
         let (BatchedCatboostMles {
             input_data_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
@@ -1530,7 +1530,7 @@ mod tests {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let num_dummy_inputs = decision_node_paths_mle_vec.len();
 

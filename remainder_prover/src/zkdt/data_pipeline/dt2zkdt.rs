@@ -47,6 +47,8 @@
 extern crate serde;
 extern crate serde_json;
 
+use crate::utils::file_exists;
+use crate::zkdt::constants::get_cached_batched_mles_filename_with_exp_size;
 use crate::zkdt::helpers::*;
 use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, InputAttribute, LeafNode};
 use crate::zkdt::data_pipeline::trees::*;
@@ -55,7 +57,8 @@ use ndarray::Array2;
 use ndarray_npy::read_npy;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
+use serde_json::to_writer;
+use std::fs::{File, self};
 
 use super::dummy_data_generator::{BatchedDummyMles, ZKDTCircuitData};
 
@@ -358,6 +361,7 @@ pub fn generate_raw_trees_model(
 /// Output of load_raw_samples, for conversion (using a TreesModel) to a Samples instance.
 /// Values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
 /// [`build_signed_bit_decomposition`]).
+#[derive(Clone)]
 pub struct RawSamples {
     values: Vec<Vec<u16>>,
     sample_length: usize
@@ -403,12 +407,27 @@ pub fn load_raw_trees_model(filename: &str) -> RawTreesModel {
     raw_trees_model
 }
 
-/// currently gives all the batched data associated with the 0th tree
-pub fn load_upshot_data_single_tree_batch<F: FieldExt>() -> (ZKDTCircuitData<F>, (usize, usize)) {
+/// Gives all batched data associated with the first `num_trees_if_multiple` trees.
+/// 
+/// ## Arguments
+/// * `input_batch_size` - The number of tree inputs to return. Must be a power of two!
+/// * `num_trees_if_multiple` - Currently unused!!!
+/// 
+/// ## Notes
+/// Note that `raw_samples.values.len()` is currently 4573! This means we can go
+/// up to 4096 in terms of batch sizes which are powers of 2
+pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
+    input_batch_size: Option<usize>,
+    num_trees_if_multiple: Option<usize>
+) -> (ZKDTCircuitData<F>, (usize, usize)) {
+
+    // --- TODO!(ryancao): We need to test our stuff with a non-power-of-two `input_batch_size` ---
+    let true_input_batch_size = input_batch_size.unwrap_or(2);
+    assert!(true_input_batch_size.is_power_of_two());
+
     let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
     let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
-    // use just a small batch
-    raw_samples.values = raw_samples.values[0..2].to_vec();
+    raw_samples.values = raw_samples.values[0..true_input_batch_size].to_vec();
 
     let trees_model: TreesModel = (&raw_trees_model).into();
     let samples: Samples = to_samples(&raw_samples, &trees_model);
@@ -429,6 +448,64 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>() -> (ZKDTCircuitData<F>,
         ctrees.decision_nodes[0].clone(),
         ctrees.leaf_nodes[0].clone(),
     ), (tree_height, input_len))
+}
+
+/// Generates all batched data of size 2^1, ..., 2^{12} and caches for testing
+/// purposes
+/// 
+/// ## Arguments
+/// * `num_trees_if_multiple` - Currently unused!!!
+/// 
+/// ## Notes
+/// Note that `raw_samples.values.len()` is currently 4573! This means we can go
+/// up to 4096 in terms of batch sizes which are powers of 2
+pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
+    num_trees_if_multiple: Option<usize>
+) {
+
+    println!("Generating Upshot data (to be cached) for all batch sizes (2^1, ..., 2^{{12}})...\n");
+    let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
+    let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+    let orig_raw_samples = raw_samples.clone();
+    let trees_model: TreesModel = (&raw_trees_model).into();
+    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
+
+    // --- We create batches of size 2^1, ..., 2^{12} ---
+    (1..12).for_each(|batch_size_exp| {
+
+        let cached_filepath = get_cached_batched_mles_filename_with_exp_size(batch_size_exp);
+        if file_exists(&cached_filepath) {
+            return;
+        }
+
+        let generation_str = format!("Generating for batch size (exp) {}...", batch_size_exp);
+        println!("{}", generation_str);
+
+        let true_input_batch_size = 2_usize.pow(batch_size_exp as u32);
+        raw_samples.values = orig_raw_samples.values[0..true_input_batch_size].to_vec();
+
+        let samples: Samples = to_samples(&raw_samples, &trees_model);
+    
+        let csamples = circuitize_samples::<F>(&samples, &trees_model);
+    
+        let tree_height = ctrees.depth;
+        let input_len = csamples.samples[0].len();
+    
+        let combined_zkdt_circuit_data = (ZKDTCircuitData::new(
+            csamples.samples,
+            csamples.permuted_samples[0].clone(),
+            csamples.decision_paths[0].clone(),
+            csamples.path_ends[0].clone(),
+            csamples.differences[0].clone(),
+            csamples.multiplicities[0].clone(),
+            ctrees.decision_nodes[0].clone(),
+            ctrees.leaf_nodes[0].clone(),
+        ), (tree_height, input_len));
+
+        // --- Write to file ---
+        let mut f = fs::File::create(cached_filepath).unwrap();
+        to_writer(&mut f, &combined_zkdt_circuit_data).unwrap();
+    });
 }
 
 #[cfg(test)]

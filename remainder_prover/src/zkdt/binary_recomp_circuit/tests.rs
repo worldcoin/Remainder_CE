@@ -109,7 +109,7 @@ mod tests {
             binary_decomp_diffs_mle_vec,
             decision_node_paths_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let mut circuit = BinaryRecompCircuit::<Fr>::new(
             decision_node_paths_mle_vec[0].clone(),
@@ -153,7 +153,7 @@ mod tests {
             binary_decomp_diffs_mle_vec,
             decision_node_paths_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(2);
 
         let mut circuit = BinaryRecompCircuitBatched::new(
             decision_node_paths_mle_vec,

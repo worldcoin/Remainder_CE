@@ -13,7 +13,7 @@ use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, laye
 use crate::{prover::{GKRCircuit, Layers, Witness}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, ConcatBuilder, FSRMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::{circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, circuits::BinaryRecompCircuitBatched}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul};
+use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, ConcatBuilder, FSRMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::{circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, dt2zkdt::load_upshot_data_single_tree_batch}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul};
 use std::{marker::PhantomData, path::Path};
 
 
@@ -718,8 +718,11 @@ pub struct ZKDTCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> ZKDTCircuit<F> {
-    pub fn new(directory: &Path) -> Self {
-        todo!()
+    pub fn new(batch_size: usize) -> Self {
+        let batched_catboost_data = load_upshot_data_single_tree_batch::<F>(Some(batch_size), None);
+        Self {
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -749,7 +752,7 @@ mod tests {
     #[test]
     fn test_combine_circuits() {
 
-        let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let combined_circuit = CombinedCircuits {
             batched_catboost_mles
