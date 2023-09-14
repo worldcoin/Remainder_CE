@@ -607,7 +607,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
             binary_decomp_diffs_mle.add_prefix_bits(combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits())
         }
 
-        let input_layer: PublicInputLayer<F, PoseidonTranscript<F>> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = input_layer.to_input_layer();
         let mut input_layer = input_layer.to_enum();
 
         let input_commit = input_layer
