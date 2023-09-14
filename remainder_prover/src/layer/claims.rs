@@ -1,9 +1,8 @@
 //!Utilities involving the claims a layer makes
 
 use ark_crypto_primitives::crh::sha256::digest::typenum::Or;
-use halo2_base::halo2_proofs::transcript::Transcript;
 use itertools::Either;
-use remainder_shared_types::transcript;
+use remainder_shared_types::transcript::{self};
 use remainder_shared_types::FieldExt;
 
 use crate::prover::input_layer::enum_input_layer::InputLayerEnum;
@@ -21,6 +20,8 @@ use crate::layer::LayerId;
 use serde::{Deserialize, Serialize};
 
 use core::cmp::Ordering;
+
+use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims
@@ -350,116 +351,118 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
     Ok(wlx)
 }
 
+fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
+    let num_claims = claims.len();
+    let mut claim_group_vec: Vec<ClaimGroup<F>> = vec![];
+
+    let mut start_index = 0;
+    for idx in (1..num_claims) {
+        if claims[idx].get_from_layer_id() != claims[idx - 1].get_from_layer_id() {
+            let end_index = idx;
+            claim_group_vec.push(ClaimGroup::new(claims[start_index..end_index].to_vec()).unwrap());
+            start_index = idx;
+        }
+    }
+
+    // Process the last group.
+    let end_index = num_claims;
+    claim_group_vec.push(ClaimGroup::new(claims[start_index..end_index].to_vec()).unwrap());
+
+    claim_group_vec
+}
+
 pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: impl Fn(&ClaimGroup<F>) -> Vec<F>,
+    compute_wlx_fn: &impl Fn(&ClaimGroup<F>) -> Vec<F>,
+    transcript: &mut impl transcript::Transcript<F>,
+    enable_optimization: bool,
+) -> (Claim<F>, Option<Vec<F>>) {
+    let num_claims = claims.get_num_claims();
+    debug_assert!(num_claims > 0);
+
+    // Do nothing if there is only one claim.
+    if num_claims == 1 {
+        return (claims.get_claim(0).clone(), None);
+    }
+
+    if enable_optimization {
+        let mut claims = claims.get_claim_vector().clone();
+
+        // Sort claims by `from_layer_id` field.
+        // A trivial total order is imposed to include `None` values which
+        // should never appear if all bookkeeping has been done correctly.
+        claims.sort_by(|claim1, claim2| {
+            match (claim1.get_from_layer_id(), claim2.get_from_layer_id()) {
+                (Some(id1), Some(id2)) => id1.cmp(&id2),
+                (None, Some(_)) => Ordering::Less,
+                (Some(_), None) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            }
+        });
+
+        // Remove mutability of claims.
+        let claims = claims;
+
+        // Intermediate results container.
+        let mut intermediate_claims: Vec<Claim<F>> = vec![];
+
+        let claim_groups = form_claim_groups(&claims);
+
+        let intermediate_claims: Vec<Claim<F>> = claim_groups
+            .into_iter()
+            .map(|claim_group| {
+                aggregate_claims_in_one_round(&claim_group, compute_wlx_fn, transcript).0
+            })
+            .collect();
+
+        // Finally, aggregate all intermediate claims.
+        aggregate_claims_in_one_round(
+            &ClaimGroup::new(intermediate_claims).unwrap(),
+            compute_wlx_fn,
+            transcript,
+        )
+    } else {
+        aggregate_claims_in_one_round(claims, compute_wlx_fn, transcript)
+    }
+}
+
+pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
+    claims: &ClaimGroup<F>,
+    compute_wlx_fn: &impl Fn(&ClaimGroup<F>) -> Vec<F>,
     transcript: &mut impl transcript::Transcript<F>,
 ) -> (Claim<F>, Option<Vec<F>>) {
     let num_claims = claims.get_num_claims();
+    debug_assert!(num_claims > 0);
 
-    // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
-    // --- claim aggregation protocol. We ONLY aggregate if need be! ---
-    if num_claims > 1 {
-        // --- Aggregate claims by performing the claim aggregation protocol.
-        // --- First compute V_i(l(x)) ---
-        let wlx_evaluations = compute_wlx_fn(claims);
-        let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
+    // Do nothing if there is only one claim.
+    if num_claims == 1 {
+        return (claims.get_claim(0).clone(), None);
+    }
 
-        transcript
-            .append_field_elements(
-                "Claim Aggregation Wlx_evaluations",
-                &relevant_wlx_evaluations,
-            )
-            .unwrap();
+    // --- Aggregate claims by performing the claim aggregation protocol.
+    // --- First compute V_i(l(x)) ---
+    let wlx_evaluations = compute_wlx_fn(claims);
+    let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
-        // --- Next, sample r^\star from the transcript ---
-        let agg_chal = transcript
-            .get_challenge("Challenge for claim aggregation")
-            .unwrap();
-
-        let aggregated_challenges = compute_aggregated_challenges(claims, agg_chal).unwrap();
-        let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
-
-        (
-            Claim::new_raw(aggregated_challenges, claimed_val),
-            Some(relevant_wlx_evaluations),
+    transcript
+        .append_field_elements(
+            "Claim Aggregation Wlx_evaluations",
+            &relevant_wlx_evaluations,
         )
-    } else {
-        println!("Found only one claim here: {:#?}", claims.get_claim(0));
+        .unwrap();
 
-        (claims.get_claim(0).clone(), None)
-    }
-}
+    // --- Next, sample r^\star from the transcript ---
+    let agg_chal = transcript
+        .get_challenge("Challenge for claim aggregation")
+        .unwrap();
 
-/// Aggregates all `claims` in a `layer` to a single claim using
-/// challenge `r_star`.
-/// This is a front-end function for claim aggregation. Layer
-/// source/destination information can improve performance when present.
-pub(crate) fn aggregate_claims_TEMP<F: FieldExt>(
-    claims: &[Claim<F>],
-    layer: &impl Layer<F>,
-    r_star: F,
-) -> Result<(Claim<F>, Vec<F>), ClaimError> {
-    // Maintain a local copy of claims for sorting.
-    let mut claims: Vec<Claim<F>> = claims.clone().to_vec();
+    let aggregated_challenges = compute_aggregated_challenges(claims, agg_chal).unwrap();
+    let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
 
-    // Sort claims by `from_layer_id` field.
-    claims.sort_by(|claim1, claim2| {
-        match (claim1.get_from_layer_id(), claim2.get_from_layer_id()) {
-            (Some(id1), Some(id2)) => id1.cmp(&id2),
-            (None, Some(_)) => Ordering::Less,
-            (Some(_), None) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        }
-    });
-
-    // Remove mutability of claims.
-    let claims = claims;
-
-    // Intermediate results container.
-    let mut resulting_claims: Vec<Claim<F>> = vec![];
-
-    // Merge sequences of claims with the same source layer ID.
-    let mut start_index = 0;
-    for (idx, claim) in (&claims).into_iter().skip(1).enumerate() {
-        if claim.get_from_layer_id() != claims[idx - 1].get_from_layer_id() {
-            let end_index = idx;
-
-            // All claims in the range (start_index..end_index) have
-            // the same `from_layer_id` and therefore are expected to
-            // have a lot of columns in common so aggregating them as
-            // a group is probably more efficient.
-            let claim_group = ClaimGroup::new(claims[start_index..end_index].to_vec()).unwrap();
-            resulting_claims.push(Claim::new_raw(
-                compute_aggregated_challenges(&claim_group, r_star).unwrap(),
-                F::zero(),
-            ));
-
-            start_index = end_index;
-        }
-    }
-
-    // Finally, aggregate all intermediate claims.
-    aggregate_similar_claims(&ClaimGroup::new(resulting_claims).unwrap(), layer, r_star)
-}
-
-/// Aggregates "similar" `claims` into a single claim using challenge
-/// `r_star`. Similarity in this context means that there is a
-/// significant number of coordinates on which all claim points agree
-/// on. Returns the aggregated claim and the wlx evaluations.
-/// WARNING: Claim aggregation is performed in a single step. This is
-/// a back-end function which ignores any claim source/destination
-/// information. Use ??? instead for merging all claims in a layer!
-pub(crate) fn aggregate_similar_claims<F: FieldExt>(
-    claims: &ClaimGroup<F>,
-    layer: &impl Layer<F>,
-    r_star: F,
-) -> Result<(Claim<F>, Vec<F>), ClaimError> {
-    let r = compute_aggregated_challenges(claims, r_star)?;
-    let wlx = compute_claim_wlx(claims, layer)?;
-    // TODO(Makis): Propagate error here.
-    let q_star = evaluate_at_a_point(&wlx, r_star).unwrap();
-    return Ok((Claim::new_raw(r, q_star), wlx));
+    (
+        Claim::new_raw(aggregated_challenges, claimed_val),
+        Some(relevant_wlx_evaluations),
+    )
 }
 
 /// Aggregates `claims` into a single claim on challenge point
@@ -493,13 +496,16 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 }
 
 #[cfg(test)]
-mod tests {
+// Makis: Making this public so that I can access some of the helper functions
+// from "sumcheck/tests.rs".
+pub(crate) mod tests {
 
     use crate::expression::{Expression, ExpressionStandard};
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
     use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
+    use remainder_shared_types::transcript::Transcript;
 
     use super::*;
     use ark_std::test_rng;
@@ -567,18 +573,6 @@ mod tests {
         layer_from_evals(mle_evals)
     }
 
-    /// Wraps around high-level claim aggregation with Layer ID
-    /// information.
-    fn claim_aggregation_front_end_wrapper(
-        layer: &impl Layer<Fr>,
-        claims: &ClaimGroup<Fr>,
-        r_star: Fr,
-    ) -> Claim<Fr> {
-        aggregate_claims_TEMP(claims.get_claim_vector(), layer, r_star)
-            .unwrap()
-            .0
-    }
-
     /// Wraps around low-level claim aggregation WITHOUT Layer ID
     /// information.
     fn claim_aggregation_back_end_wrapper(
@@ -603,6 +597,22 @@ mod tests {
                 evaluate_at_a_point(evals, r_star.clone()).unwrap()
             })
             .collect()
+    }
+
+    /// Wraps around high-level claim aggregation with Layer ID
+    /// information.
+    pub(crate) fn claim_aggregation_testing_wrapper(
+        layer: &impl Layer<Fr>,
+        claims: &ClaimGroup<Fr>,
+        r_star: Fr,
+    ) -> (Claim<Fr>, Option<Vec<Fr>>) {
+        let mut transcript = PoseidonTranscript::<Fr>::new("Dummy transcript for testing");
+        aggregate_claims(
+            claims,
+            &|claim| compute_claim_wlx(claims, layer).unwrap(),
+            &mut transcript,
+            true,
+        )
     }
 
     // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
@@ -1016,13 +1026,13 @@ mod tests {
         let wlx = compute_claim_wlx(&claims, &layer).unwrap();
         // assert_eq!(wlx, vec![Fr::from(163), Fr::from(1015), Fr::from(2269)]);
 
-        let aggregated_claim = claim_aggregation_front_end_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_testing_wrapper(&layer, &claims, r_star.clone());
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
         // assert_eq!(expected_claim.get_result(), Fr::from(26773));
 
-        assert_eq!(aggregated_claim, expected_claim);
+        assert_eq!(aggregated_claim.0, expected_claim);
     }
 
     #[test]
@@ -1061,9 +1071,9 @@ mod tests {
         let rchal = Fr::from(2).neg();
 
         let claim_group = ClaimGroup::new(claims).unwrap();
-        let (res, wlx) = aggregate_similar_claims(&claim_group, &layer, rchal).unwrap();
+        let (res, wlx) = claim_aggregation_testing_wrapper(&layer, &claim_group, rchal);
         let rounds = expr.index_mle_indices(0);
-        let verify_result = verify_aggregate_claim(&wlx, &claim_group, rchal).unwrap();
+        let verify_result = verify_aggregate_claim(&wlx.unwrap(), &claim_group, rchal).unwrap();
 
         // Makis; This test isn't verifying anything apart form the
         // fact that no errors are produced :/

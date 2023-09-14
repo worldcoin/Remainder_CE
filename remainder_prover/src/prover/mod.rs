@@ -196,6 +196,9 @@ pub struct Witness<F: FieldExt, Tr: Transcript<F>> {
     pub input_layers: Vec<InputLayerEnum<F, Tr>>,
 }
 
+/// Controls claim aggregation behavior.
+const ENABLE_OPTIMIZATION: bool = true;
+
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
     /// The transcript this circuit uses
@@ -305,12 +308,11 @@ pub trait GKRCircuit<F: FieldExt> {
                         .unwrap();
                 }
 
-                const OPTIMIZATION_ENABLED: bool = false;
-
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
-                    |claims| compute_claim_wlx(claims, &layer).unwrap(),
+                    &|claims| compute_claim_wlx(claims, &layer).unwrap(),
                     transcript,
+                    ENABLE_OPTIMIZATION,
                 );
 
                 // --- Compute all sumcheck messages across this particular layer ---
@@ -373,8 +375,9 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
-                    |claims| input_layer.compute_claim_wlx(claims).unwrap(),
+                    &|claims| input_layer.compute_claim_wlx(claims).unwrap(),
                     transcript,
+                    ENABLE_OPTIMIZATION,
                 );
 
                 let opening_proof = input_layer
