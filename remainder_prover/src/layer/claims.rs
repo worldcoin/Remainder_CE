@@ -1,6 +1,8 @@
 //!Utilities involving the claims a layer makes
 
 use ark_crypto_primitives::crh::sha256::digest::typenum::Or;
+use halo2_base::halo2_proofs::transcript::Transcript;
+use remainder_shared_types::transcript;
 use remainder_shared_types::FieldExt;
 
 use crate::sumcheck::*;
@@ -345,11 +347,51 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
     Ok(wlx)
 }
 
+pub(crate) fn aggregate_claims<F: FieldExt>(
+    claims: &ClaimGroup<F>,
+    layer: &impl Layer<F>,
+    transcript: &mut impl transcript::Transcript<F>,
+) -> (Claim<F>, Option<Vec<F>>) {
+    let num_claims = claims.get_num_claims();
+
+    // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
+    // --- claim aggregation protocol. We ONLY aggregate if need be! ---
+    if num_claims > 1 {
+        // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
+        let wlx_evaluations = compute_claim_wlx(claims, layer).unwrap();
+        let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
+
+        transcript
+            .append_field_elements(
+                "Claim Aggregation Wlx_evaluations",
+                &relevant_wlx_evaluations,
+            )
+            .unwrap();
+
+        // --- Next, sample r^\star from the transcript ---
+        let agg_chal = transcript
+            .get_challenge("Challenge for claim aggregation")
+            .unwrap();
+
+        let aggregated_challenges = compute_aggregated_challenges(claims, agg_chal).unwrap();
+        let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
+
+        (
+            Claim::new_raw(aggregated_challenges, claimed_val),
+            Some(relevant_wlx_evaluations),
+        )
+    } else {
+        println!("Found only one claim here: {:#?}", claims.get_claim(0));
+
+        (claims.get_claim(0).clone(), None)
+    }
+}
+
 /// Aggregates all `claims` in a `layer` to a single claim using
 /// challenge `r_star`.
 /// This is a front-end function for claim aggregation. Layer
 /// source/destination information can improve performance when present.
-pub(crate) fn aggregate_claims<F: FieldExt>(
+pub(crate) fn aggregate_claims_TEMP<F: FieldExt>(
     claims: &[Claim<F>],
     layer: &impl Layer<F>,
     r_star: F,
@@ -528,7 +570,7 @@ mod tests {
         claims: &ClaimGroup<Fr>,
         r_star: Fr,
     ) -> Claim<Fr> {
-        aggregate_claims(claims.get_claim_vector(), layer, r_star)
+        aggregate_claims_TEMP(claims.get_claim_vector(), layer, r_star)
             .unwrap()
             .0
     }

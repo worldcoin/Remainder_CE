@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use crate::{
     expression::ExpressionStandard,
     layer::{
-        claims::compute_aggregated_challenges, claims::compute_claim_wlx,
+        claims::aggregate_claims, claims::compute_aggregated_challenges, claims::compute_claim_wlx,
         claims::verify_aggregate_claim, claims::Claim, claims::ClaimGroup, from_mle,
         layer_enum::LayerEnum, GKRLayer, Layer, LayerBuilder, LayerError, LayerId,
     },
@@ -307,45 +307,8 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 const OPTIMIZATION_ENABLED: bool = false;
 
-                let (layer_claim, relevant_wlx_evaluations) = if OPTIMIZATION_ENABLED {
-                    todo!();
-                } else {
-                    // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
-                    // --- claim aggregation protocol. We ONLY aggregate if need be! ---
-                    if num_claims > 1 {
-                        // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
-                        let wlx_evaluations =
-                            compute_claim_wlx(&layer_claim_group, &layer).unwrap();
-                        let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
-
-                        transcript
-                            .append_field_elements(
-                                "Claim Aggregation Wlx_evaluations",
-                                &relevant_wlx_evaluations,
-                            )
-                            .unwrap();
-
-                        // --- Next, sample r^\star from the transcript ---
-                        let agg_chal = transcript
-                            .get_challenge("Challenge for claim aggregation")
-                            .unwrap();
-
-                        let aggregated_challenges =
-                            compute_aggregated_challenges(&layer_claim_group, agg_chal).unwrap();
-                        let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
-
-                        (
-                            Claim::new_raw(aggregated_challenges, claimed_val),
-                            Some(relevant_wlx_evaluations),
-                        )
-                    } else {
-                        println!(
-                            "Found only one claim here: {:#?}",
-                            layer_claim_group.get_claim(0)
-                        );
-                        (layer_claim_group.get_claim(0).clone(), None)
-                    }
-                };
+                let (layer_claim, relevant_wlx_evaluations) =
+                    aggregate_claims(&layer_claim_group, &layer, transcript);
 
                 // --- Compute all sumcheck messages across this particular layer ---
                 let prover_sumcheck_messages = layer
@@ -405,7 +368,9 @@ pub trait GKRCircuit<F: FieldExt> {
                         .unwrap();
                 }
 
-                let (layer_claim, relevant_wlx_evaluations) = if num_claims > 1 {
+                let (layer_claim, relevant_wlx_evaluations) =
+                    aggregate_claims(&layer_claim_group, &input_layer, transcript)
+                if num_claims > 1 {
                     // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
                     let wlx_evaluations = input_layer
                         .compute_claim_wlx(&layer_claim_group)
