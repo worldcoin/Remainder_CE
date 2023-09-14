@@ -51,6 +51,15 @@ pub struct BinDecomp16Bit<F> {
     pub bits: [F; 16],
 }
 
+#[derive(Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Used for the attribute multiplicities
+pub struct BinDecomp4Bit<F> {
+    ///The 4 bits that make up this decomposition
+    ///
+    /// Should all be 1 or 0
+    pub bits: [F; 4],
+}
+
 /// --- Input element to the tree, i.e. a list of input attributes ---
 /// Used for the following components of the (circuit) input:
 /// a) The actual input attributes, i.e. x
@@ -62,6 +71,22 @@ pub struct InputAttribute<F> {
     pub(crate) attr_id: F,
     ///The threshold value of this input
     pub(crate) attr_val: F,
+}
+
+impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
+    fn from(bits: Vec<bool>) -> Self {
+        BinDecomp16Bit::<F> {
+            bits: bits.iter().map(|x| F::from(*x)).collect::<Vec<F>>().try_into().unwrap()
+        }
+    }
+}
+
+impl<F: FieldExt> From<Vec<bool>> for BinDecomp4Bit<F> {
+    fn from(bits: Vec<bool>) -> Self {
+        BinDecomp4Bit::<F> {
+            bits: bits.iter().map(|x| F::from(*x)).collect::<Vec<F>>().try_into().unwrap()
+        }
+    }
 }
 
 // --- Just an enumeration of, uh, stuff...? ---

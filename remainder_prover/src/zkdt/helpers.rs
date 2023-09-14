@@ -38,55 +38,32 @@ pub fn next_power_of_two(n: usize) -> Option<usize> {
     None
 }
 
-const BIT_DECOMPOSITION_LENGTH: usize = 16;
-pub const SIGNED_DECOMPOSITION_MAX_ARG_ABS: u32 =
-    2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32 - 1) - 1;
-const UNSIGNED_DECOMPOSITION_MAX_ARG: u32 = 2_u32.pow(BIT_DECOMPOSITION_LENGTH as u32) - 1;
-
-/// Build a 16 bit signed decomposition of the specified i32, or None if the argument is too large
-/// in absolute value (exceeding SIGNED_DECOMPOSITION_MAX_ARG_ABS).
+/// Return the `bit_length` bit signed decomposition of the specified i32, or None if the argument is too large.
 /// Result is little endian (so LSB has index 0).
 /// Sign bit has maximal index.
-pub fn build_signed_bit_decomposition<F: FieldExt>(value: i32) -> Option<BinDecomp16Bit<F>> {
-    let abs_val = value.abs() as u32;
-    if abs_val > SIGNED_DECOMPOSITION_MAX_ARG_ABS {
-        return None;
+/// Pre: bit_length > 1
+pub fn build_signed_bit_decomposition(mut value: i32, bit_length: usize) -> Option<Vec<bool>> {
+    let mut unsigned = build_unsigned_bit_decomposition(value.abs() as u32, bit_length - 1);
+    if let Some(mut bits) = unsigned {
+        bits.push(value < 0);
+        return Some(bits);
     }
-    let mut decomposition = build_unsigned_bit_decomposition(abs_val).unwrap();
-    // set the sign bit
-    decomposition.bits[BIT_DECOMPOSITION_LENGTH - 1] =
-        if value >= 0 { F::zero() } else { F::one() };
-    Some(decomposition)
+    None
 }
 
-/// Build a 16 bit decomposition of the specified u32, or None if the argument is too large
-/// (exceeding UNSIGNED_DECOMPOSITION_MAX_ARG_ABS).
+/// Return the `bit_length` bit decomposition of the specified u32, or None if the argument is too large.
 /// Result is little endian i.e. LSB has index 0.
-pub fn build_unsigned_bit_decomposition<F: FieldExt>(mut value: u32) -> Option<BinDecomp16Bit<F>> {
-    if value > UNSIGNED_DECOMPOSITION_MAX_ARG {
-        return None;
-    }
-    let mut bits = [F::zero(); BIT_DECOMPOSITION_LENGTH];
-    for i in 0..BIT_DECOMPOSITION_LENGTH {
-        if value & 1 == 1 {
-            bits[i] = F::one();
-        }
+pub fn build_unsigned_bit_decomposition(mut value: u32, bit_length: usize) -> Option<Vec<bool>> {
+    let mut bits = vec![];
+    for _ in 0..bit_length {
+        bits.push((value & 1) != 0);
         value >>= 1;
     }
-    Some(BinDecomp16Bit { bits: bits })
-}
-
-/// Repeat the items of the provided slice `repetitions` times, before padding with the minimal
-/// number of zeros such that the length is a power of two.
-pub fn repeat_and_pad<T: Clone>(values: &[T], repetitions: usize, padding: T) -> Vec<T> {
-    // repeat
-    let repeated_length = repetitions * values.len();
-    let repeated_iter = values.into_iter().cycle().take(repeated_length);
-    // pad to nearest power of two
-    let padding_length = next_power_of_two(repeated_length).unwrap() - repeated_length;
-    let padding_iter = repeat(&padding).take(padding_length);
-    // chain together and convert to a vector
-    repeated_iter.chain(padding_iter).cloned().collect()
+    if value == 0 {
+        Some(bits)
+    } else {
+        None
+    }
 }
 
 /// Return a Vec containing a DecisionNode for each Node::Internal appearing in this tree, in arbitrary order.
@@ -212,40 +189,22 @@ mod tests {
     }
 
     #[test]
-    fn test_repeat_and_pad() {
-        let result = repeat_and_pad(&vec![3_u16, 1_u16], 3, 0_u16);
-        assert_eq!(result.len(), 8);
-        assert_eq!(result[0], 3_u16);
-        assert_eq!(result[1], 1_u16);
-        assert_eq!(result[2], 3_u16);
-        assert_eq!(result[4], 3_u16);
-        assert_eq!(result[6], 0_u16);
-        assert_eq!(result[7], 0_u16);
-    }
-
-    #[test]
-    fn test_repeat_and_pad_boundary() {
-        let result = repeat_and_pad(&vec![3_u32, 1_u32], 2, 0_u32);
-        assert_eq!(result.len(), 4);
-    }
-
-    #[test]
     fn test_build_signed_bit_decomposition() {
         // test vanilla case
-        let result = build_signed_bit_decomposition::<Fr>(-3);
+        let result = build_signed_bit_decomposition(-3, 16);
         if let Some(bit_decomp) = result {
-            assert_eq!(bit_decomp.bits[0], Fr::from(1));
-            assert_eq!(bit_decomp.bits[1], Fr::from(1));
-            assert_eq!(bit_decomp.bits[2], Fr::from(0));
-            assert_eq!(bit_decomp.bits[3], Fr::from(0));
-            assert_eq!(bit_decomp.bits[15], Fr::from(1));
+            assert_eq!(bit_decomp[0], true);
+            assert_eq!(bit_decomp[1], true);
+            assert_eq!(bit_decomp[2], false);
+            assert_eq!(bit_decomp[3], false);
+            assert_eq!(bit_decomp[15], true);
         } else {
             assert!(false);
         }
         // test overflow handling
-        assert_eq!(build_signed_bit_decomposition::<Fr>(2_i32.pow(30)), None);
+        assert_eq!(build_signed_bit_decomposition(2_i32.pow(30), 16), None);
         assert_eq!(
-            build_signed_bit_decomposition::<Fr>(-1 * 2_i32.pow(30)),
+            build_signed_bit_decomposition(-1 * 2_i32.pow(30), 16),
             None
         );
     }
@@ -253,17 +212,17 @@ mod tests {
     #[test]
     fn test_build_unsigned_bit_decomposition() {
         // test vanilla case
-        let result = build_unsigned_bit_decomposition::<Fr>(6);
+        let result = build_unsigned_bit_decomposition(6, 16);
         if let Some(bit_decomp) = result {
-            assert_eq!(bit_decomp.bits[0], Fr::from(0));
-            assert_eq!(bit_decomp.bits[1], Fr::from(1));
-            assert_eq!(bit_decomp.bits[2], Fr::from(1));
-            assert_eq!(bit_decomp.bits[3], Fr::from(0));
-            assert_eq!(bit_decomp.bits[15], Fr::from(0));
+            assert_eq!(bit_decomp[0], false);
+            assert_eq!(bit_decomp[1], true);
+            assert_eq!(bit_decomp[2], true);
+            assert_eq!(bit_decomp[3], false);
+            assert_eq!(bit_decomp[15], false);
         } else {
             assert!(false);
         }
         // test overflow handling
-        assert_eq!(build_unsigned_bit_decomposition::<Fr>(2_u32.pow(30)), None);
+        assert_eq!(build_unsigned_bit_decomposition(2_u32.pow(30), 16), None);
     }
 }
