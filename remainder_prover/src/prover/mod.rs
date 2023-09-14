@@ -298,35 +298,48 @@ pub trait GKRCircuit<F: FieldExt> {
                         .unwrap();
                 }
 
-                // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
-                // --- claim aggregation protocol. We ONLY aggregate if need be! ---
-                let (layer_claim, relevant_wlx_evaluations) = if num_claims > 1 {
-                    // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
-                    let wlx_evaluations = compute_claim_wlx(&layer_claim_group, &layer).unwrap();
-                    let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
+                const OPTIMIZATION_ENABLED: bool = false;
 
-                    transcript
-                        .append_field_elements(
-                            "Claim Aggregation Wlx_evaluations",
-                            &relevant_wlx_evaluations,
-                        )
-                        .unwrap();
+                println!("In layer {:?}.", layer.id());
 
-                    // --- Next, sample r^\star from the transcript ---
-                    let agg_chal = transcript
-                        .get_challenge("Challenge for claim aggregation")
-                        .unwrap();
-
-                    let aggregated_challenges =
-                        compute_aggregated_challenges(&layer_claim_group, agg_chal).unwrap();
-                    let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
-
-                    (
-                        Claim::new_raw(aggregated_challenges, claimed_val),
-                        Some(relevant_wlx_evaluations),
-                    )
+                let (layer_claim, relevant_wlx_evaluations) = if OPTIMIZATION_ENABLED {
+                    todo!();
                 } else {
-                    (layer_claim_group.get_claim(0).clone(), None)
+                    // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
+                    // --- claim aggregation protocol. We ONLY aggregate if need be! ---
+                    if num_claims > 1 {
+                        // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
+                        let wlx_evaluations =
+                            compute_claim_wlx(&layer_claim_group, &layer).unwrap();
+                        let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
+
+                        transcript
+                            .append_field_elements(
+                                "Claim Aggregation Wlx_evaluations",
+                                &relevant_wlx_evaluations,
+                            )
+                            .unwrap();
+
+                        // --- Next, sample r^\star from the transcript ---
+                        let agg_chal = transcript
+                            .get_challenge("Challenge for claim aggregation")
+                            .unwrap();
+
+                        let aggregated_challenges =
+                            compute_aggregated_challenges(&layer_claim_group, agg_chal).unwrap();
+                        let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
+
+                        (
+                            Claim::new_raw(aggregated_challenges, claimed_val),
+                            Some(relevant_wlx_evaluations),
+                        )
+                    } else {
+                        println!(
+                            "Found only one claim here: {:#?}",
+                            layer_claim_group.get_claim(0)
+                        );
+                        (layer_claim_group.get_claim(0).clone(), None)
+                    }
                 };
 
                 // --- Compute all sumcheck messages across this particular layer ---
@@ -360,6 +373,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .zip(commitments)
             .map(|(input_layer, commitment)| {
                 let layer_id = input_layer.layer_id();
+                println!("In input layer: {:?}", layer_id);
 
                 let layer_claims_vec = claims
                     .get(&layer_id)
@@ -413,6 +427,10 @@ pub trait GKRCircuit<F: FieldExt> {
                         Some(relevant_wlx_evaluations),
                     )
                 } else {
+                    println!(
+                        "Found only one claim here: {:#?}",
+                        layer_claim_group.get_claim(0)
+                    );
                     (layer_claim_group.get_claim(0).clone(), None)
                 };
 
