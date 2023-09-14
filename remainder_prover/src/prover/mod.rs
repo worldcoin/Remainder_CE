@@ -40,7 +40,7 @@ use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript
 use remainder_shared_types::FieldExt;
 
 // use derive_more::From;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -307,8 +307,11 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 const OPTIMIZATION_ENABLED: bool = false;
 
-                let (layer_claim, relevant_wlx_evaluations) =
-                    aggregate_claims(&layer_claim_group, &layer, transcript);
+                let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
+                    &layer_claim_group,
+                    |claims| compute_claim_wlx(claims, &layer).unwrap(),
+                    transcript,
+                );
 
                 // --- Compute all sumcheck messages across this particular layer ---
                 let prover_sumcheck_messages = layer
@@ -368,46 +371,11 @@ pub trait GKRCircuit<F: FieldExt> {
                         .unwrap();
                 }
 
-                let (layer_claim, relevant_wlx_evaluations) =
-                    aggregate_claims(&layer_claim_group, &input_layer, transcript)
-                if num_claims > 1 {
-                    // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
-                    let wlx_evaluations = input_layer
-                        .compute_claim_wlx(&layer_claim_group)
-                        .map_err(|err| {
-                            GKRError::ErrorWhenProvingLayer(*layer_id, LayerError::ClaimError(err))
-                        })?;
-                    let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
-
-                    transcript
-                        .append_field_elements(
-                            "Claim Aggregation Wlx_evaluations",
-                            &relevant_wlx_evaluations,
-                        )
-                        .unwrap();
-
-                    // --- Next, sample r^\star from the transcript ---
-                    let agg_chal = transcript
-                        .get_challenge("Challenge for claim aggregation")
-                        .unwrap();
-
-                    let aggregated_challenges = input_layer
-                        .compute_aggregated_challenges(&layer_claim_group, agg_chal)
-                        .map_err(|err| {
-                            GKRError::ErrorWhenProvingLayer(*layer_id, LayerError::ClaimError(err))
-                        })?;
-                    let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
-
-                    let claim = Claim::new_raw(aggregated_challenges, claimed_val);
-                    println!("Aggregated Claim: {:#?}", claim);
-                    (claim, Some(relevant_wlx_evaluations))
-                } else {
-                    println!(
-                        "Found only one claim here: {:#?}",
-                        layer_claim_group.get_claim(0)
-                    );
-                    (layer_claim_group.get_claim(0).clone(), None)
-                };
+                let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
+                    &layer_claim_group,
+                    |claims| input_layer.compute_claim_wlx(claims).unwrap(),
+                    transcript,
+                );
 
                 let opening_proof = input_layer
                     .open(transcript, layer_claim)

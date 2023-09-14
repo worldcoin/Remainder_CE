@@ -2,9 +2,12 @@
 
 use ark_crypto_primitives::crh::sha256::digest::typenum::Or;
 use halo2_base::halo2_proofs::transcript::Transcript;
+use itertools::Either;
 use remainder_shared_types::transcript;
 use remainder_shared_types::FieldExt;
 
+use crate::prover::input_layer::enum_input_layer::InputLayerEnum;
+use crate::prover::input_layer::InputLayer;
 use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
@@ -349,7 +352,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 
 pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    layer: &impl Layer<F>,
+    compute_wlx_fn: impl Fn(&ClaimGroup<F>) -> Vec<F>,
     transcript: &mut impl transcript::Transcript<F>,
 ) -> (Claim<F>, Option<Vec<F>>) {
     let num_claims = claims.get_num_claims();
@@ -357,8 +360,9 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
     // --- claim aggregation protocol. We ONLY aggregate if need be! ---
     if num_claims > 1 {
-        // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
-        let wlx_evaluations = compute_claim_wlx(claims, layer).unwrap();
+        // --- Aggregate claims by performing the claim aggregation protocol.
+        // --- First compute V_i(l(x)) ---
+        let wlx_evaluations = compute_wlx_fn(claims);
         let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
         transcript
