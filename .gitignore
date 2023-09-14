@@ -13,11 +13,9 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-# ignoring catboost data
-*.npy
-*.json
-
 # Added by cargo
+
+remainder_prover/*.json
 
 /target
 /Cargo.lock
