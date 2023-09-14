@@ -49,6 +49,8 @@ use self::input_layer::{
     InputLayer, InputLayerError,
 };
 
+use core::cmp::Ordering;
+
 // use lcpc_2d::ScalarField;
 // use lcpc_2d::adapter::LigeroProof;
 
@@ -279,14 +281,15 @@ pub trait GKRCircuit<F: FieldExt> {
             .map(|mut layer| {
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_id = layer.id().clone();
-                let layer_claims_vec = claims
+                let mut layer_claims_vec = claims
                     .get(&layer_id)
-                    .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+                    .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?
+                    .clone();
                 let layer_claim_group = ClaimGroup::new(layer_claims_vec.clone()).unwrap();
                 let num_claims = layer_claim_group.get_num_claims();
 
                 // --- Add the claimed values to the FS transcript ---
-                for claim in layer_claims_vec {
+                for claim in &layer_claims_vec {
                     transcript
                         .append_field_elements("Claimed bits to be aggregated", claim.get_point())
                         .unwrap();
