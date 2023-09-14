@@ -61,7 +61,7 @@ pub struct Claim<F> {
     pub from_layer_id: Option<LayerId>,
     /// The layer ID of the layer containing the MLE this claim refers to (if
     /// present); destination layer.
-    to_layer_id: Option<LayerId>,
+    pub to_layer_id: Option<LayerId>,
 }
 
 impl<F: Clone> Claim<F> {

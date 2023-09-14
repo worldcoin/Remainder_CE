@@ -259,8 +259,13 @@ pub trait GKRCircuit<F: FieldExt> {
             }
 
             // --- Gather the claim and layer ID ---
-            let claim = claim.unwrap();
+            let mut claim = claim.unwrap();
             let layer_id = output.get_layer_id();
+            claim.to_layer_id = Some(layer_id);
+            println!(
+                "Output: Creating a claim for Layer {:?}: {:?}",
+                layer_id, claim
+            );
 
             // --- Add the claim to either the set of current claims we're proving ---
             // --- or the global set of claims we need to eventually prove ---
@@ -281,6 +286,8 @@ pub trait GKRCircuit<F: FieldExt> {
             .map(|mut layer| {
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_id = layer.id().clone();
+                println!("In layer {:?}", layer_id);
+
                 let mut layer_claims_vec = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?
@@ -299,8 +306,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
 
                 const OPTIMIZATION_ENABLED: bool = false;
-
-                println!("In layer {:?}.", layer.id());
 
                 let (layer_claim, relevant_wlx_evaluations) = if OPTIMIZATION_ENABLED {
                     todo!();
@@ -352,11 +357,16 @@ pub trait GKRCircuit<F: FieldExt> {
                     .get_claims()
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
 
+                println!(
+                    "After sumcheck, I have the following claims: {:#?}",
+                    post_sumcheck_new_claims
+                );
+
                 for claim in post_sumcheck_new_claims {
-                    if let Some(curr_claims) = claims.get_mut(&claim.get_from_layer_id().unwrap()) {
+                    if let Some(curr_claims) = claims.get_mut(&claim.get_to_layer_id().unwrap()) {
                         curr_claims.push(claim);
                     } else {
-                        claims.insert(claim.get_from_layer_id().unwrap(), vec![claim]);
+                        claims.insert(claim.get_to_layer_id().unwrap(), vec![claim]);
                     }
                 }
 
@@ -379,6 +389,7 @@ pub trait GKRCircuit<F: FieldExt> {
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
                 let layer_claim_group = ClaimGroup::new(layer_claims_vec.clone()).unwrap();
+                println!("Layer Claim Group: {:#?}", layer_claim_group);
                 let num_claims = layer_claim_group.get_num_claims();
 
                 // --- Add the claimed values to the FS transcript ---
@@ -422,10 +433,9 @@ pub trait GKRCircuit<F: FieldExt> {
                         })?;
                     let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
 
-                    (
-                        Claim::new_raw(aggregated_challenges, claimed_val),
-                        Some(relevant_wlx_evaluations),
-                    )
+                    let claim = Claim::new_raw(aggregated_challenges, claimed_val);
+                    println!("Aggregated Claim: {:#?}", claim);
+                    (claim, Some(relevant_wlx_evaluations))
                 } else {
                     println!(
                         "Found only one claim here: {:#?}",
@@ -504,7 +514,12 @@ pub trait GKRCircuit<F: FieldExt> {
                 claim_chal.push(challenge);
             }
             let layer_id = output.get_layer_id();
-            let claim = Claim::new(claim_chal, F::zero(), None, Some(layer_id));
+            let mut claim = Claim::new(claim_chal, F::zero(), None, Some(layer_id));
+            claim.to_layer_id = Some(layer_id);
+            println!(
+                "Output: Creating a claim for Layer {:?}: {:?}",
+                layer_id, claim
+            );
 
             // --- Append claims to either the claim tracking map OR the first (sumchecked) layer's list of claims ---
             if let Some(curr_claims) = claims.get_mut(&layer_id) {
@@ -524,10 +539,12 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
             let layer_id = layer.id().clone();
+            println!("In Layer {:?}", layer_id);
             let layer_claims = claims
                 .get(&layer_id)
                 .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
             let layer_claim_group = ClaimGroup::new(layer_claims.clone()).unwrap();
+            println!("Found claim group: {:#?}", layer_claim_group);
             let layer_num_claims = layer_claim_group.get_num_claims();
 
             // --- Append claims to the FS transcript... TODO!(ryancao): Do we actually need to do this??? ---
@@ -580,22 +597,25 @@ pub trait GKRCircuit<F: FieldExt> {
             let other_claims = layer
                 .get_claims()
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
+            println!("Got other claims: {:#?}", other_claims);
 
             for claim in other_claims {
                 if let Some(curr_claims) = claims.get_mut(&claim.get_to_layer_id().unwrap()) {
                     curr_claims.push(claim);
                 } else {
-                    claims.insert(layer_id, vec![claim]);
+                    claims.insert(claim.get_to_layer_id().unwrap(), vec![claim]);
                 }
             }
         }
 
         for input_layer in input_layer_proofs {
             let input_layer_id = input_layer.layer_id;
+            println!("In Input Layer: {:?}", input_layer_id);
             let input_layer_claims = claims
                 .get(&input_layer_id)
                 .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
             let input_layer_claim_group = ClaimGroup::new(input_layer_claims.clone()).unwrap();
+            println!("Got claim group: {:#?}", input_layer_claim_group);
 
             // --- Add the claimed values to the FS transcript ---
             for claim in input_layer_claims {
