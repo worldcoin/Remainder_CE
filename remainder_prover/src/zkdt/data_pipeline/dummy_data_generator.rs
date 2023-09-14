@@ -1,6 +1,9 @@
 use crate::layer::LayerId;
 use crate::mle::MleRef;
 use crate::mle::dense::DenseMle;
+use crate::utils::file_exists;
+use crate::zkdt::constants::get_cached_batched_mles_filename_with_exp_size;
+use crate::zkdt::data_pipeline::dt2zkdt::generate_upshot_data_all_batch_sizes;
 use remainder_shared_types::FieldExt;
 use serde::{Serialize, Deserialize};
 use serde_json::{to_writer, from_reader};
@@ -485,10 +488,9 @@ pub struct BatchedCatboostMles<F: FieldExt> {
 /// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
 /// to a file for ease of reading (i.e. faster testing, mostly lol)
 pub fn write_mles_batch_catboost_single_tree<F: FieldExt>() {
-    let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>();
+    let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>(None, None);
     let mut f = fs::File::create(CACHED_BATCHED_MLES_FILE).unwrap();
     to_writer(&mut f, &loaded_zkdt_circuit_data).unwrap();
-    panic!()
 }
 
 /// Reads the cached results from [`load_upshot_data_single_tree_batch`] and returns them.
@@ -497,8 +499,39 @@ pub fn read_upshot_data_single_tree_branch_from_file<F: FieldExt>() -> (ZKDTCirc
     from_reader(&file).unwrap()
 }
 
+/// Loads a result from [`generate_upshot_data_all_batch_sizes`].
+pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>(
+    exp_batch_size: usize
+) -> (ZKDTCircuitData<F>, (usize, usize)) {
+
+    // --- Sanitychecks ---
+    debug_assert!(exp_batch_size >= 1);
+    debug_assert!(exp_batch_size <= 12);
+
+    // --- Load ---
+    let file = std::fs::File::open(get_cached_batched_mles_filename_with_exp_size(exp_batch_size)).unwrap();
+    from_reader(&file).unwrap()
+}
+
 /// Generates circuit data in batched form for a single Catboost tree
-pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>() -> (BatchedCatboostMles<F>, (usize, usize)) {
+/// 
+/// ## Arguments
+/// * `exp_batch_size` - 2^{`exp_batch_size`} is the actual batch size that we want.
+///     Note that this value must be between 1 and 12, inclusive!
+pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usize) -> (BatchedCatboostMles<F>, (usize, usize)) {
+
+    // --- Sanitychecks ---
+    debug_assert!(exp_batch_size >= 1);
+    debug_assert!(exp_batch_size <= 12);
+
+    // --- Check to see if the cached file exists ---
+    let cached_file_path = get_cached_batched_mles_filename_with_exp_size(exp_batch_size);
+
+    // --- If no cached file exists, run the entire cache thingy ---
+    if !file_exists(&cached_file_path) {
+        generate_upshot_data_all_batch_sizes::<F>(None);
+    }
+
     // --- First generate the dummy data ---
     let (ZKDTCircuitData {
         // dummy_attr_idx_data,

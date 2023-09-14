@@ -37,7 +37,7 @@ mod tests {
         let (BatchedCatboostMles {
             permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
-        }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let circuit = NonBatchedAttributeConsistencyCircuit::new(
             permuted_input_data_mle_vec[0].clone(),
@@ -54,7 +54,7 @@ mod tests {
         let (BatchedCatboostMles {
             permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
-        }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let mut circuit = AttributeConsistencyCircuit::new(
             permuted_input_data_mle_vec,

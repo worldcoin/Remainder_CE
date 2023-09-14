@@ -23,7 +23,7 @@ mod tests {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let circuit = MultiSetCircuit::new(
             decision_nodes_mle,
@@ -49,7 +49,7 @@ mod tests {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
 
         let circuit = FSMultiSetCircuit::new(
             decision_nodes_mle,

@@ -1,4 +1,4 @@
-use std::iter::repeat_with;
+use std::{iter::repeat_with, fs};
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
@@ -109,4 +109,16 @@ pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Ve
             }
         },
     )
+}
+
+/// Returns whether a particular file exists in the filesystem
+/// 
+/// TODO!(ryancao): Shucks does this check a relative path...?
+pub fn file_exists(file_path: &String) -> bool {
+    match fs::metadata(file_path) {
+        Ok(file_metadata) => {
+            file_metadata.is_file()
+        },
+        Err(_) => false,
+    }
 }
