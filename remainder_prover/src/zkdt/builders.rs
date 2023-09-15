@@ -12,7 +12,7 @@ use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
-use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
+use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode, BinDecomp4Bit};
 
 struct ProductTreeBuilder<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
@@ -173,6 +173,7 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
 
         // begin sus: feels like there should be a concat (reverse direction) for expression,
         // for splitting the expression
+        // TODO!(ende): remove the optional padding of 1!!!
         let split_mle = self.mle.split(F::one());
         // end sus
 
@@ -489,6 +490,48 @@ impl<F: FieldExt> BitExponentiationBuilderCatBoost<F> {
     }
 }
 
+/// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
+pub struct BitExponentiationBuilderInput<F: FieldExt> {
+    bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
+    bit_index: usize,
+    r_minus_x_power: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
+    type Successor = DenseMle<F, F>;
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
+
+        println!("b_ij {:?}", b_ij.num_vars());
+        println!("self.r_minus_x_power {:?}", self.r_minus_x_power.mle_ref().num_vars());
+        ExpressionStandard::Sum(Box::new(ExpressionStandard::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
+                                Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(b_ij)))
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        //TODO!(fix this so it uses bin_decomp.into_iter)
+        let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
+        DenseMle::new_from_iter(self.r_minus_x_power
+            .clone()
+            .into_iter()
+            .zip(b_ij.bookkeeping_table.clone().into_iter())
+            .map(
+            |(r_minus_x_power, b_ij_iter)| (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> BitExponentiationBuilderInput<F> {
+    /// create new leaf node packed
+    pub(crate) fn new(
+        bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
+        bit_index: usize,
+        r_minus_x_power: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            bin_decomp, bit_index, r_minus_x_power
+        }
+    }
+}
+
 /// Takes (1) b_ij * (r-x_i)^j + (1-b_ij), (2) prev_prods PROD(b_ij * (r-x_i)^j + (1-b_ij)) across j
 /// Outputs (1) * (2). naming (1) as multiplier
 pub struct ProductBuilder<F: FieldExt> {
@@ -500,6 +543,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
+        println!("self.prev_prod {:?}", self.prev_prod.mle_ref().num_vars());
         ExpressionStandard::products(vec![self.multiplier.mle_ref(), self.prev_prod.mle_ref()])
     }
 
