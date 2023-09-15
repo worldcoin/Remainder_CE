@@ -22,3 +22,6 @@ remainder_prover/*.json
 
 # darn macOS
 .DS_Store
+
+*.npy
+*.json

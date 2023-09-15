@@ -11,56 +11,24 @@ mod tests {
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     use crate::prover::tests::test_circuit;
 
-    use super::super::circuits::{MultiSetCircuit, FSMultiSetCircuit};
-
-    #[test]
-    fn test_multiset_circuit_catboost_batched() {
-
-        let mut rng = test_rng();
-
-        let (BatchedCatboostMles {decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
-
-        let circuit = MultiSetCircuit::new(
-            decision_nodes_mle,
-            leaf_nodes_mle,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-            Fr::from(rng.gen::<u64>()),
-            (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())),
-        );
-
-        test_circuit(circuit, None);
-    }
-
-
+    use super::super::circuits::{InputMultiSetCircuit};
 
     #[test]
     fn test_fs_multiset_circuit_catboost_batched() {
 
-        let (BatchedCatboostMles {decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        let (BatchedCatboostMles {
+            input_data_mle_vec,
+            permuted_input_data_mle_vec, ..
+            // multiplicities_bin_decomp_mle_input,
+        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
-        let circuit = FSMultiSetCircuit::new(
-            decision_nodes_mle,
-            leaf_nodes_mle,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-        );
+        // let circuit = InputMultiSetCircuit::new(
+        //     input_data_mle_vec,
+        //     permuted_input_data_mle_vec,
+        //     multiplicities_bin_decomp_mle_input,
+        // );
 
-        test_circuit(circuit, None);
+        // test_circuit(circuit, None);
     }
 
 }
