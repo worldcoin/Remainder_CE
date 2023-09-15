@@ -250,8 +250,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         let val = claim.1.clone();
 
-        dbg!(self.expression());
-
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
 
@@ -298,7 +296,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .as_mut()
             .map(|beta| beta.beta_update(num_sumcheck_rounds - 1, final_chal));
 
-        dbg!(self.expression());
 
         Ok(all_prover_sumcheck_messages.into())
     }
@@ -388,7 +385,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // Return basically a list of (usize, Claim)
         let layerwise_expr = &self.expression;
         
-        dbg!(&layerwise_expr);
 
         // --- Define how to parse the expression tree ---
         // - Basically we just want to go down it and pass up claims
