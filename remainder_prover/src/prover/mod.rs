@@ -78,16 +78,27 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     }
 
     /// Add an AddGate to a list of layers (unbatched version)
-    /// uses the AddGate constructor
+    /// 
+    /// # Arguments
+    /// `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where 
+    /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
+    /// `lhs`: the mle representing the left side of the sum
+    /// `rhs`: the mle representing the right side of the sum
+    /// 
+    /// # Returns
+    /// A `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_add_gate(
         &mut self,
         nonzero_gates: Vec<(usize, usize, usize)>,
         lhs: DenseMleRef<F>,
         rhs: DenseMleRef<F>,
-        num_copy_bits: usize,
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
-        let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits, None);
+        // use the add gate constructor in order to initialize a new add gate mle
+        let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
+        
+        // we want to return an mle representing the evaluations of this over all the points in the boolean hypercube
+        // the size of this mle is dependent on the max gate label given in the z coordinate of the tuples (as defined above)
         let max_gate_val = nonzero_gates.clone().into_iter().fold(
             0, 
             |acc, (z, _, _)| {
@@ -96,6 +107,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         );
         self.0.push(gate.get_enum());
 
+        // we use the nonzero add gates in order to evaluate the values at the next layer
         let mut sum_table = vec![F::zero(); max_gate_val + 1];
         nonzero_gates.into_iter().for_each(
             |(z, x, y)| {
@@ -112,16 +124,25 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         //ZeroMleRef::new(*num_vars, None, id.clone())
     }
 
-    /// Add a MulGate to a list of layers
+    /// Add a MulGate to a list of layers (unbatched version)
+    /// 
+    /// # Arguments
+    /// `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where 
+    /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
+    /// `lhs`: the mle representing the left side of the multiplication
+    /// `rhs`: the mle representing the right side of the multiplication
+    /// 
+    /// # Returns
+    /// A `DenseMle` that represents the evaluations of the mul gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_mul_gate(
         &mut self,
         nonzero_gates: Vec<(usize, usize, usize)>,
         lhs: DenseMleRef<F>,
         rhs: DenseMleRef<F>,
-        num_copy_bits: usize,
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
-        let gate: MulGate<F, Tr> = MulGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), num_copy_bits, None);
+        // use the mul gate constructor in order to initialize a new add gate mle
+        let gate: MulGate<F, Tr> = MulGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
         let max_gate_val = nonzero_gates.clone().into_iter().fold(
             0, 
             |acc, (z, _, _)| {
