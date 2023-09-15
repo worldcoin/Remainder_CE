@@ -946,4 +946,24 @@ impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {
 
         DenseMle::new_from_raw(input_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
     }
+
+    /// Returns the entire bin decomp MLE as a single MLE ref
+    pub(crate) fn get_entire_mle_as_mle_ref(&'_ self) -> DenseMleRef<F> {
+        // --- Just need to merge all of the bin decomps in an interleaved fashion ---
+        // TODO!(ryancao): This is an awful hacky fix so that we can use `combine_mles`.
+        // Note that we are manually inserting the extra iterated bits as prefix bits.
+        // We should stop doing this once `combine_mles` works as it should!
+        let self_mle_ref_vec = self.mle.clone().map(|mle_bookkeeping_table| {
+            DenseMle::new_from_raw(
+                mle_bookkeeping_table, 
+                self.layer_id, 
+                Some(
+                    self.get_prefix_bits().iter().flatten().cloned().chain(
+                        repeat_n(MleIndex::Iterated, 2)
+                    ).collect_vec()
+                )
+            ).mle_ref()
+        }).to_vec();
+        combine_mles(self_mle_ref_vec, 4)
+    }
 }

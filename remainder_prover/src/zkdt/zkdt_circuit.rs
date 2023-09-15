@@ -13,7 +13,7 @@ use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, laye
 use crate::{prover::{GKRCircuit, Layers, Witness}, mle::{mle_enum::MleEnum}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, ConcatBuilder, FSRMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, BitExponentiationBuilderInput}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::{circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, dt2zkdt::load_upshot_data_single_tree_batch}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul};
+use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, ConcatBuilder, FSRMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, BitExponentiationBuilderInput}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::{circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, dt2zkdt::load_upshot_data_single_tree_batch}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul, bits_are_binary_circuit::circuits::{BinDecomp4BitIsBinaryCircuitBatched, BinDecomp16BitIsBinaryCircuitBatched}};
 use std::{marker::PhantomData, path::Path};
 
 
@@ -794,6 +794,8 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
             mut input_multiset_circuit,
             mut binary_recomp_circuit_batched,
             mut path_consistency_circuit_batched,
+            mut bin_decomp_4_bit_batched_bits_binary,
+            mut bin_decomp_16_bit_batched_bits_binary,
 
             // --- Input layer ---
             input_layers,
@@ -804,6 +806,8 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
         let multiset_witness = multiset_circuit.yield_sub_circuit();
         let input_multiset_witness = input_multiset_circuit.yield_sub_circuit();
         let binary_recomp_circuit_batched_witness = binary_recomp_circuit_batched.yield_sub_circuit();
+        let bin_decomp_4_bit_binary_batched_witness = bin_decomp_4_bit_batched_bits_binary.yield_sub_circuit();
+        let bin_decomp_16_bit_binary_batched_witness = bin_decomp_16_bit_batched_bits_binary.yield_sub_circuit();
 
         let (mut combined_circuit_layers, mut combined_circuit_output_layers) = combine_layers(
             vec![
@@ -811,12 +815,16 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
                 multiset_witness.layers,
                 input_multiset_witness.layers,
                 binary_recomp_circuit_batched_witness.layers,
+                bin_decomp_4_bit_binary_batched_witness.layers,
+                bin_decomp_16_bit_binary_batched_witness.layers,
             ],
             vec![
                 attribute_consistency_witness.output_layers,
                 multiset_witness.output_layers,
                 input_multiset_witness.output_layers,
                 binary_recomp_circuit_batched_witness.output_layers,
+                bin_decomp_4_bit_binary_batched_witness.output_layers,
+                bin_decomp_16_bit_binary_batched_witness.output_layers,
             ],
         )
         .unwrap();
@@ -845,6 +853,8 @@ impl <F: FieldExt> CombinedCircuits<F> {
             InputMultiSetSubCircuit<F>,
             BinaryRecompCircuitBatched<F>,
             PathCheckCircuitBatchedMul<F>,
+            BinDecomp4BitIsBinaryCircuitBatched<F>,
+            BinDecomp16BitIsBinaryCircuitBatched<F>,
             Vec<InputLayerEnum<F, PoseidonTranscript<F>>>, // input layers, including random layers
             Vec<CommitmentEnum<F>> // input layers' commitments
         ), GKRError> {
@@ -967,7 +977,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
         let input_multiset_circuit = InputMultiSetSubCircuit {
             input_data_mle_vec,
             permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
-            multiplicities_bin_decomp_mle_input_vec,
+            multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vec.clone(),
             r_mle: r_mle.clone(),
             r_mle_another: r_mle_another.clone(),
             r_packing_mle: r_packing_mle.clone(),
@@ -982,7 +992,15 @@ impl <F: FieldExt> CombinedCircuits<F> {
         let path_consistency_circuit_batched = PathCheckCircuitBatchedMul::new(
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
+            binary_decomp_diffs_mle_vec.clone(),
+        );
+
+        let bits_binary_16_bit_batched = BinDecomp16BitIsBinaryCircuitBatched::new(
             binary_decomp_diffs_mle_vec
+        );
+
+        let bits_binary_4_bit_batched = BinDecomp4BitIsBinaryCircuitBatched::new(
+            multiplicities_bin_decomp_mle_input_vec
         );
 
         Ok((
@@ -992,6 +1010,8 @@ impl <F: FieldExt> CombinedCircuits<F> {
             input_multiset_circuit,
             binary_recomp_circuit_batched,
             path_consistency_circuit_batched,
+            bits_binary_4_bit_batched,
+            bits_binary_16_bit_batched,
 
             // --- Input layers ---
             vec![

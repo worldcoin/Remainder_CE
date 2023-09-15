@@ -541,6 +541,12 @@ pub fn read_upshot_data_single_tree_branch_from_file<F: FieldExt>() -> (ZKDTCirc
     from_reader(&file).unwrap()
 }
 
+/// Reads the cached results from `cached_file_path` and returns them
+pub fn read_upshot_data_single_tree_branch_from_filepath<F: FieldExt>(cached_file_path: &str) -> (ZKDTCircuitData<F>, (usize, usize)) {
+    let file = std::fs::File::open(cached_file_path).unwrap();
+    from_reader(&file).unwrap()
+}
+
 /// Loads a result from [`generate_upshot_data_all_batch_sizes`].
 pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>(
     exp_batch_size: usize,
@@ -588,7 +594,7 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usi
         decision_nodes,
         leaf_nodes,
         multiplicities_bin_decomp_input,
-    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_file::<F>();
+    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_filepath::<F>(&cached_file_path);
 
     // println!("input_data {:?}", input_data[0]);
     // println!("permuted_input_data {:?}", permuted_input_data[0]);
