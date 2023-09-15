@@ -17,10 +17,10 @@ use super::{
 };
 
 ///A Layer with 0 num_vars
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct EmptyLayer<F, Tr> {
-    expr: ExpressionStandard<F>,
+    pub(crate) expr: ExpressionStandard<F>,
     id: LayerId,
     _marker: PhantomData<Tr>,
 }
@@ -161,7 +161,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
-        todo!()
+        unimplemented!()
     }
 
     fn new<L: super::LayerBuilder<F>>(builder: L, id: LayerId) -> Self
@@ -180,5 +180,13 @@ impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
     ///Gets this layer's underlying expression
     pub fn expression(&self) -> &ExpressionStandard<F> {
         &self.expr
+    }
+
+    pub(crate) fn new_raw(id: LayerId, expr: ExpressionStandard<F>) -> Self {
+        Self {
+            id,
+            expr,
+            _marker: PhantomData,
+        }
     }
 }

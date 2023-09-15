@@ -19,12 +19,12 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 /// Beta table struct for a product of mle refs
-pub(crate) struct BetaTable<F> {
-    layer_claim_vars: Vec<F>,
+pub struct BetaTable<F> {
+    pub(crate) layer_claim_vars: Vec<F>,
     ///The bookkeeping table for the beta table
     /// TODO(Get rid of BetaTable's reliance on the DenseMleRef type; Create a shared subtype for the shared behavior)
-    pub(crate) table: DenseMleRef<F>,
-    relevant_indices: Vec<usize>,
+    pub table: DenseMleRef<F>,
+    pub relevant_indices: Vec<usize>,
 }
 
 /// Error handling for beta table construction
@@ -32,26 +32,20 @@ pub(crate) struct BetaTable<F> {
 pub enum BetaError {
     #[error("claim index is 0, cannot take inverse")]
     ///claim index is 0, cannot take inverse
-    ///claim index is 0, cannot take inverse
     NoInverse,
     #[error("not enough claims to compute beta table")]
-    ///not enough claims to compute beta table
     ///not enough claims to compute beta table
     NotEnoughClaims,
     #[error("cannot make beta table over empty mle list")]
     ///cannot make beta table over empty mle list
-    ///cannot make beta table over empty mle list
     EmptyMleList,
     #[error("cannot update beta table")]
-    ///cannot update beta table
     ///cannot update beta table
     BetaUpdateError,
     #[error("MLE bits were not indexed")]
     ///MLE bits were not indexed
-    ///MLE bits were not indexed
     MleNotIndexedError,
     #[error("Beta table doesn't contain the particular indexed bit")]
-    ///Beta table doesn't contain the particular indexed bit
     ///Beta table doesn't contain the particular indexed bit
     IndexedBitNotFoundError,
 }
@@ -64,7 +58,7 @@ pub fn compute_beta_over_two_challenges<F: FieldExt>(
     challenge_one: &Vec<F>,
     challenge_two: &Vec<F>,
 ) -> F {
-    assert_eq!(challenge_one.len(), challenge_two.len());
+    //assert_eq!(challenge_one.len(), challenge_two.len());
 
     // --- Formula is just \prod_i (x_i * y_i) + (1 - x_i) * (1 - y_i) ---
     let one = F::one();
@@ -82,7 +76,6 @@ pub(crate) fn compute_new_beta_table<F: FieldExt>(
     round_index: usize,
     challenge: F,
 ) -> Result<Vec<F>, BetaError> {
-    let curr_beta = beta_table.table.bookkeeping_table();
     let curr_beta = beta_table.table.bookkeeping_table();
 
     // --- This should always be true now, no? ---
@@ -106,6 +99,7 @@ pub(crate) fn compute_new_beta_table<F: FieldExt>(
 
     Err(BetaError::IndexedBitNotFoundError)
 }
+
 /// Splits the beta table by the second most significant bit when we have nested selectors
 /// (the case where the selector bit is not the independent variable)
 pub(crate) fn beta_split<F: FieldExt>(

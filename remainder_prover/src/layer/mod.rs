@@ -24,6 +24,7 @@ use crate::{
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
+    zkdt::helpers::get_field_val_as_usize_vec,
 };
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
@@ -157,10 +158,10 @@ pub trait Layer<F: FieldExt> {
 }
 
 /// Default Layer abstraction
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct GKRLayer<F, Tr> {
     id: LayerId,
-    expression: ExpressionStandard<F>,
+    pub(crate) expression: ExpressionStandard<F>,
     beta: Option<BetaTable<F>>,
     #[serde(skip)]
     _marker: PhantomData<Tr>,
@@ -178,11 +179,14 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
             let mut beta =
                 BetaTable::new(claim.get_point().clone()).map_err(LayerError::BetaError)?;
 
+            let expression_num_indices = expression.index_mle_indices(0);
+            let beta_table_num_indices = beta.table.index_mle_indices(0);
+            // dbg!(&expression_num_indices);
+            // dbg!(&beta_table_num_indices);
+            // dbg!(&expression);
+
             // --- This should always be equivalent to the number of indices within the beta table ---
-            let max_round = std::cmp::max(
-                expression.index_mle_indices(0),
-                beta.table.index_mle_indices(0),
-            );
+            let max_round = std::cmp::max(expression_num_indices, beta_table_num_indices);
             (max_round, beta)
         };
 
@@ -206,6 +210,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         // --- Grabs the expression/beta table and updates them with the new challenge ---
         let (expression, beta) = self.mut_expression_and_beta();
         let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
+        //dbg!(&expression);
         expression.fix_variable(round_index - 1, challenge);
         beta.beta_update(round_index - 1, challenge)
             .map_err(LayerError::BetaError)?;
@@ -234,6 +239,15 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
     pub fn expression(&self) -> &ExpressionStandard<F> {
         &self.expression
     }
+
+    pub(crate) fn new_raw(id: LayerId, expression: ExpressionStandard<F>) -> Self {
+        GKRLayer {
+            id,
+            expression,
+            beta: None,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
@@ -256,6 +270,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
+
+        if val != first_sumcheck_message[0] + first_sumcheck_message[1] {
+            dbg!(&self.expression);
+        }
 
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
 
@@ -402,6 +420,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     // --- This is super jank ---
                     let mut fixed_mle_indices: Vec<F> = vec![];
                     for mle_idx in mle_indices {
+                        if let None = mle_idx.val() {
+                            dbg!("We got a nothing");
+                            dbg!(&mle_idx);
+                            dbg!(&mle_indices);
+                            dbg!(&mle_ref);
+                        }
                         fixed_mle_indices.push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
                     }
 
@@ -410,10 +434,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
                     // --- Grab the actual value that the claim is supposed to evaluate to ---
                     if mle_ref.bookkeeping_table().len() != 1 {
+                        dbg!(&mle_ref.bookkeeping_table);
                         return Err(ClaimError::MleRefMleError);
                     }
-                    // dbg!(mle_ref.bookkeeping_table());
-                    // dbg!(mle_indices);
                     let claimed_value = mle_ref.bookkeeping_table()[0];
 
                     // --- Construct the claim ---
@@ -518,6 +541,24 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // 1` which brings down the total degree by the same amount.
         let num_evals =
             (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+
+        debug_assert!({
+            claim_vecs.iter().zip(claimed_vals.iter()).map(|(point, val)| {
+                let mut beta = BetaTable::new(point.to_vec()).unwrap();
+                beta.table.index_mle_indices(0);
+                let eval = compute_sumcheck_message(&mut expr.clone(), 0, degree, &beta).unwrap();
+                let Evals(evals) = eval;
+                let eval = evals[0] + evals[1];
+                if eval == *val {
+                    true
+                } else {
+                    dbg!(self.id());
+                    dbg!(self.expression());
+                    println!("Claim passed into compute_wlx is invalid! point is {:?} claimed val is {:?}, actual eval is {:?}", point, val, eval);
+                    false
+                }
+            }).reduce(|acc, val| acc && val).unwrap()
+        });
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
@@ -629,6 +670,7 @@ pub enum Padding {
     Left(usize),
     None,
 }
+
 /// The layerbuilder that represents two layers concatonated together
 pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
     first: A,
@@ -691,7 +733,6 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
                         .clone()
                         .into_iter()
                         .flatten()
-                        // .chain(std::iter::once(MleIndex::Fixed(true)))
                         .chain(first_padding)
                         .chain(std::iter::once(MleIndex::Fixed(true)))
                         .collect(),
@@ -703,7 +744,6 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
                     prefix_bits
                         .into_iter()
                         .flatten()
-                        // .chain(std::iter::once(MleIndex::Fixed(false)))
                         .chain(second_padding)
                         .chain(std::iter::once(MleIndex::Fixed(false)))
                         .collect(),
@@ -731,10 +771,13 @@ impl<
     type Successor = S;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        (self.expression_builder)(&self.mle)
+        let hi = (self.expression_builder)(&self.mle);
+        // dbg!(&hi);
+        hi
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        // dbg!(&id);
         (self.layer_builder)(&self.mle, id, prefix_bits)
     }
 }

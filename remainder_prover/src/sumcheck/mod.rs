@@ -115,7 +115,31 @@ impl<F: FieldExt> Mul<&F> for Evals<F> {
 /// value (e.g. if all variables are bound and/or the expression is just over
 /// a constant), or a vector of evals at 0, ..., deg - 1 for an expression
 /// where there are iterated variables.
+/// 
+/// Binary mult tree
+/// []
+/// [] [] []
+/// [] []
+/// []
+/// V_i(b_1, ..., b_n) = V_{i + 1}(0, b_1, ..., b_n) + V_{i + 1}(1, b_1, ..., b_n)
+/// \tilde{V_i}(g_1, ..., g_n) = \sum_{b_1, ..., b_n} \beta(g, b) * 
+///     (\tilde{V_{i + 1}}(0, b_1, ..., b_n) + \tilde{V_{i + 1}}(1, b_1, ..., b_n))
 ///
+/// \tilde{V_i}(g_1, ..., g_n) = c_1
+/// P -> g_1(x) = \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * 
+///     (\tilde{V_{i + 1}}(0, x, b_2, ..., b_n) + \tilde{V_{i + 1}}(1, x, b_2, ..., b_n)) + 3
+/// 
+/// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * \tilde{V_{i + 1}}(0, x, ..., b_n) + 
+/// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * \tilde{V_{i + 1}}(1, x, ..., b_n) * \tilde{V_{i + 1}}(1, x, ..., b_n)+ 
+/// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * 3
+/// 
+/// beta_table = \beta(g, b_1, b_2, ..., b_n)
+/// 
+/// g_1(x) = g_{11}(x) = /// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * \tilde{V_{i + 1}}(0, x, ..., b_n) + 
+/// + g_{12}(x) =  \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * \tilde{V_{i + 1}}(1, x, ..., b_n) * \tilde{V_{i + 1}}(1, x, ..., b_n)+ 
+/// + g_{13}(x) = /// \sum_{b_2, ..., b_n} \beta(g, x, b2, ..., b_n) * 3
+/// 
+/// g_1(0) + g_1(1) = c_1
 /// # Arguments
 /// * `expr` - The actual expression to evaluate
 /// * `round_index` - The sumcheck round index, I think??
@@ -135,6 +159,11 @@ pub(crate) fn compute_sumcheck_message<
     max_degree: usize,
     beta_table: &BetaTable<F>,
 ) -> Result<Evals<F>, ExpressionError> {
+
+    // --- TODO!(ryancao): (From Zhenfei): So we can probably cache this beta table evaluation somehow
+    // and then use those evals many times and not have to do this over and over again
+    // Zhenfei's idea: Just memoize
+
     // --- Constant evaluation is just Sum(k) ---
     let constant = |constant, beta_mle_ref: &DenseMleRef<F>| {
         // need to actually treat this like a 'scaled' because there is a beta table
@@ -155,6 +184,8 @@ pub(crate) fn compute_sumcheck_message<
         Ok(beta_eval * constant)
     };
 
+    // V_i(b_1, ..., b_n) = ((1 - b1) * (V_{i + 1}(0, 0, b2, ..., bn) + V_{i + 1}(0, 0, b2, ..., bn))) + 
+    // b1 * (V_{i + 1}(0, 0, b2, ..., bn) * V_{i + 1}(0, 0, b2, ..., bn)))
     let selector = |index: &MleIndex<F>, a, b| match index {
         MleIndex::IndexedBit(indexed_bit) => {
             match Ord::cmp(&round_index, indexed_bit) {
@@ -168,31 +199,31 @@ pub(crate) fn compute_sumcheck_message<
                 // --- over should just be values. The result is that if you plug in 0, you get ---
                 // --- the first value, and if you plug in 1 you get the second ---
                 std::cmp::Ordering::Equal => {
-                    let first = b?;
-                    let second: Evals<F> = a?;
+                    let first = a?;
+                    let second: Evals<F> = b?;
 
                     let (Evals(first_evals), Evals(second_evals)) = (first, second);
-                    if (first_evals.len() == second_evals.len()) && first_evals.len() == 3 {
-                        if max_degree == 2 {
-                            // we need to combine the evals by doing (1-x) * first eval + x * second eval
-                            let first_evals = Evals(
-                                (0..3)
-                                    .map(|idx| first_evals[idx] * (F::one() - F::from(idx as u64)))
-                                    .collect(),
-                            );
+                    if (first_evals.len() == second_evals.len()) {
+                        // we need to combine the evals by doing (1-x) * first eval + x * second eval
+                        let first_evals = Evals(
+                            first_evals
+                                .into_iter()
+                                .enumerate()
+                                .map(|(idx, first_eval)| {
+                                    first_eval * (F::one() - F::from(idx as u64))
+                                })
+                                .collect(),
+                        );
 
-                            let second_evals = Evals(
-                                (0..3)
-                                    .map(|idx| second_evals[idx] * F::from(idx as u64))
-                                    .collect(),
-                            );
+                        let second_evals = Evals(
+                            second_evals
+                                .into_iter()
+                                .enumerate()
+                                .map(|(idx, second_eval)| second_eval * F::from(idx as u64))
+                                .collect(),
+                        );
 
-                            Ok(first_evals + second_evals)
-                        } else {
-                            Err(ExpressionError::EvaluationError(
-                                "Expression has a degree > 2 when the round is on a selector bit",
-                            ))
-                        }
+                        Ok(first_evals + second_evals)
                     } else {
                         Err(ExpressionError::EvaluationError("Expression returns two evals that do not have length 3 on a selector bit"))
                     }
@@ -208,7 +239,7 @@ pub(crate) fn compute_sumcheck_message<
 
             // --- Just r * V[2i + 1] + (1 - r) * V[2i] ---
             // --- (I.e. the selector formulation after the selector bit is bound to `r` above) ---
-            Ok((a * coeff) + (b * coeff_neg))
+            Ok((b * coeff) + (a * coeff_neg))
         }
         _ => Err(ExpressionError::InvalidMleIndex),
     };
@@ -299,22 +330,25 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
     if !beta_ref.indexed() {
         return Err(MleError::NotIndexedError);
     }
+    // dbg!(&mle_refs);
+    // dbg!(&beta_ref);
 
     // --- Gets the total number of iterated variables across all MLEs within this product ---
-    let mut max_num_vars = mle_refs
+    let max_num_vars = mle_refs
         .iter()
         .map(|mle_ref| mle_ref.num_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
-    max_num_vars = std::cmp::max(max_num_vars, beta_ref.num_vars());
+    let beta_max_num_vars = std::cmp::max(max_num_vars, beta_ref.num_vars());
+    //max_num_vars = std::cmp::max(max_num_vars, beta_ref.num_vars());
 
     if independent_variable {
         //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
         let eval_count = degree + 1;
 
         //iterate across all pairs of evaluations
-        let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
+        let evals = cfg_into_iter!((0..1 << (beta_max_num_vars - 1))).fold(
             #[cfg(feature = "parallel")]
             || vec![F::zero(); eval_count],
             #[cfg(not(feature = "parallel"))]
@@ -323,7 +357,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                 // compute the beta successors the same way it's done for each mle. do it outside the loop
                 // because it only needs to be done once per product of mles
                 let zero = F::zero();
-                let idx = if beta_ref.num_vars() < max_num_vars {
+                let idx = if beta_ref.num_vars() < beta_max_num_vars {
                     let max = 1 << beta_ref.num_vars();
                     (index * 2) % max
                 } else {
@@ -348,7 +382,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                     .iter()
                     .map(|mle_ref| {
                         let zero = F::zero();
-                        let index = if mle_ref.num_vars() < max_num_vars {
+                        let index = if mle_ref.num_vars() < beta_max_num_vars {
                             let max = 1 << mle_ref.num_vars();
                             (index * 2) % max
                         } else {
@@ -363,7 +397,6 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
 
                         // let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
                         let step = second - first;
-
                         let successors =
                             std::iter::successors(Some(second), move |item| Some(*item + step));
                         //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
@@ -399,13 +432,23 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
         // beta table still has an independent variable so we have a line
         let eval_count = 2;
 
-        let partials = cfg_into_iter!((0..1 << (max_num_vars))).fold(
+        let range_var = {
+            if (beta_max_num_vars - 1) >= max_num_vars {
+                beta_max_num_vars - 1
+            }
+            // should never be the case
+            else {
+                max_num_vars
+            }
+        };
+
+        let partials = cfg_into_iter!((0..1 << (range_var))).fold(
             #[cfg(feature = "parallel")]
             || vec![F::zero(); eval_count],
             #[cfg(not(feature = "parallel"))]
             vec![F::zero(); eval_count],
             |mut acc, index| {
-                let beta_idx_0 = if beta_ref.num_vars() < max_num_vars {
+                let beta_idx_0 = if beta_ref.num_vars() < beta_max_num_vars {
                     let max = 1 << beta_ref.num_vars();
                     (index * 2) % max
                 } else {
@@ -431,7 +474,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                     .iter()
                     // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
-                        let index = if mle_ref.num_vars() < max_num_vars {
+                        let index = if mle_ref.num_vars() < beta_max_num_vars {
                             // max = 2^{num_vars}; index := index % 2^{num_vars}
                             let max = 1 << mle_ref.num_vars();
                             index % max
@@ -439,14 +482,12 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                             index
                         };
                         // --- Access the MLE at that index. Pad with zeros ---
-                        mle_ref
-                            .bookkeeping_table()
-                            .get(index)
-                            .unwrap_or(&zero)
+                        mle_ref.bookkeeping_table().get(index).unwrap_or(&zero)
                     })
                     .fold(F::one(), |acc, eval| acc * eval);
 
                 let beta_evals = [beta_at_0, beta_at_1];
+                
                 // multiply the beta evals by the product of the resulting mles
                 acc.iter_mut()
                     .zip(beta_evals.iter())
@@ -456,6 +497,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
         );
 
         #[cfg(feature = "parallel")]
+        
         let partials = partials.reduce(
             || vec![F::zero(); eval_count],
             |mut acc, partial| {
@@ -465,12 +507,20 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                 acc
             },
         );
+        let eval_count = degree + 1;
 
-        let evals = vec![
-            partials[0],
-            partials[1],
-            F::from(2_u64) * partials[1] - partials[0],
-        ];
+        let step: F = partials[1] - partials[0];
+        let mut counter = 2;
+        let evals =
+        std::iter::once(partials[0]).chain(std::iter::successors(Some(partials[1]), move |item| if counter < eval_count {counter += 1; Some(*item + step)} else {None})).collect_vec();
+
+        debug_assert!(evals.len() == eval_count);
+
+        // let evals = vec![
+        //     partials[0],
+        //     partials[1],
+        //     F::from(2_u64) * step,
+        // ];
 
         Ok(Evals(evals))
     }

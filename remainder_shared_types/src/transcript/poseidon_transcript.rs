@@ -1,8 +1,11 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
+use std::{iter::repeat_with, ops::Range};
+
+use ark_std::{test_rng, rand::{Rng, distributions::uniform::SampleRange}};
 use itertools::Itertools;
-use serde::{Serialize, Deserialize};
-use tracing::trace;
 use poseidon::Poseidon;
+use serde::{Deserialize, Serialize};
+use tracing::trace;
 
 use crate::FieldExt;
 
@@ -13,11 +16,12 @@ fn default_sponge<F: FieldExt>() -> Poseidon<F, 3, 2> {
 }
 
 /// A transcript that uses the Poseidon hash function; Useful for recursive proving
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PoseidonTranscript<F: FieldExt> {
     #[serde(skip)]
     #[serde(default = "default_sponge")]
     sponge: Poseidon<F, 3, 2>,
+    counter: usize,
 }
 
 impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
@@ -29,6 +33,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         // let params = PoseidonConfig::new(8, 60, 5, mds, ark, 2, 1);
         Self {
             sponge: default_sponge(),
+            counter: 1,
         }
     }
 
@@ -39,6 +44,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
     ) -> Result<(), TranscriptError> {
         trace!(module = "Transcript", "Absorbing: {}, {:?}", label, element);
         self.sponge.update(&[element]);
+        // dbg!(&element);
         Ok(())
     }
 
@@ -53,6 +59,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
             label,
             elements
         );
+        // dbg!(&elements);
         self.sponge.update(&elements);
         Ok(())
     }
@@ -60,7 +67,14 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
     fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptError> {
         let output = self.sponge.squeeze();
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
+
+        self.counter += 1;
+
+        // Ok(F::from((self.counter % 2 + 1) as u64))
         Ok(output)
+        // Ok(F::one() + F::one())
+
+        // Ok(F::from(10))
     }
 
     fn get_challenges(
@@ -71,6 +85,8 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         let output = (0..len).map(|_| self.sponge.squeeze()).collect_vec();
         trace!(module = "Transcript", "Squeezing: {}, {:?}", label, output);
         Ok(output)
+
+        // Ok(repeat_with(|| F::one() + F::one()).take(len).collect_vec())
     }
 }
 

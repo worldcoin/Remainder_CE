@@ -26,11 +26,12 @@ use super::{enum_input_layer::InputLayerEnum, InputLayer, MleInputLayer};
 
 pub struct LigeroInputLayer<F: FieldExt, Tr> {
     mle: DenseMle<F, F>,
-    layer_id: LayerId,
+    pub(crate) layer_id: LayerId,
     comm: Option<LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>>,
     aux: Option<LcProofAuxiliaryInfo>,
     root: Option<LcRoot<LigeroEncoding<F>, F>>,
     _marker: PhantomData<Tr>,
+    is_precommit: bool,
 }
 
 /// The *actual* Ligero evaluation proof the prover needs to send to the verifier
@@ -39,6 +40,8 @@ pub struct LigeroInputLayer<F: FieldExt, Tr> {
 pub struct LigeroInputProof<F: FieldExt> {
     pub proof: LigeroProof<F>,
     pub aux: LcProofAuxiliaryInfo,
+    /// Whether this is a pre-committed (true) or live-committed Ligero input layer
+    pub is_precommit: bool,
 }
 
 const RHO_INV: u8 = 4;
@@ -109,6 +112,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
         Ok(LigeroInputProof {
             proof: ligero_eval_proof,
             aux,
+            is_precommit: self.is_precommit,
         })
     }
 
@@ -154,6 +158,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for LigeroInputLayer<F, Tr
             aux: None,
             root: None,
             _marker: PhantomData,
+            is_precommit: false,
         }
     }
 }
@@ -174,6 +179,7 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
             aux: Some(ligero_aux),
             root: Some(ligero_root),
             _marker: PhantomData,
+            is_precommit: true,
         }
     }
 }

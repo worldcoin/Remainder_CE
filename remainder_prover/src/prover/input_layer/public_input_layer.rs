@@ -17,7 +17,7 @@ use super::{enum_input_layer::InputLayerEnum, InputLayer, InputLayerError, MleIn
 ///An Input Layer that is send to the verifier in the clear
 pub struct PublicInputLayer<F: FieldExt, Tr> {
     mle: DenseMle<F, F>,
-    layer_id: LayerId,
+    pub(crate) layer_id: LayerId,
     _marker: PhantomData<Tr>,
 }
 
@@ -62,7 +62,9 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
-
+            debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
+            // dbg!(&eval);
+            // dbg!(&claim);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
             Claim::new_raw(vec![], mle_ref.bookkeeping_table[0])

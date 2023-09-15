@@ -504,8 +504,7 @@ pub(crate) mod tests {
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
-    use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
-    use remainder_shared_types::transcript::Transcript;
+    use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
 
     use super::*;
     use ark_std::test_rng;

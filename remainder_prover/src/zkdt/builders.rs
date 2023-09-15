@@ -1,16 +1,18 @@
 //!The LayerBuilders that build the ZKDT Circuit
 use std::cmp::max;
 
-use ark_std::log2;
+use ark_crypto_primitives::crh::sha256::digest::typenum::Zero;
+use ark_std::{log2, cfg_into_iter};
 use itertools::Itertools;
 
 use crate::expression::{ExpressionStandard, Expression};
 use crate::layer::batched::BatchedLayer;
 use crate::layer::{LayerBuilder, LayerId};
+use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
-use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
+use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode, BinDecomp4Bit};
 
 struct ProductTreeBuilder<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
@@ -141,7 +143,7 @@ impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilderZeroRef<F> {
         //     .map(|(InputAttribute { attr_id: input_attr_ids, .. }, DecisionNode { attr_id: path_attr_ids, ..})|
         //         input_attr_ids - path_attr_ids), id, prefix_bits)
 
-        let num_vars = self.mle_path.num_iterated_vars();
+        let num_vars = self.mle_path.num_iterated_vars() - 2;
         ZeroMleRef::new(num_vars, prefix_bits, id)
     }
 }
@@ -171,6 +173,7 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
 
         // begin sus: feels like there should be a concat (reverse direction) for expression,
         // for splitting the expression
+        // TODO!(ende): remove the optional padding of 1!!!
         let split_mle = self.mle.split(F::one());
         // end sus
 
@@ -239,13 +242,36 @@ impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
                                      Box::new(ExpressionStandard::Mle(self.mle_2.mle_ref())))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let mut concat_mle_vec: Vec<F> = self.mle_1
-            .clone()
-            .into_iter()
-            .collect();
+        let max_num_var = std::cmp::max(self.mle_1.num_iterated_vars(), self.mle_2.num_iterated_vars());
+        let interleave_size = 1 << (max_num_var + 1);
+        let range_size = 1 << max_num_var;
+        let mut interleaved_mle_vec = vec![F::zero(); interleave_size];
+        let zero = &F::zero();
+        let first_mle_ref = self.mle_1.mle_ref();
+        let second_mle_ref = self.mle_2.mle_ref();
 
-        concat_mle_vec.extend(self.mle_2.clone().into_iter());
-        DenseMle::new_from_raw(concat_mle_vec, id, prefix_bits)
+        (0..range_size).into_iter().for_each(
+            |idx| {
+                let mle_1_idx = 1 << self.mle_1.num_iterated_vars();
+                let mle_2_idx = 1 << self.mle_2.num_iterated_vars();
+
+                let index_1 = {
+                    if idx >= mle_1_idx { idx % mle_1_idx } else { idx }
+                };
+
+                let index_2 = {
+                    if idx >= mle_2_idx { idx % mle_2_idx } else { idx }
+                };
+
+                let first_mle_val = first_mle_ref.bookkeeping_table.get(index_1).unwrap_or(zero);
+                let second_mle_val = second_mle_ref.bookkeeping_table.get(index_2).unwrap_or(zero);
+                interleaved_mle_vec[idx*2] = *first_mle_val;
+                interleaved_mle_vec[idx*2 + 1] = *second_mle_val;
+
+            }
+        );
+
+        DenseMle::new_from_raw(interleaved_mle_vec, id, prefix_bits)
     }
 }
 
@@ -257,6 +283,40 @@ impl<F: FieldExt> ConcatBuilder<F> {
     ) -> Self {
         Self {
             mle_1, mle_2
+        }
+    }
+}
+
+/// Takes x, outputs r-x
+/// first step in exponantiation
+pub struct FSRMinusXBuilder<F: FieldExt> {
+    packed_x: DenseMle<F, F>,
+    r_mle: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for FSRMinusXBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.packed_x.mle_ref()))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let r = self.r_mle.mle_ref().bookkeeping_table[0];
+        DenseMle::new_from_iter(self.packed_x.clone().into_iter().map(
+            |x| r - x
+        ), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> FSRMinusXBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        packed_x: DenseMle<F, F>,
+        r_mle: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            packed_x, r_mle
         }
     }
 }
@@ -314,6 +374,34 @@ impl<F: FieldExt> LayerBuilder<F> for SquaringBuilder<F> {
 }
 
 impl<F: FieldExt> SquaringBuilder<F> {
+    /// create new leaf node packed
+    pub fn new(
+        mle: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            mle
+        }
+    }
+}
+
+/// takes a densemleref that is all zeros and returns a zeromleref as the successor 
+pub struct ZeroBuilder<F: FieldExt> {
+    mle: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
+    type Successor = ZeroMleRef<F>;
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.mle.mle_ref())
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+
+        let mle_num_vars = self.mle.num_iterated_vars();
+        ZeroMleRef::new(mle_num_vars, prefix_bits, id)
+    }
+}
+
+impl<F: FieldExt> ZeroBuilder<F> {
     /// create new leaf node packed
     pub fn new(
         mle: DenseMle<F, F>,
@@ -402,6 +490,48 @@ impl<F: FieldExt> BitExponentiationBuilderCatBoost<F> {
     }
 }
 
+/// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
+pub struct BitExponentiationBuilderInput<F: FieldExt> {
+    bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
+    bit_index: usize,
+    r_minus_x_power: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
+    type Successor = DenseMle<F, F>;
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
+
+        println!("b_ij {:?}", b_ij.num_vars());
+        println!("self.r_minus_x_power {:?}", self.r_minus_x_power.mle_ref().num_vars());
+        ExpressionStandard::Sum(Box::new(ExpressionStandard::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
+                                Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(b_ij)))
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        //TODO!(fix this so it uses bin_decomp.into_iter)
+        let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
+        DenseMle::new_from_iter(self.r_minus_x_power
+            .clone()
+            .into_iter()
+            .zip(b_ij.bookkeeping_table.clone().into_iter())
+            .map(
+            |(r_minus_x_power, b_ij_iter)| (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> BitExponentiationBuilderInput<F> {
+    /// create new leaf node packed
+    pub(crate) fn new(
+        bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
+        bit_index: usize,
+        r_minus_x_power: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            bin_decomp, bit_index, r_minus_x_power
+        }
+    }
+}
+
 /// Takes (1) b_ij * (r-x_i)^j + (1-b_ij), (2) prev_prods PROD(b_ij * (r-x_i)^j + (1-b_ij)) across j
 /// Outputs (1) * (2). naming (1) as multiplier
 pub struct ProductBuilder<F: FieldExt> {
@@ -413,6 +543,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
+        println!("self.prev_prod {:?}", self.prev_prod.mle_ref().num_vars());
         ExpressionStandard::products(vec![self.multiplier.mle_ref(), self.prev_prod.mle_ref()])
     }
 
@@ -476,6 +607,46 @@ impl<F: FieldExt> LeafPackingBuilder<F> {
     }
 }
 
+/// packs leaf node mles, FS version
+pub struct FSLeafPackingBuilder<F: FieldExt> {
+    mle: DenseMle<F, LeafNode<F>>,
+    r_mle: DenseMle<F, F>,
+    r_packing_mle: DenseMle<F, F>
+}
+
+impl<F: FieldExt> LayerBuilder<F> for FSLeafPackingBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    // expressions = r - (x.node_id + r_packing * x.node_val)
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.mle.node_id()) +
+        ExpressionStandard::products(vec![self.mle.node_val(), self.r_packing_mle.mle_ref()]))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let r = self.r_mle.mle_ref().bookkeeping_table[0];
+        let r_packing = self.r_packing_mle.mle_ref().bookkeeping_table[0];
+
+        DenseMle::new_from_iter(self.mle.into_iter().map(
+            |LeafNode {node_id, node_val}|
+            r - (node_id + r_packing * node_val)
+        ), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> FSLeafPackingBuilder<F> {
+    /// create new leaf node packed
+    pub(crate) fn new(
+        mle: DenseMle<F, LeafNode<F>>,
+        r_mle: DenseMle<F, F>,
+        r_packing_mle: DenseMle<F, F>
+    ) -> Self {
+        Self {
+            mle, r_mle, r_packing_mle
+        }
+    }
+}
+
 /// packs decision node mles
 pub struct DecisionPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, DecisionNode<F>>,
@@ -510,6 +681,86 @@ impl<F: FieldExt> DecisionPackingBuilder<F> {
     ) -> Self {
         Self {
             mle, r, r_packings
+        }
+    }
+}
+
+/// packs decision node mles, FS version
+pub struct FSDecisionPackingBuilder<F: FieldExt> {
+    mle: DenseMle<F, DecisionNode<F>>,
+    r_mle: DenseMle<F, F>,
+    r_packing_mle: DenseMle<F, F>,
+    r_packing_another_mle: DenseMle<F, F>
+}
+
+impl<F: FieldExt> LayerBuilder<F> for FSDecisionPackingBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    // expressions = r - (x.node_id + r_packing[0] * x.attr_id + r_packing[1] * x.threshold)
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.mle.node_id()) +
+        ExpressionStandard::products(vec![self.mle.attr_id(), self.r_packing_mle.mle_ref()]) +
+        ExpressionStandard::products(vec![self.mle.threshold(), self.r_packing_another_mle.mle_ref()]))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let r = self.r_mle.mle_ref().bookkeeping_table[0];
+        let r_packing = self.r_packing_mle.mle_ref().bookkeeping_table[0];
+        let r_packing_another = self.r_packing_another_mle.mle_ref().bookkeeping_table[0];
+
+        DenseMle::new_from_iter(self.mle.into_iter().map(
+            |DecisionNode { node_id, attr_id, threshold }|
+            r - (node_id + r_packing * attr_id + r_packing_another * threshold)
+        ), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> FSDecisionPackingBuilder<F> {
+    /// create new decision node packed
+    pub(crate) fn new(
+        mle: DenseMle<F, DecisionNode<F>>,
+        r_mle: DenseMle<F, F>,
+        r_packing_mle: DenseMle<F, F>,
+        r_packing_another_mle: DenseMle<F, F>
+    ) -> Self {
+        Self {
+            mle, r_mle, r_packing_mle, r_packing_another_mle
+        }
+    }
+}
+
+/// packs input x, FS version
+pub struct FSInputPackingBuilder<F: FieldExt> {
+    mle: DenseMle<F, InputAttribute<F>>,
+    r_mle: DenseMle<F, F>,
+    r_packing_mle: DenseMle<F, F>
+}
+
+impl<F: FieldExt> LayerBuilder<F> for FSInputPackingBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    // expressions = r - (x.attr_id + r_packing * x.attr_val)
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.mle.attr_id(None)) +
+        ExpressionStandard::products(vec![self.mle.attr_val(None), self.r_packing_mle.mle_ref()]))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let r = self.r_mle.mle_ref().bookkeeping_table[0];
+        let r_packing = self.r_packing_mle.mle_ref().bookkeeping_table[0];
+        DenseMle::new_from_iter(self.mle.into_iter().map(|InputAttribute { attr_id, attr_val }| r - (attr_id + r_packing * attr_val)), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> FSInputPackingBuilder<F> {
+    /// create new decision node packed
+    pub(crate) fn new(
+        mle: DenseMle<F, InputAttribute<F>>,
+        r_mle: DenseMle<F, F>,
+        r_packing_mle: DenseMle<F, F>
+    ) -> Self {
+        Self {
+            mle, r_mle, r_packing_mle
         }
     }
 }
@@ -586,12 +837,14 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
-    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::zkdt_helpers::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, generate_mles_batch_catboost_single_tree, BatchedCatboostMles, BatchedDummyMles}};
+    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::data_pipeline::dummy_data_generator::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, generate_mles_batch_catboost_single_tree, BatchedCatboostMles, BatchedDummyMles}};
     use halo2_base::halo2_proofs::halo2curves::{bn256::Fr, FieldExt};
-    use ark_ff::Field;
     use ark_std::log2;
 
     #[test]
@@ -1227,11 +1480,11 @@ mod tests {
     fn test_attribute_consistency_builder_catboost() {
 
         let (BatchedCatboostMles {
-            dummy_permuted_input_data_mle,
-            dummy_decision_node_paths_mle, ..
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+            permuted_input_data_mle_vec,
+            decision_node_paths_mle_vec, ..
+        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
-        let num_dummy_inputs = dummy_permuted_input_data_mle.len();
+        let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
         let mut zero_vec = vec![];
         for _ in 0..(tree_height-1) {
@@ -1240,8 +1493,8 @@ mod tests {
 
         for i in 0..num_dummy_inputs {
             let attribute_consistency_build = AttributeConsistencyBuilder {
-                mle_input: dummy_permuted_input_data_mle[i].clone(),
-                mle_path: dummy_decision_node_paths_mle[i].clone(),
+                mle_input: permuted_input_data_mle_vec[i].clone(),
+                mle_path: decision_node_paths_mle_vec[i].clone(),
                 tree_height: tree_height
             };
             let _ = attribute_consistency_build.build_expression();
@@ -1256,11 +1509,11 @@ mod tests {
     fn test_permutation_builder_catboost() {
 
         let (BatchedCatboostMles {
-            dummy_input_data_mle,
-            dummy_permuted_input_data_mle, ..
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+            input_data_mle_vec,
+            permuted_input_data_mle_vec, ..
+        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
-        let num_dummy_inputs = dummy_permuted_input_data_mle.len();
+        let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
         let (r, r_packings) = (Fr::from(3), (Fr::from(5), Fr::from(4)));
         let another_r = Fr::from(6);
@@ -1269,7 +1522,7 @@ mod tests {
         for i in 0..num_dummy_inputs {
 
             let input_packing_builder = InputPackingBuilder{
-                mle: dummy_input_data_mle[i].clone(),
+                mle: input_data_mle_vec[i].clone(),
                 r,
                 r_packing
             };
@@ -1277,7 +1530,7 @@ mod tests {
             let input_packed = input_packing_builder.next_layer(LayerId::Layer(0), None);
 
             let permuted_input_packing_builder = InputPackingBuilder{
-                mle: dummy_permuted_input_data_mle[i].clone(),
+                mle: permuted_input_data_mle_vec[i].clone(),
                 r,
                 r_packing
             };
@@ -1318,14 +1571,14 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
-        let (BatchedCatboostMles {dummy_decision_node_paths_mle,
-            dummy_leaf_node_paths_mle,
-            dummy_multiplicities_bin_decomp_mle_decision,
-            dummy_multiplicities_bin_decomp_mle_leaf,
-            dummy_decision_nodes_mle,
-            dummy_leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+        let (BatchedCatboostMles {decision_node_paths_mle_vec,
+            leaf_node_paths_mle_vec,
+            multiplicities_bin_decomp_mle_decision,
+            multiplicities_bin_decomp_mle_leaf,
+            decision_nodes_mle,
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
-        let num_dummy_inputs = dummy_decision_node_paths_mle.len();
+        let num_dummy_inputs = decision_node_paths_mle_vec.len();
 
         // println!("node_paths nodes: {:?}", dummy_decision_node_paths_mle);
         // println!("leaf_paths nodes: {:?}", dummy_leaf_node_paths_mle);
@@ -1343,7 +1596,7 @@ mod tests {
 
         // WHOLE TREE: decision nodes packing
         let decision_packing_builder = DecisionPackingBuilder{
-            mle: dummy_decision_nodes_mle.clone(),
+            mle: decision_nodes_mle.clone(),
             r,
             r_packings
         };
@@ -1352,7 +1605,7 @@ mod tests {
 
         // WHOLE TREE: leaf nodes packing
         let leaf_packing_builder = LeafPackingBuilder{
-            mle: dummy_leaf_nodes_mle.clone(),
+            mle: leaf_nodes_mle.clone(),
             r,
             r_packing: another_r
         };
@@ -1380,7 +1633,7 @@ mod tests {
 
         // b_ij * (r-x) + (1 - b_ij), j = 0
         let prev_prod_builder_decision = BitExponentiationBuilderCatBoost {
-            bin_decomp: dummy_multiplicities_bin_decomp_mle_decision.clone(),
+            bin_decomp: multiplicities_bin_decomp_mle_decision.clone(),
             bit_index: 0,
             r_minus_x_power: r_minus_x_decision.clone()
         };
@@ -1388,7 +1641,7 @@ mod tests {
         let mut prev_prod_decision = prev_prod_builder_decision.next_layer(LayerId::Layer(2), None);
 
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost {
-            bin_decomp: dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+            bin_decomp: multiplicities_bin_decomp_mle_leaf.clone(),
             bit_index: 0,
             r_minus_x_power: r_minus_x_leaf.clone()
         };
@@ -1416,7 +1669,7 @@ mod tests {
 
             // b_ij * (r-x)^2 + (1 - b_ij), j = 1..15
             let curr_prod_builder_decision = BitExponentiationBuilderCatBoost {
-                bin_decomp: dummy_multiplicities_bin_decomp_mle_decision.clone(),
+                bin_decomp: multiplicities_bin_decomp_mle_decision.clone(),
                 bit_index: i,
                 r_minus_x_power: r_minus_x_square_decision.clone()
             };
@@ -1424,7 +1677,7 @@ mod tests {
             let curr_prod_decision = curr_prod_builder_decision.next_layer(LayerId::Layer(i+2), None);
 
             let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost {
-                bin_decomp: dummy_multiplicities_bin_decomp_mle_leaf.clone(),
+                bin_decomp: multiplicities_bin_decomp_mle_leaf.clone(),
                 bit_index: i,
                 r_minus_x_power: r_minus_x_square_leaf.clone()
             };
@@ -1510,7 +1763,7 @@ mod tests {
 
             // PATH: decision nodes packing
             let decision_path_packing_builder = DecisionPackingBuilder{
-                mle: dummy_decision_node_paths_mle[i].clone(),
+                mle: decision_node_paths_mle_vec[i].clone(),
                 r,
                 r_packings
             };
@@ -1519,7 +1772,7 @@ mod tests {
 
             // PATH: leaf nodes packing
             let leaf_path_packing_builder = LeafPackingBuilder{
-                mle: dummy_leaf_node_paths_mle[i].clone(),
+                mle: leaf_node_paths_mle_vec[i].clone(),
                 r,
                 r_packing: another_r
             };

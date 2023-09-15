@@ -12,11 +12,13 @@ use remainder_shared_types::FieldExt;
 use self::mle_enum::MleEnum;
 use dyn_clonable::*;
 
+pub mod batched_mulgate;
 pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
 pub mod gate;
 pub mod mle_enum;
+pub mod mulgate;
 pub mod zero;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
@@ -38,6 +40,8 @@ where
     fn get_padded_evaluations(&self) -> Vec<F>;
 
     fn add_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
+
+    fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>>;
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
