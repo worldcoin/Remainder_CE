@@ -2,21 +2,30 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use crate::mle::gate::{AddGate, AddGateBatched};
+use crate::mle::{
+    batched_mulgate::MulGateBatched,
+    gate::{AddGate, AddGateBatched},
+    mulgate::MulGate,
+};
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
 use super::claims::Claim;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 ///An enum representing all the possible kinds of Layers
 pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     ///A standard `GKRLayer`
     Gkr(GKRLayer<F, Tr>),
-    ///An Addition Gate
+    /// A Mulgate
+    MulGate(MulGate<F, Tr>),
+    /// An Addition Gate
     AddGate(AddGate<F, Tr>),
+    /// Batched AddGate
     AddGateBatched(AddGateBatched<F, Tr>),
+    /// Batched MulGate
+    MulGateBatched(MulGateBatched<F, Tr>),
     EmptyLayer(EmptyLayer<F, Tr>),
 }
 
@@ -30,6 +39,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     ) -> Result<crate::prover::SumcheckProof<F>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.prove_rounds(claim, transcript),
+            LayerEnum::MulGate(layer) => layer.prove_rounds(claim, transcript),
+            LayerEnum::MulGateBatched(layer) => layer.prove_rounds(claim, transcript),
             LayerEnum::AddGate(layer) => layer.prove_rounds(claim, transcript),
             LayerEnum::AddGateBatched(layer) => layer.prove_rounds(claim, transcript),
             LayerEnum::EmptyLayer(layer) => layer.prove_rounds(claim, transcript),
@@ -44,6 +55,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     ) -> Result<(), super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
+            LayerEnum::MulGate(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
+            LayerEnum::MulGateBatched(layer) => {
+                layer.verify_rounds(claim, sumcheck_rounds, transcript)
+            }
             LayerEnum::AddGate(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
             LayerEnum::AddGateBatched(layer) => {
                 layer.verify_rounds(claim, sumcheck_rounds, transcript)
@@ -55,6 +70,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     fn get_claims(&self) -> Result<Vec<Claim<F>>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
+            LayerEnum::MulGate(layer) => layer.get_claims(),
+            LayerEnum::MulGateBatched(layer) => layer.get_claims(),
             LayerEnum::AddGate(layer) => layer.get_claims(),
             LayerEnum::AddGateBatched(layer) => layer.get_claims(),
             LayerEnum::EmptyLayer(layer) => layer.get_claims(),
@@ -64,6 +81,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     fn id(&self) -> &super::LayerId {
         match self {
             LayerEnum::Gkr(layer) => layer.id(),
+            LayerEnum::MulGate(layer) => layer.id(),
+            LayerEnum::MulGateBatched(layer) => layer.id(),
             LayerEnum::AddGate(layer) => layer.id(),
             LayerEnum::AddGateBatched(layer) => layer.id(),
             LayerEnum::EmptyLayer(layer) => layer.id(),
@@ -90,17 +109,39 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     ) -> Result<Vec<F>, super::claims::ClaimError> {
         match self {
             LayerEnum::Gkr(layer) => {
-                layer.get_wlx_evaluations(&claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+            }
+            LayerEnum::MulGate(layer) => {
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+            }
+            LayerEnum::MulGateBatched(layer) => {
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
             }
             LayerEnum::AddGate(layer) => {
-                layer.get_wlx_evaluations(&claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
             }
             LayerEnum::AddGateBatched(layer) => {
-                layer.get_wlx_evaluations(&claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
             }
             LayerEnum::EmptyLayer(layer) => {
-                layer.get_wlx_evaluations(&claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
             }
         }
+    }
+}
+
+impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
+    ///Gets the size of the Layer as a whole in terms of number of bits
+    pub(crate) fn layer_size(&self) -> usize {
+        let expression = match self {
+            LayerEnum::Gkr(layer) => &layer.expression,
+            LayerEnum::EmptyLayer(layer) => &layer.expr,
+            LayerEnum::AddGate(_)
+            | LayerEnum::AddGateBatched(_)
+            | LayerEnum::MulGate(_)
+            | LayerEnum::MulGateBatched(_) => unimplemented!(),
+        };
+
+        expression.get_expression_size(0)
     }
 }

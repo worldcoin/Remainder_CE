@@ -17,41 +17,43 @@ hashes. Additionally, it adds (explicit) multilinear functionality
 to the codebase.
 */
 
+use crate::utils::get_least_significant_bits_to_usize_little_endian;
+use ark_ff::biginteger::BigInteger;
 use err_derive::Error;
 use itertools::Itertools;
 use poseidon::Poseidon;
-use poseidon_ligero::PoseidonSpongeHasher;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
+use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
-use ark_ff::biginteger::BigInteger;
-use crate::utils::get_least_significant_bits_to_usize_little_endian;
 
 // --- Actual field trait + transcript stuff ---
-use remainder_shared_types::{FieldExt, transcript::{Transcript as RemainderTranscript, poseidon_transcript::PoseidonTranscript}};
+use remainder_shared_types::{
+    transcript::{poseidon_transcript::PoseidonTranscript, Transcript as RemainderTranscript},
+    FieldExt,
+};
 
 mod macros;
 
-#[cfg(test)]
-pub mod tests;
-/// For Poseidon hashing (implementation with respect to Digest and Transcript)
-pub mod poseidon_ligero;
 /// For converting between this codebase's types and the types the page would like to have
 pub mod adapter;
-/// For actual Ligero proof structs
-pub mod ligero_structs;
-/// For multilinear commitment stuff
-pub mod ligero_ml_helper;
 /// Public functions for univariate and multilinear Ligero commitment (with Poseidon)
 pub mod ligero_commit;
+/// For multilinear commitment stuff
+pub mod ligero_ml_helper;
+/// For actual Ligero proof structs
+pub mod ligero_structs;
+/// For Poseidon hashing (implementation with respect to Digest and Transcript)
+pub mod poseidon_ligero;
+#[cfg(test)]
+pub mod tests;
 /// Helper functions
 pub mod utils;
 
 /// TODO!(ryancao): Perhaps we should rename this? After everything is working.
 /// We are distinguishing it from `FieldHash` for now.
 pub trait PoseidonFieldHash: FieldExt {
-
     /// Update the digest `d` with the `self` (since `self` should already be a field element)
     fn digest_update<D: FieldHashFnDigest<Self>>(&self, d: &mut D) {
         d.update(&[*self])
@@ -65,7 +67,6 @@ pub trait PoseidonFieldHash: FieldExt {
 
 // --- Ryan's addendum ---
 impl<F: FieldExt> PoseidonFieldHash for F {
-
     fn digest_update<D: FieldHashFnDigest<F>>(&self, d: &mut D) {
         d.update(&[*self])
     }
@@ -173,10 +174,14 @@ where
 /// --- For encoding the matrix size and other useful info ---
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LcProofAuxiliaryInfo {
-    rho_inv: u8,
-    encoded_num_cols: usize,
-    orig_num_cols: usize,
-    num_rows: usize,
+    /// Inverse of the encoding rate rho
+    pub rho_inv: u8,
+    /// Number of columns of the encoded matrix
+    pub encoded_num_cols: usize,
+    /// Number of columns of the original matrix
+    pub orig_num_cols: usize,
+    /// Number of rows of the matrix
+    pub num_rows: usize,
 }
 
 /// result of a verifier operation
@@ -195,9 +200,9 @@ where
     // --- Flattened version of M (non-encoded) matrix ---
     coeffs: Vec<F>,
     // --- Matrix dims ---
-    n_rows: usize, // Height of M (and M')
+    n_rows: usize,           // Height of M (and M')
     encoded_num_cols: usize, // Width of M'
-    orig_num_cols: usize, // Width of M
+    orig_num_cols: usize,    // Width of M
     // --- TODO!(ryancao): What this? ---
     hashes: Vec<F>,
     phantom_data: PhantomData<D>,
@@ -292,8 +297,8 @@ where
     E: Send + Sync,
 {
     col_idx: usize,
-    col: Vec<F>,    // The actual column from M
-    path: Vec<F>,   // TODO!(ryancao)
+    col: Vec<F>,  // The actual column from M
+    path: Vec<F>, // TODO!(ryancao)
     phantom_data: PhantomData<E>,
 }
 
@@ -461,7 +466,6 @@ where
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
-
     // --- This is SUPER ugly, but for the sake of efficiency... ---
     // TODO!(ryancao): Riperoni
     let master_default_poseidon_merkle_hasher = Poseidon::<F, 3, 2>::new(8, 57);
@@ -474,7 +478,14 @@ where
 
     // step 1: hash each column of the commitment (we always reveal a full column)
     let hashes = &mut comm.hashes[..comm.encoded_num_cols];
-    hash_columns::<D, E, F>(&comm.comm, hashes, comm.n_rows, comm.encoded_num_cols, 0, &master_default_poseidon_column_hasher);
+    hash_columns::<D, E, F>(
+        &comm.comm,
+        hashes,
+        comm.n_rows,
+        comm.encoded_num_cols,
+        0,
+        &master_default_poseidon_column_hasher,
+    );
 
     // step 2: compute rest of Merkle tree
     let len_plus_one = comm.hashes.len() + 1;
@@ -484,12 +495,12 @@ where
 }
 
 fn hash_columns<D, E, F>(
-    comm: &[F],                 // The flattened version of M'
-    hashes: &mut [F],           // This is the thing we are populating
-    n_rows: usize,              // Height of M and M'
-    encoded_num_cols: usize,    // Width of M'
-    offset: usize,              // Gets set to zero above
-    master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>
+    comm: &[F],              // The flattened version of M'
+    hashes: &mut [F],        // This is the thing we are populating
+    n_rows: usize,           // Height of M and M'
+    encoded_num_cols: usize, // Width of M'
+    offset: usize,           // Gets set to zero above
+    master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
 ) where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
@@ -505,7 +516,8 @@ fn hash_columns<D, E, F>(
             // let dig = PoseidonSpongeHasher::new_with_params(column_hash_poseidon_params);
             // let halo2_default_sponge = dig.get_()
             // dig = PoseidonSpongeHasher::new_column_hasher(halo2_default_sponge);
-            let dig = PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
+            let dig =
+                PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
             digests.push(dig);
         }
 
@@ -523,14 +535,31 @@ fn hash_columns<D, E, F>(
         for (col, digest) in digests.into_iter().enumerate() {
             hashes[col] = digest.finalize();
         }
-
     } else {
         // recursive case: split and execute in parallel
         let half_cols = hashes.len() / 2;
         let (lo, hi) = hashes.split_at_mut(half_cols);
         rayon::join(
-            || hash_columns::<D, E, F>(comm, lo, n_rows, encoded_num_cols, offset, master_default_poseidon_column_hasher),
-            || hash_columns::<D, E, F>(comm, hi, n_rows, encoded_num_cols, offset + half_cols, master_default_poseidon_column_hasher),
+            || {
+                hash_columns::<D, E, F>(
+                    comm,
+                    lo,
+                    n_rows,
+                    encoded_num_cols,
+                    offset,
+                    master_default_poseidon_column_hasher,
+                )
+            },
+            || {
+                hash_columns::<D, E, F>(
+                    comm,
+                    hi,
+                    n_rows,
+                    encoded_num_cols,
+                    offset + half_cols,
+                    master_default_poseidon_column_hasher,
+                )
+            },
         );
     }
 }
@@ -540,9 +569,8 @@ fn hash_columns<D, E, F>(
 fn merkle_tree<D, F>(
     ins: &[F],
     outs: &mut [F],
-    master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>
-)
-where
+    master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
+) where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
 {
@@ -563,9 +591,8 @@ where
 fn merkle_layer<D, F>(
     ins: &[F],
     outs: &mut [F],
-    master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>
-)
-where
+    master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
+) where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
 {
@@ -583,7 +610,6 @@ where
             digest.update(&[ins[2 * idx + 1]]);
             outs[idx] = digest.finalize_reset();
         }
-
     } else {
         // recursive case: split and compute
         let (inl, inr) = ins.split_at(ins.len() / 2);
@@ -646,7 +672,12 @@ where
     // --- the final hash of such, when used as the target leaf node within ---
     // --- a Merkle proof, given the Merkle path `path` below, yields the ---
     // --- original commitment ---
-    Ok(LcColumn { col, path, phantom_data: PhantomData, col_idx: column })
+    Ok(LcColumn {
+        col,
+        path,
+        phantom_data: PhantomData,
+        col_idx: column,
+    })
 }
 
 const fn log2(v: usize) -> usize {
@@ -668,7 +699,6 @@ where
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
-
     // --- Grab ONE global copy of Merkle + column hashing Poseidon ---
     // --- This is SUPER ugly, but for the sake of efficiency... ---
     // TODO!(ryancao): Riperoni
@@ -745,9 +775,7 @@ where
         tr.get_challenges("column_indices", n_col_opens)
             .unwrap()
             .into_iter()
-            .map(|challenge| {
-                compute_col_idx_from_transcript_challenge(challenge, encoded_num_cols)
-            })
+            .map(|challenge| compute_col_idx_from_transcript_challenge(challenge, encoded_num_cols))
             .collect()
     };
 
@@ -766,7 +794,6 @@ where
         .par_iter()
         .zip(&proof.columns[..])
         .try_for_each(|(&col_num, column)| {
-
             // --- No longer doing the well-formedness check ---
             // --- Okay so we zip the indices with the actual columns ---
             // let rand = {
@@ -786,7 +813,13 @@ where
 
             // --- Merkle path verification: Does hashing for each column, then Merkle tree hashes ---
             // TODO!(ryancao): Make this use Poseidon
-            let path = verify_column_path::<D, E, F>(column, col_num, root, &master_default_poseidon_merkle_hasher, &master_default_poseidon_column_hasher);
+            let path = verify_column_path::<D, E, F>(
+                column,
+                col_num,
+                root,
+                &master_default_poseidon_merkle_hasher,
+                &master_default_poseidon_column_hasher,
+            );
 
             // --- "Very elegant, Riad" - Ryan ---
             match (eval, path) {
@@ -820,7 +853,6 @@ where
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
-
     // --- New Poseidon params + Poseidon hasher ---
     // let poseidon_column_hash_params = PoseidonParams::new(8, 63, 8, 9);
     // let mut digest = PoseidonSpongeHasher::new_with_params(poseidon_column_hash_params);
@@ -859,9 +891,9 @@ where
 
 // check column value
 fn verify_column_value<D, E, F>(
-    column: &LcColumn<E, F>,    // The actual Ligero matrix col M_j
-    tensor: &[F],               // The random r^T we are evaluating at
-    poly_eval: &F,              // The RLC'd, evaluated version r^T M'[j]
+    column: &LcColumn<E, F>, // The actual Ligero matrix col M_j
+    tensor: &[F],            // The random r^T we are evaluating at
+    poly_eval: &F,           // The RLC'd, evaluated version r^T M'[j]
 ) -> bool
 where
     F: FieldExt,
@@ -883,13 +915,13 @@ fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
     challenge: F,
     encoded_num_cols: usize,
 ) -> usize {
-
     // --- Get the number of necessary bits ---
     let log_col_len = log2(encoded_num_cols);
     debug_assert!(log_col_len < 32);
 
     let challenge_le_bytes = challenge.to_bytes_le();
-    let col_idx = get_least_significant_bits_to_usize_little_endian(challenge_le_bytes, log_col_len);
+    let col_idx =
+        get_least_significant_bits_to_usize_little_endian(challenge_le_bytes, log_col_len);
 
     // --- Sanitycheck ---
     assert!(col_idx < encoded_num_cols);
@@ -971,15 +1003,15 @@ where
     // now extract the column numbers to open
     let n_col_opens = enc.get_n_col_opens();
     let columns: Vec<LcColumn<E, F>> = {
-
         // --- I think we need to do a mod operation here... ---
-        let cols_to_open: Vec<usize> = tr.get_challenges("column_indices", n_col_opens)
+        let cols_to_open: Vec<usize> = tr
+            .get_challenges("column_indices", n_col_opens)
             .unwrap()
             .into_iter()
             .enumerate()
-            .map(|(i, challenge)|
+            .map(|(i, challenge)| {
                 compute_col_idx_from_transcript_challenge(challenge, comm.encoded_num_cols)
-            )
+            })
             .collect();
 
         // --- Let's check out this `open_column` function ---
@@ -987,14 +1019,14 @@ where
         // Pretty straightforward. "I LIKE it! - Creed" - Ryan
         // TODO!(ryancao): Put the parallelism back
         cols_to_open
-        .par_iter()
-        .map(|&col| open_column(comm, col))
+            .par_iter()
+            .map(|&col| open_column(comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
     };
 
     Ok(LcEvalProof {
         encoded_num_cols: comm.encoded_num_cols, // Number of columns
-        p_eval, // Actual b^T M value
+        p_eval,                                  // Actual b^T M value
         // --- No longer doing the well-formedness check ---
         // p_random_vec, // Random vectors to check well-formedness
         columns, // Columns plus necessary opening proof content
@@ -1037,7 +1069,16 @@ fn collapse_columns<E, F>(
         let (lo, hi) = poly.split_at_mut(half_cols);
         rayon::join(
             || collapse_columns::<E, F>(coeffs, tensor, lo, n_rows, orig_num_cols, offset),
-            || collapse_columns::<E, F>(coeffs, tensor, hi, n_rows, orig_num_cols, offset + half_cols),
+            || {
+                collapse_columns::<E, F>(
+                    coeffs,
+                    tensor,
+                    hi,
+                    n_rows,
+                    orig_num_cols,
+                    offset + half_cols,
+                )
+            },
         );
     }
 }
@@ -1048,9 +1089,8 @@ fn collapse_columns<E, F>(
 fn merkleize_ser<D, E, F>(
     comm: &mut LcCommit<D, E, F>,
     master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
-    master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>
-)
-where
+    master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
+) where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
@@ -1061,7 +1101,8 @@ where
     for (col, hash) in hashes.iter_mut().enumerate().take(comm.encoded_num_cols) {
         // let poseidon_column_hash_params = PoseidonParams::new(8, 63, 8, 9);
         // let mut digest = PoseidonSpongeHasher::new_with_params(poseidon_column_hash_params);
-        let mut digest = PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
+        let mut digest =
+            PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
         // digest.update(&[F::default()]);
         for row in 0..comm.n_rows {
             comm.comm[row * comm.encoded_num_cols + col].digest_update(&mut digest);
@@ -1101,17 +1142,20 @@ where
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
-    verify_column_path::<D, E, F>(column, col_num, root, master_default_poseidon_merkle_hasher, master_default_poseidon_column_hasher) && verify_column_value::<D, E, F>(column, tensor, poly_eval)
+    verify_column_path::<D, E, F>(
+        column,
+        col_num,
+        root,
+        master_default_poseidon_merkle_hasher,
+        master_default_poseidon_column_hasher,
+    ) && verify_column_value::<D, E, F>(column, tensor, poly_eval)
 }
 
 // Evaluate the committed polynomial using the "outer" tensor
 // --- I'm not sure why Riad is calling it a "tensor" because it's ---
 // --- definitely just a vector but it's the b^T M' component ---
 #[cfg(test)]
-fn eval_outer<D, E, F>(
-    comm: &LcCommit<D, E, F>,
-    tensor: &[F],
-) -> ProverResult<Vec<F>, ErrT<E, F>>
+fn eval_outer<D, E, F>(comm: &LcCommit<D, E, F>, tensor: &[F]) -> ProverResult<Vec<F>, ErrT<E, F>>
 where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,

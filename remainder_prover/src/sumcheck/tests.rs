@@ -49,6 +49,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
 
         // --- Gives back the evaluations g(0), g(1), ..., g(d - 1) ---
         let eval = compute_sumcheck_message(expr, round_index, degree, &mut beta_table);
+        dbg!(&eval);
 
         if let Ok(Evals(evaluations)) = eval {
             // dbg!(&evaluations);
