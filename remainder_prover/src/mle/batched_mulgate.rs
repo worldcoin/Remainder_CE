@@ -50,7 +50,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
                 let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
                 challenges.push(challenge);
                 let eval =
-                    prove_round_copy(&mut lhs, &mut rhs, &beta_g1, &mut beta_g2, round, challenge, &self.nonzero_gates, self.new_bits).unwrap();
+                    prove_round_copy(&mut lhs, &mut rhs, &beta_g1, &mut beta_g2, round, challenge, &self.nonzero_gates, self.new_bits - round).unwrap();
                 transcript
                     .append_field_elements("Sumcheck evaluations", &eval)
                     .unwrap();

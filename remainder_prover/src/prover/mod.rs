@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use crate::{
     expression::ExpressionStandard,
     layer::{
-        claims::aggregate_claims, claims::compute_aggregated_challenges, claims::compute_claim_wlx,
+        claims::compute_aggregated_challenges, claims::compute_claim_wlx,
         claims::verify_aggregate_claim, from_mle, layer_enum::LayerEnum, Claim, GKRLayer, Layer,
         LayerBuilder, LayerError, LayerId,
     },
@@ -77,7 +77,8 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         self.add::<_, GKRLayer<_, Tr>>(new_layer)
     }
 
-    /// Add an AddGate to a list of layers
+    /// Add an AddGate to a list of layers (unbatched version)
+    /// uses the AddGate constructor
     pub fn add_add_gate(
         &mut self,
         nonzero_gates: Vec<(usize, usize, usize)>,
