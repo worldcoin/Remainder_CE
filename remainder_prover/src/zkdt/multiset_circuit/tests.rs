@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
+    use std::{time::Instant, path::Path};
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::{test_rng, UniformRand};
@@ -23,7 +23,7 @@ mod tests {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = MultiSetCircuit::new(
             decision_nodes_mle,
@@ -49,7 +49,7 @@ mod tests {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = FSMultiSetCircuit::new(
             decision_nodes_mle,

@@ -796,6 +796,8 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use crate::{mle::{dense::DenseMle, MleRef}, zkdt::data_pipeline::dummy_data_generator::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, generate_mles_batch_catboost_single_tree, BatchedCatboostMles, BatchedDummyMles}};
     use halo2_base::halo2_proofs::halo2curves::{bn256::Fr, FieldExt};
@@ -1436,7 +1438,7 @@ mod tests {
         let (BatchedCatboostMles {
             permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
@@ -1465,7 +1467,7 @@ mod tests {
         let (BatchedCatboostMles {
             input_data_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
@@ -1530,7 +1532,7 @@ mod tests {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let num_dummy_inputs = decision_node_paths_mle_vec.len();
 
