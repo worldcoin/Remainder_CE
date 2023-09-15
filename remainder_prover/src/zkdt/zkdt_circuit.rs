@@ -736,6 +736,7 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
     use std::time::Instant;
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
@@ -752,7 +753,7 @@ mod tests {
     #[test]
     fn test_combine_circuits() {
 
-        let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let combined_circuit = CombinedCircuits {
             batched_catboost_mles

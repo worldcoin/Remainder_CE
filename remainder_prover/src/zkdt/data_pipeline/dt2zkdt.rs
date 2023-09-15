@@ -59,6 +59,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use std::fs::{File, self};
+use std::path::Path;
 
 use super::dummy_data_generator::{BatchedDummyMles, ZKDTCircuitData};
 
@@ -460,7 +461,8 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
 /// Note that `raw_samples.values.len()` is currently 4573! This means we can go
 /// up to 4096 in terms of batch sizes which are powers of 2
 pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
-    num_trees_if_multiple: Option<usize>
+    num_trees_if_multiple: Option<usize>,
+    upshot_data_dir_path: &Path,
 ) {
 
     println!("Generating Upshot data (to be cached) for all batch sizes (2^1, ..., 2^{{12}})...\n");
@@ -473,7 +475,9 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
     // --- We create batches of size 2^1, ..., 2^{12} ---
     (1..12).for_each(|batch_size_exp| {
 
-        let cached_filepath = get_cached_batched_mles_filename_with_exp_size(batch_size_exp);
+        dbg!(upshot_data_dir_path);
+
+        let cached_filepath = get_cached_batched_mles_filename_with_exp_size(batch_size_exp, upshot_data_dir_path);
         if file_exists(&cached_filepath) {
             return;
         }

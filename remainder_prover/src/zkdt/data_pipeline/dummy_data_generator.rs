@@ -18,6 +18,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::fs;
 use std::iter::zip;
+use std::path::Path;
 
 /*
 What's our plan here?
@@ -501,7 +502,8 @@ pub fn read_upshot_data_single_tree_branch_from_file<F: FieldExt>() -> (ZKDTCirc
 
 /// Loads a result from [`generate_upshot_data_all_batch_sizes`].
 pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>(
-    exp_batch_size: usize
+    exp_batch_size: usize,
+    upshot_data_dir_path: &Path
 ) -> (ZKDTCircuitData<F>, (usize, usize)) {
 
     // --- Sanitychecks ---
@@ -509,7 +511,7 @@ pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>
     debug_assert!(exp_batch_size <= 12);
 
     // --- Load ---
-    let file = std::fs::File::open(get_cached_batched_mles_filename_with_exp_size(exp_batch_size)).unwrap();
+    let file = std::fs::File::open(get_cached_batched_mles_filename_with_exp_size(exp_batch_size, upshot_data_dir_path)).unwrap();
     from_reader(&file).unwrap()
 }
 
@@ -518,18 +520,18 @@ pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>
 /// ## Arguments
 /// * `exp_batch_size` - 2^{`exp_batch_size`} is the actual batch size that we want.
 ///     Note that this value must be between 1 and 12, inclusive!
-pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usize) -> (BatchedCatboostMles<F>, (usize, usize)) {
+pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usize, upshot_data_dir_path: &Path) -> (BatchedCatboostMles<F>, (usize, usize)) {
 
     // --- Sanitychecks ---
     debug_assert!(exp_batch_size >= 1);
     debug_assert!(exp_batch_size <= 12);
 
     // --- Check to see if the cached file exists ---
-    let cached_file_path = get_cached_batched_mles_filename_with_exp_size(exp_batch_size);
+    let cached_file_path = get_cached_batched_mles_filename_with_exp_size(exp_batch_size, upshot_data_dir_path);
 
     // --- If no cached file exists, run the entire cache thingy ---
     if !file_exists(&cached_file_path) {
-        generate_upshot_data_all_batch_sizes::<F>(None);
+        generate_upshot_data_all_batch_sizes::<F>(None, upshot_data_dir_path);
     }
 
     // --- First generate the dummy data ---

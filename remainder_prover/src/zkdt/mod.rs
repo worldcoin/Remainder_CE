@@ -19,3 +19,5 @@ pub mod permutation_circuit;
 pub mod multiset_circuit;
 /// Path consistency circuit component
 pub mod path_consistency_circuit;
+/// For the two "bits are binary" checkers
+pub mod bits_are_binary_circuit;

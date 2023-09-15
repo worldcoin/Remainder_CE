@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
+    use std::{time::Instant, path::Path};
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::{test_rng, UniformRand};
@@ -37,7 +37,7 @@ mod tests {
         let (BatchedCatboostMles {
             permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
-        }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = NonBatchedAttributeConsistencyCircuit::new(
             permuted_input_data_mle_vec[0].clone(),
@@ -54,7 +54,7 @@ mod tests {
         let (BatchedCatboostMles {
             permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
-        }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let mut circuit = AttributeConsistencyCircuit::new(
             permuted_input_data_mle_vec,
