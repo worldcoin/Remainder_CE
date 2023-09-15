@@ -475,6 +475,8 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
     // --- We create batches of size 2^1, ..., 2^{12} ---
     (1..12).for_each(|batch_size_exp| {
 
+        dbg!(upshot_data_dir_path);
+
         let cached_filepath = get_cached_batched_mles_filename_with_exp_size(batch_size_exp, upshot_data_dir_path);
         if file_exists(&cached_filepath) {
             return;
