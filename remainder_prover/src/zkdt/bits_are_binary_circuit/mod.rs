@@ -4,3 +4,4 @@ pub mod circuit_builders;
 pub mod circuits;
 /// For testing
 pub mod tests;
+pub mod dataparallel_circuits;
