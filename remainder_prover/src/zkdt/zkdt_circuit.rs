@@ -559,7 +559,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
             mut decision_nodes_mle,
             mut leaf_nodes_mle,
             mut binary_decomp_diffs_mle_vec,
-            mut multiplicities_bin_decomp_mle_input
+            multiplicities_bin_decomp_mle_input_vec: mut multiplicities_bin_decomp_mle_input
         } = self.batched_catboost_mles.clone();
 
         // deal w input

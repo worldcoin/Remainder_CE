@@ -14,21 +14,21 @@ mod tests {
     use super::super::circuits::{InputMultiSetCircuit};
 
     #[test]
-    fn test_fs_multiset_circuit_catboost_batched() {
+    fn test_fs_input_multiset_circuit_catboost_batched() {
 
         let (BatchedCatboostMles {
             input_data_mle_vec,
-            permuted_input_data_mle_vec, ..
-            // multiplicities_bin_decomp_mle_input,
-        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
+            permuted_input_data_mle_vec,
+            multiplicities_bin_decomp_mle_input_vec, ..
+        }, (_tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>();
 
-        // let circuit = InputMultiSetCircuit::new(
-        //     input_data_mle_vec,
-        //     permuted_input_data_mle_vec,
-        //     multiplicities_bin_decomp_mle_input,
-        // );
+        let circuit = InputMultiSetCircuit::new(
+            input_data_mle_vec,
+            permuted_input_data_mle_vec,
+            multiplicities_bin_decomp_mle_input_vec,
+        );
 
-        // test_circuit(circuit, None);
+        test_circuit(circuit, None);
     }
 
 }

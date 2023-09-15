@@ -60,6 +60,13 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
             ];
 
             let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
+
+            let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
+
+            for multiplicities_bin_decomp_mle_input in self.multiplicities_bin_decomp_mle_input_vec.iter_mut() {
+                multiplicities_bin_decomp_mle_input.add_prefix_bits(Some(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()))
+            }
+
             let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
             let mut input_layer = input_layer.to_enum();
     
@@ -241,12 +248,12 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
                 }).collect_vec()
             );
 
-            let layer_i_builders = r_minus_x_square_builders.concat(curr_prod_builders).concat_with_padding(prod_builders, Padding::Right(1));
+            let layer_4_builders = r_minus_x_square_builders.concat(curr_prod_builders).concat_with_padding(prod_builders, Padding::Right(1));
 
-            ((r_minus_x_power_vec, curr_prod_vec), prev_prod_vec) = layers.add_gkr(layer_i_builders);
+            ((r_minus_x_power_vec, curr_prod_vec), prev_prod_vec) = layers.add_gkr(layer_4_builders);
     
             // at this point we have
-            // (r - x)^(2^15), (r - x)^(2^14) * b_ij + (1 - b_ij), PROD ALL[(r - x)^(2^13) * b_ij + (1 - b_ij)]
+            // (r - x)^(2^3), (r - x)^(2^2) * b_ij + (1 - b_ij), PROD ALL[(r - x)^(2^1) * b_ij + (1 - b_ij)]
             // need to BitExponentiate 1 time
             // and PROD w prev_prod 2 times
     
@@ -309,9 +316,8 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
             
             // **** above is input exponentiated ****
             // **** below is all decision nodes on the path multiplied ****
-            println!("Nodes exponentiated, number of layers {:?}", layers.next_layer_id());
     
-            // layer 0: packing
+            // layer 13: packing
     
             let batch_bits = log2(self.permuted_input_data_mle_vec.len()) as usize;
     
@@ -329,7 +335,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
                 ).collect_vec());
             let path_packed_vec = layers.add_gkr(path_packing_builders);
     
-            // layer 2: r - x
+            // layer 14: r - x
     
             let r_minus_x_path_builders = BatchedLayer::new(
                 path_packed_vec.iter().map(|path_packed| FSRMinusXBuilder::new(
@@ -340,7 +346,9 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
             let r_minus_x_path_vec = layers.add_gkr(r_minus_x_path_builders);
             let mut path_product_vec = r_minus_x_path_vec;
 
-            for _ in 0..log2(input_len) {
+            // layer 15, 16, 17
+            let permuted_input_len = 1 << (self.permuted_input_data_mle_vec[0].num_iterated_vars() - 1);
+            for _ in 0..log2(permuted_input_len) {
                 let split_product_builders = BatchedLayer::new(
                     path_product_vec.into_iter().map(
                         |path_product| SplitProductBuilder::new(path_product)
@@ -348,16 +356,14 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
 
                     path_product_vec = layers.add_gkr(split_product_builders);
             }
-
     
+            // layer 18
             let difference_builder = EqualityCheck::new_batched(
                 exponentiated_input_vec,
                 path_product_vec
             );
     
             let circuit_output = layers.add_gkr(difference_builder);
-    
-            println!("Multiset circuit finished, number of layers {:?}", layers.next_layer_id());
 
             let circuit_output = combine_zero_mle_ref(circuit_output);
 

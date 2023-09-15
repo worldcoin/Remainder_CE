@@ -520,7 +520,7 @@ pub struct BatchedCatboostMles<F: FieldExt> {
     pub multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
     pub decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
     pub leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
-    pub multiplicities_bin_decomp_mle_input: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
+    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
 }
 
 /// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
@@ -554,6 +554,10 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>() -> (BatchedCatboo
         leaf_nodes,
         multiplicities_bin_decomp_input,
     }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_file::<F>();
+
+    // println!("input_data {:?}", input_data[0]);
+    // println!("permuted_input_data {:?}", permuted_input_data[0]);
+    // println!("multiplicities_bin_decomp_input {:?}", multiplicities_bin_decomp_input[0]);
 
     let decision_len = 2_usize.pow(tree_height as u32 - 1);
     let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
@@ -626,7 +630,7 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>() -> (BatchedCatboo
         multiplicities_bin_decomp_mle_leaf,
         decision_nodes_mle,
         leaf_nodes_mle,
-        multiplicities_bin_decomp_mle_input
+        multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input
     }, (tree_height, input_len))
 }
 
