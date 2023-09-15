@@ -444,7 +444,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .map(|mut layer| {
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_id = layer.id().clone();
-                // dbg!(layer_id);
+                dbg!(layer_id);
                 let layer_claims = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
