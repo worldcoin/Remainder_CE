@@ -57,7 +57,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 
-use super::dummy_data_generator::{BatchedDummyMles, ZKDTCircuitData};
+use super::dummy_data_generator::{BatchedDummyMles, ZKDTDummyCircuitData, ZKDTCircuitData};
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
@@ -427,6 +427,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>() -> (ZKDTCircuitData<F>,
         csamples.node_multiplicities[0].clone(),
         ctrees.decision_nodes[0].clone(),
         ctrees.leaf_nodes[0].clone(),
+        csamples.attribute_multiplicities[0].clone()
     ), (tree_height, input_len))
 }
 
