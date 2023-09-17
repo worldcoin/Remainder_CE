@@ -346,6 +346,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         gather_combine_all_evals(self)
     }
 
+    ///Similar function to eval, but with minor changes to accomodate sumcheck's peculiarities
     #[allow(clippy::too_many_arguments)]
     fn evaluate_sumcheck<T>(
         &self,
