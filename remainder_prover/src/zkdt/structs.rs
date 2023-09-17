@@ -1,7 +1,6 @@
 use std::{
     cmp,
-    iter::{self, Cloned, Flatten, Map, Zip},
-    marker::PhantomData,
+    iter::{Cloned, Map, Zip},
 };
 
 use crate::{
@@ -10,16 +9,14 @@ use crate::{
         Mle, MleAble, MleIndex, MleRef,
     }, layer::{batched::combine_mles, LayerId},
 };
-use rayon::vec;
 use remainder_shared_types::FieldExt;
 use ark_std::log2;
-// use derive_more::{From, Into};
-use itertools::{repeat_n, Chunk, Chunks, Itertools};
+use itertools::{repeat_n, Itertools};
 use serde::{Serialize, Deserialize};
 
+// ------------------------------------ ACTUAL DATA STRUCTS ------------------------------------
+
 /// --- Path nodes within the tree and in the path hint ---
-/// Used for the following components of the (circuit) input:
-/// a)
 #[derive(Copy, Debug, Clone, Serialize, Deserialize)]
 pub struct DecisionNode<F> {
     ///The id of this node in the tree
@@ -73,6 +70,45 @@ pub struct InputAttribute<F> {
     pub(crate) attr_val: F,
 }
 
+// ------------------------------------ MLEABLE IMPLEMENTATIONS ------------------------------------
+
+impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
+    type Repr = [Vec<F>; 3];
+
+    fn get_padded_evaluations(items: &Self::Repr) -> Vec<F> {
+        get_padded_evaluations_for_list(items)
+    }
+
+    type IntoIter<'a> = Map<Zip<Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>, Cloned<std::slice::Iter<'a, F>>>, fn(((F, F), F)) -> DecisionNode<F>> where Self: 'a;
+
+    fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr {
+        let iter = iter.into_iter();
+        let (node_ids, attr_ids, thresholds): (Vec<F>, Vec<F>, Vec<F>) = iter
+            .map(|x| (x.node_id, x.attr_id, x.threshold))
+            .multiunzip();
+
+        [node_ids, attr_ids, thresholds]
+    }
+
+    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
+        items[0]
+            .iter()
+            .cloned()
+            .zip(items[1].iter().cloned())
+            .zip(items[2].iter().cloned())
+            .map(|((node_id, attr_id), threshold)| DecisionNode {
+                node_id,
+                attr_id,
+                threshold,
+            })
+    }
+
+    fn num_vars(items: &Self::Repr) -> usize {
+        log2(items[0].len() + items[1].len() + items[2].len()) as usize
+    }
+}
+
+
 impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
     fn from(bits: Vec<bool>) -> Self {
         BinDecomp16Bit::<F> {
@@ -88,16 +124,6 @@ impl<F: FieldExt> From<Vec<bool>> for BinDecomp4Bit<F> {
         }
     }
 }
-
-// --- Just an enumeration of, uh, stuff...? ---
-// To be honest this is basically just DenseMle<F>
-// TODO!(ryancao)
-// #[derive(Debug, Clone)]
-// pub struct EnumerationRange<F: FieldExt> {
-//     // TODO!(ryancao)
-//     pub attr_id: F,
-//     // pub attr_val: F,
-// }
 
 /// for input layer stuff, combining refs together
 /// TODO!(ende): refactor
@@ -139,43 +165,6 @@ pub(crate) fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> Dense
         .collect_vec();
 
     DenseMle::new_from_raw(result, LayerId::Input(0), None)
-}
-
-// Personally for the above, just give me a Vec<u32> and that should be great!
-impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
-    type Repr = [Vec<F>; 3];
-
-    fn get_padded_evaluations(items: &Self::Repr) -> Vec<F> {
-        get_padded_evaluations_for_list(items)
-    }
-
-    type IntoIter<'a> = Map<Zip<Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>, Cloned<std::slice::Iter<'a, F>>>, fn(((F, F), F)) -> DecisionNode<F>> where Self: 'a;
-
-    fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr {
-        let iter = iter.into_iter();
-        let (node_ids, attr_ids, thresholds): (Vec<F>, Vec<F>, Vec<F>) = iter
-            .map(|x| (x.node_id, x.attr_id, x.threshold))
-            .multiunzip();
-
-        [node_ids, attr_ids, thresholds]
-    }
-
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
-        items[0]
-            .iter()
-            .cloned()
-            .zip(items[1].iter().cloned())
-            .zip(items[2].iter().cloned())
-            .map(|((node_id, attr_id), threshold)| DecisionNode {
-                node_id,
-                attr_id,
-                threshold,
-            })
-    }
-
-    fn num_vars(items: &Self::Repr) -> usize {
-        log2(items[0].len() + items[1].len() + items[2].len()) as usize
-    }
 }
 
 // TODO!(ryancao): Actually implement this correctly for PathNode<F>
