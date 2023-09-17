@@ -1,7 +1,7 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
-use std::{iter::repeat_with, ops::Range};
 
-use ark_std::{test_rng, rand::{Rng, distributions::uniform::SampleRange}};
+
+
 use itertools::Itertools;
 use poseidon::Poseidon;
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
             elements
         );
         // dbg!(&elements);
-        self.sponge.update(&elements);
+        self.sponge.update(elements);
         Ok(())
     }
 
