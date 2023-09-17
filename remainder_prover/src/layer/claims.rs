@@ -414,7 +414,7 @@ mod tests {
 
         let claim1: Claim<Fr> = (chals1, valchal[0]);
         let claim2: Claim<Fr> = (chals2, valchal[1]);
-        let claim3: Claim<Fr> = (chals3, valchal[2] + Fr::one());
+        let claim3: Claim<Fr> = (chals3, valchal[2]);
 
         let rchal = Fr::from(rng.gen::<u64>());
 
