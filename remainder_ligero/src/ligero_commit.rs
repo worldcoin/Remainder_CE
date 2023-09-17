@@ -41,7 +41,7 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
     log_num_rows: usize,
     log_orig_num_cols: usize,
     rho_inv: u8,
-    maybe_ligero_root_filename: Option<&str>,
+    _maybe_ligero_root_filename: Option<&str>,
 ) -> (
     LigeroEncoding<F>,
     crate::LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
@@ -60,7 +60,7 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
 
     // --- Create commitment ---
     let enc = LigeroEncoding::<F>::new_from_dims(orig_num_cols, encoded_num_cols);
-    let comm = commit::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>(&coeffs, &enc).unwrap();
+    let comm = commit::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>(coeffs, &enc).unwrap();
 
     // --- Only component of commitment which needs to be sent to the verifier is the commitment root ---
     let root: LcRoot<LigeroEncoding<F>, F> = comm.get_root();
@@ -117,9 +117,9 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     log_orig_num_cols: usize,
     challenge_coord: &Vec<F>,
     transcript: &mut T,
-    maybe_ligero_proof_filename: Option<&str>,
-    maybe_ligero_aux_data_filename: Option<&str>,
-    maybe_ligero_claim_filename: Option<&str>,
+    _maybe_ligero_proof_filename: Option<&str>,
+    _maybe_ligero_aux_data_filename: Option<&str>,
+    _maybe_ligero_claim_filename: Option<&str>,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
     root: LcRoot<LigeroEncoding<F>, F>,
 ) -> Result<
@@ -138,7 +138,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     assert_eq!(coeffs.len(), num_rows * orig_num_cols);
 
     // --- Compute "a" and "b" from `challenge_coord` ---
-    let (_, outer_tensor) = get_ml_inner_outer_tensors(&challenge_coord, num_rows, orig_num_cols);
+    let (_, outer_tensor) = get_ml_inner_outer_tensors(challenge_coord, num_rows, orig_num_cols);
 
     // --- Generate the transcript and write to it ---
     // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
@@ -153,9 +153,9 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
 
     // --- Return the evaluation point value ---
     // TODO!(ryancao): Do we need this?
-    let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, &challenge_coord);
+    let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, challenge_coord);
 
-    let claim = LigeroClaim {
+    let _claim = LigeroClaim {
         point: challenge_coord.clone(),
         eval,
     };
@@ -190,7 +190,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
 
     // --- Return the evaluation point value ---
     // TODO!(ryancao): Do we need this?
-    let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, &challenge_coord);
+    let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, challenge_coord);
     Ok((eval, pf))
 }
 
@@ -226,7 +226,7 @@ pub fn remainder_ligero_commit_prove<F: FieldExt>(
 
     // --- NOTE: These will have to be passed in later for the eval proof phase ---
     poseidon_ml_commit_prove(
-        &input_mle_bookkeeping_table,
+        input_mle_bookkeeping_table,
         log2(num_rows) as usize,
         log2(orig_num_cols) as usize,
         rho_inv,
@@ -267,7 +267,7 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     let log_orig_num_cols = log2(aux.orig_num_cols) as usize;
 
     let (_, proof) = poseidon_ml_eval_prove(
-        &input_layer_bookkeeping_table,
+        input_layer_bookkeeping_table,
         rho_inv,
         log_num_rows,
         log_orig_num_cols,
@@ -415,7 +415,7 @@ pub mod tests {
         // --- Eval phase ---
         // --- Initialize transcript (note that this would come from GKR) ---
         let mut poseidon_transcript = PoseidonTranscript::new("Test transcript");
-        let (eval, proof) = poseidon_ml_eval_prove(
+        let (_eval, proof) = poseidon_ml_eval_prove(
             &ml_coeffs,
             rho_inv,
             log_num_rows,

@@ -1,4 +1,4 @@
-use ark_std::{test_rng, UniformRand};
+use ark_std::{test_rng};
 use rand::Rng;
 use remainder::{
     prover::GKRCircuit,

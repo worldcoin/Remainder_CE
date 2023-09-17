@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use crate::utils::halo2_fft;
 use crate::{
-    def_labels, poseidon_ligero::poseidon_digest::FieldHashFnDigest, LcCommit, LcEncoding,
+    def_labels, LcCommit, LcEncoding,
     LcEvalProof,
 };
 use fffft::FFTError;
@@ -41,16 +41,7 @@ where
 
         // compute #cols, which must be a power of 2 because of FFT
         let encoded_num_cols = (((len as f64).sqrt() / rho).ceil() as usize)
-            .checked_next_power_of_two()
-            .and_then(|nc| {
-                // --- TODO!(ryancao): We should check for FFT length bounds here too ---
-                // if nc > (1 << <Ft as FieldFFT>::S) {
-                //     None
-                // } else {
-                //     Some(nc)
-                // }
-                Some(nc)
-            })?;
+            .checked_next_power_of_two()?;
 
         // minimize nr subject to #cols and rho
         // --- Not sure what the above is talking about, but basically computes ---

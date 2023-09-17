@@ -7,7 +7,7 @@ use remainder_shared_types::FieldExt;
 fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
     // --- For each of the challenge coordinates ---
     challenge_coord
-        .into_iter()
+        .iter()
         .fold(vec![F::one()], |current_tensor, challenge| {
             // --- Take first coordinate and double current tensor ---
             current_tensor
@@ -83,12 +83,11 @@ pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
     let one = F::one();
     let reduced_bookkeeping_table =
         challenge_coord
-            .into_iter()
+            .iter()
             .fold(mle_coeffs.clone(), |bookkeeping_table, new_challenge| {
                 // --- Grab every pair of elements and use the formula ---
                 bookkeeping_table
                     .chunks(2)
-                    .into_iter()
                     .map(|elem_tuple| {
                         elem_tuple[0] * (one - new_challenge) + elem_tuple[1] * new_challenge
                     })
@@ -108,9 +107,9 @@ fn test_initialize_tensor() {
     let mut rng = test_rng();
 
     // --- TODO!(ryancao): Change the random generation to how it should be!
-    let first = Fr::from(Fr::from(rng.gen::<u64>()));
-    let second = Fr::from(Fr::from(rng.gen::<u64>()));
-    let third = Fr::from(Fr::from(rng.gen::<u64>()));
+    let first = Fr::from(rng.gen::<u64>());
+    let second = Fr::from(rng.gen::<u64>());
+    let third = Fr::from(rng.gen::<u64>());
     let challenge_coord = vec![first, second, third];
 
     let one = Fr::one();
@@ -139,11 +138,11 @@ fn test_split_tensor() {
 
     let mut rng = test_rng();
 
-    let first = Fr::from(Fr::from(rng.gen::<u64>()));
-    let second = Fr::from(Fr::from(rng.gen::<u64>()));
-    let third = Fr::from(Fr::from(rng.gen::<u64>()));
-    let fourth = Fr::from(Fr::from(rng.gen::<u64>()));
-    let fifth = Fr::from(Fr::from(rng.gen::<u64>()));
+    let first = Fr::from(rng.gen::<u64>());
+    let second = Fr::from(rng.gen::<u64>());
+    let third = Fr::from(rng.gen::<u64>());
+    let fourth = Fr::from(rng.gen::<u64>());
+    let fifth = Fr::from(rng.gen::<u64>());
     let challenge_coord = vec![first, second, third, fourth, fifth];
 
     let one = Fr::one();
