@@ -544,7 +544,7 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usi
         mut dummy_multiplicities_bin_decomp,
         dummy_decision_nodes,
         dummy_leaf_nodes,
-    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_file::<F>();
+    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_file_with_batch_exp::<F>(exp_batch_size);
 
     let decision_len = 2_usize.pow(tree_height as u32 - 1);
     let dummy_multiplicities_bin_decomp_leaf = dummy_multiplicities_bin_decomp.split_off(decision_len);

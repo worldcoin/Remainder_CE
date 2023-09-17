@@ -1,7 +1,7 @@
 use std::{path::Path, time::Instant, fs};
 
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use remainder::{zkdt::{zkdt_circuit::CombinedCircuits, data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree}, prover::GKRCircuit};
+use remainder::{zkdt::{zkdt_circuit::CombinedCircuits, data_pipeline::{dt2zkdt::load_upshot_data_single_tree_batch, dummy_data_generator::generate_mles_batch_catboost_single_tree}}, prover::GKRCircuit};
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 use serde_json::{to_writer, from_reader};
 use tracing::Level;
@@ -55,7 +55,9 @@ fn main() {
     // tracing::subscriber::set_global_default(subscriber)
     //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
-    let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>();
+    let batch_size = 10;
+
+    let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(batch_size);
 
     let combined_circuit = CombinedCircuits {
         batched_catboost_mles
