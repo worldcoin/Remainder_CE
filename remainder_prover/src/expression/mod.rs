@@ -213,10 +213,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         &self,
         observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
     ) -> Result<(), E> {
-        let result = observer_fn(self)?;
+        observer_fn(self)?;
         match self {
             ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Product(_) => {
-                Ok(result)
+                Ok(())
             },
             ExpressionStandard::Negated(exp) => {
                 exp.traverse(observer_fn)
@@ -599,10 +599,10 @@ impl<F: FieldExt> ExpressionStandard<F> {
         observer_fn: &mut impl FnMut(&mut ExpressionStandard<F>) -> Result<(), E>,
     ) -> Result<(), E> {
         // dbg!(&self);
-        let result = observer_fn(self)?;
+        observer_fn(self)?;
         match self {
             ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Product(_) => {
-                Ok(result)
+                Ok(())
             },
             ExpressionStandard::Negated(exp) => {
                 exp.traverse_mut(observer_fn)
