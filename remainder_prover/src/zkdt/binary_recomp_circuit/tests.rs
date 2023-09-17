@@ -1,5 +1,3 @@
-use crate::zkdt::binary_recomp_circuit::circuits::BinaryRecompCircuitBatched;
-
 #[cfg(test)]
 mod tests {
     use std::{time::Instant, path::Path};
@@ -9,7 +7,7 @@ mod tests {
     use itertools::Itertools;
     use rand::Rng;
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, structs::{InputAttribute, DecisionNode}, binary_recomp_circuit::circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit, BinaryRecompCircuitBatched}}, prover::GKRCircuit, mle::{dense::DenseMle, MleRef}, layer::LayerId};
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, structs::{InputAttribute, DecisionNode}, binary_recomp_circuit::{circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}, dataparallel_circuits::BinaryRecompCircuitBatched}}, prover::GKRCircuit, mle::{dense::DenseMle, MleRef}, layer::LayerId};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     use crate::prover::tests::test_circuit;
 

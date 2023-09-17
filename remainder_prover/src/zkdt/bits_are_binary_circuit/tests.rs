@@ -2,7 +2,7 @@
 mod tests {
     use std::{time::Instant, path::Path};
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, binary_recomp_circuit::circuits::{BinaryRecompCircuitBatched}, bits_are_binary_circuit::circuits::{BinDecomp16BitIsBinaryCircuit, BinDecomp16BitIsBinaryCircuitBatched, BinDecomp4BitIsBinaryCircuit, BinDecomp4BitIsBinaryCircuitBatched}}, prover::GKRCircuit};
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, bits_are_binary_circuit::{circuits::{BinDecomp16BitIsBinaryCircuit, BinDecomp4BitIsBinaryCircuit}, dataparallel_circuits::{BinDecomp16BitIsBinaryCircuitBatched, BinDecomp4BitIsBinaryCircuitBatched}}}, prover::GKRCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
 
     #[test]

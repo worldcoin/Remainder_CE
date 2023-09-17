@@ -1,8 +1,7 @@
 //!The LayerBuilders that build the ZKDT Circuit
 use std::cmp::max;
 
-use ark_crypto_primitives::crh::sha256::digest::typenum::Zero;
-use ark_std::{log2, cfg_into_iter};
+use ark_std::log2;
 use itertools::Itertools;
 
 use crate::expression::{ExpressionStandard, Expression};
@@ -14,6 +13,7 @@ use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
 use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode, BinDecomp4Bit};
 
+/// multiply the binary tree pair-wise between the tuple
 struct ProductTreeBuilder<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
 }
@@ -38,6 +38,8 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
 }
 
 /// calculates the difference between two mles
+/// effectively means checking they are equal
+/// should spit out ZeroMleRef
 pub struct EqualityCheck<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -45,7 +47,7 @@ pub struct EqualityCheck<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
     type Successor = ZeroMleRef<F>;
-
+    // the difference between two mles, should be zero valued
     fn build_expression(&self) -> ExpressionStandard<F> {
         ExpressionStandard::Mle(self.mle_1.mle_ref()) - 
         ExpressionStandard::Mle(self.mle_2.mle_ref())
@@ -68,6 +70,7 @@ impl<F: FieldExt> EqualityCheck<F> {
         }
     }
 
+    /// creates a batched layer for equality check
     pub fn new_batched(
         mle_1: Vec<DenseMle<F, F>>,
         mle_2: Vec<DenseMle<F, F>>,
@@ -126,7 +129,6 @@ pub struct AttributeConsistencyBuilderZeroRef<F: FieldExt> {
 }
 
 impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilderZeroRef<F> {
-    // type Successor = DenseMle<F, F>;
     type Successor = ZeroMleRef<F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
@@ -135,14 +137,6 @@ impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilderZeroRef<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-
-        // DenseMle::new_from_iter(self
-        //     .mle_input
-        //     .into_iter()
-        //     .zip(self.mle_path.into_iter())
-        //     .map(|(InputAttribute { attr_id: input_attr_ids, .. }, DecisionNode { attr_id: path_attr_ids, ..})|
-        //         input_attr_ids - path_attr_ids), id, prefix_bits)
-
         let num_vars = self.mle_path.num_iterated_vars() - 2;
         ZeroMleRef::new(num_vars, prefix_bits, id)
     }
@@ -171,11 +165,8 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     //a function that multiplies the parts of the tuple pair-wise
     fn build_expression(&self) -> ExpressionStandard<F> {
 
-        // begin sus: feels like there should be a concat (reverse direction) for expression,
-        // for splitting the expression
         // TODO!(ende): remove the optional padding of 1!!!
         let split_mle = self.mle.split(F::one());
-        // end sus
 
         ExpressionStandard::products(vec![split_mle.first(), split_mle.second()])
     }
