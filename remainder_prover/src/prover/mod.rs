@@ -18,11 +18,11 @@ use crate::{
     },
     mle::{
         dense::{DenseMle, DenseMleRef},
-        gate::AddGate,
+        addgate::AddGate,
         MleRef,
     },
     mle::{MleIndex, mle_enum::MleEnum, mulgate::{MulGate}, batched_mulgate::MulGateBatched},
-    mle::{gate::{AddGateBatched}},
+    mle::{batched_addgate::{AddGateBatched}},
     utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point
 };
 
