@@ -1,8 +1,7 @@
 //!The LayerBuilders that build the ZKDT Circuit
 use std::cmp::max;
 
-use ark_crypto_primitives::crh::sha256::digest::typenum::Zero;
-use ark_std::{log2, cfg_into_iter};
+use ark_std::log2;
 use itertools::Itertools;
 
 use crate::expression::{ExpressionStandard, Expression};
@@ -12,8 +11,9 @@ use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
-use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
+use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode, BinDecomp4Bit};
 
+/// multiply the binary tree pair-wise between the tuple
 struct ProductTreeBuilder<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
 }
@@ -38,6 +38,8 @@ impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
 }
 
 /// calculates the difference between two mles
+/// effectively means checking they are equal
+/// should spit out ZeroMleRef
 pub struct EqualityCheck<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -45,7 +47,7 @@ pub struct EqualityCheck<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
     type Successor = ZeroMleRef<F>;
-
+    // the difference between two mles, should be zero valued
     fn build_expression(&self) -> ExpressionStandard<F> {
         ExpressionStandard::Mle(self.mle_1.mle_ref()) - 
         ExpressionStandard::Mle(self.mle_2.mle_ref())
@@ -68,6 +70,7 @@ impl<F: FieldExt> EqualityCheck<F> {
         }
     }
 
+    /// creates a batched layer for equality check
     pub fn new_batched(
         mle_1: Vec<DenseMle<F, F>>,
         mle_2: Vec<DenseMle<F, F>>,
@@ -126,7 +129,6 @@ pub struct AttributeConsistencyBuilderZeroRef<F: FieldExt> {
 }
 
 impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilderZeroRef<F> {
-    // type Successor = DenseMle<F, F>;
     type Successor = ZeroMleRef<F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
@@ -135,14 +137,6 @@ impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilderZeroRef<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-
-        // DenseMle::new_from_iter(self
-        //     .mle_input
-        //     .into_iter()
-        //     .zip(self.mle_path.into_iter())
-        //     .map(|(InputAttribute { attr_id: input_attr_ids, .. }, DecisionNode { attr_id: path_attr_ids, ..})|
-        //         input_attr_ids - path_attr_ids), id, prefix_bits)
-
         let num_vars = self.mle_path.num_iterated_vars() - 2;
         ZeroMleRef::new(num_vars, prefix_bits, id)
     }
@@ -171,10 +165,8 @@ impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     //a function that multiplies the parts of the tuple pair-wise
     fn build_expression(&self) -> ExpressionStandard<F> {
 
-        // begin sus: feels like there should be a concat (reverse direction) for expression,
-        // for splitting the expression
+        // TODO!(ende): remove the optional padding of 1!!!
         let split_mle = self.mle.split(F::one());
-        // end sus
 
         ExpressionStandard::products(vec![split_mle.first(), split_mle.second()])
     }
@@ -489,6 +481,48 @@ impl<F: FieldExt> BitExponentiationBuilderCatBoost<F> {
     }
 }
 
+/// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
+pub struct BitExponentiationBuilderInput<F: FieldExt> {
+    bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
+    bit_index: usize,
+    r_minus_x_power: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
+    type Successor = DenseMle<F, F>;
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
+
+        println!("b_ij {:?}", b_ij.num_vars());
+        println!("self.r_minus_x_power {:?}", self.r_minus_x_power.mle_ref().num_vars());
+        ExpressionStandard::Sum(Box::new(ExpressionStandard::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
+                                Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(b_ij)))
+    }
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        //TODO!(fix this so it uses bin_decomp.into_iter)
+        let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
+        DenseMle::new_from_iter(self.r_minus_x_power
+            .clone()
+            .into_iter()
+            .zip(b_ij.bookkeeping_table.clone().into_iter())
+            .map(
+            |(r_minus_x_power, b_ij_iter)| (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> BitExponentiationBuilderInput<F> {
+    /// create new leaf node packed
+    pub(crate) fn new(
+        bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
+        bit_index: usize,
+        r_minus_x_power: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            bin_decomp, bit_index, r_minus_x_power
+        }
+    }
+}
+
 /// Takes (1) b_ij * (r-x_i)^j + (1-b_ij), (2) prev_prods PROD(b_ij * (r-x_i)^j + (1-b_ij)) across j
 /// Outputs (1) * (2). naming (1) as multiplier
 pub struct ProductBuilder<F: FieldExt> {
@@ -500,6 +534,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
+        println!("self.prev_prod {:?}", self.prev_prod.mle_ref().num_vars());
         ExpressionStandard::products(vec![self.multiplier.mle_ref(), self.prev_prod.mle_ref()])
     }
 
@@ -796,6 +831,8 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use crate::{mle::{dense::DenseMle, MleRef}, zkdt::data_pipeline::dummy_data_generator::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, generate_mles_batch_catboost_single_tree, BatchedCatboostMles, BatchedDummyMles}};
     use halo2_base::halo2_proofs::halo2curves::{bn256::Fr, FieldExt};
@@ -1436,7 +1473,7 @@ mod tests {
         let (BatchedCatboostMles {
             permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
@@ -1465,7 +1502,7 @@ mod tests {
         let (BatchedCatboostMles {
             input_data_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let num_dummy_inputs = permuted_input_data_mle_vec.len();
 
@@ -1530,7 +1567,7 @@ mod tests {
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,
             decision_nodes_mle,
-            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+            leaf_nodes_mle, ..}, (tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let num_dummy_inputs = decision_node_paths_mle_vec.len();
 

@@ -1,5 +1,3 @@
-use crate::zkdt::binary_recomp_circuit::circuits::BinaryRecompCircuitBatched;
-
 #[cfg(test)]
 mod tests {
     use std::{time::Instant, path::Path};

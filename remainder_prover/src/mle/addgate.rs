@@ -19,12 +19,12 @@ use remainder_shared_types::{transcript::Transcript, FieldExt};
 use super::{
     beta::compute_beta_over_two_challenges,
     dense::{DenseMle, DenseMleRef},
-    MleIndex, MleRef, gate_helpers::{index_mle_indices_gate, compute_sumcheck_message_mul_gate, GateError, compute_full_gate, check_fully_bound, fix_var_gate, prove_round_mul},
+    MleIndex, MleRef, gate_helpers::{compute_sumcheck_message_add_gate, index_mle_indices_gate, GateError, prove_round_add, fix_var_gate, check_fully_bound, compute_full_gate},
 };
 use thiserror::Error;
 
 /// implement the layer trait for addgate struct
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
+impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
     type Transcript = Tr;
 
     fn prove_rounds(
@@ -32,14 +32,14 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-
+        // initialization, get the first sumcheck message
         let first_message = self
             .init_phase_1(claim)
             .expect("could not evaluate original lhs and rhs")
             .into_iter().map(|eval| {
                 eval * self.beta_scaled.unwrap_or(F::one())
             }).collect_vec();
-        let phase_1_mles = self
+        let (phase_1_lhs, phase_1_rhs) = self
             .phase_1_mles
             .as_mut()
             .ok_or(GateError::Phase1InitError)
@@ -57,10 +57,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
                 challenges.push(challenge);
                 // if there are copy bits, we want to start at that index
-                let eval = prove_round_mul(
+                let eval = prove_round_add(
                     round + self.num_dataparallel_bits,
                     challenge,
-                    phase_1_mles
+                    phase_1_lhs,
+                    phase_1_rhs,
                 )
                 .unwrap().into_iter().map(|eval| {
                     eval * self.beta_scaled.unwrap_or(F::one())
@@ -79,29 +80,29 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         challenges.push(final_chal_u);
 
         fix_var_gate(
-            phase_1_mles,
+            phase_1_lhs,
+            num_rounds_phase1 - 1 + self.num_dataparallel_bits,
+            final_chal_u,
+        );
+        fix_var_gate(
+            phase_1_rhs,
             num_rounds_phase1 - 1 + self.num_dataparallel_bits,
             final_chal_u,
         );
 
-
-
-        let f_2 = &phase_1_mles[1];
+        // transition into binding y
+        let f_2 = &phase_1_lhs[1];
         if f_2.bookkeeping_table.len() == 1 {
-            // first message of the next phase includes the random challenge from the last phase
-            // (this transition checks that we did the bookkeeping optimization correctly between each phase)
             let f_at_u = f_2.bookkeeping_table[0];
             let u_challenges = (challenges.clone(), F::zero());
-            let first_message = self
-                .init_phase_2(u_challenges, f_at_u)
-                .expect("could not evaluate original lhs and rhs")
-                .into_iter().map(|eval| {
+            let first_message = self.init_phase_2(u_challenges, f_at_u).unwrap().into_iter().map(
+                |eval| {
                     eval * self.beta_scaled.unwrap_or(F::one())
-                }).collect_vec();
+                }
+            ).collect_vec();
 
             if self.rhs_num_vars > 0 {
-                
-                let phase_2_mles = self
+                let (phase_2_lhs, phase_2_rhs) = self
                     .phase_2_mles
                     .as_mut()
                     .ok_or(GateError::Phase2InitError)
@@ -111,7 +112,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                     .append_field_elements("Initial Sumcheck evaluations", &first_message)
                     .unwrap();
 
-                // number of rounds in phase 2 is number of variables in the right sum, binding y
                 let num_rounds_phase2 = self.rhs.num_vars();
 
                 // bind y, the right side of the sum
@@ -119,10 +119,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                     .chain((1..num_rounds_phase2).map(|round| {
                         let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
                         challenges.push(challenge);
-                        let eval = prove_round_mul(
+                        let eval = prove_round_add(
                             round + self.num_dataparallel_bits,
                             challenge,
-                            phase_2_mles,
+                            phase_2_lhs,
+                            phase_2_rhs,
                         )
                         .unwrap().into_iter().map(
                             |eval| {
@@ -136,25 +137,28 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                     }))
                     .try_collect()?;
 
+                // final round of sumcheck
                 let final_chal = transcript
-                .get_challenge("Final Sumcheck challenge")
-                .unwrap();
+                    .get_challenge("Final Sumcheck challenge")
+                    .unwrap();
                 challenges.push(final_chal);
                 fix_var_gate(
-                    phase_2_mles,
+                    phase_2_lhs,
+                    num_rounds_phase2 - 1 + self.num_dataparallel_bits,
+                    final_chal,
+                );
+                fix_var_gate(
+                    phase_2_rhs,
                     num_rounds_phase2 - 1 + self.num_dataparallel_bits,
                     final_chal,
                 );
 
                 sumcheck_rounds.extend(sumcheck_rounds_y.into_iter());
-
             }
 
             Ok(sumcheck_rounds.into())
-        } 
-        
-        else {
-            return Err(LayerError::LayerNotReady)
+        } else {
+            return Err(LayerError::LayerNotReady);
         }
     }
 
@@ -171,6 +175,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         let mut first_u_challenges = vec![];
         let mut last_v_challenges = vec![];
         let num_u = self.lhs.num_vars();
+        let num_v = self.rhs.num_vars();
 
         // first round check
         let claimed_claim = prev_evals[0] + prev_evals[1];
@@ -224,9 +229,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         }
 
         // we mutate the mles in the struct as we bind variables, so we can check whether they were bound correctly
-        let [_, lhs] = self.phase_1_mles.as_mut().unwrap();
-        let [_, rhs] = self.phase_2_mles.as_mut().unwrap();
+        let ([_, lhs], _) = self.phase_1_mles.as_mut().unwrap();
+        let (_, [_, rhs]) = self.phase_2_mles.as_mut().unwrap();
         let bound_lhs = check_fully_bound(&mut [lhs.clone()], first_u_challenges.clone()).unwrap();
+
         
         let bound_rhs = {
             if self.rhs_num_vars > 0 {
@@ -237,7 +243,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 rhs.bookkeeping_table[0]
             }
         };
-
+        
         // compute the sum over all the variables of the gate function
         let beta_u = BetaTable::new((first_u_challenges.clone(), bound_lhs)).unwrap();
         let beta_v = if last_v_challenges.len() > 0 {
@@ -248,7 +254,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             }
-        };
+        };        
         let beta_g = if claim.0.len() > 0 {
             BetaTable::new((claim.0, F::zero())).unwrap()
         } else {
@@ -268,7 +274,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         );
 
         // get the fully evaluated "expression"
-        let fully_evaluated = f_1_uv * (bound_lhs * bound_rhs);
+        let fully_evaluated = f_1_uv * (bound_lhs + bound_rhs);
         let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
 
         // error if this doesn't match the last round of sumcheck
@@ -287,7 +293,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         let mut fixed_mle_indices_u: Vec<F> = vec![];
 
         // check the left side of the sum (f2(u)) against the challenges made to bind that variable
-        if let Some([_, f_2_u]) = &self.phase_1_mles {
+        if let Some(([_, f_2_u], _)) = &self.phase_1_mles {
             for index in f_2_u.mle_indices() {
                 fixed_mle_indices_u.push(
                     index
@@ -301,11 +307,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
             return Err(LayerError::LayerNotReady);
         }
 
-
+        
         let mut fixed_mle_indices_v: Vec<F> = vec![];
 
         // check the right side of the sum (f3(v)) against the challenges made to bind that variable
-        if let Some([_, f_3_v]) = &self.phase_2_mles {
+        if let Some((_, [_, f_3_v])) = &self.phase_2_mles {
             for index in f_3_v.mle_indices() {
                 fixed_mle_indices_v.push(
                     index
@@ -375,7 +381,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
     }
 
     fn get_enum(self) -> crate::layer::layer_enum::LayerEnum<F, Self::Transcript> {
-        LayerEnum::MulGate(self)
+        LayerEnum::AddGate(self)
     }
 }
 
@@ -392,7 +398,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
 /// * `num_copy_bits` - length of `p_2`
 #[derive(Error, Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
-pub struct MulGate<F: FieldExt, Tr: Transcript<F>> {
+pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     pub layer_id: LayerId,
     pub nonzero_gates: Vec<(usize, usize, usize)>,
     pub lhs_num_vars: usize,
@@ -400,14 +406,14 @@ pub struct MulGate<F: FieldExt, Tr: Transcript<F>> {
     pub lhs: DenseMleRef<F>,
     pub rhs: DenseMleRef<F>,
     beta_g: Option<BetaTable<F>>,
-    pub phase_1_mles: Option<[DenseMleRef<F>; 2]>,
-    pub phase_2_mles: Option<[DenseMleRef<F>; 2]>,
+    pub phase_1_mles: Option<([DenseMleRef<F>; 2], [DenseMleRef<F>; 1])>,
+    pub phase_2_mles: Option<([DenseMleRef<F>; 1], [DenseMleRef<F>; 2])>,
     pub num_dataparallel_bits: usize,
     pub beta_scaled: Option<F>,
     _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
+impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
     /// new addgate mle (wrapper constructor)
     pub fn new(
         layer_id: LayerId,
@@ -416,8 +422,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
         rhs: DenseMleRef<F>,
         num_dataparallel_bits: usize,
         beta_scaled: Option<F>,
-    ) -> MulGate<F, Tr> {
-        MulGate {
+    ) -> AddGate<F, Tr> {
+        AddGate {
             layer_id,
             nonzero_gates,
             lhs_num_vars: lhs.num_vars(),
@@ -438,13 +444,13 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
     }
 
     /// bookkeeping tables necessary for binding x
-    fn set_phase_1(&mut self, mles: [DenseMleRef<F>; 2]) {
-        self.phase_1_mles = Some(mles);
+    fn set_phase_1(&mut self, (mle_l, mle_r): ([DenseMleRef<F>; 2], [DenseMleRef<F>; 1])) {
+        self.phase_1_mles = Some((mle_l, mle_r));
     }
 
     /// bookkeeping tables necessary for binding y
-    fn set_phase_2(&mut self, mles: [DenseMleRef<F>; 2]) {
-        self.phase_2_mles = Some(mles);
+    fn set_phase_2(&mut self, (mle_l, mle_r): ([DenseMleRef<F>; 1], [DenseMleRef<F>; 2])) {
+        self.phase_2_mles = Some((mle_l, mle_r));
     }
 
     /// initialize bookkeeping tables for phase 1 of sumcheck
@@ -465,7 +471,6 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
     ///
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         // --- First compute the bookkeeping table for \beta(g, z) \in \{0, 1\}^{s_i} ---
-
         let beta_g = if claim.0.len() > 0 {
             BetaTable::new(claim).unwrap()
         } else {
@@ -482,6 +487,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
         let num_x = self.lhs.num_vars();
 
         // bookkeeping tables according to libra, set everything to zero for now (we are summing over y so size is 2^(num_x))
+        // --- `a_hg_lhs` is f_1'(x) ---
+        let mut a_hg_lhs = vec![F::zero(); 1 << num_x];
         // --- `a_hg_rhs` is h_g(x) ---
         let mut a_hg_rhs = vec![F::zero(); 1 << num_x];
 
@@ -504,19 +511,23 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
                     .bookkeeping_table()
                     .get(y_ind)
                     .unwrap_or(&F::zero());
+                a_hg_lhs[x_ind] = a_hg_lhs[x_ind] + beta_g_at_z;
                 a_hg_rhs[x_ind] = a_hg_rhs[x_ind] + (beta_g_at_z * f_3_at_y);
             });
 
-        // --- We need to multiply h_g(x) by f_2(x) ---
-        let mut phase_1_mles = [
-            DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0), None).mle_ref(),
+        // --- We need to multiply f_1'(x) by f_2(x) ---
+        let mut phase_1_lhs = [
+            DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0), None).mle_ref(),
             self.lhs.clone(),
         ];
-        index_mle_indices_gate(phase_1_mles.as_mut(), self.num_dataparallel_bits);
-        self.set_phase_1(phase_1_mles.clone());
+        // --- The RHS will just be h_g(x), which doesn't get multiplied by f_2(x) ---
+        let mut phase_1_rhs = [DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0), None).mle_ref()];
+        index_mle_indices_gate(phase_1_lhs.as_mut(), self.num_dataparallel_bits);
+        index_mle_indices_gate(phase_1_rhs.as_mut(), self.num_dataparallel_bits);
+        self.set_phase_1((phase_1_lhs.clone(), phase_1_rhs.clone()));
 
         // returns the first sumcheck message
-        compute_sumcheck_message_mul_gate(&phase_1_mles, self.num_dataparallel_bits)
+        compute_sumcheck_message_add_gate(&phase_1_lhs, &phase_1_rhs, self.num_dataparallel_bits)
     }
 
     /// initialize bookkeeping tables for phase 2 of sumcheck
@@ -543,7 +554,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
         let num_y = self.rhs.num_vars();
 
         // bookkeeping table where we now bind y, so size is 2^(num_y)
-        let mut a_f1 = vec![F::zero(); 1 << num_y];
+        let mut a_f1_lhs = vec![F::zero(); 1 << num_y];
+        let mut a_f1_rhs = vec![F::zero(); 1 << num_y];
 
         // TODO!(ryancao): Potential optimization here -- if the nonzero gates are sorted by `y_ind`, we can
         // parallelize over them as long as we split the parallelism along a change in `y_ind`, since each
@@ -566,19 +578,22 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
                     .get(x_ind)
                     .unwrap_or(&F::zero());
                 let adder = gz * ux;
-                a_f1[y_ind] = a_f1[y_ind] + (adder * f_at_u);
+                a_f1_lhs[y_ind] = a_f1_lhs[y_ind] + (adder * f_at_u);
+                a_f1_rhs[y_ind] = a_f1_rhs[y_ind] + adder;
             });
 
+        // --- LHS bookkeeping table is already multiplied by f_2(u) ---
+        let mut phase_2_lhs = [DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0), None).mle_ref()];
         // --- RHS bookkeeping table needs to be multiplied by f_3(y) ---
-        let mut phase_2_mles = [
-            DenseMle::new_from_raw(a_f1, LayerId::Input(0), None).mle_ref(),
+        let mut phase_2_rhs = [
+            DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0), None).mle_ref(),
             self.rhs.clone(),
         ];
-        index_mle_indices_gate(phase_2_mles.as_mut(), self.num_dataparallel_bits);
-        self.set_phase_2(phase_2_mles.clone());
+        index_mle_indices_gate(phase_2_lhs.as_mut(), self.num_dataparallel_bits);
+        index_mle_indices_gate(phase_2_rhs.as_mut(), self.num_dataparallel_bits);
+        self.set_phase_2((phase_2_lhs.clone(), phase_2_rhs.clone()));
 
         // return the first sumcheck message of this phase
-        let hello = compute_sumcheck_message_mul_gate(&phase_2_mles, self.num_dataparallel_bits);
-        hello
+        compute_sumcheck_message_add_gate(&phase_2_lhs, &phase_2_rhs, self.num_dataparallel_bits)
     }
 }

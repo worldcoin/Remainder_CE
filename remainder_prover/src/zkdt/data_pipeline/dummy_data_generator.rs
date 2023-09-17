@@ -18,6 +18,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::fs;
 use std::iter::zip;
+use std::path::Path;
 
 /*
 What's our plan here?
@@ -168,7 +169,7 @@ fn generate_16_bit_unsigned_decomp<F: FieldExt>(value: F) -> BinDecomp16Bit<F> {
 
 /// dummydata input form factor for circuit inputs
 #[derive(Serialize, Deserialize)]
-pub struct ZKDTCircuitData<F> {
+pub struct ZKDTDummyCircuitData<F> {
     dummy_input_data: Vec<Vec<InputAttribute<F>>>, // Input attributes
     dummy_permuted_input_data: Vec<Vec<InputAttribute<F>>>, // Permuted input attributes
     dummy_decision_node_paths: Vec<Vec<DecisionNode<F>>>, // Paths (decision node part only)
@@ -179,7 +180,7 @@ pub struct ZKDTCircuitData<F> {
     dummy_leaf_nodes: Vec<LeafNode<F>>,            // Actual tree leaf nodes
 }
 
-impl<F: FieldExt> ZKDTCircuitData<F> {
+impl<F: FieldExt> ZKDTDummyCircuitData<F> {
     /// creates new dummydata
     pub fn new(
         dummy_input_data: Vec<Vec<InputAttribute<F>>>,
@@ -190,8 +191,8 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
         dummy_multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>,
         dummy_decision_nodes: Vec<DecisionNode<F>>,
         dummy_leaf_nodes: Vec<LeafNode<F>>,
-    ) -> ZKDTCircuitData<F> {
-        ZKDTCircuitData {
+    ) -> ZKDTDummyCircuitData<F> {
+        ZKDTDummyCircuitData {
             dummy_input_data,
             dummy_permuted_input_data,
             dummy_decision_node_paths,
@@ -204,12 +205,52 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct ZKDTCircuitData<F> {
+    input_data: Vec<Vec<InputAttribute<F>>>, // Input attributes
+    permuted_input_data: Vec<Vec<InputAttribute<F>>>, // Permuted input attributes
+    decision_node_paths: Vec<Vec<DecisionNode<F>>>, // Paths (decision node part only)
+    leaf_node_paths: Vec<LeafNode<F>>,       // Paths (leaf node part only)
+    binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>, // Binary decomp of differences
+    multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>, // Binary decomp of multiplicities
+    decision_nodes: Vec<DecisionNode<F>>,    // Actual tree decision nodes
+    leaf_nodes: Vec<LeafNode<F>>,            // Actual tree leaf nodes
+    multiplicities_bin_decomp_input: Vec<Vec<BinDecomp4Bit<F>>>, // Binary decomp of multiplicities, of input
+}
+
+impl<F: FieldExt> ZKDTCircuitData<F> {
+    /// creates new dummydata
+    pub fn new(
+        input_data: Vec<Vec<InputAttribute<F>>>,
+        permuted_input_data: Vec<Vec<InputAttribute<F>>>,
+        decision_node_paths: Vec<Vec<DecisionNode<F>>>,
+        leaf_node_paths: Vec<LeafNode<F>>,
+        binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>,
+        multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>,
+        decision_nodes: Vec<DecisionNode<F>>,
+        leaf_nodes: Vec<LeafNode<F>>,
+        multiplicities_bin_decomp_input: Vec<Vec<BinDecomp4Bit<F>>>,
+    ) -> ZKDTCircuitData<F> {
+        ZKDTCircuitData {
+            input_data,
+            permuted_input_data,
+            decision_node_paths,
+            leaf_node_paths,
+            binary_decomp_diffs,
+            multiplicities_bin_decomp,
+            decision_nodes,
+            leaf_nodes,
+            multiplicities_bin_decomp_input
+        }
+    }
+}
+
 /// Need to generate dummy circuit inputs, starting with the input data
 /// Then get the path data and binary decomp stuff
 /// TODO!(ryancao): add the attribute index field to `InputAttribute<F>`
 /// -- Actually, scratch the above: we might be getting rid of `attr_id`s
 /// altogether and replacing with `attr_idx` everywhere (as suggested by Ben!)
-fn generate_dummy_data<F: FieldExt>() -> ZKDTCircuitData<F> {
+fn generate_dummy_data<F: FieldExt>() -> ZKDTDummyCircuitData<F> {
     // --- Get the RNG ---
     let mut rng = test_rng();
 
@@ -405,7 +446,7 @@ fn generate_dummy_data<F: FieldExt>() -> ZKDTCircuitData<F> {
         })
         .collect_vec();
 
-    ZKDTCircuitData {
+    ZKDTDummyCircuitData {
         dummy_input_data,
         dummy_permuted_input_data,
         dummy_decision_node_paths,
@@ -483,6 +524,7 @@ pub struct BatchedCatboostMles<F: FieldExt> {
     pub multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
     pub decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
     pub leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
+    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
 }
 
 /// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
@@ -499,9 +541,16 @@ pub fn read_upshot_data_single_tree_branch_from_file<F: FieldExt>() -> (ZKDTCirc
     from_reader(&file).unwrap()
 }
 
+/// Reads the cached results from `cached_file_path` and returns them
+pub fn read_upshot_data_single_tree_branch_from_filepath<F: FieldExt>(cached_file_path: &str) -> (ZKDTCircuitData<F>, (usize, usize)) {
+    let file = std::fs::File::open(cached_file_path).unwrap();
+    from_reader(&file).unwrap()
+}
+
 /// Loads a result from [`generate_upshot_data_all_batch_sizes`].
 pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>(
-    exp_batch_size: usize
+    exp_batch_size: usize,
+    upshot_data_dir_path: &Path
 ) -> (ZKDTCircuitData<F>, (usize, usize)) {
 
     // --- Sanitychecks ---
@@ -509,7 +558,7 @@ pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>
     debug_assert!(exp_batch_size <= 12);
 
     // --- Load ---
-    let file = std::fs::File::open(get_cached_batched_mles_filename_with_exp_size(exp_batch_size)).unwrap();
+    let file = std::fs::File::open(get_cached_batched_mles_filename_with_exp_size(exp_batch_size, upshot_data_dir_path)).unwrap();
     from_reader(&file).unwrap()
 }
 
@@ -518,103 +567,117 @@ pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>
 /// ## Arguments
 /// * `exp_batch_size` - 2^{`exp_batch_size`} is the actual batch size that we want.
 ///     Note that this value must be between 1 and 12, inclusive!
-pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usize) -> (BatchedCatboostMles<F>, (usize, usize)) {
+pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usize, upshot_data_dir_path: &Path) -> (BatchedCatboostMles<F>, (usize, usize)) {
 
     // --- Sanitychecks ---
     debug_assert!(exp_batch_size >= 1);
     debug_assert!(exp_batch_size <= 12);
 
     // --- Check to see if the cached file exists ---
-    let cached_file_path = get_cached_batched_mles_filename_with_exp_size(exp_batch_size);
+    let cached_file_path = get_cached_batched_mles_filename_with_exp_size(exp_batch_size, upshot_data_dir_path);
 
     // --- If no cached file exists, run the entire cache thingy ---
     if !file_exists(&cached_file_path) {
-        generate_upshot_data_all_batch_sizes::<F>(None);
+        generate_upshot_data_all_batch_sizes::<F>(None, upshot_data_dir_path);
     }
 
     // --- First generate the dummy data ---
     let (ZKDTCircuitData {
         // dummy_attr_idx_data,
-        dummy_input_data,
-        // dummy_permutation_indices,
-        dummy_permuted_input_data,
-        dummy_decision_node_paths,
-        dummy_leaf_node_paths,
-        dummy_binary_decomp_diffs,
-        mut dummy_multiplicities_bin_decomp,
-        dummy_decision_nodes,
-        dummy_leaf_nodes,
-    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_file_with_batch_exp::<F>(exp_batch_size);
+        input_data,
+        // permutation_indices,
+        permuted_input_data,
+        decision_node_paths,
+        leaf_node_paths,
+        binary_decomp_diffs,
+        mut multiplicities_bin_decomp,
+        decision_nodes,
+        leaf_nodes,
+        multiplicities_bin_decomp_input,
+    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_filepath::<F>(&cached_file_path);
+
+    // println!("input_data {:?}", input_data[0]);
+    // println!("permuted_input_data {:?}", permuted_input_data[0]);
+    // println!("multiplicities_bin_decomp_input {:?}", multiplicities_bin_decomp_input[0]);
 
     let decision_len = 2_usize.pow(tree_height as u32 - 1);
-    let dummy_multiplicities_bin_decomp_leaf = dummy_multiplicities_bin_decomp.split_off(decision_len);
-    let dummy_multiplicities_bin_decomp_decision = dummy_multiplicities_bin_decomp;
+    let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
+    let multiplicities_bin_decomp_decision = multiplicities_bin_decomp;
 
     // --- Generate MLEs for each ---
     // TODO!(ryancao): Change this into batched form
-    // let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
-    let dummy_input_data_mle = dummy_input_data.into_iter().map(|input| DenseMle::new_from_iter(input
+    // let attr_idx_data_mle = DenseMle::<_, F>::new(attr_idx_data[0].clone());
+    let input_data_mle_vec = input_data.into_iter().map(|input| DenseMle::new_from_iter(input
         .clone()
         .into_iter()
         .map(InputAttribute::from), LayerId::Input(0), None)).collect_vec();
-    // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
-    let dummy_permuted_input_data_mle = dummy_permuted_input_data
+    // let permutation_indices_mle = DenseMle::<_, F>::new(permutation_indices[0].clone());
+    let permuted_input_data_mle_vec = permuted_input_data
         .iter().map(|datum| DenseMle::new_from_iter(datum
             .clone()
             .into_iter()
             .map(InputAttribute::from), LayerId::Input(0), None)).collect();
-    let dummy_decision_node_paths_mle: Vec<DenseMle<F, DecisionNode<F>>> = dummy_decision_node_paths
+    let decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>> = decision_node_paths
         .iter()
         .map(|path|
             DenseMle::new_from_iter(path
             .clone()
             .into_iter(), LayerId::Input(0), None))
         .collect();
-    let dummy_leaf_node_paths_mle = dummy_leaf_node_paths
+    let leaf_node_paths_mle_vec = leaf_node_paths
         .into_iter()
         .map(|path| DenseMle::new_from_iter([path].into_iter(), LayerId::Input(0), None))
         .collect();
-    let dummy_binary_decomp_diffs_mle = dummy_binary_decomp_diffs
+    let binary_decomp_diffs_mle_vec = binary_decomp_diffs
         .iter()
-        .map(|dummy_binary_decomp_diff|
-            DenseMle::new_from_iter(dummy_binary_decomp_diff
+        .map(|binary_decomp_diff|
+            DenseMle::new_from_iter(binary_decomp_diff
                 .clone()
                 .into_iter()
                 .map(BinDecomp16Bit::from), LayerId::Input(0), None))
         .collect_vec();
-    let dummy_multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp_decision
+    let multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(multiplicities_bin_decomp_decision
         .clone()
         .into_iter()
         .map(BinDecomp16Bit::from), LayerId::Input(0), None);
-    let dummy_multiplicities_bin_decomp_mle_leaf = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp_leaf
+    let multiplicities_bin_decomp_mle_leaf = DenseMle::new_from_iter(multiplicities_bin_decomp_leaf
         .clone()
         .into_iter()
         .map(BinDecomp16Bit::from), LayerId::Input(0), None);
-    let dummy_decision_nodes_mle = DenseMle::new_from_iter(dummy_decision_nodes
+    let decision_nodes_mle = DenseMle::new_from_iter(decision_nodes
         .clone()
         .into_iter()
         .map(DecisionNode::from), LayerId::Input(0), None);
-    let dummy_leaf_nodes_mle = DenseMle::new_from_iter(dummy_leaf_nodes
+    let leaf_nodes_mle = DenseMle::new_from_iter(leaf_nodes
         .clone()
         .into_iter()
         .map(LeafNode::from), LayerId::Input(0), None);
+    let multiplicities_bin_decomp_mle_input = multiplicities_bin_decomp_input
+        .iter().map(|datum|
+            DenseMle::new_from_iter(datum
+            .clone()
+            .into_iter()
+            .map(BinDecomp4Bit::from), LayerId::Input(0), None))
+        .collect_vec();
+
 
     (BatchedCatboostMles {
-        input_data_mle_vec: dummy_input_data_mle,
-        permuted_input_data_mle_vec: dummy_permuted_input_data_mle,
-        decision_node_paths_mle_vec: dummy_decision_node_paths_mle,
-        leaf_node_paths_mle_vec: dummy_leaf_node_paths_mle,
-        binary_decomp_diffs_mle_vec: dummy_binary_decomp_diffs_mle,
-        multiplicities_bin_decomp_mle_decision: dummy_multiplicities_bin_decomp_mle_decision,
-        multiplicities_bin_decomp_mle_leaf: dummy_multiplicities_bin_decomp_mle_leaf,
-        decision_nodes_mle: dummy_decision_nodes_mle,
-        leaf_nodes_mle: dummy_leaf_nodes_mle,
+        input_data_mle_vec,
+        permuted_input_data_mle_vec,
+        decision_node_paths_mle_vec,
+        leaf_node_paths_mle_vec,
+        binary_decomp_diffs_mle_vec,
+        multiplicities_bin_decomp_mle_decision,
+        multiplicities_bin_decomp_mle_leaf,
+        decision_nodes_mle,
+        leaf_nodes_mle,
+        multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input
     }, (tree_height, input_len))
 }
 
 pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
     // --- First generate the dummy data ---
-    let ZKDTCircuitData {
+    let ZKDTDummyCircuitData {
         // dummy_attr_idx_data,
         dummy_input_data,
         // dummy_permutation_indices,
@@ -699,7 +762,7 @@ pub(crate) struct DummyMles<F: FieldExt> {
 /// into MLE form factor.
 pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
     // --- First generate the dummy data ---
-    let ZKDTCircuitData {
+    let ZKDTDummyCircuitData {
         dummy_input_data,
         dummy_permuted_input_data,
         dummy_decision_node_paths,
@@ -812,7 +875,7 @@ mod tests {
     #[test]
     fn dummy_bits_are_binary_test() {
         // --- First generate the dummy data ---
-        let ZKDTCircuitData {
+        let ZKDTDummyCircuitData {
             dummy_binary_decomp_diffs,
             dummy_multiplicities_bin_decomp,
             ..
@@ -986,7 +1049,7 @@ mod tests {
     #[test]
     fn dummy_binary_recomp_test() {
         // --- First generate the dummy data ---
-        let ZKDTCircuitData {
+        let ZKDTDummyCircuitData {
             dummy_permuted_input_data,
             dummy_decision_node_paths,
             dummy_binary_decomp_diffs,

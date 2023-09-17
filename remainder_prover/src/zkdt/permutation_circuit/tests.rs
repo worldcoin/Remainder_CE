@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
+    use std::{time::Instant, path::Path};
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::{test_rng, UniformRand};
@@ -21,7 +21,7 @@ mod tests {
         let (BatchedCatboostMles {
             input_data_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = NonBatchedPermutationCircuit::new(
             input_data_mle_vec[0].clone(),
@@ -41,7 +41,7 @@ mod tests {
         let (BatchedCatboostMles {
             input_data_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = PermutationCircuit::new(
             input_data_mle_vec,
@@ -78,7 +78,7 @@ mod tests {
         let (BatchedCatboostMles {
             input_data_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = FSPermutationCircuit::new(
             input_data_mle_vec,

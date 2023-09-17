@@ -57,11 +57,11 @@ fn main() {
 
     let batch_size = 10;
 
-    let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(batch_size);
+    let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(batch_size, todo!());
 
-    let combined_circuit = CombinedCircuits {
-        batched_catboost_mles
-    };
+    // let combined_circuit = CombinedCircuits {
+    //     batched_catboost_mles
+    // };
 
-    test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));
+    // test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));
 }

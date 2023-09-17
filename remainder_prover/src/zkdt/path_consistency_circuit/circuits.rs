@@ -94,8 +94,8 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
 
         let nonzero_gates = create_wiring_from_size(1 << (prev_node_left_mle_ref.num_vars() - self.num_copy));
 
-        let res_negative = layers.add_add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref.clone(), self.num_copy);
-        let res_positive = layers.add_add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref.clone(), self.num_copy);
+        let res_negative = layers.add_add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref.clone());
+        let res_positive = layers.add_add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref.clone());
 
         let sign_bit_sum_builder: SignBitProductBuilder<F> = SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative);
         let final_res = layers.add_gkr(sign_bit_sum_builder);
@@ -134,7 +134,6 @@ pub struct PathMulCheckCircuit<F: FieldExt> {
     decision_node_paths_mle: DenseMle<F, DecisionNode<F>>,
     leaf_node_paths_mle: DenseMle<F, LeafNode<F>>,
     bin_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
-    num_copy: usize,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PathMulCheckCircuit<F> {
@@ -170,23 +169,23 @@ impl<F: FieldExt> GKRCircuit<F> for PathMulCheckCircuit<F> {
         let prev_node_right_mle_ref = layers.add_gkr(prev_node_right_builder).mle_ref();
         let prev_node_left_mle_ref = layers.add_gkr(prev_node_left_builder).mle_ref();
 
-        let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (prev_node_left_mle_ref.num_vars() - self.num_copy));
-        let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (prev_node_left_mle_ref.num_vars() - self.num_copy));
+        let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (prev_node_left_mle_ref.num_vars()));
+        let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (prev_node_left_mle_ref.num_vars()));
 
-        let res_negative_dec = layers.add_add_gate(nonzero_gates_add_decision.clone(), curr_decision_mle_ref.clone(), prev_node_left_mle_ref.clone(), self.num_copy);
-        let res_positive_dec = layers.add_add_gate(nonzero_gates_add_decision.clone(), curr_decision_mle_ref, prev_node_right_mle_ref.clone(), self.num_copy);
+        let res_negative_dec = layers.add_add_gate(nonzero_gates_add_decision.clone(), curr_decision_mle_ref.clone(), prev_node_left_mle_ref.clone());
+        let res_positive_dec = layers.add_add_gate(nonzero_gates_add_decision.clone(), curr_decision_mle_ref, prev_node_right_mle_ref.clone());
 
-        let res_negative_leaf = layers.add_add_gate(nonzero_gates_add_leaf.clone(), prev_node_left_mle_ref.clone(), curr_leaf_mle_ref.clone(), self.num_copy);
-        let res_positive_leaf = layers.add_add_gate(nonzero_gates_add_leaf, prev_node_right_mle_ref.clone(), curr_leaf_mle_ref, self.num_copy);
+        let res_negative_leaf = layers.add_add_gate(nonzero_gates_add_leaf.clone(), prev_node_left_mle_ref.clone(), curr_leaf_mle_ref.clone());
+        let res_positive_leaf = layers.add_add_gate(nonzero_gates_add_leaf, prev_node_right_mle_ref.clone(), curr_leaf_mle_ref);
 
 
-        let nonzero_gates_mul_decision = decision_mul_wiring_from_size(1 << (pos_sign_bits.num_iterated_vars() - self.num_copy));
-        let nonzero_gates_mul_leaf = leaf_mul_wiring_from_size(1 << (pos_sign_bits.num_iterated_vars() - self.num_copy));
+        let nonzero_gates_mul_decision = decision_mul_wiring_from_size(1 << (pos_sign_bits.num_iterated_vars()));
+        let nonzero_gates_mul_leaf = leaf_mul_wiring_from_size(1 << (pos_sign_bits.num_iterated_vars()));
 
-        let dec_pos_prod = layers.add_mul_gate(nonzero_gates_mul_decision.clone(), pos_sign_bits.clone().mle_ref(), res_positive_dec.clone().mle_ref(), self.num_copy);
-        let dec_neg_prod = layers.add_mul_gate(nonzero_gates_mul_decision.clone(), neg_sign_bits.clone().mle_ref(), res_negative_dec.clone().mle_ref(), self.num_copy);
-        let leaf_pos_prod = layers.add_mul_gate(nonzero_gates_mul_leaf.clone(), pos_sign_bits.clone().mle_ref(), res_positive_leaf.clone().mle_ref(), self.num_copy);
-        let leaf_neg_prod = layers.add_mul_gate(nonzero_gates_mul_leaf.clone(), neg_sign_bits.clone().mle_ref(), res_negative_leaf.clone().mle_ref(), self.num_copy);
+        let dec_pos_prod = layers.add_mul_gate(nonzero_gates_mul_decision.clone(), pos_sign_bits.clone().mle_ref(), res_positive_dec.clone().mle_ref());
+        let dec_neg_prod = layers.add_mul_gate(nonzero_gates_mul_decision.clone(), neg_sign_bits.clone().mle_ref(), res_negative_dec.clone().mle_ref());
+        let leaf_pos_prod = layers.add_mul_gate(nonzero_gates_mul_leaf.clone(), pos_sign_bits.clone().mle_ref(), res_positive_leaf.clone().mle_ref());
+        let leaf_neg_prod = layers.add_mul_gate(nonzero_gates_mul_leaf.clone(), neg_sign_bits.clone().mle_ref(), res_negative_leaf.clone().mle_ref());
 
         let witness: Witness<F, Self::Transcript> = Witness {
             layers,
@@ -203,13 +202,11 @@ impl<F: FieldExt> PathMulCheckCircuit<F> {
         decision_node_paths_mle: DenseMle<F, DecisionNode<F>>,
         leaf_node_paths_mle: DenseMle<F, LeafNode<F>>,
         bin_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
-        num_copy: usize,
     ) -> Self {
         Self {
             decision_node_paths_mle,
             leaf_node_paths_mle,
             bin_decomp_diff_mle,
-            num_copy,
         }
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     expression::ExpressionStandard,
-    layer::{claims::aggregate_claims, from_mle, Claim, GKRLayer, Layer, LayerBuilder, LayerId},
+    layer::{from_mle, Claim, GKRLayer, Layer, LayerBuilder, LayerId, claims::{compute_claim_wlx, compute_aggregated_challenges}},
     mle::{
         beta::compute_beta_over_two_challenges,
         dense::{DenseMle, Tuple2},
@@ -686,12 +686,13 @@ fn test_dummy_sumcheck_subtract() {
     );
     let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
-    let (layer_claims, _) = aggregate_claims(
-        &[first_claim, second_claim],
-        &layer,
-        Fr::from(rng.gen::<u64>()),
-    )
-    .unwrap();
+    let rchal = Fr::from(rng.gen::<u64>());
+
+    let wlx: Vec<Fr> = compute_claim_wlx(&[first_claim.clone(), second_claim.clone()], &layer).unwrap();
+    let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+    let claimed_chals = compute_aggregated_challenges(&[first_claim.clone(), second_claim.clone()], rchal).unwrap();
+    let layer_claims: Claim<Fr> = (claimed_chals, claimed_val);
+
 
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
@@ -756,12 +757,12 @@ fn test_dummy_sumcheck_product_and_claim_aggregate() {
     );
     let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
-    let (layer_claims, _) = aggregate_claims(
-        &[first_claim, second_claim],
-        &layer,
-        Fr::from(rng.gen::<u64>()),
-    )
-    .unwrap();
+    let rchal = Fr::from(rng.gen::<u64>());
+
+    let wlx: Vec<Fr> = compute_claim_wlx(&[first_claim.clone(), second_claim.clone()], &layer).unwrap();
+    let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+    let claimed_chals = compute_aggregated_challenges(&[first_claim.clone(), second_claim.clone()], rchal).unwrap();
+    let layer_claims: Claim<Fr> = (claimed_chals, claimed_val);
 
     let layer_claim_real = get_dummy_claim(
         mle_out_fake.mle_ref(),
@@ -851,12 +852,12 @@ fn test_dummy_sumcheck_example() {
 
     let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
-    let (layer_claims, _) = aggregate_claims(
-        &[first_claim, second_claim],
-        &layer,
-        Fr::from(rng.gen::<u64>()),
-    )
-    .unwrap();
+    let rchal = Fr::from(rng.gen::<u64>());
+
+    let wlx: Vec<Fr> = compute_claim_wlx(&[first_claim.clone(), second_claim.clone()], &layer).unwrap();
+    let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+    let claimed_chals = compute_aggregated_challenges(&[first_claim.clone(), second_claim.clone()], rchal).unwrap();
+    let layer_claims: Claim<Fr> = (claimed_chals, claimed_val);
 
     let layer_claims_real =
         get_dummy_claim(output.mle_ref(), &mut rng, Some(layer_claims.0.clone()));

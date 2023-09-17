@@ -23,7 +23,6 @@
 //! ```
 extern crate serde;
 extern crate serde_json;
-use crate::zkdt::helpers::SIGNED_DECOMPOSITION_MAX_ARG_ABS;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -205,27 +204,6 @@ impl<T: Copy> Node<T> {
         }
     }
 
-    /// Add (depth_of_node - 1) * multiplier to the feature index of all internal nodes in this
-    /// tree.
-    pub fn offset_feature_indices(&mut self, multiplier: usize) {
-        self.offset_feature_indices_for_depth(multiplier, 1);
-    }
-
-    /// Helper to offset_feature_indices.
-    fn offset_feature_indices_for_depth(&mut self, multiplier: usize, depth: usize) {
-        if let Node::Internal {
-            feature_index,
-            left,
-            right,
-            ..
-        } = self
-        {
-            *feature_index = (depth - 1) * multiplier + *feature_index;
-            left.offset_feature_indices_for_depth(multiplier, depth + 1);
-            right.offset_feature_indices_for_depth(multiplier, depth + 1);
-        }
-    }
-
     /// Return the path traced by the specified sample down this tree.
     /// Pre: sample.len() > node.feature_index for this node and all descendents.
     pub fn get_path<'a>(&'a self, sample: &[u16]) -> Vec<&'a Node<T>> {
@@ -286,7 +264,6 @@ pub fn quantize_leaf_values(trees: &[Node<f64>]) -> (Vec<Node<i64>>, f64) {
 /// Tree is guaranteed to be perfect of depth `target_depth` if `premature_leaf_proba` is 0,
 /// otherwise `target_depth` is an upper bound.
 /// Node ids are not assigned.
-/// Thresholds are bounded SIGNED_DECOMPOSITION_MAX_ARG_ABS.
 /// Pre: target_depth >= 1; n_features >= 1.
 pub fn generate_tree(
     target_depth: usize,
@@ -301,7 +278,7 @@ pub fn generate_tree(
         Node::new_internal(
             None,
             rng.gen_range(0..n_features) as usize,
-            rng.gen_range(0..SIGNED_DECOMPOSITION_MAX_ARG_ABS) as u16,
+            rng.gen_range(0..2_u32.pow(15) + 1) as u16,
             generate_tree(target_depth - 1, n_features, premature_leaf_proba),
             generate_tree(target_depth - 1, n_features, premature_leaf_proba),
         )
@@ -462,25 +439,6 @@ mod tests {
                 assert_eq!(right.get_id(), Some(4));
             }
         }
-    }
-
-    #[test]
-    fn test_offset_feature_indices() {
-        let mut tree = build_small_tree();
-        tree.offset_feature_indices(10);
-        if let Node::Internal {
-            left,
-            feature_index,
-            ..
-        } = tree
-        {
-            assert_eq!(feature_index, 1);
-            if let Node::Internal { feature_index, .. } = *left {
-                assert_eq!(feature_index, 10);
-                return;
-            }
-        }
-        panic!("Should be inaccessible");
     }
 
     #[test]

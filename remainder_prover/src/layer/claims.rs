@@ -96,38 +96,6 @@ pub enum ClaimError {
 //     Ok(wlx_evals)
 // }
 
-/// Aggregate several claims into one
-pub(crate) fn aggregate_claims<F: FieldExt>(
-    claims: &[Claim<F>],
-    layer: &impl Layer<F>,
-    rstar: F,
-) -> Result<(Claim<F>, Vec<F>), ClaimError> {
-    let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
-
-    if claims.is_empty() {
-        return Err(ClaimError::ClaimAggroError);
-    }
-    let num_idx = claim_vecs[0].len();
-
-    // get the claim (r = l(r*))
-    let r: Vec<F> = cfg_into_iter!(0..num_idx)
-        .map(|idx| {
-            let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                .map(|claim| claim[idx])
-                .collect();
-            evaluate_at_a_point(&evals, rstar).unwrap()
-        })
-        .collect();
-
-    // get the evals [W(l(0)), W(l(1)), ...]
-    let wlx = layer.get_wlx_evaluations(claim_vecs, &mut vals, claims.len(), num_idx)?;
-
-    // interpolate to get W(l(r)), that's the claimed value
-    let claimed_val = evaluate_at_a_point(&wlx, rstar);
-
-    Ok(((r, claimed_val.unwrap()), wlx))
-}
-
 pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     claims: &[Claim<F>],
     rstar: F,
@@ -269,9 +237,10 @@ mod tests {
         let claim1: Claim<Fr> = (chals1, valchal[0]);
         let claim2: Claim<Fr> = (chals2, valchal[1]);
 
-        let res = aggregate_claims(&[claim1, claim2], &layer, Fr::from(10))
-            .unwrap()
-            .0;
+        let wlx: Vec<Fr> = compute_claim_wlx(&[claim1.clone(), claim2.clone()], &layer).unwrap();
+        let claimed_val = evaluate_at_a_point(&wlx, Fr::from(10)).unwrap();
+        let claimed_chals = compute_aggregated_challenges(&[claim1, claim2], Fr::from(10)).unwrap();
+        let res: Claim<Fr> = (claimed_chals, claimed_val);
 
         expr_copy.index_mle_indices(0);
         let challenge_l_10 = vec![Fr::from(7).neg(), Fr::from(43)]; // l(10), by hand
@@ -317,9 +286,10 @@ mod tests {
 
         let rchal = Fr::from(2).neg();
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
-            .unwrap()
-            .0;
+        let wlx: Vec<Fr> = compute_claim_wlx(&[claim1.clone(), claim2.clone(), claim3.clone()], &layer).unwrap();
+        let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+        let claimed_chals = compute_aggregated_challenges(&[claim1, claim2, claim3], rchal).unwrap();
+        let res: Claim<Fr> = (claimed_chals, claimed_val);
 
         let transpose1 = vec![Fr::from(1), Fr::from(2), Fr::from(3)];
         let transpose2 = vec![Fr::from(2), Fr::from(3), Fr::from(1)];
@@ -381,9 +351,10 @@ mod tests {
 
         let rchal = Fr::from(rng.gen::<u64>());
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
-            .unwrap()
-            .0;
+        let wlx: Vec<Fr> = compute_claim_wlx(&[claim1.clone(), claim2.clone(), claim3.clone()], &layer).unwrap();
+        let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+        let claimed_chals = compute_aggregated_challenges(&[claim1, claim2, claim3], rchal).unwrap();
+        let res: Claim<Fr> = (claimed_chals, claimed_val);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -447,9 +418,10 @@ mod tests {
 
         let rchal = Fr::from(rng.gen::<u64>());
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
-            .unwrap()
-            .0;
+        let wlx: Vec<Fr> = compute_claim_wlx(&[claim1.clone(), claim2.clone(), claim3.clone()], &layer).unwrap();
+        let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+        let claimed_chals = compute_aggregated_challenges(&[claim1, claim2, claim3], rchal).unwrap();
+        let res: Claim<Fr> = (claimed_chals, claimed_val);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -512,9 +484,15 @@ mod tests {
 
         let rchal = Fr::from(rng.gen::<u64>());
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
-            .unwrap()
-            .0;
+        // let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
+        //     .unwrap()
+        //     .0;
+
+        let wlx: Vec<Fr> = compute_claim_wlx(&[claim1.clone(), claim2.clone(), claim3.clone()], &layer).unwrap();
+        let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+        let claimed_chals = compute_aggregated_challenges(&[claim1, claim2, claim3], rchal).unwrap();
+        let res: Claim<Fr> = (claimed_chals, claimed_val);
+
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -577,9 +555,10 @@ mod tests {
 
         let rchal = Fr::from(rng.gen::<u64>());
 
-        let res: Claim<Fr> = aggregate_claims(&[claim1, claim2, claim3], &layer, rchal)
-            .unwrap()
-            .0;
+        let wlx: Vec<Fr> = compute_claim_wlx(&[claim1.clone(), claim2.clone(), claim3.clone()], &layer).unwrap();
+        let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+        let claimed_chals = compute_aggregated_challenges(&[claim1, claim2, claim3], rchal).unwrap();
+        let res: Claim<Fr> = (claimed_chals, claimed_val);
 
         let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
         let transpose2 = vec![Fr::from(192013).neg(), Fr::from(482), Fr::from(29014)];
@@ -632,11 +611,15 @@ mod tests {
 
         let rchal = Fr::from(2).neg();
 
-        let (res, wlx) = aggregate_claims(&claims, &layer, rchal).unwrap();
+        let wlx: Vec<Fr> = compute_claim_wlx(&claims, &layer).unwrap();
+        let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
+        let claimed_chals = compute_aggregated_challenges(&claims, rchal).unwrap();
+        let res: Claim<Fr> = (claimed_chals, claimed_val);
         let rounds = expr.index_mle_indices(0);
         // for round in 0..rounds {
         //     expr.fix
         // }
-        let verify_result = verify_aggregate_claim(&wlx, &claims, rchal).unwrap();
+        let verify_result = verify_aggregate_claim(&wlx, &claims, rchal);
+        assert!(verify_result.is_ok())
     }
 }

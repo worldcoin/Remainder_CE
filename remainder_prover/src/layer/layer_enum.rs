@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
 use crate::{
-    mle::{gate::{AddGate, AddGateBatched}, mulgate::{MulGate}, batched_mulgate::MulGateBatched},
+    mle::{addgate::{AddGate}, batched_addgate::{AddGateBatched}, mulgate::{MulGate}, batched_mulgate::MulGateBatched},
 };
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};

@@ -1,15 +1,13 @@
-use crate::zkdt::binary_recomp_circuit::circuits::BinaryRecompCircuitBatched;
-
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
+    use std::{time::Instant, path::Path};
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use ark_std::{test_rng, UniformRand};
     use itertools::Itertools;
     use rand::Rng;
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, structs::{InputAttribute, DecisionNode}, binary_recomp_circuit::circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit, BinaryRecompCircuitBatched}}, prover::GKRCircuit, mle::{dense::DenseMle, MleRef}, layer::LayerId};
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, structs::{InputAttribute, DecisionNode}, binary_recomp_circuit::{circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}, dataparallel_circuits::BinaryRecompCircuitBatched}}, prover::GKRCircuit, mle::{dense::DenseMle, MleRef}, layer::LayerId};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     use crate::prover::tests::test_circuit;
 
@@ -109,7 +107,7 @@ mod tests {
             binary_decomp_diffs_mle_vec,
             decision_node_paths_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1);
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let mut circuit = BinaryRecompCircuit::<Fr>::new(
             decision_node_paths_mle_vec[0].clone(),
@@ -153,7 +151,7 @@ mod tests {
             binary_decomp_diffs_mle_vec,
             decision_node_paths_mle_vec,
             permuted_input_data_mle_vec, ..
-        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(2);
+        }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(2, Path::new("upshot_data/"));
 
         let mut circuit = BinaryRecompCircuitBatched::new(
             decision_node_paths_mle_vec,
