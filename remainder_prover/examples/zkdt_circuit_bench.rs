@@ -57,7 +57,7 @@ fn main() {
 
     let batch_size = 10;
 
-    let (_batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(batch_size, todo!());
+    let (_batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(batch_size, Path::new("upshot_data"));
 
     // let combined_circuit = CombinedCircuits {
     //     batched_catboost_mles
