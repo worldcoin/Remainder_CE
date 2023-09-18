@@ -251,7 +251,11 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         }
     }
 
-    /// for input layer stuff
+    /// Given a batch of `DenseMle<F, InputAttribute<F>>`, creates a single combined
+    /// MLE bookkeeping table which represents first interleaving by node ID, attribute ID, and threshold,
+    /// then interleaving by batched MLEs (should always be a power of two!)
+    /// 
+    /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
     pub(crate) fn combine_mle_batch(decision_mle_batch: Vec<DenseMle<F, DecisionNode<F>>>) -> DenseMle<F, F> {
         
@@ -355,7 +359,11 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
         }
     }
 
-    /// for input layer stuff
+    /// Given a batch of `DenseMle<F, InputAttribute<F>>`, creates a single combined
+    /// MLE bookkeeping table which represents first interleaving by node ID and val,
+    /// then interleaving by batched MLEs (should always be a power of two!)
+    /// 
+    /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
     pub(crate) fn combine_mle_batch(leaf_mle_batch: Vec<DenseMle<F, LeafNode<F>>>) -> DenseMle<F, F> {
         
@@ -495,7 +503,11 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         }
     }
 
-    /// for input layer stuff
+    /// Given a batch of `DenseMle<F, InputAttribute<F>>`, creates a single combined
+    /// MLE bookkeeping table which represents first interleaving by attribute ID and attribute val,
+    /// then interleaving by batched MLEs (should always be a power of two!)
+    /// 
+    /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
     pub(crate) fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, InputAttribute<F>>>) -> DenseMle<F, F> {
         

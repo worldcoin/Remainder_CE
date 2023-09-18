@@ -22,3 +22,4 @@ pub mod path_consistency_circuit;
 /// For the two "bits are binary" checkers
 pub mod bits_are_binary_circuit;
 pub mod input_multiset_circuit;
+pub mod legacy_circuits;

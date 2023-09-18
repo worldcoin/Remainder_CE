@@ -1,22 +1,8 @@
-
-
-
-
-
-
-
-
-
-
-
 use crate::{mle::{dense::DenseMle}, prover::{input_layer::{MleInputLayer}}};
 use crate::{prover::{GKRCircuit, Layers, Witness}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
 use super::super::{builders::{AttributeConsistencyBuilder}, structs::{InputAttribute, DecisionNode}};
-
-
-
 
 pub(crate) struct NonBatchedAttributeConsistencyCircuit<F: FieldExt> {
     permuted_input_data_mle_vec: DenseMle<F, InputAttribute<F>>,
