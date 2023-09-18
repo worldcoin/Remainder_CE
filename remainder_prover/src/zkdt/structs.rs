@@ -1,7 +1,6 @@
 use std::{
     cmp,
-    iter::{self, Cloned, Flatten, Map, Zip},
-    marker::PhantomData,
+    iter::{Cloned, Map, Zip},
 };
 
 use crate::{
@@ -10,16 +9,14 @@ use crate::{
         Mle, MleAble, MleIndex, MleRef,
     }, layer::{batched::combine_mles, LayerId},
 };
-use rayon::vec;
 use remainder_shared_types::FieldExt;
 use ark_std::log2;
-// use derive_more::{From, Into};
-use itertools::{repeat_n, Chunk, Chunks, Itertools};
+use itertools::{repeat_n, Itertools};
 use serde::{Serialize, Deserialize};
 
+// ------------------------------------ ACTUAL DATA STRUCTS ------------------------------------
+
 /// --- Path nodes within the tree and in the path hint ---
-/// Used for the following components of the (circuit) input:
-/// a)
 #[derive(Copy, Debug, Clone, Serialize, Deserialize)]
 pub struct DecisionNode<F> {
     ///The id of this node in the tree
@@ -73,75 +70,8 @@ pub struct InputAttribute<F> {
     pub(crate) attr_val: F,
 }
 
-impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
-    fn from(bits: Vec<bool>) -> Self {
-        BinDecomp16Bit::<F> {
-            bits: bits.iter().map(|x| F::from(*x)).collect::<Vec<F>>().try_into().unwrap()
-        }
-    }
-}
+// ------------------------------------ MLEABLE IMPLEMENTATIONS ------------------------------------
 
-impl<F: FieldExt> From<Vec<bool>> for BinDecomp4Bit<F> {
-    fn from(bits: Vec<bool>) -> Self {
-        BinDecomp4Bit::<F> {
-            bits: bits.iter().map(|x| F::from(*x)).collect::<Vec<F>>().try_into().unwrap()
-        }
-    }
-}
-
-// --- Just an enumeration of, uh, stuff...? ---
-// To be honest this is basically just DenseMle<F>
-// TODO!(ryancao)
-// #[derive(Debug, Clone)]
-// pub struct EnumerationRange<F: FieldExt> {
-//     // TODO!(ryancao)
-//     pub attr_id: F,
-//     // pub attr_val: F,
-// }
-
-/// for input layer stuff, combining refs together
-/// TODO!(ende): refactor
-/// Takes the individual bookkeeping tables from the MleRefs within an MLE
-/// and merges them with padding, using a little-endian representation
-/// merge strategy. Assumes that ALL MleRefs are the same size.
-pub(crate) fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
-
-    let num_fields = items.len();
-
-    // --- All the items within should be the same size ---
-    let max_size = items
-        .iter()
-        .map(|mle_ref| mle_ref.bookkeeping_table.len())
-        .max().unwrap();
-
-    let part_size = 1 << log2(max_size);
-    let part_count = 2_u32.pow(log2(num_fields)) as usize;
-
-    // --- Number of "part" slots which need to filled with padding ---
-    let padding_count = part_count - num_fields;
-    let total_size = part_size * part_count;
-    let total_padding: usize = total_size - max_size * part_count;
-
-    // items.into_iter().cloned().map(|mut items| {
-    //     let padding = part_size - items.len();
-    //     items.extend(repeat_n(F::zero(), padding));
-    //     items
-    // }).flatten().chain(repeat_n(F::zero(), padding_count * part_size)).collect()
-
-    let result = (0..max_size)
-        .flat_map(|index| {
-            items
-                .iter()
-                .map(move |item| item.bookkeeping_table().get(index).unwrap_or(&F::zero()).clone())
-                .chain(repeat_n(F::zero(), padding_count))
-        })
-        .chain(repeat_n(F::zero(), total_padding))
-        .collect_vec();
-
-    DenseMle::new_from_raw(result, LayerId::Input(0), None)
-}
-
-// Personally for the above, just give me a Vec<u32> and that should be great!
 impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
     type Repr = [Vec<F>; 3];
 
@@ -178,43 +108,59 @@ impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
     }
 }
 
-// TODO!(ryancao): Actually implement this correctly for PathNode<F>
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, DecisionNode<F>> {
-//     type Item = ((F, F), F);
 
-//     type IntoIter = Zip<Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>, Cloned<std::slice::Iter<'a, F>>>;
+impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
+    fn from(bits: Vec<bool>) -> Self {
+        BinDecomp16Bit::<F> {
+            bits: bits.iter().map(|x| F::from(*x)).collect::<Vec<F>>().try_into().unwrap()
+        }
+    }
+}
 
-//     fn into_iter(self) -> Self::IntoIter {
+impl<F: FieldExt> From<Vec<bool>> for BinDecomp4Bit<F> {
+    fn from(bits: Vec<bool>) -> Self {
+        BinDecomp4Bit::<F> {
+            bits: bits.iter().map(|x| F::from(*x)).collect::<Vec<F>>().try_into().unwrap()
+        }
+    }
+}
 
-//         self.mle[0]
-//             .iter()
-//             .cloned()
-//             .zip(self.mle[1].iter().cloned())
-//             .zip(self.mle[2].iter().cloned())
-//     }
-// }
+/// for input layer stuff, combining refs together
+/// TODO!(ende): refactor
+/// Takes the individual bookkeeping tables from the MleRefs within an MLE
+/// and merges them with padding, using a little-endian representation
+/// merge strategy. Assumes that ALL MleRefs are the same size.
+pub(crate) fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
 
-/// Conversion from a list of `PathNode<F>`s into a DenseMle
-// impl<F: FieldExt> FromIterator<DecisionNode<F>> for DenseMle<F, DecisionNode<F>> {
-//     fn from_iter<T: IntoIterator<Item = DecisionNode<F>>>(iter: T) -> Self {
-//         // --- The physical storage is [node_id_1, ...] + [attr_id_1, ...] + [threshold_1, ...] ---
-//         let iter = iter.into_iter();
-//         let (node_ids, attr_ids, thresholds): (Vec<F>, Vec<F>, Vec<F>) = iter
-//             .map(|x| (x.node_id, x.attr_id, x.threshold))
-//             .multiunzip();
+    let num_fields = items.len();
 
-//         // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-//         let num_vars = log2(4 * node_ids.len()) as usize;
+    // --- All the items within should be the same size ---
+    let max_size = items
+        .iter()
+        .map(|mle_ref| mle_ref.bookkeeping_table.len())
+        .max().unwrap();
 
-//         Self {
-//             mle: [node_ids, attr_ids, thresholds],
-//             num_vars,
-//             _marker: PhantomData,
-//             layer_id: None,
-//             prefix_bits: None,
-//         }
-//     }
-// }
+    let part_size = 1 << log2(max_size);
+    let part_count = 2_u32.pow(log2(num_fields)) as usize;
+
+    // --- Number of "part" slots which need to filled with padding ---
+    let padding_count = part_count - num_fields;
+    let total_size = part_size * part_count;
+    let total_padding: usize = total_size - max_size * part_count;
+
+    let result = (0..max_size)
+        .flat_map(|index| {
+            items
+                .iter()
+                .map(move |item| item.bookkeeping_table().get(index).unwrap_or(&F::zero()).clone())
+                .chain(repeat_n(F::zero(), padding_count))
+        })
+        .chain(repeat_n(F::zero(), total_padding))
+        .collect_vec();
+
+    DenseMle::new_from_raw(result, LayerId::Input(0), None)
+}
+
 
 impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     /// MleRef grabbing just the list of node IDs
@@ -357,41 +303,6 @@ impl<F: FieldExt> MleAble<F> for LeafNode<F> {
     }
 }
 
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, LeafNode<F>> {
-//     type Item = (F, F);
-
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         let len = self.mle.len() / 2;
-
-//         self.mle[0]
-//             .iter()
-//             .cloned()
-//             .zip(self.mle[1].iter().cloned())
-//     }
-// }
-
-/// Conversion from a list of `LeafNode<F>`s into a DenseMle
-// impl<F: FieldExt> FromIterator<LeafNode<F>> for DenseMle<F, LeafNode<F>> {
-//     fn from_iter<T: IntoIterator<Item = LeafNode<F>>>(iter: T) -> Self {
-//         // --- The physical storage is [node_id_1, ...] + [attr_id_1, ...] + [threshold_1, ...] ---
-//         let iter = iter.into_iter();
-//         let (node_ids, node_vals): (Vec<F>, Vec<F>) = iter.map(|x| (x.node_id, x.node_val)).unzip();
-
-//         // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-//         let num_vars = log2(2 * node_ids.len()) as usize;
-
-//         Self {
-//             mle: [node_ids, node_vals],
-//             num_vars,
-//             _marker: PhantomData,
-//             layer_id: None,
-//             prefix_bits: None,
-//         }
-//     }
-// }
-
 impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     /// MleRef grabbing just the list of node IDs
     pub(crate) fn node_id(&'_ self) -> DenseMleRef<F> {
@@ -495,41 +406,6 @@ impl<F: FieldExt> MleAble<F> for InputAttribute<F> {
         log2(items[0].len() + items[1].len()) as usize
     }
 }
-
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, InputAttribute<F>> {
-//     type Item = (F, F);
-
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         let len = self.mle.len() / 2;
-
-//         self.mle[0]
-//             .iter()
-//             .cloned()
-//             .zip(self.mle[1].iter().cloned())
-//     }
-// }
-
-/// Conversion from a list of `InputAttribute<F>`s into a DenseMle
-// impl<F: FieldExt> FromIterator<InputAttribute<F>> for DenseMle<F, InputAttribute<F>> {
-//     fn from_iter<T: IntoIterator<Item = InputAttribute<F>>>(iter: T) -> Self {
-//         // --- The physical storage is [node_id_1, ...] + [attr_id_1, ...] + [threshold_1, ...] ---
-//         let iter = iter.into_iter();
-//         let (attr_ids, attr_vals): (Vec<F>, Vec<F>) = iter.map(|x| (x.attr_id, x.attr_val)).unzip();
-
-//         // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-//         let num_vars = log2(2 * attr_ids.len()) as usize;
-
-//         Self {
-//             mle: [attr_ids, attr_vals],
-//             num_vars,
-//             _marker: PhantomData,
-//             layer_id: None,
-//             prefix_bits: None,
-//         }
-//     }
-// }
 
 impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// MleRef grabbing just the list of attribute IDs
@@ -688,34 +564,6 @@ impl<F: FieldExt> MleAble<F> for BinDecomp16Bit<F> {
     }
 }
 
-/// Conversion from a list of `BinDecomp16Bit<F>`s into a DenseMle
-// TODO!(ryancao): Make this stuff derivable
-// impl<F: FieldExt> FromIterator<BinDecomp16Bit<F>> for DenseMle<F, BinDecomp16Bit<F>> {
-//     fn from_iter<T: IntoIterator<Item = BinDecomp16Bit<F>>>(iter: T) -> Self {
-//         // --- The physical storage is [bit_0, ...] + [bit_1, ...] + [bit_2, ...], ... ---
-//         let iter = iter.into_iter();
-
-//         // --- TODO!(ryancao): This is genuinely horrible but we'll fix it later ---
-//         let mut ret: [Vec<F>; 16] = std::array::from_fn(|_| vec![]);
-//         iter.for_each(|tuple| {
-//             for (item, bit) in ret.iter_mut().zip(tuple.bits.iter()) {
-//                 item.push(*bit);
-//             }
-//         });
-
-//         // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-//         let num_vars = log2(16 * ret[0].len()) as usize;
-
-//         Self {
-//             mle: ret,
-//             num_vars,
-//             _marker: PhantomData,
-//             layer_id: None,
-//             prefix_bits: None,
-//         }
-//     }
-// }
-
 // TODO!(ryancao): Make this stuff derivable
 impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
     /// Returns a list of MLERefs, one for each bit
@@ -852,34 +700,6 @@ impl<F: FieldExt> MleAble<F> for BinDecomp4Bit<F> {
         log2(4 * items[0].len()) as usize
     }
 }
-
-/// Conversion from a list of `BinDecomp4Bit<F>`s into a DenseMle
-// TODO!(ryancao): Make this stuff derivable
-// impl<F: FieldExt> FromIterator<BinDecomp4Bit<F>> for DenseMle<F, BinDecomp4Bit<F>> {
-//     fn from_iter<T: IntoIterator<Item = BinDecomp4Bit<F>>>(iter: T) -> Self {
-//         // --- The physical storage is [bit_0, ...] + [bit_1, ...] + [bit_2, ...], ... ---
-//         let iter = iter.into_iter();
-
-//         // --- TODO!(ryancao): This is genuinely horrible but we'll fix it later ---
-//         let mut ret: [Vec<F>; 4] = std::array::from_fn(|_| vec![]);
-//         iter.for_each(|tuple| {
-//             for (item, bit) in ret.iter_mut().zip(tuple.bits.iter()) {
-//                 item.push(*bit);
-//             }
-//         });
-
-//         // --- TODO!(ryancao): Does this pad correctly? (I.e. is this necessary?) ---
-//         let num_vars = log2(4 * ret[0].len()) as usize;
-
-//         Self {
-//             mle: ret,
-//             num_vars,
-//             _marker: PhantomData,
-//             layer_id: None,
-//             prefix_bits: None,
-//         }
-//     }
-// }
 
 // TODO!(ryancao): Make this stuff derivable
 impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {

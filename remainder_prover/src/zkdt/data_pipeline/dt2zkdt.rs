@@ -47,15 +47,24 @@
 extern crate serde;
 extern crate serde_json;
 
+use crate::layer::LayerId;
+use crate::mle::{Mle, MleRef};
+use crate::mle::dense::DenseMle;
+use crate::prover::input_layer::combine_input_layers::InputLayerBuilder;
+use crate::prover::input_layer::ligero_input_layer::LigeroInputLayer;
 use crate::utils::file_exists;
-use crate::zkdt::constants::get_cached_batched_mles_filename_with_exp_size;
+use crate::zkdt::constants::{get_cached_batched_mles_filename_with_exp_size, get_tree_commitment_filename_for_tree_number};
 use crate::zkdt::helpers::*;
 use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode};
 use crate::zkdt::data_pipeline::trees::*;
+use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use itertools::Itertools;
+use remainder_ligero::ligero_commit::{remainder_ligero_commit_prove, self};
 use remainder_shared_types::FieldExt;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
 use rand::Rng;
+use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use std::fs::{File, self};
@@ -451,6 +460,68 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
         ctrees.leaf_nodes[0].clone(),
         csamples.attribute_multiplicities[0].clone()
     ), (tree_height, input_len))
+}
+
+
+/// Generates Ligero commitments for all trees within the Upshot tree model.
+/// 
+/// TODO!(ryancao): Actually write these things to file!
+pub fn generate_all_tree_ligero_commitments<F: FieldExt>(upshot_data_dir_path: &Path) {
+
+    let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
+    let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+    raw_samples.values = raw_samples.values[0..1].to_vec();
+
+    let trees_model: TreesModel = (&raw_trees_model).into();
+    let samples: Samples = to_samples(&raw_samples, &trees_model);
+    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
+
+    let csamples = circuitize_samples::<F>(&samples, &trees_model);
+
+    let tree_height = ctrees.depth;
+    let input_len = csamples.samples[0].len();
+
+    // --- Generate Ligero commitments for trees ---
+    debug_assert_eq!(ctrees.decision_nodes.len(), ctrees.leaf_nodes.len());
+    ctrees.decision_nodes.into_iter().zip(
+        ctrees.leaf_nodes.into_iter()).enumerate().for_each(|(tree_number, (tree_decision_nodes, tree_leaf_nodes))| {
+
+            dbg!("Generating commitment for tree number {:?}", tree_number);
+
+            // --- Create MLEs from each tree decision + leaf node list ---
+            let mut tree_decision_nodes_mle = DenseMle::new_from_iter(tree_decision_nodes
+                .clone()
+                .into_iter()
+                .map(DecisionNode::from), LayerId::Input(0), None);
+            let mut tree_leaf_nodes_mle = DenseMle::new_from_iter(tree_leaf_nodes
+                .clone()
+                .into_iter()
+                .map(LeafNode::from), LayerId::Input(0), None);
+
+            // --- Combine them as if creating an input layer ---
+            let tree_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+                Box::new(&mut tree_decision_nodes_mle),
+                Box::new(&mut tree_leaf_nodes_mle),
+            ];
+            let tree_input_layer_builder = InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
+            let tree_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = tree_input_layer_builder.to_input_layer();
+
+            // --- Create commitment to the combined MLEs via the input layer ---
+            let rho_inv = 4;
+            let ligero_commitment = remainder_ligero_commit_prove(&tree_input_layer.mle.mle_ref().bookkeeping_table, rho_inv);
+
+            // --- Write to file ---
+            let tree_commitment_filepath = get_tree_commitment_filename_for_tree_number(tree_number, upshot_data_dir_path);
+            let mut f = fs::File::create(tree_commitment_filepath).unwrap();
+            to_writer(&mut f, &ligero_commitment).unwrap();
+    });
+}
+
+/// Just to have something runnable which will generate all tree commitments into
+/// "upshot_data/tree_ligero_commitments/" (make sure you create the directory first!!!)
+#[test]
+pub fn do_generate_all_ligero_tree_commitments() {
+    generate_all_tree_ligero_commitments::<Fr>(Path::new("upshot_data/tree_ligero_commitments/"));
 }
 
 /// Generates all batched data of size 2^1, ..., 2^{12} and caches for testing

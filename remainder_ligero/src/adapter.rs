@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+
 
 use crate::poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use crate::{LcColumn, LcEncoding};
@@ -6,7 +6,7 @@ use crate::{LcColumn, LcEncoding};
 use crate::poseidon_ligero::PoseidonSpongeHasher;
 use crate::LcProofAuxiliaryInfo;
 use crate::{ligero_structs::LigeroEncoding, ligero_structs::LigeroEvalProof, LcRoot};
-use halo2_base::utils::log2_ceil;
+
 use remainder_shared_types::FieldExt;
 
 use itertools::Itertools;
@@ -42,7 +42,7 @@ pub struct LigeroClaim<F> {
 
 /// Converts a lcpc-style Ligero proof/root into the above data structure.
 pub fn convert_lcpc_to_halo<F: FieldExt>(
-    aux: LcProofAuxiliaryInfo,
+    _aux: LcProofAuxiliaryInfo,
     root: LcRoot<LigeroEncoding<F>, F>,
     pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
 ) -> LigeroProof<F> {
@@ -93,7 +93,9 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
     //     eval: ark_to_halo(&raw_claim.eval),
     // };
 
-    let proof = LigeroProof {
+    
+
+    LigeroProof {
         merkle_root,
         // --- No longer doing the well-formedness check ---
         // r_a,
@@ -101,9 +103,7 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
         columns,
         merkle_paths,
         col_indices,
-    };
-
-    proof
+    }
 }
 
 /// Converts the Halo2-compatible proof back into the Ligero structs needed

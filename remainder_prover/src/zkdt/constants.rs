@@ -7,3 +7,8 @@ pub fn get_cached_batched_mles_filename_with_exp_size(exp_size: usize, upshot_da
     let upshot_data_filepath = upshot_data_dir_path.join(format!("cached_batched_upshot_mles_exp_batch_size_{}.json", exp_size));
     String::from(upshot_data_filepath.to_str().unwrap())
 }
+/// For tree commitment cache-ing
+pub fn get_tree_commitment_filename_for_tree_number(tree_number: usize, upshot_data_dir_path: &Path) -> String {
+    let upshot_data_filepath = upshot_data_dir_path.join(format!("tree_commitment_{}.json", tree_number));
+    String::from(upshot_data_filepath.to_str().unwrap())
+}

@@ -212,13 +212,11 @@ pub fn check_fully_bound<F: FieldExt>(
 
     mle_refs.into_iter().fold(Ok(F::one()), |acc, mle_ref| {
         // --- Accumulate either errors or multiply ---
-        if let Err(e) = acc {
-            return Err(e);
-        }
+        let acc = acc?;
         if mle_ref.bookkeeping_table().len() != 1 {
             return Err(GateError::MleNotFullyBoundError);
         }
-        Ok(acc.unwrap() * mle_ref.bookkeeping_table()[0])
+        Ok(acc * mle_ref.bookkeeping_table()[0])
     })
 }
 
