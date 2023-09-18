@@ -3,13 +3,13 @@ mod tests {
     use std::{time::Instant, path::Path};
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use ark_std::{test_rng, UniformRand};
-    use itertools::Itertools;
-    use rand::Rng;
+    
+    
+    
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, NUM_DUMMY_INPUTS, DUMMY_INPUT_LEN, TREE_HEIGHT, generate_dummy_mles_batch, BatchedDummyMles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, structs::{InputAttribute, DecisionNode}, binary_recomp_circuit::{circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}, dataparallel_circuits::BinaryRecompCircuitBatched}}, prover::GKRCircuit, mle::{dense::DenseMle, MleRef}, layer::LayerId};
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, binary_recomp_circuit::{circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}, dataparallel_circuits::BinaryRecompCircuitBatched}}, prover::GKRCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
-    use crate::prover::tests::test_circuit;
+    
 
     #[test]
     fn test_partial_bits_checker() {

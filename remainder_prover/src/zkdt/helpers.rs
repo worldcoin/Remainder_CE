@@ -213,18 +213,18 @@ mod tests {
         // test vanilla case
         let result = build_signed_bit_decomposition(-3, 16);
         if let Some(bit_decomp) = result {
-            assert_eq!(bit_decomp[0], true);
-            assert_eq!(bit_decomp[1], true);
-            assert_eq!(bit_decomp[2], false);
-            assert_eq!(bit_decomp[3], false);
-            assert_eq!(bit_decomp[15], true);
+            assert!(bit_decomp[0]);
+            assert!(bit_decomp[1]);
+            assert!(!bit_decomp[2]);
+            assert!(!bit_decomp[3]);
+            assert!(bit_decomp[15]);
         } else {
             assert!(false);
         }
         // test overflow handling
         assert_eq!(build_signed_bit_decomposition(2_i32.pow(30), 16), None);
         assert_eq!(
-            build_signed_bit_decomposition(-1 * 2_i32.pow(30), 16),
+            build_signed_bit_decomposition(-2_i32.pow(30), 16),
             None
         );
     }
@@ -234,11 +234,11 @@ mod tests {
         // test vanilla case
         let result = build_unsigned_bit_decomposition(6, 16);
         if let Some(bit_decomp) = result {
-            assert_eq!(bit_decomp[0], false);
-            assert_eq!(bit_decomp[1], true);
-            assert_eq!(bit_decomp[2], true);
-            assert_eq!(bit_decomp[3], false);
-            assert_eq!(bit_decomp[15], false);
+            assert!(!bit_decomp[0]);
+            assert!(bit_decomp[1]);
+            assert!(bit_decomp[2]);
+            assert!(!bit_decomp[3]);
+            assert!(!bit_decomp[15]);
         } else {
             assert!(false);
         }

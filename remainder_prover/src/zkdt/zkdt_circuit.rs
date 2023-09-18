@@ -1180,12 +1180,12 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use std::time::Instant;
+    
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use ark_std::{test_rng, UniformRand};
-    use itertools::Itertools;
-    use rand::Rng;
+    
+    
+    
 
     use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
     

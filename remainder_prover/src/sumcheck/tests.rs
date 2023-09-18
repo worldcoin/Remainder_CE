@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use ark_std::test_rng;
-use ark_std::UniformRand;
+
 use ark_std::{One, Zero};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use rand::Rng;
@@ -316,9 +316,9 @@ fn test_dummy_sumcheck_1() {
 
     let mle_output = DenseMle::new_from_iter(
         mle_new
-            .clone()
+            
             .into_iter()
-            .zip(mle_2.clone().into_iter())
+            .zip(mle_2.into_iter())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
         None,
@@ -348,9 +348,9 @@ fn test_dummy_sumcheck_2() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_output = DenseMle::new_from_iter(
-        mle1.clone()
+        mle1
             .into_iter()
-            .zip(mle2.clone().into_iter())
+            .zip(mle2.into_iter())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
         None,
@@ -386,9 +386,9 @@ fn test_dummy_sumcheck_3() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_output = DenseMle::new_from_iter(
-        mle1.clone()
+        mle1
             .into_iter()
-            .zip(mle2.clone().into_iter().chain(mle2.clone().into_iter()))
+            .zip(mle2.into_iter().chain(mle2.into_iter()))
             .map(|(first, second)| first * second),
         LayerId::Input(0),
         None,
@@ -415,9 +415,9 @@ fn test_dummy_sumcheck_sum_small() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_output = DenseMle::new_from_iter(
-        mle1.clone()
+        mle1
             .into_iter()
-            .zip(mle2.clone().into_iter())
+            .zip(mle2.into_iter())
             .map(|(first, second)| first + second),
         LayerId::Input(0),
         None,
@@ -658,9 +658,9 @@ fn test_dummy_sumcheck_subtract() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_out = DenseMle::new_from_iter(
-        mle1.clone()
+        mle1
             .into_iter()
-            .zip(mle2.clone().into_iter())
+            .zip(mle2.into_iter())
             .map(|(first, second)| first - second),
         LayerId::Input(0),
         None,
@@ -690,7 +690,7 @@ fn test_dummy_sumcheck_subtract() {
 
     let wlx: Vec<Fr> = compute_claim_wlx(&[first_claim.clone(), second_claim.clone()], &layer).unwrap();
     let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
-    let claimed_chals = compute_aggregated_challenges(&[first_claim.clone(), second_claim.clone()], rchal).unwrap();
+    let claimed_chals = compute_aggregated_challenges(&[first_claim, second_claim], rchal).unwrap();
     let layer_claims: Claim<Fr> = (claimed_chals, claimed_val);
 
 
@@ -728,9 +728,9 @@ fn test_dummy_sumcheck_product_and_claim_aggregate() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_out_fake = DenseMle::new_from_iter(
-        mle1.clone()
+        mle1
             .into_iter()
-            .zip(mle2.clone().into_iter())
+            .zip(mle2.into_iter())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
         None,
@@ -761,7 +761,7 @@ fn test_dummy_sumcheck_product_and_claim_aggregate() {
 
     let wlx: Vec<Fr> = compute_claim_wlx(&[first_claim.clone(), second_claim.clone()], &layer).unwrap();
     let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
-    let claimed_chals = compute_aggregated_challenges(&[first_claim.clone(), second_claim.clone()], rchal).unwrap();
+    let claimed_chals = compute_aggregated_challenges(&[first_claim, second_claim], rchal).unwrap();
     let layer_claims: Claim<Fr> = (claimed_chals, claimed_val);
 
     let layer_claim_real = get_dummy_claim(
@@ -856,7 +856,7 @@ fn test_dummy_sumcheck_example() {
 
     let wlx: Vec<Fr> = compute_claim_wlx(&[first_claim.clone(), second_claim.clone()], &layer).unwrap();
     let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
-    let claimed_chals = compute_aggregated_challenges(&[first_claim.clone(), second_claim.clone()], rchal).unwrap();
+    let claimed_chals = compute_aggregated_challenges(&[first_claim, second_claim], rchal).unwrap();
     let layer_claims: Claim<Fr> = (claimed_chals, claimed_val);
 
     let layer_claims_real =

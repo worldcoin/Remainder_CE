@@ -118,9 +118,9 @@ mod tests {
         // let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
 
         let mut circuit = PathCheckCircuitBatched::new(
-            decision_node_paths_mle_vec.clone(), 
-            leaf_node_paths_mle_vec.clone(),
-            binary_decomp_diffs_mle_vec.clone(),
+            decision_node_paths_mle_vec, 
+            leaf_node_paths_mle_vec,
+            binary_decomp_diffs_mle_vec,
         );
         let now = Instant::now();
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
@@ -162,9 +162,9 @@ mod tests {
         // let flattened_decision_node_paths_mle = combine_mles(dummy_decision_node_paths_mle, num_copy_bits as usize);
 
         let mut circuit = PathCheckCircuitBatchedMul::new(
-            decision_node_paths_mle_vec.clone(), 
-            leaf_node_paths_mle_vec.clone(),
-            binary_decomp_diffs_mle_vec.clone(),
+            decision_node_paths_mle_vec, 
+            leaf_node_paths_mle_vec,
+            binary_decomp_diffs_mle_vec,
         );
         let now = Instant::now();
         let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");

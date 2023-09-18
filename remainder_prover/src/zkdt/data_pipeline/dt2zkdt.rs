@@ -65,7 +65,7 @@ use ndarray::Array2;
 use ndarray_npy::read_npy;
 use rand::Rng;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use std::fs::{File, self};
@@ -609,7 +609,7 @@ mod tests {
     #[test]
     fn test_raw_trees_model_loading() {
         let filename = "src/zkdt/data_pipeline/test_qtrees.json";
-        let raw_trees_model = load_raw_trees_model(filename);
+        let _raw_trees_model = load_raw_trees_model(filename);
     }
 
     #[test]
@@ -628,8 +628,8 @@ mod tests {
             vec![2_u16; sample_length],
         ];
         let raw_samples = RawSamples {
-            values: values,
-            sample_length: sample_length
+            values,
+            sample_length
         };
         let tree = build_small_tree();
         let raw_trees_model = RawTreesModel {
@@ -757,7 +757,7 @@ mod tests {
             for (node_id, node) in tree_dns.iter().take(tree_dns.len() - 1).enumerate() {
                 assert_eq!(node.node_id, Fr::from(node_id as u64));
             }
-            assert_eq!(tree_dns[tree_dns.len() - 1].node_id, Fr::from(7 as u64));
+            assert_eq!(tree_dns[tree_dns.len() - 1].node_id, Fr::from(7_u64));
         }
         // check leaf nodes
         for tree_lns in &ctrees.leaf_nodes {
@@ -776,7 +776,7 @@ mod tests {
         let f_quant_score = if quant_score >= 0 {
             Fr::from(quant_score as u64)
         } else {
-            -Fr::from(quant_score.abs() as u64)
+            -Fr::from(quant_score.unsigned_abs())
         };
         // just check that's it's close
         assert_eq!(f_quant_score, acc_score);
@@ -815,17 +815,17 @@ mod tests {
         // pad the trees, assign ids and quantize the leaf values
         let trees_model: TreesModel = (&raw_trees_model).into();
         // circuitize the trees (converts to DecisionNode<F>, LeafNode<F>)
-        let ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
+        let _ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
         // .. continued
         // generate some samples to play with
         let n_samples = 10;
         let raw_samples = generate_raw_samples(n_samples, n_features);
         let samples = to_samples(&raw_samples, &trees_model);
         // notice: circuitize_samples takes trees_model, not ctrees!
-        let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
+        let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);
         // .. continued
-        let raw_trees_model: RawTreesModel = load_raw_trees_model("src/zkdt/data_pipeline/test_qtrees.json");
-        let raw_samples: RawSamples = load_raw_samples("src/zkdt/data_pipeline/test_samples_10x6.npy");
+        let _raw_trees_model: RawTreesModel = load_raw_trees_model("src/zkdt/data_pipeline/test_qtrees.json");
+        let _raw_samples: RawSamples = load_raw_samples("src/zkdt/data_pipeline/test_samples_10x6.npy");
     }
 
     #[test]
@@ -842,7 +842,7 @@ mod tests {
         let trees_model: TreesModel = (&raw_trees_model).into();
         let samples = to_samples(&raw_samples, &trees_model);
 
-        let ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
-        let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
+        let _ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
+        let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);
     }
 }

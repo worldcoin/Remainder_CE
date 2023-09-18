@@ -286,7 +286,7 @@ mod tests {
     use crate::{
         expression::ExpressionStandard,
         layer::{from_mle, LayerBuilder, LayerId},
-        mle::{dense::DenseMle, Mle, MleIndex},
+        mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
     };
 
@@ -313,12 +313,12 @@ mod tests {
             )
         };
         let output: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(
+            let first = DenseMle::new_from_raw(
                 vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)],
                 LayerId::Input(0),
                 Some(vec![MleIndex::Iterated]),
             );
-            let mut second = DenseMle::new_from_raw(
+            let second = DenseMle::new_from_raw(
                 vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)],
                 LayerId::Input(0),
                 Some(vec![MleIndex::Iterated]),
@@ -328,12 +328,12 @@ mod tests {
         let builder = from_mle(output, expression_builder, layer_builder);
 
         let output_2: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(
+            let first = DenseMle::new_from_raw(
                 vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)],
                 LayerId::Input(0),
                 Some(vec![MleIndex::Iterated]),
             );
-            let mut second = DenseMle::new_from_raw(
+            let second = DenseMle::new_from_raw(
                 vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)],
                 LayerId::Input(0),
                 Some(vec![MleIndex::Iterated]),

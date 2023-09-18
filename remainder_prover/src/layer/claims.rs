@@ -175,7 +175,7 @@ mod tests {
 
     use crate::expression::{Expression, ExpressionStandard};
     use crate::layer::{from_mle, GKRLayer, LayerId};
-    use crate::mle::{dense::DenseMle, Mle};
+    use crate::mle::{dense::DenseMle};
     use rand::Rng;
     use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
 
@@ -211,7 +211,7 @@ mod tests {
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
 
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let expr = ExpressionStandard::Mle(mle_ref);
 
         let layer = from_mle(
             mle1,
@@ -257,7 +257,7 @@ mod tests {
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -323,7 +323,7 @@ mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -390,7 +390,7 @@ mod tests {
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
-        let mut expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
+        let expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -456,7 +456,7 @@ mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -527,7 +527,7 @@ mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -582,7 +582,7 @@ mod tests {
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
-        let mut expr_copy = expr.clone();
+        let _expr_copy = expr.clone();
 
         let layer = from_mle(
             mle1,
@@ -614,8 +614,8 @@ mod tests {
         let wlx: Vec<Fr> = compute_claim_wlx(&claims, &layer).unwrap();
         let claimed_val = evaluate_at_a_point(&wlx, rchal).unwrap();
         let claimed_chals = compute_aggregated_challenges(&claims, rchal).unwrap();
-        let res: Claim<Fr> = (claimed_chals, claimed_val);
-        let rounds = expr.index_mle_indices(0);
+        let _res: Claim<Fr> = (claimed_chals, claimed_val);
+        let _rounds = expr.index_mle_indices(0);
         // for round in 0..rounds {
         //     expr.fix
         // }

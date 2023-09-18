@@ -924,7 +924,7 @@ mod tests {
             ],
             Fr::zero(),
         );
-        let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
+        let mut beta = BetaTable::new(layer_claim).unwrap();
         beta.table.index_mle_indices(0);
 
         let DummyMles {
@@ -983,7 +983,7 @@ mod tests {
     fn circuit_dummy_bits_are_binary_test_multiplicities() {
         let mut rng = test_rng();
         let layer_claim: Claim<Fr> = (vec![Fr::from(rng.gen::<u64>()); 12], Fr::zero());
-        let mut beta = BetaTable::new(layer_claim.clone()).unwrap();
+        let mut beta = BetaTable::new(layer_claim).unwrap();
         beta.table.index_mle_indices(0);
 
         let DummyMles {
