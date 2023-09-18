@@ -188,12 +188,9 @@ pub struct LcProofAuxiliaryInfo {
 pub type VerifierResult<T, ErrT> = Result<T, VerifierError<ErrT>>;
 
 /// a commitment
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LcCommit<D, E, F>
 where
-    F: FieldExt,
-    D: FieldHashFnDigest<F> + Send + Sync,
-    E: LcEncoding<F> + Send + Sync,
 {
     // --- Flattened version of M' (encoded) matrix ---
     comm: Vec<F>,

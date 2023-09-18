@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use serde::{Serialize, Deserialize};
 use std::marker::PhantomData;
 
 use crate::utils::halo2_fft;
@@ -10,7 +11,7 @@ use fffft::FFTError;
 use remainder_shared_types::FieldExt;
 
 /// Ligero encoding
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LigeroEncoding<F: FieldExt> {
     /// number of inputs to the encoding
     pub orig_num_cols: usize,
