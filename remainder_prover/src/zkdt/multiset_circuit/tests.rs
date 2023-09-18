@@ -7,11 +7,11 @@ mod tests {
     
     use rand::Rng;
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}}};
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, multiset_circuit::legacy_circuits::MultiSetCircuit}};
     use remainder_shared_types::transcript::{Transcript};
     use crate::prover::tests::test_circuit;
 
-    use super::super::circuits::{MultiSetCircuit, FSMultiSetCircuit};
+    use super::super::circuits::{FSMultiSetCircuit};
 
     #[test]
     fn test_multiset_circuit_catboost_batched() {
