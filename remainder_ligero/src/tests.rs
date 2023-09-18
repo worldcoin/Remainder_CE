@@ -171,8 +171,8 @@ fn arkworks_bn_fft_test() {
     let fft_evals: Vec<Fr> = small_domain.ifft(&orig_coeffs);
     dbg!(fft_evals.len());
     let ifft_coeffs: Vec<Fr> = small_domain.fft(&fft_evals);
-    let orig_poly = DensePolynomial::from_coefficients_vec(orig_coeffs.clone());
-    let ifft_poly = DensePolynomial::from_coefficients_vec(ifft_coeffs.clone());
+    let orig_poly = DensePolynomial::from_coefficients_vec(orig_coeffs);
+    let ifft_poly = DensePolynomial::from_coefficients_vec(ifft_coeffs);
     dbg!(orig_poly.clone());
     dbg!(ifft_poly.clone());
     assert_eq!(orig_poly.degree(), 3);
@@ -212,7 +212,7 @@ fn halo2_bn_fft_test() {
 
     // --- Perform the IFFT and assert that the resulting polynomial has degree 7 ---
     let ifft_coeffs = evaluation_domain.extended_to_coeff(polynomial_eval_form);
-    let orig_raw_coeffs = polynomial_coeff.into_iter().collect_vec();
+    let orig_raw_coeffs = polynomial_coeff.iter().collect_vec();
     let ifft_raw_coeffs = ifft_coeffs.into_iter().collect_vec();
 
     // --- All coefficients past the original should be zero ---

@@ -188,12 +188,9 @@ pub struct LcProofAuxiliaryInfo {
 pub type VerifierResult<T, ErrT> = Result<T, VerifierError<ErrT>>;
 
 /// a commitment
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LcCommit<D, E, F>
 where
-    F: FieldExt,
-    D: FieldHashFnDigest<F> + Send + Sync,
-    E: LcEncoding<F> + Send + Sync,
 {
     // --- Flattened version of M' (encoded) matrix ---
     comm: Vec<F>,
@@ -660,7 +657,7 @@ where
         let other = (column & !1) | (!column & 1);
         assert_eq!(other ^ column, 1);
         // --- Mmmmmm okay so `hashes` contains all of the Merkle hashes. I see I see ---
-        path.push(hashes[other].clone());
+        path.push(hashes[other]);
         let (_, hashes_new) = hashes.split_at((hashes.len() + 1) / 2);
         hashes = hashes_new;
         column >>= 1;
@@ -729,11 +726,11 @@ where
     // we run multiple instances of this to boost soundness
 
     // --- This is for the verifier-generated versions of `r` ---
-    let mut rand_tensor_vec: Vec<Vec<F>> = Vec::new();
+    let _rand_tensor_vec: Vec<Vec<F>> = Vec::new();
 
     // --- This is for the verifier evaluations of r^T M' ---
     // --- but computed where r^T comes from the prover (???) ---
-    let mut p_random_fft: Vec<Vec<F>> = Vec::new();
+    let _p_random_fft: Vec<Vec<F>> = Vec::new();
 
     // --- No longer doing the well-formedness check ---
     // let n_degree_tests = enc.get_n_degree_tests();
@@ -1009,7 +1006,7 @@ where
             .unwrap()
             .into_iter()
             .enumerate()
-            .map(|(i, challenge)| {
+            .map(|(_i, challenge)| {
                 compute_col_idx_from_transcript_challenge(challenge, comm.encoded_num_cols)
             })
             .collect();
@@ -1195,7 +1192,7 @@ where
 
     let mut poly = vec![F::zero(); comm.orig_num_cols];
     for (row, tensor_val) in tensor.iter().enumerate() {
-        for (col, mut val) in poly.iter_mut().enumerate() {
+        for (col, val) in poly.iter_mut().enumerate() {
             let entry = row * comm.orig_num_cols + col;
             *val += comm.coeffs[entry] * tensor_val;
         }
