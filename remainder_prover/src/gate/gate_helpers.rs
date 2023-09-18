@@ -16,7 +16,7 @@ use crate::{
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use super::{
+use crate::mle::{
     beta::compute_beta_over_two_challenges,
     dense::{DenseMle, DenseMleRef},
     MleIndex, MleRef,
