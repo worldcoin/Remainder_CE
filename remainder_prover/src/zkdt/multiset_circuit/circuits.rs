@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 use ark_std::{log2};
 use itertools::{Itertools, repeat_n};
 
@@ -17,6 +9,17 @@ use super::super::{builders::{SplitProductBuilder, EqualityCheck, DecisionPackin
 
 use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
 
+/// Dataparallel version of the "path multiset circuit" described in the audit spec.
+/// 
+/// Recall that this circuit computes the characteristic polynomial of two multisets,
+/// one which "packs" the nodes involved in all $\pathx$ nodes by combining the `node_id`
+/// and `threshold` via `r_packings[0]`, then multiplying all of the nodes together via
+/// a huge product tree, and the other which again "packs" the nodes within the decision
+/// tree (both decision and leaf nodes), exponentiates them by their multiplicites (this is
+/// provided in 16-bit unsigned binary decomposition form factor by the prover), and multiplies
+/// all those exponentiated values together. 
+/// 
+/// See spec for more high-level details!
 pub(crate) struct MultiSetCircuit<F: FieldExt> {
     decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
     leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
@@ -59,6 +62,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
         
+        // --- Grab raw combined versions of the dataparallel MLEs and merge them for the input layer ---
         let mut dummy_decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.decision_node_paths_mle_vec.clone());
         let mut dummy_leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.leaf_node_paths_mle_vec.clone());
 
@@ -71,12 +75,13 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let _input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
 
-        // layer 0: x
+        // --- Layer 0: Compute the "packed" version of the decision and leaf tree nodes ---
+        // Note that this also "evaluates" each packed entry at the random characteristic polynomial
+        // evaluation challenge point `self.r`.
         let mut dummy_decision_nodes_mle = self.decision_nodes_mle.clone();
         dummy_decision_nodes_mle.add_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
         let decision_packing_builder = DecisionPackingBuilder::new(
@@ -91,23 +96,17 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let packing_builders = decision_packing_builder.concat(leaf_packing_builder);
         let (decision_packed, leaf_packed) = layers.add_gkr(packing_builders);
 
-        // layer 1: (r - x)
-        let r_minus_x_builder_decision =  RMinusXBuilder::new(
-            decision_packed, self.r_packings.0
-        );
-        let r_minus_x_builder_leaf =  RMinusXBuilder::new(
-            leaf_packed, self.r_packings.0
-        );
-        let r_minus_x_builders = r_minus_x_builder_decision.concat(r_minus_x_builder_leaf);
-        let (r_minus_x_power_decision, r_minus_x_power_leaf) = layers.add_gkr(r_minus_x_builders);
-
         let mut dummy_multiplicities_bin_decomp_mle_decision = self.multiplicities_bin_decomp_mle_decision.clone();
         dummy_multiplicities_bin_decomp_mle_decision.add_prefix_bits(self.multiplicities_bin_decomp_mle_decision.get_prefix_bits());
-        // layer 2, part 1: (r - x) * b_ij + (1 - b_ij)
+
+        // --- Layer 2, part 1: computes (r - x) * b_ij + (1 - b_ij) ---
+        // Note that this is for the actual exponentiation computation:
+        // we have that (r - x)^c_i = \prod_{j = 0}^{15} (r - x)^{2^{b_ij}} * b_{ij} + (1 - b_ij)
+        // where \sum_{j = 0}^{15} 2^j b_{ij} = c_i.
         let prev_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
             dummy_multiplicities_bin_decomp_mle_decision.clone(),
             0,
-            r_minus_x_power_decision.clone()
+            decision_packed.clone()
         );
 
         let mut dummy_multiplicities_bin_decomp_mle_leaf = self.multiplicities_bin_decomp_mle_leaf.clone();
@@ -115,16 +114,18 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
             dummy_multiplicities_bin_decomp_mle_leaf.clone(),
             0,
-            r_minus_x_power_leaf.clone()
+            leaf_packed.clone()
         );
         let pre_prod_builders = prev_prod_builder_decision.concat(prev_prod_builder_leaf);
 
-        // layer 2, part 2: (r - x)^2
+        // --- Layer 2, part 2: (r - x)^2 ---
+        // Note that we need to compute (r - x)^{2^0}, ..., (r - x)^{2^{15}}
+        // We do this via repeated squaring of the previous power.
         let r_minus_x_square_builder_decision = SquaringBuilder::new(
-            r_minus_x_power_decision
+            decision_packed
         );
         let r_minus_x_square_builder_leaf = SquaringBuilder::new(
-            r_minus_x_power_leaf
+            leaf_packed
         );
         let r_minus_x_square_builders = r_minus_x_square_builder_decision.concat(r_minus_x_square_builder_leaf);
 
@@ -321,28 +322,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let path_packing_builders = decision_path_packing_builder.concat_with_padding(leaf_path_packing_builder, Padding::Right(bit_difference - 1));
         let (decision_path_packed, leaf_path_packed) = layers.add_gkr(path_packing_builders);
 
-        // layer 2: r - x
-
-        let bit_difference = decision_path_packed[0].num_iterated_vars() - leaf_path_packed[0].num_iterated_vars();
-
-        let r_minus_x_path_builder_decision = BatchedLayer::new(
-            decision_path_packed.iter().map(|x| RMinusXBuilder::new(
-                x.clone(),
-                self.r_packings.0
-            )).collect_vec());
-
-        let r_minus_x_path_builder_leaf = BatchedLayer::new(
-            leaf_path_packed.iter().map(|x| RMinusXBuilder::new(
-                x.clone(),
-                self.r_packings.0
-            )).collect_vec());
-
-        let r_minus_x_path_builders = r_minus_x_path_builder_decision.concat_with_padding(r_minus_x_path_builder_leaf, Padding::Right(bit_difference));
-
-        let (r_minus_x_path_decision, r_minus_x_path_leaf) = layers.add_gkr(r_minus_x_path_builders);
-
-        let mut vector_x_decision = unbatch_mles(r_minus_x_path_decision);
-        let mut vector_x_leaf = unbatch_mles(r_minus_x_path_leaf);
+        let mut vector_x_decision = unbatch_mles(decision_path_packed);
+        let mut vector_x_leaf = unbatch_mles(leaf_path_packed);
 
         // product all the batches together
         for _ in 0..vector_x_decision.num_iterated_vars() {

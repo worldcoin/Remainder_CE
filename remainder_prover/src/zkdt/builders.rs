@@ -638,7 +638,7 @@ impl<F: FieldExt> FSLeafPackingBuilder<F> {
     }
 }
 
-/// packs decision node mles
+/// Result: r - (x.node_id + r_packing[0] * x.attr_id + r_packing[1] * x.threshold)
 pub struct DecisionPackingBuilder<F: FieldExt> {
     mle: DenseMle<F, DecisionNode<F>>,
     r: F,
@@ -648,7 +648,6 @@ pub struct DecisionPackingBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for DecisionPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    // expressions = r - (x.node_id + r_packing[0] * x.attr_id + r_packing[1] * x.threshold)
     fn build_expression(&self) -> ExpressionStandard<F> {
         ExpressionStandard::Constant(self.r) - (ExpressionStandard::Mle(self.mle.node_id()) +
         ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle.attr_id())), self.r_packings.0) +

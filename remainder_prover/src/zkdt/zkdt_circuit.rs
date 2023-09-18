@@ -1180,17 +1180,9 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    
-
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    
-    
-    
-
     use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
-    
     use crate::prover::tests::test_circuit;
-
     use super::CombinedCircuits;
 
     #[test]
