@@ -46,17 +46,17 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
 
     fn open(
         &self,
-        transcript: &mut Self::Transcript,
-        claim: Claim<F>,
+        _transcript: &mut Self::Transcript,
+        _claim: Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
     }
 
     fn verify(
         commitment: &Self::Commitment,
-        opening_proof: &Self::OpeningProof,
+        _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        _transcript: &mut Self::Transcript,
     ) -> Result<(), super::InputLayerError> {
         let mut mle_ref =
             DenseMle::<F, F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
@@ -85,7 +85,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
     }
 
     fn get_padded_mle(&self) -> DenseMle<F, F> {
-        DenseMle::new_from_raw(self.mle.clone(), self.layer_id.clone(), None)
+        DenseMle::new_from_raw(self.mle.clone(), self.layer_id, None)
     }
 
     fn to_enum(self) -> InputLayerEnum<F, Self::Transcript> {
@@ -107,6 +107,6 @@ impl<F: FieldExt, Tr: Transcript<F>> RandomInputLayer<F, Tr> {
     }
 
     pub fn get_mle(&self) -> DenseMle<F, F> {
-        DenseMle::new_from_raw(self.mle.clone(), self.layer_id.clone(), None)
+        DenseMle::new_from_raw(self.mle.clone(), self.layer_id, None)
     }
 }

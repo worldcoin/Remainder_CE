@@ -624,7 +624,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     ///Gets the size of an expression in terms of the number of rounds of sumcheck
     pub fn get_expression_size(&self, curr_size: usize) -> usize {
         match self {
-            ExpressionStandard::Selector(mle_index, a, b) => {
+            ExpressionStandard::Selector(_mle_index, a, b) => {
                 let a_bits = a.get_expression_size(curr_size + 1);
                 let b_bits = b.get_expression_size(curr_size + 1);
                 max(a_bits, b_bits)

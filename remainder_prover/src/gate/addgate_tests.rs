@@ -1,25 +1,21 @@
-use ark_std::{cfg_into_iter, rand::Rng};
+use ark_std::{rand::Rng};
 use itertools::Itertools;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use rayon::prelude::{ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
-    expression::ExpressionStandard,
     layer::{
-        claims::ClaimError, layer_enum::LayerEnum, Claim, Layer, LayerBuilder, LayerError, LayerId,
-        VerificationError,
+        Claim, Layer, LayerId,
     },
     mle::{beta::BetaTable},
-    prover::SumcheckProof,
     sumcheck::*,
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
 use crate::mle::{
     beta::compute_beta_over_two_challenges,
-    dense::{DenseMle, DenseMleRef},
-    MleIndex, MleRef,
+    dense::{DenseMle, DenseMleRef}, MleRef,
 };
 use super::gate_helpers::{index_mle_indices_gate, compute_sumcheck_message_add_gate, GateError, fix_var_gate, prove_round_add, check_fully_bound, prove_round_copy, compute_sumcheck_message_copy_add};
 
@@ -109,7 +105,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
     ///
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         // --- First compute the bookkeeping table for \beta(g, z) \in \{0, 1\}^{s_i} ---
-        let beta_g = if claim.0.len() > 0 {
+        let beta_g = if !claim.0.is_empty() {
             BetaTable::new(claim).unwrap()
         } else {
             BetaTable {
@@ -149,8 +145,8 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
                     .bookkeeping_table()
                     .get(y_ind)
                     .unwrap_or(&F::zero());
-                a_hg_lhs[x_ind] = a_hg_lhs[x_ind] + beta_g_at_z;
-                a_hg_rhs[x_ind] = a_hg_rhs[x_ind] + (beta_g_at_z * f_3_at_y);
+                a_hg_lhs[x_ind] += beta_g_at_z;
+                a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
             });
 
         // --- We need to multiply f_1'(x) by f_2(x) ---
@@ -216,8 +212,8 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
                     .get(x_ind)
                     .unwrap_or(&F::zero());
                 let adder = gz * ux;
-                a_f1_lhs[y_ind] = a_f1_lhs[y_ind] + (adder * f_at_u);
-                a_f1_rhs[y_ind] = a_f1_rhs[y_ind] + adder;
+                a_f1_lhs[y_ind] += adder * f_at_u;
+                a_f1_rhs[y_ind] += adder;
             });
 
         // --- LHS bookkeeping table is already multiplied by f_2(u) ---
@@ -528,7 +524,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
 
         // create two separate beta tables for each, as they are handled differently
         let mut beta_g2 = BetaTable::new((g2_challenges.clone(), F::zero())).unwrap();
-        let beta_g1 = if g1_challenges.len() > 0 {
+        let beta_g1 = if !g1_challenges.is_empty() {
             BetaTable::new((g1_challenges.clone(), F::zero())).unwrap()
         } else {
             BetaTable {
@@ -545,7 +541,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
 
         // populate the bookkeeping tables
         // TODO!(ryancao): Good optimization here is to parallelize -- I don't think there are any race conditions
-        (0..num_copy_vars).into_iter().for_each(|idx| {
+        (0..num_copy_vars).for_each(|idx| {
             let mut adder_f2 = F::zero();
             let mut adder_f3 = F::zero();
             // we need to compute the value of the gate function at each of these points before adding them
@@ -608,14 +604,14 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
     ) -> Vec<(Vec<F>, Option<F>)> {
         // initialization
         let first_message = self
-            .init_copy_phase(claim.clone())
+            .init_copy_phase(claim)
             .expect("could not evaluate original lhs and rhs");
         let (beta_g, [a_f2, a_f3]) = self
             .copy_phase_mles
             .as_mut()
             .ok_or(GateError::CopyPhaseInitError)
             .unwrap();
-        let (mut lhs, mut rhs) = (&mut self.lhs.clone(), &mut self.rhs.clone());
+        let (lhs, rhs) = (&mut self.lhs.clone(), &mut self.rhs.clone());
         let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
         let mut challenges: Vec<F> = vec![];
         let mut challenge: Option<F> = None;
@@ -631,7 +627,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
             challenges.push(chal);
 
             let evals =
-                prove_round_copy(a_f2, a_f3, &mut lhs, &mut rhs, beta_g, round, chal).unwrap();
+                prove_round_copy(a_f2, a_f3, lhs, rhs, beta_g, round, chal).unwrap();
             messages.push((evals, challenge));
         }
 
@@ -655,7 +651,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
         // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
         // TODO!(ryancao): Can we get rid of the clones here somehow (for `lhs` and `rhs`)?
         let reduced_gate: AddGateTest<F, Tr> = AddGateTest::new(
-            self.layer_id.clone(),
+            self.layer_id,
             self.nonzero_gates.clone(),
             lhs.clone(),
             rhs.clone(),

@@ -1,7 +1,7 @@
 //! Trait for dealing with InputLayer
 
-use ark_std::{cfg_into_iter, cfg_iter, log2};
-use itertools::Itertools;
+use ark_std::{cfg_into_iter, cfg_iter};
+
 use rayon::prelude::*;
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
@@ -14,7 +14,7 @@ pub mod ligero_input_layer;
 pub mod public_input_layer;
 pub mod random_input_layer;
 
-use crate::{layer::{LayerId, Claim, claims::ClaimError}, mle::{Mle, dense::DenseMle, MleIndex, MleRef}, utils::argsort, sumcheck::evaluate_at_a_point};
+use crate::{layer::{LayerId, Claim, claims::ClaimError}, mle::{dense::DenseMle, MleRef}, sumcheck::evaluate_at_a_point};
 
 use self::enum_input_layer::InputLayerEnum;
 
@@ -58,7 +58,7 @@ pub trait InputLayer<F: FieldExt> {
 
     fn compute_claim_wlx(&self, claims: &[Claim<F>]) -> Result<Vec<F>, ClaimError> {
 
-        let mut mle = self.get_padded_mle().clone().mle_ref();
+        let mut mle = self.get_padded_mle().mle_ref();
         let num_claims = claims.len();
         let (claim_vecs, mut claimed_vals): (Vec<Vec<F>>, Vec<F>) =
             cfg_iter!(claims).cloned().unzip();
@@ -80,19 +80,19 @@ pub trait InputLayer<F: FieldExt> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                        res
+                        
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
 
                 let mut fix_mle = mle.clone();
-                let eval = {
+                
+                {
                     new_chal.into_iter().enumerate().for_each(|(idx, chal)| {
                         fix_mle.fix_variable(idx, chal);
                     });
                     fix_mle.bookkeeping_table[0]
-                };
-                eval
+                }
             })
             .collect();
 

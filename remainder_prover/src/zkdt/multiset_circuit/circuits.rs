@@ -1,19 +1,19 @@
-use ark_bn254::Fr;
-use ark_crypto_primitives::sponge::poseidon::get_default_poseidon_parameters_internal;
-use ark_ff::BigInteger;
-use rand::Rng;
-use rayon::{iter::Split, vec};
-use tracing_subscriber::fmt::layer;
-use std::{io::Empty, iter};
 
-use ark_std::{log2, test_rng};
+
+
+
+
+
+
+
+use ark_std::{log2};
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, FSInputPackingBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
-use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}, mle::{mle_enum::MleEnum}};
+use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, unbatch_mles}, LayerId, Padding}, zkdt::builders::{BitExponentiationBuilderCatBoost, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, random_input_layer::RandomInputLayer}}};
+use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::super::{builders::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}};
+use super::super::{builders::{SplitProductBuilder, EqualityCheck, DecisionPackingBuilder, LeafPackingBuilder, RMinusXBuilder, SquaringBuilder, ProductBuilder}, structs::{DecisionNode, LeafNode, BinDecomp16Bit}};
 
 use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
 
@@ -71,7 +71,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_prefix_bits = input_layer.fetch_prefix_bits();
+        let _input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();
@@ -216,13 +216,13 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let curr_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
             dummy_multiplicities_bin_decomp_mle_decision.clone(),
             15,
-            r_minus_x_power_decision.clone()
+            r_minus_x_power_decision
         );
 
         let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
             dummy_multiplicities_bin_decomp_mle_leaf.clone(),
             15,
-            r_minus_x_power_leaf.clone()
+            r_minus_x_power_leaf
         );
 
         let curr_prod_builders = curr_prod_builder_decision.concat(curr_prod_builder_leaf);
@@ -444,13 +444,13 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
                 Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
             ];
             let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-            let input_prefix_bits = input_layer.fetch_prefix_bits();
+            let _input_prefix_bits = input_layer.fetch_prefix_bits();
             let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
             let mut input_layer = input_layer.to_enum();
     
             let input_commit = input_layer
                 .commit()
-                .map_err(|err| GKRError::InputLayerError(err))?;
+                .map_err(GKRError::InputLayerError)?;
                 InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript).unwrap();
 
             // FS
@@ -459,28 +459,28 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             let mut random_r = random_r.to_enum();
             let random_r_commit = random_r
                 .commit()
-                .map_err(|err| GKRError::InputLayerError(err))?;
+                .map_err(GKRError::InputLayerError)?;
 
             let random_r_another = RandomInputLayer::new(transcript, 1, LayerId::Input(2));
             let r_mle_another = random_r_another.get_mle();
             let mut random_r_another = random_r_another.to_enum();
             let random_r_another_commit = random_r_another
                 .commit()
-                .map_err(|err| GKRError::InputLayerError(err))?;
+                .map_err(GKRError::InputLayerError)?;
 
             let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(3));
             let r_packing_mle = random_r_packing.get_mle();
             let mut random_r_packing = random_r_packing.to_enum();
             let random_r_packing_commit = random_r_packing
                 .commit()
-                .map_err(|err| GKRError::InputLayerError(err))?;
+                .map_err(GKRError::InputLayerError)?;
 
             let random_r_packing_another = RandomInputLayer::new(transcript, 1, LayerId::Input(4));
             let r_packing_another_mle = random_r_packing_another.get_mle();
             let mut random_r_packing_another = random_r_packing_another.to_enum();
             let random_r_packing_another_commit = random_r_packing_another
                 .commit()
-                .map_err(|err| GKRError::InputLayerError(err))?;
+                .map_err(GKRError::InputLayerError)?;
 
             // FS
 
@@ -627,13 +627,13 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             let curr_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
                 dummy_multiplicities_bin_decomp_mle_decision.clone(),
                 15,
-                r_minus_x_power_decision.clone()
+                r_minus_x_power_decision
             );
     
             let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
                 dummy_multiplicities_bin_decomp_mle_leaf.clone(),
                 15,
-                r_minus_x_power_leaf.clone()
+                r_minus_x_power_leaf
             );
     
             let curr_prod_builders = curr_prod_builder_decision.concat(curr_prod_builder_leaf);

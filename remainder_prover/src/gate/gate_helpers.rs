@@ -1,24 +1,20 @@
-use ark_std::{cfg_into_iter, rand::Rng};
+use ark_std::{cfg_into_iter};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, marker::PhantomData};
+
+use std::{fmt::Debug};
 
 use crate::{
-    expression::ExpressionStandard,
     layer::{
-        claims::ClaimError, layer_enum::LayerEnum, Claim, Layer, LayerBuilder, LayerError, LayerId,
-        VerificationError,
+        Layer,
     },
     mle::beta::BetaTable,
-    prover::SumcheckProof,
     sumcheck::*,
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
 use crate::mle::{
-    beta::compute_beta_over_two_challenges,
-    dense::{DenseMle, DenseMleRef},
+    dense::{DenseMleRef},
     MleIndex, MleRef,
 };
 use thiserror::Error;
@@ -198,11 +194,7 @@ pub fn check_fully_bound<F: FieldExt>(
 
             let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
 
-            if indices != challenges {
-                false
-            } else {
-                true
-            }
+            indices == challenges
         })
         .collect();
 
@@ -210,7 +202,7 @@ pub fn check_fully_bound<F: FieldExt>(
         return Err(GateError::EvaluateBoundIndicesDontMatch);
     }
 
-    mle_refs.into_iter().fold(Ok(F::one()), |acc, mle_ref| {
+    mle_refs.iter_mut().fold(Ok(F::one()), |acc, mle_ref| {
         // --- Accumulate either errors or multiply ---
         let acc = acc?;
         if mle_ref.bookkeeping_table().len() != 1 {
@@ -371,8 +363,8 @@ pub fn compute_full_gate<F: FieldExt>(
 
     // literally summing over everything else (x, y)
     if copy_bits == 0 {
-        let sum =
-            nonzero_gates
+        
+        nonzero_gates
                 .clone()
                 .into_iter()
                 .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
@@ -385,16 +377,15 @@ pub fn compute_full_gate<F: FieldExt>(
                     let vy = rhs.bookkeeping_table().get(y_ind).unwrap_or(&zero);
                     dbg!(&gz, ux, vy);
                     acc + gz * (*ux + *vy)
-                });
-        sum
+                })
     } else {
         let num_copy_idx = 1 << copy_bits;
         // if the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on p2
         let beta_g2 = BetaTable::new((copy_chals, F::zero())).unwrap();
-        let sum = {
+        
+        {
             // sum over everything else, outer sum being over p2, inner sum over (x, y)
             (0..(1 << num_copy_idx))
-                .into_iter()
                 .fold(F::zero(), |acc_outer, idx| {
                     let g2 = *beta_g2
                         .table
@@ -423,8 +414,7 @@ pub fn compute_full_gate<F: FieldExt>(
                     );
                     acc_outer + (g2 * inner_sum)
                 })
-        };
-        sum
+        }
     }
 }
 
@@ -485,7 +475,7 @@ pub fn prove_round_copy_mul<F: FieldExt>(
     lhs.fix_variable(round_index - 1, challenge);
     rhs.fix_variable(round_index - 1, challenge);
     // compute_sumcheck_message_copy_phase_mul(&[phase_lhs.clone(), phase_rhs.clone()], beta, round_index)
-    libra_giraffe(&lhs, &rhs, &beta_g2.table, &beta_g1.table, nonzero_gates, num_dataparallel_bits)
+    libra_giraffe(lhs, rhs, &beta_g2.table, &beta_g1.table, nonzero_gates, num_dataparallel_bits)
 }
 
 

@@ -1,10 +1,10 @@
 //!Utilities involving the claims a layer makes
 
-use crate::{expression::ExpressionStandard, mle::beta::BetaTable};
+
 use remainder_shared_types::FieldExt;
 
 // use itertools::Itertools;
-use crate::mle::MleRef;
+
 use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
@@ -100,7 +100,7 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     claims: &[Claim<F>],
     rstar: F,
 ) -> Result<Vec<F>, ClaimError> {
-    let (claim_vecs, mut vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+    let (claim_vecs, _vals): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
 
     if claims.is_empty() {
         return Err(ClaimError::ClaimAggroError);
@@ -173,7 +173,7 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 #[cfg(test)]
 mod tests {
 
-    use crate::expression::Expression;
+    use crate::expression::{Expression, ExpressionStandard};
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::{dense::DenseMle, Mle};
     use rand::Rng;

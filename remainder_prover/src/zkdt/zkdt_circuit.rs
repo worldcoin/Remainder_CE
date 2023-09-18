@@ -1,23 +1,23 @@
-use ark_bn254::Fr;
-use ark_crypto_primitives::sponge::poseidon::get_default_poseidon_parameters_internal;
-use ark_ff::BigInteger;
-use rand::Rng;
-use rayon::{iter::Split, vec};
-use remainder_ligero::{ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcRoot, LcProofAuxiliaryInfo, ligero_commit::remainder_ligero_commit_prove};
-use serde_json::from_reader;
-use tracing_subscriber::fmt::layer;
-use std::{io::Empty, iter};
 
-use ark_std::{log2, test_rng};
+
+
+
+
+
+
+
+
+
+use ark_std::{log2};
 use itertools::{Itertools, repeat_n};
-use remainder_ligero::LcCommit;
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::{InputLayerEnum, CommitmentEnum}, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers, GKRError}};
-use crate::{prover::{GKRCircuit, Layers, Witness}, mle::{mle_enum::MleEnum}};
+
+use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, zkdt::builders::{BitExponentiationBuilderCatBoost, AttributeConsistencyBuilderZeroRef}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, InputLayer, MleInputLayer, enum_input_layer::{InputLayerEnum, CommitmentEnum}, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers, GKRError}};
+use crate::{prover::{GKRCircuit, Layers, Witness}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, ConcatBuilder, FSRMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder, BitExponentiationBuilderInput}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::{circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, dataparallel_circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, dt2zkdt::load_upshot_data_single_tree_batch}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul, bits_are_binary_circuit::{dataparallel_circuits::{BinDecomp4BitIsBinaryCircuitBatched, BinDecomp16BitIsBinaryCircuitBatched}, circuits::BinDecomp16BitIsBinaryCircuit}, constants::get_tree_commitment_filename_for_tree_number};
-use std::{marker::PhantomData, path::Path};
+use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder, SquaringBuilder, ProductBuilder, BitExponentiationBuilderInput}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::{dataparallel_circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::{BatchedCatboostMles}, dt2zkdt::load_upshot_data_single_tree_batch}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul, bits_are_binary_circuit::{dataparallel_circuits::{BinDecomp4BitIsBinaryCircuitBatched, BinDecomp16BitIsBinaryCircuitBatched}, circuits::BinDecomp16BitIsBinaryCircuit}};
+use std::{marker::PhantomData};
 
 
 pub struct PermutationSubCircuit<F: FieldExt> {
@@ -186,13 +186,13 @@ impl<F: FieldExt> InputMultiSetSubCircuit<F> {
 
         let packing_builders = input_packing_builders.concat(input_permuted_packing_builders);
 
-        let (mut input_packed_vec, mut input_permuted_packed_vec) = layers.add_gkr(packing_builders);
+        let (input_packed_vec, _input_permuted_packed_vec) = layers.add_gkr(packing_builders);
 
         // layer 1: (r - x)
         let r_minus_x_builders = BatchedLayer::new(
             input_packed_vec.iter().map(
                 |input_packed| {
-                    let mut input_packed = input_packed.clone();
+                    let input_packed = input_packed.clone();
                     FSRMinusXBuilder::new(
                         input_packed, self.r_mle_another.clone()
                     )
@@ -202,7 +202,7 @@ impl<F: FieldExt> InputMultiSetSubCircuit<F> {
         
         let r_minus_x_power_vec = layers.add_gkr(r_minus_x_builders);
 
-        let mut multiplicities_bin_decomp_mle_input_vec = self.multiplicities_bin_decomp_mle_input_vec.clone();
+        let multiplicities_bin_decomp_mle_input_vec = self.multiplicities_bin_decomp_mle_input_vec.clone();
 
         // layer 2, part 1: (r - x) * b_ij + (1 - b_ij)
         let prev_prod_builders = BatchedLayer::new(
@@ -221,7 +221,7 @@ impl<F: FieldExt> InputMultiSetSubCircuit<F> {
         let r_minus_x_square_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().map(
                 |r_minus_x_power| {
-                    let mut r_minus_x_power = r_minus_x_power.clone();
+                    let r_minus_x_power = r_minus_x_power.clone();
                     SquaringBuilder::new(
                         r_minus_x_power
                     )
@@ -251,7 +251,7 @@ impl<F: FieldExt> InputMultiSetSubCircuit<F> {
         let r_minus_x_square_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().map(
                 |r_minus_x_power| {
-                    let mut r_minus_x_power = r_minus_x_power.clone();
+                    let r_minus_x_power = r_minus_x_power.clone();
                     SquaringBuilder::new(
                         r_minus_x_power
                     )
@@ -271,7 +271,7 @@ impl<F: FieldExt> InputMultiSetSubCircuit<F> {
         let r_minus_x_square_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().map(
                 |r_minus_x_power| {
-                    let mut r_minus_x_power = r_minus_x_power.clone();
+                    let r_minus_x_power = r_minus_x_power.clone();
                     SquaringBuilder::new(
                         r_minus_x_power
                     )
@@ -601,13 +601,13 @@ impl<F: FieldExt> MultiSetSubCircuit<F> {
         let curr_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
             multiplicities_bin_decomp_mle_decision.clone(),
             15,
-            r_minus_x_power_decision.clone()
+            r_minus_x_power_decision
         );
 
         let curr_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
             multiplicities_bin_decomp_mle_leaf.clone(),
             15,
-            r_minus_x_power_leaf.clone()
+            r_minus_x_power_leaf
         );
 
         let curr_prod_builders = curr_prod_builder_decision.concat(curr_prod_builder_leaf);
@@ -954,7 +954,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
         // let mut aux_mles_input_layer = aux_mles_input_layer.to_enum();
 
         // --- Just have a single Ligero commitment for now ---
-        let mut all_ligero_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+        let all_ligero_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             // --- Tree MLEs ---
             Box::new(&mut decision_nodes_mle),
             Box::new(&mut leaf_nodes_mle),
@@ -1025,7 +1025,7 @@ impl <F: FieldExt> CombinedCircuits<F> {
         let mut all_ligero_mles_input_layer = all_ligero_mles_input_layer.to_enum(); 
         let all_input_mles_commit = all_ligero_mles_input_layer
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&all_input_mles_commit, transcript).unwrap();
 
         // FS
@@ -1034,28 +1034,28 @@ impl <F: FieldExt> CombinedCircuits<F> {
         let mut random_r = random_r.to_enum();
         let random_r_commit = random_r
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
 
         let random_r_another = RandomInputLayer::new(transcript, 1, LayerId::Input(2));
         let r_mle_another = random_r_another.get_mle();
         let mut random_r_another = random_r_another.to_enum();
         let random_r_another_commit = random_r_another
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
 
         let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(3));
         let r_packing_mle = random_r_packing.get_mle();
         let mut random_r_packing = random_r_packing.to_enum();
         let random_r_packing_commit = random_r_packing
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
 
         let random_r_packing_another = RandomInputLayer::new(transcript, 1, LayerId::Input(4));
         let r_packing_another_mle = random_r_packing_another.get_mle();
         let mut random_r_packing_another = random_r_packing_another.to_enum();
         let random_r_packing_another_commit = random_r_packing_another
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
 
         // FS
 
@@ -1084,9 +1084,9 @@ impl <F: FieldExt> CombinedCircuits<F> {
             input_data_mle_vec,
             permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
             multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vec.clone(),
-            r_mle: r_mle.clone(),
-            r_mle_another: r_mle_another.clone(),
-            r_packing_mle: r_packing_mle.clone(),
+            r_mle,
+            r_mle_another,
+            r_packing_mle,
         };
 
         let binary_recomp_circuit_batched = BinaryRecompCircuitBatched::new(
@@ -1162,7 +1162,7 @@ pub struct ZKDTCircuit<F: FieldExt> {
 
 impl<F: FieldExt> ZKDTCircuit<F> {
     pub fn new(batch_size: usize) -> Self {
-        let batched_catboost_data = load_upshot_data_single_tree_batch::<F>(Some(batch_size), None);
+        let _batched_catboost_data = load_upshot_data_single_tree_batch::<F>(Some(batch_size), None);
         Self {
             _marker: PhantomData,
         }

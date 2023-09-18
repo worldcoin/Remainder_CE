@@ -1,7 +1,7 @@
-use itertools::Itertools;
+
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 
-use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef}, zkdt::structs::BinDecomp16Bit, layer::{LayerBuilder, LayerId, empty_layer::{EmptyLayer, self}}, expression::ExpressionStandard};
+use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef}, layer::{LayerBuilder, LayerId}, expression::ExpressionStandard};
 
 /// Does the building for taking two MLEs of size two and multiplying each 
 /// to itself, then adding the results into a single MLE of size 1

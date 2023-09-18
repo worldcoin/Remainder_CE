@@ -30,7 +30,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let eval =
-            gather_combine_all_evals(&self.expr).map_err(|err| LayerError::ExpressionError(err))?;
+            gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
 
         Ok(vec![vec![eval]].into())
     }
@@ -145,10 +145,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: Vec<Vec<F>>,
-        claimed_vals: &mut Vec<F>,
-        num_claims: usize,
-        num_idx: usize,
+        _claim_vecs: Vec<Vec<F>>,
+        _claimed_vals: &mut Vec<F>,
+        _num_claims: usize,
+        _num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         unimplemented!()
     }

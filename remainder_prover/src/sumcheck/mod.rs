@@ -203,7 +203,7 @@ pub(crate) fn compute_sumcheck_message<
                     let second: Evals<F> = b?;
 
                     let (Evals(first_evals), Evals(second_evals)) = (first, second);
-                    if (first_evals.len() == second_evals.len()) {
+                    if first_evals.len() == second_evals.len() {
                         // we need to combine the evals by doing (1-x) * first eval + x * second eval
                         let first_evals = Evals(
                             first_evals

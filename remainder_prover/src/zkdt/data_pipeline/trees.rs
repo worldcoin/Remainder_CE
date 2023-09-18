@@ -277,7 +277,7 @@ pub fn generate_tree(
     } else {
         Node::new_internal(
             None,
-            rng.gen_range(0..n_features) as usize,
+            rng.gen_range(0..n_features),
             rng.gen_range(0..2_u32.pow(15) + 1) as u16,
             generate_tree(target_depth - 1, n_features, premature_leaf_proba),
             generate_tree(target_depth - 1, n_features, premature_leaf_proba),

@@ -96,7 +96,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
     }
 
     fn get_layer_id(&self) -> LayerId {
-        self.layer_id.clone()
+        self.layer_id
     }
 
     fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {

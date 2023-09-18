@@ -2,14 +2,14 @@ use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex, mle_enum::MleEnum}, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit, combine_mle_refs}, builders::{ConcatBuilder, ZeroBuilder}}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, empty_layer::EmptyLayer, batched::{combine_mles, BatchedLayer, unbatch_mles, unflatten_mle, combine_zero_mle_ref}}};
+use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex, mle_enum::MleEnum}, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, builders::{ZeroBuilder}}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, batched::{BatchedLayer, unbatch_mles}}};
 
-use super::circuit_builders::{OneMinusSignBit, SignBit, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBitProductBuilder, DumbBuilder};
+use super::circuit_builders::{OneMinusSignBit, SignBit, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf};
 
 /// Helper!
 pub fn create_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     dbg!(&size);
-    let mut gates = (0.. (size-1)).into_iter().map(
+    let mut gates = (0.. (size-1)).map(
         |idx| (idx, 2*(idx + 1), idx)
     ).collect_vec();
     gates.push((size-1, 1, size-1));
@@ -19,10 +19,10 @@ pub fn create_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
 
 /// Helper!
 pub fn decision_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
-    let mut gates = (0 .. (size-1)).into_iter().map(
+    
+    (0 .. (size-1)).map(
         |idx| (idx, idx + 1, idx)
-    ).collect_vec();
-    gates
+    ).collect_vec()
 }
 
 /// Helper!
@@ -34,10 +34,10 @@ pub fn leaf_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
 /// Helper!
 pub fn decision_mul_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     dbg!(&size);
-    let mut gates = (0 .. (size-1)).into_iter().map(
+    
+    (0 .. (size-1)).map(
         |idx| (idx, idx, idx)
-    ).collect_vec();
-    gates
+    ).collect_vec()
 }
 
 /// Helper!
@@ -153,8 +153,8 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
         let prev_node_right = layers.add_gkr(prev_right_batched_builder); // ID is 4
         let prev_node_left = layers.add_gkr(prev_left_batched_builder); // ID is 5
 
-        let flattened_curr_dec = unbatch_mles(curr_decision.clone());
-        let flattened_curr_leaf = unbatch_mles(curr_leaf.clone());
+        let flattened_curr_dec = unbatch_mles(curr_decision);
+        let flattened_curr_leaf = unbatch_mles(curr_leaf);
         let flattened_prev_right = unbatch_mles(prev_node_right);
         let flattened_prev_left = unbatch_mles(prev_node_left);
 
@@ -166,22 +166,22 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
         let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
         let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
 
-        let res_neg_dec = layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.clone().mle_ref(), flattened_prev_left.clone().mle_ref(), num_copy_bits); // ID is 6
-        let res_pos_dec = layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.clone().mle_ref(), flattened_prev_right.clone().mle_ref(), num_copy_bits); // ID is 7
+        let res_neg_dec = layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_prev_left.mle_ref(), num_copy_bits); // ID is 6
+        let res_pos_dec = layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.mle_ref(), flattened_prev_right.mle_ref(), num_copy_bits); // ID is 7
 
-        let res_neg_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.clone().mle_ref(), num_copy_bits); // ID is 8
-        let res_pos_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.clone().mle_ref(), num_copy_bits); // ID is 9
+        let res_neg_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.mle_ref(), num_copy_bits); // ID is 8
+        let res_pos_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.mle_ref(), num_copy_bits); // ID is 9
 
         let nonzero_gates_mul_decision = decision_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
         let nonzero_gates_mul_leaf = leaf_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
 
-        let flattened_pos = unbatch_mles(pos_sign_bits.clone());
-        let flattened_neg = unbatch_mles(neg_sign_bits.clone());
+        let flattened_pos = unbatch_mles(pos_sign_bits);
+        let flattened_neg = unbatch_mles(neg_sign_bits);
 
-        let dec_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.clone().mle_ref(), res_pos_dec.clone().mle_ref(), num_copy_bits); // ID is 10
-        let dec_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_neg.clone().mle_ref(), res_neg_dec.clone().mle_ref(), num_copy_bits); // ID is 11
-        let leaf_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.clone().mle_ref(), res_pos_leaf.clone().mle_ref(), num_copy_bits); // ID is 12
-        let leaf_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_neg.clone().mle_ref(), res_neg_leaf.clone().mle_ref(), num_copy_bits); // ID is 13
+        let dec_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.mle_ref(), res_pos_dec.mle_ref(), num_copy_bits); // ID is 10
+        let dec_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision, flattened_neg.mle_ref(), res_neg_dec.mle_ref(), num_copy_bits); // ID is 11
+        let leaf_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.mle_ref(), res_pos_leaf.mle_ref(), num_copy_bits); // ID is 12
+        let leaf_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf, flattened_neg.mle_ref(), res_neg_leaf.mle_ref(), num_copy_bits); // ID is 13
 
         let dec_pos_zero = ZeroBuilder::new(dec_pos_prod);
         let dec_neg_zero = ZeroBuilder::new(dec_neg_prod);
@@ -320,8 +320,8 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
         let prev_node_right = combined_layers.add_gkr(prev_right_batched_builder); // ID is 4
         let prev_node_left = combined_layers.add_gkr(prev_left_batched_builder); // ID is 5
 
-        let flattened_curr_dec = unbatch_mles(curr_decision.clone());
-        let flattened_curr_leaf = unbatch_mles(curr_leaf.clone());
+        let flattened_curr_dec = unbatch_mles(curr_decision);
+        let flattened_curr_leaf = unbatch_mles(curr_leaf);
         let flattened_prev_right = unbatch_mles(prev_node_right);
         let flattened_prev_left = unbatch_mles(prev_node_left);
 
@@ -333,22 +333,22 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
         let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
         let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
 
-        let res_neg_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.clone().mle_ref(), flattened_prev_left.clone().mle_ref(), num_copy_bits); // ID is 6
-        let res_pos_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.clone().mle_ref(), flattened_prev_right.clone().mle_ref(), num_copy_bits); // ID is 7
+        let res_neg_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_prev_left.mle_ref(), num_copy_bits); // ID is 6
+        let res_pos_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.mle_ref(), flattened_prev_right.mle_ref(), num_copy_bits); // ID is 7
 
-        let res_neg_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.clone().mle_ref(), num_copy_bits); // ID is 8
-        let res_pos_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.clone().mle_ref(), num_copy_bits); // ID is 9
+        let res_neg_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.mle_ref(), num_copy_bits); // ID is 8
+        let res_pos_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.mle_ref(), num_copy_bits); // ID is 9
 
         let nonzero_gates_mul_decision = decision_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
         let nonzero_gates_mul_leaf = leaf_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
 
-        let flattened_pos = unbatch_mles(pos_sign_bits.clone());
-        let flattened_neg = unbatch_mles(neg_sign_bits.clone());
+        let flattened_pos = unbatch_mles(pos_sign_bits);
+        let flattened_neg = unbatch_mles(neg_sign_bits);
 
-        let dec_pos_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.clone().mle_ref(), res_pos_dec.clone().mle_ref(), num_copy_bits); // ID is 10
-        let dec_neg_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_neg.clone().mle_ref(), res_neg_dec.clone().mle_ref(), num_copy_bits); // ID is 11
-        let leaf_pos_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.clone().mle_ref(), res_pos_leaf.clone().mle_ref(), num_copy_bits); // ID is 12
-        let leaf_neg_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_neg.clone().mle_ref(), res_neg_leaf.clone().mle_ref(), num_copy_bits); // ID is 13
+        let dec_pos_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.mle_ref(), res_pos_dec.mle_ref(), num_copy_bits); // ID is 10
+        let dec_neg_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_decision, flattened_neg.mle_ref(), res_neg_dec.mle_ref(), num_copy_bits); // ID is 11
+        let leaf_pos_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.mle_ref(), res_pos_leaf.mle_ref(), num_copy_bits); // ID is 12
+        let leaf_neg_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_leaf, flattened_neg.mle_ref(), res_neg_leaf.mle_ref(), num_copy_bits); // ID is 13
 
         let dec_pos_zero = ZeroBuilder::new(dec_pos_prod);
         let dec_neg_zero = ZeroBuilder::new(dec_neg_prod);

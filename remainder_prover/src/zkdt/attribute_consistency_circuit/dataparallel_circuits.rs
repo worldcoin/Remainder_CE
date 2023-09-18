@@ -1,21 +1,21 @@
-use ark_bn254::Fr;
-use ark_crypto_primitives::sponge::poseidon::get_default_poseidon_parameters_internal;
-use ark_ff::BigInteger;
-use rand::Rng;
-use rayon::{iter::Split, vec};
-use tracing_subscriber::fmt::layer;
-use std::{io::Empty, iter};
 
-use ark_std::{log2, test_rng};
+
+
+
+
+
+
+
+use ark_std::{log2};
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, beta::BetaTable, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, sumcheck::{compute_sumcheck_message, Evals, get_round_degree}, zkdt::builders::{BitExponentiationBuilderCatBoost, IdentityBuilder, AttributeConsistencyBuilderZeroRef, FSInputPackingBuilder, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers}};
-use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}, mle::{mle_enum::MleEnum}};
+use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, zkdt::builders::{AttributeConsistencyBuilderZeroRef}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, InputLayer, MleInputLayer}}};
+use crate::{prover::{GKRCircuit, Layers, Witness}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::super::{builders::{InputPackingBuilder, SplitProductBuilder, EqualityCheck, AttributeConsistencyBuilder, DecisionPackingBuilder, LeafPackingBuilder, ConcatBuilder, RMinusXBuilder, BitExponentiationBuilder, SquaringBuilder, ProductBuilder}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit}, binary_recomp_circuit::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}};
+use super::super::{structs::{InputAttribute, DecisionNode}};
 
-use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
+
 
 pub(crate) struct AttributeConsistencyCircuit<F: FieldExt> {
     permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
@@ -36,7 +36,7 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
             Box::new(&mut dummy_decision_node_paths_mle_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_prefix_bits = input_layer.fetch_prefix_bits();
+        let _input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
         let mut layers: Layers<_, Self::Transcript> = Layers::new();

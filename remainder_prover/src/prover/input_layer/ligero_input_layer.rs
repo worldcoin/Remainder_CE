@@ -19,7 +19,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     layer::LayerId, mle::dense::DenseMle, prover::input_layer::InputLayerError,
-    utils::pad_to_nearest_power_of_two,
 };
 
 use super::{enum_input_layer::InputLayerEnum, InputLayer, MleInputLayer};

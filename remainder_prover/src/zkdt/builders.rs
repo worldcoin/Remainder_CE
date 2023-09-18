@@ -241,7 +241,7 @@ impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
         let first_mle_ref = self.mle_1.mle_ref();
         let second_mle_ref = self.mle_2.mle_ref();
 
-        (0..range_size).into_iter().for_each(
+        (0..range_size).for_each(
             |idx| {
                 let mle_1_idx = 1 << self.mle_1.num_iterated_vars();
                 let mle_2_idx = 1 << self.mle_2.num_iterated_vars();
@@ -423,7 +423,7 @@ impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilder<F> {
         DenseMle::new_from_iter(self.r_minus_x_power
             .clone()
             .into_iter()
-            .zip(b_ij.bookkeeping_table.clone().into_iter())
+            .zip(b_ij.bookkeeping_table.into_iter())
             .map(
             |(r_minus_x_power, b_ij_iter)| (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))), id, prefix_bits)
     }
@@ -462,7 +462,7 @@ impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderCatBoost<F> {
         DenseMle::new_from_iter(self.r_minus_x_power
             .clone()
             .into_iter()
-            .zip(b_ij.bookkeeping_table.clone().into_iter())
+            .zip(b_ij.bookkeeping_table.into_iter())
             .map(
             |(r_minus_x_power, b_ij_iter)| (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))), id, prefix_bits)
     }
@@ -504,7 +504,7 @@ impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
         DenseMle::new_from_iter(self.r_minus_x_power
             .clone()
             .into_iter()
-            .zip(b_ij.bookkeeping_table.clone().into_iter())
+            .zip(b_ij.bookkeeping_table.into_iter())
             .map(
             |(r_minus_x_power, b_ij_iter)| (b_ij_iter * r_minus_x_power + (F::one() - b_ij_iter))), id, prefix_bits)
     }
@@ -804,7 +804,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
             .into_iter()
             .map(|bit| {
                 let b = ExpressionStandard::Mle(bit.clone());
-                let b_squared = ExpressionStandard::Product(vec![bit.clone(), bit.clone()]);
+                let b_squared = ExpressionStandard::Product(vec![bit.clone(), bit]);
                 b - b_squared
             })
             .collect_vec();
@@ -820,7 +820,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
         let expr2 = chunk_and_concat(&expr1);
         let expr3 = chunk_and_concat(&expr2);
 
-        return expr3[0].clone().concat_expr(expr3[1].clone());
+        expr3[0].clone().concat_expr(expr3[1].clone())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {

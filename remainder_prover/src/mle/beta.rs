@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use ark_crypto_primitives::crh::sha256::digest::CtOutput;
+
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
@@ -63,8 +63,8 @@ pub fn compute_beta_over_two_challenges<F: FieldExt>(
     // --- Formula is just \prod_i (x_i * y_i) + (1 - x_i) * (1 - y_i) ---
     let one = F::one();
     challenge_one
-        .into_iter()
-        .zip(challenge_two.into_iter())
+        .iter()
+        .zip(challenge_two.iter())
         .fold(F::one(), |acc, (x_i, y_i)| {
             acc * ((*x_i * y_i) + (one - x_i) * (one - y_i))
         })
@@ -153,7 +153,7 @@ impl<F: FieldExt> BetaTable<F> {
             cur_table = firsthalf;
         }
 
-        let iterated_bit_indices = (0..layer_claim_vars.len()).into_iter().collect_vec();
+        let iterated_bit_indices = (0..layer_claim_vars.len()).collect_vec();
         let cur_table_mle_ref: DenseMleRef<F> =
             DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
         Ok(BetaTable {

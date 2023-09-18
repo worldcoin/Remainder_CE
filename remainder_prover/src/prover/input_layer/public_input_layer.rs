@@ -36,7 +36,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         commitment: &Self::Commitment,
         transcript: &mut Self::Transcript,
     ) -> Result<(), TranscriptError> {
-        transcript.append_field_elements("Public Input Commitment", &commitment)
+        transcript.append_field_elements("Public Input Commitment", commitment)
     }
 
     fn open(
@@ -47,7 +47,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         Ok(())
     }
 
-    fn verify(commitment: &Self::Commitment, opening_proof: &Self::OpeningProof, claim: Claim<F>, transcript: &mut Self::Transcript) -> Result<(), super::InputLayerError> {
+    fn verify(commitment: &Self::Commitment, _opening_proof: &Self::OpeningProof, claim: Claim<F>, _transcript: &mut Self::Transcript) -> Result<(), super::InputLayerError> {
         let mut mle_ref = DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
 

@@ -10,33 +10,22 @@ pub mod test_helper_circuits;
 use std::collections::HashMap;
 
 use crate::{
-    expression::ExpressionStandard,
     layer::{
         claims::compute_aggregated_challenges, claims::compute_claim_wlx,
-        claims::verify_aggregate_claim, from_mle, layer_enum::LayerEnum, Claim, GKRLayer, Layer,
+        claims::verify_aggregate_claim, layer_enum::LayerEnum, Claim, GKRLayer, Layer,
         LayerBuilder, LayerError, LayerId,
     },
     mle::{
         dense::{DenseMle, DenseMleRef},
         MleRef,
     },
-    mle::{MleIndex, mle_enum::MleEnum},
-    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point, gate::{addgate::AddGate, mulgate::MulGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched}
+    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point, gate::{addgate::AddGate, mulgate::MulGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched}
 };
 
 // use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
 // use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
-use remainder_ligero::{
-    adapter::convert_halo_to_lcpc,
-    adapter::LigeroProof,
-    ligero_commit::{
-        remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify,
-    },
-    ligero_structs::LigeroEncoding,
-    poseidon_ligero::PoseidonSpongeHasher,
-    LcProofAuxiliaryInfo,
-};
-use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
+
+use remainder_shared_types::transcript::{Transcript};
 use remainder_shared_types::FieldExt;
 
 // use derive_more::From;
@@ -64,7 +53,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         new_layer: B,
     ) -> B::Successor {
         let id = LayerId::Layer(self.0.len());
-        let successor = new_layer.next_layer(id.clone(), None);
+        let successor = new_layer.next_layer(id, None);
         let layer = L::new(new_layer, id);
         self.0.push(layer.get_enum());
         successor
@@ -93,7 +82,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
         // use the add gate constructor in order to initialize a new add gate mle
-        let gate: AddGate<F, Tr> = AddGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
+        let gate: AddGate<F, Tr> = AddGate::new(id, nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
         
         // we want to return an mle representing the evaluations of this over all the points in the boolean hypercube
         // the size of this mle is dependent on the max gate label given in the z coordinate of the tuples (as defined above)
@@ -138,7 +127,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
         // use the mul gate constructor in order to initialize a new add gate mle
-        let gate: MulGate<F, Tr> = MulGate::new(id.clone(), nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
+        let gate: MulGate<F, Tr> = MulGate::new(id, nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
         
         // we want to return an mle representing the evaluations of this over all the points in the boolean hypercube
         // the size of this mle is dependent on the max gate label given in the z coordinate of the tuples (as defined above)
@@ -182,7 +171,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     pub fn add_add_gate_batched(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_dataparallel_bits: usize) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
         // constructor for batched add gate struct
-        let gate: AddGateBatched<F, Tr> = AddGateBatched::new(num_dataparallel_bits, nonzero_gates.clone(), lhs.clone(), rhs.clone(), id.clone());
+        let gate: AddGateBatched<F, Tr> = AddGateBatched::new(num_dataparallel_bits, nonzero_gates.clone(), lhs.clone(), rhs.clone(), id);
         let max_gate_val = nonzero_gates.clone().into_iter().fold(
             0, 
             |acc, (z, _, _)| {
@@ -200,7 +189,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
 
         // iterate through each of the indices and compute the sum
         let mut sum_table = vec![F::zero(); sum_table_num_entries];
-        (0..num_dataparallel_vals).into_iter().for_each(|idx|
+        (0..num_dataparallel_vals).for_each(|idx|
             {
                 nonzero_gates.clone().into_iter().for_each(
                     |(z_ind, x_ind, y_ind)| {
@@ -231,7 +220,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     pub fn add_mul_gate_batched(&mut self, nonzero_gates: Vec<(usize, usize, usize)>, lhs: DenseMleRef<F>, rhs: DenseMleRef<F>, num_dataparallel_bits: usize) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
         // constructor for batched mul gate struct
-        let gate: MulGateBatched<F, Tr> = MulGateBatched::new(num_dataparallel_bits, nonzero_gates.clone(), lhs.clone(), rhs.clone(), id.clone());
+        let gate: MulGateBatched<F, Tr> = MulGateBatched::new(num_dataparallel_bits, nonzero_gates.clone(), lhs.clone(), rhs.clone(), id);
         let max_gate_val = nonzero_gates.clone().into_iter().fold(
             0, 
             |acc, (z, _, _)| {
@@ -248,7 +237,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
 
         // iterate through each of the indices and compute the product
         let mut mul_table = vec![F::zero(); sum_table_num_entries];
-        (0..num_dataparallel_vals).into_iter().for_each(|idx|
+        (0..num_dataparallel_vals).for_each(|idx|
             {
                 nonzero_gates.clone().into_iter().for_each(
                     |(z_ind, x_ind, y_ind)| {
@@ -372,7 +361,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .map(|input_layer| {
                 let commitment = input_layer
                     .commit()
-                    .map_err(|err| GKRError::InputLayerError(err))?;
+                    .map_err(GKRError::InputLayerError)?;
                 InputLayerEnum::append_commitment_to_transcript(&commitment, transcript).unwrap();
                 Ok(commitment)
             })
@@ -441,11 +430,11 @@ pub trait GKRCircuit<F: FieldExt> {
             .rev()
             .map(|mut layer| {
                 // --- For each layer, get the ID and all the claims on that layer ---
-                let layer_id = layer.id().clone();
+                let layer_id = *layer.id();
                 dbg!(layer_id);
                 let layer_claims = claims
                     .get(&layer_id)
-                    .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+                    .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
 
                 // --- Add the claimed values to the FS transcript ---
                 for claim in layer_claims {
@@ -458,16 +447,14 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
 
                 // --- If it's an empty layer, skip the claim aggregation ---
-                let empty_layer = layer_claims.iter().fold(true, |acc, claim| {
-                    acc && claim.0.len() == 0
-                });
+                let empty_layer = layer_claims.iter().all(|claim| claim.0.is_empty());
 
                 // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
                 // --- claim aggregation protocol. We ONLY aggregate if need be! ---
                 let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1 && !empty_layer {
 
                     // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
-                    let wlx_evaluations = compute_claim_wlx(&layer_claims, &layer).unwrap();
+                    let wlx_evaluations = compute_claim_wlx(layer_claims, &layer).unwrap();
                     let relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
 
                     transcript
@@ -483,7 +470,7 @@ pub trait GKRCircuit<F: FieldExt> {
                         .unwrap();
 
                     let aggregated_challenges =
-                        compute_aggregated_challenges(&layer_claims, agg_chal).unwrap();
+                        compute_aggregated_challenges(layer_claims, agg_chal).unwrap();
 
                     let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
 
@@ -498,12 +485,12 @@ pub trait GKRCircuit<F: FieldExt> {
                 // --- Compute all sumcheck messages across this particular layer ---
                 let prover_sumcheck_messages = layer
                     .prove_rounds(layer_claim, transcript)
-                    .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+                    .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
                 // --- Grab all the resulting claims from the above sumcheck procedure and add them to the claim tracking map ---
                 let post_sumcheck_new_claims = layer
                     .get_claims()
-                    .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id.clone(), err))?;
+                    .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
                 // dbg!(layer_id, &post_sumcheck_new_claims);
 
@@ -530,8 +517,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 let layer_id = input_layer.layer_id();
 
                 let layer_claims = claims
-                    .get(&layer_id)
-                    .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+                    .get(layer_id)
+                    .ok_or(GKRError::NoClaimsForLayer(*layer_id))?;
 
                 // dbg!("prover claims");
                 // dbg!(&layer_claims);
@@ -553,7 +540,7 @@ pub trait GKRCircuit<F: FieldExt> {
                     // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
                     let wlx_evaluations =
                         input_layer
-                            .compute_claim_wlx(&layer_claims)
+                            .compute_claim_wlx(layer_claims)
                             .map_err(|err| {
                                 GKRError::ErrorWhenProvingLayer(
                                     *layer_id,
@@ -575,7 +562,7 @@ pub trait GKRCircuit<F: FieldExt> {
                         .unwrap();
 
                     let aggregated_challenges = input_layer
-                        .compute_aggregated_challenges(&layer_claims, agg_chal)
+                        .compute_aggregated_challenges(layer_claims, agg_chal)
                         .map_err(|err| {
                             GKRError::ErrorWhenProvingLayer(*layer_id, LayerError::ClaimError(err))
                         })?;
@@ -591,7 +578,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 let opening_proof = input_layer
                     .open(transcript, layer_claim)
-                    .map_err(|err| GKRError::InputLayerError(err))?;
+                    .map_err(GKRError::InputLayerError)?;
 
                 Ok(InputLayerProof {
                     layer_id: *layer_id,
@@ -664,7 +651,7 @@ pub trait GKRCircuit<F: FieldExt> {
             }
             let claim = (
                 mle_indices
-                    .into_iter()
+                    .iter()
                     .map(|index| index.val().unwrap())
                     .collect(),
                 F::zero(),
@@ -688,10 +675,10 @@ pub trait GKRCircuit<F: FieldExt> {
             } = sumcheck_proof_single;
 
             // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
-            let layer_id = layer.id().clone();
+            let layer_id = *layer.id();
             let layer_claims = claims
                 .get(&layer_id)
-                .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+                .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
 
 
             // --- Append claims to the FS transcript... TODO!(ryancao): Do we actually need to do this??? ---
@@ -712,7 +699,7 @@ pub trait GKRCircuit<F: FieldExt> {
             if layer_claims.len() > 1 {
                 // --- Perform the claim aggregation verification, first sampling `r` ---
                 let all_wlx_evaluations: Vec<F> = layer_claims
-                    .into_iter()
+                    .iter()
                     .map(|(_, val)| *val)
                     .chain(wlx_evaluations.clone().into_iter())
                     .collect();
@@ -727,7 +714,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 prev_claim = verify_aggregate_claim(&all_wlx_evaluations, layer_claims, agg_chal)
                     .map_err(|_err| {
                     GKRError::ErrorWhenVerifyingLayer(
-                        layer_id.clone(),
+                        layer_id,
                         LayerError::AggregationError,
                     )
                 })?;
@@ -737,14 +724,14 @@ pub trait GKRCircuit<F: FieldExt> {
             // --- Performs the actual sumcheck verification step ---
             layer
                 .verify_rounds(prev_claim, sumcheck_proof.0, transcript)
-                .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
+                .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
 
             // --- Extract/track claims from the expression independently (this ensures implicitly that the ---
             // --- prover is behaving correctly with respect to claim reduction, as otherwise the claim ---
             // --- aggregation verification step will fail ---
             let other_claims = layer
                 .get_claims()
-                .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id.clone(), err))?;
+                .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
 
             for (layer_id, claim) in other_claims {
                 if let Some(curr_claims) = claims.get_mut(&layer_id) {
@@ -760,7 +747,7 @@ pub trait GKRCircuit<F: FieldExt> {
             let input_layer_id = input_layer.layer_id;
             let input_layer_claims = claims
                 .get(&input_layer_id)
-                .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
+                .ok_or(GKRError::NoClaimsForLayer(input_layer_id))?;
 
             // dbg!(&input_layer_claims);
 
@@ -779,7 +766,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             let input_layer_claim = if input_layer_claims.len() > 1 {
                 let all_input_wlx_evaluations: Vec<F> = input_layer_claims
-                    .into_iter()
+                    .iter()
                     .map(|(_, val)| *val)
                     .chain(input_layer.input_layer_wlx_evaluations.clone().into_iter())
                     .collect();
@@ -817,7 +804,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 input_layer_claim,
                 transcript,
             )
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
         }
 
         Ok(())

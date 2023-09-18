@@ -38,7 +38,8 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitBatched<F> {
                     ).collect_vec()
                 )
             );
-            let diff_builder = from_mle(
+            
+            from_mle(
                 diff_signed_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
@@ -46,8 +47,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitBatched<F> {
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)
-            });
-            diff_builder
+            })
         }).collect_vec();
         let combined_output_zero_mle_ref = combine_zero_mle_ref(layers.add_gkr(BatchedLayer::new(diff_builders)));
 
@@ -86,7 +86,8 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitBatched<F> {
                     ).collect_vec()
                 )
             );
-            let diff_builder = from_mle(
+            
+            from_mle(
                 diff_signed_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
@@ -94,8 +95,7 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitBatched<F> {
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)
-            });
-            diff_builder
+            })
         }).collect_vec();
         let combined_output_zero_mle_ref = combine_zero_mle_ref(layers.add_gkr(BatchedLayer::new(diff_builders)));
 
@@ -138,7 +138,8 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuitBatched<F> {
                     ).collect_vec()
                 )
             );
-            let diff_builder = from_mle(
+            
+            from_mle(
                 multiplicities_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
@@ -146,8 +147,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuitBatched<F> {
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)
-            });
-            diff_builder
+            })
         }).collect_vec();
         let combined_output_zero_mle_ref = combine_zero_mle_ref(layers.add_gkr(BatchedLayer::new(diff_builders)));
 
@@ -185,7 +185,8 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatched<F> {
                     ).collect_vec()
                 )
             );
-            let diff_builder = from_mle(
+            
+            from_mle(
                 multiplicities_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
@@ -193,8 +194,7 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatched<F> {
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)
-            });
-            diff_builder
+            })
         }).collect_vec();
         let combined_output_zero_mle_ref = combine_zero_mle_ref(layers.add_gkr(BatchedLayer::new(diff_builders)));
 

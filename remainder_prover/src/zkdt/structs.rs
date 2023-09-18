@@ -90,7 +90,7 @@ impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
         [node_ids, attr_ids, thresholds]
     }
 
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
         items[0]
             .iter()
             .cloned()
@@ -152,7 +152,7 @@ pub(crate) fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> Dense
         .flat_map(|index| {
             items
                 .iter()
-                .map(move |item| item.bookkeeping_table().get(index).unwrap_or(&F::zero()).clone())
+                .map(move |item| *item.bookkeeping_table().get(index).unwrap_or(&F::zero()))
                 .chain(repeat_n(F::zero(), padding_count))
         })
         .chain(repeat_n(F::zero(), total_padding))
@@ -187,7 +187,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 2,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -216,7 +216,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 2,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -246,7 +246,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 2,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -258,7 +258,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         let batched_bits = log2(decision_mle_batch.len());
 
         let decision_mle_batch_ref_combined = decision_mle_batch
-            .clone()
+            
             .into_iter().map(
                 |x| {
                     combine_mle_refs(
@@ -290,7 +290,7 @@ impl<F: FieldExt> MleAble<F> for LeafNode<F> {
         [node_ids, node_vals]
     }
 
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
         items[0]
             .iter()
             .cloned()
@@ -326,7 +326,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 1,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -350,7 +350,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
                 )
                 .collect_vec(),
             num_vars: num_vars - 1,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -362,7 +362,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
         let batched_bits = log2(leaf_mle_batch.len());
 
         let leaf_mle_batch_ref_combined = leaf_mle_batch
-            .clone()
+            
             .into_iter().map(
                 |x| {
                     combine_mle_refs(
@@ -394,7 +394,7 @@ impl<F: FieldExt> MleAble<F> for InputAttribute<F> {
         [attr_ids, attr_vals]
     }
 
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
         items[0]
             .iter()
             .cloned()
@@ -445,7 +445,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 )
                 .collect_vec(),
             num_vars,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -490,7 +490,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
                 )
                 .collect_vec(),
             num_vars,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -502,7 +502,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let batched_bits = log2(input_mle_batch.len());
 
         let input_mle_batch_ref_combined = input_mle_batch
-            .clone()
+            
             .into_iter().map(
                 |x| {
                     combine_mle_refs(
@@ -542,10 +542,10 @@ impl<F: FieldExt> MleAble<F> for BinDecomp16Bit<F> {
         ret
     }
 
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
-        let elems = (0..items[0].len()).into_iter().map(
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
+        let elems = (0..items[0].len()).map(
             |idx| {
-                let bits = items.into_iter().map(
+                let bits = items.iter().map(
                     |item| {
                         item[idx]
                     }
@@ -598,7 +598,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
                     )
                     .collect_vec(),
                 num_vars: num_vars - 4,
-                layer_id: self.layer_id.clone(),
+                layer_id: self.layer_id,
                 indexed: false,
             };
             ret.push(bit_mle_ref);
@@ -640,7 +640,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
         let batched_bits = log2(input_mle_batch.len());
 
         let input_mle_batch_ref_combined = input_mle_batch
-            .clone()
+            
             .into_iter().map(
                 |x| {
                     combine_mle_refs(
@@ -679,10 +679,10 @@ impl<F: FieldExt> MleAble<F> for BinDecomp4Bit<F> {
         ret
     }
 
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
-        let elems = (0..items[0].len()).into_iter().map(
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
+        let elems = (0..items[0].len()).map(
             |idx| {
-                let bits = items.into_iter().map(
+                let bits = items.iter().map(
                     |item| {
                         item[idx]
                     }
@@ -731,7 +731,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {
                     )
                     .collect_vec(),
                 num_vars: num_vars - 2,
-                layer_id: self.layer_id.clone(),
+                layer_id: self.layer_id,
                 indexed: false,
             };
             ret.push(bit_mle_ref);
@@ -753,7 +753,7 @@ impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {
         let batched_bits = log2(input_mle_batch.len());
 
         let input_mle_batch_ref_combined = input_mle_batch
-            .clone()
+            
             .into_iter().map(
                 |x| {
                     combine_mle_refs(

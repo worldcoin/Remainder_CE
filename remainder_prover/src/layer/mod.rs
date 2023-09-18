@@ -8,9 +8,9 @@ pub mod layer_enum;
 
 use std::marker::PhantomData;
 
-use itertools::{repeat_n, Itertools};
+use itertools::{repeat_n};
 use ark_std::cfg_into_iter;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{Serialize, Deserialize};
 use thiserror::Error;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -18,13 +18,13 @@ use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
     mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
-        MleIndex, MleRef, zero,
+        MleIndex, MleRef,
     },
     prover::SumcheckProof,
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     
-    }, zkdt::helpers::get_field_val_as_usize_vec,
+    },
 };
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
@@ -160,7 +160,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         let (max_round, beta) = {
             let (expression, _) = self.mut_expression_and_beta();
 
-            let mut beta = BetaTable::new(claim.clone()).map_err(LayerError::BetaError)?;
+            let mut beta = BetaTable::new(claim).map_err(LayerError::BetaError)?;
 
             let expression_num_indices = expression.index_mle_indices(0);
             let beta_table_num_indices = beta.table.index_mle_indices(0);
@@ -252,7 +252,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
 
-        let val = claim.1.clone();
+        let val = claim.1;
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
@@ -409,7 +409,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     // --- This is super jank ---
                     let mut fixed_mle_indices: Vec<F> = vec![];
                     for mle_idx in mle_indices {
-                        if let None = mle_idx.val() {
+                        if mle_idx.val().is_none() {
                             dbg!("We got a nothing");
                             dbg!(&mle_idx);
                             dbg!(&mle_indices);
@@ -544,8 +544,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                        res
+                        
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
 
@@ -664,7 +664,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         let zero_expression: ExpressionStandard<F> = ExpressionStandard::Constant(F::zero());
         
         let first_padded = if let Padding::Left(padding) = self.padding {
-            let mut left = first.clone();
+            let mut left = first;
             for _ in 0..padding {
                 left = zero_expression.clone().concat_expr(left);
             }
@@ -674,7 +674,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         };
 
         let second_padded = if let Padding::Right(padding) = self.padding {
-            let mut right = second.clone();
+            let mut right = second;
             for _ in 0..padding {
                 right = zero_expression.clone().concat_expr(right);
             }
@@ -700,7 +700,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         };
         (
             self.first.next_layer(
-                id.clone(),
+                id,
                 Some(
                     prefix_bits
                         .clone()
@@ -744,9 +744,9 @@ impl<
     type Successor = S;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let hi = (self.expression_builder)(&self.mle);
+        
         // dbg!(&hi);
-        hi
+        (self.expression_builder)(&self.mle)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {

@@ -107,7 +107,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateTest<F, Tr> {
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         // --- First compute the bookkeeping table for \beta(g, z) \in \{0, 1\}^{s_i} ---
 
-        let beta_g = if claim.0.len() > 0 {
+        let beta_g = if !claim.0.is_empty() {
             BetaTable::new(claim).unwrap()
         } else {
             BetaTable {
@@ -145,7 +145,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateTest<F, Tr> {
                     .bookkeeping_table()
                     .get(y_ind)
                     .unwrap_or(&F::zero());
-                a_hg_rhs[x_ind] = a_hg_rhs[x_ind] + (beta_g_at_z * f_3_at_y);
+                a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
             });
 
         // --- We need to multiply h_g(x) by f_2(x) ---
@@ -207,7 +207,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateTest<F, Tr> {
                     .get(x_ind)
                     .unwrap_or(&F::zero());
                 let adder = gz * ux;
-                a_f1[y_ind] = a_f1[y_ind] + (adder * f_at_u);
+                a_f1[y_ind] += adder * f_at_u;
             });
 
         // --- RHS bookkeeping table needs to be multiplied by f_3(y) ---
@@ -219,8 +219,8 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateTest<F, Tr> {
         self.set_phase_2(phase_2_mles.clone());
 
         // return the first sumcheck message of this phase
-        let hello = compute_sumcheck_message_mul_gate(&phase_2_mles, self.num_dataparallel_bits);
-        hello
+        
+        compute_sumcheck_message_mul_gate(&phase_2_mles, self.num_dataparallel_bits)
     }
 
     /// dummy sumcheck prover for this, testing purposes
@@ -308,7 +308,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateTest<F, Tr> {
     fn dummy_verify_rounds(
         &mut self,
         messages: Vec<(Vec<F>, Option<F>)>,
-        rng: &mut impl Rng,
+        _rng: &mut impl Rng,
         claim: Claim<F>,
     ) -> Result<(), VerifyError> {
         // first message evals
@@ -511,7 +511,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatchedTest<F, Tr> {
         // create two separate beta tables for each, as they are handled differently
         let mut beta_g2 = BetaTable::new((g2_challenges.clone(), F::zero())).unwrap();
         beta_g2.table.index_mle_indices(0);
-        let beta_g1 = if g1_challenges.len() > 0 {
+        let beta_g1 = if !g1_challenges.is_empty() {
             BetaTable::new((g1_challenges.clone(), F::zero())).unwrap()
         } else {
             BetaTable {
@@ -549,11 +549,11 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatchedTest<F, Tr> {
     ) -> Vec<(Vec<F>, Option<F>)> {
         // initialization
         let first_message = self
-            .init_copy_phase(claim.clone())
+            .init_copy_phase(claim)
             .expect("could not evaluate original lhs and rhs");
         let beta_g1 = BetaTable::new((self.g1_challenges.clone().unwrap(), F::zero())).unwrap();
-        let mut beta_g2 = self.beta_g2.as_mut().unwrap();
-        let (mut lhs, mut rhs) = (&mut self.lhs.clone(), &mut self.rhs.clone());
+        let beta_g2 = self.beta_g2.as_mut().unwrap();
+        let (lhs, rhs) = (&mut self.lhs.clone(), &mut self.rhs.clone());
         let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
         let mut challenges: Vec<F> = vec![];
         let mut challenge: Option<F> = None;
@@ -571,7 +571,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatchedTest<F, Tr> {
 
             let evals =
                 // prove_round_copy(&mut lhs, &mut rhs, beta_g2, round, chal).unwrap();
-                prove_round_copy_mul(&mut lhs, &mut rhs, &beta_g1, &mut beta_g2, round, chal, &self.nonzero_gates, self.new_bits - round).unwrap();
+                prove_round_copy_mul(lhs, rhs, &beta_g1, beta_g2, round, chal, &self.nonzero_gates, self.new_bits - round).unwrap();
 
             messages.push((evals, challenge));
         }
@@ -597,7 +597,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatchedTest<F, Tr> {
         // TODO!(ryancao): Can we get rid of the clones here somehow (for `lhs` and `rhs`)?
         
         let reduced_gate: MulGateTest<F, Tr> = MulGateTest::new(
-            self.layer_id.clone(),
+            self.layer_id,
             self.nonzero_gates.clone(),
             lhs.clone(),
             rhs.clone(),
@@ -634,7 +634,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatchedTest<F, Tr> {
     fn dummy_verify_rounds(
         &mut self,
         messages: Vec<(Vec<F>, Option<F>)>,
-        rng: &mut impl Rng,
+        _rng: &mut impl Rng,
         claim: Claim<F>,
     ) -> Result<(), VerifyError> {
         let mut prev_evals = &messages[0].0;

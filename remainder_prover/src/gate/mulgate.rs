@@ -1,11 +1,10 @@
-use ark_std::{cfg_into_iter, rand::Rng};
+use ark_std::{cfg_into_iter};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
-    expression::ExpressionStandard,
     layer::{
         claims::ClaimError, layer_enum::LayerEnum, Claim, Layer, LayerBuilder, LayerError, LayerId,
         VerificationError,
@@ -17,9 +16,7 @@ use crate::{
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
 use crate::mle::{
-    beta::compute_beta_over_two_challenges,
-    dense::{DenseMle, DenseMleRef},
-    MleIndex, MleRef,
+    dense::{DenseMle, DenseMleRef}, MleRef,
 };
 use thiserror::Error;
 
@@ -156,7 +153,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         } 
         
         else {
-            return Err(LayerError::LayerNotReady)
+            Err(LayerError::LayerNotReady)
         }
     }
 
@@ -190,7 +187,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
             let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
 
             let prev_at_r = evaluate_at_a_point(prev_evals, challenge)
-                .map_err(|err| LayerError::InterpError(err))?;
+                .map_err(LayerError::InterpError)?;
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 return Err(LayerError::VerificationError(
@@ -199,7 +196,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
             };
 
             transcript
-                .append_field_elements("Sumcheck evaluations", &curr_evals)
+                .append_field_elements("Sumcheck evaluations", curr_evals)
                 .unwrap();
 
             prev_evals = curr_evals;
@@ -242,7 +239,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
 
         // compute the sum over all the variables of the gate function
         let beta_u = BetaTable::new((first_u_challenges.clone(), bound_lhs)).unwrap();
-        let beta_v = if last_v_challenges.len() > 0 {
+        let beta_v = if !last_v_challenges.is_empty() {
             BetaTable::new((last_v_challenges.clone(), bound_rhs)).unwrap()
         } else {
             BetaTable {
@@ -251,7 +248,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 relevant_indices: vec![],
             }
         };
-        let beta_g = if claim.0.len() > 0 {
+        let beta_g = if !claim.0.is_empty() {
             BetaTable::new((claim.0, F::zero())).unwrap()
         } else {
             BetaTable {
@@ -329,7 +326,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
     }
 
     ///Create new ConcreteLayer from a LayerBuilder
-    fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
+    fn new<L: LayerBuilder<F>>(_builder: L, _id: LayerId) -> Self {
         todo!()
     }
 
@@ -346,7 +343,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
-            .into_iter()
             .map(|idx| {
                 // get the challenge l(idx)
                 let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
@@ -354,19 +350,19 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                        res
+                        
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
 
-                let eval = compute_full_gate(
+                
+                compute_full_gate(
                     new_chal,
                     &mut self.lhs.clone(),
                     &mut self.rhs.clone(),
                     &self.nonzero_gates,
                     0,
-                );
-                eval
+                )
             })
             .collect();
 
@@ -468,7 +464,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         // --- First compute the bookkeeping table for \beta(g, z) \in \{0, 1\}^{s_i} ---
 
-        let beta_g = if claim.0.len() > 0 {
+        let beta_g = if !claim.0.is_empty() {
             BetaTable::new(claim).unwrap()
         } else {
             BetaTable {
@@ -506,7 +502,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
                     .bookkeeping_table()
                     .get(y_ind)
                     .unwrap_or(&F::zero());
-                a_hg_rhs[x_ind] = a_hg_rhs[x_ind] + (beta_g_at_z * f_3_at_y);
+                a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
             });
 
         // --- We need to multiply h_g(x) by f_2(x) ---
@@ -568,7 +564,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
                     .get(x_ind)
                     .unwrap_or(&F::zero());
                 let adder = gz * ux;
-                a_f1[y_ind] = a_f1[y_ind] + (adder * f_at_u);
+                a_f1[y_ind] += adder * f_at_u;
             });
 
         // --- RHS bookkeeping table needs to be multiplied by f_3(y) ---
@@ -580,7 +576,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
         self.set_phase_2(phase_2_mles.clone());
 
         // return the first sumcheck message of this phase
-        let hello = compute_sumcheck_message_mul_gate(&phase_2_mles, self.num_dataparallel_bits);
-        hello
+        
+        compute_sumcheck_message_mul_gate(&phase_2_mles, self.num_dataparallel_bits)
     }
 }
