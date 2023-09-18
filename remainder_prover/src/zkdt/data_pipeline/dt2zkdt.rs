@@ -65,7 +65,7 @@ use ndarray::Array2;
 use ndarray_npy::read_npy;
 use rand::Rng;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
-
+use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use std::fs::{File, self};
