@@ -30,6 +30,7 @@ impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
     }
 }
 
+///Helper function for "unbatching" when required by the output layer
 pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMleRef<F> {
     let new_bits = 0;
     let num_vars = mle_refs[0].mle_indices().len();
@@ -37,6 +38,7 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
 }
 
+///Helper function for "unbatching" when required by circuit design
 pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     let old_layer_id = mles[0].layer_id.clone();
     let new_bits = log2(mles.len()) as usize;
@@ -66,6 +68,8 @@ pub fn unflatten_mle<F: FieldExt>(flattened_mle: DenseMle<F, F>, num_copy_bits: 
     unflat
 }
 
+///Helper function for batchedlayer that takes in m expressions of size n, and
+///turns it into a single expression o size n*m
 fn combine_expressions<F: FieldExt>(
     exprs: Vec<ExpressionStandard<F>>,
 ) -> Result<ExpressionStandard<F>, CombineExpressionError> {
@@ -78,6 +82,10 @@ fn combine_expressions_helper<F: FieldExt>(
     exprs: Vec<ExpressionStandard<F>>,
     new_bits: usize,
 ) -> Result<ExpressionStandard<F>, CombineExpressionError> {
+    //Check if all expressions have the same structure, and if they do, combine
+    //their parts. 
+    //Combination is done through either recursion or simple methods, except for
+    //Mle and Products; which use a helper function `combine_mles`
     match &exprs[0] {
         ExpressionStandard::Selector(index, _, _) => {
             let index = index.clone();
@@ -193,7 +201,8 @@ fn combine_expressions_helper<F: FieldExt>(
     }
 }
 
-/// for batching
+/// for batching. Taking m DenseMleRefs of size n and turning them into a single
+/// DenseMleRef of size n*m
 pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> DenseMleRef<F> {
     let old_indices = mles[0].mle_indices();
     let old_num_vars = mles[0].num_vars();
@@ -219,22 +228,6 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
                 .collect_vec()
         })
         .collect_vec();
-
-    // let mut count: usize = 0;
-
-    // for mle_index in old_indices {
-    //     match mle_index {
-    //         MleIndex::Iterated | MleIndex::IndexedBit(_) => break,
-    //         _ => count +=1
-    //     }
-    // }
-
-    // if count > 1 {
-    //     count -= 1;
-    // }
-
-    // let mle_indices = old_indices[..count].iter().cloned().chain(repeat_n(MleIndex::Iterated, new_bits)).chain(old_indices[count..].iter().cloned()).collect_vec();
-    // let mle_indices = repeat_n(MleIndex::Iterated, new_bits).chain(old_indices.iter().cloned()).collect_vec();
 
     DenseMleRef {
         bookkeeping_table: out,
@@ -262,27 +255,11 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let new_bits = log2(self.layers.len()) as usize;
-        // let bits = std::iter::successors(
-        //     Some(vec![MleIndex::Fixed(false); num_bits]),
-        //     |prev| {
-        //         let mut prev = prev.clone();
-        //         let mut removed_bits = 0;
-        //         for index in (0..num_bits).rev() {
-        //             let curr = prev.remove(index);
-        //             if curr == MleIndex::Fixed(false) {
-        //                 prev.push(MleIndex::Fixed(true));
-        //                 break;
-        //             } else {
-        //                 removed_bits += 1;
-        //             }
-        //         }
-        //         if removed_bits == num_bits {
-        //             None
-        //         } else {
-        //             Some(prev.into_iter().chain(repeat_n(MleIndex::Fixed(false), removed_bits)).collect_vec())
-        //         }
-        //     },
-        // );
+
+        //Mles yielded by this BatchedLayer have the batched bits taken into
+        //account so that they are ordered correctly compared to all other bits,
+        //even though there is some semantic incorrectness to having the batch
+        //bits be part of the individual mles
 
         self.layers
             .iter()
@@ -290,11 +267,6 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
             .map(|layer| {
                 layer.next_layer(
                     id.clone(),
-                    // Some(
-                    //     bits.into_iter()
-                    //         .chain(prefix_bits.clone().into_iter().flatten())
-                    //         .collect_vec(),
-                    // ),
                     Some(
                         prefix_bits
                             .clone()
