@@ -16,12 +16,14 @@ use crate::{
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use super::{
+use crate::mle::{
     beta::compute_beta_over_two_challenges,
     dense::{DenseMle, DenseMleRef},
-    MleIndex, MleRef, gate_helpers::{index_mle_indices_gate, compute_sumcheck_message_mul_gate, GateError, compute_full_gate, check_fully_bound, fix_var_gate, prove_round_mul},
+    MleIndex, MleRef,
 };
 use thiserror::Error;
+
+use super::gate_helpers::{index_mle_indices_gate, compute_sumcheck_message_mul_gate, GateError, compute_full_gate, check_fully_bound, fix_var_gate, prove_round_mul};
 
 /// implement the layer trait for addgate struct
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {

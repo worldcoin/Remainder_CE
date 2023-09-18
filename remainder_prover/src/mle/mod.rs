@@ -18,13 +18,6 @@ pub mod dense;
 
 pub mod mle_enum;
 pub mod zero;
-pub mod addgate;
-pub mod batched_addgate;
-pub mod addgate_tests;
-pub mod mulgate;
-pub mod batched_mulgate;
-pub mod mulgate_tests;
-pub mod gate_helpers;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.

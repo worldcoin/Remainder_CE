@@ -18,12 +18,10 @@ use crate::{
     },
     mle::{
         dense::{DenseMle, DenseMleRef},
-        addgate::AddGate,
         MleRef,
     },
-    mle::{MleIndex, mle_enum::MleEnum, mulgate::{MulGate}, batched_mulgate::MulGateBatched},
-    mle::{batched_addgate::{AddGateBatched}},
-    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point
+    mle::{MleIndex, mle_enum::MleEnum},
+    utils::pad_to_nearest_power_of_two, sumcheck::evaluate_at_a_point, gate::{addgate::AddGate, mulgate::MulGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched}
 };
 
 // use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
