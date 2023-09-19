@@ -6,18 +6,17 @@ use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex, mle_enum::MleEnum}, zk
 
 use super::circuit_builders::{OneMinusSignBit, SignBit, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf};
 
-/// Helper!
-pub fn create_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
-    dbg!(&size);
-    let mut gates = (0.. (size-1)).map(
-        |idx| (idx, 2*(idx + 1), idx)
-    ).collect_vec();
-    gates.push((size-1, 1, size-1));
-
-    gates
-}
-
-/// Helper!
+/// Given an AddGate or AddGateBatched mle struct with `lhs` and `rhs` (on either side
+/// of the summation) which are both mles over decision nodes, this creates the wiring 
+/// between the two sides for the current circuit.
+/// 
+/// # Arguments
+/// `size`: the maximum of the number of elements in the bookkeeping table in the 
+/// AddGate/AddGateBatched between `lhs` and `rhs`
+/// 
+/// # Returns
+/// a vector of gates which are nonzero representing the wiring specifically for 
+/// adding the current node id to the expected next node id for decision nodes.
 pub fn decision_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     
     (0 .. (size-1)).map(
@@ -25,13 +24,33 @@ pub fn decision_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> 
     ).collect_vec()
 }
 
-/// Helper!
+/// Given an AddGate or AddGateBatched mle struct with `lhs` and `rhs` (on either side
+/// of the summation) where one side is decision nodes and the other a leaf node, this 
+/// creates the wiring between the two sides for the current circuit.
+/// 
+/// # Arguments
+/// `size`: the maximum of the number of elements in the bookkeeping table in the 
+/// AddGate/AddGateBatched between `lhs` and `rhs`
+/// 
+/// # Returns
+/// a vector of nonzero gates representing the wiring specifically for adding the current 
+/// node id to the expected next node id for leaf nodes against the last decision node.
 pub fn leaf_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     vec![(0, size-1, 0)]
 }
 
 
-/// Helper!
+/// Given an MulGate or MulGateBatched mle struct with `lhs` and `rhs` (on either side
+/// of the product) which one is over decision nodes and the other are sign bits, this 
+/// creates the wiring between the two sides for the current circuit.
+/// 
+/// # Arguments
+/// `size`: the maximum of the number of elements in the bookkeeping table in the 
+/// MulGate/MulGateBatched between `lhs` and `rhs`
+/// 
+/// # Returns
+/// a vector of gates which are nonzero representing the wiring specifically for 
+/// multiplying the current decision node id to the respective sign bit.
 pub fn decision_mul_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     dbg!(&size);
     
@@ -40,7 +59,17 @@ pub fn decision_mul_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> 
     ).collect_vec()
 }
 
-/// Helper!
+/// Given an MulGate or MulGateBatched mle struct with `lhs` and `rhs` (on either side
+/// of the product) which one is over leaf nodes and the other are sign bits, this 
+/// creates the wiring between the two sides for the current circuit.
+/// 
+/// # Arguments
+/// `size`: the maximum of the number of elements in the bookkeeping table in the 
+/// MulGate/MulGateBatched between `lhs` and `rhs`
+/// 
+/// # Returns
+/// a vector of gates which are nonzero representing the wiring specifically for 
+/// multiplying the current leaf node id to the last sign bit of the decision nodes.
 pub fn leaf_mul_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     vec![(0, size-1, 0)]
 }
@@ -57,8 +86,8 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
     type Transcript = PoseidonTranscript<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let num_copy = self.batched_decision_node_paths_mle.len();
-        let num_copy_bits = log2(num_copy) as usize;
+        let num_dataparallel_circuits = self.batched_decision_node_paths_mle.len();
+        let num_dataparallel_bits = log2(num_dataparallel_circuits) as usize;
         let mut layers: Layers<F, Self::Transcript> = Layers::new();
 
         let mut combined_decision = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.batched_decision_node_paths_mle.clone());
@@ -73,7 +102,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
             |bin_decomp_mle| {
                 bin_decomp_mle.add_prefix_bits(Some(
                     combined_bit.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
             }
@@ -83,7 +112,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
             |dec_mle| {
                 dec_mle.add_prefix_bits(Some(
                     combined_decision.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
             }
@@ -93,7 +122,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
             |leaf_mle| {
                 leaf_mle.add_prefix_bits(Some(
                     combined_leaf.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
             }
@@ -163,14 +192,14 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
         // add gate with dec and left
         // add gate with leaf and right
         // add gate with leaf and left
-        let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
-        let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
+        let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_dataparallel_bits));
+        let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_dataparallel_bits));
 
-        let res_neg_dec = layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_prev_left.mle_ref(), num_copy_bits); // ID is 6
-        let res_pos_dec = layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.mle_ref(), flattened_prev_right.mle_ref(), num_copy_bits); // ID is 7
+        let res_neg_dec = layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_prev_left.mle_ref(), num_dataparallel_bits); // ID is 6
+        let res_pos_dec = layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.mle_ref(), flattened_prev_right.mle_ref(), num_dataparallel_bits); // ID is 7
 
-        let res_neg_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.mle_ref(), num_copy_bits); // ID is 8
-        let res_pos_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.mle_ref(), num_copy_bits); // ID is 9
+        let res_neg_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.mle_ref(), num_dataparallel_bits); // ID is 8
+        let res_pos_leaf = layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.mle_ref(), num_dataparallel_bits); // ID is 9
 
         let nonzero_gates_mul_decision = decision_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
         let nonzero_gates_mul_leaf = leaf_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
@@ -178,10 +207,10 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
         let flattened_pos = unbatch_mles(pos_sign_bits);
         let flattened_neg = unbatch_mles(neg_sign_bits);
 
-        let dec_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.mle_ref(), res_pos_dec.mle_ref(), num_copy_bits); // ID is 10
-        let dec_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision, flattened_neg.mle_ref(), res_neg_dec.mle_ref(), num_copy_bits); // ID is 11
-        let leaf_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.mle_ref(), res_pos_leaf.mle_ref(), num_copy_bits); // ID is 12
-        let leaf_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf, flattened_neg.mle_ref(), res_neg_leaf.mle_ref(), num_copy_bits); // ID is 13
+        let dec_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.mle_ref(), res_pos_dec.mle_ref(), num_dataparallel_bits); // ID is 10
+        let dec_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_decision, flattened_neg.mle_ref(), res_neg_dec.mle_ref(), num_dataparallel_bits); // ID is 11
+        let leaf_pos_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.mle_ref(), res_pos_leaf.mle_ref(), num_dataparallel_bits); // ID is 12
+        let leaf_neg_prod = layers.add_mul_gate_batched(nonzero_gates_mul_leaf, flattened_neg.mle_ref(), res_neg_leaf.mle_ref(), num_dataparallel_bits); // ID is 13
 
         let dec_pos_zero = ZeroBuilder::new(dec_pos_prod);
         let dec_neg_zero = ZeroBuilder::new(dec_neg_prod);
@@ -231,16 +260,21 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
         combined_layers: &mut Layers<F, PoseidonTranscript<F>>,
         combined_output_layers: Vec<MleEnum<F>>,
     ) -> Vec<MleEnum<F>> {
-        let num_copy = self.batched_decision_node_paths_mle.len();
-        let num_copy_bits = log2(num_copy) as usize;
+        
+        // get the batch size, or the number of inputs, by getting the length of the vector
+        let num_dataparallel_circuits = self.batched_decision_node_paths_mle.len();
+        // number of bits needed to represent which copy number we are currently in
+        let num_dataparallel_bits = log2(num_dataparallel_circuits) as usize;
+
+        // for each of the mles, we need to add prefix bits corresopnding to the number of dataparallel circuits.
+        // we do this manually by adding the number of iterated bits corresponding to the number of dataparallel bits
+        // now the prefix bits are in the order (mle ref bits, batched bits)
 
         self.batched_bin_decomp_diff_mle.iter_mut().for_each(
             |bin_decomp_mle| {
                 bin_decomp_mle.add_prefix_bits(Some(
-                    // --- NOTE that each MLE already has prefix bits from the input layer ---
-                    // --- but not batched prefix bits ---
                     bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
             }
@@ -250,7 +284,7 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
             |dec_mle| {
                 dec_mle.add_prefix_bits(Some(
                     dec_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
             }
@@ -260,12 +294,14 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
             |leaf_mle| {
                 leaf_mle.add_prefix_bits(Some(
                     leaf_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, num_copy_bits)
+                        repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
             }
         );
 
+        // we compute (1 - (sign bit)) using this builder in order to get the values of the bit which are nonzero
+        // if and only if the threshold difference against the node value is positive
         let pos_builders = self.batched_bin_decomp_diff_mle.iter().map(
             |bin_decomp_mle| {
                 OneMinusSignBit::new(bin_decomp_mle.clone())
@@ -273,6 +309,8 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
         ).collect_vec();
         let pos_batched_builder = BatchedLayer::new(pos_builders);
 
+        // we compute (sign bit) using this builder in order to get the values of the bit which are nonzero
+        // if and only if the threshold difference against the node value is negative
         let neg_builders = self.batched_bin_decomp_diff_mle.iter().map(
             |bin_decomp_mle| {
                 SignBit::new(bin_decomp_mle.clone())
@@ -280,9 +318,11 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
         ).collect_vec();
         let neg_batched_builder = BatchedLayer::new(neg_builders);
 
+        // add these layers to be sumchecked over
         let pos_sign_bits = combined_layers.add_gkr(pos_batched_builder); // ID is 0
         let neg_sign_bits = combined_layers.add_gkr(neg_batched_builder); // ID is 1
 
+        // for the decision path mle, compute (2*node_id + 1)
         let prev_node_left_builders = self.batched_decision_node_paths_mle.iter().map(
             |dec_mle| {
                 PrevNodeLeftBuilderDecision::new(dec_mle.clone())
@@ -291,6 +331,7 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
 
         let prev_left_batched_builder = BatchedLayer::new(prev_node_left_builders);
 
+        // for the decision path mle, compute (2*node_id + 2)
         let prev_node_right_builders = self.batched_decision_node_paths_mle.iter().map(
             |dec_mle| {
                 PrevNodeRightBuilderDecision::new(dec_mle.clone())
@@ -299,6 +340,7 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
 
         let prev_right_batched_builder = BatchedLayer::new(prev_node_right_builders);
 
+        // for the decision path mle, return mle representing node_id
         let curr_node_decision_builders = self.batched_decision_node_paths_mle.iter().map(
             |dec_mle| {
                 CurrNodeBuilderDecision::new(dec_mle.clone())
@@ -307,6 +349,7 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
 
         let curr_decision_batched_builder = BatchedLayer::new(curr_node_decision_builders);
 
+        // for the leaf path mle, return mle representing node_id
         let curr_node_leaf_builders = self.batched_leaf_node_paths_mle.iter().map(
             |leaf_mle| {
                 CurrNodeBuilderLeaf::new(leaf_mle.clone())
@@ -315,41 +358,58 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
 
         let curr_leaf_batched_builder = BatchedLayer::new(curr_node_leaf_builders);
 
+        // add these layers to be sumchecked over
         let curr_decision = combined_layers.add_gkr(curr_decision_batched_builder); // ID is 2
         let curr_leaf = combined_layers.add_gkr(curr_leaf_batched_builder); // ID is 3
         let prev_node_right = combined_layers.add_gkr(prev_right_batched_builder); // ID is 4
         let prev_node_left = combined_layers.add_gkr(prev_left_batched_builder); // ID is 5
 
+        // in order to use with the gate mles, we need to flatten the vector of mles such that it is one large mle
+        // with num_dataparallel_bits + num_iterated_bits number of bits (combined in little endian format)
         let flattened_curr_dec = unbatch_mles(curr_decision);
         let flattened_curr_leaf = unbatch_mles(curr_leaf);
         let flattened_prev_right = unbatch_mles(prev_node_right);
         let flattened_prev_left = unbatch_mles(prev_node_left);
 
 
-        // add gate with dec and right
-        // add gate with dec and left
-        // add gate with leaf and right
-        // add gate with leaf and left
-        let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
-        let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_copy_bits));
 
-        let res_neg_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_prev_left.mle_ref(), num_copy_bits); // ID is 6
-        let res_pos_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.mle_ref(), flattened_prev_right.mle_ref(), num_copy_bits); // ID is 7
+        // get the circuit wiring for two decision path mles 
+        let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_dataparallel_bits));
+        // get circuit wiring for decision path mle + leaf path mle
+        let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_prev_left.num_iterated_vars() - num_dataparallel_bits));
 
-        let res_neg_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.mle_ref(), num_copy_bits); // ID is 8
-        let res_pos_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.mle_ref(), num_copy_bits); // ID is 9
+        // we want to compute (id_{j+1}) - (2id_j + 1) where j is the node id. we do this using gate mles because this is
+        // an irregular circuit. this is two steps because we do this separately for when we are comparing decision nodes
+        // against decision nodes, and decision nodes against the last leaf node.
+        // this specific step computes the cases that should be zero when we go left in the decision tree
+        let res_neg_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_prev_left.mle_ref(), num_dataparallel_bits); // ID is 6
+        let res_neg_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_prev_left.mle_ref(), flattened_curr_leaf.mle_ref(), num_dataparallel_bits); // ID is 8
 
+        // we want to compute (id_{j+1}) - (2id_j + 2) where j is the node id. we do this using gate mles because this is
+        // an irregular circuit. this is two steps because we do this separately for when we are comparing decision nodes
+        // against decision nodes, and decision nodes against the last leaf node.
+        // this specific step computes the cases that should be zero when we go right in the decision tree
+        let res_pos_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision, flattened_curr_dec.mle_ref(), flattened_prev_right.mle_ref(), num_dataparallel_bits); // ID is 7
+        let res_pos_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf, flattened_prev_right.mle_ref(), flattened_curr_leaf.mle_ref(), num_dataparallel_bits); // ID is 9
+
+        // get the circuit wiring for a decision path mle and sign bit mle
         let nonzero_gates_mul_decision = decision_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
+        // get the circuit wiring for a leaf path mle and a sign bit mle
         let nonzero_gates_mul_leaf = leaf_mul_wiring_from_size(1 << pos_sign_bits[0].num_iterated_vars());
 
+        // in order to use in the MulGateBatched, we need a flattened mle as described above
         let flattened_pos = unbatch_mles(pos_sign_bits);
         let flattened_neg = unbatch_mles(neg_sign_bits);
 
-        let dec_pos_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.mle_ref(), res_pos_dec.mle_ref(), num_copy_bits); // ID is 10
-        let dec_neg_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_decision, flattened_neg.mle_ref(), res_neg_dec.mle_ref(), num_copy_bits); // ID is 11
-        let leaf_pos_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.mle_ref(), res_pos_leaf.mle_ref(), num_copy_bits); // ID is 12
-        let leaf_neg_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_leaf, flattened_neg.mle_ref(), res_neg_leaf.mle_ref(), num_copy_bits); // ID is 13
+        // we want to multiply the sign bits that should be zero when we turn right * the differences that are nonzero when we turn right, and
+        // the sign bits that shoudl be zero when we turn left * the differences that are nonzero when we turn left. we do this in four steps
+        // because this is done differently when we have decision nodes and the leaf node, due to the circuit wiring.
+        let dec_pos_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_decision.clone(), flattened_pos.mle_ref(), res_pos_dec.mle_ref(), num_dataparallel_bits); // ID is 10
+        let dec_neg_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_decision, flattened_neg.mle_ref(), res_neg_dec.mle_ref(), num_dataparallel_bits); // ID is 11
+        let leaf_pos_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_leaf.clone(), flattened_pos.mle_ref(), res_pos_leaf.mle_ref(), num_dataparallel_bits); // ID is 12
+        let leaf_neg_prod = combined_layers.add_mul_gate_batched(nonzero_gates_mul_leaf, flattened_neg.mle_ref(), res_neg_leaf.mle_ref(), num_dataparallel_bits); // ID is 13
 
+        // we return ZeroMleRefs at the end of this process, and therefore add an extra step where we add the mles to a ZeroBuilder
         let dec_pos_zero = ZeroBuilder::new(dec_pos_prod);
         let dec_neg_zero = ZeroBuilder::new(dec_neg_prod);
         let leaf_pos_zero = ZeroBuilder::new(leaf_pos_prod);
