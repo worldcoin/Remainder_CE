@@ -268,13 +268,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             .commit()
             .map_err(GKRError::InputLayerError)?;
 
-        // let random_r_another = RandomInputLayer::new(transcript, 1, LayerId::Input(2));
-        // let r_mle_another = random_r_another.get_mle();
-        // let mut random_r_another = random_r_another.to_enum();
-        // let random_r_another_commit = random_r_another
-        //     .commit()
-        //     .map_err(GKRError::InputLayerError)?;
-
         let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(3));
         let r_packing_mle = random_r_packing.get_mle();
         let mut random_r_packing = random_r_packing.to_enum();
@@ -307,7 +300,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             decision_node_paths_mle_vec: decision_node_paths_mle_vec.clone(),
             leaf_node_paths_mle_vec: leaf_node_paths_mle_vec.clone(),
             r_mle: r_mle.clone(),
-            // r_mle_another: r_mle_another.clone(),
             r_packing_mle: r_packing_mle.clone(),
             r_packing_another_mle,
         };
@@ -317,7 +309,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
             multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vec.clone(),
             r_mle,
-            // r_mle_another,
             r_packing_mle,
         };
 
