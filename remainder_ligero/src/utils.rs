@@ -3,7 +3,7 @@ use std::iter::repeat_with;
 use crate::log2;
 use ark_std::test_rng;
 use halo2_base::halo2_proofs::{halo2curves::FieldExt as Halo2FieldExt, poly::EvaluationDomain};
-use rand::{distributions::Standard, prelude::Distribution, Rng};
+use rand::{Rng};
 use remainder_shared_types::FieldExt;
 
 /// TODO!(ryancao): Add support for passing in an RNG rather than
@@ -35,16 +35,7 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8) -> Option<(usize, us
 
     // compute #cols, which must be a power of 2 because of FFT
     let encoded_num_cols = (((poly_len as f64).sqrt() / rho).ceil() as usize)
-        .checked_next_power_of_two()
-        .and_then(|nc| {
-            // --- TODO!(ryancao): We should check for FFT length bounds here too ---
-            // if nc > (1 << <Ft as FieldFFT>::S) {
-            //     None
-            // } else {
-            //     Some(nc)
-            // }
-            Some(nc)
-        })?;
+        .checked_next_power_of_two()?;
 
     // minimize nr subject to #cols and rho
     // --- Not sure what the above is talking about, but basically computes ---
@@ -88,7 +79,7 @@ pub fn halo2_fft<F: Halo2FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
     let polynomial_eval_form = evaluation_domain.coeff_to_extended(&polynomial_coeff);
     debug_assert_eq!(polynomial_eval_form.len(), num_evals);
 
-    return polynomial_eval_form.to_vec();
+    polynomial_eval_form.to_vec()
 }
 
 /// Wrapper function over Halo2's FFT
@@ -127,7 +118,7 @@ pub fn halo2_ifft<F: Halo2FieldExt>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
             debug_assert_eq!(*coeff, F::zero());
         });
 
-    return polynomial_coeff_form.to_vec();
+    polynomial_coeff_form.to_vec()
 }
 
 /// Grabs the least significant bits from a byte vector stored in little-endian form!
@@ -177,7 +168,7 @@ mod test {
     use ark_std::test_rng;
     use halo2_base::{halo2_proofs::halo2curves::bn256::Fr, utils::ScalarField};
     use rand::Rng;
-    use remainder_shared_types::FieldExt;
+    
     use std::ops::Range;
 
     #[test]
