@@ -277,7 +277,7 @@ pub fn generate_tree(
     } else {
         Node::new_internal(
             None,
-            rng.gen_range(0..n_features) as usize,
+            rng.gen_range(0..n_features),
             rng.gen_range(0..2_u32.pow(15) + 1) as u16,
             generate_tree(target_depth - 1, n_features, premature_leaf_proba),
             generate_tree(target_depth - 1, n_features, premature_leaf_proba),
@@ -353,7 +353,7 @@ mod tests {
           }
         }
         "#;
-        let _tree: Node<f64> = serde_json::from_str(&json).unwrap();
+        let _tree: Node<f64> = serde_json::from_str(json).unwrap();
     }
 
     #[test]
@@ -445,7 +445,7 @@ mod tests {
     fn test_get_path() {
         let mut tree = build_small_tree().map(&|x| x as i64).perfect_to_depth(3);
         tree.assign_id(0);
-        let path = tree.get_path(&vec![2_u16, 0_u16]);
+        let path = tree.get_path(&[2_u16, 0_u16]);
         assert_eq!(path.len(), 3);
         assert_eq!(path[0].get_id(), Some(0));
         assert_eq!(path[1].get_id(), Some(1));
@@ -483,7 +483,7 @@ mod tests {
         let target_depth = 3;
         let n_features = 6;
         // check that trees are perfect when premature_leaf_proba==0.
-        for _ in (0..10) {
+        for _ in 0..10 {
             let tree = generate_tree(target_depth, n_features, 0.);
             assert_eq!(tree.depth(std::cmp::max), target_depth);
             assert!(tree.is_perfect());
@@ -492,7 +492,7 @@ mod tests {
         // in some imperfect trees.
         let mut n_perfect: usize = 0;
         let n_iter = 50;
-        for _ in (0..n_iter) {
+        for _ in 0..n_iter {
             let tree = generate_tree(target_depth, n_features, 0.5);
             assert!(tree.depth(std::cmp::max) <= target_depth);
             if tree.is_perfect() {
@@ -533,6 +533,6 @@ mod tests {
         perfect_tree.assign_id(0);
         // get the path of a sample through the tree
         let sample: Vec<u16> = vec![11, 0, 1, 2];
-        let path: Vec<&Node<i64>> = perfect_tree.get_path(&sample);
+        let _path: Vec<&Node<i64>> = perfect_tree.get_path(&sample);
     }
 }

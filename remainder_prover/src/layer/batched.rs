@@ -34,15 +34,17 @@ impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
     }
 }
 
+///Helper function for "unbatching" when required by the output layer
 pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMleRef<F> {
     let new_bits = 0;
     let num_vars = mle_refs[0].mle_indices().len();
-    let layer_id = mle_refs[0].get_layer_id().clone();
+    let layer_id = mle_refs[0].get_layer_id();
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
 }
 
+///Helper function for "unbatching" when required by circuit design
 pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
-    let old_layer_id = mles[0].layer_id.clone();
+    let old_layer_id = mles[0].layer_id;
     let new_bits = log2(mles.len()) as usize;
     let old_prefix_bits = mles[0]
         .prefix_bits
@@ -66,12 +68,13 @@ pub fn unflatten_mle<F: FieldExt>(
 ) -> Vec<DenseMle<F, F>> {
     let num_copies = 1 << num_copy_bits;
     let individual_mle_len = 1 << (flattened_mle.num_iterated_vars() - num_copy_bits);
-    let unflat = (0..num_copies)
-        .map(|idx| {
+    
+    (0..num_copies).map(
+        |idx| {
             let zero = &F::zero();
-            let copy_idx = idx.clone();
-            let individual_mle_table = (0..individual_mle_len)
-                .map(|mle_idx| {
+            let copy_idx = idx;
+            let individual_mle_table = (0..individual_mle_len).map(
+                |mle_idx| {
                     let flat_mle_ref = flattened_mle.mle_ref();
                     let val = flat_mle_ref
                         .bookkeeping_table
@@ -86,11 +89,12 @@ pub fn unflatten_mle<F: FieldExt>(
                 Some(repeat_n(MleIndex::Iterated, num_copy_bits).collect_vec()),
             );
             individual_mle
-        })
-        .collect_vec();
-    unflat
+        }
+    ).collect_vec()
 }
 
+///Helper function for batchedlayer that takes in m expressions of size n, and
+///turns it into a single expression o size n*m
 fn combine_expressions<F: FieldExt>(
     exprs: Vec<ExpressionStandard<F>>,
 ) -> Result<ExpressionStandard<F>, CombineExpressionError> {
@@ -103,6 +107,10 @@ fn combine_expressions_helper<F: FieldExt>(
     exprs: Vec<ExpressionStandard<F>>,
     new_bits: usize,
 ) -> Result<ExpressionStandard<F>, CombineExpressionError> {
+    //Check if all expressions have the same structure, and if they do, combine
+    //their parts. 
+    //Combination is done through either recursion or simple methods, except for
+    //Mle and Products; which use a helper function `combine_mles`
     match &exprs[0] {
         ExpressionStandard::Selector(index, _, _) => {
             let index = index.clone();
@@ -181,7 +189,7 @@ fn combine_expressions_helper<F: FieldExt>(
             ))
         }
         ExpressionStandard::Scaled(_, coeff) => {
-            let coeff = coeff.clone();
+            let coeff = *coeff;
             let out: Vec<_> = exprs
                 .into_iter()
                 .map(|expr| {
@@ -218,7 +226,8 @@ fn combine_expressions_helper<F: FieldExt>(
     }
 }
 
-/// for batching
+/// for batching. Taking m DenseMleRefs of size n and turning them into a single
+/// DenseMleRef of size n*m
 pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> DenseMleRef<F> {
     let old_indices = mles[0].mle_indices();
     let old_num_vars = mles[0].num_vars();
@@ -227,11 +236,7 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
     // --- TODO!(ryancao): SUPER hacky fix for the random packing constants ---
     // --- Basically if all the MLEs are exactly the same, we don't combine at all ---
     if matches!(layer_id, LayerId::Input(_)) && old_num_vars == 0 {
-        let all_same = (0..mles[0].bookkeeping_table().len()).fold(true, |acc, idx| {
-            acc && mles.iter().skip(1).fold(true, |inner_acc, mle| {
-                inner_acc && (mles[0].bookkeeping_table()[idx] == mle.bookkeeping_table()[idx])
-            })
-        });
+        let all_same = (0..mles[0].bookkeeping_table().len()).all(|idx| mles.iter().skip(1).all(|mle| (mles[0].bookkeeping_table()[idx] == mle.bookkeeping_table()[idx])));
         if all_same {
             return mles[0].clone();
         }
@@ -244,22 +249,6 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
                 .collect_vec()
         })
         .collect_vec();
-
-    // let mut count: usize = 0;
-
-    // for mle_index in old_indices {
-    //     match mle_index {
-    //         MleIndex::Iterated | MleIndex::IndexedBit(_) => break,
-    //         _ => count +=1
-    //     }
-    // }
-
-    // if count > 1 {
-    //     count -= 1;
-    // }
-
-    // let mle_indices = old_indices[..count].iter().cloned().chain(repeat_n(MleIndex::Iterated, new_bits)).chain(old_indices[count..].iter().cloned()).collect_vec();
-    // let mle_indices = repeat_n(MleIndex::Iterated, new_bits).chain(old_indices.iter().cloned()).collect_vec();
 
     DenseMleRef {
         bookkeeping_table: out,
@@ -280,46 +269,25 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
             .map(|layer| layer.build_expression())
             .collect_vec();
 
-        let hi = combine_expressions(exprs)
-            .expect("Expressions fed into BatchedLayer don't have the same structure!");
-        hi
+        
+        combine_expressions(exprs)
+            .expect("Expressions fed into BatchedLayer don't have the same structure!")
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let new_bits = log2(self.layers.len()) as usize;
-        // let bits = std::iter::successors(
-        //     Some(vec![MleIndex::Fixed(false); num_bits]),
-        //     |prev| {
-        //         let mut prev = prev.clone();
-        //         let mut removed_bits = 0;
-        //         for index in (0..num_bits).rev() {
-        //             let curr = prev.remove(index);
-        //             if curr == MleIndex::Fixed(false) {
-        //                 prev.push(MleIndex::Fixed(true));
-        //                 break;
-        //             } else {
-        //                 removed_bits += 1;
-        //             }
-        //         }
-        //         if removed_bits == num_bits {
-        //             None
-        //         } else {
-        //             Some(prev.into_iter().chain(repeat_n(MleIndex::Fixed(false), removed_bits)).collect_vec())
-        //         }
-        //     },
-        // );
+
+        //Mles yielded by this BatchedLayer have the batched bits taken into
+        //account so that they are ordered correctly compared to all other bits,
+        //even though there is some semantic incorrectness to having the batch
+        //bits be part of the individual mles
 
         self.layers
             .iter()
             // .zip(bits)
             .map(|layer| {
                 layer.next_layer(
-                    id.clone(),
-                    // Some(
-                    //     bits.into_iter()
-                    //         .chain(prefix_bits.clone().into_iter().flatten())
-                    //         .collect_vec(),
-                    // ),
+                    id,
                     Some(
                         prefix_bits
                             .clone()
@@ -343,7 +311,7 @@ mod tests {
     use crate::{
         expression::ExpressionStandard,
         layer::{from_mle, LayerBuilder, LayerId},
-        mle::{dense::DenseMle, Mle, MleIndex},
+        mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
     };
 
@@ -370,12 +338,12 @@ mod tests {
             )
         };
         let output: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(
+            let first = DenseMle::new_from_raw(
                 vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)],
                 LayerId::Input(0),
                 Some(vec![MleIndex::Iterated]),
             );
-            let mut second = DenseMle::new_from_raw(
+            let second = DenseMle::new_from_raw(
                 vec![Fr::from(4), Fr::from(11), Fr::from(5), Fr::from(6)],
                 LayerId::Input(0),
                 Some(vec![MleIndex::Iterated]),
@@ -385,12 +353,12 @@ mod tests {
         let builder = from_mle(output, expression_builder, layer_builder);
 
         let output_2: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
-            let mut first = DenseMle::new_from_raw(
+            let first = DenseMle::new_from_raw(
                 vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)],
                 LayerId::Input(0),
                 Some(vec![MleIndex::Iterated]),
             );
-            let mut second = DenseMle::new_from_raw(
+            let second = DenseMle::new_from_raw(
                 vec![Fr::from(5), Fr::from(8), Fr::from(5), Fr::from(6)],
                 LayerId::Input(0),
                 Some(vec![MleIndex::Iterated]),

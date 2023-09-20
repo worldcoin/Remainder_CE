@@ -213,10 +213,10 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         &self,
         observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
     ) -> Result<(), E> {
-        let result = observer_fn(self)?;
+        observer_fn(self)?;
         match self {
             ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Product(_) => {
-                Ok(result)
+                Ok(())
             },
             ExpressionStandard::Negated(exp) => {
                 exp.traverse(observer_fn)
@@ -346,6 +346,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         gather_combine_all_evals(self)
     }
 
+    ///Similar function to eval, but with minor changes to accomodate sumcheck's peculiarities
     #[allow(clippy::too_many_arguments)]
     fn evaluate_sumcheck<T>(
         &self,
@@ -598,10 +599,10 @@ impl<F: FieldExt> ExpressionStandard<F> {
         observer_fn: &mut impl FnMut(&mut ExpressionStandard<F>) -> Result<(), E>,
     ) -> Result<(), E> {
         // dbg!(&self);
-        let result = observer_fn(self)?;
+        observer_fn(self)?;
         match self {
             ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Product(_) => {
-                Ok(result)
+                Ok(())
             },
             ExpressionStandard::Negated(exp) => {
                 exp.traverse_mut(observer_fn)
@@ -623,7 +624,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     ///Gets the size of an expression in terms of the number of rounds of sumcheck
     pub fn get_expression_size(&self, curr_size: usize) -> usize {
         match self {
-            ExpressionStandard::Selector(mle_index, a, b) => {
+            ExpressionStandard::Selector(_mle_index, a, b) => {
                 let a_bits = a.get_expression_size(curr_size + 1);
                 let b_bits = b.get_expression_size(curr_size + 1);
                 max(a_bits, b_bits)

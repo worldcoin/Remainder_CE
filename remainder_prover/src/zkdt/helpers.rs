@@ -1,16 +1,16 @@
 //! Miscellaneous helper functions for `dt2zkdt`.
-use crate::zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode};
+use crate::zkdt::structs::{DecisionNode, LeafNode};
 use crate::zkdt::data_pipeline::trees::*;
 use remainder_ligero::utils::get_least_significant_bits_to_usize_little_endian;
 use remainder_shared_types::FieldExt;
-use std::iter::repeat;
+
 
 /// Helper function for conversion to field elements, handling negative values.
 pub fn i32_to_field<F: FieldExt>(value: i32) -> F {
     if value >= 0 {
         F::from(value as u64)
     } else {
-        F::from(value.abs() as u64).neg()
+        F::from(value.unsigned_abs() as u64).neg()
     }
 }
 
@@ -19,7 +19,7 @@ pub fn i64_to_field<F: FieldExt>(value: i64) -> F {
     if value >= 0 {
         F::from(value as u64)
     } else {
-        F::from(value.abs() as u64).neg()
+        F::from(value.unsigned_abs()).neg()
     }
 }
 
@@ -43,8 +43,8 @@ pub fn next_power_of_two(n: usize) -> Option<usize> {
 /// Result is little endian (so LSB has index 0).
 /// Sign bit has maximal index.
 /// Pre: bit_length > 1
-pub fn build_signed_bit_decomposition(mut value: i32, bit_length: usize) -> Option<Vec<bool>> {
-    let mut unsigned = build_unsigned_bit_decomposition(value.abs() as u32, bit_length - 1);
+pub fn build_signed_bit_decomposition(value: i32, bit_length: usize) -> Option<Vec<bool>> {
+    let unsigned = build_unsigned_bit_decomposition(value.unsigned_abs(), bit_length - 1);
     if let Some(mut bits) = unsigned {
         bits.push(value < 0);
         return Some(bits);
@@ -128,7 +128,7 @@ pub fn get_field_val_as_usize_vec<F: FieldExt>(value: F) -> Vec<usize> {
     let second_result = get_least_significant_bits_to_usize_little_endian(value_le_bytes[8..].to_vec(), 64);
     let third_result = get_least_significant_bits_to_usize_little_endian(value_le_bytes[16..].to_vec(), 64);
     let fourth_result = get_least_significant_bits_to_usize_little_endian(value_le_bytes[24..].to_vec(), 64);
-    return vec![first_result, second_result, third_result, fourth_result];
+    vec![first_result, second_result, third_result, fourth_result]
 }
 
 
@@ -213,18 +213,18 @@ mod tests {
         // test vanilla case
         let result = build_signed_bit_decomposition(-3, 16);
         if let Some(bit_decomp) = result {
-            assert_eq!(bit_decomp[0], true);
-            assert_eq!(bit_decomp[1], true);
-            assert_eq!(bit_decomp[2], false);
-            assert_eq!(bit_decomp[3], false);
-            assert_eq!(bit_decomp[15], true);
+            assert!(bit_decomp[0]);
+            assert!(bit_decomp[1]);
+            assert!(!bit_decomp[2]);
+            assert!(!bit_decomp[3]);
+            assert!(bit_decomp[15]);
         } else {
             assert!(false);
         }
         // test overflow handling
         assert_eq!(build_signed_bit_decomposition(2_i32.pow(30), 16), None);
         assert_eq!(
-            build_signed_bit_decomposition(-1 * 2_i32.pow(30), 16),
+            build_signed_bit_decomposition(-2_i32.pow(30), 16),
             None
         );
     }
@@ -234,11 +234,11 @@ mod tests {
         // test vanilla case
         let result = build_unsigned_bit_decomposition(6, 16);
         if let Some(bit_decomp) = result {
-            assert_eq!(bit_decomp[0], false);
-            assert_eq!(bit_decomp[1], true);
-            assert_eq!(bit_decomp[2], true);
-            assert_eq!(bit_decomp[3], false);
-            assert_eq!(bit_decomp[15], false);
+            assert!(!bit_decomp[0]);
+            assert!(bit_decomp[1]);
+            assert!(bit_decomp[2]);
+            assert!(!bit_decomp[3]);
+            assert!(!bit_decomp[15]);
         } else {
             assert!(false);
         }

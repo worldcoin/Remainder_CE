@@ -5,6 +5,7 @@
 pub mod expression;
 pub mod layer;
 pub mod mle;
+pub mod gate;
 pub mod prover;
 pub mod sumcheck;
 pub mod utils;

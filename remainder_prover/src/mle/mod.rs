@@ -1,8 +1,8 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+
 use core::fmt::Debug;
-use dyn_clone::DynClone;
+
 use serde::{Deserialize, Serialize};
 
 use crate::layer::claims::Claim;
@@ -12,13 +12,11 @@ use remainder_shared_types::FieldExt;
 use self::mle_enum::MleEnum;
 use dyn_clonable::*;
 
-pub mod batched_mulgate;
 pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
-pub mod gate;
+
 pub mod mle_enum;
-pub mod mulgate;
 pub mod zero;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
@@ -95,7 +93,7 @@ pub trait MleAble<F> {
 
     fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr;
 
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a>;
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_>;
 
     fn num_vars(items: &Self::Repr) -> usize;
 }

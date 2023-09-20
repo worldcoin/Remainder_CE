@@ -2,8 +2,8 @@
 use crate::expression::ExpressionStandard;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
-use crate::mle::dense::{DenseMle, Tuple2};
-use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
+use crate::mle::dense::{DenseMle};
+use crate::mle::{zero::ZeroMleRef, MleIndex};
 use remainder_shared_types::FieldExt;
 
 

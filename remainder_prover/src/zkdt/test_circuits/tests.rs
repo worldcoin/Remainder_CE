@@ -1,13 +1,11 @@
-use crate::zkdt::binary_recomp_circuit::circuits::BinaryRecompCircuitBatched;
-
 #[cfg(test)]
 mod tests {
-    use std::{time::Instant, path::Path};
+    use std::{path::Path};
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use ark_std::{test_rng, UniformRand};
-    use itertools::Itertools;
-    use rand::Rng;
+    use ark_std::{test_rng};
+    
+    
 
     use crate::{zkdt::test_circuits::circuits::BatchedFSRandomCircuit, utils::get_random_mle};
     use crate::prover::tests::test_circuit;

@@ -1,7 +1,7 @@
 //! Trait for dealing with InputLayer
 
-use ark_std::{cfg_into_iter, cfg_iter, log2};
-use itertools::Itertools;
+use ark_std::{cfg_into_iter, cfg_iter};
+
 use rayon::prelude::*;
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
@@ -14,12 +14,7 @@ pub mod ligero_input_layer;
 pub mod public_input_layer;
 pub mod random_input_layer;
 
-use crate::{
-    layer::{claims::Claim, claims::ClaimError, claims::ClaimGroup, LayerId},
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
-    sumcheck::evaluate_at_a_point,
-    utils::argsort,
-};
+use crate::{layer::{LayerId, claims::{ClaimError, Claim, ClaimGroup}}, mle::{dense::DenseMle, MleRef}, sumcheck::evaluate_at_a_point};
 
 use self::enum_input_layer::InputLayerEnum;
 
@@ -84,19 +79,19 @@ pub trait InputLayer<F: FieldExt> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                        res
+                        
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
 
                 let mut fix_mle = mle.clone();
-                let eval = {
+                
+                {
                     new_chal.into_iter().enumerate().for_each(|(idx, chal)| {
                         fix_mle.fix_variable(idx, chal);
                     });
                     fix_mle.bookkeeping_table[0]
-                };
-                eval
+                }
             })
             .collect();
 

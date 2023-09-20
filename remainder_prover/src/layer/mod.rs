@@ -8,11 +8,11 @@ pub mod layer_enum;
 
 use std::marker::PhantomData;
 
+use itertools::{repeat_n};
 use ark_std::cfg_into_iter;
-use itertools::{repeat_n, Itertools};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Serialize, Deserialize};
 use thiserror::Error;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
@@ -420,7 +420,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     // --- This is super jank ---
                     let mut fixed_mle_indices: Vec<F> = vec![];
                     for mle_idx in mle_indices {
-                        if let None = mle_idx.val() {
+                        if mle_idx.val().is_none() {
                             dbg!("We got a nothing");
                             dbg!(&mle_idx);
                             dbg!(&mle_indices);
@@ -579,8 +579,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        let res = evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap();
-                        res
+                        
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
 
@@ -701,7 +701,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         let zero_expression: ExpressionStandard<F> = ExpressionStandard::Constant(F::zero());
 
         let first_padded = if let Padding::Left(padding) = self.padding {
-            let mut left = first.clone();
+            let mut left = first;
             for _ in 0..padding {
                 left = zero_expression.clone().concat_expr(left);
             }
@@ -711,7 +711,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         };
 
         let second_padded = if let Padding::Right(padding) = self.padding {
-            let mut right = second.clone();
+            let mut right = second;
             for _ in 0..padding {
                 right = zero_expression.clone().concat_expr(right);
             }
@@ -737,7 +737,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         };
         (
             self.first.next_layer(
-                id.clone(),
+                id,
                 Some(
                     prefix_bits
                         .clone()
@@ -781,9 +781,9 @@ impl<
     type Successor = S;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        let hi = (self.expression_builder)(&self.mle);
+        
         // dbg!(&hi);
-        hi
+        (self.expression_builder)(&self.mle)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {

@@ -6,7 +6,7 @@ use std::{
 
 use ark_std::log2;
 // use derive_more::{From, Into};
-use itertools::{repeat_n, Itertools, MapInto};
+use itertools::{repeat_n, Itertools};
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
@@ -141,7 +141,7 @@ pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(
         .flat_map(|index| {
             items
                 .iter()
-                .map(move |item| item.get(index).unwrap_or(&F::zero()).clone())
+                .map(move |item| *item.get(index).unwrap_or(&F::zero()))
                 .chain(repeat_n(F::zero(), padding_count))
         })
         .chain(repeat_n(F::zero(), total_padding))
@@ -167,7 +167,7 @@ impl<F: FieldExt> MleAble<F> for F {
         iter.into_iter().collect_vec()
     }
 
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
         items.iter().cloned()
     }
 
@@ -201,7 +201,7 @@ impl<F: FieldExt> DenseMle<F, F> {
                 .chain((0..self.num_iterated_vars()).map(|_| MleIndex::Iterated))
                 .collect(),
             num_vars: self.num_iterated_vars,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -212,7 +212,7 @@ impl<F: FieldExt> DenseMle<F, F> {
             self.mle
                 .chunks(2)
                 .map(|items| (items[0], items.get(1).cloned().unwrap_or(padding)).into()),
-            self.layer_id.clone(),
+            self.layer_id,
             self.prefix_bits.clone(),
         )
     }
@@ -237,10 +237,12 @@ impl<F: FieldExt> DenseMle<F, F> {
         let batched_bits = log2(mle_batch.len());
 
         let mle_batch_ref_combined = mle_batch
-            .clone()
-            .into_iter()
-            .map(|x| x.mle_ref())
-            .collect_vec();
+            
+            .into_iter().map(
+                |x| {
+                    x.mle_ref()
+                }
+            ).collect_vec();
 
         let mle_batch_ref_combined_ref =
             combine_mles(mle_batch_ref_combined, batched_bits as usize);
@@ -272,11 +274,11 @@ impl<F: FieldExt> MleAble<F> for Tuple2<F> {
         [first, second]
     }
 
-    fn to_iter<'a>(items: &'a Self::Repr) -> Self::IntoIter<'a> {
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
         items[0]
             .iter()
             .zip(items[1].iter())
-            .map(|(first, second)| Tuple2((first.clone(), second.clone())))
+            .map(|(first, second)| Tuple2((*first, *second)))
     }
 
     fn num_vars(items: &Self::Repr) -> usize {
@@ -337,7 +339,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 )
                 .collect_vec(),
             num_vars: new_num_iterated_vars,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -359,7 +361,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 )
                 .collect_vec(),
             num_vars: new_num_iterated_vars,
-            layer_id: self.layer_id.clone(),
+            layer_id: self.layer_id,
             indexed: false,
         }
     }
@@ -372,10 +374,14 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         let batched_bits = log2(tuple2_mle_batch.len());
 
         let tuple2_mle_batch_ref_combined = tuple2_mle_batch
-            .clone()
-            .into_iter()
-            .map(|x| combine_mle_refs(vec![x.first(), x.second()]).mle_ref())
-            .collect_vec();
+            
+            .into_iter().map(
+                |x| {
+                    combine_mle_refs(
+                        vec![x.first(), x.second()]
+                    ).mle_ref()
+                }
+            ).collect_vec();
 
         let tuple2_mle_batch_ref_combined_ref =
             combine_mles(tuple2_mle_batch_ref_combined, batched_bits as usize);
@@ -492,7 +498,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
     }
 
     fn get_layer_id(&self) -> LayerId {
-        self.layer_id.clone()
+        self.layer_id
     }
 
     fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {

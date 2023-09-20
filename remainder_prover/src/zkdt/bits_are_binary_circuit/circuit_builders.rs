@@ -1,17 +1,17 @@
 //!The LayerBuilders that build the ZKDT Circuit
-use std::cmp::max;
 
-use ark_std::log2;
-use itertools::Itertools;
 
-use crate::expression::{ExpressionStandard, Expression};
-use crate::layer::batched::BatchedLayer;
+
+
+
+use crate::expression::{ExpressionStandard};
+
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
-use crate::mle::dense::{DenseMle, Tuple2};
+use crate::mle::dense::{DenseMle};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
-use super::super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode};
+use super::super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode};
 
 /// For asserting that the binary decomposition of the bits which purportedly
 /// make up the difference between the node's threshold value and the actual
@@ -60,8 +60,8 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompBuilder<F> {
                 })
             }
         );
-        let ret = DenseMle::new_from_iter(result_iter, id, prefix_bits);
-        ret
+        
+        DenseMle::new_from_iter(result_iter, id, prefix_bits)
     }
 }
 impl<F: FieldExt> BinaryRecompBuilder<F> {
@@ -142,7 +142,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompCheckerBuilder<F> {
         let diff_mle_ref = self.input_path_diff_mle.mle_ref();
 
         // --- LHS of addition ---
-        let pos_recomp_minus_diff = ExpressionStandard::Mle(positive_recomp_mle_ref.clone()) - ExpressionStandard::Mle(diff_mle_ref.clone());
+        let pos_recomp_minus_diff = ExpressionStandard::Mle(positive_recomp_mle_ref) - ExpressionStandard::Mle(diff_mle_ref.clone());
 
         // --- RHS of addition ---
         let sign_bit_times_diff_ptr = Box::new(ExpressionStandard::Product(vec![signed_bit_mle_ref, diff_mle_ref]));

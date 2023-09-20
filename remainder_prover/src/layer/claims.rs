@@ -735,7 +735,7 @@ pub(crate) mod tests {
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
-        let mut expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
+        let expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -800,7 +800,7 @@ pub(crate) mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -865,7 +865,7 @@ pub(crate) mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let expr = ExpressionStandard::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -1047,7 +1047,7 @@ pub(crate) mod tests {
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
         let mut expr = ExpressionStandard::Mle(mle_ref);
-        let mut expr_copy = expr.clone();
+        let _expr_copy = expr.clone();
 
         let layer = from_mle(
             mle1,

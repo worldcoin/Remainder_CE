@@ -19,13 +19,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     layer::LayerId, mle::dense::DenseMle, prover::input_layer::InputLayerError,
-    utils::pad_to_nearest_power_of_two,
 };
 
 use super::{enum_input_layer::InputLayerEnum, InputLayer, MleInputLayer};
 
 pub struct LigeroInputLayer<F: FieldExt, Tr> {
-    mle: DenseMle<F, F>,
+    pub mle: DenseMle<F, F>,
     pub(crate) layer_id: LayerId,
     comm: Option<LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>>,
     aux: Option<LcProofAuxiliaryInfo>,

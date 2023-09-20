@@ -1,11 +1,12 @@
-use ark_std::{log2, test_rng, One, UniformRand, Zero};
+use ark_std::{log2, test_rng, One};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
-use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
-use tracing::Level;
+
+use std::{cmp::max, fs, path::Path, time::Instant, iter::repeat_with};
+
 
 use crate::{
     expression::ExpressionStandard,
@@ -256,7 +257,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
                         .collect_vec(),
                 ));
 
-                let diff_builder = from_mle(
+                
+                from_mle(
                     mle,
                     // --- The expression is a simple diff between the first and second halves ---
                     |mle| {
@@ -277,11 +279,10 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
                         let num_vars = max(mle.first().num_vars(), mle.second().num_vars());
                         ZeroMleRef::new(num_vars, prefix_bits, layer_id)
                     },
-                );
-                diff_builder
-            })
-            .collect_vec();
-
+                )
+            }
+        ).collect_vec();
+        
         // --- Convert the vector of builders into a batched builder which can be added to `layers` ---
         let batched_builder = BatchedLayer::new(diff_builders);
         let batched_result = layers.add_gkr(batched_builder);
@@ -324,7 +325,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
         let input_commit = input
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript).unwrap();
 
         let random = RandomInputLayer::new(transcript, 1, LayerId::Input(1));
@@ -332,7 +333,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         let mut random = random.to_enum();
         let random_commit = random
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
 
         let mut layers = Layers::new();
 
@@ -360,7 +361,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
                 .to_enum();
         let input_layer_2_commit = input_layer_2
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commit, transcript).unwrap();
 
         let layer_2 = EqualityCheck::new(output, output_input);
@@ -470,7 +471,7 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
 
         // --- Subtract the computed circuit output from the advice circuit output ---
         let builder5 = from_mle(
-            (computed_output, output_input.clone().clone()),
+            (computed_output, output_input.clone()),
             |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
             |(mle1, mle2), layer_id, prefix_bits| {
                 let num_vars = max(mle1.num_iterated_vars(), mle2.num_iterated_vars());
@@ -664,14 +665,14 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
     // tracing::subscriber::set_global_default(subscriber)
     //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
-    let mut rng = test_rng();
+    let _rng = test_rng();
     let size = 1 << 2;
 
     let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
             // let num = Fr::from(rng.gen::<u64>());
-            let num = Fr::one();
-            num
+            
+            Fr::one()
         }),
         LayerId::Input(0),
         None,
@@ -680,8 +681,8 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
     let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
             // let num = Fr::from(rng.gen::<u64>());
-            let num = Fr::one();
-            num
+            
+            Fr::one()
         }),
         LayerId::Input(0),
         None,
@@ -721,8 +722,8 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
 
     let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            num
+            
+            Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
         None,
@@ -730,8 +731,8 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
 
     let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            num
+            
+            Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
         None,
@@ -1120,20 +1121,17 @@ fn test_gkr_simplest_batched_circuit() {
 
     let batch_size = 1 << 2;
     // --- This should be 2^2 ---
-    let batched_mle: Vec<DenseMle<Fr, Tuple2<Fr>>> = (0..batch_size)
-        .map(|idx1| {
-            DenseMle::new_from_iter(
-                (0..size).map(|idx| {
-                    let num = Fr::from(rng.gen::<u64>());
-                    //let second_num = Fr::from(rng.gen::<u64>());
-                    // let num = Fr::from(idx + idx1);
-                    (num, num).into()
-                }),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect_vec();
+    let batched_mle: Vec<DenseMle<Fr, Tuple2<Fr>>> = (0..batch_size).map(|_idx1| {
+        DenseMle::new_from_iter(
+        (0..size).map(|_idx| {
+            let num = Fr::from(rng.gen::<u64>());
+            //let second_num = Fr::from(rng.gen::<u64>());
+            // let num = Fr::from(idx + idx1);
+            (num, num).into()
+        }),
+        LayerId::Input(0),
+        None)
+    }).collect_vec();
     // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
     //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
     //     LayerId::Input(0),
@@ -1197,8 +1195,8 @@ fn test_gkr_gate_simplest_circuit() {
     // --- This should be 2^2 ---
     let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            num
+            
+            Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
         None,
@@ -1232,8 +1230,8 @@ fn test_gkr_gate_batched_simplest_circuit() {
     // --- This should be 2^4 ---
     let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            num
+            
+            Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
         // this is the batched bits
@@ -1272,8 +1270,8 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
     // --- This should be 2^4 ---
     let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            let num = Fr::from(rng.gen::<u64>());
-            num
+            
+            Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
         // These are NOT the batched bits
@@ -1281,9 +1279,10 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
     );
 
     let negmle = DenseMle::new_from_iter(
-        mle.mle_ref().bookkeeping_table[0..size2]
-            .into_iter()
-            .map(|elem| -elem),
+        mle.mle_ref().bookkeeping_table[0..size2].iter().map(
+            |elem|
+            -elem
+        ), 
         LayerId::Input(0),
         // These are NOT the batched bits
         None,
@@ -1385,7 +1384,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
         let mut mle_combined = DenseMle::<_, Tuple2<_>>::combine_mle_batch(self.mle.clone());
         let mut mle_2_combined = DenseMle::<_, Tuple2<_>>::combine_mle_batch(self.mle_2.clone());
         // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
-        let mut input_mles: Vec<Box<&mut dyn Mle<F>>> =
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut mle_combined), Box::new(&mut mle_2_combined)];
         let mut input_layer = InputLayerBuilder::new(
             input_mles,
@@ -1534,7 +1533,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
         );
 
         // --- Add this final layer to the circuit ---
-        let circuit_circuit_output = layers.add_gkr(builder5);
+        let _circuit_circuit_output = layers.add_gkr(builder5);
 
         // // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
         // let input_mles: Vec<Box<&mut dyn Mle<F>>> =
@@ -1774,20 +1773,17 @@ fn test_combine_3_circuit() {
 
     let batch_size = 1 << 2;
     // --- This should be 2^2 ---
-    let batched_mle: Vec<DenseMle<Fr, Tuple2<Fr>>> = (0..batch_size)
-        .map(|idx1| {
-            DenseMle::new_from_iter(
-                (0..size).map(|idx| {
-                    let num = Fr::from(rng.gen::<u64>());
-                    //let second_num = Fr::from(rng.gen::<u64>());
-                    // let num = Fr::from(idx + idx1);
-                    (num, num).into()
-                }),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect_vec();
+    let batched_mle: Vec<DenseMle<Fr, Tuple2<Fr>>> = (0..batch_size).map(|_idx1| {
+        DenseMle::new_from_iter(
+        (0..size).map(|_idx| {
+            let num = Fr::from(rng.gen::<u64>());
+            //let second_num = Fr::from(rng.gen::<u64>());
+            // let num = Fr::from(idx + idx1);
+            (num, num).into()
+        }),
+        LayerId::Input(0),
+        None)
+    }).collect_vec();
     // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
     //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
     //     LayerId::Input(0),

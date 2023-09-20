@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+
 
 use ark_std::log2;
 use itertools::Itertools;
@@ -52,7 +52,6 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
     // --- Grab the table by pairs, and create iterators over each half ---
     let tuples: (Vec<F>, Vec<F>) = padded_bookkeeping_table
         .chunks(2)
-        .into_iter()
         .map(|pair| (pair[0], pair[1]))
         .unzip();
 
@@ -132,7 +131,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         // --- Go through individual MLEs and add prefix bits ---
         let mut current_padded_usage: u32 = 0;
         mle_combine_indices
-            .clone()
+            
             .into_iter()
             .for_each(|input_mle_idx| {
                 // --- Only add prefix bits to the non-input-output MLEs ---
@@ -141,7 +140,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
 
                     // --- Grab the prefix bits and add them to the individual MLEs ---
                     let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
-                        current_padded_usage as u32,
+                        current_padded_usage,
                         total_num_vars,
                         input_mle.num_iterated_vars(),
                     );
@@ -152,7 +151,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
 
                     // --- Grab the prefix bits for the dummy padded MLE (this should ONLY happen if we have a dummy padded MLE) ---
                     let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
-                        current_padded_usage as u32,
+                        current_padded_usage,
                         total_num_vars,
                         extra_mle_num_vars.as_ref().unwrap()[extra_mle_index],
                     );
@@ -162,7 +161,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
                 }
             });
 
-        if extra_mle_indices.len() != 0 {
+        if !extra_mle_indices.is_empty() {
             Some(extra_mle_indices)
         } else {
             None

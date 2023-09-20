@@ -1,10 +1,10 @@
-use std::cmp::max;
+
 
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex}, zkdt::structs::{DecisionNode, InputAttribute, BinDecomp16Bit}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, ligero_input_layer::LigeroInputLayer, InputLayer, random_input_layer::RandomInputLayer, enum_input_layer::InputLayerEnum}, Layers, GKRError}, layer::{LayerId, batched::{BatchedLayer, combine_zero_mle_ref}, LayerBuilder}};
+use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, random_input_layer::RandomInputLayer, enum_input_layer::InputLayerEnum}, Layers, GKRError}, layer::{LayerId, batched::{BatchedLayer, combine_zero_mle_ref}}};
 
 use super::circuit_builders::{FSRandomBuilder, SelfMinusSelfBuilder};
 
@@ -36,7 +36,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedFSRandomCircuit<F> {
         let mut public_input_layer_enum = public_input_layer.to_enum();
         let input_commit = public_input_layer_enum
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript).unwrap();
 
         // --- The other is a `RandomInputLayer` for `val_mle` ---
@@ -45,7 +45,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedFSRandomCircuit<F> {
         let mut val_mle_input_layer_enum = val_mle_input_layer.to_enum();
         let random_commit = val_mle_input_layer_enum
             .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
 
         // --- Dataparallel/batching stuff + sanitychecks ---
         let num_subcircuit_copies = self.batched_mle.len();

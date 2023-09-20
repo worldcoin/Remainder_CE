@@ -34,7 +34,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let eval =
-            gather_combine_all_evals(&self.expr).map_err(|err| LayerError::ExpressionError(err))?;
+            gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
 
         Ok(vec![vec![eval]].into())
     }

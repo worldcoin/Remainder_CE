@@ -2,7 +2,7 @@ use std::{iter::repeat_with, fs};
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
-use rand::{distributions::Standard, prelude::Distribution, Rng};
+use rand::{prelude::Distribution, Rng};
 use remainder_shared_types::FieldExt;
 
 use crate::{
@@ -75,7 +75,7 @@ pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F> {
 pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F, F> {
     let mut rng = test_rng();
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
-        .take(capacity as usize)
+        .take(capacity)
         .collect_vec();
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
 }

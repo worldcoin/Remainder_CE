@@ -3,13 +3,13 @@
 use std::cmp::min;
 
 use ark_std::log2;
-use itertools::{repeat_n, Itertools};
+use itertools::{Itertools};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionStandard},
-    layer::{empty_layer::EmptyLayer, from_mle, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
+    layer::{layer_enum::LayerEnum, GKRLayer, Layer, LayerId, empty_layer::EmptyLayer},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };
@@ -26,6 +26,8 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
     mut layers: Vec<Layers<F, Tr>>,
     mut output_layers: Vec<Vec<MleEnum<F>>>,
 ) -> Result<(Layers<F, Tr>, Vec<MleEnum<F>>), CombineError> {
+    //We're going to add multiple selectors to merge the sub-circuits, and then
+    //the future layers need to take those selectors into account in thier claims.
     let layer_count = layers.iter().map(|layers| layers.0.len()).max().unwrap();
     let subcircuit_count = layers.len();
 
@@ -34,19 +36,17 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             .iter()
             .enumerate()
             .filter_map(|(subcircuit_idx, layers)| {
-                if let Some(layer) = layers.0.get(layer_idx) {
-                    Some((subcircuit_idx, layer))
-                } else {
-                    None
-                }
+                layers.0.get(layer_idx).map(|layer| (subcircuit_idx, layer))
             })
             .collect_vec()
     });
 
     //The variants of the layer to be combined is the inner vec
+    //This list is the list of extra bits that need to be added for each layer
+    //and each sub-circuit
     let bit_counts: Vec<Vec<Vec<MleIndex<F>>>> = interpolated_layers
         .map(|layers| {
-            let layer_id = layers[0].1.id();
+            let _layer_id = layers[0].1.id();
             // bits_iter(log2(layers.len()) as usize).collect_vec()
             let layer_sizes = layers.iter().map(|layer| layer.1.layer_size());
             let layer_sizes_concrete = layer_sizes.clone().collect_vec();
@@ -62,9 +62,11 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             let mut bit_indices = bits_iter::<F>(*max_extra_bits);
 
             let mut sorted_and_padded_bits = vec![vec![]; subcircuit_count];
-            //Go through the list of layers from largest to smallest
-            //When a layer is added it comsumes a possible permutation of bits from the iterator
-            //If the layer is larger than the smallest layer, then it will consume all the permutations of the bits it's using in it's sumcheck
+            //Go through the list of layers from largest to smallest When a
+            //layer is added it comsumes a possible permutation of bits from the
+            //iterator If the layer is larger than the smallest layer, then it
+            //will consume all the permutations of the bits it's using in it's
+            //sumcheck
             sorted_indices
                 .into_iter()
                 .map(|index| {
@@ -99,6 +101,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
         })
         .collect_vec();
 
+    //Add the extra bits we calculated to all the future claims
     layers
         .iter_mut()
         .zip(output_layers.iter_mut())
@@ -118,6 +121,8 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
         })
         .try_collect()?;
 
+    //Combine all the sub-circuits expressions in such a way that it matches the
+    //extra bits we calculated
     let layers: Vec<LayerEnum<F, Tr>> = (0..layer_count)
         .map(|layer_idx| {
             layers
@@ -129,11 +134,6 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             // let new_bits = log2(layers.len()) as usize;
             let layer_id = *layers[0].id();
 
-            // let combine_expressions = |exprs: Vec<ExpressionStandard<F>>| {
-            //     exprs.chunks(2).map(|exprs| {
-            //         exprs.get(1).cloned().unwrap_or(ExpressionStandard::Constant(F::zero())).concat(exprs[0].clone())
-            //     }).collect_vec()
-            // };
             let expressions = layers
                 .into_iter()
                 .map(|layer| match layer {
@@ -159,6 +159,8 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
     ))
 }
 
+///Add all the extra bits that represent selectors between the sub-circuits to
+///the future DenseMleRefs that refer to the modified layer
 fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
     layers: &mut [LayerEnum<F, Tr>],
     output_layers: &mut Vec<MleEnum<F>>,
@@ -231,14 +233,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
     Ok(())
 }
 
+///Combine expression w/ padding using selectors
 fn combine_expressions<F: FieldExt>(
     mut exprs: Vec<ExpressionStandard<F>>,
 ) -> ExpressionStandard<F> {
-    let floor_size = exprs
-        .iter()
-        .map(|expr| expr.get_expression_size(0))
-        .min()
-        .unwrap();
+    let _floor_size = exprs.iter().map(|expr| expr.get_expression_size(0)).min().unwrap();
 
     exprs.sort_by(|first, second| {
         first
@@ -261,7 +260,7 @@ fn combine_expressions<F: FieldExt>(
         });
 
         let (first_index, first) = exprs.remove(0);
-        let first_size = first.get_expression_size(0);
+        let _first_size = first.get_expression_size(0);
         let (second_index, second) = exprs.remove(0);
 
         let diff = second.get_expression_size(0) - first.get_expression_size(0);
