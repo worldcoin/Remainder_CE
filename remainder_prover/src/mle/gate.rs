@@ -1445,8 +1445,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         claims_vec.push(Claim::new(
             fixed_mle_indices_u,
             val,
-            Some(lhs_reduced.get_layer_id()),
             Some(self.id().clone()),
+            Some(lhs_reduced.get_layer_id()),
         ));
 
         // grab the claim on the right sum
@@ -1462,8 +1462,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         claims_vec.push(Claim::new(
             fixed_mle_indices_v,
             val,
-            Some(rhs_reduced.get_layer_id()),
             Some(self.id().clone()),
+            Some(rhs_reduced.get_layer_id()),
         ));
 
         Ok(claims_vec)

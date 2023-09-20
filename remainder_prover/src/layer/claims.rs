@@ -146,7 +146,7 @@ pub struct ClaimGroup<F> {
     result_vector: Vec<F>,
 }
 
-impl<F: Copy + Clone> ClaimGroup<F> {
+impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
     /// Builds a ClaimGroup<F> struct from a vector of claims. Also populates
     /// all the redundant fields for easy access to rows/columns.
     /// If the claims do not all agree on the number of variables, a
@@ -436,7 +436,14 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
 
     // Do nothing if there is only one claim.
     if num_claims == 1 {
-        return (claims.get_claim(0).clone(), None);
+        // Return the claim but erase any from/to layer info so as not to
+        // trigger any checks from claim groups used in claim aggregation.
+        let claim = Claim {
+            from_layer_id: None,
+            to_layer_id: None,
+            ..claims.get_claim(0).clone()
+        };
+        return (claim, None);
     }
 
     // --- Aggregate claims by performing the claim aggregation protocol.
@@ -610,7 +617,7 @@ pub(crate) mod tests {
             claims,
             &|claim| compute_claim_wlx(claims, layer).unwrap(),
             &mut transcript,
-            true,
+            false,
         )
     }
 

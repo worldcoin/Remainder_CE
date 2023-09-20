@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionStandard},
-    layer::{from_mle, layer_enum::LayerEnum, GKRLayer, Layer, LayerId, empty_layer::EmptyLayer},
+    layer::{empty_layer::EmptyLayer, from_mle, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };
@@ -31,7 +31,8 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
 
     let interpolated_layers = (0..layer_count).map(|layer_idx| {
         layers
-            .iter().enumerate()
+            .iter()
+            .enumerate()
             .filter_map(|(subcircuit_idx, layers)| {
                 if let Some(layer) = layers.0.get(layer_idx) {
                     Some((subcircuit_idx, layer))
@@ -49,7 +50,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             // bits_iter(log2(layers.len()) as usize).collect_vec()
             let layer_sizes = layers.iter().map(|layer| layer.1.layer_size());
             let layer_sizes_concrete = layer_sizes.clone().collect_vec();
-            dbg!(layer_sizes_concrete);
+            // dbg!(layer_sizes_concrete);
             let total_size = log2(layer_sizes.clone().map(|size| 1 << size).sum()) as usize;
 
             let extra_bits = layer_sizes
@@ -149,7 +150,6 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             } else {
                 Ok(GKRLayer::new_raw(layer_id, expression).get_enum())
             }
-
         })
         .try_collect()?;
 
@@ -234,7 +234,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
 fn combine_expressions<F: FieldExt>(
     mut exprs: Vec<ExpressionStandard<F>>,
 ) -> ExpressionStandard<F> {
-    let floor_size = exprs.iter().map(|expr| expr.get_expression_size(0)).min().unwrap();
+    let floor_size = exprs
+        .iter()
+        .map(|expr| expr.get_expression_size(0))
+        .min()
+        .unwrap();
 
     exprs.sort_by(|first, second| {
         first
@@ -250,7 +254,8 @@ fn combine_expressions<F: FieldExt>(
         }
 
         exprs.sort_by(|first, second| {
-            first.1
+            first
+                .1
                 .get_expression_size(0)
                 .cmp(&second.1.get_expression_size(0))
         });

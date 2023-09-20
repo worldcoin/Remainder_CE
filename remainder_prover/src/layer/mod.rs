@@ -440,6 +440,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     let claimed_value = mle_ref.bookkeeping_table()[0];
 
                     // --- Construct the claim ---
+                    // println!("========\n I'm making a GKR layer claim for an MLE!!\n==========");
+                    // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
                     let claim: Claim<F> = Claim::new(
                         fixed_mle_indices,
                         claimed_value,
@@ -472,6 +474,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let claimed_value = mle_ref.bookkeeping_table()[0];
 
                         // --- Construct the claim ---
+                        // println!(
+                        //     "========\n I'm making a GKR layer claim for a product!!\n=========="
+                        // );
+                        // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
                         let claim: Claim<F> = Claim::new(
                             fixed_mle_indices,
                             claimed_value,
