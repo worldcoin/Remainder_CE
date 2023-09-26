@@ -370,7 +370,6 @@ impl <F: FieldExt> ZKDTCircuit<F> {
                 tree_mle_input_layer,
                 input_mles_input_layer,
                 aux_mles_input_layer,
-                // all_ligero_mles_input_layer,
                 random_r,
                 random_r_packing,
                 random_r_packing_another
@@ -380,7 +379,6 @@ impl <F: FieldExt> ZKDTCircuit<F> {
                 tree_mle_commit,
                 input_mle_commit,
                 aux_mle_commit,
-                // all_input_mles_commit,
                 random_r_commit,
                 random_r_packing_commit,
                 random_r_packing_another_commit
