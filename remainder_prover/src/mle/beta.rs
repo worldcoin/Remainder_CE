@@ -8,7 +8,7 @@ use itertools::Itertools;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{Claim, LayerId};
+use crate::layer::{claims::Claim, LayerId};
 use remainder_shared_types::FieldExt;
 
 use super::{
@@ -20,11 +20,11 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 /// Beta table struct for a product of mle refs
 pub struct BetaTable<F> {
-    pub(crate) layer_claim: Claim<F>,
+    pub(crate) layer_claim_vars: Vec<F>,
     ///The bookkeeping table for the beta table
     /// TODO(Get rid of BetaTable's reliance on the DenseMleRef type; Create a shared subtype for the shared behavior)
-    pub(crate) table: DenseMleRef<F>,
-    pub(crate) relevant_indices: Vec<usize>,
+    pub table: DenseMleRef<F>,
+    pub relevant_indices: Vec<usize>,
 }
 
 /// Error handling for beta table construction
@@ -76,12 +76,11 @@ pub(crate) fn compute_new_beta_table<F: FieldExt>(
     round_index: usize,
     challenge: F,
 ) -> Result<Vec<F>, BetaError> {
-    let (layer_claims, _) = &beta_table.layer_claim;
     let curr_beta = beta_table.table.bookkeeping_table();
 
     // --- This should always be true now, no? ---
     if beta_table.relevant_indices.contains(&round_index) {
-        let layer_claim = layer_claims[round_index];
+        let layer_claim = beta_table.layer_claim_vars[round_index];
         let layer_claim_inv = layer_claim.invert();
         if layer_claim_inv.is_none().into() {
             return Err(BetaError::NoInverse);
@@ -137,8 +136,7 @@ pub(crate) fn beta_split<F: FieldExt>(
 
 impl<F: FieldExt> BetaTable<F> {
     /// Construct a new beta table using a single claim
-    pub(crate) fn new(layer_claim: Claim<F>) -> Result<BetaTable<F>, BetaError> {
-        let (layer_claim_vars, _) = &layer_claim;
+    pub(crate) fn new(layer_claim_vars: Vec<F>) -> Result<BetaTable<F>, BetaError> {
         let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
         let mut cur_table = vec![one_minus_r, r];
 
@@ -157,7 +155,7 @@ impl<F: FieldExt> BetaTable<F> {
         let cur_table_mle_ref: DenseMleRef<F> =
             DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
         Ok(BetaTable {
-            layer_claim,
+            layer_claim_vars,
             table: cur_table_mle_ref,
             relevant_indices: iterated_bit_indices,
         })

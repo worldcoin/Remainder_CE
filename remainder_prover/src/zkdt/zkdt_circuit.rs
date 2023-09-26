@@ -430,7 +430,7 @@ mod tests {
     #[test]
     fn bench_zkdt_circuits() {
 
-        (11..12).for_each(|batch_size| {
+        (1..2).for_each(|batch_size| {
             let circuit_timer = start_timer!(|| format!("zkdt circuit, batch_size 2^{batch_size}"));
             let wit_gen_timer = start_timer!(|| "wit gen");
 

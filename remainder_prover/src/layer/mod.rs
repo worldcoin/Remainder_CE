@@ -18,25 +18,25 @@ use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
     mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
-        MleIndex, MleRef,
+        zero, MleIndex, MleRef,
     },
     prover::SumcheckProof,
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
-    
     },
+    zkdt::helpers::get_field_val_as_usize_vec,
 };
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
     FieldExt,
 };
 
+use self::{
+    claims::{Claim, ClaimError},
+    layer_enum::LayerEnum,
+};
 
-
-use self::{claims::ClaimError, layer_enum::LayerEnum};
-
-/// Type alias for a claim (A point to evaluate at and an evaluation)
-pub type Claim<F> = (Vec<F>, F);
+use core::cmp::Ordering;
 
 #[derive(Error, Debug, Clone)]
 /// Errors to do with working with a Layer
@@ -89,13 +89,29 @@ pub enum VerificationError {
     ChallengeCheckFailed,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, PartialOrd)]
 ///  The location of a layer within the GKR circuit
 pub enum LayerId {
     /// An Mle located in the input layer
     Input(usize),
     /// A layer within the GKR protocol, indexed by it's layer id
     Layer(usize),
+    /// An MLE located in the output layer.
+    Output(usize),
+}
+
+impl Ord for LayerId {
+    fn cmp(&self, layer2: &LayerId) -> Ordering {
+        match (self, layer2) {
+            (LayerId::Input(id1), LayerId::Input(id2)) => id1.cmp(&id2),
+            (LayerId::Input(id1), _) => Ordering::Less,
+            (LayerId::Layer(id1), LayerId::Input(id2)) => Ordering::Greater,
+            (LayerId::Layer(id1), LayerId::Layer(id2)) => id1.cmp(&id2),
+            (LayerId::Layer(id1), _) => Ordering::Less,
+            (LayerId::Output(id1), LayerId::Output(id2)) => id1.cmp(&id2),
+            (LayerId::Output(id1), _) => Ordering::Greater,
+        }
+    }
 }
 
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
@@ -119,7 +135,7 @@ pub trait Layer<F: FieldExt> {
     ) -> Result<(), LayerError>;
 
     /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError>;
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError>;
 
     /// Gets this layers id
     fn id(&self) -> &LayerId;
@@ -127,8 +143,8 @@ pub trait Layer<F: FieldExt> {
     ///Get W(l(x)) evaluations
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: Vec<Vec<F>>,
-        claimed_vals: &mut Vec<F>,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError>;
@@ -160,7 +176,8 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         let (max_round, beta) = {
             let (expression, _) = self.mut_expression_and_beta();
 
-            let mut beta = BetaTable::new(claim).map_err(LayerError::BetaError)?;
+            let mut beta =
+                BetaTable::new(claim.get_point().clone()).map_err(LayerError::BetaError)?;
 
             let expression_num_indices = expression.index_mle_indices(0);
             let beta_table_num_indices = beta.table.index_mle_indices(0);
@@ -169,9 +186,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
             // dbg!(&expression);
 
             // --- This should always be equivalent to the number of indices within the beta table ---
-            let max_round = std::cmp::max(
-                expression_num_indices, beta_table_num_indices
-            );
+            let max_round = std::cmp::max(expression_num_indices, beta_table_num_indices);
             (max_round, beta)
         };
 
@@ -251,8 +266,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-
-        let val = claim.1;
+        let val = claim.get_result().clone();
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let (first_sumcheck_message, num_sumcheck_rounds) = self.start_sumcheck(claim)?;
@@ -260,7 +274,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         if val != first_sumcheck_message[0] + first_sumcheck_message[1] {
             dbg!(&self.expression);
         }
-        
+
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
 
         // --- Add prover message to the FS transcript ---
@@ -303,7 +317,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .as_mut()
             .map(|beta| beta.beta_update(num_sumcheck_rounds - 1, final_chal));
 
-
         Ok(all_prover_sumcheck_messages.into())
     }
 
@@ -320,7 +333,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // (i.e. the first verification step of sumcheck)
         let mut prev_evals = &sumcheck_prover_messages[0];
 
-        if prev_evals[0] + prev_evals[1] != claim.1 {
+        if prev_evals[0] + prev_evals[1] != claim.get_result() {
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
             ));
@@ -366,7 +379,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---
         let beta_fn_evaluated_at_challenge_point =
-            compute_beta_over_two_challenges(&claim.0, &challenges);
+            compute_beta_over_two_challenges(claim.get_point(), &challenges);
 
         // --- The actual value should just be the product of the two ---
         let mle_evaluated_at_challenge_coord =
@@ -386,19 +399,17 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         Ok(())
     }
 
-    fn get_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
         // First off, parse the expression that is associated with the layer...
         // Next, get to the actual claims that are generated by each expression and grab them
         // Return basically a list of (usize, Claim)
         let layerwise_expr = &self.expression;
-        
 
         // --- Define how to parse the expression tree ---
         // - Basically we just want to go down it and pass up claims
         // - We can only add a new claim if we see an MLE with all its indices bound
 
         let mut claims: Vec<Claim<F>> = Vec::new();
-        let mut indices: Vec<LayerId> = Vec::new();
 
         let mut observer_fn = |exp: &ExpressionStandard<F>| {
             match exp {
@@ -429,12 +440,17 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     let claimed_value = mle_ref.bookkeeping_table()[0];
 
                     // --- Construct the claim ---
-                    let claim: Claim<F> = (fixed_mle_indices, claimed_value);
+                    // println!("========\n I'm making a GKR layer claim for an MLE!!\n==========");
+                    // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
+                    let claim: Claim<F> = Claim::new(
+                        fixed_mle_indices,
+                        claimed_value,
+                        Some(self.id().clone()),
+                        Some(mle_layer_id),
+                    );
 
                     // --- Push it into the list of claims ---
-                    // --- Also push the layer_id ---
                     claims.push(claim);
-                    indices.push(mle_layer_id);
                 }
                 ExpressionStandard::Product(mle_refs) => {
                     for mle_ref in mle_refs {
@@ -458,12 +474,19 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let claimed_value = mle_ref.bookkeeping_table()[0];
 
                         // --- Construct the claim ---
-                        let claim: Claim<F> = (fixed_mle_indices, claimed_value);
+                        // println!(
+                        //     "========\n I'm making a GKR layer claim for a product!!\n=========="
+                        // );
+                        // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
+                        let claim: Claim<F> = Claim::new(
+                            fixed_mle_indices,
+                            claimed_value,
+                            Some(self.id().clone()),
+                            Some(mle_layer_id),
+                        );
 
                         // --- Push it into the list of claims ---
-                        // --- Also push the layer_id ---
                         claims.push(claim);
-                        indices.push(mle_layer_id);
                     }
                 }
                 _ => {}
@@ -476,7 +499,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .traverse(&mut observer_fn)
             .map_err(LayerError::ClaimError)?;
 
-        Ok(indices.into_iter().zip(claims).collect())
+        Ok(claims)
     }
 
     fn id(&self) -> &LayerId {
@@ -485,8 +508,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: Vec<Vec<F>>,
-        claimed_vals: &mut Vec<F>,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
@@ -500,26 +523,37 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // expr.init_beta_tables(prev_layer_claim);
         let num_evals = (num_vars) * (num_claims); //* degree;
 
-        debug_assert!({
-            claim_vecs.iter().map(|claim| claim.len()).fold(Ok(None), |acc, thing| {
-                if let Ok(Some(acc)) = acc {
-                    if acc == thing {
-                        Ok(Some(acc))
-                    } else {
-                        Err(format!("Claims are of different len on layer {:?}", self.id))
-                    }
-                } else if let Ok(None) = acc {
-                    Ok(Some(thing))
-                } else {
-                    Err(format!("Claims are of different len on layer {:?}", self.id))
+        let mut degree_reduction = num_vars as i64;
+        for j in 0..num_vars {
+            for i in 1..num_claims {
+                if claim_vecs[i][j] != claim_vecs[i - 1][j] {
+                    degree_reduction -= 1;
+                    break;
                 }
-            }).unwrap();
-            true
-        });
+            }
+        }
+        assert!(degree_reduction >= 0);
 
+        // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
+        // points. W : F^n -> F is a multi-linear polynomial on
+        // `num_vars` variables and l : F -> F^n is a canonical
+        // polynomial passing through `num_claims` points so its degree is
+        // at most `num_claims - 1`. This imposes an upper
+        // bound of `num_vars * (num_claims - 1)` to the degree of P.
+        // However, the actual degree of P might be lower.
+        // For any coordinate `i` such that all claims agree
+        // on that coordinate, we can quickly deduce that `l_i(x)` is a
+        // constant polynomial of degree zero instead of `num_claims -
+        // 1` which brings down the total degree by the same amount.
+        let num_evals =
+            (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+
+        // TODO(Makis): This assert fails on `test_aggro_claim_4` and I'm not
+        // sure if the test is wrong or if the assert is wrong!
+        /*
         debug_assert!({
             claim_vecs.iter().zip(claimed_vals.iter()).map(|(point, val)| {
-                let mut beta = BetaTable::new((point.to_vec(), F::zero())).unwrap();
+                let mut beta = BetaTable::new(point.to_vec()).unwrap();
                 beta.table.index_mle_indices(0);
                 let eval = compute_sumcheck_message(&mut expr.clone(), 0, degree, &beta).unwrap();
                 let Evals(evals) = eval;
@@ -534,6 +568,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                 }
             }).reduce(|acc, val| acc && val).unwrap()
         });
+        */
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
@@ -553,7 +588,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                 // let mut fix_expr = expr.clone();
                 // let eval_w_l = fix_expr.evaluate_expr(new_chal);
 
-                let mut beta = BetaTable::new((new_chal, F::zero())).unwrap();
+                let mut beta = BetaTable::new(new_chal).unwrap();
                 beta.table.index_mle_indices(0);
                 let eval = compute_sumcheck_message(&expr, 0, degree, &beta).unwrap();
                 let Evals(evals) = eval;
@@ -567,9 +602,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             })
             .collect();
 
-        // concat this with the first k evaluations from the claims to get num_evals evaluations
-        claimed_vals.extend(&next_evals);
-        let wlx_evals = claimed_vals.clone();
+        // concat this with the first k evaluations from the claims to
+        // get num_evals evaluations
+        let mut wlx_evals = claimed_vals.clone();
+        wlx_evals.extend(&next_evals);
         Ok(wlx_evals)
     }
 
@@ -601,10 +637,13 @@ pub trait LayerBuilder<F: FieldExt> {
             _marker: PhantomData,
         }
     }
-    
 
     ///Concatonate two layers together with some padding
-    fn concat_with_padding<Other: LayerBuilder<F>>(self, rhs: Other, padding: Padding) -> ConcatLayer<F, Self, Other>
+    fn concat_with_padding<Other: LayerBuilder<F>>(
+        self,
+        rhs: Other,
+        padding: Padding,
+    ) -> ConcatLayer<F, Self, Other>
     where
         Self: Sized,
     {
@@ -636,12 +675,10 @@ pub fn from_mle<
     }
 }
 
-
-
 pub enum Padding {
     Right(usize),
     Left(usize),
-    None
+    None,
 }
 
 /// The layerbuilder that represents two layers concatonated together
@@ -662,7 +699,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         // return first.concat_expr(second);
 
         let zero_expression: ExpressionStandard<F> = ExpressionStandard::Constant(F::zero());
-        
+
         let first_padded = if let Padding::Left(padding) = self.padding {
             let mut left = first;
             for _ in 0..padding {

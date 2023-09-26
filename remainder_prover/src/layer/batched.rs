@@ -1,11 +1,15 @@
-use std::marker::PhantomData;
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
+use std::marker::PhantomData;
 use thiserror::Error;
 
 use crate::{
     expression::ExpressionStandard,
-    mle::{dense::{DenseMleRef, DenseMle}, zero::ZeroMleRef, MleIndex, MleRef, MleAble, Mle},
+    mle::{
+        dense::{DenseMle, DenseMleRef},
+        zero::ZeroMleRef,
+        Mle, MleAble, MleIndex, MleRef,
+    },
 };
 use remainder_shared_types::FieldExt;
 
@@ -42,12 +46,26 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
 pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     let old_layer_id = mles[0].layer_id;
     let new_bits = log2(mles.len()) as usize;
-    let old_prefix_bits = mles[0].prefix_bits.clone().map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
-    DenseMle::new_from_raw(combine_mles(mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(), new_bits).bookkeeping_table, old_layer_id, old_prefix_bits)
+    let old_prefix_bits = mles[0]
+        .prefix_bits
+        .clone()
+        .map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
+    DenseMle::new_from_raw(
+        combine_mles(
+            mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(),
+            new_bits,
+        )
+        .bookkeeping_table,
+        old_layer_id,
+        old_prefix_bits,
+    )
 }
 
 /// convert a flattened batch mle to a vector of mles
-pub fn unflatten_mle<F: FieldExt>(flattened_mle: DenseMle<F, F>, num_copy_bits: usize) -> Vec<DenseMle<F, F>> {
+pub fn unflatten_mle<F: FieldExt>(
+    flattened_mle: DenseMle<F, F>,
+    num_copy_bits: usize,
+) -> Vec<DenseMle<F, F>> {
     let num_copies = 1 << num_copy_bits;
     let individual_mle_len = 1 << (flattened_mle.num_iterated_vars() - num_copy_bits);
     
@@ -58,11 +76,18 @@ pub fn unflatten_mle<F: FieldExt>(flattened_mle: DenseMle<F, F>, num_copy_bits: 
             let individual_mle_table = (0..individual_mle_len).map(
                 |mle_idx| {
                     let flat_mle_ref = flattened_mle.mle_ref();
-                    let val = flat_mle_ref.bookkeeping_table.get(copy_idx + (mle_idx * num_copies)).unwrap_or(zero);
+                    let val = flat_mle_ref
+                        .bookkeeping_table
+                        .get(copy_idx + (mle_idx * num_copies))
+                        .unwrap_or(zero);
                     *val
-                }
-            ).collect_vec();
-            let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(individual_mle_table, flattened_mle.layer_id, Some(repeat_n(MleIndex::Iterated, num_copy_bits).collect_vec()));
+                })
+                .collect_vec();
+            let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(
+                individual_mle_table,
+                flattened_mle.layer_id,
+                Some(repeat_n(MleIndex::Iterated, num_copy_bits).collect_vec()),
+            );
             individual_mle
         }
     ).collect_vec()

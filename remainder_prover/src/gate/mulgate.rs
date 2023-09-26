@@ -6,7 +6,7 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
     layer::{
-        claims::ClaimError, layer_enum::LayerEnum, Claim, Layer, LayerBuilder, LayerError, LayerId,
+        claims::ClaimError, layer_enum::LayerEnum, claims::Claim, Layer, LayerBuilder, LayerError, LayerId,
         VerificationError,
     },
     mle::beta::BetaTable,
@@ -90,7 +90,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
             // first message of the next phase includes the random challenge from the last phase
             // (this transition checks that we did the bookkeeping optimization correctly between each phase)
             let f_at_u = f_2.bookkeeping_table[0];
-            let u_challenges = (challenges.clone(), F::zero());
+            let u_challenges = Claim::new_raw(challenges.clone(), F::zero());
             let first_message = self
                 .init_phase_2(u_challenges, f_at_u)
                 .expect("could not evaluate original lhs and rhs")
@@ -173,7 +173,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
 
         // first round check
         let claimed_claim = prev_evals[0] + prev_evals[1];
-        if claimed_claim != claim.1 {
+        if claimed_claim != claim.get_result() {
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
             ));
@@ -238,21 +238,21 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         };
 
         // compute the sum over all the variables of the gate function
-        let beta_u = BetaTable::new((first_u_challenges.clone(), bound_lhs)).unwrap();
+        let beta_u = BetaTable::new(first_u_challenges.clone()).unwrap();
         let beta_v = if !last_v_challenges.is_empty() {
-            BetaTable::new((last_v_challenges.clone(), bound_rhs)).unwrap()
+            BetaTable::new(last_v_challenges.clone()).unwrap()
         } else {
             BetaTable {
-                layer_claim: (vec![], F::zero()),
+                layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             }
         };
-        let beta_g = if !claim.0.is_empty() {
-            BetaTable::new((claim.0, F::zero())).unwrap()
+        let beta_g = if !claim.get_point().is_empty() {
+            BetaTable::new(claim.get_point().clone()).unwrap()
         } else {
             BetaTable {
-                layer_claim: (vec![], F::zero()),
+                layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             }
@@ -281,8 +281,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
     }
 
     /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<(LayerId, Claim<F>)>, LayerError> {
-        let mut claims: Vec<(LayerId, Claim<F>)> = vec![];
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+        let mut claims = vec![];
         let mut fixed_mle_indices_u: Vec<F> = vec![];
 
         // check the left side of the sum (f2(u)) against the challenges made to bind that variable
@@ -295,7 +295,14 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 );
             }
             let val = f_2_u.bookkeeping_table()[0];
-            claims.push((f_2_u.get_layer_id(), (fixed_mle_indices_u, val)));
+            let claim: Claim<F> = Claim::new(
+                fixed_mle_indices_u,
+                val,
+                Some(self.id().clone()),
+                Some(f_2_u.get_layer_id()),
+            );
+            claims.push(claim);
+    
         } else {
             return Err(LayerError::LayerNotReady);
         }
@@ -313,7 +320,14 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 );
             }
             let val = f_3_v.bookkeeping_table()[0];
-            claims.push((f_3_v.get_layer_id(), (fixed_mle_indices_v, val)));
+            let claim: Claim<F> = Claim::new(
+                fixed_mle_indices_v,
+                val,
+                Some(self.id().clone()),
+                Some(f_3_v.get_layer_id()),
+            );
+            claims.push(claim);
+
         } else {
             return Err(LayerError::LayerNotReady);
         }
@@ -332,8 +346,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
 
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: Vec<Vec<F>>,
-        claimed_vals: &mut Vec<F>,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
@@ -366,9 +380,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
             })
             .collect();
 
-        // concat this with the first k evaluations from the claims to get num_evals evaluations
+        // concat this with the first k evaluations from the claims to get
+        // num_evals evaluations
+        let mut claimed_vals = claimed_vals.clone();
+        
         claimed_vals.extend(&next_evals);
-        let wlx_evals = claimed_vals.clone();
+        let wlx_evals = claimed_vals;
         Ok(wlx_evals)
     }
 
@@ -464,11 +481,11 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         // --- First compute the bookkeeping table for \beta(g, z) \in \{0, 1\}^{s_i} ---
 
-        let beta_g = if !claim.0.is_empty() {
-            BetaTable::new(claim).unwrap()
+        let beta_g = if !claim.get_point().is_empty() {
+            BetaTable::new(claim.get_point().clone()).unwrap()
         } else {
             BetaTable {
-                layer_claim: (vec![], F::zero()),
+                layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             }
@@ -537,7 +554,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
             .expect("beta table should be initialized by now");
 
         // create a beta table according to the challenges used to bind the x variables
-        let beta_u = BetaTable::new(u_claim).unwrap();
+        let beta_u = BetaTable::new(u_claim.get_point().clone()).unwrap();
         let num_y = self.rhs.num_vars();
 
         // bookkeeping table where we now bind y, so size is 2^(num_y)

@@ -14,7 +14,7 @@ pub mod ligero_input_layer;
 pub mod public_input_layer;
 pub mod random_input_layer;
 
-use crate::{layer::{LayerId, Claim, claims::ClaimError}, mle::{dense::DenseMle, MleRef}, sumcheck::evaluate_at_a_point};
+use crate::{layer::{LayerId, claims::{ClaimError, Claim, ClaimGroup}}, mle::{dense::DenseMle, MleRef}, sumcheck::evaluate_at_a_point};
 
 use self::enum_input_layer::InputLayerEnum;
 
@@ -56,13 +56,12 @@ pub trait InputLayer<F: FieldExt> {
 
     fn get_padded_mle(&self) -> DenseMle<F, F>;
 
-    fn compute_claim_wlx(&self, claims: &[Claim<F>]) -> Result<Vec<F>, ClaimError> {
-
-        let mut mle = self.get_padded_mle().mle_ref();
-        let num_claims = claims.len();
-        let (claim_vecs, mut claimed_vals): (Vec<Vec<F>>, Vec<F>) =
-            cfg_iter!(claims).cloned().unzip();
-        let num_idx = claim_vecs[0].len();
+    fn compute_claim_wlx(&self, claims: &ClaimGroup<F>) -> Result<Vec<F>, ClaimError> {
+        let mut mle = self.get_padded_mle().clone().mle_ref();
+        let num_claims = claims.get_num_claims();
+        let claim_vecs = claims.get_claim_points_matrix();
+        let claimed_vals = claims.get_results();
+        let num_idx = claims.get_num_vars();
 
         //fix variable hella times
         //evaluate expr on the mutated expr
@@ -97,18 +96,18 @@ pub trait InputLayer<F: FieldExt> {
             .collect();
 
         // concat this with the first k evaluations from the claims to get num_evals evaluations
-        claimed_vals.extend(&next_evals);
-        let wlx_evals = claimed_vals.clone();
+        let mut wlx_evals = claimed_vals.clone();
+        wlx_evals.extend(&next_evals);
         Ok(wlx_evals)
     }
 
     /// Computes `l(r^{\star})`
     fn compute_aggregated_challenges(
         &self,
-        claims: &[Claim<F>],
+        claims: &ClaimGroup<F>,
         rstar: F,
     ) -> Result<Vec<F>, ClaimError> {
-        let (claim_vecs, _): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+        let claim_vecs = claims.get_claim_points_matrix();
 
         if claims.is_empty() {
             return Err(ClaimError::ClaimAggroError);

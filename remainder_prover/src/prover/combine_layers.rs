@@ -33,7 +33,8 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
 
     let interpolated_layers = (0..layer_count).map(|layer_idx| {
         layers
-            .iter().enumerate()
+            .iter()
+            .enumerate()
             .filter_map(|(subcircuit_idx, layers)| {
                 layers.0.get(layer_idx).map(|layer| (subcircuit_idx, layer))
             })
@@ -149,7 +150,6 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             } else {
                 Ok(GKRLayer::new_raw(layer_id, expression).get_enum())
             }
-
         })
         .try_collect()?;
 
@@ -253,7 +253,8 @@ fn combine_expressions<F: FieldExt>(
         }
 
         exprs.sort_by(|first, second| {
-            first.1
+            first
+                .1
                 .get_expression_size(0)
                 .cmp(&second.1.get_expression_size(0))
         });

@@ -5,7 +5,7 @@
 use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{Claim, LayerId};
+use crate::layer::{claims::Claim, LayerId};
 use remainder_shared_types::FieldExt;
 
 use super::{mle_enum::MleEnum, MleIndex, MleRef};
@@ -71,7 +71,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
-            Some((
+            Some(Claim::new_raw(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())

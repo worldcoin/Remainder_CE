@@ -6,7 +6,7 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
     layer::{
-        Claim, Layer, LayerId,
+        claims::Claim, Layer, LayerId,
     },
     mle::{beta::BetaTable},
     sumcheck::*,
@@ -105,11 +105,11 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
     ///
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         // --- First compute the bookkeeping table for \beta(g, z) \in \{0, 1\}^{s_i} ---
-        let beta_g = if !claim.0.is_empty() {
-            BetaTable::new(claim).unwrap()
+        let beta_g = if !claim.get_point().is_empty() {
+            BetaTable::new(claim.get_point().clone()).unwrap()
         } else {
             BetaTable {
-                layer_claim: (vec![], F::zero()),
+                layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             }
@@ -184,7 +184,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
             .expect("beta table should be initialized by now");
 
         // create a beta table according to the challenges used to bind the x variables
-        let beta_u = BetaTable::new(u_claim).unwrap();
+        let beta_u = BetaTable::new(u_claim.get_point().clone()).unwrap();
         let num_y = self.rhs.num_vars();
 
         // bookkeeping table where we now bind y, so size is 2^(num_y)
@@ -283,7 +283,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
 
         if f_2.bookkeeping_table.len() == 1 {
             let f_at_u = f_2.bookkeeping_table[0];
-            let u_challenges = (challenges.clone(), F::zero());
+            let u_challenges = Claim::new_raw(challenges.clone(), F::zero());
 
             // first message of the next phase includes the random challenge from the last phase
             // (this transition checks that we did the bookkeeping optimization correctly between each phase)
@@ -335,7 +335,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
 
         // first round checked here
         let claimed_val = messages[0].0[0] + messages[0].0[1];
-        if claimed_val != claim.1 {
+        if claimed_val != claim.get_result() {
             dbg!("first check failed");
             dbg!(claimed_val);
             dbg!(-claimed_val);
@@ -378,8 +378,8 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
         let f_3_v = check_fully_bound(&mut [rhs.clone()], last_v_challenges.clone()).unwrap();
 
         // evaluate the gate function at the bound points!!!
-        let beta_u = BetaTable::new((first_u_challenges.clone(), f_2_u)).unwrap();
-        let beta_v = BetaTable::new((last_v_challenges.clone(), f_3_v)).unwrap();
+        let beta_u = BetaTable::new(first_u_challenges.clone()).unwrap();
+        let beta_v = BetaTable::new(last_v_challenges.clone()).unwrap();
         let beta_g = self.beta_g.as_ref().unwrap();
         let f_1_uv =
             self.nonzero_gates
@@ -505,7 +505,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
     /// * The first one is computed via initializing a beta table.
     /// * The second/third ones are computed via iterating over all (sparse) (p_2, z, x, y) points and summing the terms above.
     fn init_copy_phase(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
-        let (challenges, _) = claim;
+        let challenges = claim.get_point();
         let mut g2_challenges: Vec<F> = vec![];
         let mut g1_challenges: Vec<F> = vec![];
 
@@ -523,12 +523,12 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
             });
 
         // create two separate beta tables for each, as they are handled differently
-        let mut beta_g2 = BetaTable::new((g2_challenges.clone(), F::zero())).unwrap();
+        let mut beta_g2 = BetaTable::new(g2_challenges.clone()).unwrap();
         let beta_g1 = if !g1_challenges.is_empty() {
-            BetaTable::new((g1_challenges.clone(), F::zero())).unwrap()
+            BetaTable::new(g1_challenges.clone()).unwrap()
         } else {
             BetaTable {
-                layer_claim: (vec![], F::zero()),
+                layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             }
@@ -646,7 +646,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
         // grab the bound beta value
         debug_assert_eq!(beta_g.table.bookkeeping_table().len(), 1); // --- Should be fully bound ---
         let beta_g2 = beta_g.table.bookkeeping_table()[0];
-        let next_claims = (self.g1_challenges.clone().unwrap(), F::zero());
+        let next_claims = Claim::new_raw(self.g1_challenges.clone().unwrap(), F::zero());
 
         // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
         // TODO!(ryancao): Can we get rid of the clones here somehow (for `lhs` and `rhs`)?
@@ -702,7 +702,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
 
         // first check!!
         let claimed_val = messages[0].0[0] + messages[0].0[1];
-        if claimed_val != claim.1 {
+        if claimed_val != claim.get_result() {
             dbg!("first check failed");
             dbg!(claimed_val);
             return Err(VerifyError::SumcheckBad);
@@ -755,9 +755,9 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
         );
 
         // compute the gate function evaluated at bound variables
-        let beta_u = BetaTable::new((first_u_challenges.clone(), F::zero())).unwrap();
-        let beta_v = BetaTable::new((last_v_challenges.clone(), F::zero())).unwrap();
-        let beta_g = BetaTable::new((self.g1_challenges.clone().unwrap(), F::zero())).unwrap();
+        let beta_u = BetaTable::new(first_u_challenges.clone()).unwrap();
+        let beta_v = BetaTable::new(last_v_challenges.clone()).unwrap();
+        let beta_g = BetaTable::new(self.g1_challenges.clone().unwrap()).unwrap();
         let f_1_uv =
             self.nonzero_gates
                 .clone()
@@ -838,7 +838,7 @@ mod test {
     fn test_sumcheck_1() {
         let mut rng = test_rng();
 
-        let claim = (vec![Fr::from(1), Fr::from(0), Fr::from(0)], Fr::from(4));
+        let claim = Claim::new_raw(vec![Fr::from(1), Fr::from(0), Fr::from(0)], Fr::from(4));
         let nonzero_gates = vec![(1, 1, 1)];
 
         let lhs_v = vec![Fr::from(1), Fr::from(2)];
@@ -865,7 +865,7 @@ mod test {
     fn test_sumcheck_2() {
         let mut rng = test_rng();
 
-        let claim = (vec![Fr::from(0), Fr::from(1), Fr::from(0)], Fr::from(2));
+        let claim = Claim::new_raw(vec![Fr::from(0), Fr::from(1), Fr::from(0)], Fr::from(2));
         let nonzero_gates = vec![(1, 0, 1), (3, 0, 2), (2, 3, 4)];
 
         let lhs_v = vec![
@@ -910,7 +910,7 @@ mod test {
     fn test_sumcheck_3() {
         let mut rng = test_rng();
 
-        let claim = (vec![Fr::from(1), Fr::from(1), Fr::from(0)], Fr::from(5200));
+        let claim = Claim::new_raw(vec![Fr::from(1), Fr::from(1), Fr::from(0)], Fr::from(5200));
         let nonzero_gates = vec![(1, 0, 15), (3, 0, 2), (5, 3, 14), (2, 3, 4)];
 
         let lhs_v = vec![
@@ -963,7 +963,7 @@ mod test {
     fn test_sumcheck_batched_1() {
         let mut rng = test_rng();
 
-        let claim = (
+        let claim = Claim::new_raw(
             vec![
                 Fr::from(1),
                 Fr::from(1),
@@ -1000,7 +1000,7 @@ mod test {
         let mut rng = test_rng();
         let new_bits = 2;
 
-        let claim = (vec![Fr::from(1), Fr::from(1), Fr::from(1)], Fr::from(2));
+        let claim = Claim::new_raw(vec![Fr::from(1), Fr::from(1), Fr::from(1)], Fr::from(2));
         let nonzero_gates = vec![(1, 1, 1), (0, 0, 1)];
 
         let lhs_v = vec![
@@ -1045,7 +1045,7 @@ mod test {
         let mut rng = test_rng();
         let new_bits = 1;
 
-        let claim = (vec![Fr::from(3), Fr::from(1), Fr::from(1)], Fr::from(22));
+        let claim = Claim::new_raw(vec![Fr::from(3), Fr::from(1), Fr::from(1)], Fr::from(22));
         let nonzero_gates = vec![(3, 1, 1), (2, 1, 0)];
 
         let lhs_v = vec![
@@ -1090,7 +1090,7 @@ mod test {
         let mut rng = test_rng();
         let new_bits = 2;
 
-        let claim = (
+        let claim = Claim::new_raw(
             vec![Fr::from(1), Fr::from(1), Fr::from(1), Fr::from(2)],
             Fr::from(4),
         );

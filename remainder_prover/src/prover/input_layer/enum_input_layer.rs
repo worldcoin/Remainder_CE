@@ -7,7 +7,7 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    layer::{Claim, LayerId},
+    layer::{claims::Claim, LayerId},
     mle::dense::DenseMle,
 };
 
@@ -82,7 +82,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
     fn open(
         &self,
         transcript: &mut Self::Transcript,
-        claim: crate::layer::Claim<F>,
+        claim: crate::layer::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         match self {
             InputLayerEnum::LigeroInputLayer(layer) => {
