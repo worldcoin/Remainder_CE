@@ -396,7 +396,7 @@ mod tests {
     use super::ZKDTCircuit;
 
     #[test]
-    fn test_combine_circuits() {
+    fn test_zkdt_circuit() {
 
         let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
