@@ -11,8 +11,11 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
-use crate::{layer::{LayerId, batched::combine_mles}, zkdt::structs::combine_mle_refs};
-use crate::{expression::ExpressionStandard, layer::Claim};
+use crate::{expression::ExpressionStandard, layer::claims::Claim};
+use crate::{
+    layer::{batched::combine_mles, LayerId},
+    zkdt::structs::combine_mle_refs,
+};
 use remainder_shared_types::FieldExt;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -114,13 +117,11 @@ impl<'a, F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> IntoIterator
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
-
+pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(
+    items: &[Vec<F>; L],
+) -> Vec<F> {
     // --- All the items within should be the same size ---
-    let max_size = items
-        .iter()
-        .map(|mle_ref| mle_ref.len())
-        .max().unwrap();
+    let max_size = items.iter().map(|mle_ref| mle_ref.len()).max().unwrap();
 
     let part_size = 1 << log2(max_size);
     let part_count = 2_u32.pow(log2(L)) as usize;
@@ -216,24 +217,23 @@ impl<F: FieldExt> DenseMle<F, F> {
         )
     }
 
-    pub fn one(mle_len: usize, layer_id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> DenseMle<F, F> {
+    pub fn one(
+        mle_len: usize,
+        layer_id: LayerId,
+        prefix_bits: Option<Vec<MleIndex<F>>>,
+    ) -> DenseMle<F, F> {
         let mut one_vec = vec![];
         for _ in 0..mle_len {
             one_vec.push(F::one())
         }
-        DenseMle::new_from_raw(
-            one_vec,
-            layer_id,
-            prefix_bits
-        )
+        DenseMle::new_from_raw(one_vec, layer_id, prefix_bits)
     }
 
-    /// To combine a batch of `DenseMle<F, F>` into a single `DenseMle<F, F>` 
+    /// To combine a batch of `DenseMle<F, F>` into a single `DenseMle<F, F>`
     /// appropriately, such that the bit ordering is (batched_bits, (mle_ref_bits), iterated_bits)
-    /// 
+    ///
     /// TODO!(ende): refactor
     pub fn combine_mle_batch(mle_batch: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
-
         let batched_bits = log2(mle_batch.len());
 
         let mle_batch_ref_combined = mle_batch
@@ -244,9 +244,14 @@ impl<F: FieldExt> DenseMle<F, F> {
                 }
             ).collect_vec();
 
-        let mle_batch_ref_combined_ref =  combine_mles(mle_batch_ref_combined, batched_bits as usize);
+        let mle_batch_ref_combined_ref =
+            combine_mles(mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(
+            mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 }
 
@@ -361,12 +366,11 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         }
     }
 
-    /// To combine a batch of `DenseMle<F, Tuple2<F>>` into a single `DenseMle<F, F>` 
+    /// To combine a batch of `DenseMle<F, Tuple2<F>>` into a single `DenseMle<F, F>`
     /// appropriately, such that the bit ordering is (batched_bits, mle_ref_bits, iterated_bits)
-    /// 
+    ///
     /// TODO!(ende): refactor
     pub fn combine_mle_batch(tuple2_mle_batch: Vec<DenseMle<F, Tuple2<F>>>) -> DenseMle<F, F> {
-
         let batched_bits = log2(tuple2_mle_batch.len());
 
         let tuple2_mle_batch_ref_combined = tuple2_mle_batch
@@ -379,9 +383,14 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
                 }
             ).collect_vec();
 
-        let tuple2_mle_batch_ref_combined_ref =  combine_mles(tuple2_mle_batch_ref_combined, batched_bits as usize);
+        let tuple2_mle_batch_ref_combined_ref =
+            combine_mles(tuple2_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(tuple2_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(
+            tuple2_mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 }
 
@@ -463,8 +472,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.bookkeeping_table = new.collect();
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
-            // dbg!(&self);
-            Some((
+            Some(Claim::new_raw(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())

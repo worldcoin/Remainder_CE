@@ -8,6 +8,8 @@ use crate::{
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
+use super::claims::Claim;
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 ///An enum representing all the possible kinds of Layers
@@ -30,7 +32,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
 
     fn prove_rounds(
         &mut self,
-        claim: super::Claim<F>,
+        claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<crate::prover::SumcheckProof<F>, super::LayerError> {
         match self {
@@ -45,7 +47,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
 
     fn verify_rounds(
         &mut self,
-        claim: super::Claim<F>,
+        claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), super::LayerError> {
@@ -63,7 +65,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         }
     }
 
-    fn get_claims(&self) -> Result<Vec<(super::LayerId, super::Claim<F>)>, super::LayerError> {
+    fn get_claims(&self) -> Result<Vec<Claim<F>>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
             LayerEnum::MulGate(layer) => layer.get_claims(),
@@ -98,8 +100,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
 
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: Vec<Vec<F>>,
-        claimed_vals: &mut Vec<F>,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, super::claims::ClaimError> {
@@ -132,7 +134,10 @@ impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
         let expression = match self {
             LayerEnum::Gkr(layer) => &layer.expression,
             LayerEnum::EmptyLayer(layer) => &layer.expr,
-            LayerEnum::AddGate(_) | LayerEnum::AddGateBatched(_) | LayerEnum::MulGate(_) | LayerEnum::MulGateBatched(_) => unimplemented!(),
+            LayerEnum::AddGate(_)
+            | LayerEnum::AddGateBatched(_)
+            | LayerEnum::MulGate(_)
+            | LayerEnum::MulGateBatched(_) => unimplemented!(),
         };
 
         expression.get_expression_size(0)

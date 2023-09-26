@@ -38,7 +38,7 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         &mut self,
         round_index: usize,
         challenge: Self::F,
-    ) -> Option<crate::layer::Claim<Self::F>> {
+    ) -> Option<crate::layer::claims::Claim<Self::F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable(round_index, challenge),
             MleEnum::Zero(item) => item.fix_variable(round_index, challenge),
