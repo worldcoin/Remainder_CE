@@ -11,7 +11,7 @@ ark-crypto-primitives = {version = "0.4.0", features = ["sponge"]}
 ark-ff = "0.4.2"
 ark-poly = "0.4.2"
 ark-serialize = {version = "0.4.2", features = ["derive"]}
-ark-std = "0.4.0"
+ark-std = {version = "0.4.0", features = ["print-trace"]}
 ark-test-curves = "0.4.2"
 criterion = "0.5.1"
 # derive_more = "0.99.17"

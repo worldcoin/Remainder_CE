@@ -25,6 +25,7 @@ use crate::{
 // use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
 // use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
+use ark_std::{start_timer, end_timer};
 use remainder_shared_types::transcript::{Transcript};
 use remainder_shared_types::FieldExt;
 
@@ -375,6 +376,7 @@ pub trait GKRCircuit<F: FieldExt> {
         &mut self,
         transcript: &mut Self::Transcript,
     ) -> Result<GKRProof<F, Self::Transcript>, GKRError> {
+        let synthesize_commit_timer = start_timer!(|| "synthesize and commit");
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
         // --- Also commit and add those commitments to the transcript
         let (
@@ -385,6 +387,9 @@ pub trait GKRCircuit<F: FieldExt> {
             },
             commitments,
         ) = self.synthesize_and_commit(transcript)?;
+        end_timer!(synthesize_commit_timer);
+
+        let claims_timer = start_timer!(|| "output claims generation");
 
         // --- Keep track of GKR-style claims across all layers ---
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
@@ -421,6 +426,10 @@ pub trait GKRCircuit<F: FieldExt> {
             }
         }
 
+        end_timer!(claims_timer);
+
+        let intermediate_layers_timer = start_timer!(|| "ALL intermediate layers proof generation");
+
         // --- Collects all the prover messages for sumchecking over each layer, ---
         // --- as well as all the prover messages for claim aggregation at the ---
         // --- beginning of proving each layer ---
@@ -429,9 +438,13 @@ pub trait GKRCircuit<F: FieldExt> {
             .into_iter()
             .rev()
             .map(|mut layer| {
+
+
+                let layer_timer = start_timer!(|| format!("proof generation for layer {:?}", *layer.id()));
+
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_id = *layer.id();
-                dbg!(layer_id);
+                // dbg!(layer_id);
                 let layer_claims = claims
                     .get(&layer_id)
                     .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
@@ -445,6 +458,8 @@ pub trait GKRCircuit<F: FieldExt> {
                         .append_field_element("Claimed value to be aggregated", claim.1)
                         .unwrap();
                 }
+
+                let claim_aggr_timer = start_timer!(|| format!("claim aggregation for layer {:?}", *layer.id()));
 
                 // --- If it's an empty layer, skip the claim aggregation ---
                 let empty_layer = layer_claims.iter().all(|claim| claim.0.is_empty());
@@ -482,10 +497,15 @@ pub trait GKRCircuit<F: FieldExt> {
                     (layer_claims[0].clone(), None)
                 };
 
+                end_timer!(claim_aggr_timer);
+                let sumcheck_msg_timer = start_timer!(|| format!("compute sumcheck message for layer {:?}", *layer.id()));
+
                 // --- Compute all sumcheck messages across this particular layer ---
                 let prover_sumcheck_messages = layer
                     .prove_rounds(layer_claim, transcript)
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+
+                end_timer!(sumcheck_msg_timer);
 
                 // --- Grab all the resulting claims from the above sumcheck procedure and add them to the claim tracking map ---
                 let post_sumcheck_new_claims = layer
@@ -502,6 +522,8 @@ pub trait GKRCircuit<F: FieldExt> {
                     }
                 }
 
+                end_timer!(layer_timer);
+
                 Ok(LayerProof {
                     sumcheck_proof: prover_sumcheck_messages,
                     layer,
@@ -510,10 +532,16 @@ pub trait GKRCircuit<F: FieldExt> {
             })
             .try_collect()?;
 
+        end_timer!(intermediate_layers_timer);
+
+        let input_layers_timer = start_timer!(|| "INPUT layers proof generation");
+
         let input_layer_proofs = input_layers
             .into_iter()
             .zip(commitments)
             .map(|(input_layer, commitment)| {
+
+                let layer_timer = start_timer!(|| format!("proof generation for INPUT layer {:?}", input_layer.layer_id()));
                 let layer_id = input_layer.layer_id();
 
                 let layer_claims = claims
@@ -535,6 +563,8 @@ pub trait GKRCircuit<F: FieldExt> {
                         .append_field_element("Claimed value to be aggregated", claim.1)
                         .unwrap();
                 }
+
+                let claim_aggr_timer = start_timer!(|| format!("claim aggregation for INPUT layer {:?}", input_layer.layer_id()));
 
                 let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1 {
                     // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
@@ -576,9 +606,17 @@ pub trait GKRCircuit<F: FieldExt> {
                     (layer_claims[0].clone(), None)
                 };
 
+                end_timer!(claim_aggr_timer);
+
+                let opening_proof_timer = start_timer!(|| format!("opening proof for INPUT layer {:?}", input_layer.layer_id()));
+
                 let opening_proof = input_layer
                     .open(transcript, layer_claim)
                     .map_err(GKRError::InputLayerError)?;
+
+                end_timer!(opening_proof_timer);
+
+                end_timer!(layer_timer);
 
                 Ok(InputLayerProof {
                     layer_id: *layer_id,
@@ -588,6 +626,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 })
             })
             .try_collect()?;
+
+        end_timer!(input_layers_timer);
 
         let gkr_proof = GKRProof {
             layer_sumcheck_proofs,
@@ -612,6 +652,8 @@ pub trait GKRCircuit<F: FieldExt> {
             input_layer_proofs,
         } = gkr_proof;
 
+        let input_layers_timer = start_timer!(|| "append INPUT commitments to transcript");
+
         for input_layer in input_layer_proofs.iter() {
             InputLayerEnum::append_commitment_to_transcript(
                 &input_layer.input_commitment,
@@ -624,9 +666,12 @@ pub trait GKRCircuit<F: FieldExt> {
                 )
             })?;
         }
+        end_timer!(input_layers_timer);
 
         // --- Verifier keeps track of the claims on its own ---
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
+
+        let claims_timer = start_timer!(|| "output claims generation");
 
         // --- NOTE that all the `Expression`s and MLEs contained within `gkr_proof` are already bound! ---
         for output in output_layers.iter() {
@@ -666,6 +711,10 @@ pub trait GKRCircuit<F: FieldExt> {
             }
         }
 
+        end_timer!(claims_timer);
+
+        let intermediate_layers_timer = start_timer!(|| "ALL intermediate layers proof verification");
+
         // --- Go through each of the layers' sumcheck proofs... ---
         for sumcheck_proof_single in layer_sumcheck_proofs {
             let LayerProof {
@@ -673,6 +722,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 mut layer,
                 wlx_evaluations,
             } = sumcheck_proof_single;
+
+            let layer_timer = start_timer!(|| format!("proof verification for layer {:?}", *layer.id()));
 
             // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
             let layer_id = *layer.id();
@@ -694,6 +745,8 @@ pub trait GKRCircuit<F: FieldExt> {
             // --- Perform the claim aggregation verification, first sampling `r` ---
             // --- Note that we ONLY do this if need be! ---
             let mut prev_claim = layer_claims[0].clone();
+
+            let claim_aggr_timer = start_timer!(|| format!("verify aggregated claim for layer {:?}", *layer.id()));
 
             // dbg!(&layer_claims);
             if layer_claims.len() > 1 {
@@ -719,12 +772,16 @@ pub trait GKRCircuit<F: FieldExt> {
                     )
                 })?;
             }
+            end_timer!(claim_aggr_timer);
             
+            let sumcheck_msg_timer = start_timer!(|| format!("verify sumcheck message for layer {:?}", *layer.id()));
 
             // --- Performs the actual sumcheck verification step ---
             layer
                 .verify_rounds(prev_claim, sumcheck_proof.0, transcript)
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
+
+            end_timer!(sumcheck_msg_timer);
 
             // --- Extract/track claims from the expression independently (this ensures implicitly that the ---
             // --- prover is behaving correctly with respect to claim reduction, as otherwise the claim ---
@@ -740,10 +797,18 @@ pub trait GKRCircuit<F: FieldExt> {
                     claims.insert(layer_id, vec![claim]);
                 }
             }
+
+            end_timer!(layer_timer);
         }
 
+        end_timer!(intermediate_layers_timer);
+
+        let input_layers_timer = start_timer!(|| "INPUT layers proof verification");
 
         for input_layer in input_layer_proofs {
+
+            let layer_timer = start_timer!(|| format!("proof generation for INPUT layer {:?}", input_layer.layer_id));
+
             let input_layer_id = input_layer.layer_id;
             let input_layer_claims = claims
                 .get(&input_layer_id)
@@ -763,6 +828,8 @@ pub trait GKRCircuit<F: FieldExt> {
                     .append_field_element("Claimed value to be aggregated", claim.1)
                     .unwrap();
             }
+
+            let claim_aggr_timer = start_timer!(|| format!("verify aggregated claim for INPUT layer {:?}", input_layer.layer_id));
 
             let input_layer_claim = if input_layer_claims.len() > 1 {
                 let all_input_wlx_evaluations: Vec<F> = input_layer_claims
@@ -797,6 +864,9 @@ pub trait GKRCircuit<F: FieldExt> {
             } else {
                 input_layer_claims[0].clone()
             };
+            end_timer!(claim_aggr_timer);
+
+            let sumcheck_msg_timer = start_timer!(|| format!("verify sumcheck message for INPUT layer {:?}", input_layer.layer_id));
 
             InputLayerEnum::verify(
                 &input_layer.input_commitment,
@@ -805,7 +875,13 @@ pub trait GKRCircuit<F: FieldExt> {
                 transcript,
             )
             .map_err(GKRError::InputLayerError)?;
+
+            end_timer!(sumcheck_msg_timer);
+
+            end_timer!(layer_timer);
         }
+
+        end_timer!(input_layers_timer);
 
         Ok(())
     }

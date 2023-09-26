@@ -1,4 +1,4 @@
-use ark_std::{log2, test_rng, One};
+use ark_std::{log2, test_rng, One, start_timer, end_timer};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use itertools::{Itertools, repeat_n};
 use rand::Rng;
@@ -38,20 +38,17 @@ use super::{
 
 pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
-    let now = Instant::now();
+    let prover_timer = start_timer!(|| "proof generation");
 
     match circuit.prove(&mut transcript) {
         Ok(proof) => {
-            println!(
-                "proof generated successfully in {}!",
-                now.elapsed().as_secs_f32()
-            );
+            end_timer!(prover_timer);
             if let Some(path) = path {
                 let mut f = fs::File::create(path).unwrap();
                 to_writer(&mut f, &proof).unwrap();
             }
             let mut transcript = C::Transcript::new("GKR Verifier Transcript");
-            let now = Instant::now();
+            let verifier_timer = start_timer!(|| "proof verification");
 
             let proof = if let Some(path) = path {
                 let file = std::fs::File::open(path).unwrap();
@@ -62,10 +59,7 @@ pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<
             };
             match circuit.verify(&mut transcript, proof) {
                 Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
+                    end_timer!(verifier_timer);
                 }
                 Err(err) => {
                     println!("Verify failed! Error: {err}");
