@@ -236,13 +236,7 @@ impl<F: FieldExt> DenseMle<F, F> {
     pub fn combine_mle_batch(mle_batch: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
         let batched_bits = log2(mle_batch.len());
 
-        let mle_batch_ref_combined = mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    x.mle_ref()
-                }
-            ).collect_vec();
+        let mle_batch_ref_combined = mle_batch.into_iter().map(|x| x.mle_ref()).collect_vec();
 
         let mle_batch_ref_combined_ref =
             combine_mles(mle_batch_ref_combined, batched_bits as usize);
@@ -374,14 +368,9 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         let batched_bits = log2(tuple2_mle_batch.len());
 
         let tuple2_mle_batch_ref_combined = tuple2_mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    combine_mle_refs(
-                        vec![x.first(), x.second()]
-                    ).mle_ref()
-                }
-            ).collect_vec();
+            .into_iter()
+            .map(|x| combine_mle_refs(vec![x.first(), x.second()]).mle_ref())
+            .collect_vec();
 
         let tuple2_mle_batch_ref_combined_ref =
             combine_mles(tuple2_mle_batch_ref_combined, batched_bits as usize);
