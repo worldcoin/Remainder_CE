@@ -31,7 +31,7 @@ use super::{
     input_layer::{
         combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
-        random_input_layer::RandomInputLayer, InputLayer,
+        random_input_layer::RandomInputLayer, InputLayer, self,
     },
     GKRCircuit, GKRError, Layers, Witness, test_helper_circuits::{EmptyLayerBuilder, EmptyLayerSubBuilder, EmptyLayerAddBuilder},
 };
@@ -220,7 +220,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
 
-        // --- Grab combined 
+        // --- Grab combined
         let mut combined_batched_first_second_mle = DenseMle::<F, Tuple2<F>>::combine_mle_batch(self.batched_first_second_mle.clone());
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut combined_batched_first_second_mle)];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
@@ -244,7 +244,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
                     )
                 );
 
-                
+
                 from_mle(
                     mle,
                     // --- The expression is a simple diff between the first and second halves ---
@@ -269,7 +269,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
                 )
             }
         ).collect_vec();
-        
+
         // --- Convert the vector of builders into a batched builder which can be added to `layers` ---
         let batched_builder = BatchedLayer::new(diff_builders);
         let batched_result = layers.add_gkr(batched_builder);
@@ -282,8 +282,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
     }
 }
 
-/// This circuit checks how RandomLayer works by multiplying the MLE by a constant, 
-/// taking in that result as advice in a publiclayer and doing an equality check 
+/// This circuit checks how RandomLayer works by multiplying the MLE by a constant,
+/// taking in that result as advice in a publiclayer and doing an equality check
 /// on the result of the mult and the advice
 struct RandomCircuit<F: FieldExt> {
     mle: DenseMle<F, F>,
@@ -357,6 +357,155 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
             },
             vec![input_commit, random_commit, input_layer_2_commit],
         ))
+    }
+}
+
+/// This circuit has two separate input layers, each with two MLEs inside, where
+/// the MLEs within the input layer are the same size but the input layers themselves
+/// are different sizes.
+///
+/// The MLEs within each input layer are first added together, then their results
+/// are added. The final layer is just a ZeroLayerBuilder (i.e. subtracts the final
+/// layer from itself for convenience).
+/// 
+/// TODO!(ryancao): If this still doesn't fail, change the MLEs within each input layer
+///     to be different sizes and see if it does
+/// TODO!(ryancao): If this still doesn't fail, make it batched and see if it fails then
+struct MultiInputLayerCircuit<F: FieldExt> {
+    input_layer_1_mle_1: DenseMle<F, F>,
+    input_layer_1_mle_2: DenseMle<F, F>,
+
+    input_layer_2_mle_1: DenseMle<F, F>,
+    input_layer_2_mle_2: DenseMle<F, F>,
+}
+impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        unimplemented!()
+    }
+
+    fn synthesize_and_commit(
+        &mut self,
+        transcript: &mut Self::Transcript,
+    ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
+
+        // --- Publicly commit to each input layer ---
+        let mut input_layer_1 =
+            InputLayerBuilder::new(vec![Box::new(&mut self.input_layer_1_mle_1), Box::new(&mut self.input_layer_1_mle_2)], None, LayerId::Input(0))
+                .to_input_layer::<PublicInputLayer<F, _>>()
+                .to_enum();
+        let input_layer_1_commitment = input_layer_1
+            .commit()
+            .map_err(GKRError::InputLayerError)?;
+        InputLayerEnum::append_commitment_to_transcript(&input_layer_1_commitment, transcript).unwrap();
+
+        // --- Second input layer (public) commitment ---
+        let mut input_layer_2 =
+            InputLayerBuilder::new(vec![Box::new(&mut self.input_layer_2_mle_1), Box::new(&mut self.input_layer_2_mle_2)], None, LayerId::Input(1))
+                .to_input_layer::<PublicInputLayer<F, _>>()
+                .to_enum();
+        let input_layer_2_commitment = input_layer_2
+            .commit()
+            .map_err(GKRError::InputLayerError)?;
+        InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commitment, transcript).unwrap();
+
+        let mut layers = Layers::new();
+
+        // --- Add the first input layer MLEs to one another ---
+        let layer_1 = from_mle(
+            // Lol this hack though
+            (self.input_layer_1_mle_1.clone(), self.input_layer_1_mle_2.clone()),
+            |(input_layer_1_mle_1, input_layer_1_mle_2)| {
+                let input_layer_1_mle_1_expr_ptr = Box::new(ExpressionStandard::Mle(input_layer_1_mle_1.mle_ref()));
+                let input_layer_1_mle_2_expr_ptr = Box::new(ExpressionStandard::Mle(input_layer_1_mle_2.mle_ref()));
+                ExpressionStandard::Sum(input_layer_1_mle_1_expr_ptr, input_layer_1_mle_2_expr_ptr)
+            },
+            |(input_layer_1_mle_1, input_layer_1_mle_2), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    input_layer_1_mle_1.into_iter()
+                        .zip(input_layer_1_mle_2.into_iter().cycle())
+                        .map(|(input_layer_1_mle_1_elem, input_layer_1_mle_2_elem)| input_layer_1_mle_1_elem + input_layer_1_mle_2_elem),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+
+        // --- Add the second input layer MLEs to one another ---
+        let layer_2 = from_mle(
+            // Lol this hack though
+            (self.input_layer_2_mle_1.clone(), self.input_layer_2_mle_2.clone()),
+            |(input_layer_2_mle_1, input_layer_2_mle_2)| {
+                let input_layer_2_mle_1_expr_ptr = Box::new(ExpressionStandard::Mle(input_layer_2_mle_1.mle_ref()));
+                let input_layer_2_mle_2_expr_ptr = Box::new(ExpressionStandard::Mle(input_layer_2_mle_2.mle_ref()));
+                dbg!(input_layer_2_mle_1.layer_id);
+                dbg!(input_layer_2_mle_2.layer_id);
+                ExpressionStandard::Sum(input_layer_2_mle_1_expr_ptr, input_layer_2_mle_2_expr_ptr)
+            },
+            |(input_layer_2_mle_1, input_layer_2_mle_2), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    input_layer_2_mle_1.into_iter()
+                        .zip(input_layer_2_mle_2.into_iter().cycle())
+                        .map(|(input_layer_2_mle_1_elem, input_layer_2_mle_2_elem)| input_layer_2_mle_1_elem + input_layer_2_mle_2_elem),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+
+        let first_layer_output = layers.add_gkr(layer_1);
+        let second_layer_output = layers.add_gkr(layer_2);
+
+        // --- Next layer should take the two and add them ---
+        let layer_3 = from_mle(
+            // Lol this hack though
+            (first_layer_output, second_layer_output),
+            |(first_layer_output_mle_param, second_layer_output_mle_param)| {
+                let first_layer_output_mle_param_expr_ptr = Box::new(ExpressionStandard::Mle(first_layer_output_mle_param.mle_ref()));
+                let second_layer_output_mle_param_expr_ptr = Box::new(ExpressionStandard::Mle(second_layer_output_mle_param.mle_ref()));
+                ExpressionStandard::Sum(first_layer_output_mle_param_expr_ptr, second_layer_output_mle_param_expr_ptr)
+            },
+            |(first_layer_output_mle_param, second_layer_output_mle_param), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    first_layer_output_mle_param.into_iter()
+                        .zip(second_layer_output_mle_param.into_iter().cycle())
+                        .map(|(first_layer_output_mle_param_elem, second_layer_output_mle_param_elem)| first_layer_output_mle_param_elem + second_layer_output_mle_param_elem),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+        let third_layer_output = layers.add_gkr(layer_3);
+
+        // --- Subtract the last layer from itself so we get all zeros ---
+        let layer_4 = EqualityCheck::new(third_layer_output.clone(), third_layer_output);
+        let fourth_layer_output = layers.add_gkr(layer_4);
+
+        Ok((
+            Witness {
+                layers,
+                output_layers: vec![fourth_layer_output.get_enum()],
+                input_layers: vec![input_layer_1, input_layer_2],
+            },
+            vec![input_layer_1_commitment, input_layer_2_commitment],
+        ))
+    }
+}
+impl<F: FieldExt> MultiInputLayerCircuit<F> {
+    /// Constructor
+    pub fn new(
+        input_layer_1_mle_1: DenseMle<F, F>,
+        input_layer_1_mle_2: DenseMle<F, F>,
+        input_layer_2_mle_1: DenseMle<F, F>,
+        input_layer_2_mle_2: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            input_layer_1_mle_1,
+            input_layer_1_mle_2,
+            input_layer_2_mle_1,
+            input_layer_2_mle_2,
+        }
     }
 }
 
@@ -530,10 +679,10 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let pos_mul_output = 
+        let pos_mul_output =
             layers.add_mul_gate(nonzero_gates.clone(), self.mle_1.mle_ref(), self.mle_2.mle_ref());
 
-        let neg_mul_output = 
+        let neg_mul_output =
             layers.add_mul_gate(nonzero_gates.clone(), self.mle_1.mle_ref(), self.neg_mle_2.mle_ref());
 
         let add_gate_layer_output =
@@ -579,10 +728,10 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
 
         dbg!(&nonzero_gates);
 
-        let neg_mul_output = 
+        let neg_mul_output =
         layers.add_mul_gate_batched(nonzero_gates.clone(), self.mle_1.mle_ref(), self.neg_mle_2.mle_ref(), self.batch_bits);
 
-        let pos_mul_output = 
+        let pos_mul_output =
         layers.add_mul_gate_batched(nonzero_gates.clone(), self.mle_1.mle_ref(), self.mle_2.mle_ref(), self.batch_bits);
 
         let add_gate_layer_output =
@@ -610,7 +759,7 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
     let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
             // let num = Fr::from(rng.gen::<u64>());
-            
+
             Fr::one()
         }),
         LayerId::Input(0),
@@ -620,7 +769,7 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
     let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
             // let num = Fr::from(rng.gen::<u64>());
-            
+
             Fr::one()
         }),
         LayerId::Input(0),
@@ -655,7 +804,7 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
 
     let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            
+
             Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
@@ -664,7 +813,7 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
 
     let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            
+
             Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
@@ -734,7 +883,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedGateCircuit<F> {
 /// Circuit which subtracts its two halves, except for the part where one half is
 /// comprised of a pre-committed Ligero input layer and the other half is comprised
 /// of a Ligero input layer which is committed to on the spot.
-/// 
+///
 /// The circuit itself produces independent claims on its two input MLEs, and is basically
 /// two indpendent circuits via the fact that it basically subtracts each input MLE
 /// from itself and calls that the output layer. In particular, this allows us to test
@@ -825,7 +974,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
 
 /// Circuit which has an empty layer as an intermediate layer with multiple claims going both
 /// to and from it, to thoroughly test the expected behavior of the `EmptyLayer`.
-/// 
+///
 /// Note that all three MLEs have size 2! The structure of the circuit is as follows:
 /// * The two empty layer src MLEs' elements are each multiplied together and then added between
 /// the two to yield a single empty layer.
@@ -1078,6 +1227,26 @@ fn test_gkr_circuit_with_precommit() {
 // ------------------------------------ INPUT LAYER TESTING CIRCUITS ------------------------------------
 
 #[test]
+fn test_multiple_input_layers_circuit() {
+
+    let mut rng = test_rng();
+    let input_layer_1_mle_1 = get_random_mle::<Fr>(3, &mut rng);
+    let input_layer_1_mle_2 = get_random_mle::<Fr>(2, &mut rng);
+
+    let mut input_layer_2_mle_1 = get_random_mle::<Fr>(2, &mut rng);
+    let mut input_layer_2_mle_2 = get_random_mle::<Fr>(1, &mut rng);
+
+    // --- Yikes ---
+    input_layer_2_mle_1.layer_id = LayerId::Input(1);
+    input_layer_2_mle_2.layer_id = LayerId::Input(1);
+
+    let circuit = MultiInputLayerCircuit::new(
+        input_layer_1_mle_1, input_layer_1_mle_2, input_layer_2_mle_1, input_layer_2_mle_2);
+    
+    test_circuit(circuit, Some(Path::new("./multiple_input_layers_circuit.json")));
+}
+
+#[test]
 fn test_random_layer_circuit() {
 
     // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
@@ -1103,7 +1272,7 @@ fn test_gkr_gate_simplest_circuit() {
     // --- This should be 2^2 ---
     let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            
+
             Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
@@ -1138,7 +1307,7 @@ fn test_gkr_gate_batched_simplest_circuit() {
     // --- This should be 2^4 ---
     let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            
+
             Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
@@ -1150,7 +1319,7 @@ fn test_gkr_gate_batched_simplest_circuit() {
         mle.mle_ref().bookkeeping_table.into_iter().map(
             |elem|
             -elem
-        ), 
+        ),
         LayerId::Input(0),
         // this is the batched bits
         None,
@@ -1174,7 +1343,7 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
     // --- This should be 2^4 ---
     let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| {
-            
+
             Fr::from(rng.gen::<u64>())
         }),
         LayerId::Input(0),
@@ -1186,7 +1355,7 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
         mle.mle_ref().bookkeeping_table[0..size2].iter().map(
             |elem|
             -elem
-        ), 
+        ),
         LayerId::Input(0),
         // These are NOT the batched bits
         None,
