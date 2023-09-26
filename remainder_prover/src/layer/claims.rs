@@ -382,6 +382,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 
     // Do nothing if there is only one claim.
     if num_claims == 1 {
+        println!("Claim Aggregation: 1 claim. Doing nothing.");
         return (claims.get_claim(0).clone(), None);
     }
 
@@ -436,6 +437,7 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
 
     // Do nothing if there is only one claim.
     if num_claims == 1 {
+        println!("Claim Aggregation: 1 claim. Doing nothing.");
         // Return the claim but erase any from/to layer info so as not to
         // trigger any checks from claim groups used in claim aggregation.
         let claim = Claim {
@@ -462,9 +464,20 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     let agg_chal = transcript
         .get_challenge("Challenge for claim aggregation")
         .unwrap();
+    println!("Aggregate challenge: {:#?}", agg_chal);
 
     let aggregated_challenges = compute_aggregated_challenges(claims, agg_chal).unwrap();
     let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
+
+    println!("Aggregating claims: ");
+    for c in claims.get_claim_vector() {
+        println!("   {:#?}", c);
+    }
+
+    println!(
+        "* Aggregated claim: {:#?}",
+        Claim::new_raw(aggregated_challenges.clone(), claimed_val)
+    );
 
     (
         Claim::new_raw(aggregated_challenges, claimed_val),
