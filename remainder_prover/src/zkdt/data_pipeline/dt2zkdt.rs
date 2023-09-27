@@ -433,14 +433,14 @@ pub fn load_raw_trees_model(filename: &str) -> RawTreesModel {
 /// Note that `raw_samples.values.len()` is currently 4573! This means we can go
 /// up to 4096 in terms of batch sizes which are powers of 2
 pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
-    input_batch_size: Option<usize>,
+    log_input_batch_size: Option<usize>,
     _num_trees_if_multiple: Option<usize>,
     raw_trees_model_path: &Path,
     raw_samples_path: &Path,
 ) -> (ZKDTCircuitData<F>, (usize, usize)) {
 
     // --- TODO!(ryancao): We need to test our stuff with a non-power-of-two `input_batch_size` ---
-    let true_input_batch_size = input_batch_size.unwrap_or(2);
+    let true_input_batch_size = 2_usize.pow(log_input_batch_size.unwrap_or(1) as u32);
     assert!(true_input_batch_size.is_power_of_two());
 
     // let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");

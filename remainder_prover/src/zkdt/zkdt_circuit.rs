@@ -7,7 +7,7 @@ use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder,
 use crate::{prover::{GKRCircuit, Layers, Witness}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
-use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder, SquaringBuilder, ProductBuilder, BitExponentiationBuilderInput}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::{dataparallel_circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::{BatchedCatboostMles}, dt2zkdt::load_upshot_data_single_tree_batch}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul, bits_are_binary_circuit::{dataparallel_circuits::{BinDecomp4BitIsBinaryCircuitBatched, BinDecomp16BitIsBinaryCircuitBatched}, circuits::BinDecomp16BitIsBinaryCircuit}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit, multiset_circuit::{legacy_circuits::MultiSetCircuit, circuits::FSMultiSetCircuit}, input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit, constants::get_tree_commitment_filename_for_tree_number};
+use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder, SquaringBuilder, ProductBuilder, BitExponentiationBuilderInput}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::{dataparallel_circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::BatchedCatboostMles}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul, bits_are_binary_circuit::{dataparallel_circuits::{BinDecomp4BitIsBinaryCircuitBatched, BinDecomp16BitIsBinaryCircuitBatched}, circuits::BinDecomp16BitIsBinaryCircuit}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit, multiset_circuit::{legacy_circuits::MultiSetCircuit, circuits::FSMultiSetCircuit}, input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit, constants::get_tree_commitment_filename_for_tree_number};
 use std::{marker::PhantomData, path::Path};
 
 /// The actual ZKDT circuit!
@@ -274,7 +274,6 @@ impl <F: FieldExt> ZKDTCircuit<F> {
         // Input(3)
         let random_r = RandomInputLayer::new(transcript, 1, LayerId::Input(3));
         let r_mle = random_r.get_mle();
-        dbg!(&r_mle.layer_id);
         let mut random_r = random_r.to_enum();
         let random_r_commit = random_r
             .commit()
@@ -283,7 +282,6 @@ impl <F: FieldExt> ZKDTCircuit<F> {
         // Input(4)
         let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(4));
         let r_packing_mle = random_r_packing.get_mle();
-        dbg!(&r_packing_mle.layer_id);
         let mut random_r_packing = random_r_packing.to_enum();
         let random_r_packing_commit = random_r_packing
             .commit()
@@ -292,7 +290,6 @@ impl <F: FieldExt> ZKDTCircuit<F> {
         // Input(5)
         let random_r_packing_another = RandomInputLayer::new(transcript, 1, LayerId::Input(5));
         let r_packing_another_mle = random_r_packing_another.get_mle();
-        dbg!(&r_packing_another_mle.layer_id);
         let mut random_r_packing_another = random_r_packing_another.to_enum();
         let random_r_packing_another_commit = random_r_packing_another
             .commit()

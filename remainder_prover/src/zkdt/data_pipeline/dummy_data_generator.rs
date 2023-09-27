@@ -531,7 +531,7 @@ pub struct BatchedCatboostMles<F: FieldExt> {
 /// to a file for ease of reading (i.e. faster testing, mostly lol)
 pub fn write_mles_batch_catboost_single_tree<F: FieldExt>() {
     let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>(
-        None,
+        Some(1),
          None,
         Path::new("upshot_data/quantized-upshot-model.json"),
         Path::new("upshot_data/upshot-quantized-samples.npy")
