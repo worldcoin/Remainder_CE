@@ -351,7 +351,18 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
     Ok(wlx)
 }
 
+use itertools::Itertools;
+
 fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
+    println!("Num claims BEFORE dedup: {}", claims.len());
+    // Remove duplicates.
+    let claims: Vec<Claim<F>> = claims
+        .to_vec()
+        .into_iter()
+        .unique_by(|c| c.get_point().clone())
+        .collect();
+    println!("Num claims AFTER dedup: {}", claims.len());
+
     let num_claims = claims.len();
     let mut claim_group_vec: Vec<ClaimGroup<F>> = vec![];
 
@@ -397,7 +408,15 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
                 (Some(id1), Some(id2)) => id1.cmp(&id2),
                 (None, Some(_)) => Ordering::Less,
                 (Some(_), None) => Ordering::Greater,
-                (None, None) => Ordering::Equal,
+                (None, None) => {
+                    if claim1.get_point() < claim2.get_point() {
+                        Ordering::Less
+                    } else if claim1.get_point() > claim2.get_point() {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Equal
+                    }
+                }
             }
         });
 
@@ -408,6 +427,11 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
         let mut intermediate_claims: Vec<Claim<F>> = vec![];
 
         let claim_groups = form_claim_groups(&claims);
+
+        println!("Claim Groups: {:#?}", claim_groups);
+        // for c in &claim_groups {
+        //     println!("claim group with {} number of claims.", c.get_num_claims());
+        // }
 
         let intermediate_claims: Vec<Claim<F>> = claim_groups
             .into_iter()
