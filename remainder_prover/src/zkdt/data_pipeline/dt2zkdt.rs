@@ -424,21 +424,29 @@ pub fn load_raw_trees_model(filename: &str) -> RawTreesModel {
 /// ## Arguments
 /// * `input_batch_size` - The number of tree inputs to return. Must be a power of two!
 /// * `num_trees_if_multiple` - Currently unused!!!
+/// * `raw_trees_model_path` - Path to the JSON file representing the quantized version of the model
+///     (as output by the Python preprocessing)
+/// * `raw_samples_path` - Path to the NumPy file representing the quantized version of the samples
+///     (again, as output by the Python preprocessing)
 /// 
 /// ## Notes
 /// Note that `raw_samples.values.len()` is currently 4573! This means we can go
 /// up to 4096 in terms of batch sizes which are powers of 2
 pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     input_batch_size: Option<usize>,
-    _num_trees_if_multiple: Option<usize>
+    _num_trees_if_multiple: Option<usize>,
+    raw_trees_model_path: &Path,
+    raw_samples_path: &Path,
 ) -> (ZKDTCircuitData<F>, (usize, usize)) {
 
     // --- TODO!(ryancao): We need to test our stuff with a non-power-of-two `input_batch_size` ---
     let true_input_batch_size = input_batch_size.unwrap_or(2);
     assert!(true_input_batch_size.is_power_of_two());
 
-    let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
-    let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+    // let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
+    // let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+    let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path.to_str().unwrap());
+    let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path.to_str().unwrap());
     raw_samples.values = raw_samples.values[0..true_input_batch_size].to_vec();
 
     let trees_model: TreesModel = (&raw_trees_model).into();
@@ -491,11 +499,9 @@ pub fn generate_all_tree_ligero_commitments<F: FieldExt>(upshot_data_dir_path: &
 
             // --- Create MLEs from each tree decision + leaf node list ---
             let mut tree_decision_nodes_mle = DenseMle::new_from_iter(tree_decision_nodes
-                
                 .into_iter()
                 .map(DecisionNode::from), LayerId::Input(0), None);
             let mut tree_leaf_nodes_mle = DenseMle::new_from_iter(tree_leaf_nodes
-                
                 .into_iter()
                 .map(LeafNode::from), LayerId::Input(0), None);
 
@@ -549,7 +555,7 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
     // --- We create batches of size 2^1, ..., 2^{12} ---
     (1..12).for_each(|batch_size_exp| {
 
-        dbg!(upshot_data_dir_path);
+        dbg!(&upshot_data_dir_path);
 
         let cached_filepath = get_cached_batched_mles_filename_with_exp_size(batch_size_exp, upshot_data_dir_path);
         if file_exists(&cached_filepath) {
