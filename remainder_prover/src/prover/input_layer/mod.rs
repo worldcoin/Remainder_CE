@@ -31,6 +31,8 @@ pub enum InputLayerError {
     OpeningBeforeCommitment,
     #[error("failed to verify public input layer")]
     PublicInputVerificationFailed,
+    #[error("failed to verify random input layer")]
+    RandomInputVerificationFailed,
 }
 
 ///Trait for dealing with the InputLayer
