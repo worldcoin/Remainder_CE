@@ -70,6 +70,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use std::fs::{File, self};
 use std::path::Path;
+use std::fmt;
 
 use super::dummy_data_generator::{ZKDTCircuitData};
 
@@ -104,6 +105,21 @@ pub struct CircuitizedTrees<F: FieldExt> {
     scaling: f64,
 }
 
+/// Output of load_raw_samples, for conversion (using a TreesModel) to a Samples instance.
+/// Values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
+/// [`build_signed_bit_decomposition`]).
+#[derive(Clone)]
+pub struct RawSamples {
+    values: Vec<Vec<u16>>,
+    sample_length: usize
+}
+
+/// Output of [`to_samples`], input to [`circuitize_samples`].
+pub struct Samples {
+    values: Vec<Vec<u16>>,
+    sample_length: usize
+}
+
 /// Represents the circuitization of a batch of samples with respect to a TreesModel.
 /// Bit decompositions are little endian.
 /// `differences` is a signed decomposition, with the sign bit at the end.
@@ -120,10 +136,20 @@ pub struct CircuitizedSamples<F: FieldExt> {
     node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,    // indexed by trees, tree nodes
 }
 
-/// Output of [`to_samples`], input to [`circuitize_samples`].
-pub struct Samples {
-    values: Vec<Vec<u16>>,
-    sample_length: usize
+impl fmt::Display for RawSamples {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?} samples with {:?} attributes", self.values.len(), self.sample_length)
+    }
+}
+
+impl RawSamples {
+    pub fn slice(&self, start: usize, end: usize) -> Self {
+        let values = self.values[start..end].to_vec();
+        RawSamples {
+            values: values,
+            sample_length: self.sample_length,
+        }
+    }
 }
 
 /// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample values.
@@ -356,6 +382,17 @@ impl From<&RawTreesModel> for TreesModel {
     }
 }
 
+impl fmt::Display for RawTreesModel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let max_depth = self.trees
+            .iter()
+            .map(|tree: &Node<f64>| tree.depth(std::cmp::max))
+            .max()
+            .unwrap();
+        write!(f, "{:?} trees of maximum depth {:?}", self.trees.len(), max_depth)
+    }
+}
+
 /// Generate a RawTreesModel as specified.  Meaning of arguments as per generate_trees().
 /// Scale and bias are chosen randomly.
 pub fn generate_raw_trees_model(
@@ -373,15 +410,6 @@ pub fn generate_raw_trees_model(
         scale: rng.gen(),
         n_features,
     }
-}
-
-/// Output of load_raw_samples, for conversion (using a TreesModel) to a Samples instance.
-/// Values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
-/// [`build_signed_bit_decomposition`]).
-#[derive(Clone)]
-pub struct RawSamples {
-    values: Vec<Vec<u16>>,
-    sample_length: usize
 }
 
 /// Generate an array of samples for input into the trees model.  For demonstration purposes.
@@ -829,7 +857,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_upshot_loading_and_circuitization() {
         // for this to work, those files need to be in place (not stored on the repo):
         // 1. remainder_prover/upshot_data/upshot-quantized-samples.npy
