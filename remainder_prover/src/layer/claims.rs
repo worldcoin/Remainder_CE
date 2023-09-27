@@ -355,6 +355,7 @@ use itertools::Itertools;
 
 fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
     println!("Num claims BEFORE dedup: {}", claims.len());
+
     // Remove duplicates.
     let claims: Vec<Claim<F>> = claims
         .to_vec()
