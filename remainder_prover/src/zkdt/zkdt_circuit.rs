@@ -1,17 +1,63 @@
-use ark_std::{log2};
-use itertools::{Itertools, repeat_n};
+use ark_std::log2;
+use itertools::{repeat_n, Itertools};
 
-use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, zkdt::builders::{BitExponentiationBuilderCatBoost, AttributeConsistencyBuilderZeroRef}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, InputLayer, MleInputLayer, enum_input_layer::{InputLayerEnum, CommitmentEnum}, self, random_input_layer::RandomInputLayer}, combine_layers::combine_layers, GKRError}};
-use crate::{prover::{GKRCircuit, Layers, Witness}};
-use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
+use crate::prover::{GKRCircuit, Layers, Witness};
+use crate::{
+    layer::{
+        batched::{combine_zero_mle_ref, unbatch_mles, BatchedLayer},
+        empty_layer::EmptyLayer,
+        LayerBuilder, LayerId, Padding,
+    },
+    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
+    prover::{
+        combine_layers::combine_layers,
+        input_layer::{
+            self,
+            combine_input_layers::InputLayerBuilder,
+            enum_input_layer::{CommitmentEnum, InputLayerEnum},
+            ligero_input_layer::LigeroInputLayer,
+            random_input_layer::RandomInputLayer,
+            InputLayer, MleInputLayer,
+        },
+        GKRError,
+    },
+    zkdt::builders::{AttributeConsistencyBuilderZeroRef, BitExponentiationBuilderCatBoost},
+};
+use remainder_shared_types::{
+    transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
+    FieldExt,
+};
 
-use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder, SquaringBuilder, ProductBuilder, BitExponentiationBuilderInput}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::{dataparallel_circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::{BatchedCatboostMles}, dt2zkdt::load_upshot_data_single_tree_batch}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul, bits_are_binary_circuit::{dataparallel_circuits::{BinDecomp4BitIsBinaryCircuitBatched, BinDecomp16BitIsBinaryCircuitBatched}, circuits::BinDecomp16BitIsBinaryCircuit}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit, multiset_circuit::{legacy_circuits::MultiSetCircuit, circuits::FSMultiSetCircuit}, input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit};
-use std::{marker::PhantomData};
+use super::{
+    attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit,
+    binary_recomp_circuit::dataparallel_circuits::BinaryRecompCircuitBatched,
+    bits_are_binary_circuit::{
+        circuits::BinDecomp16BitIsBinaryCircuit,
+        dataparallel_circuits::{
+            BinDecomp16BitIsBinaryCircuitBatched, BinDecomp4BitIsBinaryCircuitBatched,
+        },
+    },
+    builders::{
+        BitExponentiationBuilderInput, EqualityCheck, FSDecisionPackingBuilder,
+        FSInputPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder, ProductBuilder,
+        SplitProductBuilder, SquaringBuilder,
+    },
+    data_pipeline::{
+        dt2zkdt::load_upshot_data_single_tree_batch, dummy_data_generator::BatchedCatboostMles,
+    },
+    input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit,
+    multiset_circuit::{circuits::FSMultiSetCircuit, legacy_circuits::MultiSetCircuit},
+    path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
+    structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
+};
+use std::marker::PhantomData;
+
+use env_logger;
 
 /// The actual ZKDT circuit!
 pub struct CombinedCircuits<F: FieldExt> {
     /// All of the input MLEs coming from the data generation pipeline
-    pub batched_catboost_mles: BatchedCatboostMles<F>
+    pub batched_catboost_mles: BatchedCatboostMles<F>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
@@ -21,9 +67,15 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
     }
 
     fn synthesize_and_commit(
-            &mut self,
-            transcript: &mut Self::Transcript,
-        ) -> Result<(Witness<F, Self::Transcript>, Vec<input_layer::enum_input_layer::CommitmentEnum<F>>), crate::prover::GKRError> {
+        &mut self,
+        transcript: &mut Self::Transcript,
+    ) -> Result<
+        (
+            Witness<F, Self::Transcript>,
+            Vec<input_layer::enum_input_layer::CommitmentEnum<F>>,
+        ),
+        crate::prover::GKRError,
+    > {
         let (
             // --- Actual circuit components ---
             mut attribute_consistency_circuit,
@@ -35,20 +87,24 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
             mut bin_decomp_16_bit_batched_bits_binary,
             bits_are_binary_multiset_decision_circuit,
             bits_are_binary_multiset_leaf_circuit,
-
             // --- Input layer ---
             input_layers,
-            inpunt_layers_commits
+            inpunt_layers_commits,
         ) = self.create_sub_circuits(transcript).unwrap();
 
         let attribute_consistency_witness = attribute_consistency_circuit.yield_sub_circuit();
         let multiset_witness = multiset_circuit.yield_sub_circuit();
         let input_multiset_witness = input_multiset_circuit.yield_sub_circuit();
-        let binary_recomp_circuit_batched_witness = binary_recomp_circuit_batched.yield_sub_circuit();
-        let bin_decomp_4_bit_binary_batched_witness = bin_decomp_4_bit_batched_bits_binary.yield_sub_circuit();
-        let bin_decomp_16_bit_binary_batched_witness = bin_decomp_16_bit_batched_bits_binary.yield_sub_circuit();
-        let bits_are_binary_multiset_decision_circuit_witness = bits_are_binary_multiset_decision_circuit.yield_sub_circuit();
-        let bits_are_binary_multiset_leaf_circuit_witness = bits_are_binary_multiset_leaf_circuit.yield_sub_circuit();
+        let binary_recomp_circuit_batched_witness =
+            binary_recomp_circuit_batched.yield_sub_circuit();
+        let bin_decomp_4_bit_binary_batched_witness =
+            bin_decomp_4_bit_batched_bits_binary.yield_sub_circuit();
+        let bin_decomp_16_bit_binary_batched_witness =
+            bin_decomp_16_bit_batched_bits_binary.yield_sub_circuit();
+        let bits_are_binary_multiset_decision_circuit_witness =
+            bits_are_binary_multiset_decision_circuit.yield_sub_circuit();
+        let bits_are_binary_multiset_leaf_circuit_witness =
+            bits_are_binary_multiset_leaf_circuit.yield_sub_circuit();
 
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
@@ -75,9 +131,11 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
         .unwrap();
 
         // --- Manually add the layers and output layers from the circuit involving gate MLEs ---
-        let updated_combined_output_layers = path_consistency_circuit_batched.add_subcircuit_layers_to_combined_layers(
-            &mut combined_circuit_layers, 
-            combined_circuit_output_layers);
+        let updated_combined_output_layers = path_consistency_circuit_batched
+            .add_subcircuit_layers_to_combined_layers(
+                &mut combined_circuit_layers,
+                combined_circuit_output_layers,
+            );
 
         Ok((
             Witness {
@@ -90,8 +148,12 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuits<F> {
     }
 }
 
-impl <F: FieldExt> CombinedCircuits<F> {
-    fn create_sub_circuits(&mut self, transcript: &mut PoseidonTranscript<F>) -> Result<(
+impl<F: FieldExt> CombinedCircuits<F> {
+    fn create_sub_circuits(
+        &mut self,
+        transcript: &mut PoseidonTranscript<F>,
+    ) -> Result<
+        (
             AttributeConsistencyCircuit<F>,
             FSMultiSetCircuit<F>,
             InputMultiSetCircuit<F>,
@@ -102,9 +164,10 @@ impl <F: FieldExt> CombinedCircuits<F> {
             BinDecomp16BitIsBinaryCircuit<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
             Vec<InputLayerEnum<F, PoseidonTranscript<F>>>, // input layers, including random layers
-            Vec<CommitmentEnum<F>> // input layers' commitments
-        ), GKRError> {
-
+            Vec<CommitmentEnum<F>>,                        // input layers' commitments
+        ),
+        GKRError,
+    > {
         let BatchedCatboostMles {
             mut input_data_mle_vec,
             mut permuted_input_data_mle_vec,
@@ -115,16 +178,28 @@ impl <F: FieldExt> CombinedCircuits<F> {
             mut decision_nodes_mle,
             mut leaf_nodes_mle,
             mut binary_decomp_diffs_mle_vec,
-            mut multiplicities_bin_decomp_mle_input_vec
+            mut multiplicities_bin_decomp_mle_input_vec,
         } = self.batched_catboost_mles.clone(); // TODO!(% Labs): Get rid of this clone?!?!
 
         // deal w input
-        let mut input_data_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_data_mle_vec.clone());
-        let mut permuted_input_data_mle_vec_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(permuted_input_data_mle_vec.clone());
-        let mut decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(decision_node_paths_mle_vec.clone());
-        let mut leaf_node_paths_mle_vec_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(leaf_node_paths_mle_vec.clone());
-        let mut combined_batched_diff_signed_bin_decomp_mle = DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(binary_decomp_diffs_mle_vec.clone());
-        let mut multiplicities_bin_decomp_mle_input_vec_combined = DenseMle::<F, BinDecomp4Bit<F>>::combine_mle_batch(multiplicities_bin_decomp_mle_input_vec.clone());
+        let mut input_data_mle_combined =
+            DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_data_mle_vec.clone());
+        let mut permuted_input_data_mle_vec_combined =
+            DenseMle::<F, InputAttribute<F>>::combine_mle_batch(
+                permuted_input_data_mle_vec.clone(),
+            );
+        let mut decision_node_paths_mle_vec_combined =
+            DenseMle::<F, DecisionNode<F>>::combine_mle_batch(decision_node_paths_mle_vec.clone());
+        let mut leaf_node_paths_mle_vec_combined =
+            DenseMle::<F, LeafNode<F>>::combine_mle_batch(leaf_node_paths_mle_vec.clone());
+        let mut combined_batched_diff_signed_bin_decomp_mle =
+            DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(
+                binary_decomp_diffs_mle_vec.clone(),
+            );
+        let mut multiplicities_bin_decomp_mle_input_vec_combined =
+            DenseMle::<F, BinDecomp4Bit<F>>::combine_mle_batch(
+                multiplicities_bin_decomp_mle_input_vec.clone(),
+            );
 
         // TODO!(ryancao): Actually fix this!!
         // Note to Veridise folks: The below should be split up as written, but we didn't quite have time to
@@ -190,10 +265,8 @@ impl <F: FieldExt> CombinedCircuits<F> {
             // --- Tree MLEs ---
             Box::new(&mut decision_nodes_mle),
             Box::new(&mut leaf_nodes_mle),
-
             // --- Input MLEs ---
             Box::new(&mut input_data_mle_combined),
-
             // --- Aux MLEs ---
             Box::new(&mut permuted_input_data_mle_vec_combined),
             Box::new(&mut decision_node_paths_mle_vec_combined),
@@ -203,12 +276,14 @@ impl <F: FieldExt> CombinedCircuits<F> {
             Box::new(&mut combined_batched_diff_signed_bin_decomp_mle),
             Box::new(&mut multiplicities_bin_decomp_mle_input_vec_combined),
         ];
-        let all_ligero_mles_input_layer_builder = InputLayerBuilder::new(all_ligero_mles, None, LayerId::Input(0));
+        let all_ligero_mles_input_layer_builder =
+            InputLayerBuilder::new(all_ligero_mles, None, LayerId::Input(0));
 
         // --- Add input layer derived prefix bits to vectors ---
         // --- First input layer ---
         for decision_node_paths_mle in decision_node_paths_mle_vec.iter_mut() {
-            decision_node_paths_mle.add_prefix_bits(decision_node_paths_mle_vec_combined.get_prefix_bits())
+            decision_node_paths_mle
+                .add_prefix_bits(decision_node_paths_mle_vec_combined.get_prefix_bits())
         }
         for leaf_node_paths_mle in leaf_node_paths_mle_vec.iter_mut() {
             leaf_node_paths_mle.add_prefix_bits(leaf_node_paths_mle_vec_combined.get_prefix_bits())
@@ -221,19 +296,25 @@ impl <F: FieldExt> CombinedCircuits<F> {
 
         // --- Last input layer ---
         for permuted_input_data_mle in permuted_input_data_mle_vec.iter_mut() {
-            permuted_input_data_mle.add_prefix_bits(permuted_input_data_mle_vec_combined.get_prefix_bits());
+            permuted_input_data_mle
+                .add_prefix_bits(permuted_input_data_mle_vec_combined.get_prefix_bits());
         }
         for decision_node_paths_mle in decision_node_paths_mle_vec.iter_mut() {
-            decision_node_paths_mle.add_prefix_bits(decision_node_paths_mle_vec_combined.get_prefix_bits());
+            decision_node_paths_mle
+                .add_prefix_bits(decision_node_paths_mle_vec_combined.get_prefix_bits());
         }
         for leaf_node_paths_mle in leaf_node_paths_mle_vec.iter_mut() {
             leaf_node_paths_mle.add_prefix_bits(leaf_node_paths_mle_vec_combined.get_prefix_bits());
         }
         for binary_decomp_diffs_mle in binary_decomp_diffs_mle_vec.iter_mut() {
-            binary_decomp_diffs_mle.add_prefix_bits(combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits())
+            binary_decomp_diffs_mle
+                .add_prefix_bits(combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits())
         }
-        for multiplicities_bin_decomp_mle_input in multiplicities_bin_decomp_mle_input_vec.iter_mut() {
-            multiplicities_bin_decomp_mle_input.add_prefix_bits(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits())
+        for multiplicities_bin_decomp_mle_input in
+            multiplicities_bin_decomp_mle_input_vec.iter_mut()
+        {
+            multiplicities_bin_decomp_mle_input
+                .add_prefix_bits(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits())
         }
 
         // --- Add commitments to transcript so they are taken into account before the FS input layers are sampled ---
@@ -253,20 +334,20 @@ impl <F: FieldExt> CombinedCircuits<F> {
         //     .map_err(|err| GKRError::InputLayerError(err))?;
         // InputLayerEnum::append_commitment_to_transcript(&aux_mle_commit, transcript).unwrap();
 
-        let all_ligero_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = all_ligero_mles_input_layer_builder.to_input_layer();
-        let mut all_ligero_mles_input_layer = all_ligero_mles_input_layer.to_enum(); 
+        let all_ligero_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+            all_ligero_mles_input_layer_builder.to_input_layer();
+        let mut all_ligero_mles_input_layer = all_ligero_mles_input_layer.to_enum();
         let all_input_mles_commit = all_ligero_mles_input_layer
             .commit()
             .map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&all_input_mles_commit, transcript).unwrap();
+        InputLayerEnum::append_commitment_to_transcript(&all_input_mles_commit, transcript)
+            .unwrap();
 
         // FS
         let random_r = RandomInputLayer::new(transcript, 1, LayerId::Input(1));
         let r_mle = random_r.get_mle();
         let mut random_r = random_r.to_enum();
-        let random_r_commit = random_r
-            .commit()
-            .map_err(GKRError::InputLayerError)?;
+        let random_r_commit = random_r.commit().map_err(GKRError::InputLayerError)?;
 
         let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(3));
         let r_packing_mle = random_r_packing.get_mle();
@@ -307,7 +388,8 @@ impl <F: FieldExt> CombinedCircuits<F> {
         let input_multiset_circuit = InputMultiSetCircuit {
             input_data_mle_vec,
             permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
-            multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vec.clone(),
+            multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vec
+                .clone(),
             r_mle,
             r_packing_mle,
         };
@@ -325,24 +407,20 @@ impl <F: FieldExt> CombinedCircuits<F> {
         );
 
         // --- Bits are binary check for each of the binary decomposition input MLEs ---
-        let bits_binary_16_bit_batched = BinDecomp16BitIsBinaryCircuitBatched::new(
-            binary_decomp_diffs_mle_vec
-        );
+        let bits_binary_16_bit_batched =
+            BinDecomp16BitIsBinaryCircuitBatched::new(binary_decomp_diffs_mle_vec);
 
-        let bits_binary_4_bit_batched = BinDecomp4BitIsBinaryCircuitBatched::new(
-            multiplicities_bin_decomp_mle_input_vec
-        );
+        let bits_binary_4_bit_batched =
+            BinDecomp4BitIsBinaryCircuitBatched::new(multiplicities_bin_decomp_mle_input_vec);
 
-        let bits_are_binary_multiset_decision_circuit = BinDecomp16BitIsBinaryCircuit::new(
-            multiplicities_bin_decomp_mle_decision
-        );
-        let bits_are_binary_multiset_leaf_circuit = BinDecomp16BitIsBinaryCircuit::new(
-            multiplicities_bin_decomp_mle_leaf
-        );        
+        let bits_are_binary_multiset_decision_circuit =
+            BinDecomp16BitIsBinaryCircuit::new(multiplicities_bin_decomp_mle_decision);
+        let bits_are_binary_multiset_leaf_circuit =
+            BinDecomp16BitIsBinaryCircuit::new(multiplicities_bin_decomp_mle_leaf);
 
         Ok((
             // --- Actual circuit components ---
-            attribute_consistency_circuit, 
+            attribute_consistency_circuit,
             multiset_circuit,
             input_multiset_circuit,
             binary_recomp_circuit_batched,
@@ -351,7 +429,6 @@ impl <F: FieldExt> CombinedCircuits<F> {
             bits_binary_16_bit_batched,
             bits_are_binary_multiset_decision_circuit,
             bits_are_binary_multiset_leaf_circuit,
-
             // --- Input layers ---
             vec![
                 // tree_mle_input_layer,
@@ -360,9 +437,8 @@ impl <F: FieldExt> CombinedCircuits<F> {
                 all_ligero_mles_input_layer,
                 random_r,
                 random_r_packing,
-                random_r_packing_another
+                random_r_packing_another,
             ],
-
             vec![
                 // tree_mle_commit,
                 // input_mle_commit,
@@ -370,8 +446,8 @@ impl <F: FieldExt> CombinedCircuits<F> {
                 all_input_mles_commit,
                 random_r_commit,
                 random_r_packing_commit,
-                random_r_packing_another_commit
-            ]
+                random_r_packing_another_commit,
+            ],
         ))
     }
 }
@@ -383,7 +459,8 @@ pub struct ZKDTCircuit<F: FieldExt> {
 
 impl<F: FieldExt> ZKDTCircuit<F> {
     pub fn new(batch_size: usize) -> Self {
-        let _batched_catboost_data = load_upshot_data_single_tree_batch::<F>(Some(batch_size), None);
+        let _batched_catboost_data =
+            load_upshot_data_single_tree_batch::<F>(Some(batch_size), None);
         Self {
             _marker: PhantomData,
         }
@@ -400,22 +477,23 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
-    use crate::prover::tests::test_circuit;
     use super::CombinedCircuits;
+    use crate::prover::tests::test_circuit;
+    use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use std::path::Path;
 
     #[test]
     fn test_combine_circuits() {
+        let _ = env_logger::builder().is_test(true).try_init();
 
-        let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
+        let (batched_catboost_mles, (_, _)) =
+            generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let combined_circuit = CombinedCircuits {
-            batched_catboost_mles
+            batched_catboost_mles,
         };
 
         test_circuit(combined_circuit, None);
     }
-
 }

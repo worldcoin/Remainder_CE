@@ -7,10 +7,10 @@ edition = "2021"
 
 [dependencies]
 ark-bn254 = "0.4.0"
-ark-crypto-primitives = {version = "0.4.0", features = ["sponge"]}
+ark-crypto-primitives = { version = "0.4.0", features = ["sponge"] }
 ark-ff = "0.4.2"
 ark-poly = "0.4.2"
-ark-serialize = {version = "0.4.2", features = ["derive"]}
+ark-serialize = { version = "0.4.2", features = ["derive"] }
 ark-std = "0.4.0"
 ark-test-curves = "0.4.2"
 criterion = "0.5.1"
@@ -33,10 +33,17 @@ remainder-shared-types = { path = "../remainder_shared_types" }
 halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" } # For BN-254 from Halo2
 dyn-clone = "1.0.13"
 dyn-clonable = "0.9.0"
+log = "0.4"
+env_logger = "0.10"
 
 
 [dev-dependencies]
 
 [features]
 default = ["parallel"]
-parallel = ["ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "ark-crypto-primitives/parallel"]
+parallel = [
+  "ark-ff/parallel",
+  "ark-poly/parallel",
+  "ark-std/parallel",
+  "ark-crypto-primitives/parallel",
+]

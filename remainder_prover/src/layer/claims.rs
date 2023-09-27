@@ -23,6 +23,8 @@ use core::cmp::Ordering;
 
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
+use log::{debug, info, warn};
+
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims
 pub enum ClaimError {
@@ -354,7 +356,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 use itertools::Itertools;
 
 fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
-    println!("Num claims BEFORE dedup: {}", claims.len());
+    debug!("Num claims BEFORE dedup: {}", claims.len());
 
     // Remove duplicates.
     let claims: Vec<Claim<F>> = claims
@@ -362,7 +364,7 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
         .into_iter()
         .unique_by(|c| c.get_point().clone())
         .collect();
-    println!("Num claims AFTER dedup: {}", claims.len());
+    debug!("Num claims AFTER dedup: {}", claims.len());
 
     let num_claims = claims.len();
     let mut claim_group_vec: Vec<ClaimGroup<F>> = vec![];
@@ -394,7 +396,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 
     // Do nothing if there is only one claim.
     if num_claims == 1 {
-        println!("Claim Aggregation: 1 claim. Doing nothing.");
+        debug!("Claim Aggregation: 1 claim. Doing nothing.");
         return (claims.get_claim(0).clone(), None);
     }
 
@@ -429,9 +431,9 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 
         let claim_groups = form_claim_groups(&claims);
 
-        println!("Claim Groups: {:#?}", claim_groups);
+        debug!("Claim Groups: {:#?}", claim_groups);
         // for c in &claim_groups {
-        //     println!("claim group with {} number of claims.", c.get_num_claims());
+        //     debug!("claim group with {} number of claims.", c.get_num_claims());
         // }
 
         let intermediate_claims: Vec<Claim<F>> = claim_groups
@@ -462,7 +464,7 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
 
     // Do nothing if there is only one claim.
     if num_claims == 1 {
-        println!("Claim Aggregation: 1 claim. Doing nothing.");
+        debug!("Claim Aggregation: 1 claim. Doing nothing.");
         // Return the claim but erase any from/to layer info so as not to
         // trigger any checks from claim groups used in claim aggregation.
         let claim = Claim {
@@ -489,17 +491,17 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     let agg_chal = transcript
         .get_challenge("Challenge for claim aggregation")
         .unwrap();
-    println!("Aggregate challenge: {:#?}", agg_chal);
+    debug!("Aggregate challenge: {:#?}", agg_chal);
 
     let aggregated_challenges = compute_aggregated_challenges(claims, agg_chal).unwrap();
     let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
 
-    println!("Aggregating claims: ");
+    debug!("Aggregating claims: ");
     for c in claims.get_claim_vector() {
-        println!("   {:#?}", c);
+        debug!("   {:#?}", c);
     }
 
-    println!(
+    debug!(
         "* Aggregated claim: {:#?}",
         Claim::new_raw(aggregated_challenges.clone(), claimed_val)
     );
