@@ -319,7 +319,6 @@ fn test_dummy_sumcheck_1() {
 
     let mle_output = DenseMle::new_from_iter(
         mle_new
-            
             .into_iter()
             .zip(mle_2.into_iter())
             .map(|(first, second)| first * second),
@@ -351,8 +350,7 @@ fn test_dummy_sumcheck_2() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_output = DenseMle::new_from_iter(
-        mle1
-            .into_iter()
+        mle1.into_iter()
             .zip(mle2.into_iter())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
@@ -389,8 +387,7 @@ fn test_dummy_sumcheck_3() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_output = DenseMle::new_from_iter(
-        mle1
-            .into_iter()
+        mle1.into_iter()
             .zip(mle2.into_iter().chain(mle2.into_iter()))
             .map(|(first, second)| first * second),
         LayerId::Input(0),
@@ -418,8 +415,7 @@ fn test_dummy_sumcheck_sum_small() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_output = DenseMle::new_from_iter(
-        mle1
-            .into_iter()
+        mle1.into_iter()
             .zip(mle2.into_iter())
             .map(|(first, second)| first + second),
         LayerId::Input(0),
@@ -661,8 +657,7 @@ fn test_dummy_sumcheck_subtract() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_out = DenseMle::new_from_iter(
-        mle1
-            .into_iter()
+        mle1.into_iter()
             .zip(mle2.into_iter())
             .map(|(first, second)| first - second),
         LayerId::Input(0),
@@ -727,8 +722,7 @@ fn test_dummy_sumcheck_product_and_claim_aggregate() {
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
     let mle_out_fake = DenseMle::new_from_iter(
-        mle1
-            .into_iter()
+        mle1.into_iter()
             .zip(mle2.into_iter())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
