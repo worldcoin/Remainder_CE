@@ -380,7 +380,7 @@ pub struct Witness<F: FieldExt, Tr: Transcript<F>> {
 }
 
 /// Controls claim aggregation behavior.
-const ENABLE_OPTIMIZATION: bool = true;
+const ENABLE_OPTIMIZATION: bool = false;
 
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
@@ -717,7 +717,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 // debug!("All wlx evals:\n{:#?}", all_wlx_evaluations);
 
                 let mut idx = 0;
-                let (prev_claim, _) = aggregate_claims(
+                let (claim, _) = aggregate_claims(
                     &layer_claim_group,
                     &mut |claim_group| {
                         debug!("Compute_wlx was called during claim aggregation verification");
@@ -735,6 +735,7 @@ pub trait GKRCircuit<F: FieldExt> {
                     transcript,
                     ENABLE_OPTIMIZATION,
                 );
+                prev_claim = claim;
 
                 if idx != relevant_wlx_evaluations.len() {
                     return Err(GKRError::ErrorWhenVerifyingLayer(
@@ -762,11 +763,15 @@ pub trait GKRCircuit<F: FieldExt> {
                 //                 LayerError::AggregationError,
                 //             )
                 //         })?;
-                debug!("Aggregated claim: {:#?}", prev_claim);
             }
 
+            debug!("Aggregated claim: {:#?}", prev_claim);
             info!("Verifier: about to verify layer");
-            debug!("sumcheck_proof: {:#?}", sumcheck_proof.0);
+            // debug!("sumcheck_proof: {:#?}", sumcheck_proof.0);
+            // debug!(
+            //     "msg0 + msg1 = {:?}",
+            //     sumcheck_proof.0[0][0] + sumcheck_proof.0[0][1]
+            // );
             // --- Performs the actual sumcheck verification step ---
             layer
                 .verify_rounds(prev_claim, sumcheck_proof.0, transcript)

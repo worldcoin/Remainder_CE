@@ -38,6 +38,8 @@ use self::{
 
 use core::cmp::Ordering;
 
+use log::{debug, info};
+
 #[derive(Error, Debug, Clone)]
 /// Errors to do with working with a Layer
 pub enum LayerError {
@@ -275,6 +277,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             dbg!(&self.expression);
         }
 
+        info!("Proving GKR Layer");
+        if first_sumcheck_message[0] + first_sumcheck_message[1] != val {
+            debug!("HUGE PROBLEM");
+        }
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
 
         // --- Add prover message to the FS transcript ---
@@ -334,6 +340,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let mut prev_evals = &sumcheck_prover_messages[0];
 
         if prev_evals[0] + prev_evals[1] != claim.get_result() {
+            debug!("I'm the PROBLEM");
+            debug!("msg0 + msg1 =\n{:?}", prev_evals[0] + prev_evals[1]);
+            debug!("rest =\n{:?}", claim.get_result());
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
             ));
