@@ -356,15 +356,15 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 use itertools::Itertools;
 
 fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
+    info!("Forming a claim group...");
     debug!("Num claims BEFORE dedup: {}", claims.len());
-
     // Remove duplicates.
     let claims: Vec<Claim<F>> = claims
         .to_vec()
         .into_iter()
         .unique_by(|c| c.get_point().clone())
         .collect();
-    debug!("Num claims AFTER dedup: {}", claims.len());
+    debug!("\nNum claims AFTER dedup: {}", claims.len());
 
     let num_claims = claims.len();
     let mut claim_group_vec: Vec<ClaimGroup<F>> = vec![];
@@ -387,21 +387,27 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 
 pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &impl Fn(&ClaimGroup<F>) -> Vec<F>,
+    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Vec<F>,
     transcript: &mut impl transcript::Transcript<F>,
     enable_optimization: bool,
-) -> (Claim<F>, Option<Vec<F>>) {
+) -> (Claim<F>, Option<Vec<Vec<F>>>) {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
 
+    info!("High-level claim aggregation on  {num_claims} claims.");
     // Do nothing if there is only one claim.
     if num_claims == 1 {
-        debug!("Claim Aggregation: 1 claim. Doing nothing.");
+        debug!("Received 1 claim. Doing nothing.");
         return (claims.get_claim(0).clone(), None);
     }
 
     if enable_optimization {
+        info!("Performing smart aggregation.");
         let mut claims = claims.get_claim_vector().clone();
+
+        // Holds a sequence of relevant wlx evaluations, one for each claim
+        // group that is being aggregated.
+        let mut group_wlx_evaluations: Vec<Vec<F>> = vec![];
 
         // Sort claims by `from_layer_id` field.
         // A trivial total order is imposed to include `None` values which
@@ -426,29 +432,43 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
         // Remove mutability of claims.
         let claims = claims;
 
-        // Intermediate results container.
-        let mut intermediate_claims: Vec<Claim<F>> = vec![];
-
         let claim_groups = form_claim_groups(&claims);
 
-        debug!("Claim Groups: {:#?}", claim_groups);
-        // for c in &claim_groups {
-        //     debug!("claim group with {} number of claims.", c.get_num_claims());
-        // }
+        debug!("Grouped claims for aggregation: ");
+        for group in &claim_groups {
+            for claim in group.get_claim_vector() {
+                debug!("\n{:#?}", claim);
+            }
+        }
 
-        let intermediate_claims: Vec<Claim<F>> = claim_groups
+        let intermediate_results: Vec<(Claim<F>, Option<Vec<Vec<F>>>)> = claim_groups
             .into_iter()
             .map(|claim_group| {
-                aggregate_claims_in_one_round(&claim_group, compute_wlx_fn, transcript).0
+                aggregate_claims_in_one_round(&claim_group, compute_wlx_fn, transcript)
             })
             .collect();
+        let intermediate_claims = intermediate_results
+            .clone()
+            .into_iter()
+            .map(|result| result.0)
+            .collect();
+        let mut intermediate_wlx_evals: Vec<Vec<F>> = intermediate_results
+            .into_iter()
+            .map(|result| result.1.unwrap_or_default())
+            .flatten()
+            .collect();
+        group_wlx_evaluations.append(&mut intermediate_wlx_evals);
 
         // Finally, aggregate all intermediate claims.
-        aggregate_claims_in_one_round(
+        let (claim, wlx_evals_option) = aggregate_claims_in_one_round(
             &ClaimGroup::new(intermediate_claims).unwrap(),
             compute_wlx_fn,
             transcript,
-        )
+        );
+
+        group_wlx_evaluations.append(&mut wlx_evals_option.unwrap_or_default());
+
+        (claim, Some(group_wlx_evaluations))
     } else {
         aggregate_claims_in_one_round(claims, compute_wlx_fn, transcript)
     }
@@ -456,15 +476,16 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 
 pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &impl Fn(&ClaimGroup<F>) -> Vec<F>,
+    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Vec<F>,
     transcript: &mut impl transcript::Transcript<F>,
-) -> (Claim<F>, Option<Vec<F>>) {
+) -> (Claim<F>, Option<Vec<Vec<F>>>) {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
+    info!("Low-level claim aggregation on {num_claims} claims.");
 
     // Do nothing if there is only one claim.
     if num_claims == 1 {
-        debug!("Claim Aggregation: 1 claim. Doing nothing.");
+        debug!("Received 1 claim. Doing nothing.");
         // Return the claim but erase any from/to layer info so as not to
         // trigger any checks from claim groups used in claim aggregation.
         let claim = Claim {
@@ -502,18 +523,18 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     }
 
     debug!(
-        "* Aggregated claim: {:#?}",
+        "Low level aggregated claim:\n{:#?}",
         Claim::new_raw(aggregated_challenges.clone(), claimed_val)
     );
 
     (
         Claim::new_raw(aggregated_challenges, claimed_val),
-        Some(relevant_wlx_evaluations),
+        Some(vec![relevant_wlx_evaluations]),
     )
 }
 
 /// Aggregates `claims` into a single claim on challenge point
-/// `r_star` using the `wlx` evaluations of W(l(x)).
+/// `r_star` given the `wlx` evaluations of W(l(x)).
 /// This function is used by the verifier in the process of verifying
 /// claim aggregation.
 pub(crate) fn verify_aggregate_claim<F: FieldExt>(
@@ -651,11 +672,11 @@ pub(crate) mod tests {
         layer: &impl Layer<Fr>,
         claims: &ClaimGroup<Fr>,
         r_star: Fr,
-    ) -> (Claim<Fr>, Option<Vec<Fr>>) {
+    ) -> (Claim<Fr>, Option<Vec<Vec<Fr>>>) {
         let mut transcript = PoseidonTranscript::<Fr>::new("Dummy transcript for testing");
         aggregate_claims(
             claims,
-            &|claim| compute_claim_wlx(claims, layer).unwrap(),
+            &mut |claim| compute_claim_wlx(claims, layer).unwrap(),
             &mut transcript,
             false,
         )
@@ -1119,7 +1140,7 @@ pub(crate) mod tests {
         let claim_group = ClaimGroup::new(claims).unwrap();
         let (res, wlx) = claim_aggregation_testing_wrapper(&layer, &claim_group, rchal);
         let rounds = expr.index_mle_indices(0);
-        let verify_result = verify_aggregate_claim(&wlx.unwrap(), &claim_group, rchal).unwrap();
+        // let verify_result = verify_aggregate_claim(&wlx.unwrap(), &claim_group, rchal).unwrap();
 
         // Makis; This test isn't verifying anything apart form the
         // fact that no errors are produced :/

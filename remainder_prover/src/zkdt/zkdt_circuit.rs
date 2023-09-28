@@ -52,8 +52,6 @@ use super::{
 };
 use std::marker::PhantomData;
 
-use env_logger;
-
 /// The actual ZKDT circuit!
 pub struct CombinedCircuits<F: FieldExt> {
     /// All of the input MLEs coming from the data generation pipeline
@@ -483,9 +481,27 @@ mod tests {
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use std::path::Path;
 
+    use chrono;
+    use env_logger::*;
+    use log::{info, LevelFilter};
+    use std::io::Write;
+
     #[test]
     fn test_combine_circuits() {
-        let _ = env_logger::builder().is_test(true).try_init();
+        env_logger::Builder::new()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "----> {}:{} {} [{}]:\n{}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                    record.level(),
+                    record.args()
+                )
+            })
+            .filter(None, LevelFilter::Debug)
+            .init();
 
         let (batched_catboost_mles, (_, _)) =
             generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));

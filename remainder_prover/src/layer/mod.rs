@@ -8,11 +8,11 @@ pub mod layer_enum;
 
 use std::marker::PhantomData;
 
-use itertools::{repeat_n};
 use ark_std::cfg_into_iter;
-use serde::{Serialize, Deserialize};
-use thiserror::Error;
+use itertools::repeat_n;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
@@ -158,7 +158,7 @@ pub trait Layer<F: FieldExt> {
 }
 
 /// Default Layer abstraction
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GKRLayer<F, Tr> {
     id: LayerId,
     pub(crate) expression: ExpressionStandard<F>,
@@ -579,7 +579,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        
+
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
@@ -781,7 +781,6 @@ impl<
     type Successor = S;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        
         // dbg!(&hi);
         (self.expression_builder)(&self.mle)
     }

@@ -17,7 +17,7 @@ use super::{
 };
 
 ///A Layer with 0 num_vars
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct EmptyLayer<F, Tr> {
     pub(crate) expr: ExpressionStandard<F>,
@@ -33,8 +33,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         _: Claim<F>,
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-        let eval =
-            gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
+        let eval = gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
 
         Ok(vec![vec![eval]].into())
     }

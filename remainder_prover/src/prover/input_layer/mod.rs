@@ -35,6 +35,7 @@ pub enum InputLayerError {
     RandomInputVerificationFailed,
 }
 
+use log::{debug, info, trace, warn};
 ///Trait for dealing with the InputLayer
 pub trait InputLayer<F: FieldExt> {
     type Transcript: Transcript<F>;
@@ -104,6 +105,8 @@ pub trait InputLayer<F: FieldExt> {
         let num_evals =
             (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
 
+        debug!("Evaluating {num_evals} times.");
+
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
             .map(|idx| {
@@ -132,6 +135,7 @@ pub trait InputLayer<F: FieldExt> {
         // concat this with the first k evaluations from the claims to get num_evals evaluations
         let mut wlx_evals = claimed_vals.clone();
         wlx_evals.extend(&next_evals);
+        debug!("Returning evals:\n{:#?} ", wlx_evals);
         Ok(wlx_evals)
     }
 
