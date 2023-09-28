@@ -2,13 +2,16 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use crate::{
-    gate::{addgate::{AddGate}, batched_addgate::{AddGateBatched}, mulgate::{MulGate}, batched_mulgate::MulGateBatched},
+use crate::gate::{
+    addgate::AddGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched,
+    mulgate::MulGate,
 };
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
 use super::claims::Claim;
+
+use std::fmt;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
@@ -25,6 +28,19 @@ pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     /// Batched MulGate
     MulGateBatched(MulGateBatched<F, Tr>),
     EmptyLayer(EmptyLayer<F, Tr>),
+}
+
+impl<F: FieldExt, Tr: Transcript<F>> fmt::Debug for LayerEnum<F, Tr> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LayerEnum::Gkr(_) => write!(f, "GKR Layer"),
+            LayerEnum::MulGate(_) => write!(f, "MulGate"),
+            LayerEnum::AddGate(_) => write!(f, "AddGate"),
+            LayerEnum::AddGateBatched(_) => write!(f, "AddGateBatched"),
+            LayerEnum::MulGateBatched(_) => write!(f, "MulGateBatched"),
+            LayerEnum::EmptyLayer(_) => write!(f, "EmptyLayer"),
+        }
+    }
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
