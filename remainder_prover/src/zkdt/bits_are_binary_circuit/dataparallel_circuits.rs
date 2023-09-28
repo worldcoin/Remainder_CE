@@ -98,6 +98,7 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitBatched<F> {
             })
         }).collect_vec();
         let combined_output_zero_mle_ref = combine_zero_mle_ref(layers.add_gkr(BatchedLayer::new(diff_builders)));
+        println!("# layers -- bits r binary 16bit: {:?}", layers.next_layer_id());
 
         Witness { layers, output_layers: vec![combined_output_zero_mle_ref.get_enum()], input_layers: vec![] }
         
@@ -198,6 +199,8 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatched<F> {
             })
         }).collect_vec();
         let combined_output_zero_mle_ref = combine_zero_mle_ref(layers.add_gkr(BatchedLayer::new(diff_builders)));
+
+        println!("# layers -- bits r binary 4bit: {:?}", layers.next_layer_id());
 
         Witness { layers, output_layers: vec![combined_output_zero_mle_ref.get_enum()], input_layers: vec![] }
         

@@ -115,6 +115,8 @@ impl<F: FieldExt> AttributeConsistencyCircuit<F> {
         let difference_mle = layers.add_gkr(attribute_consistency_builder);
         let circuit_output = combine_zero_mle_ref(difference_mle);
 
+        println!("# layers -- attr consis: {:?}", layers.next_layer_id());
+
         Witness {
             layers,
             output_layers: vec![circuit_output.get_enum()],
