@@ -1,23 +1,25 @@
-use ark_std::{rand::Rng};
+use ark_std::rand::Rng;
 use itertools::Itertools;
-use rayon::prelude::{ParallelIterator};
+use rayon::prelude::ParallelIterator;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
-    layer::{
-        claims::Claim, Layer, LayerId,
-    },
-    mle::{beta::BetaTable},
+    layer::{claims::Claim, Layer, LayerId},
+    mle::beta::BetaTable,
     sumcheck::*,
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
+use super::gate_helpers::{
+    check_fully_bound, compute_sumcheck_message_add_gate, compute_sumcheck_message_copy_add,
+    fix_var_gate, index_mle_indices_gate, prove_round_add, prove_round_copy, GateError,
+};
 use crate::mle::{
     beta::compute_beta_over_two_challenges,
-    dense::{DenseMle, DenseMleRef}, MleRef,
+    dense::{DenseMle, DenseMleRef},
+    MleRef,
 };
-use super::gate_helpers::{index_mle_indices_gate, compute_sumcheck_message_add_gate, GateError, fix_var_gate, prove_round_add, check_fully_bound, prove_round_copy, compute_sumcheck_message_copy_add};
 
 /// very (not) cool addgate
 ///
@@ -260,8 +262,13 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
             //challenge = Some(F::one());
             let chal = challenge.unwrap();
             challenges.push(chal);
-            let eval =
-                prove_round_add(round + self.num_dataparallel_bits, chal, phase_1_lhs, phase_1_rhs).unwrap();
+            let eval = prove_round_add(
+                round + self.num_dataparallel_bits,
+                chal,
+                phase_1_lhs,
+                phase_1_rhs,
+            )
+            .unwrap();
             messages.push((eval, challenge));
         }
 
@@ -304,8 +311,13 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
                 //challenge = Some(F::one());
                 let chal = challenge.unwrap();
                 challenges.push(chal);
-                let eval = prove_round_add(round + self.num_dataparallel_bits, chal, phase_2_lhs, phase_2_rhs)
-                    .unwrap();
+                let eval = prove_round_add(
+                    round + self.num_dataparallel_bits,
+                    chal,
+                    phase_2_lhs,
+                    phase_2_rhs,
+                )
+                .unwrap();
                 messages.push((eval, challenge));
             }
 
@@ -532,7 +544,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             }
-        };  
+        };
 
         // the bookkeeping tables of this phase must have size 2^copy_bits (refer to vibe check B))
         let num_copy_vars = 1 << self.new_bits;
@@ -626,8 +638,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
             let chal = challenge.unwrap();
             challenges.push(chal);
 
-            let evals =
-                prove_round_copy(a_f2, a_f3, lhs, rhs, beta_g, round, chal).unwrap();
+            let evals = prove_round_copy(a_f2, a_f3, lhs, rhs, beta_g, round, chal).unwrap();
             messages.push((evals, challenge));
         }
 
@@ -656,7 +667,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
             lhs.clone(),
             rhs.clone(),
             self.new_bits,
-            Some(beta_g2)
+            Some(beta_g2),
         );
         self.reduced_gate = Some(reduced_gate);
         let mut next_messages = self
@@ -800,7 +811,10 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
             .unwrap()
             .clone();
 
-        let (f2_bound, f3_bound) = (lhs_reduced.bookkeeping_table[0], rhs_reduced.bookkeeping_table[0]);
+        let (f2_bound, f3_bound) = (
+            lhs_reduced.bookkeeping_table[0],
+            rhs_reduced.bookkeeping_table[0],
+        );
 
         let beta_bound = compute_beta_over_two_challenges(
             &self.g2_challenges.clone().unwrap(),
@@ -982,13 +996,14 @@ mod test {
         let rhs_v = vec![Fr::from(0), Fr::from(5), Fr::from(51395810), Fr::from(2)];
         let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
-        let mut batched_gate_mle: AddGateBatchedTest<Fr, PoseidonTranscript<Fr>> = AddGateBatchedTest::new(
-            new_bits,
-            nonzero_gates,
-            lhs_mle_ref,
-            rhs_mle_ref,
-            LayerId::Layer(0),
-        );
+        let mut batched_gate_mle: AddGateBatchedTest<Fr, PoseidonTranscript<Fr>> =
+            AddGateBatchedTest::new(
+                new_bits,
+                nonzero_gates,
+                lhs_mle_ref,
+                rhs_mle_ref,
+                LayerId::Layer(0),
+            );
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
         let verify_res_1 = batched_gate_mle.dummy_verify_rounds(messages_1, &mut rng, claim);
         assert!(verify_res_1.is_ok());
@@ -1027,13 +1042,14 @@ mod test {
         ];
         let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
-        let mut batched_gate_mle: AddGateBatchedTest<Fr, PoseidonTranscript<Fr>> = AddGateBatchedTest::new(
-            new_bits,
-            nonzero_gates,
-            lhs_mle_ref,
-            rhs_mle_ref,
-            LayerId::Layer(0),
-        );
+        let mut batched_gate_mle: AddGateBatchedTest<Fr, PoseidonTranscript<Fr>> =
+            AddGateBatchedTest::new(
+                new_bits,
+                nonzero_gates,
+                lhs_mle_ref,
+                rhs_mle_ref,
+                LayerId::Layer(0),
+            );
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
         let verify_res_1 = batched_gate_mle.dummy_verify_rounds(messages_1, &mut rng, claim);
         assert!(verify_res_1.is_ok());
@@ -1072,13 +1088,14 @@ mod test {
         ];
         let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
-        let mut batched_gate_mle: AddGateBatchedTest<Fr, PoseidonTranscript<Fr>> = AddGateBatchedTest::new(
-            new_bits,
-            nonzero_gates,
-            lhs_mle_ref,
-            rhs_mle_ref,
-            LayerId::Layer(0),
-        );
+        let mut batched_gate_mle: AddGateBatchedTest<Fr, PoseidonTranscript<Fr>> =
+            AddGateBatchedTest::new(
+                new_bits,
+                nonzero_gates,
+                lhs_mle_ref,
+                rhs_mle_ref,
+                LayerId::Layer(0),
+            );
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
         let verify_res_1 = batched_gate_mle.dummy_verify_rounds(messages_1, &mut rng, claim);
         assert!(verify_res_1.is_ok());
@@ -1136,13 +1153,14 @@ mod test {
         ];
         let rhs_mle_ref = DenseMle::new_from_raw(rhs_v, LayerId::Input(0), None).mle_ref();
 
-        let mut batched_gate_mle: AddGateBatchedTest<Fr, PoseidonTranscript<Fr>> = AddGateBatchedTest::new(
-            new_bits,
-            nonzero_gates,
-            lhs_mle_ref,
-            rhs_mle_ref,
-            LayerId::Layer(0),
-        );
+        let mut batched_gate_mle: AddGateBatchedTest<Fr, PoseidonTranscript<Fr>> =
+            AddGateBatchedTest::new(
+                new_bits,
+                nonzero_gates,
+                lhs_mle_ref,
+                rhs_mle_ref,
+                LayerId::Layer(0),
+            );
         let messages_1 = batched_gate_mle.dummy_prove_rounds(claim.clone(), &mut rng);
         let verify_res_1 = batched_gate_mle.dummy_verify_rounds(messages_1, &mut rng, claim);
         assert!(verify_res_1.is_ok());

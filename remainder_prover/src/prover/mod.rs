@@ -257,6 +257,10 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
             .clone()
             .into_iter()
             .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
+        let max_gate_val = nonzero_gates
+            .clone()
+            .into_iter()
+            .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
 
         // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
         // evaluating over all values in the boolean hypercube which includes dataparallel bits

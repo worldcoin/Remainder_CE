@@ -543,7 +543,9 @@ pub fn read_upshot_data_single_tree_branch_from_file<F: FieldExt>(
 }
 
 /// Reads the cached results from `cached_file_path` and returns them
-pub fn read_upshot_data_single_tree_branch_from_filepath<F: FieldExt>(cached_file_path: &str) -> (ZKDTCircuitData<F>, (usize, usize)) {
+pub fn read_upshot_data_single_tree_branch_from_filepath<F: FieldExt>(
+    cached_file_path: &str,
+) -> (ZKDTCircuitData<F>, (usize, usize)) {
     let file = std::fs::File::open(cached_file_path).unwrap();
     from_reader(&file).unwrap()
 }
@@ -589,19 +591,22 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(
     }
 
     // --- First generate the dummy data ---
-    let (ZKDTCircuitData {
-        // dummy_attr_idx_data,
-        input_data,
-        // permutation_indices,
-        permuted_input_data,
-        decision_node_paths,
-        leaf_node_paths,
-        binary_decomp_diffs,
-        mut multiplicities_bin_decomp,
-        decision_nodes,
-        leaf_nodes,
-        multiplicities_bin_decomp_input,
-    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_filepath::<F>(&cached_file_path);
+    let (
+        ZKDTCircuitData {
+            // dummy_attr_idx_data,
+            input_data,
+            // permutation_indices,
+            permuted_input_data,
+            decision_node_paths,
+            leaf_node_paths,
+            binary_decomp_diffs,
+            mut multiplicities_bin_decomp,
+            decision_nodes,
+            leaf_nodes,
+            multiplicities_bin_decomp_input,
+        },
+        (tree_height, input_len),
+    ) = read_upshot_data_single_tree_branch_from_filepath::<F>(&cached_file_path);
 
     // println!("input_data {:?}", input_data[0]);
     // println!("permuted_input_data {:?}", permuted_input_data[0]);
@@ -614,12 +619,15 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(
     // --- Generate MLEs for each ---
     // TODO!(ryancao): Change this into batched form
     // let attr_idx_data_mle = DenseMle::<_, F>::new(attr_idx_data[0].clone());
-    let input_data_mle_vec = input_data.into_iter().map(|input| 
+    let input_data_mle_vec = input_data
+        .into_iter()
+        .map(|input| {
             DenseMle::new_from_iter(
-                input.clone().into_iter().map(InputAttribute::from),
+                input.into_iter().map(InputAttribute::from),
                 LayerId::Input(0),
                 None,
-            ))
+            )
+        })
         .collect_vec();
     // let permutation_indices_mle = DenseMle::<_, F>::new(permutation_indices[0].clone());
     let permuted_input_data_mle_vec = permuted_input_data
@@ -653,30 +661,13 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(
             )
         })
         .collect_vec();
-    let multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(multiplicities_bin_decomp_decision
-        
-        .into_iter()
-        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
-    let multiplicities_bin_decomp_mle_leaf = DenseMle::new_from_iter(multiplicities_bin_decomp_leaf
-        .clone()
-        .into_iter()
-        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
-    let decision_nodes_mle = DenseMle::new_from_iter(decision_nodes
-        .clone()
-        .into_iter()
-        .map(DecisionNode::from), LayerId::Input(0), None);
-    let leaf_nodes_mle = DenseMle::new_from_iter(leaf_nodes
-        .clone()
-        .into_iter()
-        .map(LeafNode::from), LayerId::Input(0), None);
-    let multiplicities_bin_decomp_mle_input: Vec<DenseMle<_, BinDecomp4Bit<F>>> = multiplicities_bin_decomp_input
-        .iter().map(|datum|
-            DenseMle::new_from_iter(datum
-            .clone()
-            .into_iter(),
+    let multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(
+        multiplicities_bin_decomp_decision
+            .into_iter()
+            .map(BinDecomp16Bit::from),
         LayerId::Input(0),
         None,
-    )).collect();
+    );
     let multiplicities_bin_decomp_mle_leaf = DenseMle::new_from_iter(
         multiplicities_bin_decomp_leaf
             .clone()
@@ -741,13 +732,15 @@ pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
     // --- Generate MLEs for each ---
     // TODO!(ryancao): Change this into batched form
     // let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
-    let dummy_input_data_mle = dummy_input_data.into_iter().map(|input| 
+    let dummy_input_data_mle = dummy_input_data
+        .into_iter()
+        .map(|input| {
             DenseMle::new_from_iter(
-                input.clone().into_iter().map(InputAttribute::from),
+                input.into_iter().map(InputAttribute::from),
                 LayerId::Input(0),
                 None,
             )
-        )
+        })
         .collect_vec();
     // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
     let dummy_permuted_input_data_mle = dummy_permuted_input_data
@@ -781,18 +774,23 @@ pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
             )
         })
         .collect_vec();
-    let dummy_multiplicities_bin_decomp_mle = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp
-        
-        .into_iter()
-        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
-    let dummy_decision_nodes_mle = DenseMle::new_from_iter(dummy_decision_nodes
-        
-        .into_iter()
-        .map(DecisionNode::from), LayerId::Input(0), None);
-    let dummy_leaf_nodes_mle = DenseMle::new_from_iter(dummy_leaf_nodes
-        
-        .into_iter()
-        .map(LeafNode::from), LayerId::Input(0), None);
+    let dummy_multiplicities_bin_decomp_mle = DenseMle::new_from_iter(
+        dummy_multiplicities_bin_decomp
+            .into_iter()
+            .map(BinDecomp16Bit::from),
+        LayerId::Input(0),
+        None,
+    );
+    let dummy_decision_nodes_mle = DenseMle::new_from_iter(
+        dummy_decision_nodes.into_iter().map(DecisionNode::from),
+        LayerId::Input(0),
+        None,
+    );
+    let dummy_leaf_nodes_mle = DenseMle::new_from_iter(
+        dummy_leaf_nodes.into_iter().map(LeafNode::from),
+        LayerId::Input(0),
+        None,
+    );
 
     BatchedDummyMles {
         dummy_input_data_mle,
@@ -1041,7 +1039,8 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_multiplicities() {
         let mut rng = test_rng();
-        let layer_claim: Claim<Fr> = Claim::new_raw(vec![Fr::from(rng.gen::<u64>()); 12], Fr::zero());
+        let layer_claim: Claim<Fr> =
+            Claim::new_raw(vec![Fr::from(rng.gen::<u64>()); 12], Fr::zero());
         let mut beta = BetaTable::new(layer_claim.get_point().clone()).unwrap();
         beta.table.index_mle_indices(0);
 

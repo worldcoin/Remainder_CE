@@ -18,13 +18,12 @@ use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
     mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
-        zero, MleIndex, MleRef,
+        MleIndex, MleRef,
     },
     prover::SumcheckProof,
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
-    zkdt::helpers::get_field_val_as_usize_vec,
 };
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
@@ -588,7 +587,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();

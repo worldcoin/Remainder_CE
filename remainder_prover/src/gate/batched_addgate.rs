@@ -373,7 +373,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();

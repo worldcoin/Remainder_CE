@@ -89,6 +89,9 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     /// 
     /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this 
     /// input_layer, but haven't yet generated the data for
+    /// 
+    /// TODO!(ryancao): Assert or enforce that the `layer_id` of each of the `input_mles` matches
+    /// the `layer_id` which is passed in here!
     pub fn new(mut input_mles: Vec<Box<&mut (dyn Mle<F> + 'static)>>, extra_mle_num_vars: Option<Vec<usize>>, layer_id: LayerId) -> Self {
         let extra_mle_indices = InputLayerBuilder::index_input_mles(&mut input_mles, extra_mle_num_vars);
         let input_mles = input_mles.into_iter().map(|mle| dyn_clone::clone_box(*mle)).collect_vec();
