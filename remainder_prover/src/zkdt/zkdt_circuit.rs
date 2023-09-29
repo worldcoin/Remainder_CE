@@ -510,6 +510,9 @@ mod tests {
             batched_catboost_mles,
         };
 
-        test_circuit(combined_circuit, None);
+        test_circuit(
+            combined_circuit,
+            Some(Path::new("upshot_data/zkdt_proof_opt.json")),
+        );
     }
 }
