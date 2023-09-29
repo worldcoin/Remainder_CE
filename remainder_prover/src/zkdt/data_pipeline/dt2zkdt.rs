@@ -71,6 +71,8 @@ use serde_json::to_writer;
 use std::fs::{File, self};
 use std::path::Path;
 use std::fmt;
+use rayon::prelude::*;
+
 
 use super::dummy_data_generator::{ZKDTCircuitData};
 
@@ -178,7 +180,6 @@ pub fn circuitize_samples<F: FieldExt>(
     samples_in: &Samples,
     trees_model: &TreesModel,
 ) -> CircuitizedSamples<F> {
-    let mut samples: Vec<Vec<InputAttribute<F>>> = vec![];
     let mut attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>> = vec![];
     let mut decision_paths: Vec<Vec<Vec<DecisionNode<F>>>> = vec![];
     let mut path_ends: Vec<Vec<LeafNode<F>>> = vec![];
@@ -187,18 +188,19 @@ pub fn circuitize_samples<F: FieldExt>(
     let mut node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
 
     // convert the samples to field elements
-    for values_row in &samples_in.values {
-        samples.push(
-            values_row
+    let mut samples: Vec<Vec<InputAttribute<F>>> = samples_in.values
+        .par_iter()
+        .map(|values_row|
+             values_row
                 .iter()
                 .enumerate()
                 .map(|(index, value)| InputAttribute {
                     attr_id: F::from(index as u64),
                     attr_val: F::from(*value as u64),
                 })
-                .collect(),
-        );
-    }
+                .collect()
+        )
+        .collect();
 
     for tree in &trees_model.trees {
         // initialize the node visit counts "node_multiplicities"
