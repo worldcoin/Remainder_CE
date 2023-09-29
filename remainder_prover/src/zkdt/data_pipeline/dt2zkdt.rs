@@ -441,7 +441,6 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
 
     // --- TODO!(ryancao): We need to test our stuff with a non-power-of-two `input_batch_size` ---
     let true_input_batch_size = 2_usize.pow(log_input_batch_size.unwrap_or(1) as u32);
-    assert!(true_input_batch_size.is_power_of_two());
 
     // let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
     // let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");

@@ -24,9 +24,6 @@ pub enum ZKDTBinaryError {
 /// TODOs for Ryan:
 /// - Test the thing with non-powers-of-two
 /// - Change the thing so that `None` gives everything instead of just 2
-/// - Do the options for verification
-/// - Do the options for file writing
-/// - Log the actual logging stuff somewhere other than `println!()`?
 
 /// Executable for running Remainder's GKR prover over the ZKDT circuit,
 /// taking in as input the outputs from the Python processing script and
@@ -72,6 +69,19 @@ struct Args {
     /// Whether we want the proof to be verified or not.
     #[arg(short, long, default_value_t = false)]
     verify_proof: bool,
+
+    /// Whether to turn on claim aggregation optimization.
+    /// (This includes claim de-duplicating)
+    #[arg(short, long, default_value_t = true)]
+    claim_agg_optimization: bool,
+
+    /// Whether to turn on flattened layer optimization for V_i(l(x)).
+    #[arg(short, long, default_value_t = true)]
+    compute_vi_l_x_flattened_optimization: bool,
+
+    /// Whether to turn on common-variable V_i(l(x)) computation optimization.
+    #[arg(short, long, default_value_t = true)]
+    compute_vi_l_x_common_var_optimization: bool,
 }
 
 /// Runs the actual circuit on the witness data
