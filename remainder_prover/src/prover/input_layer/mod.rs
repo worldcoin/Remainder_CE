@@ -20,6 +20,7 @@ use crate::{
         LayerId,
     },
     mle::{dense::DenseMle, MleRef},
+    prover::ENABLE_OPTIMIZATION,
     sumcheck::evaluate_at_a_point,
 };
 
@@ -78,32 +79,34 @@ pub trait InputLayer<F: FieldExt> {
 
         // get the number of evaluations
         let num_vars = mle.index_mle_indices(0);
-        let num_evals = num_claims * num_vars;
+        let mut num_evals = num_claims * num_vars;
 
-        let mut degree_reduction = num_vars as i64;
-        for j in 0..num_vars {
-            for i in 1..num_claims {
-                if claim_vecs[i][j] != claim_vecs[i - 1][j] {
-                    degree_reduction -= 1;
-                    break;
+        if ENABLE_OPTIMIZATION {
+            let mut degree_reduction = num_vars as i64;
+            for j in 0..num_vars {
+                for i in 1..num_claims {
+                    if claim_vecs[i][j] != claim_vecs[i - 1][j] {
+                        degree_reduction -= 1;
+                        break;
+                    }
                 }
             }
-        }
-        assert!(degree_reduction >= 0);
+            assert!(degree_reduction >= 0);
 
-        // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
-        // points. W : F^n -> F is a multi-linear polynomial on
-        // `num_vars` variables and l : F -> F^n is a canonical
-        // polynomial passing through `num_claims` points so its degree is
-        // at most `num_claims - 1`. This imposes an upper
-        // bound of `num_vars * (num_claims - 1)` to the degree of P.
-        // However, the actual degree of P might be lower.
-        // For any coordinate `i` such that all claims agree
-        // on that coordinate, we can quickly deduce that `l_i(x)` is a
-        // constant polynomial of degree zero instead of `num_claims -
-        // 1` which brings down the total degree by the same amount.
-        let num_evals =
-            (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+            // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
+            // points. W : F^n -> F is a multi-linear polynomial on
+            // `num_vars` variables and l : F -> F^n is a canonical
+            // polynomial passing through `num_claims` points so its degree is
+            // at most `num_claims - 1`. This imposes an upper
+            // bound of `num_vars * (num_claims - 1)` to the degree of P.
+            // However, the actual degree of P might be lower.
+            // For any coordinate `i` such that all claims agree
+            // on that coordinate, we can quickly deduce that `l_i(x)` is a
+            // constant polynomial of degree zero instead of `num_claims -
+            // 1` which brings down the total degree by the same amount.
+            num_evals =
+                (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+        }
 
         debug!("Evaluating {num_evals} times.");
 

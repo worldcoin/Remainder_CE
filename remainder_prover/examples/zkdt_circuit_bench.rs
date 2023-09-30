@@ -69,5 +69,8 @@ fn main() {
         batched_catboost_mles,
     };
 
-    test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));
+    test_circuit(
+        combined_circuit,
+        Some(Path::new("./zkdt_proof_no_opt.json")),
+    );
 }
