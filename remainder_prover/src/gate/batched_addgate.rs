@@ -267,6 +267,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             val,
             Some(self.id().clone()),
             Some(self.lhs.get_layer_id()),
+            Some(lhs_reduced.clone()),
         );
         claims.push(claim);
 
@@ -285,6 +286,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             val,
             Some(self.id().clone()),
             Some(self.rhs.get_layer_id()),
+            Some(rhs_reduced.clone()),
         );
         claims.push(claim);
 

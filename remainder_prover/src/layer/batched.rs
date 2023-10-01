@@ -251,9 +251,12 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
         .collect_vec();
 
     DenseMleRef {
-        bookkeeping_table: out,
+        bookkeeping_table: out.clone(),
+        original_bookkeeping_table: out,
         mle_indices: old_indices.to_vec(),
+        original_mle_indices: old_indices.to_vec(),
         num_vars: old_num_vars + new_bits,
+        original_num_vars: old_num_vars + new_bits,
         layer_id,
         indexed: false,
     }

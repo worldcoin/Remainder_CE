@@ -473,6 +473,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_id = *layer.id();
                 debug!("==== Layer {:?} ====", layer_id);
+                dbg!("layer");
+                dbg!(&layer_id);
                 let layer_claims_vec = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?
@@ -490,6 +492,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
 
                 debug!("Time for claim aggregation!");
+                dbg!("claim agg");
+                dbg!(layer_id);
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
                     &|claims| compute_claim_wlx(claims, &layer).unwrap(),
@@ -640,6 +644,11 @@ pub trait GKRCircuit<F: FieldExt> {
             }
             let layer_id = output.get_layer_id();
             debug!("=== Output {:?} ====", layer_id);
+
+            let output_mle_ref = match output {
+                MleEnum::Dense(mle_ref) => Some(mle_ref.clone()),
+                MleEnum::Zero(_) => None,
+            };
             let claim = Claim::new(
                 mle_indices
                     .iter()
@@ -648,6 +657,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 F::zero(),
                 None,
                 Some(layer_id),
+                output_mle_ref,
             );
 
             debug!("Generating claim: {:#?}", claim);

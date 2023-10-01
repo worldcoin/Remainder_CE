@@ -97,6 +97,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                         claimed_value,
                         Some(self.id().clone()),
                         Some(mle_layer_id),
+                        Some(mle_ref.clone())
                     );
 
                     // --- Push it into the list of claims ---
@@ -130,6 +131,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                             claimed_value,
                             Some(self.id().clone()),
                             Some(mle_layer_id),
+                            Some(mle_ref.clone())
                         );
 
                         // --- Push it into the list of claims ---

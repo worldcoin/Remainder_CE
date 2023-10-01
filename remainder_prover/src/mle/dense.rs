@@ -191,16 +191,20 @@ impl<F: FieldExt> DenseMle<F, F> {
 
     ///Creates a DenseMleRef from this DenseMle
     pub fn mle_ref(&self) -> DenseMleRef<F> {
+        let mle_indices: Vec<MleIndex<F>> = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain((0..self.num_iterated_vars()).map(|_| MleIndex::Iterated))
+        .collect();
         DenseMleRef {
             bookkeeping_table: self.mle.clone(),
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain((0..self.num_iterated_vars()).map(|_| MleIndex::Iterated))
-                .collect(),
+            original_bookkeeping_table: self.mle.clone(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: self.num_iterated_vars,
+            original_num_vars: self.num_iterated_vars,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -320,19 +324,24 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         // --- Number of *remaining* iterated variables ---
         let new_num_iterated_vars = self.num_iterated_vars - 1;
 
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            std::iter::once(MleIndex::Fixed(false))
+                .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
+        )
+        .collect_vec();
+
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
-                )
-                .collect_vec(),
+            original_bookkeeping_table: self.mle[0].to_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: new_num_iterated_vars,
+            original_num_vars: new_num_iterated_vars,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -341,20 +350,24 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     ///Gets an MleRef to the second element in the tuple
     pub fn second(&'_ self) -> DenseMleRef<F> {
         let new_num_iterated_vars = self.num_iterated_vars - 1;
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            std::iter::once(MleIndex::Fixed(true))
+                .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
+        )
+        .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
-                )
-                .collect_vec(),
+            original_bookkeeping_table: self.mle[1].to_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: new_num_iterated_vars,
+            original_num_vars: new_num_iterated_vars,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -390,11 +403,17 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
 pub struct DenseMleRef<F> {
     ///The bookkeeping table of this MleRefs evaluations over the boolean hypercube
     pub bookkeeping_table: Vec<F>,
+    /// The original bookkeeping table (that does not get destructively modified during fix variable)
+    pub original_bookkeeping_table: Vec<F>,
     ///The MleIndices of this MleRef e.g. V(0, 1, r_1, r_2)
     pub mle_indices: Vec<MleIndex<F>>,
+    /// The original mle indices (not modified during fix var)
+    pub original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     pub num_vars: usize,
+    /// original num vars (not modifier during fix var)
+    pub original_num_vars: usize,
     /// The layer this MleRef is a reference to
     pub layer_id: LayerId,
     /// A marker that keeps track of if this MleRef is indexed

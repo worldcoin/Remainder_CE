@@ -300,6 +300,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 val,
                 Some(self.id().clone()),
                 Some(f_2_u.get_layer_id()),
+                Some(f_2_u.clone()),
             );
             claims.push(claim);
     
@@ -325,6 +326,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 val,
                 Some(self.id().clone()),
                 Some(f_3_v.get_layer_id()),
+                Some(f_3_v.clone()),
             );
             claims.push(claim);
 

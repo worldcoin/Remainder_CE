@@ -411,6 +411,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
+       
+
         let mut observer_fn = |exp: &ExpressionStandard<F>| {
             match exp {
                 ExpressionStandard::Mle(mle_ref) => {
@@ -447,6 +449,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         claimed_value,
                         Some(self.id().clone()),
                         Some(mle_layer_id),
+                        Some(mle_ref.clone()),
                     );
 
                     // --- Push it into the list of claims ---
@@ -468,6 +471,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let mle_layer_id = mle_ref.get_layer_id();
 
                         // --- Grab the actual value that the claim is supposed to evaluate to ---
+
                         if mle_ref.bookkeeping_table().len() != 1 {
                             return Err(ClaimError::MleRefMleError);
                         }
@@ -483,6 +487,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                             claimed_value,
                             Some(self.id().clone()),
                             Some(mle_layer_id),
+                            Some(mle_ref.clone())
                         );
 
                         // --- Push it into the list of claims ---
@@ -514,6 +519,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         let mut expr = self.expression.clone();
+        dbg!(&expr);
         //fix variable hella times
         //evaluate expr on the mutated expr
 
