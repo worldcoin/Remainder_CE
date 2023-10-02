@@ -159,7 +159,8 @@ fn main() -> Result<(), ZKDTBinaryError> {
 
     // --- Create the full ZKDT circuit ---
     let full_zkdt_circuit = ZKDTCircuit {
-        batched_catboost_mles
+        batched_catboost_mles,
+        tree_precommit_filepath: args.tree_commit_filepath
     };
 
     // --- Grab the proof filepath to write to and compute the circuit + prove ---
