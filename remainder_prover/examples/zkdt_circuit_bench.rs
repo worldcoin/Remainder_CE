@@ -60,7 +60,8 @@ fn main() {
     let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(batch_size, Path::new("upshot_data"));
 
     let combined_circuit = ZKDTCircuit {
-        batched_catboost_mles
+        batched_catboost_mles,
+        tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
     };
 
     test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));

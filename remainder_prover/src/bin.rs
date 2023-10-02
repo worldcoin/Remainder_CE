@@ -70,18 +70,28 @@ struct Args {
     #[arg(short, long, default_value_t = false)]
     verify_proof: bool,
 
-    /// Whether to turn on claim aggregation optimization.
-    /// (This includes claim de-duplicating)
-    #[arg(short, long, default_value_t = true)]
-    claim_agg_optimization: bool,
+    // /// Whether to turn on claim aggregation optimization which
+    // /// reduces the number of V_i(l(x)) evaluations sent over to
+    // /// the verifier, rather than the upper bound of 
+    // /// `num_claims * num_challenge_points + 1`
+    // #[arg(short, long, default_value_t = true)]
+    // claim_agg_reduced_number_vi_l_x_evaluations_optimization: bool,
 
-    /// Whether to turn on flattened layer optimization for V_i(l(x)).
-    #[arg(short, long, default_value_t = true)]
-    compute_vi_l_x_flattened_optimization: bool,
+    // /// Whether to turn on claim aggregation optimization which
+    // /// attempts to a) group claims by source input layers, b) aggregate
+    // /// those claims first into a resulting claim, and c) aggregate
+    // /// all the resulting claims.
+    // /// (This includes claim de-duplicating)
+    // #[arg(short, long, default_value_t = true)]
+    // claim_agg_group_claims_by_input_layer_optimization: bool,
 
-    /// Whether to turn on common-variable V_i(l(x)) computation optimization.
-    #[arg(short, long, default_value_t = true)]
-    compute_vi_l_x_common_var_optimization: bool,
+    // /// Whether to turn on flattened layer optimization for V_i(l(x)).
+    // #[arg(short, long, default_value_t = true)]
+    // compute_vi_l_x_flattened_optimization: bool,
+
+    // /// Whether to turn on common-variable V_i(l(x)) computation optimization.
+    // #[arg(short, long, default_value_t = true)]
+    // compute_vi_l_x_common_var_optimization: bool,
 }
 
 /// Runs the actual circuit on the witness data
