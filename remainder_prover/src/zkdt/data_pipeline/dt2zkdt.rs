@@ -119,7 +119,7 @@ pub struct RawSamples {
 /// Output of [`to_samples`], input to [`circuitize_samples`].
 pub struct Samples {
     values: Vec<Vec<u16>>,
-    sample_length: usize
+    sample_length: usize // FIXME needed?
 }
 
 /// Represents the circuitization of a batch of samples with respect to a TreesModel.
@@ -170,126 +170,208 @@ pub fn to_samples(raw_samples: &RawSamples, _trees_model: &TreesModel) -> Sample
     }
 }
 
+pub struct PathStep {
+    node_id: u32,
+    attr_id: usize,
+    threshold: u16,
+    attr_val: u16 // i.e. from the Sample
+}
+
+pub struct TreePath<T> {
+    steps: Vec<PathStep>,
+    leaf_node_id: u32,
+    leaf_value: T
+}
+
+/// Conversion TreePath -> LeafNode
+impl<F: FieldExt> From<&TreePath<i64>> for LeafNode<F> {
+    fn from(tree_path: &TreePath<i64>) -> Self {
+        LeafNode {
+            node_id: F::from(tree_path.leaf_node_id as u64),
+            node_val: i64_to_field(tree_path.leaf_value)
+        }
+    }
+}
+
+// TODO alias
+type DecisionPath<F> = Vec<DecisionNode<F>>;
+impl<F: FieldExt, T> From<&TreePath<T>> for DecisionPath<F> {
+    fn from(tree_path: &TreePath<T>) -> Self {
+        tree_path.steps
+            .iter()
+            .map(|path_step| DecisionNode::<F> {
+                node_id: F::from(path_step.node_id as u64),
+                attr_id: F::from(path_step.attr_id as u64),
+                threshold: F::from(path_step.threshold as u64)
+            })
+            .collect()
+    }
+}
+
+type AttributesOnPath<F> = Vec<InputAttribute<F>>;
+// conversion from tree path to attributes on path
+impl<F: FieldExt> From<&TreePath<i64>> for AttributesOnPath<F> {
+    fn from(tree_path: &TreePath<i64>) -> Self {
+        tree_path.steps
+            .iter()
+            .map(|step| InputAttribute::<F> {
+                attr_id: F::from(step.attr_id as u64),
+                attr_val: F::from(step.attr_val as u64)
+            })
+            .collect()
+    }
+}
+
+/// TreePath -> differences TODO alias
+type DifferencesBits<F> = Vec<BinDecomp16Bit<F>>;
+impl<F: FieldExt> From<&TreePath<i64>> for DifferencesBits<F> {
+    fn from(tree_path: &TreePath<i64>) -> Self {
+        tree_path.steps
+            .iter()
+            .map(|step| {
+                let difference = (step.attr_val as i32) - (step.threshold as i32);
+                let bits = build_signed_bit_decomposition(difference, 16).unwrap();
+                BinDecomp16Bit::<F>::from(bits)
+            })
+            .collect()
+    }
+}
+
+
+
+/// TODO consider: perhaps this method belongs in trees.rs, replacing the get_path method?  would
+/// move the structs with this method.
+/// Assumes node ids have been assigned.
+/// Pre: tree.get_id() != None;
+pub fn build_path<T: Copy>(tree: &Node<T>, sample: &Vec<u16>) -> TreePath<T> {
+    let path = tree.get_path(sample);
+    let mut steps: Vec<PathStep> = vec![];
+    // build the path steps
+    for node in &path[..path.len() - 1] {
+        if let Node::Internal {
+            id,
+            feature_index,
+            threshold,
+            ..
+        } = node
+        {
+            steps.push(PathStep {
+                node_id: id.unwrap(),
+                attr_id: *feature_index,
+                threshold: *threshold,
+                attr_val: sample[*feature_index]
+            });
+        } else {
+            panic!("All Nodes in the path must be internal, except the last");
+        }
+    }
+    // build the leaf and return
+    if let Node::Leaf { id, value } = path[path.len() - 1] {
+        TreePath {
+            steps: steps,
+            leaf_node_id: id.unwrap(),
+            leaf_value: *value
+        }
+    } else {
+        panic!("Last item in path should be a Node::Leaf");
+    }
+}
+
+/// Build the witnesses for a single sample.
+pub fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>> {
+     sample
+        .iter()
+        .enumerate()
+        .map(|(index, value)| InputAttribute {
+            attr_id: F::from(index as u64),
+            attr_val: F::from(*value as u64),
+        })
+        .collect()
+}
+
+
 /// Circuitize the provided batch of samples using the specified TreesModel instance,
 /// returning a CircuitizedSamples instance.
 /// See documentation of CircuitizedSamples.
-/// The length of each sample (in `samples`) is
+/// The length of each sample (in `result.samples`) is
 /// `next_power_of_two((trees_model.depth - 1) * values_array[0].len())`
 /// Pre: `values_array.len() > 0`.
 pub fn circuitize_samples<F: FieldExt>(
     samples_in: &Samples,
     trees_model: &TreesModel,
-) -> CircuitizedSamples<F> {
-    let mut attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>> = vec![];
-    let mut decision_paths: Vec<Vec<Vec<DecisionNode<F>>>> = vec![];
-    let mut path_ends: Vec<Vec<LeafNode<F>>> = vec![];
-    let mut differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>> = vec![];
-    let mut attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = vec![];
-    let mut node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
-
-    // convert the samples to field elements
-    let mut samples: Vec<Vec<InputAttribute<F>>> = samples_in.values
+    ) -> CircuitizedSamples<F> {
+    let paths: Vec<Vec<TreePath<i64>>> = trees_model.trees
         .par_iter()
-        .map(|values_row|
-             values_row
-                .iter()
-                .enumerate()
-                .map(|(index, value)| InputAttribute {
-                    attr_id: F::from(index as u64),
-                    attr_val: F::from(*value as u64),
-                })
-                .collect()
-        )
+        .map(|tree| samples_in.values
+             .iter()
+             .map(|sample| build_path(&tree, &sample))
+             .collect())
         .collect();
-
-    for tree in &trees_model.trees {
-        // initialize the node visit counts "node_multiplicities"
-        let mut node_multiplicities_for_tree: Vec<u32> = vec![0_u32; 2_usize.pow(trees_model.depth as u32)];
-        let mut attribute_multiplicities_for_tree: Vec<Vec<u32>> = vec![];
-        let mut attributes_on_paths_for_tree: Vec<Vec<InputAttribute<F>>> = vec![];
-        let mut decision_paths_for_tree: Vec<Vec<DecisionNode<F>>> = vec![];
-        let mut path_ends_for_tree: Vec<LeafNode<F>> = vec![];
-        let mut differences_for_tree: Vec<Vec<BinDecomp16Bit<F>>> = vec![];
-
-        for (values_row, sample) in samples_in.values.iter().zip(samples.iter()) {
-            // get the path
-            let path = tree.get_path(values_row);
-
-            // derive data from decision path
-            let mut decision_path = vec![];
-            let mut attributes_on_path_for_tree_and_sample: Vec<InputAttribute<F>> = vec![];
-            let mut differences_for_tree_and_sample = vec![];
-            let mut attribute_multiplicities_for_tree_and_sample = vec![0_u32; sample.len()];
-            for node in &path[..path.len() - 1] {
-                if let Node::Internal {
-                    id,
-                    feature_index,
-                    threshold,
-                    ..
-                } = node
-                {
-                    decision_path.push(DecisionNode {
-                        node_id: F::from(id.unwrap() as u64),
-                        attr_id: F::from(*feature_index as u64),
-                        threshold: F::from(*threshold as u64),
-                    });
-                    // calculate the bit decompositions of the differences
-                    let difference = (values_row[*feature_index] as i32) - (*threshold as i32);
-                    let bits = build_signed_bit_decomposition(difference, 16).unwrap();
-                    differences_for_tree_and_sample.push(BinDecomp16Bit::<F>::from(bits));
-                    // accumulate the node_multiplicities for this tree
-                    node_multiplicities_for_tree[id.unwrap() as usize] += 1;
-                    // accumulate the attribute multiplicities
-                    attribute_multiplicities_for_tree_and_sample[*feature_index] += 1;
-                    // build up the attributes on path
-                    attributes_on_path_for_tree_and_sample.push(sample[*feature_index]);
-                } else {
-                    panic!("All Nodes in the path must be internal, except the last");
-                }
-            }
-
-            attributes_on_paths_for_tree.push(attributes_on_path_for_tree_and_sample);
-            decision_paths_for_tree.push(decision_path);
-            differences_for_tree.push(differences_for_tree_and_sample);
-            attribute_multiplicities_for_tree.push(attribute_multiplicities_for_tree_and_sample);
-
-            // build the leaf node
-            if let Node::Leaf { id, value } = path[path.len() - 1] {
-                path_ends_for_tree.push(LeafNode {
-                    node_id: F::from(id.unwrap() as u64),
-                    node_val: i64_to_field(*value),
-                });
-                // accumulate multiplicity for leaf node
-                // index using node id + 1 (since it's a leaf node)
-                node_multiplicities_for_tree[id.unwrap() as usize + 1] += 1;
-            } else {
-                panic!("Last item in path should be a Node::Leaf");
-            }
-        }
-        attributes_on_paths.push(attributes_on_paths_for_tree);
-        decision_paths.push(decision_paths_for_tree);
-        path_ends.push(path_ends_for_tree);
-        differences.push(differences_for_tree);
-        // calculate the bit decompositions of the attribute multiplicities
-        attribute_multiplicities.push(
-            attribute_multiplicities_for_tree
+    let samples: Vec<Vec<InputAttribute<F>>> = samples_in.values
+        .par_iter()
+        .map(build_sample_witness)
+        .collect();
+    let decision_paths: Vec<Vec<DecisionPath<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(DecisionPath::<F>::from)
+                .collect()
+            })
+        .collect();
+    let attributes_on_paths: Vec<Vec<AttributesOnPath<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(AttributesOnPath::<F>::from)
+                .collect()
+        })
+        .collect();
+    let differences: Vec<Vec<DifferencesBits<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(DifferencesBits::<F>::from)
+                .collect()
+        })
+        .collect();
+    let path_ends: Vec<Vec<LeafNode<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(LeafNode::<F>::from)
+                .collect()
+            })
+        .collect();
+    let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(|tree_path| count_attribute_multiplicities(&tree_path.steps, samples_in.sample_length))
                 .into_iter()
-                .map(|mults| mults
+                .map(|multiplicities| multiplicities
                      .into_iter()
-                     .map(|mult| build_unsigned_bit_decomposition(mult, 4).unwrap())
+                     .map(|mult| build_unsigned_bit_decomposition(mult as u32, 4).unwrap())
                      .map(BinDecomp4Bit::<F>::from)
                      .collect())
                 .collect()
-        );
-        // calculate the bit decompositions of the node multiplicities
-        node_multiplicities.push(
-            node_multiplicities_for_tree
+        })
+        .collect();
+    let node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            count_node_multiplicities(tree_paths, trees_model.depth)
                 .into_iter()
-                .map(|mult| build_unsigned_bit_decomposition(mult, 16).unwrap())
+                .map(|mult| build_unsigned_bit_decomposition(mult as u32, 16).unwrap())
                 .map(BinDecomp16Bit::<F>::from)
-                .collect(),
-        );
-    }
+                .collect()
+        })
+        .collect();
 
     CircuitizedSamples {
         samples,
@@ -300,6 +382,28 @@ pub fn circuitize_samples<F: FieldExt>(
         attribute_multiplicities,
         node_multiplicities,
     }
+}
+
+/// Given a vector of PathSteps, return a vector counting how often each attribute is used.
+pub fn count_attribute_multiplicities(path_steps: &Vec<PathStep>, sample_length: usize) -> Vec<usize> {
+    let mut multiplicities = vec![0_usize; sample_length];
+    path_steps
+        .iter()
+        .for_each(|step| multiplicities[step.attr_id as usize] += 1);
+    multiplicities
+}
+
+// FIXME docs!
+pub fn count_node_multiplicities<T>(tree_paths: &Vec<TreePath<T>>, tree_depth: usize) -> Vec<usize> {
+    let mut multiplicities = vec![0_usize; 2_usize.pow(tree_depth as u32)];
+    tree_paths
+        .iter()
+        .for_each(|tree_path| {
+            tree_path.steps
+                .iter()
+                .for_each(|step| multiplicities[step.node_id as usize] += 1)
+        });
+    multiplicities
 }
 
 impl<F: FieldExt> From<&TreesModel> for CircuitizedTrees<F> {
@@ -366,7 +470,7 @@ impl From<&RawTreesModel> for TreesModel {
             .max()
             .unwrap();
         let target_depth = next_power_of_two(max_depth - 1).unwrap() + 1;
-        // insert DecisionNodes where needed to perfect each tree
+        // insert decision nodes where needed to perfect each tree
         let mut qtrees: Vec<Node<i64>> = qtrees
             .iter()
             .map(|tree: &Node<i64>| tree.perfect_to_depth(target_depth))
@@ -873,5 +977,36 @@ mod tests {
 
         let _ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
         let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);
+    }
+
+    #[test]
+    fn test_build_path() {
+        let mut tree = build_small_tree();
+        tree.assign_id(0);
+        let sample = vec![2_u16, 0_u16];
+        let path = build_path(&tree, &sample);
+    }
+
+    #[test]
+    fn test_count_attribute_multiplicities() {
+        let sample_length: usize = 10;
+        let multiplicities = count_attribute_multiplicities(&vec![], sample_length);
+        assert_eq!(multiplicities.len(), 10);
+        assert_eq!(multiplicities[1], 0);
+        let mut path: Vec<PathStep> = vec![];
+        for i in 0..2 {
+            path.push(PathStep {
+                node_id: 1,
+                attr_id: 2,
+                threshold: 3,
+                attr_val: 4
+            });
+        }
+        let multiplicities = count_attribute_multiplicities(&path, sample_length);
+        assert_eq!(multiplicities.len(), 10);
+        assert_eq!(multiplicities[1], 0);
+        assert_eq!(multiplicities[2], 2);
+        assert_eq!(multiplicities[3], 0);
+        assert_eq!(multiplicities[4], 0);
     }
 }

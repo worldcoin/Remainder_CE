@@ -304,11 +304,11 @@ mod tests {
     use super::*;
 
     /// Returns a small tree for testing:
-    ///      .
-    ///     / \
-    ///    .  1.2
-    ///   / \
-    /// 0.1 0.2
+    ///       x[1]>=1?
+    ///        /    \
+    ///    x[0]>=2?  1.2
+    ///     /    \
+    ///  0.1      0.2
     fn build_small_tree() -> Node<f64> {
         let left = Node::new_leaf(None, 0.1);
         let middle = Node::new_leaf(None, 0.2);
@@ -428,8 +428,9 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_id() {
+    fn test_assign_id_and_get_id() {
         let mut tree = build_small_tree();
+        assert_eq!(tree.get_id(), None);
         tree.assign_id(0);
         assert_eq!(tree.get_id(), Some(0));
         if let Node::Internal { left, .. } = tree {
