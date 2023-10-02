@@ -57,6 +57,7 @@ use super::{
     path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
+use ark_std::{end_timer, start_timer};
 use std::{marker::PhantomData, path::Path};
 
 /// The actual ZKDT circuit!
@@ -81,6 +82,7 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
         ),
         crate::prover::GKRError,
     > {
+        let create_sub_circuits_timer = start_timer!(|| "input + instantiate sub circuits");
         let (
             // --- Actual circuit components ---
             mut attribute_consistency_circuit,
@@ -96,7 +98,9 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
             input_layers,
             inpunt_layers_commits,
         ) = self.create_sub_circuits(transcript).unwrap();
+        end_timer!(create_sub_circuits_timer);
 
+        let wit_gen_timer = start_timer!(|| "witness generation of subcircuits");
         let attribute_consistency_witness = attribute_consistency_circuit.yield_sub_circuit();
         let multiset_witness = multiset_circuit.yield_sub_circuit();
         let input_multiset_witness = input_multiset_circuit.yield_sub_circuit();
@@ -110,7 +114,9 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
             bits_are_binary_multiset_decision_circuit.yield_sub_circuit();
         let bits_are_binary_multiset_leaf_circuit_witness =
             bits_are_binary_multiset_leaf_circuit.yield_sub_circuit();
+        end_timer!(wit_gen_timer);
 
+        let combine_layers_timer = start_timer!(|| "combine layers + gate stuff");
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
                 attribute_consistency_witness.layers,
@@ -141,6 +147,8 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
                 &mut combined_circuit_layers,
                 combined_circuit_output_layers,
             );
+
+        end_timer!(combine_layers_timer);
 
         Ok((
             Witness {
@@ -186,6 +194,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             mut multiplicities_bin_decomp_mle_input_vec,
         } = self.batched_catboost_mles.clone(); // TODO!(% Labs): Get rid of this clone?!?!
 
+        let combine_mles_timer = start_timer!(|| "combine batched mles");
+
         // deal w input
         let mut input_data_mle_combined =
             DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_data_mle_vec.clone());
@@ -206,6 +216,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 multiplicities_bin_decomp_mle_input_vec.clone(),
             );
 
+        end_timer!(combine_mles_timer);
         // TODO!(ryancao): Actually fix this!!
         // Note to Veridise folks: The below should be split up as written, but we didn't quite have time to
         // fully debug it before sending things over. Will send an updated version ASAP!
@@ -214,51 +225,67 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         // a) Precommitted Ligero input layer for tree itself (LayerId: 0)
         // b) Ligero input layer for just the inputs themselves (LayerId: 1)
         // c) Ligero input layer for all the auxiliaries (LayerId: 2)
-        // d) Public input layer for all the leaf node outputs (TODO!(ryancao)): Actually do this bit! (LayerId: TODO!)
+        // d) Public input layer for all the leaf node outputs (TODO!(ryancao)): // Actually do this bit! (LayerId: TODO!)
         // e) FS-style input layer for all the random packing constants + challenges (LayerId: 3)
-        // TODO!(ryancao): Make it so that we don't have to manually assign all of the layer IDs for input layer MLEs...
+        // let tree_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+        //     Box::new(&mut decision_nodes_mle),
+        //     Box::new(&mut leaf_nodes_mle),
+        // ];
+        // let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+        //     Box::new(&mut input_data_mle_combined),
+        // ];
+        // let aux_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+        //     Box::new(&mut permuted_input_data_mle_vec_combined),
+        //     Box::new(&mut decision_node_paths_mle_vec_combined),
+        //     Box::new(&mut leaf_node_paths_mle_vec_combined),
+        //     Box::new(&mut multiplicities_bin_decomp_mle_decision),
+        //     Box::new(&mut multiplicities_bin_decomp_mle_leaf),
+        //     Box::new(&mut combined_batched_diff_signed_bin_decomp_mle),
+        //     Box::new(&mut multiplicities_bin_decomp_mle_input_vec_combined),
+        // ];
 
-        // --- Input layer 0 ---
-        decision_nodes_mle.layer_id = LayerId::Input(0);
-        leaf_nodes_mle.layer_id = LayerId::Input(0);
-        let tree_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+        // --- a) Precommitted Ligero input layer for tree itself (LayerId: 0) ---
+        // let tree_mle_precommit_filepath = get_tree_commitment_filename_for_tree_number(0, Path::new("upshot_data/tree_ligero_commitments/"));
+        // let (
+        //     _ligero_encoding,
+        //     ligero_commit,
+        //     ligero_root,
+        //     ligero_aux
+        // ): (
+        //     LigeroEncoding<F>,
+        //     LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+        //     LcRoot<LigeroEncoding<F>, F>,
+        //     LcProofAuxiliaryInfo,
+        // ) = {
+        //     let file = std::fs::File::open(tree_mle_precommit_filepath).unwrap();
+        //     from_reader(&file).unwrap()
+        // };
+        // let tree_mle_input_layer_builder = InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
+
+        // --- b) Ligero input layer for just the inputs themselves (LayerId: 1) ---
+        // let input_mles_input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(1));
+
+        // --- c) Ligero input layer for all the auxiliaries (LayerId: 2) ---
+        // let aux_mles_input_layer_builder = InputLayerBuilder::new(aux_mles, None, LayerId::Input(2));
+
+        // --- Convert all the input layer builders into input layers ---
+        // let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = tree_mle_input_layer_builder.to_input_layer_with_precommit(ligero_commit, ligero_aux, ligero_root);
+        // let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = input_mles_input_layer_builder.to_input_layer();
+        // let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = aux_mles_input_layer_builder.to_input_layer();
+        // let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
+        // let mut input_mles_input_layer = input_mles_input_layer.to_enum();
+        // let mut aux_mles_input_layer = aux_mles_input_layer.to_enum();
+
+        // --- Just have a single Ligero commitment for now ---
+        let ligero_timer = start_timer!(|| "construct ligero mles");
+
+        let all_ligero_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            // --- Tree MLEs ---
             Box::new(&mut decision_nodes_mle),
             Box::new(&mut leaf_nodes_mle),
-        ];
-
-        // --- Input layer 1 ---
-        input_data_mle_combined.layer_id = LayerId::Input(1);
-        input_data_mle_vec.iter_mut().for_each(|mle| {
-            mle.layer_id = LayerId::Input(1);
-        });
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut input_data_mle_combined)];
-
-        // --- Input layer 2 ---
-        permuted_input_data_mle_vec_combined.layer_id = LayerId::Input(2);
-        decision_node_paths_mle_vec_combined.layer_id = LayerId::Input(2);
-        leaf_node_paths_mle_vec_combined.layer_id = LayerId::Input(2);
-        multiplicities_bin_decomp_mle_decision.layer_id = LayerId::Input(2);
-        multiplicities_bin_decomp_mle_leaf.layer_id = LayerId::Input(2);
-        combined_batched_diff_signed_bin_decomp_mle.layer_id = LayerId::Input(2);
-        multiplicities_bin_decomp_mle_input_vec_combined.layer_id = LayerId::Input(2);
-        permuted_input_data_mle_vec.iter_mut().for_each(|mle| {
-            mle.layer_id = LayerId::Input(2);
-        });
-        decision_node_paths_mle_vec.iter_mut().for_each(|mle| {
-            mle.layer_id = LayerId::Input(2);
-        });
-        leaf_node_paths_mle_vec.iter_mut().for_each(|mle| {
-            mle.layer_id = LayerId::Input(2);
-        });
-        binary_decomp_diffs_mle_vec.iter_mut().for_each(|mle| {
-            mle.layer_id = LayerId::Input(2);
-        });
-        multiplicities_bin_decomp_mle_input_vec
-            .iter_mut()
-            .for_each(|mle| {
-                mle.layer_id = LayerId::Input(2);
-            });
-        let aux_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            // --- Input MLEs ---
+            Box::new(&mut input_data_mle_combined),
+            // --- Aux MLEs ---
             Box::new(&mut permuted_input_data_mle_vec_combined),
             Box::new(&mut decision_node_paths_mle_vec_combined),
             Box::new(&mut leaf_node_paths_mle_vec_combined),
@@ -267,46 +294,9 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             Box::new(&mut combined_batched_diff_signed_bin_decomp_mle),
             Box::new(&mut multiplicities_bin_decomp_mle_input_vec_combined),
         ];
-
-        // --- a) Precommitted Ligero input layer for tree itself (LayerId: 0) ---
-        let tree_mle_precommit_filepath = get_tree_commitment_filename_for_tree_number(
-            0,
-            Path::new("upshot_data/tree_ligero_commitments/"),
-        );
-        let (_ligero_encoding, ligero_commit, ligero_root, ligero_aux): (
-            LigeroEncoding<F>,
-            LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-            LcRoot<LigeroEncoding<F>, F>,
-            LcProofAuxiliaryInfo,
-        ) = {
-            let file = std::fs::File::open(tree_mle_precommit_filepath).unwrap();
-            from_reader(&file).unwrap()
-        };
-        let tree_mle_input_layer_builder =
-            InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
-
-        // --- b) Ligero input layer for just the inputs themselves (LayerId: 1) ---
-        let input_mles_input_layer_builder =
-            InputLayerBuilder::new(input_mles, None, LayerId::Input(1));
-
-        // --- c) Ligero input layer for all the auxiliaries (LayerId: 2) ---
-        let aux_mles_input_layer_builder =
-            InputLayerBuilder::new(aux_mles, None, LayerId::Input(2));
-
-        // --- Convert all the input layer builders into input layers ---
-        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            tree_mle_input_layer_builder.to_input_layer_with_precommit(
-                ligero_commit,
-                ligero_aux,
-                ligero_root,
-            );
-        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            input_mles_input_layer_builder.to_input_layer();
-        let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            aux_mles_input_layer_builder.to_input_layer();
-        let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
-        let mut input_mles_input_layer = input_mles_input_layer.to_enum();
-        let mut aux_mles_input_layer = aux_mles_input_layer.to_enum();
+        let all_ligero_mles_input_layer_builder =
+            InputLayerBuilder::new(all_ligero_mles, None, LayerId::Input(0));
+        end_timer!(ligero_timer);
 
         // --- Add input layer derived prefix bits to vectors ---
         // --- First input layer ---
@@ -348,24 +338,35 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 
         // --- Add commitments to transcript so they are taken into account before the FS input layers are sampled ---
         // --- TODO!(ryancao): Do this correctly
-        let tree_mle_commit = tree_mle_input_layer
-            .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
-        InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
+        // let tree_mle_commit = tree_mle_input_layer
+        //     .commit()
+        //     .map_err(|err| GKRError::InputLayerError(err))?;
+        // InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
 
-        let input_mle_commit = input_mles_input_layer
-            .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
-        InputLayerEnum::append_commitment_to_transcript(&input_mle_commit, transcript).unwrap();
+        // let input_mle_commit = input_mles_input_layer
+        //     .commit()
+        //     .map_err(|err| GKRError::InputLayerError(err))?;
+        // InputLayerEnum::append_commitment_to_transcript(&input_mle_commit, transcript).unwrap();
 
-        let aux_mle_commit = aux_mles_input_layer
-            .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
-        InputLayerEnum::append_commitment_to_transcript(&aux_mle_commit, transcript).unwrap();
+        // let aux_mle_commit = aux_mles_input_layer
+        //     .commit()
+        //     .map_err(|err| GKRError::InputLayerError(err))?;
+        // InputLayerEnum::append_commitment_to_transcript(&aux_mle_commit, transcript).unwrap();
 
-        // --- FS layers must also have LayerId::Input(.)s! ---
-        // Input(3)
-        let random_r = RandomInputLayer::new(transcript, 1, LayerId::Input(3));
+        let ligero_commit_timer = start_timer!(|| "combine ligero mles and commit");
+        let all_ligero_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+            all_ligero_mles_input_layer_builder.to_input_layer();
+        let mut all_ligero_mles_input_layer = all_ligero_mles_input_layer.to_enum();
+        let all_input_mles_commit = all_ligero_mles_input_layer
+            .commit()
+            .map_err(GKRError::InputLayerError)?;
+        InputLayerEnum::append_commitment_to_transcript(&all_input_mles_commit, transcript)
+            .unwrap();
+        end_timer!(ligero_commit_timer);
+
+        let fs_timer = start_timer!(|| "FS");
+        // FS
+        let random_r = RandomInputLayer::new(transcript, 1, LayerId::Input(1));
         let r_mle = random_r.get_mle();
         dbg!(&r_mle.layer_id);
         let mut random_r = random_r.to_enum();
@@ -389,7 +390,12 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             .commit()
             .map_err(GKRError::InputLayerError)?;
 
-        // --- Construct the actual circuit structs ---
+        // FS
+        end_timer!(fs_timer);
+
+        // construct the circuits
+        let circuits_timer = start_timer!(|| "construct circuits");
+
         let attribute_consistency_circuit = AttributeConsistencyCircuit {
             permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
             decision_node_paths_mle_vec: decision_node_paths_mle_vec.clone(),
@@ -440,6 +446,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             BinDecomp16BitIsBinaryCircuit::new(multiplicities_bin_decomp_mle_decision);
         let bits_are_binary_multiset_leaf_circuit =
             BinDecomp16BitIsBinaryCircuit::new(multiplicities_bin_decomp_mle_leaf);
+        end_timer!(circuits_timer);
 
         Ok((
             // --- Actual circuit components ---
@@ -454,17 +461,19 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             bits_are_binary_multiset_leaf_circuit,
             // --- Input layers ---
             vec![
-                tree_mle_input_layer,
-                input_mles_input_layer,
-                aux_mles_input_layer,
+                // tree_mle_input_layer,
+                // input_mles_input_layer,
+                // aux_mles_input_layer,
+                all_ligero_mles_input_layer,
                 random_r,
                 random_r_packing,
                 random_r_packing_another,
             ],
             vec![
-                tree_mle_commit,
-                input_mle_commit,
-                aux_mle_commit,
+                // tree_mle_commit,
+                // input_mle_commit,
+                // aux_mle_commit,
+                all_input_mles_commit,
                 random_r_commit,
                 random_r_packing_commit,
                 random_r_packing_another_commit,
@@ -478,6 +487,7 @@ mod tests {
     use super::ZKDTCircuit;
     use crate::prover::tests::test_circuit;
     use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
+    use ark_std::{end_timer, start_timer};
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use std::path::Path;
 
@@ -514,5 +524,27 @@ mod tests {
             combined_circuit,
             Some(Path::new("upshot_data/zkdt_proof_opt.json")),
         );
+    }
+
+    #[test]
+    fn bench_zkdt_circuits() {
+        (1..2).for_each(|batch_size| {
+            let circuit_timer = start_timer!(|| format!("zkdt circuit, batch_size 2^{batch_size}"));
+            let wit_gen_timer = start_timer!(|| "wit gen");
+
+            let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(
+                batch_size,
+                Path::new("upshot_data/"),
+            );
+            end_timer!(wit_gen_timer);
+
+            let combined_circuit = ZKDTCircuit {
+                batched_catboost_mles,
+            };
+
+            test_circuit(combined_circuit, None);
+
+            end_timer!(circuit_timer);
+        });
     }
 }

@@ -33,7 +33,7 @@ pub fn leaf_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
 
 /// Helper!
 pub fn decision_mul_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
-    dbg!(&size);
+    // dbg!(&size);
     
     (0 .. (size-1)).map(
         |idx| (idx, idx, idx)

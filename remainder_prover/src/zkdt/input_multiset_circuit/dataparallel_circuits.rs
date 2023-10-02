@@ -633,6 +633,8 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
 
         let circuit_output = combine_zero_mle_ref(circuit_output);
 
+        println!("# layers -- input multiset: {:?}", layers.next_layer_id());
+
         Witness {
             layers,
             output_layers: vec![circuit_output.get_enum()],

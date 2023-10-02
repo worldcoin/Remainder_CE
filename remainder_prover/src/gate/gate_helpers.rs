@@ -371,7 +371,6 @@ pub fn compute_full_gate<F: FieldExt>(
         let num_copy_idx = 1 << copy_bits;
         // if the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on p2
         let beta_g2 = BetaTable::new(copy_chals).unwrap();
-
         {
             // sum over everything else, outer sum being over p2, inner sum over (x, y)
             (0..(1 << num_copy_idx)).fold(F::zero(), |acc_outer, idx| {

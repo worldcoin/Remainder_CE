@@ -743,6 +743,8 @@ impl<F: FieldExt> FSMultiSetCircuit<F> {
 
         println!("Multiset circuit finished, number of layers {:?}", layers.next_layer_id());
 
+        println!("# layers -- multiset: {:?}", layers.next_layer_id());
+
         Witness {
             layers,
             output_layers: vec![circuit_output.get_enum()],
