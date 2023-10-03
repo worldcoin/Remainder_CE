@@ -451,15 +451,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     let samples: Samples = to_samples(&raw_samples, &trees_model);
     let ctrees: CircuitizedTrees<F> = (&trees_model).into();
 
-    dbg!(&samples.values.len());
-    dbg!(&samples.values[0].len());
-
     let csamples = circuitize_samples::<F>(&samples, &trees_model);
-    dbg!(&csamples.samples.len());
-    dbg!(&csamples.decision_paths[0].len());
-    dbg!(&csamples.attributes_on_paths[0].len());
-
-    panic!();
 
     let tree_height = ctrees.depth;
     let input_len = csamples.samples[0].len();
