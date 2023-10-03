@@ -1,10 +1,15 @@
-use std::{path::Path, time::Instant, fs};
+use std::{fs, path::Path, time::Instant};
 
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use remainder::{zkdt::{data_pipeline::{dummy_data_generator::generate_mles_batch_catboost_single_tree}, zkdt_circuit::ZKDTCircuit}, prover::GKRCircuit};
-use remainder_shared_types::{FieldExt, transcript::Transcript};
-use serde_json::{to_writer, from_reader};
-
+use remainder::{
+    prover::GKRCircuit,
+    zkdt::{
+        data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree,
+        zkdt_circuit::ZKDTCircuit,
+    },
+};
+use remainder_shared_types::{transcript::Transcript, FieldExt};
+use serde_json::{from_reader, to_writer};
 
 pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
@@ -57,10 +62,13 @@ fn main() {
 
     let batch_size = 10;
 
-    let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(batch_size, Path::new("upshot_data"));
+    let (batched_catboost_mles, (_, _)) =
+        generate_mles_batch_catboost_single_tree::<Fr>(batch_size, Path::new("upshot_data"));
 
     let combined_circuit = ZKDTCircuit {
-        batched_catboost_mles
+        batched_catboost_mles,
+        tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json"
+            .to_string(),
     };
 
     test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));

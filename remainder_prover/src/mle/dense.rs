@@ -11,8 +11,11 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
-use crate::{layer::{LayerId, batched::combine_mles}, zkdt::structs::combine_mle_refs};
 use crate::{expression::ExpressionStandard, layer::Claim};
+use crate::{
+    layer::{batched::combine_mles, LayerId},
+    zkdt::structs::combine_mle_refs,
+};
 use remainder_shared_types::FieldExt;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -114,13 +117,11 @@ impl<'a, F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> IntoIterator
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
-
+pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(
+    items: &[Vec<F>; L],
+) -> Vec<F> {
     // --- All the items within should be the same size ---
-    let max_size = items
-        .iter()
-        .map(|mle_ref| mle_ref.len())
-        .max().unwrap();
+    let max_size = items.iter().map(|mle_ref| mle_ref.len()).max().unwrap();
 
     let part_size = 1 << log2(max_size);
     let part_count = 2_u32.pow(log2(L)) as usize;
@@ -216,37 +217,35 @@ impl<F: FieldExt> DenseMle<F, F> {
         )
     }
 
-    pub fn one(mle_len: usize, layer_id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> DenseMle<F, F> {
+    pub fn one(
+        mle_len: usize,
+        layer_id: LayerId,
+        prefix_bits: Option<Vec<MleIndex<F>>>,
+    ) -> DenseMle<F, F> {
         let mut one_vec = vec![];
         for _ in 0..mle_len {
             one_vec.push(F::one())
         }
-        DenseMle::new_from_raw(
-            one_vec,
-            layer_id,
-            prefix_bits
-        )
+        DenseMle::new_from_raw(one_vec, layer_id, prefix_bits)
     }
 
-    /// To combine a batch of `DenseMle<F, F>` into a single `DenseMle<F, F>` 
+    /// To combine a batch of `DenseMle<F, F>` into a single `DenseMle<F, F>`
     /// appropriately, such that the bit ordering is (batched_bits, (mle_ref_bits), iterated_bits)
-    /// 
+    ///
     /// TODO!(ende): refactor
     pub fn combine_mle_batch(mle_batch: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
-
         let batched_bits = log2(mle_batch.len());
 
-        let mle_batch_ref_combined = mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    x.mle_ref()
-                }
-            ).collect_vec();
+        let mle_batch_ref_combined = mle_batch.into_iter().map(|x| x.mle_ref()).collect_vec();
 
-        let mle_batch_ref_combined_ref =  combine_mles(mle_batch_ref_combined, batched_bits as usize);
+        let mle_batch_ref_combined_ref =
+            combine_mles(mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(
+            mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 }
 
@@ -361,27 +360,26 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         }
     }
 
-    /// To combine a batch of `DenseMle<F, Tuple2<F>>` into a single `DenseMle<F, F>` 
+    /// To combine a batch of `DenseMle<F, Tuple2<F>>` into a single `DenseMle<F, F>`
     /// appropriately, such that the bit ordering is (batched_bits, mle_ref_bits, iterated_bits)
-    /// 
+    ///
     /// TODO!(ende): refactor
     pub fn combine_mle_batch(tuple2_mle_batch: Vec<DenseMle<F, Tuple2<F>>>) -> DenseMle<F, F> {
-
         let batched_bits = log2(tuple2_mle_batch.len());
 
         let tuple2_mle_batch_ref_combined = tuple2_mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    combine_mle_refs(
-                        vec![x.first(), x.second()]
-                    ).mle_ref()
-                }
-            ).collect_vec();
+            .into_iter()
+            .map(|x| combine_mle_refs(vec![x.first(), x.second()]).mle_ref())
+            .collect_vec();
 
-        let tuple2_mle_batch_ref_combined_ref =  combine_mles(tuple2_mle_batch_ref_combined, batched_bits as usize);
+        let tuple2_mle_batch_ref_combined_ref =
+            combine_mles(tuple2_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(tuple2_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(
+            tuple2_mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 }
 
@@ -433,31 +431,63 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
     /// described by [Tha13].
     fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>> {
         // --- Bind the current indexed bit to the challenge value ---
+        // The count of the indexed bit we're fixing.
+        let mut bit_count = 0;
+        dbg!(&self.mle_indices);
         for mle_index in self.mle_indices.iter_mut() {
+            if let MleIndex::IndexedBit(_) = *mle_index {
+                bit_count += 1;
+            }
             if *mle_index == MleIndex::IndexedBit(round_index) {
                 mle_index.bind_index(challenge);
+                break;
             }
         }
+        debug_assert!(bit_count >= 1);
+
+        let chunk_size: usize = 1 << bit_count;
 
         // --- One fewer iterated bit to sumcheck through ---
         self.num_vars -= 1;
 
         let transform = |chunk: &[F]| {
-            let zero = F::zero();
-            let first = chunk[0];
-            let second = chunk.get(1).unwrap_or(&zero);
+            let window_size: usize = (1 << (bit_count - 1)) + 1;
 
-            // (1 - r) * V(i) + r * V(i + 1)
-            first + (*second - first) * challenge
+            let inner_transform = |window: &[F]| {
+                let zero = F::zero();
+                let first = window[0];
+                let second = *window.get(window_size - 1).unwrap_or(&zero);
+
+                // (1 - r) * V(i) + r * V(i + 1)
+                first + (second - first) * challenge
+            };
+
+            #[cfg(feature = "parallel")]
+            let new = chunk.par_windows(window_size).map(inner_transform);
+
+            #[cfg(not(feature = "parallel"))]
+            let new = chunk.windows(window_size).map(inner_transform);
+
+            let inner_bookkeeping_table: Vec<F> = new.collect();
+
+            inner_bookkeeping_table
         };
 
         // --- So this goes through and applies the formula from [Tha13], bottom ---
         // --- of page 23 ---
         #[cfg(feature = "parallel")]
-        let new = self.bookkeeping_table().par_chunks(2).map(transform);
+        let new = self
+            .bookkeeping_table()
+            .par_chunks(chunk_size)
+            .map(transform)
+            .flatten();
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.bookkeeping_table().chunks(2).map(transform);
+        let new = self
+            .bookkeeping_table()
+            .chunks(chunk_size)
+            .map(transform)
+            .flatten();
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.bookkeeping_table = new.collect();
