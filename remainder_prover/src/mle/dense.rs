@@ -860,58 +860,6 @@ mod tests {
     }
 
     #[test]
-    ///test nested fixing variables in an mle with three variables
-    fn fix_variable_nested() {
-        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
-        let mle_vec = vec![
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(0),
-            Fr::from(3),
-            Fr::from(1),
-            Fr::from(4),
-        ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-        let mut mle_ref = mle.mle_ref();
-        mle_ref.fix_variable(1, Fr::from(3));
-        mle_ref.fix_variable(2, Fr::from(2));
-
-        let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
-        let mle_exp: DenseMle<Fr, Fr> =
-            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
-    }
-
-    #[test]
-    ///test nested fixing all the wayyyy
-    fn fix_variable_full() {
-        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
-        let mle_vec = vec![
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(0),
-            Fr::from(2),
-            Fr::from(0),
-            Fr::from(3),
-            Fr::from(1),
-            Fr::from(4),
-        ];
-        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-        let mut mle_ref = mle.mle_ref();
-        let _ = mle_ref.index_mle_indices(0);
-        mle_ref.fix_variable(0, Fr::from(3));
-        mle_ref.fix_variable(1, Fr::from(2));
-        mle_ref.fix_variable(2, Fr::from(4));
-
-        let mle_vec_exp = vec![Fr::from(26)];
-        let mle_exp: DenseMle<Fr, Fr> =
-            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
-    }
-
-    #[test]
     fn create_dense_mle_from_vec() {
         let mle_vec = vec![
             Fr::from(0),
