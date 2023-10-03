@@ -13,6 +13,7 @@ use ark_std::cfg_into_iter;
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use tracing::Value;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},

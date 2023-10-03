@@ -8,6 +8,8 @@ use remainder_shared_types::FieldExt;
 use remainder_shared_types::transcript::Transcript;
 use serde_json::{to_writer, from_reader};
 use thiserror::Error;
+use tracing::{debug, event, Level};
+use tracing_subscriber::{FmtSubscriber, fmt::format::FmtSpan};
 
 #[derive(Error, Debug, Clone)]
 /// Errors for running the binary over inputs and proving/verification
@@ -69,6 +71,18 @@ struct Args {
     /// Whether we want the proof to be verified or not.
     #[arg(short, long, default_value_t = false)]
     verify_proof: bool,
+
+    /// Whether we want debug tracing subscriber logs or not.
+    /// By default, we use `TRACE` as the subscriber level.
+    /// 
+    /// TODO!(ryancao): Figure out `structopt` so we can pass in
+    /// different trace levels
+    #[arg(short, long, default_value_t = false)]
+    debug_tracing_subscriber: bool,
+
+    // --- NOTE: The below flags are all no-ops! ---
+    // TODO!(ryancao, marsenis): Tie these to the actual optimization
+    // flags after a refactor
 
     // /// Whether to turn on claim aggregation optimization which
     // /// reduces the number of V_i(l(x)) evaluations sent over to
@@ -157,6 +171,21 @@ pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
 /// * Output as files the actual proof which gets generated from that code
 fn main() -> Result<(), ZKDTBinaryError> {
     let args = Args::parse();
+
+    // --- Tracing subscriber (i.e. outputs trace messages in stdout) if asked for ---
+    if args.debug_tracing_subscriber {
+        let subscriber = FmtSubscriber::builder()
+            .with_line_number(true)
+            .with_max_level(tracing::Level::TRACE)
+            .with_level(true)
+            .with_span_events(FmtSpan::FULL)
+            .finish();
+        let _default_guard = tracing::subscriber::set_default(subscriber);
+    }
+
+    // --- Log the args ---
+    let args_as_string = format!("{:?}", args);
+    event!(Level::DEBUG, args_as_string);
 
     // --- Read in the Upshot data from file ---
     let (zkdt_circuit_data, (tree_height, input_len)) = load_upshot_data_single_tree_batch::<Fr>(

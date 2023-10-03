@@ -2,6 +2,7 @@
 
 
 use remainder_shared_types::FieldExt;
+use tracing::instrument;
 
 // use itertools::Itertools;
 
@@ -96,6 +97,7 @@ pub enum ClaimError {
 //     Ok(wlx_evals)
 // }
 
+#[instrument(level = "debug")]
 pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     claims: &[Claim<F>],
     rstar: F,
@@ -120,6 +122,7 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     Ok(r)
 }
 
+#[instrument(skip(layer), err, level = "debug")]
 pub(crate) fn compute_claim_wlx<F: FieldExt>(
     claims: &[Claim<F>],
     layer: &impl Layer<F>,
@@ -138,6 +141,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 }
 
 /// verifies the claim aggregation
+#[instrument(level = "debug")]
 pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for qx
     claims: &[Claim<F>],

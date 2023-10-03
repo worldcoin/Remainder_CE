@@ -7,6 +7,7 @@ use crate::zkdt::data_pipeline::dt2zkdt::generate_upshot_data_all_batch_sizes;
 use remainder_shared_types::FieldExt;
 use serde::{Serialize, Deserialize};
 use serde_json::{to_writer, from_reader};
+use tracing::instrument;
 
 use super::super::constants::CACHED_BATCHED_MLES_FILE;
 use super::dt2zkdt::load_upshot_data_single_tree_batch;
@@ -593,6 +594,7 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usi
 
 /// Takes the output from presumably something like [`read_upshot_data_single_tree_branch_from_filepath`]
 /// and converts it into `BatchedCatboostMles<F>`, i.e. the input to the circuit.
+#[instrument(skip(zkdt_circuit_data))]
 pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
     zkdt_circuit_data: ZKDTCircuitData<F>,
     tree_height: usize,

@@ -68,6 +68,7 @@ use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
+use tracing::instrument;
 use std::fs::{File, self};
 use std::path::Path;
 
@@ -432,6 +433,7 @@ pub fn load_raw_trees_model(filename: &str) -> RawTreesModel {
 /// ## Notes
 /// Note that `raw_samples.values.len()` is currently 4573! This means we can go
 /// up to 4096 in terms of batch sizes which are powers of 2
+#[instrument]
 pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     log_input_batch_size: Option<usize>,
     _num_trees_if_multiple: Option<usize>,
