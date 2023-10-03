@@ -15,10 +15,10 @@ use crate::{
         mulgate::MulGate,
     },
     layer::{
-        claims::aggregate_claims,
         claims::compute_aggregated_challenges,
         claims::compute_claim_wlx,
         claims::verify_aggregate_claim,
+        claims::{aggregate_claims, get_num_wlx_evaluations},
         claims::{Claim, ClaimGroup},
         layer_enum::LayerEnum,
         GKRLayer, Layer, LayerBuilder, LayerError, LayerId,
@@ -518,10 +518,11 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
-                    &mut |claims| compute_claim_wlx(claims, &layer).unwrap(),
+                    &mut |claims| Ok(compute_claim_wlx(claims, &layer).unwrap()),
                     transcript,
                     ENABLE_OPTIMIZATION,
-                );
+                )
+                .unwrap();
                 info!("Done aggregating claims! New claim: {:#?}", layer_claim);
                 debug!("Relevant wlx evals: {:#?}", relevant_wlx_evaluations);
                 end_timer!(claim_aggr_timer);
@@ -612,10 +613,11 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
-                    &mut |claims| input_layer.compute_claim_wlx(claims).unwrap(),
+                    &mut |claims| Ok(input_layer.compute_claim_wlx(claims).unwrap()),
                     transcript,
                     ENABLE_OPTIMIZATION,
-                );
+                )
+                .unwrap();
                 debug!("Relevant wlx evaluations: {:#?}", relevant_wlx_evaluations);
                 end_timer!(claim_aggr_timer);
 
@@ -786,22 +788,33 @@ pub trait GKRCircuit<F: FieldExt> {
                 let mut idx = 0;
                 let (claim, _) = aggregate_claims(
                     &layer_claim_group,
-                    &mut |claim_group| {
+                    &mut |claim_group: &ClaimGroup<F>| -> Result<Vec<F>, GKRError> {
                         debug!("Compute_wlx was called during claim aggregation verification");
+
+                        let current_wlx_evaluations = relevant_wlx_evaluations[idx].clone();
                         idx += 1;
-                        let current_wlx_evaluations = relevant_wlx_evaluations[idx - 1].clone();
-                        let all_wlx_evaluations: Vec<F> = claim_group
-                            .get_claim_vector()
+
+                        let claim_wlx_evaluations = claim_group.get_results().clone();
+
+                        let all_wlx_evaluations: Vec<F> = claim_wlx_evaluations
                             .into_iter()
-                            .map(|claim| claim.get_result().clone())
                             .chain(current_wlx_evaluations.into_iter())
                             .collect();
-                        debug!("All wlx evals returned:\n{:#?}", all_wlx_evaluations);
-                        all_wlx_evaluations
+
+                        let claim_vecs = claim_group.get_claim_points_matrix();
+                        let expected_num_evals = get_num_wlx_evaluations(claim_vecs);
+                        if expected_num_evals != all_wlx_evaluations.len() {
+                            return Err(GKRError::ErrorWhenVerifyingLayer(
+                                layer_id,
+                                LayerError::AggregationError,
+                            ));
+                        }
+
+                        Ok(all_wlx_evaluations)
                     },
                     transcript,
                     ENABLE_OPTIMIZATION,
-                );
+                )?;
                 prev_claim = claim;
 
                 if idx != relevant_wlx_evaluations.len() {
@@ -914,21 +927,33 @@ pub trait GKRCircuit<F: FieldExt> {
                 let mut idx = 0;
                 let (prev_claim, _) = aggregate_claims(
                     &input_layer_claim_group,
-                    &mut |claim_group| {
+                    &mut |claim_group| -> Result<Vec<F>, GKRError> {
+                        debug!("Compute_wlx was called during claim aggregation verification in the input layer");
+
+                        let current_wlx_evaluations = relevant_wlx_evaluations[idx].clone();
                         idx += 1;
-                        let current_wlx_evaluations = relevant_wlx_evaluations[idx - 1].clone();
-                        let all_wlx_evaluations: Vec<F> = claim_group
-                            .get_claim_vector()
+
+                        let claim_wlx_evaluations = claim_group.get_results().clone();
+                        let all_wlx_evaluations: Vec<F> = claim_wlx_evaluations
                             .into_iter()
-                            .map(|claim| claim.get_result().clone())
                             .chain(current_wlx_evaluations.into_iter())
                             .collect();
-                        debug!("All wlx evals:\n{:#?}", all_wlx_evaluations);
-                        all_wlx_evaluations
+
+                        let claim_vecs = claim_group.get_claim_points_matrix();
+                        let expected_num_evals = get_num_wlx_evaluations(claim_vecs);
+                        if expected_num_evals != all_wlx_evaluations.len() {
+                            debug!("wlx eval lengths don't match:\nexpected = {expected_num_evals}\nfound = {}", all_wlx_evaluations.len());
+                            return Err(GKRError::ErrorWhenVerifyingLayer(
+                                input_layer_id,
+                                LayerError::AggregationError,
+                            ));
+                        }
+
+                        Ok(all_wlx_evaluations)
                     },
                     transcript,
                     ENABLE_OPTIMIZATION,
-                );
+                )?;
 
                 if idx != relevant_wlx_evaluations.len() {
                     return Err(GKRError::ErrorWhenVerifyingLayer(

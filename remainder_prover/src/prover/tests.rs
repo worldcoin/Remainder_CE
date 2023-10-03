@@ -1,4 +1,4 @@
-use ark_std::{log2, test_rng, One, start_timer, end_timer};
+use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
@@ -886,7 +886,7 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
         batch_bits: 1,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof.json")));
+    test_circuit(circuit, Some(Path::new("./gate_batch_proof1.json")));
 
     // panic!();
 }
@@ -1447,7 +1447,7 @@ fn test_gkr_gate_batched_simplest_circuit() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof.json")));
+    test_circuit(circuit, Some(Path::new("./gate_batch_proof2.json")));
 }
 
 #[test]

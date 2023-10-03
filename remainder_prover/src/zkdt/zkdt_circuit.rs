@@ -510,7 +510,7 @@ mod tests {
                     record.args()
                 )
             })
-            .filter(None, LevelFilter::Debug)
+            .filter(None, LevelFilter::Error)
             .init();
 
         let (batched_catboost_mles, (_, _)) =

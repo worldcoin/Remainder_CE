@@ -6,8 +6,10 @@ use std::marker::PhantomData;
 
 use crate::{
     layer::{
-        claims::Claim, claims::ClaimError, layer_enum::LayerEnum, Layer, LayerBuilder, LayerError,
-        LayerId, VerificationError,
+        claims::Claim,
+        claims::{get_num_wlx_evaluations, ClaimError},
+        layer_enum::LayerEnum,
+        Layer, LayerBuilder, LayerError, LayerId, VerificationError,
     },
     mle::beta::BetaTable,
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
@@ -362,34 +364,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
         let num_vars = std::cmp::max(self.lhs.num_vars(), self.rhs.num_vars());
-        let mut num_evals = (num_vars) * (num_claims); //* degree;
-
-        if ENABLE_OPTIMIZATION {
-            let mut degree_reduction = num_vars as i64;
-            for j in 0..num_vars {
-                for i in 1..num_claims {
-                    if claim_vecs[i][j] != claim_vecs[i - 1][j] {
-                        degree_reduction -= 1;
-                        break;
-                    }
-                }
-            }
-            assert!(degree_reduction >= 0);
-
-            // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
-            // points. W : F^n -> F is a multi-linear polynomial on
-            // `num_vars` variables and l : F -> F^n is a canonical
-            // polynomial passing through `num_claims` points so its degree is
-            // at most `num_claims - 1`. This imposes an upper
-            // bound of `num_vars * (num_claims - 1)` to the degree of P.
-            // However, the actual degree of P might be lower.
-            // For any coordinate `i` such that all claims agree
-            // on that coordinate, we can quickly deduce that `l_i(x)` is a
-            // constant polynomial of degree zero instead of `num_claims -
-            // 1` which brings down the total degree by the same amount.
-            num_evals =
-                (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
-        }
+        let num_evals = get_num_wlx_evaluations(claim_vecs);
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
