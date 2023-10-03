@@ -2,7 +2,7 @@ use crate::layer::LayerId;
 
 use crate::mle::dense::DenseMle;
 use crate::utils::file_exists;
-use crate::zkdt::constants::get_cached_batched_mles_filename_with_exp_size;
+use crate::zkdt::constants::get_cached_batched_mles_filepath_with_exp_size;
 use crate::zkdt::data_pipeline::dt2zkdt::generate_upshot_data_all_batch_sizes;
 use remainder_shared_types::FieldExt;
 use serde::{Serialize, Deserialize};
@@ -564,7 +564,7 @@ pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>
     debug_assert!(exp_batch_size <= 12);
 
     // --- Load ---
-    let file = std::fs::File::open(get_cached_batched_mles_filename_with_exp_size(exp_batch_size, upshot_data_dir_path)).unwrap();
+    let file = std::fs::File::open(get_cached_batched_mles_filepath_with_exp_size(exp_batch_size, upshot_data_dir_path)).unwrap();
     from_reader(&file).unwrap()
 }
 
@@ -580,7 +580,7 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usi
     debug_assert!(exp_batch_size <= 12);
 
     // --- Check to see if the cached file exists ---
-    let cached_file_path = get_cached_batched_mles_filename_with_exp_size(exp_batch_size, upshot_data_dir_path);
+    let cached_file_path = get_cached_batched_mles_filepath_with_exp_size(exp_batch_size, upshot_data_dir_path);
 
     // --- If no cached file exists, run the entire cache thingy ---
     if !file_exists(&cached_file_path) {
