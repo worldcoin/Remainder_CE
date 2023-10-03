@@ -39,12 +39,12 @@ pub enum ZKDTBinaryError {
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Path to the tree commitment file that we care about
-    #[arg(short, long)]
+    #[arg(long)]
     tree_commit_filepath: String,
 
     /// Filepath to the sample intermediates that we care about
     /// (i.e. the outputs of the Python processing)
-    #[arg(short, long)]
+    #[arg(long)]
     quantized_samples_filepath: String,
 
     /// Filepath to the actual tree model that we care about
@@ -53,23 +53,23 @@ struct Args {
     /// TODO!(ryancao): Make this only need to take in the 
     /// singular tree that we are supposed to be proving, not
     /// the contents of the entire forest.
-    #[arg(short, long)]
+    #[arg(long)]
     decision_forest_model_filepath: String,
 
     /// log_2 of the number of samples to be read in.
     /// (Note that not passing in anything here will result in *all*
     /// samples being read.)
-    #[arg(short, long)]
+    #[arg(long)]
     log_sample_batch_size: Option<usize>,
 
     /// Filepath to where the final GKR proof should be written to.
     /// (Note that not passing in anything here will result in no proof
     /// being written at all.)
-    #[arg(short, long)]
+    #[arg(long)]
     gkr_proof_to_be_written_filepath: Option<String>,
 
     /// Whether we want the proof to be verified or not.
-    #[arg(short, long, default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     verify_proof: bool,
 
     /// Whether we want debug tracing subscriber logs or not.
@@ -77,7 +77,7 @@ struct Args {
     /// 
     /// TODO!(ryancao): Figure out `structopt` so we can pass in
     /// different trace levels
-    #[arg(short, long, default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     debug_tracing_subscriber: bool,
 
     // --- NOTE: The below flags are all no-ops! ---
@@ -88,7 +88,7 @@ struct Args {
     // /// reduces the number of V_i(l(x)) evaluations sent over to
     // /// the verifier, rather than the upper bound of 
     // /// `num_claims * num_challenge_points + 1`
-    // #[arg(short, long, default_value_t = true)]
+    // #[arg(long, default_value_t = true)]
     // claim_agg_reduced_number_vi_l_x_evaluations_optimization: bool,
 
     // /// Whether to turn on claim aggregation optimization which
@@ -96,15 +96,15 @@ struct Args {
     // /// those claims first into a resulting claim, and c) aggregate
     // /// all the resulting claims.
     // /// (This includes claim de-duplicating)
-    // #[arg(short, long, default_value_t = true)]
+    // #[arg(long, default_value_t = true)]
     // claim_agg_group_claims_by_input_layer_optimization: bool,
 
     // /// Whether to turn on flattened layer optimization for V_i(l(x)).
-    // #[arg(short, long, default_value_t = true)]
+    // #[arg(long, default_value_t = true)]
     // compute_vi_l_x_flattened_optimization: bool,
 
     // /// Whether to turn on common-variable V_i(l(x)) computation optimization.
-    // #[arg(short, long, default_value_t = true)]
+    // #[arg(long, default_value_t = true)]
     // compute_vi_l_x_common_var_optimization: bool,
 }
 
@@ -176,11 +176,11 @@ fn main() -> Result<(), ZKDTBinaryError> {
     if args.debug_tracing_subscriber {
         let subscriber = FmtSubscriber::builder()
             .with_line_number(true)
-            .with_max_level(tracing::Level::TRACE)
+            .with_max_level(tracing::Level::DEBUG)
             .with_level(true)
             .with_span_events(FmtSpan::FULL)
             .finish();
-        let _default_guard = tracing::subscriber::set_default(subscriber);
+        let _default_guard = tracing::subscriber::set_global_default(subscriber);
     }
 
     // --- Log the args ---

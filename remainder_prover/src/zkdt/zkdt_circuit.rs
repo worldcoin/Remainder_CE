@@ -204,7 +204,6 @@ impl <F: FieldExt> ZKDTCircuit<F> {
             LcRoot<LigeroEncoding<F>, F>,
             LcProofAuxiliaryInfo,
         ) = {
-            dbg!(&self.tree_precommit_filepath);
             let file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
             from_reader(&file).unwrap()
         };

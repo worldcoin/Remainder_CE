@@ -30,7 +30,7 @@ pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     type Transcript = Tr;
 
-    #[instrument(skip(transcript, self), level = "debug", err)]
+    #[instrument(skip_all, level = "debug", err)]
     fn prove_rounds(
         &mut self,
         claim: super::Claim<F>,
@@ -46,7 +46,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         }
     }
 
-    #[instrument(skip(transcript, self), level = "debug", err)]
+    #[instrument(skip_all, level = "debug", err)]
     fn verify_rounds(
         &mut self,
         claim: super::Claim<F>,
@@ -102,7 +102,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     }
 
     /// NOTE: This function is effectively deprecated!!!
-    #[instrument(skip(self), level = "debug", err)]
+    #[instrument(skip(self, claim_vecs, claimed_vals), level = "debug", err)]
     fn get_wlx_evaluations(
         &self,
         claim_vecs: Vec<Vec<F>>,

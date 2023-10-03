@@ -99,6 +99,13 @@ pub enum LayerId {
     Layer(usize),
 }
 
+impl LayerId {
+    /// For tracing
+    pub fn to_tracing_repr(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
     /// The transcript that this layer uses

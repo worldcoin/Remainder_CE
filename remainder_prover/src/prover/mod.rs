@@ -345,7 +345,7 @@ pub trait GKRCircuit<F: FieldExt> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript>;
 
     /// Calls `synthesize` and also generates commitments from each of the input layers
-    #[instrument(skip(self, transcript), err)]
+    #[instrument(skip_all, err)]
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut Self::Transcript,
@@ -368,7 +368,7 @@ pub trait GKRCircuit<F: FieldExt> {
     }
 
     /// The backwards pass, creating the GKRProof
-    #[instrument(skip(self, transcript), err)]
+    #[instrument(skip_all, err)]
     fn prove(
         &mut self,
         transcript: &mut Self::Transcript,
@@ -438,8 +438,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 // --- TRACE: Proving an individual GKR layer ---
                 let layer_id = *layer.id();
-                let layer_id_repr = format!("{:?}", layer_id);
-                let _layer_sumcheck_proving_span = span!(Level::DEBUG, "layer_sumcheck_proving_span", layer_id_repr).entered();
+                let _layer_sumcheck_proving_span = span!(Level::DEBUG, "layer_sumcheck_proving_span", layer_id = layer_id.to_tracing_repr()).entered();
 
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_claims = claims
@@ -617,12 +616,14 @@ pub trait GKRCircuit<F: FieldExt> {
     /// Verifies the GKRProof produced by fn prove
     ///
     /// Takes in a transcript for FS and re-generates challenges on its own
-    #[instrument(skip(self, transcript, gkr_proof), err)]
+    #[instrument(skip_all, err)]
     fn verify(
         &mut self,
         transcript: &mut Self::Transcript,
         gkr_proof: GKRProof<F, Self::Transcript>,
     ) -> Result<(), GKRError> {
+
+        // --- Unpacking GKR proof + adding input commitments to transcript first ---
         let GKRProof {
             layer_sumcheck_proofs,
             output_layers,
@@ -644,6 +645,9 @@ pub trait GKRCircuit<F: FieldExt> {
 
         // --- Verifier keeps track of the claims on its own ---
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
+
+        // --- TRACE: output claims ---
+        let verifier_output_claims_span = span!(Level::DEBUG, "verifier_output_claims_span").entered();
 
         // --- NOTE that all the `Expression`s and MLEs contained within `gkr_proof` are already bound! ---
         for output in output_layers.iter() {
@@ -683,6 +687,9 @@ pub trait GKRCircuit<F: FieldExt> {
             }
         }
 
+        // --- END TRACE: output claims ---
+        verifier_output_claims_span.exit();
+
         // --- Go through each of the layers' sumcheck proofs... ---
         for sumcheck_proof_single in layer_sumcheck_proofs {
             let LayerProof {
@@ -691,8 +698,11 @@ pub trait GKRCircuit<F: FieldExt> {
                 wlx_evaluations,
             } = sumcheck_proof_single;
 
-            // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
+            // --- TRACE: Proving an individual GKR layer ---
             let layer_id = *layer.id();
+            let _layer_sumcheck_verification_span = span!(Level::DEBUG, "layer_sumcheck_verification_span", layer_id = layer_id.to_tracing_repr()).entered();
+
+            // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
             let layer_claims = claims
                 .get(&layer_id)
                 .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
@@ -737,7 +747,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 })?;
             }
             
-
             // --- Performs the actual sumcheck verification step ---
             layer
                 .verify_rounds(prev_claim, sumcheck_proof.0, transcript)

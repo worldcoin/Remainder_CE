@@ -58,7 +58,7 @@ pub trait InputLayer<F: FieldExt> {
     fn get_padded_mle(&self) -> DenseMle<F, F>;
 
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
-    #[instrument(skip(self), err, ret, level = "debug")]
+    #[instrument(skip_all, err, level = "debug")]
     fn compute_claim_wlx(&self, claims: &[Claim<F>]) -> Result<Vec<F>, ClaimError> {
         let mut mle = self.get_padded_mle().mle_ref();
         let num_claims = claims.len();
@@ -108,7 +108,7 @@ pub trait InputLayer<F: FieldExt> {
     }
 
     /// Computes `l(r^{\star})`
-    #[instrument(skip(self), ret, err, level = "debug")]
+    #[instrument(skip_all, err, level = "debug")]
     fn compute_aggregated_challenges(
         &self,
         claims: &[Claim<F>],
