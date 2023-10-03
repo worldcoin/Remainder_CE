@@ -178,7 +178,8 @@ fn main() -> Result<(), ZKDTBinaryError> {
             .with_line_number(true)
             .with_max_level(tracing::Level::DEBUG)
             .with_level(true)
-            .with_span_events(FmtSpan::FULL)
+            .with_span_events(FmtSpan::ENTER)
+            .with_span_events(FmtSpan::EXIT)
             .finish();
         let _default_guard = tracing::subscriber::set_global_default(subscriber);
     }
