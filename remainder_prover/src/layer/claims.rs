@@ -583,11 +583,8 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> usize {
         // degree up to m-1, resulting in a polynomial W(l(x)) of degree at most
         // n * (m-1) which needs at least n * (m-1) + 1 evaluations to be fully
         // specified.
-        // Note: The quantity returned is lower bounded by `num_claims` as long
-        // as `num_vars >= 1` and `num_claims >= 1`, so the total number of
-        // evaluations is never less that the provided claims.
         debug!("Dummy num_evals");
-        num_vars * (num_claims - 1) + 1
+        max(num_vars * (num_claims - 1) + 1, num_claims)
     } else {
         debug!("Smart num_evals");
         let mut degree_reduction = num_vars as i64;
@@ -613,9 +610,6 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> usize {
         // on that coordinate, we can quickly deduce that `l_i(x)` is a
         // constant polynomial of degree zero instead of `num_claims -
         // 1` which brings down the total degree by the same amount.
-        // Note: In this case, it is possible (but not probable) that the
-        // quantity computed is less than `num_claims` so we have to make sure
-        // to clip it.
         let num_evals =
             (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
         debug!("num_evals originally = {}", num_evals);
