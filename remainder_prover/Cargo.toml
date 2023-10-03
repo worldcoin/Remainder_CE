@@ -11,6 +11,10 @@ path = "src/bin/run_remainder_zkdt.rs"
 name = "generate_ligero_tree_commitments"
 path = "src/bin/generate_ligero_tree_commitments.rs"
 
+[[bin]]
+name = "generate_common_input_commitments"
+path = "src/bin/generate_common_input_commitments.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
