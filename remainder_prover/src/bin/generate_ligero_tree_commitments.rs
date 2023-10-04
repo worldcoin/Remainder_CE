@@ -34,7 +34,7 @@ struct Args {
     decision_forest_model_filepath: String,
 
     /// Whether we want debug tracing subscriber logs or not.
-    /// By default, we use `TRACE` as the subscriber level.
+    /// By default, we use `DEBUG` as the subscriber level.
     /// 
     /// TODO!(ryancao): Figure out `structopt` so we can pass in
     /// different trace levels
