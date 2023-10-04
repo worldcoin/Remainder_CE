@@ -427,9 +427,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.indexed
     }
 
-    /// Ryan's note -- I assume this function updates the bookkeeping tables as
-    /// described by [Tha13].
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>> {
+    fn smart_fix_variable(&mut self, index: usize, point: Self::F) -> Option<Claim<Self::F>> {
         // --- Bind the current indexed bit to the challenge value ---
         // The count of the indexed bit we're fixing.
         let mut bit_count = 0;
@@ -437,8 +435,8 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
             if let MleIndex::IndexedBit(_) = *mle_index {
                 bit_count += 1;
             }
-            if *mle_index == MleIndex::IndexedBit(round_index) {
-                mle_index.bind_index(challenge);
+            if *mle_index == MleIndex::IndexedBit(index) {
+                mle_index.bind_index(point);
                 break;
             }
         }
@@ -458,7 +456,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
                 let second = *window.get(window_size - 1).unwrap_or(&zero);
 
                 // (1 - r) * V(i) + r * V(i + 1)
-                first + (second - first) * challenge
+                first + (second - first) * point
             };
 
             #[cfg(feature = "parallel")]
@@ -487,6 +485,53 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
             .chunks(chunk_size)
             .map(transform)
             .flatten();
+
+        // --- Note that MLE is destructively modified into the new bookkeeping table here ---
+        self.bookkeeping_table = new.collect();
+        // --- Just returns the final value if we've collapsed the table into a single value ---
+        if self.bookkeeping_table.len() == 1 {
+            // dbg!(&self);
+            Some((
+                self.mle_indices
+                    .iter()
+                    .map(|index| index.val().unwrap())
+                    .collect_vec(),
+                self.bookkeeping_table[0],
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Ryan's note -- I assume this function updates the bookkeeping tables as
+    /// described by [Tha13].
+    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>> {
+        // --- Bind the current indexed bit to the challenge value ---
+        for mle_index in self.mle_indices.iter_mut() {
+            if *mle_index == MleIndex::IndexedBit(round_index) {
+                mle_index.bind_index(challenge);
+            }
+        }
+
+        // --- One fewer iterated bit to sumcheck through ---
+        self.num_vars -= 1;
+
+        let transform = |chunk: &[F]| {
+            let zero = F::zero();
+            let first = chunk[0];
+            let second = chunk.get(1).unwrap_or(&zero);
+
+            // (1 - r) * V(i) + r * V(i + 1)
+            first + (*second - first) * challenge
+        };
+
+        // --- So this goes through and applies the formula from [Tha13], bottom ---
+        // --- of page 23 ---
+        #[cfg(feature = "parallel")]
+        let new = self.bookkeeping_table().par_chunks(2).map(transform);
+
+        #[cfg(not(feature = "parallel"))]
+        let new = self.bookkeeping_table().chunks(2).map(transform);
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.bookkeeping_table = new.collect();
@@ -536,16 +581,110 @@ mod tests {
     use super::*;
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
+    // ======== `fix_variable` tests ========
+
     #[test]
     ///test fixing variables in an mle with two variables
-    fn fix_variable_two_vars_forward() {
+    fn fix_variable_twovars() {
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(1));
+
+        let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
+        let mle_exp: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
+        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+    }
+    #[test]
+    ///test fixing variables in an mle with three variables
+    fn fix_variable_threevars() {
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(3));
+
+        let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
+        let mle_exp: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
+        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+    }
+
+    #[test]
+    ///test nested fixing variables in an mle with three variables
+    fn fix_variable_nested() {
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
+        let mut mle_ref = mle.mle_ref();
+        mle_ref.fix_variable(1, Fr::from(3));
+        mle_ref.fix_variable(2, Fr::from(2));
+
+        let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
+        let mle_exp: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
+        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+    }
+
+    #[test]
+    ///test nested fixing all the wayyyy
+    fn fix_variable_full() {
+        let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
+        let mle_vec = vec![
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(2),
+            Fr::from(0),
+            Fr::from(3),
+            Fr::from(1),
+            Fr::from(4),
+        ];
+        let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
+        let mut mle_ref = mle.mle_ref();
+        let _ = mle_ref.index_mle_indices(0);
+        mle_ref.fix_variable(0, Fr::from(3));
+        mle_ref.fix_variable(1, Fr::from(2));
+        mle_ref.fix_variable(2, Fr::from(4));
+
+        let mle_vec_exp = vec![Fr::from(26)];
+        let mle_exp: DenseMle<Fr, Fr> =
+            DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
+        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+    }
+
+    // ======== `smart_fix_variable` tests ========
+
+    #[test]
+    ///test fixing variables in an mle with two variables
+    fn smart_fix_variable_two_vars_forward() {
         let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
         let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
         let mut mle_ref = mle.mle_ref();
         mle_ref.index_mle_indices(0);
 
         // Fix 1st variable to 1.
-        mle_ref.fix_variable(0, Fr::from(1));
+        mle_ref.smart_fix_variable(0, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -554,7 +693,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 1.
-        mle_ref.fix_variable(1, Fr::from(1));
+        mle_ref.smart_fix_variable(1, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -564,14 +703,14 @@ mod tests {
     }
 
     #[test]
-    fn fix_variable_two_vars_backwards() {
+    fn smart_fix_variable_two_vars_backwards() {
         let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
         let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
         let mut mle_ref = mle.mle_ref();
         mle_ref.index_mle_indices(0);
 
         // Fix 2nd variable to 1.
-        mle_ref.fix_variable(1, Fr::from(1));
+        mle_ref.smart_fix_variable(1, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(1), Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -580,7 +719,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 1.
-        mle_ref.fix_variable(0, Fr::from(1));
+        mle_ref.smart_fix_variable(0, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -591,7 +730,7 @@ mod tests {
 
     #[test]
     ///test fixing variables in an mle with three variables
-    fn fix_variable_three_vars_123() {
+    fn smart_fix_variable_three_vars_123() {
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -607,7 +746,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 1st variable to 3.
-        mle_ref.fix_variable(0, Fr::from(3));
+        mle_ref.smart_fix_variable(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -616,7 +755,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 4.
-        mle_ref.fix_variable(1, Fr::from(4));
+        mle_ref.smart_fix_variable(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(13)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -625,7 +764,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 3rd variable to 5.
-        mle_ref.fix_variable(2, Fr::from(5));
+        mle_ref.smart_fix_variable(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -636,7 +775,7 @@ mod tests {
 
     #[test]
     ///test fixing variables in an mle with three variables
-    fn fix_variable_three_vars_132() {
+    fn smart_fix_variable_three_vars_132() {
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -652,7 +791,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 1st variable to 3.
-        mle_ref.fix_variable(0, Fr::from(3));
+        mle_ref.smart_fix_variable(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -661,7 +800,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 3rd variable to 5.
-        mle_ref.fix_variable(2, Fr::from(5));
+        mle_ref.smart_fix_variable(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(21), Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -670,7 +809,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 4.
-        mle_ref.fix_variable(1, Fr::from(4));
+        mle_ref.smart_fix_variable(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -681,7 +820,7 @@ mod tests {
 
     #[test]
     ///test fixing variables in an mle with three variables
-    fn fix_variable_three_vars_213() {
+    fn smart_fix_variable_three_vars_213() {
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -697,7 +836,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 2nd variable to 4.
-        mle_ref.fix_variable(1, Fr::from(4));
+        mle_ref.smart_fix_variable(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(7)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -706,7 +845,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 3.
-        mle_ref.fix_variable(0, Fr::from(3));
+        mle_ref.smart_fix_variable(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(13)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -715,7 +854,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 3rd variable to 5.
-        mle_ref.fix_variable(2, Fr::from(5));
+        mle_ref.smart_fix_variable(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -726,7 +865,7 @@ mod tests {
 
     #[test]
     ///test fixing variables in an mle with three variables
-    fn fix_variable_three_vars_231() {
+    fn smart_fix_variable_three_vars_231() {
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -742,7 +881,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 2nd variable to 4.
-        mle_ref.fix_variable(1, Fr::from(4));
+        mle_ref.smart_fix_variable(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(7)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -751,7 +890,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 3rd variable to 5.
-        mle_ref.fix_variable(2, Fr::from(5));
+        mle_ref.smart_fix_variable(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(20), Fr::from(27)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -760,7 +899,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 3.
-        mle_ref.fix_variable(0, Fr::from(3));
+        mle_ref.smart_fix_variable(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -771,7 +910,7 @@ mod tests {
 
     #[test]
     ///test fixing variables in an mle with three variables
-    fn fix_variable_three_vars_312() {
+    fn smart_fix_variable_three_vars_312() {
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -787,7 +926,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 3rd variable to 5.
-        mle_ref.fix_variable(2, Fr::from(5));
+        mle_ref.smart_fix_variable(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(0), Fr::from(7), Fr::from(5), Fr::from(12)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -796,7 +935,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 3.
-        mle_ref.fix_variable(0, Fr::from(3));
+        mle_ref.smart_fix_variable(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(21), Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -805,7 +944,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 4.
-        mle_ref.fix_variable(1, Fr::from(4));
+        mle_ref.smart_fix_variable(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -816,7 +955,7 @@ mod tests {
     #[test]
 
     ///test fixing variables in an mle with three variables
-    fn fix_variable_three_vars_321() {
+    fn smart_fix_variable_three_vars_321() {
         let mle_vec = vec![
             Fr::from(0),
             Fr::from(2),
@@ -832,7 +971,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 3rd variable to 5.
-        mle_ref.fix_variable(2, Fr::from(5));
+        mle_ref.smart_fix_variable(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(0), Fr::from(7), Fr::from(5), Fr::from(12)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -841,7 +980,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 4.
-        mle_ref.fix_variable(1, Fr::from(4));
+        mle_ref.smart_fix_variable(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(20), Fr::from(27)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -850,7 +989,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 3.
-        mle_ref.fix_variable(0, Fr::from(3));
+        mle_ref.smart_fix_variable(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -860,6 +999,9 @@ mod tests {
     }
 
     #[test]
+
+    // ======== ========
+
     fn create_dense_mle_from_vec() {
         let mle_vec = vec![
             Fr::from(0),
