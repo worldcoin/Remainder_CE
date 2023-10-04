@@ -72,6 +72,7 @@ use std::fs::{File, self};
 use std::path::Path;
 use std::fmt;
 use rayon::prelude::*;
+use std::time::Instant;
 
 
 use super::dummy_data_generator::{ZKDTCircuitData};
@@ -120,7 +121,7 @@ pub struct RawSamples {
 /// Difference to RawSamples: these are padded to the nearest power of two.
 pub struct Samples {
     values: Vec<Vec<u16>>,
-    sample_length: usize // FIXME needed?
+    sample_length: usize
 }
 
 /// Represents the circuitization of a batch of samples with respect to a TreesModel.
@@ -177,6 +178,7 @@ pub fn to_samples(raw_samples: &RawSamples, _trees_model: &TreesModel) -> Sample
     }
 }
 
+#[derive(Clone)]
 pub struct PathStep {
     node_id: u32,
     attr_id: usize,
@@ -184,7 +186,8 @@ pub struct PathStep {
     attr_val: u16 // i.e. from the Sample
 }
 
-pub struct TreePath<T> {
+#[derive(Clone)]
+pub struct TreePath<T: Copy> {
     steps: Vec<PathStep>,
     leaf_node_id: u32,
     leaf_value: T
@@ -202,7 +205,7 @@ impl<F: FieldExt> From<&TreePath<i64>> for LeafNode<F> {
 
 // TODO alias
 type DecisionPath<F> = Vec<DecisionNode<F>>;
-impl<F: FieldExt, T> From<&TreePath<T>> for DecisionPath<F> {
+impl<F: FieldExt, T: Copy> From<&TreePath<T>> for DecisionPath<F> {
     fn from(tree_path: &TreePath<T>) -> Self {
         tree_path.steps
             .iter()
@@ -307,6 +310,7 @@ pub fn circuitize_samples<F: FieldExt>(
     samples_in: &Samples,
     trees_model: &TreesModel,
     ) -> CircuitizedSamples<F> {
+    let start_time = Instant::now();
     let paths: Vec<Vec<TreePath<i64>>> = trees_model.trees
         .par_iter()
         .map(|tree| samples_in.values
@@ -314,10 +318,16 @@ pub fn circuitize_samples<F: FieldExt>(
              .map(|sample| build_path(&tree, &sample))
              .collect())
         .collect();
+    println!("building paths took: {:?}", start_time.elapsed());  // FIXME remove
+
+    let start_time = Instant::now();
     let samples: Vec<Vec<InputAttribute<F>>> = samples_in.values
         .par_iter()
         .map(build_sample_witness)
         .collect();
+    println!("Building the InputAttribute arrays took: {:?}", start_time.elapsed());  // FIXME
+
+    let start_time = Instant::now();
     let decision_paths: Vec<Vec<DecisionPath<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -327,6 +337,9 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
             })
         .collect();
+    println!("decision paths took: {:?}", start_time.elapsed());  // FIXME
+
+    let start_time = Instant::now();
     let attributes_on_paths: Vec<Vec<AttributesOnPath<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -336,6 +349,9 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
         })
         .collect();
+    println!("attrs on paths took: {:?}", start_time.elapsed());  // FIXME
+
+    let start_time = Instant::now();
     let differences: Vec<Vec<DifferencesBits<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -345,6 +361,9 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
         })
         .collect();
+    println!("Differences bindecomp took {:?}", start_time.elapsed());  // FIXME
+
+    let start_time = Instant::now();
     let path_ends: Vec<Vec<LeafNode<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -354,6 +373,9 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
             })
         .collect();
+    println!("path ends took {:?}", start_time.elapsed());  // FIXME
+
+    let start_time = Instant::now();
     let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -369,6 +391,9 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
         })
         .collect();
+    println!("attr mult took: {:?}", start_time.elapsed());
+
+    let start_time = Instant::now();
     let node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -379,6 +404,7 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
         })
         .collect();
+    println!("node mult took: {:?}", start_time.elapsed());
 
     CircuitizedSamples {
         samples,
@@ -400,8 +426,9 @@ pub fn count_attribute_multiplicities(path_steps: &Vec<PathStep>, sample_length:
     multiplicities
 }
 
-// FIXME docs!
-pub fn count_node_multiplicities<T>(tree_paths: &Vec<TreePath<T>>, tree_depth: usize) -> Vec<usize> {
+/// Given a vector of tree paths all belonging to the same tree, return a vector, indexed by tree
+/// node ids, counting the number of times each node was visited.
+pub fn count_node_multiplicities<T: Copy>(tree_paths: &Vec<TreePath<T>>, tree_depth: usize) -> Vec<usize> {
     let mut multiplicities = vec![0_usize; 2_usize.pow(tree_depth as u32)];
     tree_paths
         .iter()
@@ -1029,6 +1056,35 @@ mod tests {
         tree.assign_id(0);
         let sample = vec![2_u16, 0_u16];
         let path = build_path(&tree, &sample);
+    }
+
+    #[test]
+    fn test_count_node_multiplicities() {
+        let tree_depth = 3;
+        let mut tree_paths: Vec<TreePath<i32>> = vec![];
+        // test first for no tree paths at all
+        let multiplicities = count_node_multiplicities(&tree_paths, tree_depth);
+        assert_eq!(multiplicities.len(), 2_usize.pow(tree_depth as u32));
+        multiplicities.iter().for_each(|mult| assert_eq!(*mult, 0));
+        // now for a non-trivial tree_path
+        let path_step = PathStep {
+            node_id: 6,
+            attr_id: 1,
+            threshold: 5,
+            attr_val: 7
+        };
+        let tree_path = TreePath::<i32> {
+            steps: vec![path_step.clone(), path_step.clone()],
+            leaf_node_id: 3,
+            leaf_value: -6
+        };
+        tree_paths.push(tree_path.clone());
+        tree_paths.push(tree_path);
+        let multiplicities = count_node_multiplicities(&tree_paths, tree_depth);
+        assert_eq!(multiplicities.len(), 2_usize.pow(tree_depth as u32));
+        assert_eq!(multiplicities[0], 0);
+        assert_eq!(multiplicities[1], 0);
+        assert_eq!(multiplicities[6], 4);
     }
 
     #[test]
