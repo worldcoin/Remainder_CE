@@ -1,19 +1,15 @@
-use ark_std::{log2};
-use itertools::{Itertools, repeat_n};
 use remainder_ligero::{ligero_structs::LigeroEncoding, LcCommit, poseidon_ligero::PoseidonSpongeHasher, LcRoot, LcProofAuxiliaryInfo};
 use serde_json::from_reader;
 
-use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder, empty_layer::EmptyLayer, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles}, LayerId, Padding}, zkdt::builders::{BitExponentiationBuilderCatBoost, AttributeConsistencyBuilderZeroRef}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, InputLayer, MleInputLayer, enum_input_layer::{InputLayerEnum, CommitmentEnum}, self, random_input_layer::RandomInputLayer, public_input_layer::PublicInputLayer}, combine_layers::combine_layers, GKRError}};
-use crate::{prover::{GKRCircuit, Layers, Witness}};
-use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
-
-use super::{builders::{FSInputPackingBuilder, SplitProductBuilder, EqualityCheck, FSDecisionPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder, SquaringBuilder, ProductBuilder, BitExponentiationBuilderInput}, structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::{dataparallel_circuits::BinaryRecompCircuitBatched}, data_pipeline::{dummy_data_generator::BatchedCatboostMles}, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul, bits_are_binary_circuit::{dataparallel_circuits::{BinDecomp4BitIsBinaryCircuitBatched, BinDecomp16BitIsBinaryCircuitBatched}, circuits::BinDecomp16BitIsBinaryCircuit}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit, multiset_circuit::{legacy_circuits::MultiSetCircuit, circuits::FSMultiSetCircuit}, input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit, constants::get_tree_commitment_filepath_for_tree_number};
-use std::{marker::PhantomData, path::Path};
+use crate::{mle::{dense::DenseMle, Mle}, layer::LayerId, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, InputLayer, enum_input_layer::{InputLayerEnum, CommitmentEnum}, self, random_input_layer::RandomInputLayer, public_input_layer::PublicInputLayer}, combine_layers::combine_layers, GKRError}};
+use crate::prover::{GKRCircuit, Witness};
+use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
+use super::{structs::{InputAttribute, DecisionNode, LeafNode, BinDecomp16Bit, BinDecomp4Bit}, binary_recomp_circuit::dataparallel_circuits::BinaryRecompCircuitBatched, path_consistency_circuit::circuits::PathCheckCircuitBatchedMul, bits_are_binary_circuit::{dataparallel_circuits::{BinDecomp4BitIsBinaryCircuitBatched, BinDecomp16BitIsBinaryCircuitBatched}, circuits::BinDecomp16BitIsBinaryCircuit}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit, multiset_circuit::circuits::FSMultiSetCircuit, input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit, input_data_to_circuit_adapter::BatchedZKDTCircuitMles};
 
 /// The actual ZKDT circuit!
 pub struct ZKDTCircuit<F: FieldExt> {
     /// All of the input MLEs coming from the data generation pipeline
-    pub batched_catboost_mles: BatchedCatboostMles<F>,
+    pub batched_zkdt_circuit_mles: BatchedZKDTCircuitMles<F>,
     /// The filepath to the precommitted tree that we are proving
     pub tree_precommit_filepath: String,
     /// The filepath to the precommitted sample minibatch that we are proving
@@ -111,7 +107,7 @@ impl <F: FieldExt> ZKDTCircuit<F> {
             Vec<CommitmentEnum<F>> // input layers' commitments
         ), GKRError> {
 
-        let BatchedCatboostMles {
+        let BatchedZKDTCircuitMles {
             mut input_samples_mle_vec,
             mut permuted_input_samples_mle_vec,
             mut decision_node_paths_mle_vec,
@@ -122,7 +118,7 @@ impl <F: FieldExt> ZKDTCircuit<F> {
             mut leaf_nodes_mle,
             mut binary_decomp_diffs_mle_vec,
             mut multiplicities_bin_decomp_mle_input_vec
-        } = self.batched_catboost_mles.clone(); // TODO!(% Labs): Get rid of this clone?!?!
+        } = self.batched_zkdt_circuit_mles.clone(); // TODO!(% Labs): Get rid of this clone?!?!
 
         // deal w input
         let mut input_samples_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vec.clone());
@@ -420,8 +416,7 @@ impl <F: FieldExt> ZKDTCircuit<F> {
 mod tests {
     use std::path::Path;
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
-    use crate::prover::tests::test_circuit;
+    use crate::{prover::tests::test_circuit, zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
     use super::ZKDTCircuit;
 
     #[test]
@@ -430,7 +425,7 @@ mod tests {
         let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let combined_circuit = ZKDTCircuit {
-            batched_catboost_mles,
+            batched_zkdt_circuit_mles: batched_catboost_mles,
             tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
             sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
         };

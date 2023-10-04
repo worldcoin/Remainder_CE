@@ -7,7 +7,7 @@ mod tests {
     
     
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, TREE_HEIGHT, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit}};
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, TREE_HEIGHT}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::BatchedZKDTCircuitMles}};
     use remainder_shared_types::transcript::{Transcript};
     use crate::prover::tests::test_circuit;
 
@@ -34,7 +34,7 @@ mod tests {
     #[test]
     fn test_attribute_consistency_circuit_catboost_non_batched() {
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             permuted_input_samples_mle_vec: permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
         }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
@@ -51,7 +51,7 @@ mod tests {
     #[test]
     fn test_attribute_consistency_circuit_catboost_batched() {
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             permuted_input_samples_mle_vec: permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
         }, (_tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));

@@ -55,6 +55,7 @@ use crate::prover::input_layer::ligero_input_layer::LigeroInputLayer;
 use crate::utils::file_exists;
 use crate::zkdt::constants::{get_cached_batched_mles_filepath_with_exp_size, get_tree_commitment_filepath_for_tree_number};
 use crate::zkdt::helpers::*;
+use crate::zkdt::input_data_to_circuit_adapter::ZKDTCircuitData;
 use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode};
 use crate::zkdt::data_pipeline::trees::*;
 
@@ -72,8 +73,6 @@ use serde_json::to_writer;
 use tracing::instrument;
 use std::fs::{File, self};
 use std::path::Path;
-
-use super::dummy_data_generator::{ZKDTCircuitData};
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
@@ -113,13 +112,13 @@ pub struct CircuitizedTrees<F: FieldExt> {
 /// node_id for decision nodes, and by node id + 1 for leaf nodes (TODO, in discussion with Ende,
 /// break up this into decision_node_multiplicities and leaf_node_multiplicities).
 pub struct CircuitizedSamples<F: FieldExt> {
-    samples: Vec<Vec<InputAttribute<F>>>,                       // indexed by samples
-    decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,             // indexed by trees, samples, steps in path
-    attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,      // indexed by trees, samples, steps in path
-    differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,              // indexed by trees, samples, steps in path
-    path_ends: Vec<Vec<LeafNode<F>>>,                           // indexed by trees, samples
-    attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index
-    node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,           // indexed by trees, tree nodes
+    pub samples: Vec<Vec<InputAttribute<F>>>,                       // indexed by samples
+    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,             // indexed by trees, samples, steps in path
+    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,      // indexed by trees, samples, steps in path
+    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,              // indexed by trees, samples, steps in path
+    pub path_ends: Vec<Vec<LeafNode<F>>>,                           // indexed by trees, samples
+    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index
+    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,           // indexed by trees, tree nodes
 }
 
 /// Output of [`to_samples`], input to [`circuitize_samples`].
@@ -425,150 +424,6 @@ pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
     let raw_trees_model: RawTreesModel = serde_json::from_reader(file)
         .unwrap_or_else(|_| panic!("'{:?}' should be valid RawTreesModel JSON.", filename.to_path_buf()));
     raw_trees_model
-}
-
-/// Specifies exactly which minibatch to use within a sample.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MinibatchData {
-    /// log_2 of the minibatch size
-    pub log_sample_minibatch_size: usize,
-    /// Minibatch index within the bigger batch
-    pub sample_minibatch_number: usize,
-}
-
-/// Gives all batched data associated with tree number `tree_idx`.
-/// 
-/// ## Arguments
-/// * `maybe_minibatch_data` - The minibatch to grab data for, including minibatch size and index.
-/// * `tree_idx` - The tree number we are generating witnesses for.
-/// * `raw_trees_model_path` - Path to the JSON file representing the quantized version of the model
-///     (as output by the Python preprocessing)
-/// * `raw_samples_path` - Path to the NumPy file representing the quantized version of the samples
-///     (again, as output by the Python preprocessing)
-/// 
-/// ## Returns
-/// * `zkdt_circuit_data` - Data which is ready to be thrown into circuit
-/// * `tree_height` - Length of every path within the given tree
-/// * `input_len` - Padded number of features within each input
-/// * `log_minibatch_size` - log_2 of the size of the minibatch, i.e. number of inputs being loaded.
-/// * `minibatch_number` - Minibatch index we are processing
-/// 
-/// ## Notes
-/// Note that `raw_samples.values.len()` is currently 4573! This means we can go
-/// up to 8192 (padded) in terms of batch sizes which are powers of 2
-/// 
-/// ## TODOs
-/// * Throw an error if `sample_minibatch_number` causes us to go out of bounds!
-#[instrument]
-pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
-    maybe_minibatch_data: Option<MinibatchData>,
-    tree_idx: usize,
-    raw_trees_model_path: &Path,
-    raw_samples_path: &Path,
-) -> (ZKDTCircuitData<F>, (usize, usize), MinibatchData) {
-
-    // --- Grab trees + raw samples ---
-    let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path);
-    let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path);
-
-    // --- Grab sample minibatch ---
-    let minibatch_data = match maybe_minibatch_data {
-        Some(param_minibatch_data) => param_minibatch_data,
-        None => {
-            MinibatchData {
-                sample_minibatch_number: 0,
-                log_sample_minibatch_size: log2(raw_samples.values.len() as usize) as usize,
-            }
-        }
-    };
-    let sample_minibatch_size = 2_usize.pow(minibatch_data.log_sample_minibatch_size as u32);
-    let minibatch_start_idx = minibatch_data.sample_minibatch_number * sample_minibatch_size;
-    raw_samples.values = raw_samples.values[minibatch_start_idx..(minibatch_start_idx + sample_minibatch_size)].to_vec();
-
-    // --- Conversions ---
-    let trees_model: TreesModel = (&raw_trees_model).into();
-    let samples: Samples = to_samples(&raw_samples);
-    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
-
-    // --- Compute actual witnesses ---
-    let csamples = circuitize_samples::<F>(&samples, &trees_model);
-    let tree_height = ctrees.depth;
-    let input_len = csamples.samples[tree_idx].len();
-
-    // --- Grab only the slice of witnesses which are relevant to the target `tree_number` ---
-    (ZKDTCircuitData::new(
-        csamples.samples,
-        csamples.attributes_on_paths[tree_idx].clone(),
-        csamples.decision_paths[tree_idx].clone(),
-        csamples.path_ends[tree_idx].clone(),
-        csamples.differences[tree_idx].clone(),
-        csamples.node_multiplicities[tree_idx].clone(),
-        ctrees.decision_nodes[tree_idx].clone(),
-        ctrees.leaf_nodes[tree_idx].clone(),
-        csamples.attribute_multiplicities[tree_idx].clone()
-    ), (tree_height, input_len), minibatch_data)
-}
-
-/// Generates all batched data of size 2^1, ..., 2^{12} and caches for testing
-/// purposes
-/// 
-/// ## Arguments
-/// * `num_trees_if_multiple` - Currently unused!!!
-/// 
-/// ## Notes
-/// Note that `raw_samples.values.len()` is currently 4573! This means we can go
-/// up to 4096 in terms of batch sizes which are powers of 2
-pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
-    _num_trees_if_multiple: Option<usize>,
-    upshot_data_dir_path: &Path,
-) {
-
-    println!("Generating Upshot data (to be cached) for all batch sizes (2^1, ..., 2^{{12}})...\n");
-    let raw_trees_model: RawTreesModel = load_raw_trees_model(Path::new("upshot_data/quantized-upshot-model.json"));
-    let mut raw_samples: RawSamples = load_raw_samples(Path::new("upshot_data/upshot-quantized-samples.npy"));
-    let orig_raw_samples = raw_samples.clone();
-    let trees_model: TreesModel = (&raw_trees_model).into();
-    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
-
-    // --- We create batches of size 2^1, ..., 2^{12} ---
-    (1..12).for_each(|batch_size_exp| {
-
-        dbg!(&upshot_data_dir_path);
-
-        let cached_filepath = get_cached_batched_mles_filepath_with_exp_size(batch_size_exp, upshot_data_dir_path);
-        if file_exists(&cached_filepath) {
-            return;
-        }
-
-        let generation_str = format!("Generating for batch size (exp) {}...", batch_size_exp);
-        println!("{}", generation_str);
-
-        let true_input_batch_size = 2_usize.pow(batch_size_exp as u32);
-        raw_samples.values = orig_raw_samples.values[0..true_input_batch_size].to_vec();
-
-        let samples: Samples = to_samples(&raw_samples);
-    
-        let csamples = circuitize_samples::<F>(&samples, &trees_model);
-    
-        let tree_height = ctrees.depth;
-        let input_len = csamples.samples[0].len();
-    
-        let combined_zkdt_circuit_data = (ZKDTCircuitData::new(
-            csamples.samples,
-            csamples.attributes_on_paths[0].clone(),
-            csamples.decision_paths[0].clone(),
-            csamples.path_ends[0].clone(),
-            csamples.differences[0].clone(),
-            csamples.node_multiplicities[0].clone(),
-            ctrees.decision_nodes[0].clone(),
-            ctrees.leaf_nodes[0].clone(),
-            csamples.attribute_multiplicities[0].clone()
-        ), (tree_height, input_len));
-
-        // --- Write to file ---
-        let mut f = fs::File::create(cached_filepath).unwrap();
-        to_writer(&mut f, &combined_zkdt_circuit_data).unwrap();
-    });
 }
 
 #[cfg(test)]

@@ -36,7 +36,7 @@ struct Args {
     /// or will grab all the samples and pad to the nearest power 
     /// of two (TODO!(benjaminwilson)) if `None`.
     #[arg(long)]
-    log_sample_batch_commitment_size: Option<usize>,
+    log_sample_minibatch_commitment_size: Option<usize>,
 
     /// Whether we want debug tracing subscriber logs or not.
     /// By default, we use `DEBUG` as the subscriber level.
@@ -176,7 +176,7 @@ fn main() -> Result<(), GenerateSampleMinibatchCommitmentsError> {
     generate_ligero_sample_minibatch_commitments::<Fr>(
         Path::new(&args.raw_samples_path),
         Path::new(&args.sample_minibatch_commitments_dir),
-        args.log_sample_batch_commitment_size
+        args.log_sample_minibatch_commitment_size
     );
 
     Ok(())

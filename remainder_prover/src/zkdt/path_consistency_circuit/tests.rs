@@ -4,14 +4,14 @@ mod tests {
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
-    use crate::{zkdt::{path_consistency_circuit::circuits::{PathCheckCircuit, PathCheckCircuitBatched, PathCheckCircuitBatchedMul, PathMulCheckCircuit}, data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}}, prover::GKRCircuit};
+    use crate::{zkdt::{path_consistency_circuit::circuits::{PathCheckCircuit, PathCheckCircuitBatched, PathCheckCircuitBatchedMul, PathMulCheckCircuit}, input_data_to_circuit_adapter::BatchedZKDTCircuitMles, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree}, prover::GKRCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     
 
     #[test]
     fn test_path_circuit_catboost() {
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec, ..
@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn test_path_mul_circuit_catboost() {
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec, ..
@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn test_path_circuit_catboost_batched() {
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec, ..
@@ -146,7 +146,7 @@ mod tests {
     #[test]
     fn test_path_circuit_catboost_batched_mulgate() {
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec, ..

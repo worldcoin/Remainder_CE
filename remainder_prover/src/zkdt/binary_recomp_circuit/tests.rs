@@ -7,7 +7,7 @@ mod tests {
     
     
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, binary_recomp_circuit::{circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}, dataparallel_circuits::BinaryRecompCircuitBatched}}, prover::GKRCircuit};
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles}, binary_recomp_circuit::{circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}, dataparallel_circuits::BinaryRecompCircuitBatched}, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::BatchedZKDTCircuitMles}, prover::GKRCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     
 
@@ -103,7 +103,7 @@ mod tests {
         //     ..
         // } = generate_dummy_mles();
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             binary_decomp_diffs_mle_vec,
             decision_node_paths_mle_vec,
             permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..
@@ -147,7 +147,7 @@ mod tests {
         //     ..
         // } = generate_dummy_mles();
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             binary_decomp_diffs_mle_vec,
             decision_node_paths_mle_vec,
             permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..

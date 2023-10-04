@@ -1,7 +1,7 @@
 use std::{path::Path, time::Instant, fs};
 
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use remainder::{zkdt::{data_pipeline::{dummy_data_generator::generate_mles_batch_catboost_single_tree}, zkdt_circuit::ZKDTCircuit}, prover::GKRCircuit};
+use remainder::{zkdt::{zkdt_circuit::ZKDTCircuit, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree}, prover::GKRCircuit};
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 use serde_json::{to_writer, from_reader};
 
@@ -60,7 +60,7 @@ fn main() {
     let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(batch_size, Path::new("upshot_data"));
 
     let combined_circuit = ZKDTCircuit {
-        batched_catboost_mles,
+        batched_zkdt_circuit_mles: batched_catboost_mles,
         tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
         sample_minibatch_precommit_filepath: "upshot_data/upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
     };

@@ -2,7 +2,7 @@
 
 use std::{path::{Path, PathBuf}, time::Instant, fs};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{data_pipeline::{dummy_data_generator::convert_zkdt_circuit_data_into_mles, dt2zkdt::{load_upshot_data_single_tree_batch, MinibatchData}}, zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}}};
+use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}, input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}};
 use clap::Parser;
 use remainder_shared_types::FieldExt;
 use remainder_shared_types::transcript::Transcript;
@@ -260,7 +260,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
 
     // --- Create the full ZKDT circuit ---
     let full_zkdt_circuit = ZKDTCircuit {
-        batched_catboost_mles,
+        batched_zkdt_circuit_mles: batched_catboost_mles,
         tree_precommit_filepath: tree_commit_filepath,
         sample_minibatch_precommit_filepath: sample_minibatch_commitment_filepath,
     };
