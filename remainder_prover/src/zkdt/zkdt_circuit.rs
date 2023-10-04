@@ -83,6 +83,10 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
             &mut combined_circuit_layers, 
             combined_circuit_output_layers);
 
+        combined_circuit_layers.0.iter().for_each(|layer| {
+            println!("layer description: {}", layer.circuit_description_fmt());
+        });
+
         Ok((
             Witness {
                 layers: combined_circuit_layers,

@@ -137,4 +137,16 @@ impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
 
         expression.get_expression_size(0)
     }
+
+    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+        match self {
+            LayerEnum::Gkr(layer) => layer.expression().circuit_description_fmt(),
+            LayerEnum::MulGate(_) => todo!(),
+            LayerEnum::AddGate(_) => todo!(),
+            LayerEnum::AddGateBatched(_) => todo!(),
+            LayerEnum::MulGateBatched(_) => todo!(),
+            LayerEnum::EmptyLayer(_) => todo!(),
+        }
+    }
+
 }

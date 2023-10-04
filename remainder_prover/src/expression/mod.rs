@@ -705,6 +705,39 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
     }
 }
 
+impl<F: std::fmt::Debug + FieldExt> ExpressionStandard<F> {
+    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+        struct CircuitDesc<'a, F>(&'a ExpressionStandard<F>);
+        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for CircuitDesc<'a, F> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self.0 {
+                    ExpressionStandard::Constant(scalar) => {
+                        f.debug_tuple("const").field(scalar).finish()
+                    }
+                    ExpressionStandard::Selector(index, a, b) => f
+                        .debug_tuple("sel")
+                        .field(index)
+                        .field(a)
+                        .field(b)
+                        .finish(),
+                    // Skip enum variant and print query struct directly to maintain backwards compatibility.
+                    ExpressionStandard::Mle(mle_ref) => {
+                        f.debug_struct("mle").field("layer", &mle_ref.get_layer_id()).field("indices", &mle_ref.mle_indices()).finish()
+                    }
+                    ExpressionStandard::Negated(poly) => f.debug_tuple("-").field(poly).finish(),
+                    ExpressionStandard::Sum(a, b) => f.debug_tuple("+").field(a).field(b).finish(),
+                    ExpressionStandard::Product(a) => f.debug_tuple("*").field(a).finish(),
+                    ExpressionStandard::Scaled(poly, scalar) => {
+                        f.debug_tuple("*").field(poly).field(scalar).finish()
+                    }
+                }
+            }
+        }
+
+        CircuitDesc(self)
+    }
+}
+
 impl<F: FieldExt> Neg for ExpressionStandard<F> {
     type Output = ExpressionStandard<F>;
     fn neg(self) -> Self::Output {
