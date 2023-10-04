@@ -59,6 +59,7 @@ use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAtt
 use crate::zkdt::data_pipeline::trees::*;
 
 
+use ark_std::log2;
 use remainder_ligero::ligero_commit::{remainder_ligero_commit_prove};
 use remainder_shared_types::FieldExt;
 use ndarray::Array2;
@@ -427,9 +428,11 @@ pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
 }
 
 /// Specifies exactly which minibatch to use within a sample.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MinibatchData {
+    /// log_2 of the minibatch size
     pub log_sample_minibatch_size: usize,
+    /// Minibatch index within the bigger batch
     pub sample_minibatch_number: usize,
 }
 
@@ -437,37 +440,52 @@ pub struct MinibatchData {
 /// 
 /// ## Arguments
 /// * `maybe_minibatch_data` - The minibatch to grab data for, including minibatch size and index.
-/// * `num_trees_if_multiple` - Currently unused!!!
+/// * `_num_trees_if_multiple` - Currently unused!!!
 /// * `raw_trees_model_path` - Path to the JSON file representing the quantized version of the model
 ///     (as output by the Python preprocessing)
 /// * `raw_samples_path` - Path to the NumPy file representing the quantized version of the samples
 ///     (again, as output by the Python preprocessing)
 /// 
+/// ## Returns
+/// * `zkdt_circuit_data` - Data which is ready to be thrown into circuit
+/// * `tree_height` - Length of every path within the given tree
+/// * `input_len` - Padded number of features within each input
+/// * `log_minibatch_size` - log_2 of the size of the minibatch, i.e. number of inputs being loaded.
+/// * `minibatch_number` - Minibatch index we are processing
+/// 
 /// ## Notes
 /// Note that `raw_samples.values.len()` is currently 4573! This means we can go
-/// up to 4096 in terms of batch sizes which are powers of 2
+/// up to 8192 (padded) in terms of batch sizes which are powers of 2
+/// 
+/// ## TODOs
+/// * Throw an error if `sample_minibatch_number` causes us to go out of bounds!
 #[instrument]
 pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     maybe_minibatch_data: Option<MinibatchData>,
     _num_trees_if_multiple: Option<usize>,
     raw_trees_model_path: &Path,
     raw_samples_path: &Path,
-) -> (ZKDTCircuitData<F>, (usize, usize)) {
+) -> (ZKDTCircuitData<F>, (usize, usize), MinibatchData) {
 
-    let (maybe_sample_minibatch_number, maybe_log_sample_minibatch_size) = match maybe_minibatch_data {
-        Some(minibatch_data) => (Some(minibatch_data.sample_minibatch_number), Some(minibatch_data.log_sample_minibatch_size)),
-        None => (None, None),
-    };
-
-    // --- TODO!(ryancao): We need to test our stuff with a non-power-of-two `input_batch_size` ---
-    let sample_minibatch_size = 2_usize.pow(maybe_log_sample_minibatch_size.unwrap_or(1) as u32) + 1;
+    // --- Grab trees + raw samples ---
     let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path);
     let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path);
 
-    // --- Grab the actual minibatch from the real values ---
-    let minibatch_start_idx = maybe_sample_minibatch_number.unwrap_or(0) * sample_minibatch_size;
+    // --- Grab sample minibatch ---
+    let minibatch_data = match maybe_minibatch_data {
+        Some(param_minibatch_data) => param_minibatch_data,
+        None => {
+            MinibatchData {
+                sample_minibatch_number: 0,
+                log_sample_minibatch_size: log2(raw_samples.values.len() as usize) as usize,
+            }
+        }
+    };
+    let sample_minibatch_size = 2_usize.pow(minibatch_data.log_sample_minibatch_size as u32);
+    let minibatch_start_idx = minibatch_data.sample_minibatch_number * sample_minibatch_size;
     raw_samples.values = raw_samples.values[minibatch_start_idx..(minibatch_start_idx + sample_minibatch_size)].to_vec();
 
+    // --- Conversions ---
     let trees_model: TreesModel = (&raw_trees_model).into();
     let samples: Samples = to_samples(&raw_samples);
     let ctrees: CircuitizedTrees<F> = (&trees_model).into();
@@ -487,7 +505,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
         ctrees.decision_nodes[0].clone(),
         ctrees.leaf_nodes[0].clone(),
         csamples.attribute_multiplicities[0].clone()
-    ), (tree_height, input_len))
+    ), (tree_height, input_len), minibatch_data)
 }
 
 /// Generates all batched data of size 2^1, ..., 2^{12} and caches for testing

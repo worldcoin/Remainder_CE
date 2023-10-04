@@ -35,7 +35,7 @@ mod tests {
     fn test_attribute_consistency_circuit_catboost_non_batched() {
 
         let (BatchedCatboostMles {
-            permuted_input_data_mle_vec,
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
         }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
@@ -52,7 +52,7 @@ mod tests {
     fn test_attribute_consistency_circuit_catboost_batched() {
 
         let (BatchedCatboostMles {
-            permuted_input_data_mle_vec,
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
         }, (_tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 

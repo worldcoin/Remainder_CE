@@ -19,8 +19,8 @@ mod tests {
         let mut rng = test_rng();
 
         let (BatchedCatboostMles {
-            input_data_mle_vec,
-            permuted_input_data_mle_vec, ..
+            input_samples_mle_vec: input_data_mle_vec,
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..
         }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = NonBatchedPermutationCircuit::new(
@@ -39,8 +39,8 @@ mod tests {
         let mut rng = test_rng();
 
         let (BatchedCatboostMles {
-            input_data_mle_vec,
-            permuted_input_data_mle_vec, ..
+            input_samples_mle_vec: input_data_mle_vec,
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..
         }, (_tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = PermutationCircuit::new(
@@ -76,8 +76,8 @@ mod tests {
     fn test_fs_permutation_circuit_catboost_batched() {
         
         let (BatchedCatboostMles {
-            input_data_mle_vec,
-            permuted_input_data_mle_vec, ..
+            input_samples_mle_vec: input_data_mle_vec,
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..
         }, (_tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let circuit = FSPermutationCircuit::new(

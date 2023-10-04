@@ -106,7 +106,7 @@ mod tests {
         let (BatchedCatboostMles {
             binary_decomp_diffs_mle_vec,
             decision_node_paths_mle_vec,
-            permuted_input_data_mle_vec, ..
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let mut circuit = BinaryRecompCircuit::<Fr>::new(
@@ -150,7 +150,7 @@ mod tests {
         let (BatchedCatboostMles {
             binary_decomp_diffs_mle_vec,
             decision_node_paths_mle_vec,
-            permuted_input_data_mle_vec, ..
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(2, Path::new("upshot_data/"));
 
         let mut circuit = BinaryRecompCircuitBatched::new(

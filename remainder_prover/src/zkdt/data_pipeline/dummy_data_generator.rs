@@ -516,8 +516,8 @@ pub struct BatchedDummyMles<F: FieldExt> {
 // #[derive(Serialize, Deserialize)]
 #[derive(Clone)]
 pub struct BatchedCatboostMles<F: FieldExt> {
-    pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-    pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub input_samples_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub permuted_input_samples_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
     pub decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
     pub leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,
     pub binary_decomp_diffs_mle_vec: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
@@ -626,10 +626,10 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
     let multiplicities_bin_decomp_decision = multiplicities_bin_decomp;
 
     // --- Generate MLEs for each ---
-    let input_data_mle_vec = input_data.into_iter().map(|input| DenseMle::new_from_iter(input
+    let input_samples_mle_vec = input_data.into_iter().map(|input| DenseMle::new_from_iter(input
         .into_iter()
         .map(InputAttribute::from), LayerId::Input(0), None)).collect_vec();
-    let permuted_input_data_mle_vec = permuted_input_data
+    let permuted_input_samples_mle_vec = permuted_input_data
         .iter().map(|datum| DenseMle::new_from_iter(datum
             .clone()
             .into_iter()
@@ -674,8 +674,8 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
         .collect_vec();
 
     (BatchedCatboostMles {
-        input_data_mle_vec,
-        permuted_input_data_mle_vec,
+        input_samples_mle_vec,
+        permuted_input_samples_mle_vec,
         decision_node_paths_mle_vec,
         leaf_node_paths_mle_vec,
         binary_decomp_diffs_mle_vec,

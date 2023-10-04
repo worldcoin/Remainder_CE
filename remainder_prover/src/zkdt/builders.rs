@@ -1470,7 +1470,7 @@ mod tests {
     fn test_attribute_consistency_builder_catboost() {
 
         let (BatchedCatboostMles {
-            permuted_input_data_mle_vec,
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
         }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
@@ -1499,8 +1499,8 @@ mod tests {
     fn test_permutation_builder_catboost() {
 
         let (BatchedCatboostMles {
-            input_data_mle_vec,
-            permuted_input_data_mle_vec, ..
+            input_samples_mle_vec: input_data_mle_vec,
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..
         }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let num_dummy_inputs = permuted_input_data_mle_vec.len();
