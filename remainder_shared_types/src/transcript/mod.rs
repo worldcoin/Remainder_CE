@@ -38,4 +38,10 @@ pub trait Transcript<F>: Clone {
         label: &'static str,
         len: usize,
     ) -> Result<Vec<F>, TranscriptError>;
+
+    fn append_string(
+        &mut self,
+        label: &'static str,
+        item: String,
+    ) -> Result<(), TranscriptError>;
 }
