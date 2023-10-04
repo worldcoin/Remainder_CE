@@ -540,7 +540,7 @@ pub fn write_mles_batch_catboost_single_tree<F: FieldExt>() {
 
     let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>(
         Some(minibatch_data),
-         None,
+        0,
         Path::new("upshot_data/quantized-upshot-model.json"),
         Path::new("upshot_data/upshot-quantized-samples.npy")
     );
@@ -860,7 +860,6 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
 // --- Create expressions using... testing modules? ---
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::{
         expression::ExpressionStandard,

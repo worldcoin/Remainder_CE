@@ -2,7 +2,7 @@
 
 use std::{path::{Path, PathBuf}, time::Instant, fs};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{data_pipeline::{dummy_data_generator::convert_zkdt_circuit_data_into_mles, dt2zkdt::{load_upshot_data_single_tree_batch, MinibatchData}}, zkdt_circuit::ZKDTCircuit, constants::get_sample_minibatch_commitment_filepath_for_batch_size}};
+use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{data_pipeline::{dummy_data_generator::convert_zkdt_circuit_data_into_mles, dt2zkdt::{load_upshot_data_single_tree_batch, MinibatchData}}, zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}}};
 use clap::Parser;
 use remainder_shared_types::FieldExt;
 use remainder_shared_types::transcript::Transcript;
@@ -24,8 +24,11 @@ pub enum ZKDTBinaryError {
     #[error("Passed in minibatch logsize without specifying minibatch number")]
     MinibatchLogsizeNoIndex,
     
-    #[error("Input commitment does not exist")]
+    #[error("Input commitment file does not exist")]
     NoInputCommitmentFile,
+
+    #[error("Tree commitment file does not exist")]
+    NoTreeCommitmentFile,
 }
 
 /// Executable for running Remainder's GKR prover over the ZKDT circuit,
@@ -39,9 +42,15 @@ pub enum ZKDTBinaryError {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Path to the tree commitment file that we care about
+    /// Path to the directory storing the tree commitment files
     #[arg(long)]
-    tree_commit_filepath: String,
+    tree_commit_dir: String,
+
+    /// The tree number we are actually running (note that this, 
+    /// alongside the `tree_commit_dir`, generates the filename
+    /// for the actual tree commitment file we are using)
+    #[arg(long)]
+    tree_number: usize,
 
     /// Path to the sample minibatch commitment directory containing
     /// all of the sample minibatch commitments.
@@ -222,7 +231,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
     // --- Read in the Upshot data from file ---
     let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) = load_upshot_data_single_tree_batch::<Fr>(
         maybe_minibatch_data,
-        None,
+        args.tree_number,
         Path::new(&args.decision_forest_model_filepath),
         Path::new(&args.quantized_samples_filepath),
     );
@@ -234,15 +243,25 @@ fn main() -> Result<(), ZKDTBinaryError> {
         minibatch_data.sample_minibatch_number,
         Path::new(&args.sample_minibatch_commit_dir),
     );
-    event!(Level::DEBUG, sample_minibatch_commitment_filepath, "Attempting to read from the following file");
+    event!(Level::DEBUG, sample_minibatch_commitment_filepath, "Attempting to find the sample minibatch commitment file");
     if let Err(_) = fs::metadata(&sample_minibatch_commitment_filepath) {
         return Err(ZKDTBinaryError::NoInputCommitmentFile);
+    }
+
+    // --- Sanitycheck (check if the tree commitment exists) ---
+    let tree_commit_filepath = get_tree_commitment_filepath_for_tree_number(
+        args.tree_number, 
+        Path::new(&args.tree_commit_dir)
+    );
+    event!(Level::DEBUG, tree_commit_filepath, "Attempting to find the tree commit file");
+    if let Err(_) = fs::metadata(&tree_commit_filepath) {
+        return Err(ZKDTBinaryError::NoTreeCommitmentFile);
     }
 
     // --- Create the full ZKDT circuit ---
     let full_zkdt_circuit = ZKDTCircuit {
         batched_catboost_mles,
-        tree_precommit_filepath: args.tree_commit_filepath,
+        tree_precommit_filepath: tree_commit_filepath,
         sample_minibatch_precommit_filepath: sample_minibatch_commitment_filepath,
     };
 
