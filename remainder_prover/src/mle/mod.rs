@@ -67,6 +67,8 @@ pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     /// Fix the iterated variable at `index` with a given challenge `point`.
     /// Mutates self to be the bookeeping table for the new Mle.  If the Mle is
     /// fully bound will return the evaluation of the fully bound Mle.
+    /// # Panics
+    /// if `index` does not correspond to a `MleIndex::Iterated(index)` in `mle_indices`.
     fn smart_fix_variable(&mut self, index: usize, point: Self::F) -> Option<Claim<Self::F>>;
 
     ///Mutate the MleIndices that are Iterated and turn them into IndexedBit with the bit index being determined from curr_index.

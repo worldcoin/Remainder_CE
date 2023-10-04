@@ -428,26 +428,35 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
     }
 
     fn smart_fix_variable(&mut self, index: usize, point: Self::F) -> Option<Claim<Self::F>> {
-        // --- Bind the current indexed bit to the challenge value ---
-        // The count of the indexed bit we're fixing.
-        let mut bit_count = 0;
+        // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
+
+        // First, find the bit corresponding to `index` and compute its absolute
+        // index. For example, if `mle_indices` is equal to
+        // `[MleIndex::Fixed(0), MleIndex::Bound(42, 0), MleIndex::IndexedBit(1), MleIndex::Bound(17, 2) MleIndex::IndexedBit(3))]`
+        // then `smart_fix_variable(3, r)` will fix `IndexedBit(3)`, which is
+        // the 2nd indexed bit, to `r`
+
+        // Count of the bit we're fixing. In the above example
+        // `bit_count == 2`.
+        let mut bit_count: usize = 0;
+        let mut index_found = false;
         for mle_index in self.mle_indices.iter_mut() {
             if let MleIndex::IndexedBit(_) = *mle_index {
                 bit_count += 1;
             }
             if *mle_index == MleIndex::IndexedBit(index) {
                 mle_index.bind_index(point);
+                index_found = true;
                 break;
             }
         }
-        debug_assert!(bit_count >= 1);
+
+        assert!(index_found);
+        debug_assert!(1 <= bit_count && (1 << bit_count) <= self.bookkeeping_table().len());
 
         let chunk_size: usize = 1 << bit_count;
 
-        // --- One fewer iterated bit to sumcheck through ---
-        self.num_vars -= 1;
-
-        let transform = |chunk: &[F]| {
+        let outer_transform = |chunk: &[F]| {
             let window_size: usize = (1 << (bit_count - 1)) + 1;
 
             let inner_transform = |window: &[F]| {
@@ -470,20 +479,23 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
             inner_bookkeeping_table
         };
 
+        // --- One fewer iterated bit to sumcheck through ---
+        self.num_vars -= 1;
+
         // --- So this goes through and applies the formula from [Tha13], bottom ---
         // --- of page 23 ---
         #[cfg(feature = "parallel")]
         let new = self
             .bookkeeping_table()
             .par_chunks(chunk_size)
-            .map(transform)
+            .map(outer_transform)
             .flatten();
 
         #[cfg(not(feature = "parallel"))]
         let new = self
             .bookkeeping_table()
             .chunks(chunk_size)
-            .map(transform)
+            .map(outer_transform)
             .flatten();
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
