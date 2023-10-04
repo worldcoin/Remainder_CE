@@ -155,7 +155,9 @@ impl RawSamples {
     }
 }
 
-/// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample values.
+/// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample
+/// values such that the length of each individual sample is a power of two, and that the number of
+/// samples is also a power of two.
 /// Pre: raw_samples.values.len() > 0.
 pub fn to_samples(raw_samples: &RawSamples, _trees_model: &TreesModel) -> Samples {
     let mut samples: Vec<Vec<u16>> = vec![];
@@ -164,6 +166,10 @@ pub fn to_samples(raw_samples: &RawSamples, _trees_model: &TreesModel) -> Sample
         let mut sample = raw_sample.clone();
         sample.resize(sample_length, 0);
         samples.push(sample);
+    }
+    let target_sample_count = next_power_of_two(raw_samples.values.len()).unwrap();
+    for i in raw_samples.values.len()..target_sample_count {
+        samples.push(vec![0_u16; sample_length]);
     }
     Samples {
         values: samples,
@@ -559,21 +565,28 @@ pub fn load_raw_trees_model(filename: &str) -> RawTreesModel {
 /// ## Arguments
 /// * `input_batch_size` - The number of tree inputs to return. Must be a power of two!
 /// * `num_trees_if_multiple` - Currently unused!!!
+/// * `raw_trees_model_path` - Path to the JSON file representing the quantized version of the model
+///     (as output by the Python preprocessing)
+/// * `raw_samples_path` - Path to the NumPy file representing the quantized version of the samples
+///     (again, as output by the Python preprocessing)
 /// 
 /// ## Notes
 /// Note that `raw_samples.values.len()` is currently 4573! This means we can go
 /// up to 4096 in terms of batch sizes which are powers of 2
 pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
-    input_batch_size: Option<usize>,
-    _num_trees_if_multiple: Option<usize>
+    log_input_batch_size: Option<usize>,
+    _num_trees_if_multiple: Option<usize>,
+    raw_trees_model_path: &Path,
+    raw_samples_path: &Path,
 ) -> (ZKDTCircuitData<F>, (usize, usize)) {
 
     // --- TODO!(ryancao): We need to test our stuff with a non-power-of-two `input_batch_size` ---
-    let true_input_batch_size = input_batch_size.unwrap_or(2);
-    assert!(true_input_batch_size.is_power_of_two());
+    let true_input_batch_size = 2_usize.pow(log_input_batch_size.unwrap_or(1) as u32);
 
-    let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
-    let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+    // let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
+    // let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+    let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path.to_str().unwrap());
+    let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path.to_str().unwrap());
     raw_samples.values = raw_samples.values[0..true_input_batch_size].to_vec();
 
     let trees_model: TreesModel = (&raw_trees_model).into();
@@ -626,11 +639,9 @@ pub fn generate_all_tree_ligero_commitments<F: FieldExt>(upshot_data_dir_path: &
 
             // --- Create MLEs from each tree decision + leaf node list ---
             let mut tree_decision_nodes_mle = DenseMle::new_from_iter(tree_decision_nodes
-                
                 .into_iter()
                 .map(DecisionNode::from), LayerId::Input(0), None);
             let mut tree_leaf_nodes_mle = DenseMle::new_from_iter(tree_leaf_nodes
-                
                 .into_iter()
                 .map(LeafNode::from), LayerId::Input(0), None);
 
@@ -684,7 +695,7 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
     // --- We create batches of size 2^1, ..., 2^{12} ---
     (1..12).for_each(|batch_size_exp| {
 
-        dbg!(upshot_data_dir_path);
+        dbg!(&upshot_data_dir_path);
 
         let cached_filepath = get_cached_batched_mles_filename_with_exp_size(batch_size_exp, upshot_data_dir_path);
         if file_exists(&cached_filepath) {
@@ -752,6 +763,36 @@ mod tests {
         let filename = "src/zkdt/data_pipeline/test_samples_10x6.npy";
         let raw_samples = load_raw_samples(filename);
         assert_eq!(raw_samples.values.len(), 10);
+    }
+
+    #[test]
+    fn test_to_samples() {
+        let sample_length = 5;
+        let values = vec![
+            vec![0_u16; sample_length],
+            vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
+            vec![2_u16; sample_length],
+        ];
+        let raw_samples = RawSamples {
+            values,
+            sample_length
+        };
+        let tree = build_small_tree();
+        let raw_trees_model = RawTreesModel {
+            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: sample_length,
+        };
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let samples = to_samples(&raw_samples, &trees_model);
+        // check the number of samples
+        assert_eq!(samples.sample_length, next_power_of_two(raw_samples.sample_length).unwrap());
+        // check length of individual samples
+        assert_eq!(samples.values.len(), next_power_of_two(raw_samples.values.len()).unwrap());
+        for sample in &samples.values {
+            assert_eq!(sample.len(), samples.sample_length);
+        }
     }
 
     #[test]
@@ -840,11 +881,12 @@ mod tests {
         assert_eq!(node_multiplicities.len(), n_trees);
         for node_multiplicities_for_tree in &node_multiplicities {
             assert_eq!(node_multiplicities_for_tree.len(), n_nodes);
-            // root node id has multiplicity samples.len() = 3
+            // root node id has multiplicity samples.values.len() = 4 (not 3, since post padding!)
             let multiplicity = &node_multiplicities_for_tree[0];
-            assert_eq!(multiplicity.bits[0], Fr::from(1));
-            assert_eq!(multiplicity.bits[1], Fr::from(1));
-            assert_eq!(multiplicity.bits[2], Fr::from(0));
+            assert_eq!(multiplicity.bits[0], Fr::from(0));
+            assert_eq!(multiplicity.bits[1], Fr::from(0));
+            assert_eq!(multiplicity.bits[2], Fr::from(1));
+            assert_eq!(multiplicity.bits[3], Fr::from(0));
             // dummy node id has multiplicity 0
             // TODO!(ende): because of the plus 1 above, changes here from `n_nodes - 1` to `n_nodes / 2 - 1`
             let multiplicity = &node_multiplicities_for_tree[n_nodes / 2 - 1];
@@ -852,6 +894,7 @@ mod tests {
                 assert_eq!(bit, Fr::from(0));
             }
         }
+        // FIXME add a better test.
     }
 
     #[test]

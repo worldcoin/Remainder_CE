@@ -530,7 +530,12 @@ pub struct BatchedCatboostMles<F: FieldExt> {
 /// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
 /// to a file for ease of reading (i.e. faster testing, mostly lol)
 pub fn write_mles_batch_catboost_single_tree<F: FieldExt>() {
-    let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>(None, None);
+    let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>(
+        Some(1),
+         None,
+        Path::new("upshot_data/quantized-upshot-model.json"),
+        Path::new("upshot_data/upshot-quantized-samples.npy")
+    );
     let mut f = fs::File::create(CACHED_BATCHED_MLES_FILE).unwrap();
     to_writer(&mut f, &loaded_zkdt_circuit_data).unwrap();
 }
@@ -581,11 +586,22 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usi
         generate_upshot_data_all_batch_sizes::<F>(None, upshot_data_dir_path);
     }
 
-    // --- First generate the dummy data ---
-    let (ZKDTCircuitData {
-        // dummy_attr_idx_data,
+    // --- First generate the dummy data, then convert to MLE form factor ---
+    let (zkdt_circuit_data, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_filepath::<F>(&cached_file_path);
+    convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len)
+}
+
+/// Takes the output from presumably something like [`read_upshot_data_single_tree_branch_from_filepath`]
+/// and converts it into `BatchedCatboostMles<F>`, i.e. the input to the circuit.
+pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
+    zkdt_circuit_data: ZKDTCircuitData<F>,
+    tree_height: usize,
+    input_len: usize,
+) -> (BatchedCatboostMles<F>, (usize, usize)) {
+
+    // --- Unpacking ---
+    let ZKDTCircuitData {
         input_data,
-        // permutation_indices,
         permuted_input_data,
         decision_node_paths,
         leaf_node_paths,
@@ -594,24 +610,16 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usi
         decision_nodes,
         leaf_nodes,
         multiplicities_bin_decomp_input,
-    }, (tree_height, input_len)) = read_upshot_data_single_tree_branch_from_filepath::<F>(&cached_file_path);
-
-    // println!("input_data {:?}", input_data[0]);
-    // println!("permuted_input_data {:?}", permuted_input_data[0]);
-    // println!("multiplicities_bin_decomp_input {:?}", multiplicities_bin_decomp_input[0]);
+    } = zkdt_circuit_data;
 
     let decision_len = 2_usize.pow(tree_height as u32 - 1);
     let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
     let multiplicities_bin_decomp_decision = multiplicities_bin_decomp;
 
     // --- Generate MLEs for each ---
-    // TODO!(ryancao): Change this into batched form
-    // let attr_idx_data_mle = DenseMle::<_, F>::new(attr_idx_data[0].clone());
     let input_data_mle_vec = input_data.into_iter().map(|input| DenseMle::new_from_iter(input
-        
         .into_iter()
         .map(InputAttribute::from), LayerId::Input(0), None)).collect_vec();
-    // let permutation_indices_mle = DenseMle::<_, F>::new(permutation_indices[0].clone());
     let permuted_input_data_mle_vec = permuted_input_data
         .iter().map(|datum| DenseMle::new_from_iter(datum
             .clone()
@@ -637,19 +645,15 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usi
                 .map(BinDecomp16Bit::from), LayerId::Input(0), None))
         .collect_vec();
     let multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(multiplicities_bin_decomp_decision
-        
         .into_iter()
         .map(BinDecomp16Bit::from), LayerId::Input(0), None);
     let multiplicities_bin_decomp_mle_leaf = DenseMle::new_from_iter(multiplicities_bin_decomp_leaf
-        
         .into_iter()
         .map(BinDecomp16Bit::from), LayerId::Input(0), None);
     let decision_nodes_mle = DenseMle::new_from_iter(decision_nodes
-        
         .into_iter()
         .map(DecisionNode::from), LayerId::Input(0), None);
     let leaf_nodes_mle = DenseMle::new_from_iter(leaf_nodes
-        
         .into_iter()
         .map(LeafNode::from), LayerId::Input(0), None);
     let multiplicities_bin_decomp_mle_input = multiplicities_bin_decomp_input
@@ -659,7 +663,6 @@ pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(exp_batch_size: usi
             .into_iter()
             .map(BinDecomp4Bit::from), LayerId::Input(0), None))
         .collect_vec();
-
 
     (BatchedCatboostMles {
         input_data_mle_vec,
