@@ -126,7 +126,9 @@ pub struct Samples {
     sample_length: usize
 }
 
-/// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample values.
+/// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample
+/// values such that the length of each individual sample is a power of two, and that the number of
+/// samples is also a power of two.
 /// Pre: raw_samples.values.len() > 0.
 pub fn to_samples(raw_samples: &RawSamples, _trees_model: &TreesModel) -> Samples {
     let mut samples: Vec<Vec<u16>> = vec![];
@@ -135,6 +137,10 @@ pub fn to_samples(raw_samples: &RawSamples, _trees_model: &TreesModel) -> Sample
         let mut sample = raw_sample.clone();
         sample.resize(sample_length, 0);
         samples.push(sample);
+    }
+    let target_sample_count = next_power_of_two(raw_samples.values.len()).unwrap();
+    for i in raw_samples.values.len()..target_sample_count {
+        samples.push(vec![0_u16; sample_length]);
     }
     Samples {
         values: samples,
@@ -625,6 +631,36 @@ mod tests {
     }
 
     #[test]
+    fn test_to_samples() {
+        let sample_length = 5;
+        let values = vec![
+            vec![0_u16; sample_length],
+            vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
+            vec![2_u16; sample_length],
+        ];
+        let raw_samples = RawSamples {
+            values,
+            sample_length
+        };
+        let tree = build_small_tree();
+        let raw_trees_model = RawTreesModel {
+            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: sample_length,
+        };
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let samples = to_samples(&raw_samples, &trees_model);
+        // check the number of samples
+        assert_eq!(samples.sample_length, next_power_of_two(raw_samples.sample_length).unwrap());
+        // check length of individual samples
+        assert_eq!(samples.values.len(), next_power_of_two(raw_samples.values.len()).unwrap());
+        for sample in &samples.values {
+            assert_eq!(sample.len(), samples.sample_length);
+        }
+    }
+
+    #[test]
     fn test_circuitize_samples() {
         let sample_length = 5;
         let values = vec![
@@ -710,11 +746,12 @@ mod tests {
         assert_eq!(node_multiplicities.len(), n_trees);
         for node_multiplicities_for_tree in &node_multiplicities {
             assert_eq!(node_multiplicities_for_tree.len(), n_nodes);
-            // root node id has multiplicity samples.len() = 3
+            // root node id has multiplicity samples.values.len() = 4 (not 3, since post padding!)
             let multiplicity = &node_multiplicities_for_tree[0];
-            assert_eq!(multiplicity.bits[0], Fr::from(1));
-            assert_eq!(multiplicity.bits[1], Fr::from(1));
-            assert_eq!(multiplicity.bits[2], Fr::from(0));
+            assert_eq!(multiplicity.bits[0], Fr::from(0));
+            assert_eq!(multiplicity.bits[1], Fr::from(0));
+            assert_eq!(multiplicity.bits[2], Fr::from(1));
+            assert_eq!(multiplicity.bits[3], Fr::from(0));
             // dummy node id has multiplicity 0
             // TODO!(ende): because of the plus 1 above, changes here from `n_nodes - 1` to `n_nodes / 2 - 1`
             let multiplicity = &node_multiplicities_for_tree[n_nodes / 2 - 1];
@@ -722,6 +759,7 @@ mod tests {
                 assert_eq!(bit, Fr::from(0));
             }
         }
+        // FIXME add a better test.
     }
 
     #[test]
