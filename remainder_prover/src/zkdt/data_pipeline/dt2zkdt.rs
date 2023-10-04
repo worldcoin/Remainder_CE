@@ -72,7 +72,6 @@ use std::fs::{File, self};
 use std::path::Path;
 use std::fmt;
 use rayon::prelude::*;
-use std::time::Instant;
 
 
 use super::dummy_data_generator::{ZKDTCircuitData};
@@ -310,7 +309,6 @@ pub fn circuitize_samples<F: FieldExt>(
     samples_in: &Samples,
     trees_model: &TreesModel,
     ) -> CircuitizedSamples<F> {
-    let start_time = Instant::now();
     let paths: Vec<Vec<TreePath<i64>>> = trees_model.trees
         .par_iter()
         .map(|tree| samples_in.values
@@ -318,16 +316,12 @@ pub fn circuitize_samples<F: FieldExt>(
              .map(|sample| build_path(&tree, &sample))
              .collect())
         .collect();
-    println!("building paths took: {:?}", start_time.elapsed());  // FIXME remove
 
-    let start_time = Instant::now();
     let samples: Vec<Vec<InputAttribute<F>>> = samples_in.values
         .par_iter()
         .map(build_sample_witness)
         .collect();
-    println!("Building the InputAttribute arrays took: {:?}", start_time.elapsed());  // FIXME
 
-    let start_time = Instant::now();
     let decision_paths: Vec<Vec<DecisionPath<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -337,9 +331,7 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
             })
         .collect();
-    println!("decision paths took: {:?}", start_time.elapsed());  // FIXME
 
-    let start_time = Instant::now();
     let attributes_on_paths: Vec<Vec<AttributesOnPath<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -349,9 +341,7 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
         })
         .collect();
-    println!("attrs on paths took: {:?}", start_time.elapsed());  // FIXME
 
-    let start_time = Instant::now();
     let differences: Vec<Vec<DifferencesBits<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -361,9 +351,7 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
         })
         .collect();
-    println!("Differences bindecomp took {:?}", start_time.elapsed());  // FIXME
 
-    let start_time = Instant::now();
     let path_ends: Vec<Vec<LeafNode<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -373,9 +361,7 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
             })
         .collect();
-    println!("path ends took {:?}", start_time.elapsed());  // FIXME
 
-    let start_time = Instant::now();
     let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -391,9 +377,7 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
         })
         .collect();
-    println!("attr mult took: {:?}", start_time.elapsed());
 
-    let start_time = Instant::now();
     let node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -404,7 +388,6 @@ pub fn circuitize_samples<F: FieldExt>(
                 .collect()
         })
         .collect();
-    println!("node mult took: {:?}", start_time.elapsed());
 
     CircuitizedSamples {
         samples,
