@@ -10,7 +10,7 @@ use serde_json::{to_writer, from_reader};
 use tracing::instrument;
 
 use super::super::constants::CACHED_BATCHED_MLES_FILE;
-use super::dt2zkdt::load_upshot_data_single_tree_batch;
+use super::dt2zkdt::{load_upshot_data_single_tree_batch, MinibatchData};
 use super::super::structs::*;
 
 use ark_std::test_rng;
@@ -531,8 +531,15 @@ pub struct BatchedCatboostMles<F: FieldExt> {
 /// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
 /// to a file for ease of reading (i.e. faster testing, mostly lol)
 pub fn write_mles_batch_catboost_single_tree<F: FieldExt>() {
+
+    // Minibatch size of 2^1, 0th minibatch
+    let minibatch_data = MinibatchData {
+        log_sample_minibatch_size: 1,
+        sample_minibatch_number: 0,
+    };
+
     let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>(
-        Some(1),
+        Some(minibatch_data),
          None,
         Path::new("upshot_data/quantized-upshot-model.json"),
         Path::new("upshot_data/upshot-quantized-samples.npy")

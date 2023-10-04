@@ -426,10 +426,17 @@ pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
     raw_trees_model
 }
 
+/// Specifies exactly which minibatch to use within a sample.
+#[derive(Clone, Debug)]
+pub struct MinibatchData {
+    pub log_sample_minibatch_size: usize,
+    pub sample_minibatch_number: usize,
+}
+
 /// Gives all batched data associated with the first `num_trees_if_multiple` trees.
 /// 
 /// ## Arguments
-/// * `input_batch_size` - The number of tree inputs to return. Must be a power of two!
+/// * `maybe_minibatch_data` - The minibatch to grab data for, including minibatch size and index.
 /// * `num_trees_if_multiple` - Currently unused!!!
 /// * `raw_trees_model_path` - Path to the JSON file representing the quantized version of the model
 ///     (as output by the Python preprocessing)
@@ -441,17 +448,25 @@ pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
 /// up to 4096 in terms of batch sizes which are powers of 2
 #[instrument]
 pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
-    log_input_batch_size: Option<usize>,
+    maybe_minibatch_data: Option<MinibatchData>,
     _num_trees_if_multiple: Option<usize>,
     raw_trees_model_path: &Path,
     raw_samples_path: &Path,
 ) -> (ZKDTCircuitData<F>, (usize, usize)) {
 
+    let (maybe_sample_minibatch_number, maybe_log_sample_minibatch_size) = match maybe_minibatch_data {
+        Some(minibatch_data) => (Some(minibatch_data.sample_minibatch_number), Some(minibatch_data.log_sample_minibatch_size)),
+        None => (None, None),
+    };
+
     // --- TODO!(ryancao): We need to test our stuff with a non-power-of-two `input_batch_size` ---
-    let true_input_batch_size = 2_usize.pow(log_input_batch_size.unwrap_or(1) as u32);
+    let sample_minibatch_size = 2_usize.pow(maybe_log_sample_minibatch_size.unwrap_or(1) as u32) + 1;
     let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path);
     let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path);
-    raw_samples.values = raw_samples.values[0..true_input_batch_size].to_vec();
+
+    // --- Grab the actual minibatch from the real values ---
+    let minibatch_start_idx = maybe_sample_minibatch_number.unwrap_or(0) * sample_minibatch_size;
+    raw_samples.values = raw_samples.values[minibatch_start_idx..(minibatch_start_idx + sample_minibatch_size)].to_vec();
 
     let trees_model: TreesModel = (&raw_trees_model).into();
     let samples: Samples = to_samples(&raw_samples);
@@ -581,15 +596,15 @@ mod tests {
             values,
             sample_length
         };
-        let tree = build_small_tree();
-        let raw_trees_model = RawTreesModel {
-            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
-            bias: 1.1,
-            scale: 6.6,
-            n_features: sample_length,
-        };
-        let trees_model: TreesModel = (&raw_trees_model).into();
-        let samples = to_samples(&raw_samples, &trees_model);
+        // let tree = build_small_tree();
+        // let raw_trees_model = RawTreesModel {
+        //     trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+        //     bias: 1.1,
+        //     scale: 6.6,
+        //     n_features: sample_length,
+        // };
+        // let trees_model: TreesModel = (&raw_trees_model).into();
+        let samples = to_samples(&raw_samples);
         // check the number of samples
         assert_eq!(samples.sample_length, next_power_of_two(raw_samples.sample_length).unwrap());
         // check length of individual samples

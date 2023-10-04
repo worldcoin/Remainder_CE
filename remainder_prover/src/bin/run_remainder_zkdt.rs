@@ -2,7 +2,7 @@
 
 use std::{path::{Path, PathBuf}, time::Instant, fs};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{data_pipeline::{dummy_data_generator::convert_zkdt_circuit_data_into_mles, dt2zkdt::load_upshot_data_single_tree_batch}, zkdt_circuit::ZKDTCircuit}};
+use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{data_pipeline::{dummy_data_generator::convert_zkdt_circuit_data_into_mles, dt2zkdt::{load_upshot_data_single_tree_batch, MinibatchData}}, zkdt_circuit::ZKDTCircuit}};
 use clap::Parser;
 use remainder_shared_types::FieldExt;
 use remainder_shared_types::transcript::Transcript;
@@ -21,6 +21,8 @@ pub enum ZKDTBinaryError {
     #[error("GKR Proving failed! Error: {0}")]
     /// Proving failed
     GKRProvingFailed(GKRError),
+    #[error("Passed in minibatch logsize without specifying minibatch number")]
+    MinibatchLogsizeNoIndex,
 }
 
 /// Executable for running Remainder's GKR prover over the ZKDT circuit,
@@ -52,11 +54,17 @@ struct Args {
     #[arg(long)]
     decision_forest_model_filepath: String,
 
-    /// log_2 of the number of samples to be read in.
-    /// (Note that not passing in anything here will result in *all*
-    /// samples being read.)
+    /// log_2 of the minibatch size. Note that passing in `None` here
+    /// will result in the entire dataset being treated as a single
+    /// minibatch.
     #[arg(long)]
-    log_sample_batch_size: Option<usize>,
+    log_sample_minibatch_size: Option<usize>,
+
+    /// The minibatch number we are generating a proof for.
+    /// Note that if `log_sample_batch_size` is `Some` then
+    /// this value cannot be `None`.
+    #[arg(long)]
+    sample_minibatch_number: Option<usize>,
 
     /// Filepath to where the final GKR proof should be written to.
     /// (Note that not passing in anything here will result in no proof
@@ -183,9 +191,25 @@ fn main() -> Result<(), ZKDTBinaryError> {
     let args_as_string = format!("{:?}", args);
     event!(Level::DEBUG, args_as_string);
 
+    // --- Sanitycheck (need minibatch number if we have batch size) + grabbing minibatch data ---
+    let maybe_minibatch_data = match (args.log_sample_minibatch_size, args.sample_minibatch_number) {
+        (None, None) => None,
+        (None, Some(_)) => None,
+        (Some(_), None) => {
+            return Err(ZKDTBinaryError::MinibatchLogsizeNoIndex);
+        },
+        (Some(log_sample_minibatch_size), Some(sample_minibatch_number)) => {
+            let minibatch_data = MinibatchData {
+                log_sample_minibatch_size,
+                sample_minibatch_number,
+            };
+            Some(minibatch_data)
+        },
+    };
+
     // --- Read in the Upshot data from file ---
     let (zkdt_circuit_data, (tree_height, input_len)) = load_upshot_data_single_tree_batch::<Fr>(
-        args.log_sample_batch_size,
+        maybe_minibatch_data,
         None,
         Path::new(&args.decision_forest_model_filepath),
         Path::new(&args.quantized_samples_filepath),

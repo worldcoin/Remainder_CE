@@ -94,7 +94,7 @@ pub fn generate_ligero_sample_minibatch_commitments<F: FieldExt>(
 
                 // --- No commitment exists yet; create commitment ---
                 Err(_) => {
-                    event!(Level::TRACE, sample_minibatch_commitment_filepath, "File doesn't exist yet! Generating commitment...");
+                    event!(Level::DEBUG, sample_minibatch_commitment_filepath, "File doesn't exist yet! Generating commitment...");
 
                     // --- Create dummy `RawSamples` and convert to `Samples` ---
                     let minibatch_raw_samples = RawSamples {
