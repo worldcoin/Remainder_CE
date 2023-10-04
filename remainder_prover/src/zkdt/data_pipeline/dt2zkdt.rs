@@ -117,6 +117,7 @@ pub struct RawSamples {
 }
 
 /// Output of [`to_samples`], input to [`circuitize_samples`].
+/// Difference to RawSamples: these are padded to the nearest power of two.
 pub struct Samples {
     values: Vec<Vec<u16>>,
     sample_length: usize // FIXME needed?
