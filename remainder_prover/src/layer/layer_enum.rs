@@ -114,6 +114,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         self
     }
 
+    // TODO(Makis): Perhaps refactor to receive a `Claim<F>` instead.
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
