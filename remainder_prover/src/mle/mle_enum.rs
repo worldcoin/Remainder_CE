@@ -45,14 +45,14 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         }
     }
 
-    fn smart_fix_variable(
+    fn fix_variable_at_index(
         &mut self,
-        index: usize,
+        indexed_bit_index: usize,
         point: Self::F,
     ) -> Option<crate::layer::Claim<Self::F>> {
         match self {
-            MleEnum::Dense(item) => item.smart_fix_variable(index, point),
-            MleEnum::Zero(item) => item.smart_fix_variable(index, point),
+            MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point),
+            MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point),
         }
     }
 

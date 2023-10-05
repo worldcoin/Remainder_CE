@@ -7,6 +7,7 @@ use std::{
 use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
+use rand::seq::index;
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
@@ -427,32 +428,50 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.indexed
     }
 
-    fn smart_fix_variable(&mut self, index: usize, point: Self::F) -> Option<Claim<Self::F>> {
+    fn fix_variable_at_index(
+        &mut self,
+        indexed_bit_index: usize,
+        point: Self::F,
+    ) -> Option<Claim<Self::F>> {
         // Bind the `MleIndex::IndexedBit(index)` to the challenge `point`.
 
         // First, find the bit corresponding to `index` and compute its absolute
         // index. For example, if `mle_indices` is equal to
         // `[MleIndex::Fixed(0), MleIndex::Bound(42, 0), MleIndex::IndexedBit(1), MleIndex::Bound(17, 2) MleIndex::IndexedBit(3))]`
-        // then `smart_fix_variable(3, r)` will fix `IndexedBit(3)`, which is
+        // then `fix_variable_at_index(3, r)` will fix `IndexedBit(3)`, which is
         // the 2nd indexed bit, to `r`
 
         // Count of the bit we're fixing. In the above example
         // `bit_count == 2`.
-        let mut bit_count: usize = 0;
-        let mut index_found = false;
-        for mle_index in self.mle_indices.iter_mut() {
-            if let MleIndex::IndexedBit(_) = *mle_index {
-                bit_count += 1;
-            }
-            if *mle_index == MleIndex::IndexedBit(index) {
-                mle_index.bind_index(point);
-                index_found = true;
-                break;
-            }
-        }
+        let (index_found, bit_count) =
+            self.mle_indices
+                .iter_mut()
+                .fold((false, 0), |state, mle_index| {
+                    if state.0 {
+                        // Index already found; do nothing.
+                        state
+                    } else {
+                        if let MleIndex::IndexedBit(current_bit_index) = *mle_index {
+                            if current_bit_index == indexed_bit_index {
+                                // Found the indexed bit in the current index;
+                                // bind it and increment the bit count.
+                                mle_index.bind_index(point);
+                                (true, state.1 + 1)
+                            } else {
+                                // Index not yet found but this is an indexed
+                                // bit; increasing bit count.
+                                (false, state.1 + 1)
+                            }
+                        } else {
+                            // Index not yet found but the current bit is not an
+                            // indexed bit; do nothing.
+                            state
+                        }
+                    }
+                });
 
         assert!(index_found);
-        debug_assert!(1 <= bit_count && (1 << bit_count) <= self.bookkeeping_table().len());
+        debug_assert!(1 <= bit_count && bit_count <= ark_std::log2(self.bookkeeping_table().len()));
 
         let chunk_size: usize = 1 << bit_count;
 
@@ -468,6 +487,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
                 first + (second - first) * point
             };
 
+            // TODO(Makis): Consider using a custom iterator here instead of windows.
             #[cfg(feature = "parallel")]
             let new = chunk.par_windows(window_size).map(inner_transform);
 
@@ -685,7 +705,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
     }
 
-    // ======== `smart_fix_variable` tests ========
+    // ======== `fix_variable_at_index` tests ========
 
     #[test]
     ///test fixing variables in an mle with two variables
@@ -696,7 +716,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 1st variable to 1.
-        mle_ref.smart_fix_variable(0, Fr::from(1));
+        mle_ref.fix_variable_at_index(0, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -705,7 +725,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 1.
-        mle_ref.smart_fix_variable(1, Fr::from(1));
+        mle_ref.fix_variable_at_index(1, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -722,7 +742,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 2nd variable to 1.
-        mle_ref.smart_fix_variable(1, Fr::from(1));
+        mle_ref.fix_variable_at_index(1, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(1), Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -731,7 +751,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 1.
-        mle_ref.smart_fix_variable(0, Fr::from(1));
+        mle_ref.fix_variable_at_index(0, Fr::from(1));
 
         let mle_vec_exp = vec![Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -758,7 +778,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 1st variable to 3.
-        mle_ref.smart_fix_variable(0, Fr::from(3));
+        mle_ref.fix_variable_at_index(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -767,7 +787,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 4.
-        mle_ref.smart_fix_variable(1, Fr::from(4));
+        mle_ref.fix_variable_at_index(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(13)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -776,7 +796,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 3rd variable to 5.
-        mle_ref.smart_fix_variable(2, Fr::from(5));
+        mle_ref.fix_variable_at_index(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -803,7 +823,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 1st variable to 3.
-        mle_ref.smart_fix_variable(0, Fr::from(3));
+        mle_ref.fix_variable_at_index(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -812,7 +832,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 3rd variable to 5.
-        mle_ref.smart_fix_variable(2, Fr::from(5));
+        mle_ref.fix_variable_at_index(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(21), Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -821,7 +841,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 4.
-        mle_ref.smart_fix_variable(1, Fr::from(4));
+        mle_ref.fix_variable_at_index(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -848,7 +868,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 2nd variable to 4.
-        mle_ref.smart_fix_variable(1, Fr::from(4));
+        mle_ref.fix_variable_at_index(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(7)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -857,7 +877,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 3.
-        mle_ref.smart_fix_variable(0, Fr::from(3));
+        mle_ref.fix_variable_at_index(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(6), Fr::from(13)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -866,7 +886,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 3rd variable to 5.
-        mle_ref.smart_fix_variable(2, Fr::from(5));
+        mle_ref.fix_variable_at_index(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -893,7 +913,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 2nd variable to 4.
-        mle_ref.smart_fix_variable(1, Fr::from(4));
+        mle_ref.fix_variable_at_index(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(7)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -902,7 +922,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 3rd variable to 5.
-        mle_ref.smart_fix_variable(2, Fr::from(5));
+        mle_ref.fix_variable_at_index(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(20), Fr::from(27)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -911,7 +931,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 3.
-        mle_ref.smart_fix_variable(0, Fr::from(3));
+        mle_ref.fix_variable_at_index(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -938,7 +958,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 3rd variable to 5.
-        mle_ref.smart_fix_variable(2, Fr::from(5));
+        mle_ref.fix_variable_at_index(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(0), Fr::from(7), Fr::from(5), Fr::from(12)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -947,7 +967,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 3.
-        mle_ref.smart_fix_variable(0, Fr::from(3));
+        mle_ref.fix_variable_at_index(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(21), Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -956,7 +976,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 4.
-        mle_ref.smart_fix_variable(1, Fr::from(4));
+        mle_ref.fix_variable_at_index(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -983,7 +1003,7 @@ mod tests {
         mle_ref.index_mle_indices(0);
 
         // Fix 3rd variable to 5.
-        mle_ref.smart_fix_variable(2, Fr::from(5));
+        mle_ref.fix_variable_at_index(2, Fr::from(5));
 
         let mle_vec_exp = vec![Fr::from(0), Fr::from(7), Fr::from(5), Fr::from(12)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -992,7 +1012,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 2nd variable to 4.
-        mle_ref.smart_fix_variable(1, Fr::from(4));
+        mle_ref.fix_variable_at_index(1, Fr::from(4));
 
         let mle_vec_exp = vec![Fr::from(20), Fr::from(27)];
         let mle_exp: DenseMle<Fr, Fr> =
@@ -1001,7 +1021,7 @@ mod tests {
         assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
 
         // Fix 1st variable to 3.
-        mle_ref.smart_fix_variable(0, Fr::from(3));
+        mle_ref.fix_variable_at_index(0, Fr::from(3));
 
         let mle_vec_exp = vec![Fr::from(41)];
         let mle_exp: DenseMle<Fr, Fr> =
