@@ -7,7 +7,7 @@ pub mod input_layer;
 pub(crate) mod tests;
 pub mod test_helper_circuits;
 
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 use crate::{
     layer::{
@@ -19,12 +19,13 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         MleRef,
     },
-    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point, gate::{addgate::AddGate, mulgate::MulGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched}
+    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point, gate::{addgate::AddGate, mulgate::MulGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched}, utils::hash_layers
 };
 
 // use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
 // use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
+use once_cell::sync::OnceCell;
 use remainder_shared_types::transcript::{Transcript};
 use remainder_shared_types::FieldExt;
 
@@ -345,6 +346,8 @@ pub trait GKRCircuit<F: FieldExt> {
     /// The transcript this circuit uses
     type Transcript: Transcript<F>;
 
+    const USE_CIRCUIT_HASH: bool = false;
+
     /// The forward pass, defining the layer relationships and generating the layers
     fn synthesize(&mut self) -> Witness<F, Self::Transcript>;
 
@@ -377,6 +380,9 @@ pub trait GKRCircuit<F: FieldExt> {
     ) -> Result<GKRProof<F, Self::Transcript>, GKRError> {
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
         // --- Also commit and add those commitments to the transcript
+        if Self::USE_CIRCUIT_HASH {
+            transcript.append_field_element("Circuit Description", Self::get_circuit_hash()).unwrap();
+        }
         let (
             Witness {
                 input_layers,
@@ -612,6 +618,10 @@ pub trait GKRCircuit<F: FieldExt> {
             input_layer_proofs,
         } = gkr_proof;
 
+        if Self::USE_CIRCUIT_HASH {
+            transcript.append_field_element("Circuit Description", Self::get_circuit_hash()).unwrap();
+        }
+
         for input_layer in input_layer_proofs.iter() {
             InputLayerEnum::append_commitment_to_transcript(
                 &input_layer.input_commitment,
@@ -808,5 +818,22 @@ pub trait GKRCircuit<F: FieldExt> {
         }
 
         Ok(())
+    }
+
+    ///Gen the circuit hash
+    fn gen_circuit_hash(&mut self) -> F {
+        let mut transcript = Self::Transcript::new("blah");
+        let (
+            Witness {
+                layers, ..
+            },
+            _,
+        ) = self.synthesize_and_commit(&mut transcript).unwrap();    
+
+        hash_layers(&layers)
+    }
+
+    fn get_circuit_hash() -> F {
+        unimplemented!()
     }
 }

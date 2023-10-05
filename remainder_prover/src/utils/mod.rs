@@ -3,11 +3,11 @@ use std::{iter::repeat_with, fs};
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::{prelude::Distribution, Rng};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{FieldExt, Poseidon, transcript::Transcript};
 
 use crate::{
     layer::LayerId,
-    mle::{dense::DenseMle, MleIndex},
+    mle::{dense::DenseMle, MleIndex}, prover::Layers,
 };
 
 /// Returns a zero-padded version of `coeffs` with length padded
@@ -121,4 +121,26 @@ pub fn file_exists(file_path: &String) -> bool {
         },
         Err(_) => false,
     }
+}
+
+pub fn hash_layers<F: FieldExt, Tr: Transcript<F>>(layers: &Layers<F, Tr>) -> F {
+    let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
+
+    layers.0.iter().for_each(|layer| {
+        let item = format!("{}", layer.circuit_description_fmt());
+        let bytes = item.as_bytes();
+        let elements: Vec<F> = bytes.chunks(62).map(|bytes| {
+            let base = F::from(8);
+            let first = bytes[0];
+            bytes.iter().skip(1).fold((F::from(first as u64), base.clone()), |(accum, power), byte| {
+                let accum = accum + (F::from(byte.clone() as u64) * power);
+                let power = power * base;
+                (accum, power)
+            }).0
+        }).collect_vec();
+    
+        sponge.update(&elements);    
+    });
+
+    sponge.squeeze()
 }

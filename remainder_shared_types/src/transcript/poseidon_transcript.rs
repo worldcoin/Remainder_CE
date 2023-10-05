@@ -88,22 +88,6 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
 
         // Ok(repeat_with(|| F::one() + F::one()).take(len).collect_vec())
     }
-
-    fn append_string(
-        &mut self,
-        label: &'static str,
-        item: String,
-    ) -> Result<(), TranscriptError> {
-        let bytes = item.as_bytes();
-        let elements: Vec<F> = bytes.chunks(62).map(|bytes| {
-            bytes.iter().fold((F::zero(), F::one()), |(accum, power), byte| {
-                let accum = accum + (F::from(byte.clone() as u64) * power);
-                let power = power.pow(&[8, 0, 0, 0]);
-                (accum, power)
-            }).0
-        }).collect_vec();
-        todo!()
-    }
 }
 
 #[cfg(test)]
