@@ -213,25 +213,36 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     raw_samples.values = raw_samples.values[minibatch_start_idx..(minibatch_start_idx + sample_minibatch_size)].to_vec();
 
     // --- Conversions ---
-    let trees_model: TreesModel = (&raw_trees_model).into();
+    let full_trees_model: TreesModel = (&raw_trees_model).into();
+    let single_tree = full_trees_model.slice(tree_idx, tree_idx + 1);
     let samples: Samples = to_samples(&raw_samples);
-    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
+    let ctrees: CircuitizedTrees<F> = (&single_tree).into();
 
     // --- Compute actual witnesses ---
-    let csamples = circuitize_samples::<F>(&samples, &trees_model);
+    let csamples = circuitize_samples::<F>(&samples, &single_tree);
     let tree_height = ctrees.depth;
-    let input_len = csamples.samples[tree_idx].len();
+    let input_len = csamples.samples[0].len();
+
+    // --- Sanitycheck ---
+    debug_assert_eq!(csamples.attributes_on_paths.len(), 1);
+    debug_assert_eq!(csamples.decision_paths.len(), 1);
+    debug_assert_eq!(csamples.path_ends.len(), 1);
+    debug_assert_eq!(csamples.differences.len(), 1);
+    debug_assert_eq!(csamples.node_multiplicities.len(), 1);
+    debug_assert_eq!(ctrees.decision_nodes.len(), 1);
+    debug_assert_eq!(ctrees.leaf_nodes.len(), 1);
+    debug_assert_eq!(csamples.attribute_multiplicities.len(), 1);
 
     // --- Grab only the slice of witnesses which are relevant to the target `tree_number` ---
     (ZKDTCircuitData::new(
         csamples.samples,
-        csamples.attributes_on_paths[tree_idx].clone(),
-        csamples.decision_paths[tree_idx].clone(),
-        csamples.path_ends[tree_idx].clone(),
-        csamples.differences[tree_idx].clone(),
-        csamples.node_multiplicities[tree_idx].clone(),
-        ctrees.decision_nodes[tree_idx].clone(),
-        ctrees.leaf_nodes[tree_idx].clone(),
-        csamples.attribute_multiplicities[tree_idx].clone()
+        csamples.attributes_on_paths[0].clone(),
+        csamples.decision_paths[0].clone(),
+        csamples.path_ends[0].clone(),
+        csamples.differences[0].clone(),
+        csamples.node_multiplicities[0].clone(),
+        ctrees.decision_nodes[0].clone(),
+        ctrees.leaf_nodes[0].clone(),
+        csamples.attribute_multiplicities[0].clone()
     ), (tree_height, input_len), minibatch_data)
 }
