@@ -99,10 +99,9 @@ pub enum LayerId {
     Layer(usize),
 }
 
-impl LayerId {
-    /// For tracing
-    pub fn to_tracing_repr(&self) -> String {
-        format!("{:?}", self)
+impl std::fmt::Display for LayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 

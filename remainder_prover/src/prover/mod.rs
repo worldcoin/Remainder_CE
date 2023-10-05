@@ -438,7 +438,8 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 // --- TRACE: Proving an individual GKR layer ---
                 let layer_id = *layer.id();
-                let _layer_sumcheck_proving_span = span!(Level::DEBUG, "layer_sumcheck_proving_span", layer_id = layer_id.to_tracing_repr()).entered();
+                let layer_id_trace_repr = format!("{}", layer_id);
+                let _layer_sumcheck_proving_span = span!(Level::DEBUG, "layer_sumcheck_proving_span", layer_id = layer_id_trace_repr).entered();
 
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_claims = claims
@@ -700,13 +701,13 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // --- TRACE: Proving an individual GKR layer ---
             let layer_id = *layer.id();
-            let _layer_sumcheck_verification_span = span!(Level::DEBUG, "layer_sumcheck_verification_span", layer_id = layer_id.to_tracing_repr()).entered();
+            let layer_id_trace_repr = format!("{}", layer_id);
+            let _layer_sumcheck_verification_span = span!(Level::DEBUG, "layer_sumcheck_verification_span", layer_id = layer_id_trace_repr).entered();
 
             // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
             let layer_claims = claims
                 .get(&layer_id)
                 .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
-
 
             // --- Append claims to the FS transcript... TODO!(ryancao): Do we actually need to do this??? ---
             for claim in layer_claims {
