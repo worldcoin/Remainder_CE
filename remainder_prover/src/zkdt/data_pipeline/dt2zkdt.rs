@@ -187,7 +187,6 @@ impl<F: FieldExt> From<&TreePath<i64>> for LeafNode<F> {
     }
 }
 
-// TODO alias
 type DecisionPath<F> = Vec<DecisionNode<F>>;
 impl<F: FieldExt, T: Copy> From<&TreePath<T>> for DecisionPath<F> {
     fn from(tree_path: &TreePath<T>) -> Self {
@@ -202,7 +201,6 @@ impl<F: FieldExt, T: Copy> From<&TreePath<T>> for DecisionPath<F> {
     }
 }
 
-// TODO remove dead structs and functions!
 type AttributesOnPath<F> = Vec<InputAttribute<F>>;
 // conversion from tree path to attributes on path
 impl<F: FieldExt> From<&TreePath<i64>> for AttributesOnPath<F> {
@@ -217,7 +215,6 @@ impl<F: FieldExt> From<&TreePath<i64>> for AttributesOnPath<F> {
     }
 }
 
-/// TreePath -> differences TODO alias
 type DifferencesBits<F> = Vec<BinDecomp16Bit<F>>;
 impl<F: FieldExt> From<&TreePath<i64>> for DifferencesBits<F> {
     fn from(tree_path: &TreePath<i64>) -> Self {
@@ -225,16 +222,29 @@ impl<F: FieldExt> From<&TreePath<i64>> for DifferencesBits<F> {
             .iter()
             .map(|step| {
                 let difference = (step.feature_value as i32) - (step.threshold as i32);
-                let bits = build_signed_bit_decomposition(difference, 16).unwrap();
-                BinDecomp16Bit::<F>::from(bits)
+                build_differences_bindecomp(difference)
             })
             .collect()
     }
 }
 
-/// FIXME test
+fn build_differences_bindecomp<F: FieldExt>(difference: i32) -> BinDecomp16Bit<F> {
+    let bits = build_signed_bit_decomposition(difference, 16).unwrap();
+    BinDecomp16Bit::<F>::from(bits)
+}
+
+fn build_node_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp16Bit<F> {
+     let bits = build_unsigned_bit_decomposition(multiplicity as u32, 16).unwrap();
+     BinDecomp16Bit::<F>::from(bits)
+}
+
+fn build_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp4Bit<F> {
+     let bits = build_unsigned_bit_decomposition(multiplicity as u32, 4).unwrap();
+     BinDecomp4Bit::<F>::from(bits)
+}
+
 /// Build the witnesses for a single sample.
-pub fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>> {
+fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>> {
      sample
         .iter()
         .enumerate()
@@ -244,7 +254,6 @@ pub fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribut
         })
         .collect()
 }
-
 
 /// Circuitize the provided batch of samples using the specified TreesModel instance,
 /// returning a CircuitizedSamples instance.
@@ -318,8 +327,7 @@ pub fn circuitize_samples<F: FieldExt>(
                 .into_iter()
                 .map(|multiplicities| multiplicities
                      .into_iter()
-                     .map(|mult| build_unsigned_bit_decomposition(mult as u32, 4).unwrap())
-                     .map(BinDecomp4Bit::<F>::from)
+                     .map(build_attribute_multiplicity_bindecomp)
                      .collect())
                 .collect()
         })
@@ -330,8 +338,7 @@ pub fn circuitize_samples<F: FieldExt>(
         .map(|tree_paths| {
             count_node_multiplicities(tree_paths, trees_model.depth)
                 .into_iter()
-                .map(|mult| build_unsigned_bit_decomposition(mult as u32, 16).unwrap())
-                .map(BinDecomp16Bit::<F>::from)
+                .map(build_node_multiplicity_bindecomp)
                 .collect()
         })
         .collect();
@@ -849,7 +856,7 @@ mod tests {
             assert_eq!(multiplicity.bits[2], Fr::from(1));
             assert_eq!(multiplicity.bits[3], Fr::from(0));
             // dummy node id has multiplicity 0
-            // TODO!(ende): because of the plus 1 above, changes here from `n_nodes - 1` to `n_nodes / 2 - 1`
+            // dummy node multiplicity is situated between internal and leaf nodes
             let multiplicity = &node_multiplicities_for_tree[n_nodes / 2 - 1];
             for bit in multiplicity.bits {
                 assert_eq!(bit, Fr::from(0));
@@ -857,15 +864,34 @@ mod tests {
         }
         // check all node multiplicities for tree 1
         let node_multiplicities_for_tree = &node_multiplicities[0];
-        let expected: Vec<u32> = vec![4, 3, 1, 0, 2, 1, 0, 1];
+        let expected: Vec<usize> = vec![4, 3, 1, 0, 2, 1, 0, 1];
         node_multiplicities_for_tree
             .iter()
             .zip(expected.iter())
             .for_each(|(bits, expected)| {
-                // FIXME magic number
-                let expected_bits: BinDecomp16Bit<Fr> = build_unsigned_bit_decomposition(*expected, 16).unwrap().into();
+                let expected_bits = build_node_multiplicity_bindecomp::<Fr>(*expected);
                 assert_eq!(expected_bits.bits, bits.bits);
             });
+
+        // check attribute multiplicities
+        // first, check their dimensions
+        assert_eq!(csamples.attribute_multiplicities.len(), n_trees);
+        for am_for_tree in &csamples.attribute_multiplicities {
+            assert_eq!(am_for_tree.len(), samples.values.len());
+            for am_for_tree_and_sample in am_for_tree {
+                assert_eq!(am_for_tree_and_sample.len(), samples.sample_length);
+            }
+        }
+        // check some particular values
+        let am = &csamples.attribute_multiplicities[0][0];
+        let mut expected: Vec<usize> = vec![0; samples.sample_length];
+        expected[0] = 1;
+        expected[1] = 1;
+        am.iter().zip(expected.iter())
+            .for_each(|(bits, expected)| {
+                let expected_bits = build_attribute_multiplicity_bindecomp::<Fr>(*expected);
+                assert_eq!(expected_bits.bits, bits.bits);
+            })
     }
 
     #[test]
@@ -1045,5 +1071,12 @@ mod tests {
         assert_eq!(multiplicities[2], 2);
         assert_eq!(multiplicities[3], 0);
         assert_eq!(multiplicities[4], 0);
+    }
+
+    #[test]
+    fn test_build_sample_witness() {
+        let sample: Vec<u16> = vec![3, 1, 4];
+        let witness = build_sample_witness::<Fr>(&sample);
+        assert_eq!(witness.len(), sample.len());
     }
 }
