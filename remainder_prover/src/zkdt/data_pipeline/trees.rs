@@ -19,7 +19,7 @@
 //! perfect_tree.assign_id(0);
 //! // get the path of a sample through the tree
 //! let sample: Vec<u16> = vec![11, 0, 1, 2];
-//! let path: Vec<&Node<i64>> = perfect_tree.get_path(&sample);
+//! let _path: TreePath<i64> = perfect_tree.get_tree_path(&sample);
 //! ```
 extern crate serde;
 extern crate serde_json;
@@ -42,6 +42,24 @@ pub enum Node<T: Copy> {
         id: Option<u32>,
         value: T,
     },
+}
+
+/// Encodes the path traced by a sample down a tree.
+/// (Better than Vec<Node>, which is recursive).
+#[derive(Clone)]
+pub struct TreePath<T: Copy> {
+    pub path_steps: Vec<PathStep>,
+    pub leaf_node_id: u32,
+    pub leaf_value: T
+}
+
+/// A single decision step of a sample through a tree.
+#[derive(Clone)]
+pub struct PathStep {
+    pub node_id: u32,
+    pub feature_index: usize,
+    pub threshold: u16,
+    pub feature_value: u16 // i.e. from the sample
 }
 
 impl<T: Copy> Node<T> {
@@ -205,31 +223,32 @@ impl<T: Copy> Node<T> {
     }
 
     /// Return the path traced by the specified sample down this tree.
+    /// Pre: self.get_id() != None
     /// Pre: sample.len() > node.feature_index for this node and all descendents.
-    pub fn get_path<'a>(&'a self, sample: &[u16]) -> Vec<&'a Node<T>> {
-        let mut path = Vec::new();
-        self.append_path(sample, &mut path);
-        path
-    }
-
-    /// Helper function to get_path.
-    /// Appends self to path, then, if internal, calls this function on the appropriate child node.
-    fn append_path<'a>(&'a self, sample: &[u16], path_to_here: &mut Vec<&'a Node<T>>) {
-        path_to_here.push(self);
-        if let Node::Internal {
-            left,
-            right,
-            feature_index,
-            threshold,
-            ..
-        } = self
-        {
-            let next = if sample[*feature_index] >= *threshold {
-                right
-            } else {
-                left
-            };
-            next.append_path(sample, path_to_here);
+    pub fn get_tree_path(&self, sample: &[u16]) -> TreePath<T> {
+        match self {
+            Node::Internal { id, left, right, feature_index, threshold } => {
+                let next = if sample[*feature_index] >= *threshold {
+                    right
+                } else {
+                    left
+                };
+                let mut tree_path = next.get_tree_path(sample);
+                tree_path.path_steps.insert(0, PathStep {
+                    node_id: id.unwrap(),
+                    feature_index: *feature_index,
+                    threshold: *threshold,
+                    feature_value: sample[*feature_index]
+                });
+                tree_path
+            },
+            Node::Leaf { id, value } => {
+                TreePath::<T> {
+                    path_steps: vec![],
+                    leaf_node_id: id.unwrap(),
+                    leaf_value: *value
+                }
+            }
         }
     }
 }
@@ -443,14 +462,18 @@ mod tests {
     }
 
     #[test]
-    fn test_get_path() {
-        let mut tree = build_small_tree().map(&|x| x as i64).perfect_to_depth(3);
+    fn test_get_tree_path() {
+        let mut tree = build_small_tree().perfect_to_depth(3);
         tree.assign_id(0);
-        let path = tree.get_path(&[2_u16, 0_u16]);
-        assert_eq!(path.len(), 3);
-        assert_eq!(path[0].get_id(), Some(0));
-        assert_eq!(path[1].get_id(), Some(1));
-        assert_eq!(path[2].get_id(), Some(4));
+        let treepath = tree.get_tree_path(&[2_u16, 0_u16]);
+        assert_eq!(treepath.path_steps.len(), 2);
+        assert_eq!(treepath.path_steps[0].node_id, 0);
+        assert_eq!(treepath.path_steps[1].node_id, 1);
+        assert_eq!(treepath.path_steps[1].feature_index, 0);
+        assert_eq!(treepath.path_steps[1].threshold, 2);
+        assert_eq!(treepath.path_steps[1].feature_value, 2);
+        assert_eq!(treepath.leaf_node_id, 4);
+        assert_eq!(treepath.leaf_value, 0.2);
     }
 
     // Helper function
@@ -534,6 +557,6 @@ mod tests {
         perfect_tree.assign_id(0);
         // get the path of a sample through the tree
         let sample: Vec<u16> = vec![11, 0, 1, 2];
-        let _path: Vec<&Node<i64>> = perfect_tree.get_path(&sample);
+        let _path: TreePath<i64> = perfect_tree.get_tree_path(&sample);
     }
 }
