@@ -481,6 +481,9 @@ pub trait GKRCircuit<F: FieldExt> {
 
         let intermediate_layers_timer = start_timer!(|| "ALL intermediate layers proof generation");
 
+        // Count the total number of wlx evaluations for benchmarking purposes.
+        let mut wlx_count = 0;
+
         // --- Collects all the prover messages for sumchecking over each layer, ---
         // --- as well as all the prover messages for claim aggregation at the ---
         // --- beginning of proving each layer ---
@@ -516,14 +519,28 @@ pub trait GKRCircuit<F: FieldExt> {
                 let claim_aggr_timer =
                     start_timer!(|| format!("claim aggregation for layer {:?}", *layer.id()));
 
+                let layer_init_wlx_count = wlx_count;
+
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
-                    &mut |claims| Ok(compute_claim_wlx(claims, &layer).unwrap()),
+                    &mut |claims| {
+                        let wlx_evals = compute_claim_wlx(claims, &layer).unwrap();
+                        wlx_count += wlx_evals.len();
+                        println!("Layer {:?}: +{} evaluations.", layer_id, wlx_evals.len());
+                        Ok(wlx_evals)
+                    },
                     transcript,
                     ENABLE_OPTIMIZATION,
                 )
                 .unwrap();
                 info!("Done aggregating claims! New claim: {:#?}", layer_claim);
+
+                println!(
+                    "Total Evaluations for Intermediate Layer {:?}: {}",
+                    layer_id,
+                    wlx_count - layer_init_wlx_count
+                );
+
                 debug!("Relevant wlx evals: {:#?}", relevant_wlx_evaluations);
                 end_timer!(claim_aggr_timer);
                 let sumcheck_msg_timer = start_timer!(|| format!(
@@ -611,13 +628,30 @@ pub trait GKRCircuit<F: FieldExt> {
                     input_layer.layer_id()
                 ));
 
+                let layer_init_wlx_count = wlx_count;
+
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
-                    &mut |claims| Ok(input_layer.compute_claim_wlx(claims).unwrap()),
+                    &mut |claims| {
+                        let wlx_evals = input_layer.compute_claim_wlx(claims).unwrap();
+                        wlx_count += wlx_evals.len();
+                        println!(
+                            "Input Layer {:?}: +{} evaluations.",
+                            layer_id,
+                            wlx_evals.len()
+                        );
+                        Ok(wlx_evals)
+                    },
                     transcript,
                     ENABLE_OPTIMIZATION,
                 )
                 .unwrap();
+
+                println!(
+                    "Total Evaluations for Input Layer {:?}: {}",
+                    layer_id,
+                    wlx_count - layer_init_wlx_count
+                );
                 debug!("Relevant wlx evaluations: {:#?}", relevant_wlx_evaluations);
                 end_timer!(claim_aggr_timer);
 
@@ -644,6 +678,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .try_collect()?;
 
         end_timer!(input_layers_timer);
+        println!("TOTAL EVALUATIONS: {}", wlx_count);
 
         let gkr_proof = GKRProof {
             layer_sumcheck_proofs,
