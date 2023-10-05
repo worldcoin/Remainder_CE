@@ -15,9 +15,6 @@ use crate::{
         mulgate::MulGate,
     },
     layer::{
-        claims::compute_aggregated_challenges,
-        claims::compute_claim_wlx,
-        claims::verify_aggregate_claim,
         claims::{aggregate_claims, get_num_wlx_evaluations},
         claims::{Claim, ClaimGroup},
         layer_enum::LayerEnum,
@@ -524,13 +521,19 @@ pub trait GKRCircuit<F: FieldExt> {
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
                     &mut |claims| {
-                        let wlx_evals = compute_claim_wlx(claims, &layer).unwrap();
+                        let wlx_evals = layer
+                            .get_wlx_evaluations(
+                                claims.get_claim_points_matrix(),
+                                claims.get_results(),
+                                claims.get_num_claims(),
+                                claims.get_num_vars(),
+                            )
+                            .unwrap();
                         wlx_count += wlx_evals.len();
                         println!("Layer {:?}: +{} evaluations.", layer_id, wlx_evals.len());
                         Ok(wlx_evals)
                     },
                     transcript,
-                    ENABLE_OPTIMIZATION,
                 )
                 .unwrap();
                 info!("Done aggregating claims! New claim: {:#?}", layer_claim);
@@ -579,7 +582,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 Ok(LayerProof {
                     sumcheck_proof: prover_sumcheck_messages,
                     layer,
-                    wlx_evaluations: relevant_wlx_evaluations.unwrap_or_default(),
+                    wlx_evaluations: relevant_wlx_evaluations,
                 })
             })
             .try_collect()?;
@@ -643,7 +646,6 @@ pub trait GKRCircuit<F: FieldExt> {
                         Ok(wlx_evals)
                     },
                     transcript,
-                    ENABLE_OPTIMIZATION,
                 )
                 .unwrap();
 
@@ -671,7 +673,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 Ok(InputLayerProof {
                     layer_id: *layer_id,
                     input_commitment: commitment,
-                    input_layer_wlx_evaluations: relevant_wlx_evaluations.unwrap_or_default(),
+                    input_layer_wlx_evaluations: relevant_wlx_evaluations,
                     input_opening_proof: opening_proof,
                 })
             })
@@ -811,15 +813,8 @@ pub trait GKRCircuit<F: FieldExt> {
             let mut prev_claim = layer_claims[0].clone();
             if layer_num_claims > 1 {
                 info!("Got > 1 claims. Verifying aggregation...");
+
                 // --- Perform the claim aggregation verification ---
-
-                // let all_wlx_evaluations: Vec<F> = layer_claims
-                //     .into_iter()
-                //     .map(|claim| claim.get_result().clone())
-                //     .chain(relevant_wlx_evaluations.clone().into_iter())
-                //     .collect();
-                // debug!("All wlx evals:\n{:#?}", all_wlx_evaluations);
-
                 let mut idx = 0;
                 let (claim, _) = aggregate_claims(
                     &layer_claim_group,
@@ -848,7 +843,6 @@ pub trait GKRCircuit<F: FieldExt> {
                         Ok(all_wlx_evaluations)
                     },
                     transcript,
-                    ENABLE_OPTIMIZATION,
                 )?;
                 prev_claim = claim;
 
@@ -858,26 +852,6 @@ pub trait GKRCircuit<F: FieldExt> {
                         LayerError::AggregationError,
                     ));
                 }
-
-                // transcript
-                //     .append_field_elements(
-                //         "Claim Aggregation Wlx_evaluations",
-                //         &relevant_wlx_evaluations,
-                //     )
-                //     .unwrap();
-                // let agg_chal = transcript
-                //     .get_challenge("Challenge for claim aggregation")
-                //     .unwrap();
-                // debug!("Aggregate challenge: {:#?}", agg_chal);
-
-                // prev_claim =
-                //     verify_aggregate_claim(&all_wlx_evaluations, &layer_claim_group, agg_chal)
-                //         .map_err(|_err| {
-                //             GKRError::ErrorWhenVerifyingLayer(
-                //                 layer_id.clone(),
-                //                 LayerError::AggregationError,
-                //             )
-                //         })?;
             }
             end_timer!(claim_aggr_timer);
 
@@ -886,11 +860,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             debug!("Aggregated claim: {:#?}", prev_claim);
             info!("Verifier: about to verify layer");
-            // debug!("sumcheck_proof: {:#?}", sumcheck_proof.0);
-            // debug!(
-            //     "msg0 + msg1 = {:?}",
-            //     sumcheck_proof.0[0][0] + sumcheck_proof.0[0][1]
-            // );
+
             // --- Performs the actual sumcheck verification step ---
             layer
                 .verify_rounds(prev_claim, sumcheck_proof.0, transcript)
@@ -987,7 +957,6 @@ pub trait GKRCircuit<F: FieldExt> {
                         Ok(all_wlx_evaluations)
                     },
                     transcript,
-                    ENABLE_OPTIMIZATION,
                 )?;
 
                 if idx != relevant_wlx_evaluations.len() {
@@ -998,36 +967,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
 
                 prev_claim
-                // let all_input_wlx_evaluations: Vec<F> = input_layer_claims
-                //     .into_iter()
-                //     .map(|claim| claim.get_result().clone())
-                //     .chain(input_layer.input_layer_wlx_evaluations.clone().into_iter())
-                //     .collect();
-                // debug!("All wlx evaluations: {:#?}", all_input_wlx_evaluations);
-
-                // // --- Add the aggregation step to the transcript ---
-                // transcript
-                //     .append_field_elements(
-                //         "Input claim aggregation Wlx_evaluations",
-                //         &input_layer.input_layer_wlx_evaluations,
-                //     )
-                //     .unwrap();
-
-                // // --- Grab the input claim aggregation challenge ---
-                // let input_r_star = transcript
-                //     .get_challenge("Challenge for input claim aggregation")
-                //     .unwrap();
-                // debug!("Aggregation challenge: {:?}", input_r_star);
-
-                // // --- Perform the aggregation verification step and extract the correct input layer claim ---
-                // verify_aggregate_claim(
-                //     &all_input_wlx_evaluations,
-                //     &input_layer_claim_group,
-                //     input_r_star,
-                // )
-                // .map_err(|_err| {
-                //     GKRError::ErrorWhenVerifyingLayer(input_layer_id, LayerError::AggregationError)
-                // })?
             } else {
                 input_layer_claims[0].clone()
             };
