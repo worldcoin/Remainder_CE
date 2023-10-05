@@ -474,6 +474,17 @@ impl fmt::Display for RawTreesModel {
     }
 }
 
+impl TreesModel {
+    pub fn slice(&self, start: usize, end: usize) -> Self {
+        let trees = self.trees[start..end].to_vec();
+        TreesModel {
+            trees: trees,
+            depth: self.depth,
+            scaling: self.scaling
+        }
+    }
+}
+
 /// Generate a RawTreesModel as specified.  Meaning of arguments as per generate_trees().
 /// Scale and bias are chosen randomly.
 pub fn generate_raw_trees_model(
@@ -1013,7 +1024,10 @@ mod tests {
         // use just a small batch
         raw_samples.values = raw_samples.values[0..4].to_vec();
 
-        let trees_model: TreesModel = (&raw_trees_model).into();
+        let mut trees_model: TreesModel = (&raw_trees_model).into();
+        // just take two trees
+        trees_model = trees_model.slice(0, 2);
+
         let samples = to_samples(&raw_samples, &trees_model);
 
         let _ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
