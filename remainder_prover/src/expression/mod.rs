@@ -6,6 +6,7 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
+use halo2_base::halo2_proofs::plonk::Circuit;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -714,21 +715,21 @@ impl<F: std::fmt::Debug + FieldExt> ExpressionStandard<F> {
                     ExpressionStandard::Constant(scalar) => {
                         f.debug_tuple("const").field(scalar).finish()
                     }
-                    ExpressionStandard::Selector(index, a, b) => f
-                        .debug_tuple("sel")
-                        .field(index)
-                        .field(a)
-                        .field(b)
-                        .finish(),
+                    ExpressionStandard::Selector(index, a, b) => f.write_fmt(format_args!("sel {index:?}; {}; {}", CircuitDesc(a), CircuitDesc(b))),
                     // Skip enum variant and print query struct directly to maintain backwards compatibility.
                     ExpressionStandard::Mle(mle_ref) => {
                         f.debug_struct("mle").field("layer", &mle_ref.get_layer_id()).field("indices", &mle_ref.mle_indices()).finish()
                     }
-                    ExpressionStandard::Negated(poly) => f.debug_tuple("-").field(poly).finish(),
-                    ExpressionStandard::Sum(a, b) => f.debug_tuple("+").field(a).field(b).finish(),
-                    ExpressionStandard::Product(a) => f.debug_tuple("*").field(a).finish(),
+                    ExpressionStandard::Negated(poly) => f.write_fmt(format_args!("-{}", CircuitDesc(poly))),
+                    ExpressionStandard::Sum(a, b) => f.write_fmt(format_args!("+ {}; {}", CircuitDesc(a), CircuitDesc(b))),
+                    ExpressionStandard::Product(a) => {
+                        let str = a.iter().map(|mle| {
+                            format!("{:?}; {:?}", mle.get_layer_id(), mle.mle_indices())
+                        }).reduce(|acc, str| acc + &str).unwrap();
+                        f.write_str(&str)
+                    },
                     ExpressionStandard::Scaled(poly, scalar) => {
-                        f.debug_tuple("*").field(poly).field(scalar).finish()
+                        f.write_fmt(format_args!("* {}; {:?}", CircuitDesc(poly), scalar))
                     }
                 }
             }

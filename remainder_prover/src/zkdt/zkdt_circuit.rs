@@ -24,8 +24,8 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
     // Uncomment this to turn on the circuit hash. Just make sure the hash you use is accurate to your batch size.
     // This one is for a batch size of 2^9
     // const CIRCUIT_HASH: Option<[u8; 32]> = Some([
-    //     101, 211, 120, 28, 94, 173, 143, 26, 89, 22, 133, 22, 201, 246, 238, 190, 127, 255, 158,
-    //     113, 112, 175, 53, 29, 86, 140, 224, 239, 244, 94, 119, 5,
+    //     244, 174, 223, 136, 11, 9, 112, 40, 60, 180, 81, 61, 132, 165, 170, 36,
+    //     31, 16, 66, 9, 54, 240, 75, 246, 68, 30, 31, 209, 242, 106, 147, 41,
     // ]);
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
