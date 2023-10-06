@@ -20,6 +20,14 @@ pub struct ZKDTCircuit<F: FieldExt> {
 
 impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
+
+    // Uncomment this to turn on the circuit hash. Just make sure the hash you use is accurate to your batch size.
+    // This one is for a batch size of 2^9
+    // const CIRCUIT_HASH: Option<[u8; 32]> = Some([
+    //     101, 211, 120, 28, 94, 173, 143, 26, 89, 22, 133, 22, 201, 246, 238, 190, 127, 255, 158,
+    //     113, 112, 175, 53, 29, 86, 140, 224, 239, 244, 94, 119, 5,
+    // ]);
+
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         unimplemented!()
     }
@@ -82,10 +90,6 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
         let updated_combined_output_layers = path_consistency_circuit_batched.add_subcircuit_layers_to_combined_layers(
             &mut combined_circuit_layers, 
             combined_circuit_output_layers);
-
-        combined_circuit_layers.0.iter().for_each(|layer| {
-            println!("layer description: {}", layer.circuit_description_fmt());
-        });
 
         Ok((
             Witness {
