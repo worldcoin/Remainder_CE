@@ -161,13 +161,9 @@ struct SimplestCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
 
-    const USE_CIRCUIT_HASH: bool = true;
-
-    fn get_circuit_hash() -> F {
-        F::from_bytes_le(&[
-            201,181,0,14,124,41,18,30,207,198,237,142,57,140,114,224,28,140,62,0,109,36,200,27,208,218,32,166,8,35,115,46,
-        ])    
-    }
+    const CIRCUIT_HASH: Option<[u8; 32]> = Some([
+        201,181,0,14,124,41,18,30,207,198,237,142,57,140,114,224,28,140,62,0,109,36,200,27,208,218,32,166,8,35,115,46,
+    ]);
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
