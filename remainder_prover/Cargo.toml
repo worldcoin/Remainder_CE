@@ -3,6 +3,10 @@ name = "remainder"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "run_remainder_zkdt"
+path = "src/bin.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -26,8 +30,6 @@ num = "0.4.1"
 ndarray = "0.15.6"
 ndarray-npy = "0.8.1"
 tracing-subscriber = "0.3.17"
-# --- For FieldExt and transcript and other Ligero stuff ---
-# lcpc-2d = { git = "ssh://git@github.com/Modulus-Labs/lcpc-ligero.git", branch = "REM-90-Input-layer-Ligero-integration" }
 remainder-ligero = { path = "../remainder_ligero" }
 remainder-shared-types = { path = "../remainder_shared_types" }
 halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" } # For BN-254 from Halo2
@@ -37,6 +39,7 @@ log = "0.4"
 env_logger = "0.10"
 pretty_env_logger = "0.5"
 chrono = "0.4.31"
+clap = { version = "=4.2.1", features = ["derive"] }
 
 
 [dev-dependencies]

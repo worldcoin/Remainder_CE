@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::FieldExt;
 
-use super::{dense::DenseMleRef, zero::ZeroMleRef, MleIndex, MleRef};
+use super::{dense::DenseMleRef, zero::ZeroMleRef, Mle, MleIndex, MleRef};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MleEnum<F> {
@@ -42,6 +42,17 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         match self {
             MleEnum::Dense(item) => item.fix_variable(round_index, challenge),
             MleEnum::Zero(item) => item.fix_variable(round_index, challenge),
+        }
+    }
+
+    fn fix_variable_at_index(
+        &mut self,
+        indexed_bit_index: usize,
+        point: Self::F,
+    ) -> Option<crate::layer::claims::Claim<Self::F>> {
+        match self {
+            MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point),
+            MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point),
         }
     }
 
