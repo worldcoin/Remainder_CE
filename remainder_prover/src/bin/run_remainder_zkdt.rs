@@ -8,7 +8,7 @@ use remainder_shared_types::FieldExt;
 use remainder_shared_types::transcript::Transcript;
 use serde_json::{to_writer, from_reader};
 use thiserror::Error;
-use tracing::{debug, event, Level};
+use tracing::debug;
 use tracing_subscriber::{FmtSubscriber, fmt::format::FmtSpan};
 
 #[derive(Error, Debug, Clone)]
@@ -210,7 +210,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
 
     // --- Log the args ---
     let args_as_string = format!("{:?}", args);
-    event!(Level::DEBUG, args_as_string);
+    debug!(args_as_string);
 
     // --- Sanitycheck (need minibatch number if we have batch size) + grabbing minibatch data ---
     let maybe_minibatch_data = match (args.log_sample_minibatch_size, args.sample_minibatch_number) {
@@ -243,7 +243,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
         minibatch_data.sample_minibatch_number,
         Path::new(&args.sample_minibatch_commit_dir),
     );
-    event!(Level::DEBUG, sample_minibatch_commitment_filepath, "Attempting to find the sample minibatch commitment file");
+    debug!(sample_minibatch_commitment_filepath, "Attempting to find the sample minibatch commitment file");
     if let Err(_) = fs::metadata(&sample_minibatch_commitment_filepath) {
         return Err(ZKDTBinaryError::NoInputCommitmentFile);
     }
@@ -253,7 +253,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
         args.tree_number, 
         Path::new(&args.tree_commit_dir)
     );
-    event!(Level::DEBUG, tree_commit_filepath, "Attempting to find the tree commit file");
+    debug!(tree_commit_filepath, "Attempting to find the tree commit file");
     if let Err(_) = fs::metadata(&tree_commit_filepath) {
         return Err(ZKDTBinaryError::NoTreeCommitmentFile);
     }

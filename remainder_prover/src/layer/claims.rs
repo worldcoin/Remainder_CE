@@ -97,6 +97,7 @@ pub enum ClaimError {
 //     Ok(wlx_evals)
 // }
 
+#[instrument(level = "trace", err)]
 #[instrument(level = "debug", skip_all, err)]
 pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     claims: &[Claim<F>],
@@ -122,6 +123,7 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     Ok(r)
 }
 
+#[instrument(skip(layer), err, level = "trace")]
 #[instrument(skip_all, err, level = "debug")]
 pub(crate) fn compute_claim_wlx<F: FieldExt>(
     claims: &[Claim<F>],
@@ -141,6 +143,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 }
 
 /// verifies the claim aggregation
+#[instrument(level = "trace", err)]
 #[instrument(level = "debug", skip_all, err)]
 pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for qx

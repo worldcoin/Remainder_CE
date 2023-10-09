@@ -89,12 +89,12 @@ pub fn generate_ligero_sample_minibatch_commitments<F: FieldExt>(
 
                 // --- File already exists; no need to commit ---
                 Ok(_) => {
-                    event!(Level::DEBUG, sample_minibatch_commitment_filepath, "File already exists! Skipping.");
+                    debug!(sample_minibatch_commitment_filepath, "File already exists! Skipping.");
                 },
 
                 // --- No commitment exists yet; create commitment ---
                 Err(_) => {
-                    event!(Level::DEBUG, sample_minibatch_commitment_filepath, "File doesn't exist yet! Generating commitment...");
+                    debug!(sample_minibatch_commitment_filepath, "File doesn't exist yet! Generating commitment...");
 
                     // --- Create dummy `RawSamples` and convert to `Samples` ---
                     let minibatch_raw_samples = RawSamples {
@@ -170,7 +170,7 @@ fn main() -> Result<(), GenerateSampleMinibatchCommitmentsError> {
 
     // --- Log the args ---
     let args_as_string = format!("{:?}", args);
-    event!(Level::DEBUG, args_as_string);
+    debug!(args_as_string);
 
     // --- Compute the commitment ---
     generate_ligero_sample_minibatch_commitments::<Fr>(

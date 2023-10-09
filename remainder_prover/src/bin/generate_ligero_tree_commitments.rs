@@ -71,12 +71,12 @@ pub fn generate_all_tree_ligero_commitments<F: FieldExt>(
 
                 // --- File already exists; no need to commit ---
                 Ok(_) => {
-                    event!(Level::DEBUG, tree_number, tree_commitment_filepath, "File already exists! Skipping.");
+                    debug!(tree_number, tree_commitment_filepath, "File already exists! Skipping.");
                 },
 
                 // --- No commitment exists yet; create commitment ---
                 Err(_) => {
-                    event!(Level::DEBUG, tree_number, tree_commitment_filepath, "File doesn't exist yet! Generating commitment...");
+                    debug!(tree_number, tree_commitment_filepath, "File doesn't exist yet! Generating commitment...");
 
                     // --- Create MLEs from each tree decision + leaf node list ---
                     let mut tree_decision_nodes_mle = DenseMle::new_from_iter(tree_decision_nodes
@@ -125,7 +125,7 @@ fn main() -> Result<(), GenerateLigeroTreeCommBinaryError> {
 
     // --- Log the args ---
     let args_as_string = format!("{:?}", args);
-    event!(Level::DEBUG, args_as_string);
+    debug!(args_as_string);
 
     // --- Compute the commitment ---
     generate_all_tree_ligero_commitments::<Fr>(
