@@ -412,7 +412,7 @@ pub struct DenseMleRef<F> {
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     pub num_vars: usize,
-    /// original num vars (not modifier during fix var)
+    /// Number of non-fixed variables originally, doesn't get modifier
     pub original_num_vars: usize,
     /// The layer this MleRef is a reference to
     pub layer_id: LayerId,
@@ -434,12 +434,24 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         &self.bookkeeping_table
     }
 
+    fn original_bookkeeping_table(&self) -> &Vec<Self::F> {
+        &self.original_bookkeeping_table
+    }
+
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
         &self.mle_indices
     }
 
+    fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>> {
+        &self.original_mle_indices
+    }
+
     fn num_vars(&self) -> usize {
         self.num_vars
+    }
+
+    fn original_num_vars(&self) -> usize {
+        self.original_num_vars
     }
 
     fn indexed(&self) -> bool {
@@ -480,13 +492,15 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.bookkeeping_table = new.collect();
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
-            Some(Claim::new_raw(
+            let mut fixed_claim_return = Claim::new_raw(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect_vec(),
                 self.bookkeeping_table[0],
-            ))
+            );
+            fixed_claim_return.mle_ref = Some(MleEnum::Dense(self.clone()));
+            Some(fixed_claim_return)
         } else {
             None
         }
