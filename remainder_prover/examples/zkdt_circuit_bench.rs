@@ -59,7 +59,7 @@ fn main() {
     // tracing::subscriber::set_global_default(subscriber)
     //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
 
-    let batch_size = 10;
+    let batch_size = 9;
 
     let (batched_catboost_mles, (_, _)) =
         generate_mles_batch_catboost_single_tree::<Fr>(batch_size, Path::new("upshot_data"));
@@ -70,6 +70,9 @@ fn main() {
             .to_string(),
         sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_1_commitment_0.json".to_string(),
     };
+
+    //Use this code to get the circuit hash for your circuit
+    // dbg!(combined_circuit.gen_circuit_hash().to_bytes());
 
     test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));
 }

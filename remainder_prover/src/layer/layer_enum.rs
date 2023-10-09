@@ -1,3 +1,4 @@
+use rayon::iter::empty;
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -144,4 +145,16 @@ impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
 
         expression.get_expression_size(0)
     }
+
+    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> Box<dyn std::fmt::Display + 'a> {
+        match self {
+            LayerEnum::Gkr(layer) => Box::new(layer.expression().circuit_description_fmt()),
+            LayerEnum::MulGate(mulgate_layer) => Box::new(mulgate_layer.circuit_description_fmt()),
+            LayerEnum::AddGate(addgate_layer) => Box::new(addgate_layer.circuit_description_fmt()),
+            LayerEnum::AddGateBatched(addgate_layer_batched) => Box::new(addgate_layer_batched.circuit_description_fmt()),
+            LayerEnum::MulGateBatched(mulgate_layer_batched) => Box::new(mulgate_layer_batched.circuit_description_fmt()),
+            LayerEnum::EmptyLayer(empty_layer) => Box::new(empty_layer.expression().circuit_description_fmt()),
+        }
+    }
+
 }

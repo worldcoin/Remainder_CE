@@ -493,8 +493,6 @@ impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
     fn build_expression(&self) -> ExpressionStandard<F> {
         let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
 
-        // println!("b_ij {:?}", b_ij.num_vars());
-        // println!("self.r_minus_x_power {:?}", self.r_minus_x_power.mle_ref().num_vars());
         ExpressionStandard::Sum(Box::new(ExpressionStandard::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
                                 Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(b_ij)))
     }
@@ -534,7 +532,6 @@ impl<F: FieldExt> LayerBuilder<F> for ProductBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        // println!("self.prev_prod {:?}", self.prev_prod.mle_ref().num_vars());
         ExpressionStandard::products(vec![self.multiplier.mle_ref(), self.prev_prod.mle_ref()])
     }
 
