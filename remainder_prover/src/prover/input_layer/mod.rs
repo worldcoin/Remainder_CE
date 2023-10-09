@@ -26,6 +26,8 @@ use crate::{
 
 use self::enum_input_layer::InputLayerEnum;
 
+use ark_std::{end_timer, start_timer};
+
 #[derive(Error, Clone, Debug)]
 pub enum InputLayerError {
     #[error("You are opening an input layer before generating a commitment!")]
@@ -68,7 +70,11 @@ pub trait InputLayer<F: FieldExt> {
     fn get_padded_mle(&self) -> DenseMle<F, F>;
 
     fn compute_claim_wlx(&self, claims: &ClaimGroup<F>) -> Result<Vec<F>, ClaimError> {
+        let prep_timer = start_timer!(|| "Claim wlx prep");
+
         let mut mle = self.get_padded_mle().clone().mle_ref();
+        end_timer!(prep_timer);
+        info!("Wlx MLE len: {}", mle.bookkeeping_table.len());
         let num_claims = claims.get_num_claims();
         let claim_vecs = claims.get_claim_points_matrix();
         let claimed_vals = claims.get_results();

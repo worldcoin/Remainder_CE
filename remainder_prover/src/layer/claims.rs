@@ -29,6 +29,8 @@ use log::{debug, info, warn};
 
 use itertools::Itertools;
 
+use ark_std::{end_timer, start_timer};
+
 pub const ENABLE_REDUCED_WLX_EVALS: bool = true;
 pub const ENABLE_CLAIM_GROUPING: bool = true;
 pub const ENABLE_CLAIM_DEDUPLICATION: bool = true;
@@ -328,6 +330,8 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
 
+    let claim_preproc_timer = start_timer!(|| format!("Claim preprocessing"));
+
     // Holds a sequence of relevant wlx evaluations, one for each claim
     // group that is being aggregated.
     let mut group_wlx_evaluations: Vec<Vec<F>> = vec![];
@@ -342,6 +346,9 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
             debug!("{:#?}", claim);
         }
     }
+
+    end_timer!(claim_preproc_timer);
+    let intermediate_timer = start_timer!(|| format!("Intermediate claim aggregation."));
 
     // TODO(Makis): Parallelize
     let intermediate_results: Result<Vec<(Claim<F>, Vec<Vec<F>>)>, GKRError> = claim_groups
@@ -365,6 +372,9 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     // Gather all wlx evaluations into one place.
     group_wlx_evaluations.append(&mut intermediate_wlx_evals);
 
+    end_timer!(intermediate_timer);
+    let final_timer = start_timer!(|| format!("Final stage aggregation."));
+
     // Finally, aggregate all intermediate claims.
     let (claim, mut wlx_evals_option) = aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
@@ -374,6 +384,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 
     group_wlx_evaluations.append(&mut wlx_evals_option);
 
+    end_timer!(final_timer);
     Ok((claim, group_wlx_evaluations))
 }
 
