@@ -493,8 +493,8 @@ impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
     fn build_expression(&self) -> ExpressionStandard<F> {
         let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
 
-        println!("b_ij {:?}", b_ij.num_vars());
-        println!("self.r_minus_x_power {:?}", self.r_minus_x_power.mle_ref().num_vars());
+        // println!("b_ij {:?}", b_ij.num_vars());
+        // println!("self.r_minus_x_power {:?}", self.r_minus_x_power.mle_ref().num_vars());
         ExpressionStandard::Sum(Box::new(ExpressionStandard::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
                                 Box::new(ExpressionStandard::Constant(F::one()) - ExpressionStandard::Mle(b_ij)))
     }
@@ -534,7 +534,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        println!("self.prev_prod {:?}", self.prev_prod.mle_ref().num_vars());
+        // println!("self.prev_prod {:?}", self.prev_prod.mle_ref().num_vars());
         ExpressionStandard::products(vec![self.multiplier.mle_ref(), self.prev_prod.mle_ref()])
     }
 
@@ -833,7 +833,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
-    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::data_pipeline::dummy_data_generator::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, generate_mles_batch_catboost_single_tree, BatchedCatboostMles, BatchedDummyMles}};
+    use crate::{mle::{dense::DenseMle, MleRef}, zkdt::{data_pipeline::dummy_data_generator::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, BatchedDummyMles}, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::BatchedZKDTCircuitMles}};
     use halo2_base::halo2_proofs::halo2curves::{bn256::Fr, FieldExt};
     use ark_std::log2;
 
@@ -1469,8 +1469,8 @@ mod tests {
     #[test]
     fn test_attribute_consistency_builder_catboost() {
 
-        let (BatchedCatboostMles {
-            permuted_input_data_mle_vec,
+        let (BatchedZKDTCircuitMles {
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec,
             decision_node_paths_mle_vec, ..
         }, (tree_height, _input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
@@ -1498,9 +1498,9 @@ mod tests {
     #[test]
     fn test_permutation_builder_catboost() {
 
-        let (BatchedCatboostMles {
-            input_data_mle_vec,
-            permuted_input_data_mle_vec, ..
+        let (BatchedZKDTCircuitMles {
+            input_samples_mle_vec: input_data_mle_vec,
+            permuted_input_samples_mle_vec: permuted_input_data_mle_vec, ..
         }, (_tree_height, input_len)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let num_dummy_inputs = permuted_input_data_mle_vec.len();
@@ -1561,7 +1561,7 @@ mod tests {
         // const DUMMY_INPUT_LEN: usize = 1 << 1;
         // const TREE_HEIGHT: usize = 2;
         // RMinusXBuilder -> (SquaringBuilder -> BitExponentiationBuilder -> ProductBuilder ->)
-        let (BatchedCatboostMles {decision_node_paths_mle_vec,
+        let (BatchedZKDTCircuitMles {decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,

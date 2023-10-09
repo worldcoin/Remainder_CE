@@ -48,8 +48,8 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             let _layer_id = layers[0].1.id();
             // bits_iter(log2(layers.len()) as usize).collect_vec()
             let layer_sizes = layers.iter().map(|layer| layer.1.layer_size());
-            let layer_sizes_concrete = layer_sizes.clone().collect_vec();
-            dbg!(layer_sizes_concrete);
+            // let layer_sizes_concrete = layer_sizes.clone().collect_vec();
+            // dbg!(layer_sizes_concrete);
             let total_size = log2(layer_sizes.clone().map(|size| 1 << size).sum()) as usize;
 
             let extra_bits = layer_sizes

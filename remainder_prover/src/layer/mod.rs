@@ -13,6 +13,7 @@ use ark_std::cfg_into_iter;
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use tracing::Value;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
@@ -96,6 +97,12 @@ pub enum LayerId {
     Input(usize),
     /// A layer within the GKR protocol, indexed by it's layer id
     Layer(usize),
+}
+
+impl std::fmt::Display for LayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
