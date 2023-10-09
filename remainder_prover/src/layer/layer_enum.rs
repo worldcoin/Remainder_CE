@@ -2,6 +2,7 @@ use rayon::iter::empty;
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
+use tracing::instrument;
 
 use crate::{
     gate::{addgate::{AddGate}, batched_addgate::{AddGateBatched}, mulgate::{MulGate}, batched_mulgate::MulGateBatched},
@@ -23,12 +24,14 @@ pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     AddGateBatched(AddGateBatched<F, Tr>),
     /// Batched MulGate
     MulGateBatched(MulGateBatched<F, Tr>),
+    /// Layer with zero variables within it
     EmptyLayer(EmptyLayer<F, Tr>),
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     type Transcript = Tr;
 
+    #[instrument(skip_all, level = "debug", err)]
     fn prove_rounds(
         &mut self,
         claim: super::Claim<F>,
@@ -44,6 +47,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         }
     }
 
+    #[instrument(skip_all, level = "debug", err)]
     fn verify_rounds(
         &mut self,
         claim: super::Claim<F>,
@@ -64,6 +68,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         }
     }
 
+    #[instrument(skip(self), level = "debug", err)]
     fn get_claims(&self) -> Result<Vec<(super::LayerId, super::Claim<F>)>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
@@ -97,6 +102,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         self
     }
 
+    /// NOTE: This function is effectively deprecated!!!
+    #[instrument(skip(self, claim_vecs, claimed_vals), level = "debug", err)]
     fn get_wlx_evaluations(
         &self,
         claim_vecs: Vec<Vec<F>>,

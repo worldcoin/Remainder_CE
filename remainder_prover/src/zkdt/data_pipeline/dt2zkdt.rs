@@ -53,12 +53,14 @@ use crate::mle::dense::DenseMle;
 use crate::prover::input_layer::combine_input_layers::InputLayerBuilder;
 use crate::prover::input_layer::ligero_input_layer::LigeroInputLayer;
 use crate::utils::file_exists;
-use crate::zkdt::constants::{get_cached_batched_mles_filename_with_exp_size, get_tree_commitment_filename_for_tree_number};
+use crate::zkdt::constants::{get_cached_batched_mles_filepath_with_exp_size, get_tree_commitment_filepath_for_tree_number};
 use crate::zkdt::helpers::*;
+use crate::zkdt::input_data_to_circuit_adapter::ZKDTCircuitData;
 use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode};
 use crate::zkdt::data_pipeline::trees::*;
 
 
+use ark_std::log2;
 use remainder_ligero::ligero_commit::{remainder_ligero_commit_prove};
 use remainder_shared_types::FieldExt;
 use ndarray::Array2;
@@ -68,10 +70,9 @@ use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
+use tracing::instrument;
 use std::fs::{File, self};
 use std::path::Path;
-
-use super::dummy_data_generator::{ZKDTCircuitData};
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
@@ -98,39 +99,39 @@ pub struct TreesModel {
 /// the number of leaf nodes).
 /// The dummy decision node has node id 2^depth - 1.
 pub struct CircuitizedTrees<F: FieldExt> {
-    decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then by node (sorted by node id)
-    leaf_nodes: Vec<Vec<LeafNode<F>>>,         // indexed by tree, then by node (sorted by node id)
-    depth: usize,
-    scaling: f64,
+    pub decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then by node (sorted by node id)
+    pub leaf_nodes: Vec<Vec<LeafNode<F>>>,         // indexed by tree, then by node (sorted by node id)
+    pub depth: usize,
+    pub scaling: f64,
 }
 
 /// Represents the circuitization of a batch of samples with respect to a TreesModel.
-/// Bit decompositions are little endian.
-/// `differences` is a signed decomposition, with the sign bit at the end.
-/// Each vector in `node_multiplicities` has length `2.pow(trees_model.depth)`; it is indexed by
+/// * Bit decompositions are little endian.
+/// * `differences` is a signed decomposition, with the sign bit at the end.
+/// * Each vector in `node_multiplicities` has length `2.pow(trees_model.depth)`; it is indexed by
 /// node_id for decision nodes, and by node id + 1 for leaf nodes (TODO, in discussion with Ende,
 /// break up this into decision_node_multiplicities and leaf_node_multiplicities).
 pub struct CircuitizedSamples<F: FieldExt> {
-    samples: Vec<Vec<InputAttribute<F>>>,                        // indexed by samples
-    decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
-    attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,  // indexed by trees, samples, steps in path
-    differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,  // indexed by trees, samples, steps in path
-    path_ends: Vec<Vec<LeafNode<F>>>,               // indexed by trees, samples
-    attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index
-    node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,    // indexed by trees, tree nodes
+    pub samples: Vec<Vec<InputAttribute<F>>>,                       // indexed by samples
+    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,             // indexed by trees, samples, steps in path
+    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,      // indexed by trees, samples, steps in path
+    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,              // indexed by trees, samples, steps in path
+    pub path_ends: Vec<Vec<LeafNode<F>>>,                           // indexed by trees, samples
+    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index
+    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,           // indexed by trees, tree nodes
 }
 
 /// Output of [`to_samples`], input to [`circuitize_samples`].
 pub struct Samples {
-    values: Vec<Vec<u16>>,
-    sample_length: usize
+    pub values: Vec<Vec<u16>>,
+    pub sample_length: usize
 }
 
 /// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample
 /// values such that the length of each individual sample is a power of two, and that the number of
 /// samples is also a power of two.
 /// Pre: raw_samples.values.len() > 0.
-pub fn to_samples(raw_samples: &RawSamples, _trees_model: &TreesModel) -> Samples {
+pub fn to_samples(raw_samples: &RawSamples) -> Samples {
     let mut samples: Vec<Vec<u16>> = vec![];
     let sample_length = next_power_of_two(raw_samples.values[0].len()).unwrap();
     for raw_sample in &raw_samples.values {
@@ -362,6 +363,17 @@ impl From<&RawTreesModel> for TreesModel {
     }
 }
 
+impl TreesModel {
+    pub fn slice(&self, start: usize, end: usize) -> Self {
+        let trees = self.trees[start..end].to_vec();
+        TreesModel {
+            trees: trees,
+            depth: self.depth,
+            scaling: self.scaling
+        }
+    }
+}
+
 /// Generate a RawTreesModel as specified.  Meaning of arguments as per generate_trees().
 /// Scale and bias are chosen randomly.
 pub fn generate_raw_trees_model(
@@ -386,8 +398,8 @@ pub fn generate_raw_trees_model(
 /// [`build_signed_bit_decomposition`]).
 #[derive(Clone)]
 pub struct RawSamples {
-    values: Vec<Vec<u16>>,
-    sample_length: usize
+    pub values: Vec<Vec<u16>>,
+    pub sample_length: usize
 }
 
 /// Generate an array of samples for input into the trees model.  For demonstration purposes.
@@ -407,7 +419,7 @@ pub fn generate_raw_samples(n_samples: usize, n_features: usize) -> RawSamples {
 }
 
 /// Load a 2d array of samples from a `.npy` file.
-pub fn load_raw_samples(filename: &str) -> RawSamples {
+pub fn load_raw_samples(filename: &Path) -> RawSamples {
     let input_arr: Array2<u16> = read_npy(filename).unwrap();
     RawSamples {
         values: input_arr.outer_iter().map(|row| row.to_vec()).collect(),
@@ -418,184 +430,11 @@ pub fn load_raw_samples(filename: &str) -> RawSamples {
 /// Load a trees model from a JSON file.
 /// WARNING: note the pre-condition.  No checks are performed.
 /// Pre: all threshold values fit in a 16 bit signed bit decomposition.
-pub fn load_raw_trees_model(filename: &str) -> RawTreesModel {
-    let file = File::open(filename).unwrap_or_else(|_| panic!("'{}' should be available.", filename));
+pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
+    let file = File::open(filename).unwrap_or_else(|_| panic!("'{:?}' should be available.", filename.to_path_buf()));
     let raw_trees_model: RawTreesModel = serde_json::from_reader(file)
-        .unwrap_or_else(|_| panic!("'{}' should be valid RawTreesModel JSON.", filename));
+        .unwrap_or_else(|_| panic!("'{:?}' should be valid RawTreesModel JSON.", filename.to_path_buf()));
     raw_trees_model
-}
-
-/// Gives all batched data associated with the first `num_trees_if_multiple` trees.
-/// 
-/// ## Arguments
-/// * `input_batch_size` - The number of tree inputs to return. Must be a power of two!
-/// * `num_trees_if_multiple` - Currently unused!!!
-/// * `raw_trees_model_path` - Path to the JSON file representing the quantized version of the model
-///     (as output by the Python preprocessing)
-/// * `raw_samples_path` - Path to the NumPy file representing the quantized version of the samples
-///     (again, as output by the Python preprocessing)
-/// 
-/// ## Notes
-/// Note that `raw_samples.values.len()` is currently 4573! This means we can go
-/// up to 4096 in terms of batch sizes which are powers of 2
-pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
-    log_input_batch_size: Option<usize>,
-    _num_trees_if_multiple: Option<usize>,
-    raw_trees_model_path: &Path,
-    raw_samples_path: &Path,
-) -> (ZKDTCircuitData<F>, (usize, usize)) {
-
-    // --- TODO!(ryancao): We need to test our stuff with a non-power-of-two `input_batch_size` ---
-    let true_input_batch_size = 2_usize.pow(log_input_batch_size.unwrap_or(1) as u32);
-
-    // let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
-    // let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
-    let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path.to_str().unwrap());
-    let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path.to_str().unwrap());
-    raw_samples.values = raw_samples.values[0..true_input_batch_size].to_vec();
-
-    let trees_model: TreesModel = (&raw_trees_model).into();
-    let samples: Samples = to_samples(&raw_samples, &trees_model);
-    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
-
-    let csamples = circuitize_samples::<F>(&samples, &trees_model);
-
-    let tree_height = ctrees.depth;
-    let input_len = csamples.samples[0].len();
-
-    (ZKDTCircuitData::new(
-        csamples.samples,
-        csamples.attributes_on_paths[0].clone(),
-        csamples.decision_paths[0].clone(),
-        csamples.path_ends[0].clone(),
-        csamples.differences[0].clone(),
-        csamples.node_multiplicities[0].clone(),
-        ctrees.decision_nodes[0].clone(),
-        ctrees.leaf_nodes[0].clone(),
-        csamples.attribute_multiplicities[0].clone()
-    ), (tree_height, input_len))
-}
-
-
-/// Generates Ligero commitments for all trees within the Upshot tree model.
-/// 
-/// TODO!(ryancao): Actually write these things to file!
-pub fn generate_all_tree_ligero_commitments<F: FieldExt>(upshot_data_dir_path: &Path) {
-
-    let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
-    let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
-    raw_samples.values = raw_samples.values[0..1].to_vec();
-
-    let trees_model: TreesModel = (&raw_trees_model).into();
-    let samples: Samples = to_samples(&raw_samples, &trees_model);
-    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
-
-    let csamples = circuitize_samples::<F>(&samples, &trees_model);
-
-    let _tree_height = ctrees.depth;
-    let _input_len = csamples.samples[0].len();
-
-    // --- Generate Ligero commitments for trees ---
-    debug_assert_eq!(ctrees.decision_nodes.len(), ctrees.leaf_nodes.len());
-    ctrees.decision_nodes.into_iter().zip(
-        ctrees.leaf_nodes.into_iter()).enumerate().for_each(|(tree_number, (tree_decision_nodes, tree_leaf_nodes))| {
-
-            dbg!("Generating commitment for tree number {:?}", tree_number);
-
-            // --- Create MLEs from each tree decision + leaf node list ---
-            let mut tree_decision_nodes_mle = DenseMle::new_from_iter(tree_decision_nodes
-                .into_iter()
-                .map(DecisionNode::from), LayerId::Input(0), None);
-            let mut tree_leaf_nodes_mle = DenseMle::new_from_iter(tree_leaf_nodes
-                .into_iter()
-                .map(LeafNode::from), LayerId::Input(0), None);
-
-            // --- Combine them as if creating an input layer ---
-            let tree_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-                Box::new(&mut tree_decision_nodes_mle),
-                Box::new(&mut tree_leaf_nodes_mle),
-            ];
-            let tree_input_layer_builder = InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
-            let tree_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = tree_input_layer_builder.to_input_layer();
-
-            // --- Create commitment to the combined MLEs via the input layer ---
-            let rho_inv = 4;
-            let ligero_commitment = remainder_ligero_commit_prove(&tree_input_layer.mle.mle_ref().bookkeeping_table, rho_inv);
-
-            // --- Write to file ---
-            let tree_commitment_filepath = get_tree_commitment_filename_for_tree_number(tree_number, upshot_data_dir_path);
-            let mut f = fs::File::create(tree_commitment_filepath).unwrap();
-            to_writer(&mut f, &ligero_commitment).unwrap();
-    });
-}
-
-/// Just to have something runnable which will generate all tree commitments into
-/// "upshot_data/tree_ligero_commitments/" (make sure you create the directory first!!!)
-#[test]
-pub fn do_generate_all_ligero_tree_commitments() {
-    generate_all_tree_ligero_commitments::<Fr>(Path::new("upshot_data/tree_ligero_commitments/"));
-}
-
-/// Generates all batched data of size 2^1, ..., 2^{12} and caches for testing
-/// purposes
-/// 
-/// ## Arguments
-/// * `num_trees_if_multiple` - Currently unused!!!
-/// 
-/// ## Notes
-/// Note that `raw_samples.values.len()` is currently 4573! This means we can go
-/// up to 4096 in terms of batch sizes which are powers of 2
-pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
-    _num_trees_if_multiple: Option<usize>,
-    upshot_data_dir_path: &Path,
-) {
-
-    println!("Generating Upshot data (to be cached) for all batch sizes (2^1, ..., 2^{{12}})...\n");
-    let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
-    let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
-    let orig_raw_samples = raw_samples.clone();
-    let trees_model: TreesModel = (&raw_trees_model).into();
-    let ctrees: CircuitizedTrees<F> = (&trees_model).into();
-
-    // --- We create batches of size 2^1, ..., 2^{12} ---
-    (1..12).for_each(|batch_size_exp| {
-
-        dbg!(&upshot_data_dir_path);
-
-        let cached_filepath = get_cached_batched_mles_filename_with_exp_size(batch_size_exp, upshot_data_dir_path);
-        if file_exists(&cached_filepath) {
-            return;
-        }
-
-        let generation_str = format!("Generating for batch size (exp) {}...", batch_size_exp);
-        println!("{}", generation_str);
-
-        let true_input_batch_size = 2_usize.pow(batch_size_exp as u32);
-        raw_samples.values = orig_raw_samples.values[0..true_input_batch_size].to_vec();
-
-        let samples: Samples = to_samples(&raw_samples, &trees_model);
-    
-        let csamples = circuitize_samples::<F>(&samples, &trees_model);
-    
-        let tree_height = ctrees.depth;
-        let input_len = csamples.samples[0].len();
-    
-        let combined_zkdt_circuit_data = (ZKDTCircuitData::new(
-            csamples.samples,
-            csamples.attributes_on_paths[0].clone(),
-            csamples.decision_paths[0].clone(),
-            csamples.path_ends[0].clone(),
-            csamples.differences[0].clone(),
-            csamples.node_multiplicities[0].clone(),
-            ctrees.decision_nodes[0].clone(),
-            ctrees.leaf_nodes[0].clone(),
-            csamples.attribute_multiplicities[0].clone()
-        ), (tree_height, input_len));
-
-        // --- Write to file ---
-        let mut f = fs::File::create(cached_filepath).unwrap();
-        to_writer(&mut f, &combined_zkdt_circuit_data).unwrap();
-    });
 }
 
 #[cfg(test)]
@@ -620,13 +459,13 @@ mod tests {
     #[test]
     fn test_raw_trees_model_loading() {
         let filename = "src/zkdt/data_pipeline/test_qtrees.json";
-        let _raw_trees_model = load_raw_trees_model(filename);
+        let _raw_trees_model = load_raw_trees_model(Path::new(filename));
     }
 
     #[test]
     fn test_numpy_loading() {
         let filename = "src/zkdt/data_pipeline/test_samples_10x6.npy";
-        let raw_samples = load_raw_samples(filename);
+        let raw_samples = load_raw_samples(Path::new(filename));
         assert_eq!(raw_samples.values.len(), 10);
     }
 
@@ -642,15 +481,15 @@ mod tests {
             values,
             sample_length
         };
-        let tree = build_small_tree();
-        let raw_trees_model = RawTreesModel {
-            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
-            bias: 1.1,
-            scale: 6.6,
-            n_features: sample_length,
-        };
-        let trees_model: TreesModel = (&raw_trees_model).into();
-        let samples = to_samples(&raw_samples, &trees_model);
+        // let tree = build_small_tree();
+        // let raw_trees_model = RawTreesModel {
+        //     trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+        //     bias: 1.1,
+        //     scale: 6.6,
+        //     n_features: sample_length,
+        // };
+        // let trees_model: TreesModel = (&raw_trees_model).into();
+        let samples = to_samples(&raw_samples);
         // check the number of samples
         assert_eq!(samples.sample_length, next_power_of_two(raw_samples.sample_length).unwrap());
         // check length of individual samples
@@ -680,7 +519,7 @@ mod tests {
             n_features: sample_length,
         };
         let trees_model: TreesModel = (&raw_trees_model).into();
-        let samples = to_samples(&raw_samples, &trees_model);
+        let samples = to_samples(&raw_samples);
         let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
         // check size of outer dimensions
         let n_trees = raw_trees_model.trees.len();
@@ -863,12 +702,12 @@ mod tests {
         // generate some samples to play with
         let n_samples = 10;
         let raw_samples = generate_raw_samples(n_samples, n_features);
-        let samples = to_samples(&raw_samples, &trees_model);
+        let samples = to_samples(&raw_samples);
         // notice: circuitize_samples takes trees_model, not ctrees!
         let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);
         // .. continued
-        let _raw_trees_model: RawTreesModel = load_raw_trees_model("src/zkdt/data_pipeline/test_qtrees.json");
-        let _raw_samples: RawSamples = load_raw_samples("src/zkdt/data_pipeline/test_samples_10x6.npy");
+        let _raw_trees_model: RawTreesModel = load_raw_trees_model(Path::new("src/zkdt/data_pipeline/test_qtrees.json"));
+        let _raw_samples: RawSamples = load_raw_samples(Path::new("src/zkdt/data_pipeline/test_samples_10x6.npy"));
     }
 
     #[test]
@@ -877,13 +716,16 @@ mod tests {
         // for this to work, those files need to be in place (not stored on the repo):
         // 1. remainder_prover/upshot_data/upshot-quantized-samples.npy
         // 2. remainder_prover/upshot_data/quantized-upshot-model.json
-        let raw_trees_model: RawTreesModel = load_raw_trees_model("upshot_data/quantized-upshot-model.json");
-        let mut raw_samples: RawSamples = load_raw_samples("upshot_data/upshot-quantized-samples.npy");
+        let raw_trees_model: RawTreesModel = load_raw_trees_model(Path::new("upshot_data/quantized-upshot-model.json"));
+        let mut raw_samples: RawSamples = load_raw_samples(Path::new("upshot_data/upshot-quantized-samples.npy"));
         // use just a small batch
         raw_samples.values = raw_samples.values[0..4].to_vec();
 
-        let trees_model: TreesModel = (&raw_trees_model).into();
-        let samples = to_samples(&raw_samples, &trees_model);
+        let mut trees_model: TreesModel = (&raw_trees_model).into();
+        // just take two trees
+        trees_model = trees_model.slice(0, 2);
+
+        let samples = to_samples(&raw_samples);
 
         let _ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
         let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);

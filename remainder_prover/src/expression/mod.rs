@@ -514,8 +514,6 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// gather all of the evaluations, combining them as appropriate.
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
 /// within.
-///
-/// TODO!(ryancao): Make this not need to be mutable
 pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
     expr: &Exp,
 ) -> Result<F, ExpressionError> {
