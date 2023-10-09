@@ -183,6 +183,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                             .chain(mle.mle_indices.iter())
                             .cloned()
                             .collect();
+                        mle.original_mle_indices = new_bits
+                            .iter()
+                            .chain(mle.original_mle_indices.iter())
+                            .cloned()
+                            .collect();
                     }
                     Ok(())
                 }
@@ -192,6 +197,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                             mle.mle_indices = new_bits
                                 .iter()
                                 .chain(mle.mle_indices.iter())
+                                .cloned()
+                                .collect();
+                            mle.original_mle_indices = new_bits
+                                .iter()
+                                .chain(mle.original_mle_indices.iter())
                                 .cloned()
                                 .collect();
                         }
@@ -217,6 +227,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                         .chain(mle.mle_indices.iter())
                         .cloned()
                         .collect();
+                    mle.original_mle_indices = new_bits
+                        .iter()
+                        .chain(mle.original_mle_indices.iter())
+                        .cloned()
+                        .collect();
                 }
             }
             MleEnum::Zero(mle) => {
@@ -224,6 +239,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())
+                        .cloned()
+                        .collect();
+                    mle.original_mle_indices = new_bits
+                        .iter()
+                        .chain(mle.original_mle_indices.iter())
                         .cloned()
                         .collect();
                 }

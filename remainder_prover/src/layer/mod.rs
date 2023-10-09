@@ -8,23 +8,22 @@ pub mod layer_enum;
 
 use std::marker::PhantomData;
 
-use itertools::{repeat_n};
 use ark_std::cfg_into_iter;
-use serde::{Serialize, Deserialize};
-use thiserror::Error;
+use itertools::repeat_n;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
     mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
-        zero, MleIndex, MleRef,
+        MleIndex, MleRef, dense::DenseMleRef, mle_enum::MleEnum,
     },
-    prover::SumcheckProof,
+    prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
-    },
-    zkdt::helpers::get_field_val_as_usize_vec,
+    }, layer::claims::combine_mle_refs_with_aggregate,
 };
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
@@ -37,6 +36,8 @@ use self::{
 };
 
 use core::cmp::Ordering;
+
+use log::{debug, info};
 
 #[derive(Error, Debug, Clone)]
 /// Errors to do with working with a Layer
@@ -145,6 +146,7 @@ pub trait Layer<F: FieldExt> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mle_refs: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError>;
@@ -158,7 +160,7 @@ pub trait Layer<F: FieldExt> {
 }
 
 /// Default Layer abstraction
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GKRLayer<F, Tr> {
     id: LayerId,
     pub(crate) expression: ExpressionStandard<F>,
@@ -275,6 +277,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             dbg!(&self.expression);
         }
 
+        info!("Proving GKR Layer");
+        if first_sumcheck_message[0] + first_sumcheck_message[1] != val {
+            debug!("HUGE PROBLEM");
+        }
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
 
         // --- Add prover message to the FS transcript ---
@@ -334,6 +340,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let mut prev_evals = &sumcheck_prover_messages[0];
 
         if prev_evals[0] + prev_evals[1] != claim.get_result() {
+            debug!("I'm the PROBLEM");
+            debug!("msg0 + msg1 =\n{:?}", prev_evals[0] + prev_evals[1]);
+            debug!("rest =\n{:?}", claim.get_result());
             return Err(LayerError::VerificationError(
                 VerificationError::SumcheckStartFailed,
             ));
@@ -449,7 +458,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         claimed_value,
                         Some(self.id().clone()),
                         Some(mle_layer_id),
-                        Some(mle_ref.clone()),
+                        Some(MleEnum::Dense(mle_ref.clone())),
                     );
 
                     // --- Push it into the list of claims ---
@@ -487,7 +496,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                             claimed_value,
                             Some(self.id().clone()),
                             Some(mle_layer_id),
-                            Some(mle_ref.clone())
+                            Some(MleEnum::Dense(mle_ref.clone()))
                         );
 
                         // --- Push it into the list of claims ---
@@ -515,11 +524,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claim_mle_refs: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         let mut expr = self.expression.clone();
-        dbg!(&expr);
+
         //fix variable hella times
         //evaluate expr on the mutated expr
 
@@ -527,32 +537,34 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let num_vars = expr.index_mle_indices(0);
         let degree = get_round_degree(&expr, 0);
         // expr.init_beta_tables(prev_layer_claim);
-        let num_evals = (num_vars) * (num_claims); //* degree;
+        let mut num_evals = (num_vars) * (num_claims); //* degree;
 
-        let mut degree_reduction = num_vars as i64;
-        for j in 0..num_vars {
-            for i in 1..num_claims {
-                if claim_vecs[i][j] != claim_vecs[i - 1][j] {
-                    degree_reduction -= 1;
-                    break;
+        if ENABLE_OPTIMIZATION {
+            let mut degree_reduction = num_vars as i64;
+            for j in 0..num_vars {
+                for i in 1..num_claims {
+                    if claim_vecs[i][j] != claim_vecs[i - 1][j] {
+                        degree_reduction -= 1;
+                        break;
+                    }
                 }
             }
-        }
-        assert!(degree_reduction >= 0);
+            assert!(degree_reduction >= 0);
 
-        // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
-        // points. W : F^n -> F is a multi-linear polynomial on
-        // `num_vars` variables and l : F -> F^n is a canonical
-        // polynomial passing through `num_claims` points so its degree is
-        // at most `num_claims - 1`. This imposes an upper
-        // bound of `num_vars * (num_claims - 1)` to the degree of P.
-        // However, the actual degree of P might be lower.
-        // For any coordinate `i` such that all claims agree
-        // on that coordinate, we can quickly deduce that `l_i(x)` is a
-        // constant polynomial of degree zero instead of `num_claims -
-        // 1` which brings down the total degree by the same amount.
-        let num_evals =
-            (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+            // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
+            // points. W : F^n -> F is a multi-linear polynomial on
+            // `num_vars` variables and l : F -> F^n is a canonical
+            // polynomial passing through `num_claims` points so its degree is
+            // at most `num_claims - 1`. This imposes an upper
+            // bound of `num_vars * (num_claims - 1)` to the degree of P.
+            // However, the actual degree of P might be lower.
+            // For any coordinate `i` such that all claims agree
+            // on that coordinate, we can quickly deduce that `l_i(x)` is a
+            // constant polynomial of degree zero instead of `num_claims -
+            // 1` which brings down the total degree by the same amount.
+            num_evals =
+                (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+        }
 
         // TODO(Makis): This assert fails on `test_aggro_claim_4` and I'm not
         // sure if the test is wrong or if the assert is wrong!
@@ -577,7 +589,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         */
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+        let next_evals: Vec<F> = (num_claims..num_evals).into_iter()
             .map(|idx| {
                 // get the challenge l(idx)
                 let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
@@ -585,7 +597,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
@@ -594,11 +605,31 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                 // let mut fix_expr = expr.clone();
                 // let eval_w_l = fix_expr.evaluate_expr(new_chal);
 
+                
+                // if self.id == LayerId::Layer(0) {
+                //     dbg!(&claim_mle_refs);
+                // }
+
+                // dbg!("smelly");
+
+                // dbg!(&expr);
+                // dbg!(&claim_mle_refs);
+                
+
+                let somethingsomething = combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
+                // somethingsomething[0]
                 let mut beta = BetaTable::new(new_chal).unwrap();
                 beta.table.index_mle_indices(0);
                 let eval = compute_sumcheck_message(&expr, 0, degree, &beta).unwrap();
                 let Evals(evals) = eval;
+                dbg!(somethingsomething - (evals[0] + evals[1]));
+                // //dbg!(&somethingsomething);
+                // //dbg!(evals[0] + evals[1]);
+                // //debug_assert_eq!(somethingsomething[0], evals[0] + evals[1]);
+
                 evals[0] + evals[1]
+
+                
 
                 // this has to be a sum--get the overall evaluation
                 // match eval_w_l {
@@ -787,7 +818,6 @@ impl<
     type Successor = S;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        
         // dbg!(&hi);
         (self.expression_builder)(&self.mle)
     }

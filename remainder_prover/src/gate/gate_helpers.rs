@@ -1,22 +1,13 @@
-use ark_std::{cfg_into_iter};
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
-use std::{fmt::Debug};
+use std::fmt::Debug;
 
-use crate::{
-    layer::{
-        Layer,
-    },
-    mle::beta::BetaTable,
-    sumcheck::*,
-};
+use crate::{layer::Layer, mle::beta::BetaTable, sumcheck::*};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use crate::mle::{
-    dense::{DenseMleRef},
-    MleIndex, MleRef,
-};
+use crate::mle::{dense::DenseMleRef, MleIndex, MleRef};
 use thiserror::Error;
 
 /// Error handling for gate mle construction
@@ -337,7 +328,6 @@ pub fn prove_round_copy<F: FieldExt>(
     compute_sumcheck_message_copy_add(beta, phase_lhs, phase_rhs, round_index)
 }
 
-
 /// fully evaluates a gate expression (for both the batched and non-batched case, add and mul gates)
 pub fn compute_full_gate<F: FieldExt>(
     challenges: Vec<F>,
@@ -363,57 +353,55 @@ pub fn compute_full_gate<F: FieldExt>(
 
     // literally summing over everything else (x, y)
     if copy_bits == 0 {
-        
         nonzero_gates
-                .clone()
-                .into_iter()
-                .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g
-                        .table
-                        .bookkeeping_table()
-                        .get(z_ind)
-                        .unwrap_or(&F::zero());
-                    let ux = lhs.bookkeeping_table().get(x_ind).unwrap_or(&zero);
-                    let vy = rhs.bookkeeping_table().get(y_ind).unwrap_or(&zero);
-                    dbg!(&gz, ux, vy);
-                    acc + gz * (*ux + *vy)
-                })
+            .clone()
+            .into_iter()
+            .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
+                let gz = *beta_g
+                    .table
+                    .bookkeeping_table()
+                    .get(z_ind)
+                    .unwrap_or(&F::zero());
+                let ux = lhs.bookkeeping_table().get(x_ind).unwrap_or(&zero);
+                let vy = rhs.bookkeeping_table().get(y_ind).unwrap_or(&zero);
+                dbg!(&gz, ux, vy);
+                acc + gz * (*ux + *vy)
+            })
     } else {
         let num_copy_idx = 1 << copy_bits;
         // if the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on p2
         let beta_g2 = BetaTable::new(copy_chals).unwrap();
-        
+
         {
             // sum over everything else, outer sum being over p2, inner sum over (x, y)
-            (0..(1 << num_copy_idx))
-                .fold(F::zero(), |acc_outer, idx| {
-                    let g2 = *beta_g2
-                        .table
-                        .bookkeeping_table()
-                        .get(idx)
-                        .unwrap_or(&F::zero());
-                    let inner_sum = nonzero_gates.clone().into_iter().fold(
-                        F::zero(),
-                        |acc, (z_ind, x_ind, y_ind)| {
-                            let gz = *beta_g
-                                .table
-                                .bookkeeping_table()
-                                .get(z_ind)
-                                .unwrap_or(&F::zero());
-                            let ux = lhs
-                                .bookkeeping_table()
-                                .get(idx + (x_ind * num_copy_idx))
-                                .unwrap_or(&zero);
-                            let vy = rhs
-                                .bookkeeping_table()
-                                .get(idx + (y_ind * num_copy_idx))
-                                .unwrap_or(&zero);
-                            dbg!(&gz, ux, vy);
-                            acc + gz * (*ux + *vy)
-                        },
-                    );
-                    acc_outer + (g2 * inner_sum)
-                })
+            (0..(1 << num_copy_idx)).fold(F::zero(), |acc_outer, idx| {
+                let g2 = *beta_g2
+                    .table
+                    .bookkeeping_table()
+                    .get(idx)
+                    .unwrap_or(&F::zero());
+                let inner_sum = nonzero_gates.clone().into_iter().fold(
+                    F::zero(),
+                    |acc, (z_ind, x_ind, y_ind)| {
+                        let gz = *beta_g
+                            .table
+                            .bookkeeping_table()
+                            .get(z_ind)
+                            .unwrap_or(&F::zero());
+                        let ux = lhs
+                            .bookkeeping_table()
+                            .get(idx + (x_ind * num_copy_idx))
+                            .unwrap_or(&zero);
+                        let vy = rhs
+                            .bookkeeping_table()
+                            .get(idx + (y_ind * num_copy_idx))
+                            .unwrap_or(&zero);
+                        dbg!(&gz, ux, vy);
+                        acc + gz * (*ux + *vy)
+                    },
+                );
+                acc_outer + (g2 * inner_sum)
+            })
         }
     }
 }
@@ -454,7 +442,6 @@ pub fn compute_sumcheck_message_mul_gate<F: FieldExt>(
     Ok(evaluations)
 }
 
-
 /// does all the necessary updates when proving a round for batched gate mles
 pub fn prove_round_copy_mul<F: FieldExt>(
     // phase_lhs: &mut DenseMleRef<F>,
@@ -475,11 +462,17 @@ pub fn prove_round_copy_mul<F: FieldExt>(
     lhs.fix_variable(round_index - 1, challenge);
     rhs.fix_variable(round_index - 1, challenge);
     // compute_sumcheck_message_copy_phase_mul(&[phase_lhs.clone(), phase_rhs.clone()], beta, round_index)
-    libra_giraffe(lhs, rhs, &beta_g2.table, &beta_g1.table, nonzero_gates, num_dataparallel_bits)
+    libra_giraffe(
+        lhs,
+        rhs,
+        &beta_g2.table,
+        &beta_g1.table,
+        nonzero_gates,
+        num_dataparallel_bits,
+    )
 }
 
-
-/// get the evals for a batched mul gate 
+/// get the evals for a batched mul gate
 pub fn libra_giraffe<F: FieldExt>(
     f2_p2_x: &DenseMleRef<F>,
     f3_p2_y: &DenseMleRef<F>,
@@ -488,8 +481,7 @@ pub fn libra_giraffe<F: FieldExt>(
     nonzero_gates: &Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
 ) -> Result<Vec<F>, GateError> {
-
-    // always always ALWAYS 3!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+    // always always ALWAYS 3!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // because we have a beta(g2, p2), f2(p2, x), and f3(p2, y)
 
     let degree = 3;
@@ -524,63 +516,77 @@ pub fn libra_giraffe<F: FieldExt>(
             let beta_successors = std::iter::once(first).chain(beta_successors_snd);
             let beta_iter: Box<dyn Iterator<Item = F>> = Box::new(beta_successors);
 
-
             let num_dataparallel_entries = 1 << num_dataparallel_bits;
-            let inner_sum_successors = nonzero_gates.clone().into_iter().map(
-                |(z, x, y)| {
+            let inner_sum_successors = nonzero_gates
+                .clone()
+                .into_iter()
+                .map(|(z, x, y)| {
                     let g1_z = *beta_g1.bookkeeping_table.get(z).unwrap();
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
 
                     // --- Compute f_2((A, p_2), x) ---
                     // --- Note that the bookkeeping table is little-endian, so we shift by `x * num_dataparallel_entries` ---
-                    let f2_0_p2_x = *f2_p2_x.bookkeeping_table().get((p2_idx * 2) + x * num_dataparallel_entries).unwrap();
+                    let f2_0_p2_x = *f2_p2_x
+                        .bookkeeping_table()
+                        .get((p2_idx * 2) + x * num_dataparallel_entries)
+                        .unwrap();
                     let f2_1_p2_x = if f2_p2_x.num_vars() != 0 {
-                        *f2_p2_x.bookkeeping_table().get((p2_idx * 2 + 1) + x * num_dataparallel_entries).unwrap()
+                        *f2_p2_x
+                            .bookkeeping_table()
+                            .get((p2_idx * 2 + 1) + x * num_dataparallel_entries)
+                            .unwrap()
                     } else {
                         f2_0_p2_x
                     };
                     let linear_diff_f2 = f2_1_p2_x - f2_0_p2_x;
-    
+
                     let f2_evals_p2_x =
-                        std::iter::successors(Some(f2_1_p2_x), move |f2_prev_p2_x| Some(*f2_prev_p2_x + linear_diff_f2));
+                        std::iter::successors(Some(f2_1_p2_x), move |f2_prev_p2_x| {
+                            Some(*f2_prev_p2_x + linear_diff_f2)
+                        });
                     let all_f2_evals_p2_x = std::iter::once(f2_0_p2_x).chain(f2_evals_p2_x);
 
                     // --- Compute f_3((A, p_2), y) ---
                     // --- Note that the bookkeeping table is little-endian, so we shift by `y * num_dataparallel_entries` ---
-                    let f3_0_p2_y = *f3_p2_y.bookkeeping_table().get((p2_idx * 2) + y * num_dataparallel_entries).unwrap();
+                    let f3_0_p2_y = *f3_p2_y
+                        .bookkeeping_table()
+                        .get((p2_idx * 2) + y * num_dataparallel_entries)
+                        .unwrap();
                     let f3_1_p2_y = if f3_p2_y.num_vars() != 0 {
-                        *f3_p2_y.bookkeeping_table().get((p2_idx * 2 + 1) + y * num_dataparallel_entries).unwrap()
+                        *f3_p2_y
+                            .bookkeeping_table()
+                            .get((p2_idx * 2 + 1) + y * num_dataparallel_entries)
+                            .unwrap()
                     } else {
                         f3_0_p2_y
                     };
                     let linear_diff_f3 = f3_1_p2_y - f3_0_p2_y;
-    
+
                     let f3_evals_p2_y =
-                        std::iter::successors(Some(f3_1_p2_y), move |f3_prev_p2_y| Some(*f3_prev_p2_y + linear_diff_f3));
+                        std::iter::successors(Some(f3_1_p2_y), move |f3_prev_p2_y| {
+                            Some(*f3_prev_p2_y + linear_diff_f3)
+                        });
                     let all_f3_evals_p2_y = std::iter::once(f3_0_p2_y).chain(f3_evals_p2_y);
 
                     // --- The evals we want are simply the element-wise product of the accessed evals ---
-                    let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = g1_z_successors.zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y)).map(|(g1_z_eval, (f2_eval, f3_eval))| {
-                        g1_z_eval * f2_eval * f3_eval
-                    });
+                    let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = g1_z_successors
+                        .zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y))
+                        .map(|(g1_z_eval, (f2_eval, f3_eval))| g1_z_eval * f2_eval * f3_eval);
 
-                    let evals_iter: Box<dyn Iterator<Item = F>> = Box::new(g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y);
+                    let evals_iter: Box<dyn Iterator<Item = F>> =
+                        Box::new(g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y);
 
                     evals_iter
-                }
-            ).reduce(
-                |acc, successor| {
-                    let add_successors = acc.zip(successor).map(
-                        |(acc_eval, successor_eval)| {
-                            acc_eval + successor_eval
-                        }
-                    );
+                })
+                .reduce(|acc, successor| {
+                    let add_successors = acc
+                        .zip(successor)
+                        .map(|(acc_eval, successor_eval)| acc_eval + successor_eval);
 
                     let add_iter: Box<dyn Iterator<Item = F>> = Box::new(add_successors);
                     add_iter
-                }
-            ).unwrap();
-
+                })
+                .unwrap();
 
             let evals = std::iter::once(inner_sum_successors)
                 // chain the beta successors

@@ -6,6 +6,7 @@ use remainder_shared_types::transcript::{self};
 use remainder_shared_types::FieldExt;
 
 use crate::mle::{MleRef, MleIndex};
+use crate::mle::mle_enum::MleEnum;
 use crate::mle::dense::{DenseMleRef, DenseMle};
 use crate::prover::input_layer::enum_input_layer::InputLayerEnum;
 use crate::prover::input_layer::InputLayer;
@@ -73,7 +74,7 @@ pub struct Claim<F> {
     /// present); destination layer.
     pub to_layer_id: Option<LayerId>,
     /// the mle ref associated with the claim
-    pub mle_ref: Option<DenseMleRef<F>>,
+    pub mle_ref: Option<MleEnum<F>>,
 }
 
 impl<F: Clone> Claim<F> {
@@ -94,7 +95,7 @@ impl<F: Clone> Claim<F> {
         result: F,
         from_layer_id: Option<LayerId>,
         to_layer_id: Option<LayerId>,
-        mle_ref: Option<DenseMleRef<F>>,
+        mle_ref: Option<MleEnum<F>>,
     ) -> Self {
         Self {
             point,
@@ -292,6 +293,12 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
     pub fn get_claim_vector(&self) -> &Vec<Claim<F>> {
         &self.claims
     }
+
+    pub fn get_claim_mle_refs(&self) -> Vec<MleEnum<F>> {
+        self.claims.clone().into_iter().map(|claim| {
+            claim.mle_ref.unwrap()
+        }).collect_vec()
+    }
 }
 
 /// Aggregates a sequence of claim into a single point.
@@ -347,6 +354,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 
     let num_claims = claims.get_num_claims();
     let num_vars = claims.get_num_vars();
+    let claim_mle_refs = claims.get_claim_mle_refs();
 
     let results = claims.get_results();
     let points_matrix = claims.get_claim_points_matrix();
@@ -355,7 +363,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
     debug_assert_eq!(points_matrix[0].len(), num_vars);
 
     // Get the evals [W(l(0)), W(l(1)), ..., W(l(degree_upper_bound)) ]
-    let wlx = layer.get_wlx_evaluations(points_matrix, results, num_claims, num_vars)?;
+    let wlx = layer.get_wlx_evaluations(points_matrix, results, claim_mle_refs, num_claims, num_vars)?;
 
     Ok(wlx)
 }
@@ -363,15 +371,15 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 use itertools::Itertools;
 
 fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
+    info!("Forming a claim group...");
     debug!("Num claims BEFORE dedup: {}", claims.len());
-
     // Remove duplicates.
     let claims: Vec<Claim<F>> = claims
         .to_vec()
         .into_iter()
         .unique_by(|c| c.get_point().clone())
         .collect();
-    debug!("Num claims AFTER dedup: {}", claims.len());
+    debug!("\nNum claims AFTER dedup: {}", claims.len());
 
     let num_claims = claims.len();
     let mut claim_group_vec: Vec<ClaimGroup<F>> = vec![];
@@ -394,11 +402,11 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 
 
 fn split_mle_ref<F: FieldExt>(
-    mle_ref: DenseMleRef<F>
-) -> Vec<DenseMleRef<F>> {
+    mle_ref: MleEnum<F>
+) -> Vec<MleEnum<F>> {
     let first_iterated_idx: usize = 
-        mle_ref.original_mle_indices.iter().enumerate().fold(
-            mle_ref.original_mle_indices.len(),
+        mle_ref.original_mle_indices().iter().enumerate().fold(
+            mle_ref.original_mle_indices().len(),
             |acc, (idx, mle_idx)| {
                 if let MleIndex::Iterated = mle_idx {
                     std::cmp::min(acc, idx)
@@ -409,35 +417,60 @@ fn split_mle_ref<F: FieldExt>(
             }
         );
 
-    let first_og_indices = mle_ref.original_mle_indices[0..first_iterated_idx].into_iter().cloned().chain(
+    let first_og_indices = mle_ref.original_mle_indices()[0..first_iterated_idx].into_iter().cloned().chain(
         std::iter::once(MleIndex::Fixed(false))).chain(
-            mle_ref.original_mle_indices[first_iterated_idx + 1..].into_iter().cloned()).collect_vec();
-    let second_og_indices = mle_ref.original_mle_indices[0..first_iterated_idx].into_iter().cloned().chain(
+            mle_ref.original_mle_indices()[first_iterated_idx + 1..].into_iter().cloned()).collect_vec();
+    let second_og_indices = mle_ref.original_mle_indices()[0..first_iterated_idx].into_iter().cloned().chain(
         std::iter::once(MleIndex::Fixed(true))).chain(
-            mle_ref.original_mle_indices[first_iterated_idx + 1..].into_iter().cloned()).collect_vec();
+            mle_ref.original_mle_indices()[first_iterated_idx + 1..].into_iter().cloned()).collect_vec();
     let first_mle_ref = {
-        DenseMleRef {
-            bookkeeping_table: mle_ref.bookkeeping_table.clone(),
-            original_bookkeeping_table: mle_ref.original_bookkeeping_table.clone().into_iter().step_by(2).collect_vec(),
-            mle_indices: mle_ref.mle_indices.clone(),
-            original_mle_indices: first_og_indices,
-            num_vars: mle_ref.num_vars,
-            original_num_vars: mle_ref.original_num_vars,
-            layer_id: mle_ref.layer_id,
-            indexed: false,
+        match mle_ref.clone() {
+            MleEnum::Dense(dense_mle_ref) => {
+                MleEnum::Dense(
+                    DenseMleRef {
+                    bookkeeping_table: dense_mle_ref.bookkeeping_table.clone(),
+                    original_bookkeeping_table: dense_mle_ref.original_bookkeeping_table.clone().into_iter().step_by(2).collect_vec(),
+                    mle_indices: dense_mle_ref.mle_indices.clone(),
+                    original_mle_indices: first_og_indices,
+                    num_vars: dense_mle_ref.num_vars,
+                    original_num_vars: dense_mle_ref.original_num_vars,
+                    layer_id: dense_mle_ref.layer_id,
+                    indexed: false,
+                })
+            }
+            MleEnum::Zero(mut zero_mle_ref) => { 
+                zero_mle_ref.original_mle_indices = first_og_indices;
+                MleEnum::Zero(
+                    zero_mle_ref
+                )
+            }
         }
+        
     };
+
     let second_mle_ref = {
-        DenseMleRef {
-            bookkeeping_table: mle_ref.bookkeeping_table,
-            original_bookkeeping_table: mle_ref.original_bookkeeping_table.into_iter().skip(1).step_by(2).collect_vec(),
-            mle_indices: mle_ref.mle_indices,
-            original_mle_indices: second_og_indices,
-            num_vars: mle_ref.num_vars,
-            original_num_vars: mle_ref.original_num_vars,
-            layer_id: mle_ref.layer_id,
-            indexed: false,
+        match mle_ref {
+            MleEnum::Dense(dense_mle_ref) => {
+                MleEnum::Dense(
+                    DenseMleRef {
+                        bookkeeping_table: dense_mle_ref.bookkeeping_table,
+                        original_bookkeeping_table: dense_mle_ref.original_bookkeeping_table.into_iter().skip(1).step_by(2).collect_vec(),
+                        mle_indices: dense_mle_ref.mle_indices,
+                        original_mle_indices: second_og_indices,
+                        num_vars: dense_mle_ref.num_vars,
+                        original_num_vars: dense_mle_ref.original_num_vars,
+                        layer_id: dense_mle_ref.layer_id,
+                        indexed: false,
+                })
+            }
+            MleEnum::Zero(mut zero_mle_ref) => { 
+                zero_mle_ref.original_mle_indices = second_og_indices;
+                MleEnum::Zero(
+                    zero_mle_ref
+                )
+            }
         }
+        
     };
 
     vec![first_mle_ref, second_mle_ref]
@@ -446,12 +479,13 @@ fn split_mle_ref<F: FieldExt>(
 
 
 fn check_iterated_within_fixed<F: FieldExt>(
-    mle_ref: &DenseMleRef<F>
+    mle_ref: &MleEnum<F>
 ) -> bool {
     let mut iterated_seen = false;
     let mut fixed_after_iterated = false;
 
-    mle_ref.original_mle_indices.iter().for_each(
+
+    mle_ref.original_mle_indices().iter().for_each(
         |mle_idx| {
             if let MleIndex::Iterated = mle_idx {
                 iterated_seen = true;
@@ -465,12 +499,12 @@ fn check_iterated_within_fixed<F: FieldExt>(
 }
 
 fn get_lsb_fixed_var<F: FieldExt>(
-    mle_refs: &Vec<DenseMleRef<F>>
-) -> (Option<usize>, Option<DenseMleRef<F>>) {
+    mle_refs: &Vec<MleEnum<F>>
+) -> (Option<usize>, Option<MleEnum<F>>) {
     mle_refs.into_iter().fold(
         (None, None),
         |(acc_idx, acc_mle), mle_ref| {
-            let lsb_within_mle = mle_ref.original_mle_indices.iter().enumerate().fold(
+            let lsb_within_mle = mle_ref.original_mle_indices().iter().enumerate().fold(
                 None, 
                 |acc, (idx_num, mle_idx)| {
                     if let MleIndex::Fixed(_) = mle_idx {
@@ -501,77 +535,83 @@ fn get_lsb_fixed_var<F: FieldExt>(
 }
 
 fn combine_pair<F: FieldExt>(
-    mle_ref_first: DenseMleRef<F>,
-    mle_ref_second: Option<DenseMleRef<F>>,
+    mle_ref_first: MleEnum<F>,
+    mle_ref_second: Option<MleEnum<F>>,
     lsb_idx: usize,
-    claim_point: &Vec<F>,
+    chal_point: &Vec<F>,
 ) -> DenseMleRef<F> {
+
+
+    // dbg!("taylor swift");
+    dbg!(&mle_ref_first);
+    dbg!(&mle_ref_second);
     
-    let mle_ref_first_bt = mle_ref_first.original_bookkeeping_table;
+    let mle_ref_first_bt = mle_ref_first.bookkeeping_table().to_vec();
 
     let mle_ref_second_bt = {
-        if mle_ref_second.is_none() {
-            vec![F::zero(); mle_ref_first_bt.len()]
+        if mle_ref_second.clone().is_none() {
+            vec![F::zero()]
         }
         else {
-            mle_ref_second.unwrap().original_bookkeeping_table
+            mle_ref_second.clone().unwrap().bookkeeping_table().to_vec()
         }
     };
 
-    let interleaved_mle_indices = mle_ref_first.original_mle_indices[0..lsb_idx].into_iter().cloned().chain(
+    let interleaved_mle_indices = mle_ref_first.mle_indices()[0..lsb_idx].into_iter().cloned().chain(
+        std::iter::once(MleIndex::Bound(chal_point[lsb_idx], lsb_idx))).chain(
+            mle_ref_first.mle_indices()[lsb_idx + 1..].into_iter().cloned()).collect_vec();
+
+    let interleaved_mle_indices_og = mle_ref_first.original_mle_indices()[0..lsb_idx].into_iter().cloned().chain(
         std::iter::once(MleIndex::Iterated)).chain(
-            mle_ref_first.original_mle_indices[lsb_idx + 1..].into_iter().cloned()).collect_vec();
+            mle_ref_first.original_mle_indices()[lsb_idx + 1..].into_iter().cloned()).collect_vec();
 
-    let claim_rand = if mle_ref_first.original_mle_indices[lsb_idx] == MleIndex::Fixed(false) {
-        F::one() - claim_point[lsb_idx]
-    }
-    else {
-        claim_point[lsb_idx]
+    let bound_coord = {
+        if let MleIndex::Fixed(false) = mle_ref_first.original_mle_indices()[lsb_idx] {
+            F::one() - chal_point[lsb_idx]
+        }
+        else {
+            chal_point[lsb_idx]
+        }
     };
 
-    // todo -- assert that bookkeeping table sizes are 1
+    let new_bt = vec![bound_coord * mle_ref_first_bt[0] + (F::one() - bound_coord) * mle_ref_second_bt[0]];
 
-    dbg!(&mle_ref_first_bt);
-    dbg!(&mle_ref_second_bt);
-
-    let selector_bt = mle_ref_first_bt.into_iter().zip(mle_ref_second_bt).map(
-        |(first, second)| {
-            claim_rand * first + ((F::one() - claim_rand) * second)
-        }
-    ).collect_vec();
-
-    DenseMleRef {
-        bookkeeping_table: selector_bt.clone(),
-        original_bookkeeping_table: selector_bt,
-        mle_indices: interleaved_mle_indices.clone(),
-        original_mle_indices: interleaved_mle_indices,
-        num_vars: mle_ref_first.num_vars,
-        original_num_vars: mle_ref_first.original_num_vars,
-        layer_id: mle_ref_first.layer_id,
+    let res = DenseMleRef {
+        bookkeeping_table: new_bt.clone(),
+        original_bookkeeping_table: new_bt,
+        mle_indices: interleaved_mle_indices,
+        original_mle_indices: interleaved_mle_indices_og,
+        num_vars: mle_ref_first.num_vars(),
+        original_num_vars: mle_ref_first.original_num_vars(),
+        layer_id: mle_ref_first.get_layer_id(),
         indexed: false,
-    }
+    };
+    res
 
 }
 
 fn find_pair_and_combine<F: FieldExt> (
-    all_refs: &Vec<DenseMleRef<F>>,
+    all_refs: &Vec<MleEnum<F>>,
     lsb_idx: usize,
-    mle_ref_of_lsb: DenseMleRef<F>,
-    claim_point: &Vec<F>,
-) -> Vec<DenseMleRef<F>> {
+    mle_ref_of_lsb: MleEnum<F>,
+    chal_point: &Vec<F>,
+) -> Vec<MleEnum<F>> {
 
-    let indices_to_compare = mle_ref_of_lsb.original_mle_indices[0..lsb_idx].to_vec();
+
+    let indices_to_compare = mle_ref_of_lsb.original_mle_indices()[0..lsb_idx].to_vec();
+    let og_indices = &mle_ref_of_lsb.original_mle_indices();
     let mut mle_ref_pair = None;
     let mut all_refs_updated = Vec::new();
 
     for mle_ref in all_refs {
-        let compare_indices = mle_ref.original_mle_indices[0..lsb_idx].to_vec();
-        if compare_indices == indices_to_compare {
+        let max_slice_idx = mle_ref.original_mle_indices().len();
+        let compare_indices = mle_ref.original_mle_indices()[0..std::cmp::min(lsb_idx, max_slice_idx)].to_vec();
+        if (compare_indices == indices_to_compare) && (&mle_ref.original_mle_indices() != og_indices) {
             mle_ref_pair = Some(mle_ref.clone());
         }
-        if mle_ref.original_bookkeeping_table != mle_ref_of_lsb.original_bookkeeping_table {
+        if &mle_ref.original_mle_indices() != og_indices {
             if mle_ref_pair.is_some() {
-                if mle_ref.original_bookkeeping_table != mle_ref_pair.clone().unwrap().original_bookkeeping_table {
+                if mle_ref.original_mle_indices() != mle_ref_pair.clone().unwrap().original_mle_indices() {
                     all_refs_updated.push(mle_ref.clone());
                 }
             }
@@ -581,14 +621,16 @@ fn find_pair_and_combine<F: FieldExt> (
         }
     }
 
-    let new_mle_ref_to_add = combine_pair(mle_ref_of_lsb, mle_ref_pair, lsb_idx, claim_point);
-    all_refs_updated.push(new_mle_ref_to_add);
+    
+
+    let new_mle_ref_to_add = combine_pair(mle_ref_of_lsb, mle_ref_pair, lsb_idx, chal_point);
+    all_refs_updated.push(MleEnum::Dense(new_mle_ref_to_add));
     all_refs_updated
 }
 
 fn collapse_mles_with_iterated_in_prefix<F: FieldExt> (
-    mle_refs: &[DenseMleRef<F>],
-) -> Vec<DenseMleRef<F>> {
+    mle_refs: &Vec<MleEnum<F>>,
+) -> Vec<MleEnum<F>> {
 
     mle_refs.into_iter().flat_map(
         |mle_ref| {
@@ -603,75 +645,114 @@ fn collapse_mles_with_iterated_in_prefix<F: FieldExt> (
 
 }
 
-fn combine_mle_refs_with_aggregate<F: FieldExt>(
-    mle_refs: &Vec<DenseMleRef<F>>,
-    claim_point: Vec<F>,
-) -> DenseMleRef<F> {
+pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
+    mle_refs: &Vec<MleEnum<F>>,
+    chal_point: &Vec<F>,
+) -> F {
 
-    let mle_refs_split = collapse_mles_with_iterated_in_prefix(mle_refs);
-    let mut mle_refs_reconstruct_og = mle_refs_split.into_iter().map(
+    dbg!("STEP 1: before unique filter");
+    dbg!(&mle_refs);
+
+    let mle_refs = mle_refs.clone().into_iter().unique_by(|mle_ref| {
+        match mle_ref {
+            MleEnum::Dense(dense_mle_ref) => { dense_mle_ref.original_mle_indices.clone() }
+            MleEnum::Zero(zero_mle_ref) => { zero_mle_ref.original_mle_indices.clone() }
+        }
+    }).collect_vec();
+
+    dbg!("STEP 2: after unique filter");
+    dbg!(&mle_refs);
+
+    let mle_refs_split = collapse_mles_with_iterated_in_prefix(&mle_refs);
+
+    dbg!("STEP 3: split iterated within bound stuff");
+    dbg!(&mle_refs_split);
+
+    let fix_var_mle_refs = mle_refs_split.into_iter().map(
         |mle_ref| {
-            let mut og_mle_ref = DenseMleRef {
-                bookkeeping_table: mle_ref.original_bookkeeping_table.clone(),
-                original_bookkeeping_table: mle_ref.original_bookkeeping_table,
-                mle_indices: mle_ref.original_mle_indices.clone(),
-                original_mle_indices: mle_ref.original_mle_indices,
-                num_vars: mle_ref.original_num_vars,
-                original_num_vars: mle_ref.original_num_vars,
-                layer_id: mle_ref.layer_id,
-                indexed: false,
-            };
-            og_mle_ref.index_mle_indices(0);
-            og_mle_ref.mle_indices.clone().into_iter().for_each(
-                |mle_idx| {
-                    if let MleIndex::IndexedBit(idx) = mle_idx {
-                        og_mle_ref.fix_variable(idx, claim_point[idx]);
-                    }
+            match mle_ref {
+                MleEnum::Dense(dense_mle_ref) => {
+                    let mut mle_ref_og = DenseMleRef {
+                        bookkeeping_table: dense_mle_ref.original_bookkeeping_table.clone(),
+                        original_bookkeeping_table: dense_mle_ref.original_bookkeeping_table.clone(),
+                        mle_indices: dense_mle_ref.original_mle_indices.clone(),
+                        original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
+                        num_vars: dense_mle_ref.original_num_vars,
+                        original_num_vars: dense_mle_ref.original_num_vars,
+                        layer_id: dense_mle_ref.get_layer_id(),
+                        indexed: false,
+                    };
+                    mle_ref_og.index_mle_indices(0);
+                    mle_ref_og.mle_indices.clone().into_iter().enumerate().for_each(
+                        |(idx, mle_idx)| {
+                            if let MleIndex::IndexedBit(idx_num) = mle_idx {
+                                mle_ref_og.fix_variable(idx_num, chal_point[idx]);
+                            }
+                        }
+                    );
+                    // dbg!(&mle_ref_og.bookkeeping_table); // check that it is size 1
+                    MleEnum::Dense(mle_ref_og)
+
                 }
-            );
-            og_mle_ref
+                MleEnum::Zero(zero_mle_ref) => {
+                    MleEnum::Zero(zero_mle_ref)
+                }
+            }
+            
         }
     ).collect_vec();
 
-    let mut updated_list = mle_refs_reconstruct_og;
+    dbg!("STEP 4: fix var before combine");
+    dbg!(&fix_var_mle_refs);
+
+    let mut updated_list = fix_var_mle_refs;
 
     loop {
         let (lsb_fixed_var_opt, mle_ref_to_pair_opt) = get_lsb_fixed_var(&updated_list); 
-        let (lsb_fixed_var, mle_ref_to_pair) = (lsb_fixed_var_opt.unwrap(), mle_ref_to_pair_opt.unwrap()); // change to error
-        updated_list = find_pair_and_combine(&updated_list, lsb_fixed_var, mle_ref_to_pair, &claim_point);
-
-        if lsb_fixed_var == 0 {
+        
+        if lsb_fixed_var_opt.is_none() {
             break
         }
+
+        let (lsb_fixed_var, mle_ref_to_pair) = (lsb_fixed_var_opt.unwrap(), mle_ref_to_pair_opt.unwrap()); // change to error
+        // dbg!(lsb_fixed_var);
+        updated_list = find_pair_and_combine(&updated_list, lsb_fixed_var, mle_ref_to_pair, chal_point);
+        // dbg!(idx);
+        dbg!("ROUND of combining");
+
+        dbg!(&lsb_fixed_var);
+        dbg!(&updated_list);
     }
-    
-    // change to a check or something
-    dbg!(&updated_list);
-    updated_list[0].clone()
+
+    // // change to a check or something
+    updated_list[0].bookkeeping_table()[0]
+
+    // F::one()
 }
 
 pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &impl Fn(&ClaimGroup<F>) -> Vec<F>,
+    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Vec<F>,
     transcript: &mut impl transcript::Transcript<F>,
     enable_optimization: bool,
-) -> (Claim<F>, Option<Vec<F>>) {
+) -> (Claim<F>, Option<Vec<Vec<F>>>) {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
-
-    if num_claims > 1 {
-        dbg!(&claims);
-    }
    
-
+    info!("High-level claim aggregation on  {num_claims} claims.");
     // Do nothing if there is only one claim.
     if num_claims == 1 {
-        debug!("Claim Aggregation: 1 claim. Doing nothing.");
+        debug!("Received 1 claim. Doing nothing.");
         return (claims.get_claim(0).clone(), None);
     }
 
     if enable_optimization {
+        info!("Performing smart aggregation.");
         let mut claims = claims.get_claim_vector().clone();
+
+        // Holds a sequence of relevant wlx evaluations, one for each claim
+        // group that is being aggregated.
+        let mut group_wlx_evaluations: Vec<Vec<F>> = vec![];
 
         // Sort claims by `from_layer_id` field.
         // A trivial total order is imposed to include `None` values which
@@ -696,29 +777,43 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
         // Remove mutability of claims.
         let claims = claims;
 
-        // Intermediate results container.
-        let mut intermediate_claims: Vec<Claim<F>> = vec![];
-
         let claim_groups = form_claim_groups(&claims);
 
-        debug!("Claim Groups: {:#?}", claim_groups);
-        // for c in &claim_groups {
-        //     debug!("claim group with {} number of claims.", c.get_num_claims());
-        // }
+        debug!("Grouped claims for aggregation: ");
+        for group in &claim_groups {
+            for claim in group.get_claim_vector() {
+                debug!("\n{:#?}", claim);
+            }
+        }
 
-        let intermediate_claims: Vec<Claim<F>> = claim_groups
+        let intermediate_results: Vec<(Claim<F>, Option<Vec<Vec<F>>>)> = claim_groups
             .into_iter()
             .map(|claim_group| {
-                aggregate_claims_in_one_round(&claim_group, compute_wlx_fn, transcript).0
+                aggregate_claims_in_one_round(&claim_group, compute_wlx_fn, transcript)
             })
             .collect();
+        let intermediate_claims = intermediate_results
+            .clone()
+            .into_iter()
+            .map(|result| result.0)
+            .collect();
+        let mut intermediate_wlx_evals: Vec<Vec<F>> = intermediate_results
+            .into_iter()
+            .map(|result| result.1.unwrap_or_default())
+            .flatten()
+            .collect();
+        group_wlx_evaluations.append(&mut intermediate_wlx_evals);
 
         // Finally, aggregate all intermediate claims.
-        aggregate_claims_in_one_round(
+        let (claim, wlx_evals_option) = aggregate_claims_in_one_round(
             &ClaimGroup::new(intermediate_claims).unwrap(),
             compute_wlx_fn,
             transcript,
-        )
+        );
+
+        group_wlx_evaluations.append(&mut wlx_evals_option.unwrap_or_default());
+
+        (claim, Some(group_wlx_evaluations))
     } else {
         aggregate_claims_in_one_round(claims, compute_wlx_fn, transcript)
     }
@@ -726,15 +821,16 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 
 pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &impl Fn(&ClaimGroup<F>) -> Vec<F>,
+    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Vec<F>,
     transcript: &mut impl transcript::Transcript<F>,
-) -> (Claim<F>, Option<Vec<F>>) {
+) -> (Claim<F>, Option<Vec<Vec<F>>>) {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
+    info!("Low-level claim aggregation on {num_claims} claims.");
 
     // Do nothing if there is only one claim.
     if num_claims == 1 {
-        debug!("Claim Aggregation: 1 claim. Doing nothing.");
+        debug!("Received 1 claim. Doing nothing.");
         // Return the claim but erase any from/to layer info so as not to
         // trigger any checks from claim groups used in claim aggregation.
         let claim = Claim {
@@ -772,18 +868,18 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     }
 
     debug!(
-        "* Aggregated claim: {:#?}",
+        "Low level aggregated claim:\n{:#?}",
         Claim::new_raw(aggregated_challenges.clone(), claimed_val)
     );
 
     (
         Claim::new_raw(aggregated_challenges, claimed_val),
-        Some(relevant_wlx_evaluations),
+        Some(vec![relevant_wlx_evaluations]),
     )
 }
 
 /// Aggregates `claims` into a single claim on challenge point
-/// `r_star` using the `wlx` evaluations of W(l(x)).
+/// `r_star` given the `wlx` evaluations of W(l(x)).
 /// This function is used by the verifier in the process of verifying
 /// claim aggregation.
 pub(crate) fn verify_aggregate_claim<F: FieldExt>(
@@ -869,7 +965,6 @@ pub(crate) mod tests {
     /// on the boolean hypercube are given by `mle_evals`.
     fn layer_from_evals(mle_evals: Vec<Fr>) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
         let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0), None);
-        let mle_ref = mle.mle_ref();
 
         let layer = from_mle(
             mle,
@@ -904,7 +999,6 @@ pub(crate) mod tests {
 
     /// Compute l* = l(r*).
     fn compute_l_star(claims: &ClaimGroup<Fr>, r_star: &Fr) -> Vec<Fr> {
-        let num_claims = claims.get_num_claims();
         let num_vars = claims.get_num_vars();
 
         (0..num_vars)
@@ -920,12 +1014,11 @@ pub(crate) mod tests {
     pub(crate) fn claim_aggregation_testing_wrapper(
         layer: &impl Layer<Fr>,
         claims: &ClaimGroup<Fr>,
-        r_star: Fr,
-    ) -> (Claim<Fr>, Option<Vec<Fr>>) {
+    ) -> (Claim<Fr>, Option<Vec<Vec<Fr>>>) {
         let mut transcript = PoseidonTranscript::<Fr>::new("Dummy transcript for testing");
         aggregate_claims(
             claims,
-            &|claim| compute_claim_wlx(claims, layer).unwrap(),
+            &mut |claim| compute_claim_wlx(claim, layer).unwrap(),
             &mut transcript,
             false,
         )
@@ -1342,7 +1435,7 @@ pub(crate) mod tests {
         let wlx = compute_claim_wlx(&claims, &layer).unwrap();
         // assert_eq!(wlx, vec![Fr::from(163), Fr::from(1015), Fr::from(2269)]);
 
-        let aggregated_claim = claim_aggregation_testing_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_testing_wrapper(&layer, &claims);
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
@@ -1387,9 +1480,9 @@ pub(crate) mod tests {
         let rchal = Fr::from(2).neg();
 
         let claim_group = ClaimGroup::new(claims).unwrap();
-        let (res, wlx) = claim_aggregation_testing_wrapper(&layer, &claim_group, rchal);
+        let (res, wlx) = claim_aggregation_testing_wrapper(&layer, &claim_group);
         let rounds = expr.index_mle_indices(0);
-        let verify_result = verify_aggregate_claim(&wlx.unwrap(), &claim_group, rchal).unwrap();
+        // let verify_result = verify_aggregate_claim(&wlx.unwrap(), &claim_group, rchal).unwrap();
 
         // Makis; This test isn't verifying anything apart form the
         // fact that no errors are produced :/

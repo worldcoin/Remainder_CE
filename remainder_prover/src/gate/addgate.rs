@@ -1,4 +1,4 @@
-use ark_std::{cfg_into_iter};
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -6,19 +6,23 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use crate::{
     layer::{
-        claims::ClaimError, layer_enum::LayerEnum, claims::Claim, Layer, LayerBuilder, LayerError, LayerId,
-        VerificationError,
+        claims::Claim, claims::ClaimError, layer_enum::LayerEnum, Layer, LayerBuilder, LayerError,
+        LayerId, VerificationError,
     },
-    mle::beta::BetaTable,
-    prover::SumcheckProof,
+    mle::{beta::BetaTable, mle_enum::MleEnum},
+    prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::*,
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 
-use crate::mle::{
-    dense::{DenseMle, DenseMleRef}, MleRef,
+use super::gate_helpers::{
+    check_fully_bound, compute_full_gate, compute_sumcheck_message_add_gate, fix_var_gate,
+    index_mle_indices_gate, prove_round_add, GateError,
 };
-use super::{gate_helpers::{compute_sumcheck_message_add_gate, index_mle_indices_gate, GateError, prove_round_add, fix_var_gate, check_fully_bound, compute_full_gate}};
+use crate::mle::{
+    dense::{DenseMle, DenseMleRef},
+    MleRef,
+};
 use thiserror::Error;
 
 /// implement the layer trait for addgate struct
@@ -34,9 +38,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         let first_message = self
             .init_phase_1(claim)
             .expect("could not evaluate original lhs and rhs")
-            .into_iter().map(|eval| {
-                eval * self.beta_scaled.unwrap_or(F::one())
-            }).collect_vec();
+            .into_iter()
+            .map(|eval| eval * self.beta_scaled.unwrap_or(F::one()))
+            .collect_vec();
         let (phase_1_lhs, phase_1_rhs) = self
             .phase_1_mles
             .as_mut()
@@ -61,9 +65,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                     phase_1_lhs,
                     phase_1_rhs,
                 )
-                .unwrap().into_iter().map(|eval| {
-                    eval * self.beta_scaled.unwrap_or(F::one())
-                }).collect_vec();
+                .unwrap()
+                .into_iter()
+                .map(|eval| eval * self.beta_scaled.unwrap_or(F::one()))
+                .collect_vec();
                 transcript
                     .append_field_elements("Sumcheck evaluations", &eval)
                     .unwrap();
@@ -93,11 +98,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         if f_2.bookkeeping_table.len() == 1 {
             let f_at_u = f_2.bookkeeping_table[0];
             let u_challenges = Claim::new_raw(challenges.clone(), F::zero());
-            let first_message = self.init_phase_2(u_challenges, f_at_u).unwrap().into_iter().map(
-                |eval| {
-                    eval * self.beta_scaled.unwrap_or(F::one())
-                }
-            ).collect_vec();
+            let first_message = self
+                .init_phase_2(u_challenges, f_at_u)
+                .unwrap()
+                .into_iter()
+                .map(|eval| eval * self.beta_scaled.unwrap_or(F::one()))
+                .collect_vec();
 
             if self.rhs_num_vars > 0 {
                 let (phase_2_lhs, phase_2_rhs) = self
@@ -123,11 +129,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                             phase_2_lhs,
                             phase_2_rhs,
                         )
-                        .unwrap().into_iter().map(
-                            |eval| {
-                                eval * self.beta_scaled.unwrap_or(F::one())
-                            }
-                        ).collect_vec();
+                        .unwrap()
+                        .into_iter()
+                        .map(|eval| eval * self.beta_scaled.unwrap_or(F::one()))
+                        .collect_vec();
                         transcript
                             .append_field_elements("Sumcheck evaluations", &eval)
                             .unwrap();
@@ -190,8 +195,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         for (i, curr_evals) in sumcheck_rounds.iter().enumerate().skip(1) {
             let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
 
-            let prev_at_r = evaluate_at_a_point(prev_evals, challenge)
-                .map_err(LayerError::InterpError)?;
+            let prev_at_r =
+                evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 return Err(LayerError::VerificationError(
@@ -217,12 +222,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
         challenges.push(final_chal);
-        
 
         if self.rhs_num_vars == 0 {
             first_u_challenges.push(final_chal);
-        }
-        else {
+        } else {
             last_v_challenges.push(final_chal);
         }
 
@@ -231,17 +234,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         let (_, [_, rhs]) = self.phase_2_mles.as_mut().unwrap();
         let bound_lhs = check_fully_bound(&mut [lhs.clone()], first_u_challenges.clone()).unwrap();
 
-        
         let bound_rhs = {
             if self.rhs_num_vars > 0 {
                 check_fully_bound(&mut [rhs.clone()], last_v_challenges.clone()).unwrap()
-            }
-            else {
+            } else {
                 debug_assert_eq!(rhs.bookkeeping_table.len(), 1);
                 rhs.bookkeeping_table[0]
             }
         };
-        
+
         // compute the sum over all the variables of the gate function
         let beta_u = BetaTable::new(first_u_challenges.clone()).unwrap();
         let beta_v = if !last_v_challenges.is_empty() {
@@ -252,7 +253,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             }
-        };        
+        };
         let beta_g = if !claim.get_point().is_empty() {
             BetaTable::new(claim.get_point().clone()).unwrap()
         } else {
@@ -262,14 +263,28 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                 relevant_indices: vec![],
             }
         };
-        let f_1_uv = self.nonzero_gates.clone().into_iter().fold(
-            F::zero(), |acc, (z_ind, x_ind, y_ind)| {
-                let gz = *beta_g.table.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
-                let ux = *beta_u.table.bookkeeping_table().get(x_ind).unwrap_or(&F::zero());
-                let vy = *beta_v.table.bookkeeping_table().get(y_ind).unwrap_or(&F::zero());
-                acc + gz * ux * vy
-            }
-        );
+        let f_1_uv =
+            self.nonzero_gates
+                .clone()
+                .into_iter()
+                .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
+                    let gz = *beta_g
+                        .table
+                        .bookkeeping_table()
+                        .get(z_ind)
+                        .unwrap_or(&F::zero());
+                    let ux = *beta_u
+                        .table
+                        .bookkeeping_table()
+                        .get(x_ind)
+                        .unwrap_or(&F::zero());
+                    let vy = *beta_v
+                        .table
+                        .bookkeeping_table()
+                        .get(y_ind)
+                        .unwrap_or(&F::zero());
+                    acc + gz * ux * vy
+                });
 
         // get the fully evaluated "expression"
         let fully_evaluated = f_1_uv * (bound_lhs + bound_rhs);
@@ -305,14 +320,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                 val,
                 Some(self.id().clone()),
                 Some(f_2_u.get_layer_id()),
-                Some(f_2_u.clone()),
+                Some(MleEnum::Dense(f_2_u.clone())),
             );
             claims.push(claim);
         } else {
             return Err(LayerError::LayerNotReady);
         }
 
-        
         let mut fixed_mle_indices_v: Vec<F> = vec![];
 
         // check the right side of the sum (f3(v)) against the challenges made to bind that variable
@@ -330,7 +344,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                 val,
                 Some(self.id().clone()),
                 Some(f_3_v.get_layer_id()),
-                Some(f_3_v.clone()),
+                Some(MleEnum::Dense(f_3_v.clone())),
             );
             claims.push(claim);
         } else {
@@ -353,12 +367,40 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
         let num_vars = std::cmp::max(self.lhs.num_vars(), self.rhs.num_vars());
-        let num_evals = (num_vars) * (num_claims); //* degree;
+        let mut num_evals = (num_vars) * (num_claims); //* degree;
+
+        if ENABLE_OPTIMIZATION {
+            let mut degree_reduction = num_vars as i64;
+            for j in 0..num_vars {
+                for i in 1..num_claims {
+                    if claim_vecs[i][j] != claim_vecs[i - 1][j] {
+                        degree_reduction -= 1;
+                        break;
+                    }
+                }
+            }
+            assert!(degree_reduction >= 0);
+
+            // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
+            // points. W : F^n -> F is a multi-linear polynomial on
+            // `num_vars` variables and l : F -> F^n is a canonical
+            // polynomial passing through `num_claims` points so its degree is
+            // at most `num_claims - 1`. This imposes an upper
+            // bound of `num_vars * (num_claims - 1)` to the degree of P.
+            // However, the actual degree of P might be lower.
+            // For any coordinate `i` such that all claims agree
+            // on that coordinate, we can quickly deduce that `l_i(x)` is a
+            // constant polynomial of degree zero instead of `num_claims -
+            // 1` which brings down the total degree by the same amount.
+            num_evals =
+                (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+        }
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
@@ -369,12 +411,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        
+
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
 
-                
                 compute_full_gate(
                     new_chal,
                     &mut self.lhs.clone(),
@@ -387,7 +428,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
 
         // concat this with the first k evaluations from the claims to get num_evals evaluations
         let mut claimed_vals = claimed_vals.clone();
-        
+
         claimed_vals.extend(&next_evals);
         let wlx_evals = claimed_vals;
         Ok(wlx_evals)

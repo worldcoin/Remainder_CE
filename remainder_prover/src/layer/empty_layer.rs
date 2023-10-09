@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionStandard},
-    mle::MleRef,
+    mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum},
     prover::SumcheckProof,
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -17,7 +17,7 @@ use super::{
 };
 
 ///A Layer with 0 num_vars
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct EmptyLayer<F, Tr> {
     pub(crate) expr: ExpressionStandard<F>,
@@ -33,8 +33,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         _: Claim<F>,
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-        let eval =
-            gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
+        let eval = gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
 
         Ok(vec![vec![eval]].into())
     }
@@ -97,7 +96,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                         claimed_value,
                         Some(self.id().clone()),
                         Some(mle_layer_id),
-                        Some(mle_ref.clone())
+                        Some(MleEnum::Dense(mle_ref.clone()))
                     );
 
                     // --- Push it into the list of claims ---
@@ -131,7 +130,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                             claimed_value,
                             Some(self.id().clone()),
                             Some(mle_layer_id),
-                            Some(mle_ref.clone())
+                            Some(MleEnum::Dense(mle_ref.clone()))
                         );
 
                         // --- Push it into the list of claims ---
@@ -160,6 +159,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {

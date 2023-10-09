@@ -33,7 +33,7 @@ use remainder_shared_types::{
 use super::{
     combine_layers::combine_layers,
     input_layer::{
-        combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
+        self, combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer, InputLayer,
     },
@@ -365,6 +365,198 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
             },
             vec![input_commit, random_commit, input_layer_2_commit],
         ))
+    }
+}
+
+/// This circuit has two separate input layers, each with two MLEs inside, where
+/// the MLEs within the input layer are the same size but the input layers themselves
+/// are different sizes.
+///
+/// The MLEs within each input layer are first added together, then their results
+/// are added. The final layer is just a ZeroLayerBuilder (i.e. subtracts the final
+/// layer from itself for convenience).
+///
+/// TODO!(ryancao): If this still doesn't fail, change the MLEs within each input layer
+///     to be different sizes and see if it does
+/// TODO!(ryancao): If this still doesn't fail, make it batched and see if it fails then
+struct MultiInputLayerCircuit<F: FieldExt> {
+    input_layer_1_mle_1: DenseMle<F, F>,
+    input_layer_1_mle_2: DenseMle<F, F>,
+
+    input_layer_2_mle_1: DenseMle<F, F>,
+    input_layer_2_mle_2: DenseMle<F, F>,
+}
+impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        unimplemented!()
+    }
+
+    fn synthesize_and_commit(
+        &mut self,
+        transcript: &mut Self::Transcript,
+    ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
+        // --- Publicly commit to each input layer ---
+        let mut input_layer_1 = InputLayerBuilder::new(
+            vec![
+                Box::new(&mut self.input_layer_1_mle_1),
+                Box::new(&mut self.input_layer_1_mle_2),
+            ],
+            None,
+            LayerId::Input(0),
+        )
+        .to_input_layer::<PublicInputLayer<F, _>>()
+        .to_enum();
+        let input_layer_1_commitment = input_layer_1.commit().map_err(GKRError::InputLayerError)?;
+        InputLayerEnum::append_commitment_to_transcript(&input_layer_1_commitment, transcript)
+            .unwrap();
+
+        // --- Second input layer (public) commitment ---
+        let mut input_layer_2 = InputLayerBuilder::new(
+            vec![
+                Box::new(&mut self.input_layer_2_mle_1),
+                Box::new(&mut self.input_layer_2_mle_2),
+            ],
+            None,
+            LayerId::Input(1),
+        )
+        .to_input_layer::<PublicInputLayer<F, _>>()
+        .to_enum();
+        let input_layer_2_commitment = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
+        InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commitment, transcript)
+            .unwrap();
+
+        let mut layers = Layers::new();
+
+        // --- Add the first input layer MLEs to one another ---
+        let layer_1 = from_mle(
+            // Lol this hack though
+            (
+                self.input_layer_1_mle_1.clone(),
+                self.input_layer_1_mle_2.clone(),
+            ),
+            |(input_layer_1_mle_1, input_layer_1_mle_2)| {
+                let input_layer_1_mle_1_expr_ptr =
+                    Box::new(ExpressionStandard::Mle(input_layer_1_mle_1.mle_ref()));
+                let input_layer_1_mle_2_expr_ptr =
+                    Box::new(ExpressionStandard::Mle(input_layer_1_mle_2.mle_ref()));
+                ExpressionStandard::Sum(input_layer_1_mle_1_expr_ptr, input_layer_1_mle_2_expr_ptr)
+            },
+            |(input_layer_1_mle_1, input_layer_1_mle_2), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    input_layer_1_mle_1
+                        .into_iter()
+                        .zip(input_layer_1_mle_2.into_iter().cycle())
+                        .map(|(input_layer_1_mle_1_elem, input_layer_1_mle_2_elem)| {
+                            input_layer_1_mle_1_elem + input_layer_1_mle_2_elem
+                        }),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+
+        // --- Add the second input layer MLEs to one another ---
+        let layer_2 = from_mle(
+            // Lol this hack though
+            (
+                self.input_layer_2_mle_1.clone(),
+                self.input_layer_2_mle_2.clone(),
+            ),
+            |(input_layer_2_mle_1, input_layer_2_mle_2)| {
+                let input_layer_2_mle_1_expr_ptr =
+                    Box::new(ExpressionStandard::Mle(input_layer_2_mle_1.mle_ref()));
+                let input_layer_2_mle_2_expr_ptr =
+                    Box::new(ExpressionStandard::Mle(input_layer_2_mle_2.mle_ref()));
+                dbg!(input_layer_2_mle_1.layer_id);
+                dbg!(input_layer_2_mle_2.layer_id);
+                ExpressionStandard::Sum(input_layer_2_mle_1_expr_ptr, input_layer_2_mle_2_expr_ptr)
+            },
+            |(input_layer_2_mle_1, input_layer_2_mle_2), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    input_layer_2_mle_1
+                        .into_iter()
+                        .zip(input_layer_2_mle_2.into_iter().cycle())
+                        .map(|(input_layer_2_mle_1_elem, input_layer_2_mle_2_elem)| {
+                            input_layer_2_mle_1_elem + input_layer_2_mle_2_elem
+                        }),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+
+        let first_layer_output = layers.add_gkr(layer_1);
+        let second_layer_output = layers.add_gkr(layer_2);
+
+        // --- Next layer should take the two and add them ---
+        let layer_3 = from_mle(
+            // Lol this hack though
+            (first_layer_output, second_layer_output),
+            |(first_layer_output_mle_param, second_layer_output_mle_param)| {
+                let first_layer_output_mle_param_expr_ptr = Box::new(ExpressionStandard::Mle(
+                    first_layer_output_mle_param.mle_ref(),
+                ));
+                let second_layer_output_mle_param_expr_ptr = Box::new(ExpressionStandard::Mle(
+                    second_layer_output_mle_param.mle_ref(),
+                ));
+                ExpressionStandard::Sum(
+                    first_layer_output_mle_param_expr_ptr,
+                    second_layer_output_mle_param_expr_ptr,
+                )
+            },
+            |(first_layer_output_mle_param, second_layer_output_mle_param),
+             layer_id,
+             prefix_bits| {
+                DenseMle::new_from_iter(
+                    first_layer_output_mle_param
+                        .into_iter()
+                        .zip(second_layer_output_mle_param.into_iter().cycle())
+                        .map(
+                            |(
+                                first_layer_output_mle_param_elem,
+                                second_layer_output_mle_param_elem,
+                            )| {
+                                first_layer_output_mle_param_elem
+                                    + second_layer_output_mle_param_elem
+                            },
+                        ),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+        let third_layer_output = layers.add_gkr(layer_3);
+
+        // --- Subtract the last layer from itself so we get all zeros ---
+        let layer_4 = EqualityCheck::new(third_layer_output.clone(), third_layer_output);
+        let fourth_layer_output = layers.add_gkr(layer_4);
+
+        Ok((
+            Witness {
+                layers,
+                output_layers: vec![fourth_layer_output.get_enum()],
+                input_layers: vec![input_layer_1, input_layer_2],
+            },
+            vec![input_layer_1_commitment, input_layer_2_commitment],
+        ))
+    }
+}
+impl<F: FieldExt> MultiInputLayerCircuit<F> {
+    /// Constructor
+    pub fn new(
+        input_layer_1_mle_1: DenseMle<F, F>,
+        input_layer_1_mle_2: DenseMle<F, F>,
+        input_layer_2_mle_1: DenseMle<F, F>,
+        input_layer_2_mle_2: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            input_layer_1_mle_1,
+            input_layer_1_mle_2,
+            input_layer_2_mle_1,
+            input_layer_2_mle_2,
+        }
     }
 }
 
@@ -1156,6 +1348,32 @@ fn test_gkr_circuit_with_precommit() {
 }
 
 // ------------------------------------ INPUT LAYER TESTING CIRCUITS ------------------------------------
+
+#[test]
+fn test_multiple_input_layers_circuit() {
+    let mut rng = test_rng();
+    let input_layer_1_mle_1 = get_random_mle::<Fr>(3, &mut rng);
+    let input_layer_1_mle_2 = get_random_mle::<Fr>(2, &mut rng);
+
+    let mut input_layer_2_mle_1 = get_random_mle::<Fr>(2, &mut rng);
+    let mut input_layer_2_mle_2 = get_random_mle::<Fr>(1, &mut rng);
+
+    // --- Yikes ---
+    input_layer_2_mle_1.layer_id = LayerId::Input(1);
+    input_layer_2_mle_2.layer_id = LayerId::Input(1);
+
+    let circuit = MultiInputLayerCircuit::new(
+        input_layer_1_mle_1,
+        input_layer_1_mle_2,
+        input_layer_2_mle_1,
+        input_layer_2_mle_2,
+    );
+
+    test_circuit(
+        circuit,
+        Some(Path::new("./multiple_input_layers_circuit.json")),
+    );
+}
 
 #[test]
 fn test_random_layer_circuit() {
