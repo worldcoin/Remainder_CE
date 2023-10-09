@@ -83,6 +83,14 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         }
     }
 
+    fn fix_variable_at_index(
+        &mut self,
+        indexed_bit_index: usize,
+        point: Self::F,
+    ) -> Option<Claim<Self::F>> {
+        self.fix_variable(indexed_bit_index, point)
+    }
+
     fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         let mut new_indices = 0;
         for mle_index in self.mle_indices.iter_mut() {
