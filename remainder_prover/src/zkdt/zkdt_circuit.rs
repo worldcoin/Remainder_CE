@@ -531,7 +531,8 @@ mod tests {
 
         let combined_circuit = ZKDTCircuit {
             batched_catboost_mles,
-            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/".to_string(),
+            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json"
+                .to_string(),
         };
 
         test_circuit(
@@ -554,7 +555,8 @@ mod tests {
 
             let combined_circuit = ZKDTCircuit {
                 batched_catboost_mles,
-                tree_precommit_filepath: "upshot_data/tree_ligero_commitments/".to_string(),
+                tree_precommit_filepath:
+                    "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
             };
 
             test_circuit(combined_circuit, None);
