@@ -72,7 +72,7 @@ fn main() {
     };
 
     //Use this code to get the circuit hash for your circuit
-    dbg!(combined_circuit.gen_circuit_hash().to_bytes());
+    // dbg!(combined_circuit.gen_circuit_hash().to_bytes());
 
     test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));
 }

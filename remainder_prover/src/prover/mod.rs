@@ -23,7 +23,7 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         MleRef,
     },
-    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point, gate::{addgate::AddGate, mulgate::MulGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched}
+    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point, utils::hash_layers,
 };
 
 use remainder_shared_types::transcript::{Transcript};
