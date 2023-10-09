@@ -34,6 +34,7 @@ use remainder_shared_types::{
     FieldExt,
 };
 
+use super::input_data_to_circuit_adapter::BatchedZKDTCircuitMles;
 use super::{
     attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit,
     binary_recomp_circuit::dataparallel_circuits::BinaryRecompCircuitBatched,
@@ -43,15 +44,8 @@ use super::{
             BinDecomp16BitIsBinaryCircuitBatched, BinDecomp4BitIsBinaryCircuitBatched,
         },
     },
-    builders::{
-        BitExponentiationBuilderInput, EqualityCheck, FSDecisionPackingBuilder,
-        FSInputPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder, ProductBuilder,
-        SplitProductBuilder, SquaringBuilder,
-    },
-    constants::get_tree_commitment_filename_for_tree_number,
-    data_pipeline::dummy_data_generator::BatchedCatboostMles,
     input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit,
-    multiset_circuit::{circuits::FSMultiSetCircuit, legacy_circuits::MultiSetCircuit},
+    multiset_circuit::{circuits::FSMultiSetCircuit},
     path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
@@ -175,9 +169,9 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         ),
         GKRError,
     > {
-        let BatchedCatboostMles {
-            mut input_data_mle_vec,
-            mut permuted_input_data_mle_vec,
+        let BatchedZKDTCircuitMles {
+            mut input_samples_mle_vec,
+            mut permuted_input_samples_mle_vec,
             mut decision_node_paths_mle_vec,
             mut leaf_node_paths_mle_vec,
             mut multiplicities_bin_decomp_mle_decision,
@@ -502,8 +496,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 #[cfg(test)]
 mod tests {
     use super::ZKDTCircuit;
-    use crate::prover::tests::test_circuit;
-    use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
+    use crate::{prover::tests::test_circuit, zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use std::path::Path;
 
