@@ -1,6 +1,5 @@
 //! An MLE is a MultiLinearExtention that contains a more complex type (i.e. T, or (T, T) or ExampleStruct)
 
-
 use core::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
@@ -64,6 +63,19 @@ pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.
     /// If the Mle is fully bound will return the evaluation of the fully bound Mle
     fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>>;
+
+    /// Fix the iterated variable at `indexed_bit_index` with a given challenge
+    /// `point`. Mutates self to be the bookeeping table for the new Mle.  If
+    /// the Mle is fully bound will return the evaluation of the fully bound
+    /// Mle.
+    /// # Panics
+    /// if `indexed_bit_index` does not correspond to a
+    /// `MleIndex::Iterated(indexed_bit_index)` in `mle_indices`.
+    fn fix_variable_at_index(
+        &mut self,
+        indexed_bit_index: usize,
+        point: Self::F,
+    ) -> Option<Claim<Self::F>>;
 
     ///Mutate the MleIndices that are Iterated and turn them into IndexedBit with the bit index being determined from curr_index.
     /// Returns the curr_index + the number of IndexedBits now in the MleIndices

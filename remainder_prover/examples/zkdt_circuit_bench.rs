@@ -67,10 +67,9 @@ fn main() {
 
     let combined_circuit = ZKDTCircuit {
         batched_catboost_mles,
+        tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json"
+            .to_string(),
     };
 
-    test_circuit(
-        combined_circuit,
-        Some(Path::new("./zkdt_proof_no_opt.json")),
-    );
+    test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));
 }
