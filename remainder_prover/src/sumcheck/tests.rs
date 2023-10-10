@@ -11,7 +11,7 @@ use crate::{
 use ark_std::test_rng;
 
 use ark_std::{One, Zero};
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use remainder_shared_types::Fr;
 use rand::Rng;
 use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
 
