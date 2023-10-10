@@ -23,3 +23,5 @@ pub mod path_consistency_circuit;
 pub mod bits_are_binary_circuit;
 pub mod input_multiset_circuit;
 pub mod legacy_circuits;
+pub mod input_data_to_circuit_adapter;
+pub mod cache_upshot_catboost_inputs_for_testing;
