@@ -13,7 +13,9 @@ use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
 
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 use thiserror::Error;
 
 use super::Layer;
@@ -339,6 +341,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 
     let claims = preprocess_claims(claims.get_claim_vector().clone());
     let claim_groups = form_claim_groups(&claims);
+    let num_groups = claim_groups.len();
 
     debug!("Grouped claims for aggregation: ");
     for group in &claim_groups {
@@ -351,11 +354,27 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     end_timer!(claim_preproc_timer);
     let intermediate_timer = start_timer!(|| format!("Intermediate claim aggregation."));
 
-    // TODO(Makis): Parallelize
-    let intermediate_results: Result<Vec<(Claim<F>, Vec<Vec<F>>)>, GKRError> = claim_groups
+    // Sample all challenges for intermediate claim aggregation.
+    let agg_challenges = (0..num_groups)
         .into_iter()
-        .map(|claim_group| aggregate_claims_in_one_round(&claim_group, compute_wlx_fn, transcript))
-        .collect();
+        .map(|_| {
+            transcript
+                .get_challenge("Challenge for claim aggregation")
+                .unwrap()
+        })
+        .collect_vec();
+
+    let intermediate_results: Result<Vec<(Claim<F>, Vec<Vec<F>>)>, GKRError> =
+        cfg_into_iter!(claim_groups)
+            .enumerate()
+            .map(|(idx, claim_group)| {
+                aggregate_claims_in_one_round(
+                    &claim_group,
+                    compute_wlx_fn,
+                    agg_challenges[idx].clone(),
+                )
+            })
+            .collect();
     let intermediate_results = intermediate_results?;
 
     // TODO(Makis): Parallelize both
@@ -370,6 +389,13 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
         .flatten()
         .collect();
 
+    // Appends all intermediate claim wlx evaluations to the transcript.
+    for wlx_evals in &intermediate_wlx_evals {
+        transcript
+            .append_field_elements("Claim Aggregation Wlx_evaluations", wlx_evals)
+            .unwrap();
+    }
+
     // Gather all wlx evaluations into one place.
     group_wlx_evaluations.append(&mut intermediate_wlx_evals);
 
@@ -377,10 +403,13 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     let final_timer = start_timer!(|| format!("Final stage aggregation."));
 
     // Finally, aggregate all intermediate claims.
+    let agg_challenge = transcript
+        .get_challenge("Challenge for claim aggregation")
+        .unwrap();
     let (claim, mut wlx_evals_option) = aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
         compute_wlx_fn,
-        transcript,
+        agg_challenge,
     )?;
 
     group_wlx_evaluations.append(&mut wlx_evals_option);
@@ -565,7 +594,7 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
     compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Result<Vec<F>, GKRError>,
-    transcript: &mut impl transcript::Transcript<F>,
+    agg_chal: F,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
@@ -590,18 +619,6 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     let wlx_evaluations = compute_wlx_fn(claims)?;
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
-    // Append evaluations to the transcript before sampling a challenge.
-    transcript
-        .append_field_elements(
-            "Claim Aggregation Wlx_evaluations",
-            &relevant_wlx_evaluations,
-        )
-        .unwrap();
-
-    // Next, sample `r^\star` from the transcript.
-    let agg_chal = transcript
-        .get_challenge("Challenge for claim aggregation")
-        .unwrap();
     debug!("Aggregate challenge: {:#?}", agg_chal);
 
     let aggregated_challenges = compute_aggregated_challenges(claims, agg_chal).unwrap();
