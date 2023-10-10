@@ -8,6 +8,7 @@ use remainder_shared_types::{
     transcript::{Transcript as RemainderTranscript, TranscriptError},
     FieldExt,
 };
+use tracing::instrument;
 
 use super::poseidon_ligero::PoseidonSpongeHasher;
 use super::{commit, prove};
@@ -36,6 +37,7 @@ use super::{commit, prove};
 /// ```
 /// // TODO!(ryancao)
 /// ```
+#[instrument(skip_all, level = "debug")]
 pub fn poseidon_ml_commit_prove<F: FieldExt>(
     coeffs: &Vec<F>,
     log_num_rows: usize,
@@ -208,6 +210,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
 /// * `ligero_commit` - Commitment including encoded matrix
 /// * `ligero_root` - Merkle tree root
 /// * `aux` - Auxiliary info for Ligero
+#[instrument(skip_all, level = "debug")]
 pub fn remainder_ligero_commit_prove<F: FieldExt>(
     input_mle_bookkeeping_table: &Vec<F>,
     rho_inv: u8,
