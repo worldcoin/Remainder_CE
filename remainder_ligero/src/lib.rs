@@ -21,7 +21,7 @@ use crate::utils::get_least_significant_bits_to_usize_little_endian;
 use ark_ff::biginteger::BigInteger;
 use err_derive::Error;
 use itertools::Itertools;
-use poseidon::Poseidon;
+use remainder_shared_types::Poseidon;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;

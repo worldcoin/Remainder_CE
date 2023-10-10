@@ -2,7 +2,7 @@
 
 use std::{path::Path, fs};
 use ark_std::log2;
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use remainder_shared_types::Fr;
 use itertools::Itertools;
 use remainder::{zkdt::{data_pipeline::dt2zkdt::{RawSamples, load_raw_samples, Samples, to_samples}, structs::InputAttribute, constants::get_sample_minibatch_commitment_filepath_for_batch_size}, mle::{dense::DenseMle, Mle}, layer::LayerId, prover::input_layer::{combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer}};
 use clap::Parser;

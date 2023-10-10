@@ -1,7 +1,7 @@
 //! Executable for Remainder ZKDT prover!
 
 use std::{path::{Path, PathBuf}, time::Instant, fs};
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use remainder_shared_types::Fr;
 use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}, input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}};
 use clap::Parser;
 use remainder_shared_types::FieldExt;

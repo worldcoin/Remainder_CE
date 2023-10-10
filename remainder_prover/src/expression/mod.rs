@@ -6,7 +6,6 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
 };
 
-use halo2_base::halo2_proofs::plonk::Circuit;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -771,7 +770,7 @@ mod tests {
 
     use super::*;
     use ark_std::One;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     // #[test]
     // fn test_expression_operators() {

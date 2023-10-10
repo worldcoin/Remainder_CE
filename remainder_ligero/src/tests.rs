@@ -19,9 +19,10 @@ use crate::{
 // --- For serialization/deserialization of the various structs ---
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
+use halo2_proofs::poly::EvaluationDomain;
 // --- For BN-254 ---
 use itertools::{iterate, Itertools};
-use poseidon::Poseidon;
+use remainder_shared_types::Poseidon;
 use rand::Rng;
 use remainder_shared_types::{
     transcript::{poseidon_transcript::PoseidonTranscript, Transcript as RemainderTranscript},
@@ -44,7 +45,7 @@ fn log2() {
 
 #[test]
 fn merkleize() {
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     // --- This is SUPER ugly, but for the sake of efficiency... ---
     // TODO!(ryancao): Riperoni
@@ -70,7 +71,7 @@ fn merkleize() {
 
 #[test]
 fn eval_outer() {
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     use super::{eval_outer, eval_outer_ser};
 
@@ -89,7 +90,7 @@ fn eval_outer() {
 #[test]
 fn open_column() {
     use super::{merkleize, open_column, verify_column};
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     // --- This is SUPER ugly, but for the sake of efficiency... ---
     // TODO!(ryancao): Riperoni
@@ -184,8 +185,7 @@ fn arkworks_bn_fft_test() {
 fn halo2_bn_fft_test() {
     use ark_std::log2;
     use ark_std::test_rng;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use halo2_base::halo2_proofs::poly::*;
+    use remainder_shared_types::Fr;
 
     let mut rng = test_rng();
 
@@ -207,7 +207,7 @@ fn halo2_bn_fft_test() {
 
     // --- Creates the polynomial in coeff form and performs the FFT from 2^3 coeffs --> 2^3 evals ---
     let polynomial_coeff = evaluation_domain.coeff_from_vec(coeffs);
-    let polynomial_eval_form = evaluation_domain.coeff_to_extended(&polynomial_coeff);
+    let polynomial_eval_form = evaluation_domain.coeff_to_extended(polynomial_coeff.clone());
     assert_eq!(polynomial_eval_form.len(), 2_usize.pow(log_num_evals));
 
     // --- Perform the IFFT and assert that the resulting polynomial has degree 7 ---
@@ -238,7 +238,7 @@ fn poseidon_commit_test() {
     use super::poseidon_ligero::PoseidonSpongeHasher;
     use super::{commit, eval_outer, eval_outer_fft};
     use ark_std::test_rng;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     // --- RNG for testing ---
     let mut rng = test_rng();
@@ -327,7 +327,7 @@ fn poseidon_end_to_end_test() {
     use super::poseidon_ligero::PoseidonSpongeHasher;
     use super::{commit, prove, verify};
     use ark_std::test_rng;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     // --- RNG for testing ---
     let mut rng = test_rng();
@@ -486,7 +486,7 @@ fn poseidon_ml_commit_test() {
     use super::poseidon_ligero::PoseidonSpongeHasher;
     use super::{commit, eval_outer, eval_outer_fft};
     use ark_std::test_rng;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     // --- RNG for testing ---
     let mut rng = test_rng();
@@ -568,7 +568,7 @@ fn poseidon_ml_end_to_end_test() {
     use super::poseidon_ligero::PoseidonSpongeHasher;
     use super::{commit, prove, verify};
     use ark_std::test_rng;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     // use std::fs;
 
     // --- RNG for testing ---

@@ -136,7 +136,7 @@ pub fn get_field_val_as_usize_vec<F: FieldExt>(value: F) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     /// Returns a small tree for testing:
     ///      .

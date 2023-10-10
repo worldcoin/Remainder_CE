@@ -656,7 +656,7 @@ mod tests {
             Evals,
         }, zkdt::cache_upshot_catboost_inputs_for_testing::write_mles_batch_catboost_single_tree,
     };
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use ark_std::test_rng;
 
     /// Checks that bits within the diff binary decomp and the multiplicity

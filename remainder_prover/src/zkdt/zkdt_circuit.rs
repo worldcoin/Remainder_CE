@@ -505,7 +505,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 mod tests {
     use super::ZKDTCircuit;
     use crate::{prover::tests::test_circuit, zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use std::path::Path;
 
     #[test]

@@ -1,4 +1,4 @@
-use poseidon::Poseidon;
+use remainder_shared_types::Poseidon;
 use remainder_shared_types::FieldExt;
 
 /// FieldHashFnDigest gives you a trait which is basically `Digest` but compatible

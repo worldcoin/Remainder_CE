@@ -1,5 +1,5 @@
 use ark_std::{log2, test_rng, One};
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use remainder_shared_types::Fr;
 use itertools::{Itertools, repeat_n};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;

@@ -139,7 +139,7 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
 }
 
 mod tests {
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use super::write_mles_batch_catboost_single_tree;
 
     /// Literally just calls the [`write_mles_batch_catboost_single_tree`] function

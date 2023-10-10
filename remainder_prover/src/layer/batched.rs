@@ -280,7 +280,7 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
 #[cfg(test)]
 mod tests {
     use ark_std::test_rng;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use itertools::Itertools;
 
     use crate::{
