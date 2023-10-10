@@ -47,7 +47,7 @@ mod tests {
     }
 
     #[test]
-    fn c() {
+    fn test_bin_decomp_16_bit_bits_are_binary_batched() {
 
         // --- NOTE that this won't work unless we flip the binary decomp endian-ness!!! ---
         // let DummyMles { 

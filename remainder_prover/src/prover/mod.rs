@@ -485,8 +485,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_id = *layer.id();
                 info!("New Intermediate Layer: {:?}", layer_id);
-                dbg!("layer");
-                dbg!(&layer_id);
 
                 let layer_claims_vec = claims
                     .get(&layer_id)
@@ -506,8 +504,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
 
                 info!("Time for claim aggregation...");
-                dbg!("claim agg");
-                dbg!(layer_id);
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
                     &mut |claims| compute_claim_wlx(claims, &layer).unwrap(),

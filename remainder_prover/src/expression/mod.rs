@@ -339,7 +339,6 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         self.traverse(&mut observer_fn)?;
 
         // --- Traverse the expression and pick up all the evals ---
-        // dbg!(&self);
         gather_combine_all_evals(self)
     }
 
