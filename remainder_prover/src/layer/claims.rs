@@ -326,7 +326,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
 /// implementation.
 pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Result<Vec<F>, GKRError>,
+    compute_wlx_fn: &(impl Fn(&ClaimGroup<F>, &usize) -> Result<Vec<F>, GKRError> + std::marker::Sync),
     transcript: &mut impl transcript::Transcript<F>,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
     let num_claims = claims.get_num_claims();
@@ -371,6 +371,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
                 aggregate_claims_in_one_round(
                     &claim_group,
                     compute_wlx_fn,
+                    &idx,
                     agg_challenges[idx].clone(),
                 )
             })
@@ -409,6 +410,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     let (claim, mut wlx_evals_option) = aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
         compute_wlx_fn,
+        &num_groups,
         agg_challenge,
     )?;
 
@@ -593,7 +595,8 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 /// this 1-step claim aggregation.
 pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Result<Vec<F>, GKRError>,
+    compute_wlx_fn: &impl Fn(&ClaimGroup<F>, &usize) -> Result<Vec<F>, GKRError>,
+    index: &usize,
     agg_chal: F,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
     let num_claims = claims.get_num_claims();
@@ -616,7 +619,7 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
 
     // Aggregate claims by performing the claim aggregation protocol.
     // First compute V_i(l(x)).
-    let wlx_evaluations = compute_wlx_fn(claims)?;
+    let wlx_evaluations = compute_wlx_fn(claims, index)?;
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
     debug!("Aggregate challenge: {:#?}", agg_chal);
@@ -860,7 +863,7 @@ pub(crate) mod tests {
         let mut transcript = PoseidonTranscript::<Fr>::new("Dummy transcript for testing");
         aggregate_claims(
             claims,
-            &mut |claim| Ok(compute_claim_wlx(claims, layer)),
+            &|claim, _| Ok(compute_claim_wlx(claims, layer)),
             &mut transcript,
         )
         .unwrap()
