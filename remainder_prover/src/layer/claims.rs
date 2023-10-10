@@ -4,6 +4,7 @@ use ark_crypto_primitives::crh::sha256::digest::typenum::Or;
 use itertools::Either;
 use remainder_shared_types::transcript::{self};
 use remainder_shared_types::FieldExt;
+use tracing::instrument;
 
 use crate::prover::input_layer::enum_input_layer::InputLayerEnum;
 use crate::prover::input_layer::InputLayer;
@@ -404,6 +405,8 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 /// operating on the points and not on the results. However, the ClaimGroup API
 /// is convenient for accessing columns and makes the implementation more
 /// readable. We should consider alternative designs.
+#[instrument(level = "trace", err)]
+#[instrument(level = "debug", skip_all, err)]
 pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     claims: &ClaimGroup<F>,
     r_star: F,
@@ -438,6 +441,8 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
 /// TODO(Makis): Due to the `ClaimGroup<F>` refactor, this function is now just
 /// wrapper around `Layer<F>::get_wlx_evaluations()`. Consider removing it.
 /*
+#[instrument(skip(layer), err, level = "trace")]
+#[instrument(skip_all, err, level = "debug")]
 pub(crate) fn compute_claim_wlx<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer: &impl Layer<F>,
@@ -680,6 +685,9 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> usize {
 /// This function is used by the verifier in the process of verifying
 /// claim aggregation.
 /*
+/// verifies the claim aggregation
+#[instrument(level = "trace", err)]
+#[instrument(level = "debug", skip_all, err)]
 pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for q(x)
     claims: &ClaimGroup<F>,

@@ -8,6 +8,7 @@ use remainder_shared_types::{
     FieldExt,
 };
 use thiserror::Error;
+use tracing::instrument;
 pub mod combine_input_layers;
 pub mod enum_input_layer;
 pub mod ligero_input_layer;
@@ -69,6 +70,7 @@ pub trait InputLayer<F: FieldExt> {
 
     fn get_padded_mle(&self) -> DenseMle<F, F>;
 
+    #[instrument(skip_all, err, level = "debug")]
     fn compute_claim_wlx(&self, claims: &ClaimGroup<F>) -> Result<Vec<F>, ClaimError> {
         let prep_timer = start_timer!(|| "Claim wlx prep");
 
@@ -122,6 +124,7 @@ pub trait InputLayer<F: FieldExt> {
     }
 
     /// Computes `l(r^{\star})`
+    #[instrument(skip_all, err, level = "debug")]
     fn compute_aggregated_challenges(
         &self,
         claims: &ClaimGroup<F>,

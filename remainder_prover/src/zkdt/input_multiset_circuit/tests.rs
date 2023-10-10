@@ -1,9 +1,6 @@
 #[cfg(test)]
 mod tests {
     use std::{path::Path};
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit}};
-    use remainder_shared_types::transcript::{Transcript};
     use crate::prover::tests::test_circuit;
 
     // --- Note: This test will only compile/run if we have the FS input layer stuff ---

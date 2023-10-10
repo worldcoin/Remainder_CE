@@ -36,6 +36,7 @@ use remainder_shared_types::{
 
 use ark_std::{end_timer, start_timer};
 
+use super::input_data_to_circuit_adapter::BatchedZKDTCircuitMles;
 use super::{
     attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit,
     binary_recomp_circuit::dataparallel_circuits::BinaryRecompCircuitBatched,
@@ -45,15 +46,8 @@ use super::{
             BinDecomp16BitIsBinaryCircuitBatched, BinDecomp4BitIsBinaryCircuitBatched,
         },
     },
-    builders::{
-        BitExponentiationBuilderInput, EqualityCheck, FSDecisionPackingBuilder,
-        FSInputPackingBuilder, FSLeafPackingBuilder, FSRMinusXBuilder, ProductBuilder,
-        SplitProductBuilder, SquaringBuilder,
-    },
-    constants::get_tree_commitment_filename_for_tree_number,
-    data_pipeline::dummy_data_generator::BatchedCatboostMles,
     input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit,
-    multiset_circuit::{circuits::FSMultiSetCircuit, legacy_circuits::MultiSetCircuit},
+    multiset_circuit::circuits::FSMultiSetCircuit,
     path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
@@ -63,9 +57,11 @@ use std::{marker::PhantomData, path::Path};
 /// The actual ZKDT circuit!
 pub struct ZKDTCircuit<F: FieldExt> {
     /// All of the input MLEs coming from the data generation pipeline
-    pub batched_catboost_mles: BatchedCatboostMles<F>,
+    pub batched_zkdt_circuit_mles: BatchedZKDTCircuitMles<F>,
     /// The filepath to the precommitted tree that we are proving
     pub tree_precommit_filepath: String,
+    /// The filepath to the precommitted sample minibatch that we are proving
+    pub sample_minibatch_precommit_filepath: String,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
@@ -183,9 +179,9 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         ),
         GKRError,
     > {
-        let BatchedCatboostMles {
-            mut input_data_mle_vec,
-            mut permuted_input_data_mle_vec,
+        let BatchedZKDTCircuitMles {
+            mut input_samples_mle_vec,
+            mut permuted_input_samples_mle_vec,
             mut decision_node_paths_mle_vec,
             mut leaf_node_paths_mle_vec,
             mut multiplicities_bin_decomp_mle_decision,
@@ -194,14 +190,14 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             mut leaf_nodes_mle,
             mut binary_decomp_diffs_mle_vec,
             mut multiplicities_bin_decomp_mle_input_vec,
-        } = self.batched_catboost_mles.clone(); // TODO!(% Labs): Get rid of this clone?!?!
+        } = self.batched_zkdt_circuit_mles.clone(); // TODO!(% Labs): Get rid of this clone?!?!
 
         // deal w input
-        let mut input_data_mle_combined =
-            DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_data_mle_vec.clone());
-        let mut permuted_input_data_mle_vec_combined =
+        let mut input_samples_mle_combined =
+            DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vec.clone());
+        let mut permuted_input_samples_mle_vec_combined =
             DenseMle::<F, InputAttribute<F>>::combine_mle_batch(
-                permuted_input_data_mle_vec.clone(),
+                permuted_input_samples_mle_vec.clone(),
             );
         let mut decision_node_paths_mle_vec_combined =
             DenseMle::<F, DecisionNode<F>>::combine_mle_batch(decision_node_paths_mle_vec.clone());
@@ -233,20 +229,20 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         ];
 
         // --- Input layer 1 ---
-        input_data_mle_combined.layer_id = LayerId::Input(1);
-        input_data_mle_vec.iter_mut().for_each(|mle| {
+        input_samples_mle_combined.layer_id = LayerId::Input(1);
+        input_samples_mle_vec.iter_mut().for_each(|mle| {
             mle.layer_id = LayerId::Input(1);
         });
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut input_data_mle_combined)];
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut input_samples_mle_combined)];
 
         // --- Input layer 2 ---
-        permuted_input_data_mle_vec_combined.layer_id = LayerId::Input(2);
+        permuted_input_samples_mle_vec_combined.layer_id = LayerId::Input(2);
         decision_node_paths_mle_vec_combined.layer_id = LayerId::Input(2);
         multiplicities_bin_decomp_mle_decision.layer_id = LayerId::Input(2);
         multiplicities_bin_decomp_mle_leaf.layer_id = LayerId::Input(2);
         combined_batched_diff_signed_bin_decomp_mle.layer_id = LayerId::Input(2);
         multiplicities_bin_decomp_mle_input_vec_combined.layer_id = LayerId::Input(2);
-        permuted_input_data_mle_vec.iter_mut().for_each(|mle| {
+        permuted_input_samples_mle_vec.iter_mut().for_each(|mle| {
             mle.layer_id = LayerId::Input(2);
         });
         decision_node_paths_mle_vec.iter_mut().for_each(|mle| {
@@ -261,7 +257,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 mle.layer_id = LayerId::Input(2);
             });
         let aux_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut permuted_input_data_mle_vec_combined),
+            Box::new(&mut permuted_input_samples_mle_vec_combined),
             Box::new(&mut decision_node_paths_mle_vec_combined),
             Box::new(&mut multiplicities_bin_decomp_mle_decision),
             Box::new(&mut multiplicities_bin_decomp_mle_leaf),
@@ -278,16 +274,6 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             vec![Box::new(&mut leaf_node_paths_mle_vec_combined)];
 
         // --- a) Precommitted Ligero input layer for tree itself (LayerId: 0) ---
-        let (_ligero_encoding, ligero_commit, ligero_root, ligero_aux): (
-            LigeroEncoding<F>,
-            LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-            LcRoot<LigeroEncoding<F>, F>,
-            LcProofAuxiliaryInfo,
-        ) = {
-            dbg!(&self.tree_precommit_filepath);
-            let file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
-            from_reader(&file).unwrap()
-        };
         let tree_mle_input_layer_builder =
             InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
 
@@ -304,14 +290,43 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             InputLayerBuilder::new(public_path_leaf_node_mles, None, LayerId::Input(3));
 
         // --- Convert all the input layer builders into input layers ---
+        let (_ligero_encoding, tree_ligero_commit, tree_ligero_root, tree_ligero_aux): (
+            LigeroEncoding<F>,
+            LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+            LcRoot<LigeroEncoding<F>, F>,
+            LcProofAuxiliaryInfo,
+        ) = {
+            let file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
+            from_reader(&file).unwrap()
+        };
         let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             tree_mle_input_layer_builder.to_input_layer_with_precommit(
-                ligero_commit,
-                ligero_aux,
-                ligero_root,
+                tree_ligero_commit,
+                tree_ligero_aux,
+                tree_ligero_root,
             );
+
+        let (
+            _ligero_encoding,
+            sample_minibatch_ligero_commit,
+            sample_minibatch_ligero_root,
+            sample_minibatch_ligero_aux,
+        ): (
+            LigeroEncoding<F>,
+            LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+            LcRoot<LigeroEncoding<F>, F>,
+            LcProofAuxiliaryInfo,
+        ) = {
+            let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+            from_reader(&file).unwrap()
+        };
         let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            input_mles_input_layer_builder.to_input_layer();
+            input_mles_input_layer_builder.to_input_layer_with_precommit(
+                sample_minibatch_ligero_commit,
+                sample_minibatch_ligero_aux,
+                sample_minibatch_ligero_root,
+            );
+
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             aux_mles_input_layer_builder.to_input_layer();
         let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
@@ -333,14 +348,14 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         }
 
         // --- Second input layer ---
-        for input_data_mle in input_data_mle_vec.iter_mut() {
-            input_data_mle.add_prefix_bits(input_data_mle_combined.get_prefix_bits());
+        for input_samples_mle in input_samples_mle_vec.iter_mut() {
+            input_samples_mle.add_prefix_bits(input_samples_mle_combined.get_prefix_bits());
         }
 
         // --- Third input layer ---
-        for permuted_input_data_mle in permuted_input_data_mle_vec.iter_mut() {
-            permuted_input_data_mle
-                .add_prefix_bits(permuted_input_data_mle_vec_combined.get_prefix_bits());
+        for permuted_input_samples_mle in permuted_input_samples_mle_vec.iter_mut() {
+            permuted_input_samples_mle
+                .add_prefix_bits(permuted_input_samples_mle_vec_combined.get_prefix_bits());
         }
         for decision_node_paths_mle in decision_node_paths_mle_vec.iter_mut() {
             decision_node_paths_mle
@@ -412,7 +427,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 
         // --- Construct the actual circuit structs ---
         let attribute_consistency_circuit = AttributeConsistencyCircuit {
-            permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
+            permuted_input_data_mle_vec: permuted_input_samples_mle_vec.clone(),
             decision_node_paths_mle_vec: decision_node_paths_mle_vec.clone(),
         };
 
@@ -430,8 +445,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         };
 
         let input_multiset_circuit = InputMultiSetCircuit {
-            input_data_mle_vec,
-            permuted_input_data_mle_vec: permuted_input_data_mle_vec.clone(),
+            input_data_mle_vec: input_samples_mle_vec,
+            permuted_input_data_mle_vec: permuted_input_samples_mle_vec.clone(),
             multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vec
                 .clone(),
             r_mle,
@@ -440,7 +455,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 
         let binary_recomp_circuit_batched = BinaryRecompCircuitBatched::new(
             decision_node_paths_mle_vec.clone(),
-            permuted_input_data_mle_vec.clone(),
+            permuted_input_samples_mle_vec.clone(),
             binary_decomp_diffs_mle_vec.clone(),
         );
 
@@ -499,7 +514,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 mod tests {
     use super::ZKDTCircuit;
     use crate::prover::tests::test_circuit;
-    use crate::zkdt::data_pipeline::dummy_data_generator::generate_mles_batch_catboost_single_tree;
+    use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
     use ark_std::{end_timer, start_timer};
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use std::path::Path;
@@ -530,9 +545,9 @@ mod tests {
             generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
 
         let combined_circuit = ZKDTCircuit {
-            batched_catboost_mles,
-            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json"
-                .to_string(),
+            batched_zkdt_circuit_mles: batched_catboost_mles,
+            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
+            sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
         };
 
         test_circuit(
@@ -547,16 +562,18 @@ mod tests {
             let circuit_timer = start_timer!(|| format!("zkdt circuit, batch_size 2^{batch_size}"));
             let wit_gen_timer = start_timer!(|| "wit gen");
 
-            let (batched_catboost_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(
+            let (batched_zkdt_circuit_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(
                 batch_size,
                 Path::new("upshot_data/"),
             );
             end_timer!(wit_gen_timer);
 
             let combined_circuit = ZKDTCircuit {
-                batched_catboost_mles,
+                batched_zkdt_circuit_mles,
                 tree_precommit_filepath:
                     "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
+                sample_minibatch_precommit_filepath:
+                    "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
             };
 
             test_circuit(combined_circuit, None);

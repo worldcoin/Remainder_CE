@@ -3,13 +3,13 @@
 use std::cmp::min;
 
 use ark_std::log2;
-use itertools::{Itertools};
+use itertools::Itertools;
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionStandard},
-    layer::{layer_enum::LayerEnum, GKRLayer, Layer, LayerId, empty_layer::EmptyLayer},
+    layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };
@@ -49,7 +49,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             let _layer_id = layers[0].1.id();
             // bits_iter(log2(layers.len()) as usize).collect_vec()
             let layer_sizes = layers.iter().map(|layer| layer.1.layer_size());
-            let layer_sizes_concrete = layer_sizes.clone().collect_vec();
+            // let layer_sizes_concrete = layer_sizes.clone().collect_vec();
             // dbg!(layer_sizes_concrete);
             let total_size = log2(layer_sizes.clone().map(|size| 1 << size).sum()) as usize;
 
@@ -237,7 +237,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
 fn combine_expressions<F: FieldExt>(
     mut exprs: Vec<ExpressionStandard<F>>,
 ) -> ExpressionStandard<F> {
-    let _floor_size = exprs.iter().map(|expr| expr.get_expression_size(0)).min().unwrap();
+    let _floor_size = exprs
+        .iter()
+        .map(|expr| expr.get_expression_size(0))
+        .min()
+        .unwrap();
 
     exprs.sort_by(|first, second| {
         first
