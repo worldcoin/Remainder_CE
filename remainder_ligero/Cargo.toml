@@ -12,7 +12,7 @@ ff = "0.12"
 merlin = "2.0"
 rand = "0.8"
 rand_chacha = "0.3"
-rayon = "1.5"
+rayon = "1.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11"
 poseidon = { git = "https://github.com/scroll-tech/poseidon/", branch = "main" } # Scroll's Poseidon impl
@@ -21,7 +21,7 @@ blake3 = { version = "1", features = ["traits-preview"] } # Duplicate from dev-d
 ark-bn254 = "0.4.0" # For BN-254 field
 ark-std = "0.4.0" # Also for BN-254 (mostly RNG purposes)
 halo2 = { git = "https://github.com/privacy-scaling-explorations/halo2.git" } # Halo2 for BN-254 FFT and what not
-halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", branch = "community-edition" }
+halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", tag = "v0.3.0-ce" }
 ark-poly = "0.4.2" # For BN-254 FFT stuff
 ark-ff = "0.4.2" # Also for FFT stuff
 ark-serialize = { version = "0.4", features = ["derive"] } # For serialization
