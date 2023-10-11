@@ -17,7 +17,7 @@
 //! let ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
 //! ```
 //!
-//! # Circuitizing samples (c.f. [`CircuitizedSamples`])
+//! # Circuitizing samples and auxiliaries (c.f. [`NewCircuitizedSamples`] & [`CircuitizeAuxiliaries`])
 //!
 //! Continuing the above example:
 //!
@@ -25,8 +25,9 @@
 //! let n_samples = 10;
 //! let raw_samples = generate_raw_samples(n_samples, n_features);
 //! let samples: Samples = (&raw_samples).into();
-//! // notice: circuitize_samples takes trees_model, not ctrees!
-//! let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
+//! let _csamples: NewCircuitizedSamples<Fr> = (&samples).into();
+//! // notice: circuitize_auxiliaries takes trees_model, not ctrees!
+//! let _caux = circuitize_auxiliaries::<Fr>(&samples, &trees_model);
 //! ```
 //!
 //! # Generating trees and samples for benchmarking
@@ -287,11 +288,100 @@ fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>
 }
 
 /// Circuitize the provided batch of samples using the specified TreesModel instance,
+/// returning a CircuitizeAuxiliaries instance.
+/// See documentation of CircuitizeAuxiliaries.
+pub fn circuitize_auxiliaries<F: FieldExt>(
+    samples_in: &Samples,
+    trees_model: &TreesModel,
+    ) -> CircuitizeAuxiliaries<F> {
+    let paths: Vec<Vec<TreePath<i64>>> = trees_model.trees
+        .par_iter()
+        .map(|tree| samples_in.values
+             .iter()
+             .map(|sample| tree.get_tree_path(&sample))
+             .collect())
+        .collect();
+
+    let decision_paths: Vec<Vec<DecisionPath<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(DecisionPath::<F>::from)
+                .collect()
+            })
+        .collect();
+
+    let attributes_on_paths: Vec<Vec<AttributesOnPath<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(AttributesOnPath::<F>::from)
+                .collect()
+        })
+        .collect();
+
+    let differences: Vec<Vec<DifferencesBits<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(DifferencesBits::<F>::from)
+                .collect()
+        })
+        .collect();
+
+    let path_ends: Vec<Vec<LeafNode<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(LeafNode::<F>::from)
+                .collect()
+            })
+        .collect();
+
+    let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            tree_paths
+                .iter()
+                .map(|tree_path| count_attribute_multiplicities(&tree_path.path_steps, samples_in.sample_length))
+                .into_iter()
+                .map(|multiplicities| multiplicities
+                     .into_iter()
+                     .map(build_attribute_multiplicity_bindecomp)
+                     .collect())
+                .collect()
+        })
+        .collect();
+
+    let node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = paths
+        .par_iter()
+        .map(|tree_paths| {
+            count_node_multiplicities(tree_paths, trees_model.depth)
+                .into_iter()
+                .map(build_node_multiplicity_bindecomp)
+                .collect()
+        })
+        .collect();
+
+    CircuitizeAuxiliaries {
+        decision_paths,
+        attributes_on_paths,
+        differences,
+        path_ends,
+        attribute_multiplicities,
+        node_multiplicities,
+    }
+}
+
+
+/// FIXME remove
+/// Circuitize the provided batch of samples using the specified TreesModel instance,
 /// returning a CircuitizedSamples instance.
 /// See documentation of CircuitizedSamples.
-/// The length of each sample (in `result.samples`) is
-/// `next_power_of_two((trees_model.depth - 1) * values_array[0].len())`
-/// Pre: `values_array.len() > 0`.
 pub fn circuitize_samples<F: FieldExt>(
     samples_in: &Samples,
     trees_model: &TreesModel,
@@ -636,6 +726,26 @@ mod tests {
             values,
             sample_length
         };
+        let samples: Samples = (&raw_samples).into();
+        let csamples: NewCircuitizedSamples<Fr> = (&samples).into();
+        assert_eq!(csamples.len(), samples.values.len());
+        csamples.iter()
+            .for_each(|sample| assert_eq!(sample.len(), samples.sample_length));
+    }
+
+    // FIXME remove
+    #[test]
+    fn test_circuitize_samples_old() {
+        let sample_length = 5;
+        let values = vec![
+            vec![0_u16; sample_length],
+            vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
+            vec![2_u16; sample_length],
+        ];
+        let raw_samples = RawSamples {
+            values,
+            sample_length
+        };
         let tree = build_small_tree();
         let raw_trees_model = RawTreesModel {
             trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
@@ -756,6 +866,135 @@ mod tests {
     }
 
     #[test]
+    fn test_circuitize_auxiliaries() {
+        let sample_length = 5;
+        let values = vec![
+            vec![0_u16; sample_length],
+            vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
+            vec![2_u16; sample_length],
+        ];
+        let raw_samples = RawSamples {
+            values,
+            sample_length
+        };
+        let tree = build_small_tree();
+        let raw_trees_model = RawTreesModel {
+            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: sample_length,
+        };
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let samples: Samples = (&raw_samples).into();
+        let caux = circuitize_auxiliaries::<Fr>(&samples, &trees_model);
+        let n_trees = raw_trees_model.trees.len();
+
+        // check dimensions of attributes on paths
+        assert_eq!(caux.attributes_on_paths.len(), n_trees);
+        for attributes_on_paths_for_tree in &caux.attributes_on_paths {
+            assert_eq!(attributes_on_paths_for_tree.len(), samples.values.len());
+            for attributes_on_path in attributes_on_paths_for_tree {
+                assert_eq!(attributes_on_path.len(), trees_model.depth - 1);
+            }
+        }
+        // check the contents of the attributes on paths for the non-trivial tree (the 0th)
+        let attributes_on_path = &caux.attributes_on_paths[0][0];
+        assert_eq!(attributes_on_path[0].attr_id, Fr::from(1));
+        // ... sample travels left down the tree
+        assert_eq!(attributes_on_path[1].attr_id, Fr::from(0));
+
+        // check the dimension of the decision paths
+        assert_eq!(caux.decision_paths.len(), n_trees);
+        for decision_paths_for_tree in &caux.decision_paths {
+            assert_eq!(decision_paths_for_tree.len(), samples.values.len());
+            for decision_path in decision_paths_for_tree {
+                assert_eq!(decision_path.len(), trees_model.depth - 1);
+            }
+        }
+        // check decision path contents for one combination
+        let decision_path = &caux.decision_paths[0][2];
+        assert_eq!(decision_path[0].node_id, Fr::from(0));
+        // ... sample travels right down the tree
+        assert_eq!(decision_path[1].node_id, Fr::from(2));
+
+        // check the dimension of the path_ends
+        assert_eq!(caux.path_ends.len(), n_trees);
+        for path_ends_for_tree in &caux.path_ends {
+            assert_eq!(path_ends_for_tree.len(), samples.values.len());
+        }
+        // check the contents
+        let path_ends_for_tree = &caux.path_ends[0];
+        assert_eq!(path_ends_for_tree[0].node_id, Fr::from(3));
+        assert_eq!(path_ends_for_tree[1].node_id, Fr::from(4));
+
+        // check the dimensions of the differences
+        assert_eq!(caux.differences.len(), n_trees);
+        for differences_for_tree in &caux.differences {
+            assert_eq!(differences_for_tree.len(), samples.values.len());
+            for differences in differences_for_tree {
+                assert_eq!(differences.len(), trees_model.depth - 1);
+            }
+        }
+        // check contents
+        let differences = &caux.differences[0][0];
+        // should have the bit decomposition of -2
+        assert_eq!(differences[1].bits[0], Fr::from(0));
+        assert_eq!(differences[1].bits[1], Fr::from(1));
+        assert_eq!(differences[1].bits[2], Fr::from(0));
+        assert_eq!(differences[1].bits[15], Fr::from(1));
+
+        // check the node_multiplicities
+        let node_multiplicities = caux.node_multiplicities;
+        let n_nodes = 2_usize.pow(trees_model.depth as u32); // includes dummy node
+        assert_eq!(node_multiplicities.len(), n_trees);
+        for node_multiplicities_for_tree in &node_multiplicities {
+            assert_eq!(node_multiplicities_for_tree.len(), n_nodes);
+            // root node id has multiplicity samples.values.len() = 4 (not 3, since post padding!)
+            let multiplicity = &node_multiplicities_for_tree[0];
+            assert_eq!(multiplicity.bits[0], Fr::from(0));
+            assert_eq!(multiplicity.bits[1], Fr::from(0));
+            assert_eq!(multiplicity.bits[2], Fr::from(1));
+            assert_eq!(multiplicity.bits[3], Fr::from(0));
+            // dummy node id has multiplicity 0
+            // dummy node multiplicity is situated between internal and leaf nodes
+            let multiplicity = &node_multiplicities_for_tree[n_nodes / 2 - 1];
+            for bit in multiplicity.bits {
+                assert_eq!(bit, Fr::from(0));
+            }
+        }
+        // check all node multiplicities for tree 1
+        let node_multiplicities_for_tree = &node_multiplicities[0];
+        let expected: Vec<usize> = vec![4, 3, 1, 0, 2, 1, 0, 1];
+        node_multiplicities_for_tree
+            .iter()
+            .zip(expected.iter())
+            .for_each(|(bits, expected)| {
+                let expected_bits = build_node_multiplicity_bindecomp::<Fr>(*expected);
+                assert_eq!(expected_bits.bits, bits.bits);
+            });
+
+        // check attribute multiplicities
+        // first, check their dimensions
+        assert_eq!(caux.attribute_multiplicities.len(), n_trees);
+        for am_for_tree in &caux.attribute_multiplicities {
+            assert_eq!(am_for_tree.len(), samples.values.len());
+            for am_for_tree_and_sample in am_for_tree {
+                assert_eq!(am_for_tree_and_sample.len(), samples.sample_length);
+            }
+        }
+        // check some particular values
+        let am = &caux.attribute_multiplicities[0][0];
+        let mut expected: Vec<usize> = vec![0; samples.sample_length];
+        expected[0] = 1;
+        expected[1] = 1;
+        am.iter().zip(expected.iter())
+            .for_each(|(bits, expected)| {
+                let expected_bits = build_attribute_multiplicity_bindecomp::<Fr>(*expected);
+                assert_eq!(expected_bits.bits, bits.bits);
+            })
+    }
+
+    #[test]
     fn test_trees_model_from() {
         let tree = build_small_tree();
         let raw_trees_model = RawTreesModel {
@@ -857,8 +1096,9 @@ mod tests {
         let n_samples = 10;
         let raw_samples = generate_raw_samples(n_samples, n_features);
         let samples: Samples = (&raw_samples).into();
-        // notice: circuitize_samples takes trees_model, not ctrees!
-        let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);
+        let _csamples: NewCircuitizedSamples<Fr> = (&samples).into();
+        // notice: circuitize_auxiliaries takes trees_model, not ctrees!
+        let _caux = circuitize_auxiliaries::<Fr>(&samples, &trees_model);
         // .. continued
         let _raw_trees_model: RawTreesModel = load_raw_trees_model(Path::new("src/zkdt/data_pipeline/test_qtrees.json"));
         let _raw_samples: RawSamples = load_raw_samples(Path::new("src/zkdt/data_pipeline/test_samples_10x6.npy"));
