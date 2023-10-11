@@ -32,7 +32,7 @@ use remainder_shared_types::{
 };
 
 use self::{
-    claims::{Claim, ClaimError},
+    claims::{Claim, ClaimError, get_num_wlx_evaluations},
     layer_enum::LayerEnum, combine_mle_refs::combine_mle_refs_with_aggregate,
 };
 

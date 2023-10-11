@@ -524,10 +524,12 @@ pub trait GKRCircuit<F: FieldExt> {
                 let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
                     &layer_claim_group,
                     &mut |claims| {
+                        dbg!(&claims);
                         let wlx_evals = layer
                             .get_wlx_evaluations(
                                 claims.get_claim_points_matrix(),
                                 claims.get_results(),
+                                claims.get_claim_mle_refs(),
                                 claims.get_num_claims(),
                                 claims.get_num_vars(),
                             )
