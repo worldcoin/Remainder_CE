@@ -31,6 +31,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
     let layer_count = layers.iter().map(|layers| layers.0.len()).max().unwrap();
     let subcircuit_count = layers.len();
 
+    // --- Grabbing the "columns" of layers (with associated circuit index) ---
     let interpolated_layers = (0..layer_count).map(|layer_idx| {
         layers
             .iter()
@@ -45,14 +46,18 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
     //This list is the list of extra bits that need to be added for each layer
     //and each sub-circuit
     let bit_counts: Vec<Vec<Vec<MleIndex<F>>>> = interpolated_layers
-        .map(|layers| {
-            let _layer_id = layers[0].1.id();
-            // bits_iter(log2(layers.len()) as usize).collect_vec()
-            let layer_sizes = layers.iter().map(|layer| layer.1.layer_size());
-            let layer_sizes_concrete = layer_sizes.clone().collect_vec();
+        .map(|layers_at_combined_index| {
+
+            // --- Global layer ID for this column ---
+            let _layer_id = layers_at_combined_index[0].1.id();
+            let layer_sizes = layers_at_combined_index.iter().map(|layer| layer.1.layer_size());
+            // let layer_sizes_concrete = layer_sizes.clone().collect_vec();
             // dbg!(layer_sizes_concrete);
+
+            // --- Getting the total combined layer size ---
             let total_size = log2(layer_sizes.clone().map(|size| 1 << size).sum()) as usize;
 
+            // --- Diffs between total size and individual layer size (to pad) ---
             let extra_bits = layer_sizes
                 .clone()
                 .map(|size| total_size - size)
@@ -76,12 +81,14 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
                             let _ = bit_indices.next();
                         }
                     }
+                    // --- `bits` now starts from the 2^{diff} bitstring ---
                     let bits = bit_indices.next().ok_or(CombineError).unwrap();
+                    // --- This return thing goes from 2^{diff}, ..., 2^{max_extra_bits} ---
                     (index, bits[0..extra_bits[index]].to_vec())
                 })
-                //resort them in thier original order so that the zip later works
+                // --- Associate the layers within this column with their bitstrings from above ---
                 .for_each(|(index, bits)| {
-                    sorted_and_padded_bits[layers[index].0] = bits;
+                    sorted_and_padded_bits[layers_at_combined_index[index].0] = bits;
                 });
 
             sorted_and_padded_bits
@@ -91,7 +98,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
 
     // dbg!(&bit_counts);
 
-    //The layers of the circuit are the inner vec
+    // --- Iterates the above `sorted_and_padded_bits` in subcircuit-major (row-major) order ---
     let layer_bits = (0..layers.len())
         .map(|index| {
             bit_counts
@@ -101,11 +108,13 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
         })
         .collect_vec();
 
-    //Add the extra bits we calculated to all the future claims
+    // --- First zip combines the subcircuit layers with all of its output layers AND all of its subcircuit-major "layer bits" ---
     layers
         .iter_mut()
         .zip(output_layers.iter_mut())
         .zip(layer_bits)
+
+        // --- For each subcircuit... ---
         .map(|((layers, output_layers), new_bits)| {
             for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
                 if let Some(&effected_layer) = layers.0.get(layer_idx).map(|layer| layer.id()) {
@@ -183,6 +192,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                             .chain(mle.mle_indices.iter())
                             .cloned()
                             .collect();
+                        mle.original_mle_indices = new_bits
+                            .iter()
+                            .chain(mle.original_mle_indices.iter())
+                            .cloned()
+                            .collect();
                     }
                     Ok(())
                 }
@@ -192,6 +206,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                             mle.mle_indices = new_bits
                                 .iter()
                                 .chain(mle.mle_indices.iter())
+                                .cloned()
+                                .collect();
+                            mle.original_mle_indices = new_bits
+                                .iter()
+                                .chain(mle.original_mle_indices.iter())
                                 .cloned()
                                 .collect();
                         }
@@ -217,6 +236,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                         .chain(mle.mle_indices.iter())
                         .cloned()
                         .collect();
+                    mle.original_mle_indices = new_bits
+                        .iter()
+                        .chain(mle.original_mle_indices.iter())
+                        .cloned()
+                        .collect();
                 }
             }
             MleEnum::Zero(mle) => {
@@ -224,6 +248,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())
+                        .cloned()
+                        .collect();
+                    mle.original_mle_indices = new_bits
+                        .iter()
+                        .chain(mle.original_mle_indices.iter())
                         .cloned()
                         .collect();
                 }

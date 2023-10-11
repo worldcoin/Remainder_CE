@@ -14,7 +14,7 @@ use crate::{
     },
     mle::{
         beta::{compute_beta_over_two_challenges, BetaTable},
-        dense::DenseMle,
+        dense::DenseMle, mle_enum::MleEnum,
     },
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::evaluate_at_a_point,
@@ -333,6 +333,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
             val,
             Some(self.id().clone()),
             Some(self.lhs.get_layer_id()),
+            Some(MleEnum::Dense(lhs_reduced.clone())),
         );
         claims.push(claim);
 
@@ -351,6 +352,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
             val,
             Some(self.id().clone()),
             Some(self.rhs.get_layer_id()),
+            Some(MleEnum::Dense(rhs_reduced.clone())),
         );
         claims.push(claim);
 
@@ -371,6 +373,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {

@@ -463,7 +463,9 @@ pub trait GKRCircuit<F: FieldExt> {
             let mut claim = claim;
             let layer_id = output.get_layer_id();
             claim.to_layer_id = Some(layer_id);
+            claim.mle_ref = Some(output.clone());
             debug!("Creating a claim: {:#?}", claim);
+            
 
             // --- Add the claim to either the set of current claims we're proving ---
             // --- or the global set of claims we need to eventually prove ---
@@ -495,6 +497,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_id = *layer.id();
                 info!("New Intermediate Layer: {:?}", layer_id);
+
                 let layer_claims_vec = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?
@@ -750,6 +753,7 @@ pub trait GKRCircuit<F: FieldExt> {
             }
             let layer_id = output.get_layer_id();
             info!("New Output Layer {:?}", layer_id);
+
             let claim = Claim::new(
                 mle_indices
                     .iter()
@@ -758,6 +762,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 F::zero(),
                 None,
                 Some(layer_id),
+                Some(output.clone()),
             );
 
             debug!("Generating claim: {:#?}", claim);

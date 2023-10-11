@@ -4,11 +4,13 @@ use std::marker::PhantomData;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionStandard},
-    mle::MleRef,
-    prover::SumcheckProof,
+    mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable},
+    prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals},
 };
+use ark_std::{cfg_into_iter};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use serde::{Deserialize, Serialize};
+use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
 
 use super::{
     claims::{Claim, ClaimError},
@@ -96,6 +98,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                         claimed_value,
                         Some(self.id().clone()),
                         Some(mle_layer_id),
+                        Some(MleEnum::Dense(mle_ref.clone()))
                     );
 
                     // --- Push it into the list of claims ---
@@ -129,6 +132,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                             claimed_value,
                             Some(self.id().clone()),
                             Some(mle_layer_id),
+                            Some(MleEnum::Dense(mle_ref.clone()))
                         );
 
                         // --- Push it into the list of claims ---
@@ -157,6 +161,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claim_mle_refs: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {

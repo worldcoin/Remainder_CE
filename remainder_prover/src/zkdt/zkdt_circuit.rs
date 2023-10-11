@@ -505,8 +505,7 @@ mod tests {
     use std::path::Path;
 
     use chrono;
-    use env_logger::*;
-    use log::{info, LevelFilter};
+    use log::LevelFilter;
     use std::io::Write;
 
     #[test]

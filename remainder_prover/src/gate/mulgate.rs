@@ -11,7 +11,7 @@ use crate::{
         layer_enum::LayerEnum,
         Layer, LayerBuilder, LayerError, LayerId, VerificationError,
     },
-    mle::beta::BetaTable,
+    mle::{beta::BetaTable, mle_enum::MleEnum},
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::*,
 };
@@ -307,6 +307,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 val,
                 Some(self.id().clone()),
                 Some(f_2_u.get_layer_id()),
+                Some(MleEnum::Dense(f_2_u.clone())),
             );
             claims.push(claim);
         } else {
@@ -330,6 +331,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
                 val,
                 Some(self.id().clone()),
                 Some(f_3_v.get_layer_id()),
+                Some(MleEnum::Dense(f_3_v.clone())),
             );
             claims.push(claim);
         } else {
@@ -352,6 +354,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
