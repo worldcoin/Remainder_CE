@@ -1,3 +1,4 @@
+//! Dummy data generation for testing purpose
 use crate::layer::LayerId;
 
 use crate::mle::dense::DenseMle;

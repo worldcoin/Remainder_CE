@@ -1,6 +1,7 @@
 //! Conversion from a decision trees model to a circuit ready form.
 //!
-//! # Circuitizing tree models (c.f. [`CircuitizedTrees`])
+//! # Circuitizing tree models
+//! (c.f. [`CircuitizedTrees`])
 //!
 //! ```
 //! use ark_bn254::Fr;
@@ -9,7 +10,6 @@
 //! let n_features = 4;
 //! let depth = 6;
 //! // start with some random (probably not perfect) trees with f64 leaf values
-//! // start with some random (probably not perfect) trees with f64 leaf values
 //! let raw_trees_model = generate_raw_trees_model(n_trees, depth, n_features, 0.5);
 //! // pad the trees, assign ids and quantize the leaf values
 //! let trees_model: TreesModel = (&raw_trees_model).into();
@@ -17,16 +17,20 @@
 //! let ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
 //! ```
 //!
-//! # Circuitizing samples and auxiliaries (c.f. [`CircuitizedSamples`] & [`CircuitizeAuxiliaries`])
-//!
-//! Continuing the above example:
+//! # Circuitizing samples
+//! (c.f. [`CircuitizedSamples`]). Continuing the above example:
 //!
 //! ```
 //! let n_samples = 10;
 //! let raw_samples = generate_raw_samples(n_samples, n_features);
 //! let samples: Samples = (&raw_samples).into();
 //! let _csamples: CircuitizedSamples<Fr> = (&samples).into();
-//! // notice: circuitize_auxiliaries takes trees_model, not ctrees!
+//! ```
+//!
+//! # Building auxiliary inputs
+//! (c.f. [`CircuitizedAuxiliaries`]). Continuing the above example:
+//!
+//! ```
 //! let _caux = circuitize_auxiliaries::<Fr>(&samples, &trees_model);
 //! ```
 //!
@@ -55,7 +59,7 @@ use crate::prover::input_layer::combine_input_layers::InputLayerBuilder;
 use crate::prover::input_layer::ligero_input_layer::LigeroInputLayer;
 use crate::utils::file_exists;
 use crate::zkdt::constants::{get_cached_batched_mles_filepath_with_exp_size, get_tree_commitment_filepath_for_tree_number};
-use crate::zkdt::helpers::*;
+use crate::zkdt::data_pipeline::helpers::*;
 use crate::zkdt::input_data_to_circuit_adapter::ZKDTCircuitData;
 use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode};
 use crate::zkdt::data_pipeline::trees::*;
@@ -88,7 +92,7 @@ pub struct RawTreesModel {
     n_features: usize,
 }
 
-/// Used for deriving CircuitizedTrees and CircuitizedSamples (given samples to circuitize).
+/// Used for deriving CircuitizedTrees and CircuitizedAuxiliaries (given samples).
 /// For properties, see TreesModel.from().
 pub struct TreesModel {
     trees: Vec<Node<i64>>,
@@ -98,7 +102,7 @@ pub struct TreesModel {
 
 /// Circuitized trees use flat (i.e. non-recursive) structs for the decision and leaf nodes and
 /// represent all integers using the field.
-/// Circuitized trees have the same properties as PaddedQuantizedTree, except that they include an
+/// Circuitized trees have the same properties as TreesModel, except that they include an
 /// extra "dummy" decision node so that the number of decision nodes is a power of two (equal to
 /// the number of leaf nodes).
 /// The dummy decision node has node id 2^depth - 1.
@@ -110,15 +114,15 @@ pub struct CircuitizedTrees<F: FieldExt> {
 }
 
 /// Output of load_raw_samples, for conversion to a Samples instance.
-/// Values are less than or equal to [`SIGNED_DECOMPOSITION_MAX_ARG_ABS`] (for the benefit of
-/// [`build_signed_bit_decomposition`]).
+/// Pre: Values do not exceed a 15-bit (not 16 bit!) representation.
 #[derive(Clone)]
 pub struct RawSamples {
     pub values: Vec<Vec<u16>>,
     pub sample_length: usize
 }
 
-/// Difference to RawSamples: these are padded to the nearest power of two.
+/// Difference to RawSamples: each sample is padded length-wise to the next power of two, and
+/// the number of samples is also padded to be the next power of two. 
 pub struct Samples {
     pub values: Vec<Vec<u16>>,
     pub sample_length: usize
@@ -132,7 +136,7 @@ pub type CircuitizedSamples<F: FieldExt> = Vec<Vec<InputAttribute<F>>>;
 /// * `differences` is a signed decomposition, with the sign bit at the end.
 /// * Each vector in `node_multiplicities` has length `2.pow(trees_model.depth)`; it is indexed by
 /// node_id for decision nodes, and by node id + 1 for leaf nodes.
-pub struct CircuitizeAuxiliaries<F: FieldExt> {
+pub struct CircuitizedAuxiliaries<F: FieldExt> {
     pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,             // indexed by trees, samples, steps in path
     pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,      // indexed by trees, samples, steps in path
     pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,              // indexed by trees, samples, steps in path
@@ -269,12 +273,12 @@ fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>
 }
 
 /// Circuitize the provided batch of samples using the specified TreesModel instance,
-/// returning a CircuitizeAuxiliaries instance.
-/// See documentation of CircuitizeAuxiliaries.
+/// returning a CircuitizedAuxiliaries instance.
+/// See documentation of [`CircuitizedAuxiliaries`].
 pub fn circuitize_auxiliaries<F: FieldExt>(
     samples_in: &Samples,
     trees_model: &TreesModel,
-    ) -> CircuitizeAuxiliaries<F> {
+    ) -> CircuitizedAuxiliaries<F> {
     let paths: Vec<Vec<TreePath<i64>>> = trees_model.trees
         .par_iter()
         .map(|tree| samples_in.values
@@ -348,7 +352,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         })
         .collect();
 
-    CircuitizeAuxiliaries {
+    CircuitizedAuxiliaries {
         decision_paths,
         attributes_on_paths,
         differences,
@@ -358,7 +362,8 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
     }
 }
 
-/// Given a vector of PathSteps, return a vector counting how often each attribute is used.
+/// Given a vector of instances of [`PathStep`], return a vector counting how often each attribute
+/// is used.
 pub fn count_attribute_multiplicities(path_steps: &Vec<PathStep>, sample_length: usize) -> Vec<usize> {
     let mut multiplicities = vec![0_usize; sample_length];
     path_steps
@@ -367,9 +372,9 @@ pub fn count_attribute_multiplicities(path_steps: &Vec<PathStep>, sample_length:
     multiplicities
 }
 
-/// Given a vector of tree paths all belonging to the same tree, return a vector counting the
-/// number of times each node was visited.
-/// WARNING: Vector is indexed by node id for internal nodes, and by node_id + 1 for leaf nodes.
+/// Given a vector of instances of [`TreePath`] all belonging to the same tree, return a vector
+/// counting the number of times each node was visited.
+/// **WARNING**: Vector is indexed by node id for internal nodes, and by node_id + 1 for leaf nodes.
 pub fn count_node_multiplicities<T: Copy>(tree_paths: &Vec<TreePath<T>>, tree_depth: usize) -> Vec<usize> {
     let mut multiplicities = vec![0_usize; 2_usize.pow(tree_depth as u32)];
     tree_paths
@@ -489,7 +494,7 @@ impl TreesModel {
     }
 }
 
-/// Generate a RawTreesModel as specified.  Meaning of arguments as per generate_trees().
+/// Generate a RawTreesModel as specified.  Meaning of arguments as per [`generate_tree`].
 /// Scale and bias are chosen randomly.
 pub fn generate_raw_trees_model(
     n_trees: usize,

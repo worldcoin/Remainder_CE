@@ -34,6 +34,6 @@ fn main() {
 
     println!("Starting auxiliaries witness generation ...");
     let start_time = Instant::now();
-    let _caux: CircuitizeAuxiliaries<Fr> = circuitize_auxiliaries(&samples, &trees_model);
+    let _caux: CircuitizedAuxiliaries<Fr> = circuitize_auxiliaries(&samples, &trees_model);
     println!("Auxiliaries witness generation ({}) took: {:?}", raw_samples, start_time.elapsed());
 }

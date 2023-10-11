@@ -10,7 +10,7 @@ use serde::{Serialize, Deserialize};
 use tracing::instrument;
 
 use crate::{mle::dense::DenseMle, layer::LayerId};
-use super::{data_pipeline::dt2zkdt::{load_raw_trees_model, RawTreesModel, load_raw_samples, RawSamples, TreesModel, Samples, CircuitizedTrees, CircuitizedSamples, CircuitizeAuxiliaries, circuitize_auxiliaries}, structs::{InputAttribute, DecisionNode, BinDecomp16Bit, LeafNode, BinDecomp4Bit}};
+use super::{data_pipeline::dt2zkdt::{load_raw_trees_model, RawTreesModel, load_raw_samples, RawSamples, TreesModel, Samples, CircuitizedTrees, CircuitizedSamples, CircuitizedAuxiliaries, circuitize_auxiliaries}, structs::{InputAttribute, DecisionNode, BinDecomp16Bit, LeafNode, BinDecomp4Bit}};
 
 #[derive(Clone)]
 pub struct BatchedZKDTCircuitMles<F: FieldExt> {

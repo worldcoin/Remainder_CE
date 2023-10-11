@@ -45,7 +45,7 @@ pub enum Node<T: Copy> {
 }
 
 /// Encodes the path traced by a sample down a tree.
-/// (Better than Vec<Node>, which is recursive).
+/// (Better than `Vec<Node>`, which is recursive).
 #[derive(Clone)]
 pub struct TreePath<T: Copy> {
     pub path_steps: Vec<PathStep>,
@@ -254,7 +254,7 @@ impl<T: Copy> Node<T> {
 }
 
 const LEAF_QUANTILE_BITWIDTH: u64 = 52; // 52 is mantissa length of a f64
-/// Given a vector of trees (Node instances) with f64 leaf values, quantize the leaf values
+/// Given a vector of trees ([`Node`] instances) with f64 leaf values, quantize the leaf values
 /// symmetrically, returning the quantized trees and the rescaling factor.  The scale is chosen
 /// such that no leaf value or sum trees.len() distinct leaf values will exceed
 /// LEAF_QUANTILE_BITWIDTH.
