@@ -192,16 +192,20 @@ impl<F: FieldExt> DenseMle<F, F> {
 
     ///Creates a DenseMleRef from this DenseMle
     pub fn mle_ref(&self) -> DenseMleRef<F> {
+        let mle_indices: Vec<MleIndex<F>> = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain((0..self.num_iterated_vars()).map(|_| MleIndex::Iterated))
+        .collect();
         DenseMleRef {
             bookkeeping_table: self.mle.clone(),
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain((0..self.num_iterated_vars()).map(|_| MleIndex::Iterated))
-                .collect(),
+            original_bookkeeping_table: self.mle.clone(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: self.num_iterated_vars,
+            original_num_vars: self.num_iterated_vars,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -321,19 +325,24 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         // --- Number of *remaining* iterated variables ---
         let new_num_iterated_vars = self.num_iterated_vars - 1;
 
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            std::iter::once(MleIndex::Fixed(false))
+                .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
+        )
+        .collect_vec();
+
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
-                )
-                .collect_vec(),
+            original_bookkeeping_table: self.mle[0].to_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: new_num_iterated_vars,
+            original_num_vars: new_num_iterated_vars,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -342,20 +351,24 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     ///Gets an MleRef to the second element in the tuple
     pub fn second(&'_ self) -> DenseMleRef<F> {
         let new_num_iterated_vars = self.num_iterated_vars - 1;
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            std::iter::once(MleIndex::Fixed(true))
+                .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
+        )
+        .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars)),
-                )
-                .collect_vec(),
+            original_bookkeeping_table: self.mle[1].to_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: new_num_iterated_vars,
+            original_num_vars: new_num_iterated_vars,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -391,11 +404,17 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
 pub struct DenseMleRef<F> {
     ///The bookkeeping table of this MleRefs evaluations over the boolean hypercube
     pub bookkeeping_table: Vec<F>,
+    /// The original bookkeeping table (that does not get destructively modified during fix variable)
+    pub original_bookkeeping_table: Vec<F>,
     ///The MleIndices of this MleRef e.g. V(0, 1, r_1, r_2)
     pub mle_indices: Vec<MleIndex<F>>,
+    /// The original mle indices (not modified during fix var)
+    pub original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     pub num_vars: usize,
+    /// Number of non-fixed variables originally, doesn't get modifier
+    pub original_num_vars: usize,
     /// The layer this MleRef is a reference to
     pub layer_id: LayerId,
     /// A marker that keeps track of if this MleRef is indexed
@@ -416,12 +435,24 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         &self.bookkeeping_table
     }
 
+    fn original_bookkeeping_table(&self) -> &Vec<Self::F> {
+        &self.original_bookkeeping_table
+    }
+
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
         &self.mle_indices
     }
 
+    fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>> {
+        &self.original_mle_indices
+    }
+
     fn num_vars(&self) -> usize {
         self.num_vars
+    }
+
+    fn original_num_vars(&self) -> usize {
+        self.original_num_vars
     }
 
     fn indexed(&self) -> bool {
@@ -569,13 +600,15 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.bookkeeping_table = new.collect();
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
-            Some(Claim::new_raw(
+            let mut fixed_claim_return = Claim::new_raw(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect_vec(),
                 self.bookkeeping_table[0],
-            ))
+            );
+            fixed_claim_return.mle_ref = Some(MleEnum::Dense(self.clone()));
+            Some(fixed_claim_return)
         } else {
             None
         }

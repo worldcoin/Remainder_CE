@@ -6,6 +6,8 @@ use crate::gate::{
     addgate::AddGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched,
     mulgate::MulGate,
 };
+use crate::mle::dense::DenseMleRef;
+use crate::mle::mle_enum::MleEnum;
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
@@ -119,27 +121,28 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, super::claims::ClaimError> {
         match self {
             LayerEnum::Gkr(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx)
             }
             LayerEnum::MulGate(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx)
             }
             LayerEnum::MulGateBatched(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx)
             }
             LayerEnum::AddGate(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx)
             }
             LayerEnum::AddGateBatched(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx)
             }
             LayerEnum::EmptyLayer(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
+                layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx)
             }
         }
     }
