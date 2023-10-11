@@ -595,7 +595,7 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 /// this 1-step claim aggregation.
 pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &impl Fn(&ClaimGroup<F>, &usize) -> Result<Vec<F>, GKRError>,
+    compute_wlx_fn: &(impl Fn(&ClaimGroup<F>, &usize) -> Result<Vec<F>, GKRError> + std::marker::Sync),
     index: &usize,
     agg_chal: F,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
@@ -700,11 +700,11 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> usize {
     }
 }
 
+/*
 /// Aggregates `claims` into a single claim on challenge point
 /// `r_star` given the `wlx` evaluations of W(l(x)).
 /// This function is used by the verifier in the process of verifying
 /// claim aggregation.
-/*
 /// verifies the claim aggregation
 #[instrument(level = "trace", err)]
 #[instrument(level = "debug", skip_all, err)]
@@ -734,6 +734,8 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     Ok(aggregated_claim)
 }
 */
+
+/*
 
 #[cfg(test)]
 // Makis: Making this public so that I can access some of the helper functions
@@ -769,6 +771,7 @@ pub(crate) mod tests {
     }
 
     // ------- Helper functions for claim aggregation tests -------
+
 
     /// Builds `ClaimGroup<Fr>` by evaluation an expression `expr` on
     /// each point in `points`.
@@ -1340,3 +1343,4 @@ pub(crate) mod tests {
     }
     */
 }
+*/

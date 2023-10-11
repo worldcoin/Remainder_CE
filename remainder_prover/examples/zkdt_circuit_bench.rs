@@ -4,13 +4,17 @@ use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use remainder::{
     prover::GKRCircuit,
     zkdt::{
-        zkdt_circuit::ZKDTCircuit, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree,
+        cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree,
+        zkdt_circuit::ZKDTCircuit,
     },
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use serde_json::{from_reader, to_writer};
 
-pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
+pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>)
+where
+    <C as GKRCircuit<F>>::Transcript: Sync,
+{
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
     let now = Instant::now();
 
@@ -68,7 +72,9 @@ fn main() {
         batched_zkdt_circuit_mles: batched_catboost_mles,
         tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json"
             .to_string(),
-        sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_1_commitment_0.json".to_string(),
+        sample_minibatch_precommit_filepath:
+            "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json"
+                .to_string(),
     };
 
     test_circuit(combined_circuit, Some(Path::new("./zkdt_proof.json")));

@@ -157,7 +157,10 @@ pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
     mut circuit: C,
     maybe_filepath_to_proof: Option<PathBuf>,
     verify_proof: bool,
-) -> Result<(), ZKDTBinaryError> {
+) -> Result<(), ZKDTBinaryError>
+where
+    <C as GKRCircuit<F>>::Transcript: Sync,
+{
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
     let now = Instant::now();
 

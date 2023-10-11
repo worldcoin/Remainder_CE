@@ -41,7 +41,10 @@ use super::{
     GKRCircuit, GKRError, Layers, Witness,
 };
 
-pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
+pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>)
+where
+    <C as GKRCircuit<F>>::Transcript: Sync,
+{
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "proof generation");
 
