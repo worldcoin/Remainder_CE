@@ -28,7 +28,7 @@ fn main() {
 
     println!("Starting samples witness generation ...");
     let start_time = Instant::now();
-    let samples = to_samples(&raw_samples);
+    let samples = (&raw_samples).into();
     let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);
     println!("Samples witness generation ({}) took: {:?}", raw_samples, start_time.elapsed());
 }

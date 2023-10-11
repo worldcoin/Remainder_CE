@@ -24,7 +24,7 @@
 //! ```
 //! let n_samples = 10;
 //! let raw_samples = generate_raw_samples(n_samples, n_features);
-//! let samples = to_samples(&raw_samples, &trees_model);
+//! let samples: Samples = (&raw_samples).into();
 //! // notice: circuitize_samples takes trees_model, not ctrees!
 //! let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
 //! ```
@@ -117,7 +117,7 @@ pub struct RawSamples {
     pub sample_length: usize
 }
 
-/// Output of [`to_samples`], input to [`circuitize_samples`].
+/// Output of [`to_samples`], input to [`circuitize_samples`]. FIXME
 /// Difference to RawSamples: these are padded to the nearest power of two.
 pub struct Samples {
     pub values: Vec<Vec<u16>>,
@@ -156,25 +156,27 @@ impl RawSamples {
     }
 }
 
-/// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample
-/// values such that the length of each individual sample is a power of two, and that the number of
-/// samples is also a power of two.
-/// Pre: raw_samples.values.len() > 0.
-pub fn to_samples(raw_samples: &RawSamples) -> Samples {
-    let mut samples: Vec<Vec<u16>> = vec![];
-    let sample_length = next_power_of_two(raw_samples.values[0].len()).unwrap();
-    for raw_sample in &raw_samples.values {
-        let mut sample = raw_sample.clone();
-        sample.resize(sample_length, 0);
-        samples.push(sample);
-    }
-    let target_sample_count = next_power_of_two(raw_samples.values.len()).unwrap();
-    for i in raw_samples.values.len()..target_sample_count {
-        samples.push(vec![0_u16; sample_length]);
-    }
-    Samples {
-        values: samples,
-        sample_length
+impl From<&RawSamples> for Samples {
+    /// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample
+    /// values such that the length of each individual sample is a power of two, and that the number of
+    /// samples is also a power of two.
+    /// Pre: raw_samples.values.len() > 0.
+    fn from(raw_samples: &RawSamples) -> Samples {
+        let mut samples: Vec<Vec<u16>> = vec![];
+        let sample_length = next_power_of_two(raw_samples.values[0].len()).unwrap();
+        for raw_sample in &raw_samples.values {
+            let mut sample = raw_sample.clone();
+            sample.resize(sample_length, 0);
+            samples.push(sample);
+        }
+        let target_sample_count = next_power_of_two(raw_samples.values.len()).unwrap();
+        for i in raw_samples.values.len()..target_sample_count {
+            samples.push(vec![0_u16; sample_length]);
+        }
+        Samples {
+            values: samples,
+            sample_length
+        }
     }
 }
 
@@ -584,15 +586,7 @@ mod tests {
             values,
             sample_length
         };
-        // let tree = build_small_tree();
-        // let raw_trees_model = RawTreesModel {
-        //     trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
-        //     bias: 1.1,
-        //     scale: 6.6,
-        //     n_features: sample_length,
-        // };
-        // let trees_model: TreesModel = (&raw_trees_model).into();
-        let samples = to_samples(&raw_samples);
+        let samples: Samples = (&raw_samples).into();
         // check the number of samples
         assert_eq!(samples.sample_length, next_power_of_two(raw_samples.sample_length).unwrap());
         // check length of individual samples
@@ -622,7 +616,7 @@ mod tests {
             n_features: sample_length,
         };
         let trees_model: TreesModel = (&raw_trees_model).into();
-        let samples = to_samples(&raw_samples);
+        let samples: Samples = (&raw_samples).into();
         let csamples = circuitize_samples::<Fr>(&samples, &trees_model);
         // check size of outer dimensions
         let n_trees = raw_trees_model.trees.len();
@@ -834,7 +828,7 @@ mod tests {
         // generate some samples to play with
         let n_samples = 10;
         let raw_samples = generate_raw_samples(n_samples, n_features);
-        let samples = to_samples(&raw_samples);
+        let samples: Samples = (&raw_samples).into();
         // notice: circuitize_samples takes trees_model, not ctrees!
         let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);
         // .. continued
@@ -856,7 +850,7 @@ mod tests {
         // just take two trees
         trees_model = trees_model.slice(0, 2);
 
-        let samples = to_samples(&raw_samples);
+        let samples: Samples = (&raw_samples).into();
 
         let _ctrees: CircuitizedTrees<Fr> = (&trees_model).into();
         let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);

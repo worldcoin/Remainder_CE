@@ -3,7 +3,7 @@
 use std::{path::Path, fs};
 use remainder_shared_types::FieldExt;
 use serde_json::{to_writer, from_reader};
-use crate::{zkdt::{constants::get_cached_batched_mles_filepath_with_exp_size, input_data_to_circuit_adapter::convert_zkdt_circuit_data_into_mles, data_pipeline::dt2zkdt::{RawTreesModel, load_raw_trees_model, load_raw_samples, RawSamples, TreesModel, CircuitizedTrees, to_samples, circuitize_samples, Samples}}, utils::file_exists};
+use crate::{zkdt::{constants::get_cached_batched_mles_filepath_with_exp_size, input_data_to_circuit_adapter::convert_zkdt_circuit_data_into_mles, data_pipeline::dt2zkdt::{RawTreesModel, load_raw_trees_model, load_raw_samples, RawSamples, TreesModel, CircuitizedTrees, circuitize_samples, Samples}}, utils::file_exists};
 use super::{input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, ZKDTCircuitData, BatchedZKDTCircuitMles}, constants::CACHED_BATCHED_MLES_FILE};
 
 /// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
@@ -114,7 +114,7 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
         let true_input_batch_size = 2_usize.pow(batch_size_exp as u32);
         raw_samples.values = orig_raw_samples.values[0..true_input_batch_size].to_vec();
 
-        let samples: Samples = to_samples(&raw_samples);
+        let samples: Samples = (&raw_samples).into();
         let csamples = circuitize_samples::<F>(&samples, &trees_model);
     
         let tree_height = ctrees.depth;

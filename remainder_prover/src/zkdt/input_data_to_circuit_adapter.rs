@@ -10,7 +10,7 @@ use serde::{Serialize, Deserialize};
 use tracing::instrument;
 
 use crate::{mle::dense::DenseMle, layer::LayerId};
-use super::{data_pipeline::dt2zkdt::{load_raw_trees_model, RawTreesModel, load_raw_samples, RawSamples, TreesModel, Samples, CircuitizedTrees, circuitize_samples, to_samples}, structs::{InputAttribute, DecisionNode, BinDecomp16Bit, LeafNode, BinDecomp4Bit}};
+use super::{data_pipeline::dt2zkdt::{load_raw_trees_model, RawTreesModel, load_raw_samples, RawSamples, TreesModel, Samples, CircuitizedTrees, circuitize_samples}, structs::{InputAttribute, DecisionNode, BinDecomp16Bit, LeafNode, BinDecomp4Bit}};
 
 #[derive(Clone)]
 pub struct BatchedZKDTCircuitMles<F: FieldExt> {
@@ -215,7 +215,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     // --- Conversions ---
     let full_trees_model: TreesModel = (&raw_trees_model).into();
     let single_tree = full_trees_model.slice(tree_idx, tree_idx + 1);
-    let samples: Samples = to_samples(&raw_samples);
+    let samples: Samples = (&raw_samples).into();
     let ctrees: CircuitizedTrees<F> = (&single_tree).into();
 
     // --- Compute actual witnesses ---
