@@ -554,13 +554,15 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
             // dbg!(&self);
-            Some(Claim::new_raw(
+            let mut fixed_claim_return = Claim::new_raw(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect_vec(),
                 self.bookkeeping_table[0],
-            ))
+            );
+            fixed_claim_return.mle_ref = Some(MleEnum::Dense(self.clone()));
+            Some(fixed_claim_return)
         } else {
             None
         }
