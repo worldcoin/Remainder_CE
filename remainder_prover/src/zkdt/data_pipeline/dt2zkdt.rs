@@ -124,6 +124,25 @@ pub struct Samples {
     pub sample_length: usize
 }
 
+/// Represents the circuitization of a batch of samples.
+type NewCircuitizedSamples<F: FieldExt> = Vec<Vec<InputAttribute<F>>>;
+
+/// Represents the circuitization of a batch of samples with respect to a TreesModel.
+/// * Bit decompositions are little endian.
+/// * `differences` is a signed decomposition, with the sign bit at the end.
+/// * Each vector in `node_multiplicities` has length `2.pow(trees_model.depth)`; it is indexed by
+/// node_id for decision nodes, and by node id + 1 for leaf nodes (TODO, in discussion with Ende,
+/// break up this into decision_node_multiplicities and leaf_node_multiplicities).
+pub struct CircuitizeAuxiliaries<F: FieldExt> {
+    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,             // indexed by trees, samples, steps in path
+    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,      // indexed by trees, samples, steps in path
+    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,              // indexed by trees, samples, steps in path
+    pub path_ends: Vec<Vec<LeafNode<F>>>,                           // indexed by trees, samples
+    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index
+    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,           // indexed by trees, tree nodes
+}
+
+/// FIXME remove
 /// Represents the circuitization of a batch of samples with respect to a TreesModel.
 /// * Bit decompositions are little endian.
 /// * `differences` is a signed decomposition, with the sign bit at the end.
@@ -161,7 +180,7 @@ impl From<&RawSamples> for Samples {
     /// values such that the length of each individual sample is a power of two, and that the number of
     /// samples is also a power of two.
     /// Pre: raw_samples.values.len() > 0.
-    fn from(raw_samples: &RawSamples) -> Samples {
+    fn from(raw_samples: &RawSamples) -> Self {
         let mut samples: Vec<Vec<u16>> = vec![];
         let sample_length = next_power_of_two(raw_samples.values[0].len()).unwrap();
         for raw_sample in &raw_samples.values {
@@ -187,6 +206,15 @@ impl<F: FieldExt> From<&TreePath<i64>> for LeafNode<F> {
             node_id: F::from(tree_path.leaf_node_id as u64),
             node_val: i64_to_field(tree_path.leaf_value)
         }
+    }
+}
+
+impl<F: FieldExt> From<&Samples> for NewCircuitizedSamples<F> {
+    fn from(samples: &Samples) -> Self {
+        samples.values
+            .par_iter()
+            .map(build_sample_witness)
+            .collect()
     }
 }
 
