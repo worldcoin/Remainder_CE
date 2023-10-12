@@ -40,6 +40,10 @@ use ark_std::{end_timer, start_timer};
 pub const ENABLE_REDUCED_WLX_EVALS: bool = true;
 pub const ENABLE_CLAIM_GROUPING: bool = true;
 pub const ENABLE_CLAIM_DEDUPLICATION: bool = true;
+/// Controls raw mle eval vs expression eval
+pub const ENABLE_RAW_MLE: bool = true;
+/// Controls pre-fixing variables for shared columns, should only be true if above is true
+pub const ENABLE_PRE_FIX: bool = true;
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims

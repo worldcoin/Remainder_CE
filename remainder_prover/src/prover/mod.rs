@@ -384,6 +384,8 @@ pub struct Witness<F: FieldExt, Tr: Transcript<F>> {
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
+/// Controls 
+
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
     /// The transcript this circuit uses

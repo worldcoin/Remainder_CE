@@ -302,6 +302,7 @@ fn find_pair_and_combine<F: FieldExt> (
     all_refs_updated
 }
 
+/// this fixes mle refs with shared points in the claims so that we don't have to keep doing them
 pub fn pre_fix_mle_refs<F: FieldExt>(
     mle_refs: &mut Vec<MleEnum<F>>,
     chal_point: &Vec<F>,
@@ -317,10 +318,17 @@ pub fn pre_fix_mle_refs<F: FieldExt>(
     });
 }
 
+
+/// function that prepares all the mle refs to be fixed, then combined. this involves filtering out for
+/// unique original mle indices, then splitting the mles with iterated bits within prefix bits, then 
+/// indexing them so that their mutable bookkeeping table is the original bookkeeping table.
 pub fn get_og_mle_refs<F: FieldExt>(
     mle_refs: Vec<MleEnum<F>>,
 ) -> Vec<MleEnum<F>> {
 
+    // first we want to filter out for mle_refs that are duplicates. we look at their original indices
+    // instead of their bookkeeping tables because sometimes two mle_refs can have the same original_bookkeeping_table
+    // but have different prefix bits. if they have the same prefix bits, they must be duplicates.
     let mle_refs = mle_refs.into_iter().unique_by(|mle_ref| {
         match mle_ref {
             MleEnum::Dense(dense_mle_ref) => { dense_mle_ref.original_mle_indices.clone() }
@@ -328,8 +336,10 @@ pub fn get_og_mle_refs<F: FieldExt>(
         }
     }).collect_vec();
 
+    // then, we split all the mle_refs with an iterated bit within the prefix bits
     let mle_refs_split = collapse_mles_with_iterated_in_prefix(&mle_refs);
 
+    // go through and create mle refs that have original bookkeeping tables, and index them so that they can be fixed later
     let mle_ref_fix = cfg_into_iter!(mle_refs_split).map(
         |mle_ref| {
             match mle_ref {
@@ -368,15 +378,7 @@ pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
     chal_point: &Vec<F>,
 ) -> Result<F, CombineMleRefError> {
 
-    // first we want to filter out for mle_refs that are duplicates. we look at their original indices
-    // instead of their bookkeeping tables because sometimes two mle_refs can have the same original_bookkeeping_table
-    // but have different prefix bits. if they have the same prefix bits, they must be duplicates.
-
-
-    // then, we split all the mle_refs with an iterated bit within the prefix bits
-
-
-    // we go through all of the mle_refs and fix variable in all of them given the iterated indices they already have
+    // we go through all of the mle_refs and fix variable in all of them given the indexed indices they already have
     // so that they are fully bound. 
     let fix_var_mle_refs = mle_refs.into_iter().map(
         |mle_ref| {

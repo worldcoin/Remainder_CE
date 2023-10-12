@@ -16,7 +16,7 @@ pub mod random_input_layer;
 
 use crate::{
     layer::{
-        claims::{get_num_wlx_evaluations, Claim, ClaimError, ClaimGroup},
+        claims::{get_num_wlx_evaluations, Claim, ClaimError, ClaimGroup, ENABLE_PRE_FIX},
         LayerId, combine_mle_refs::pre_fix_mle_refs,
     },
     mle::{dense::DenseMle, MleRef, mle_enum::MleEnum, MleIndex},
@@ -88,13 +88,15 @@ pub trait InputLayer<F: FieldExt> {
         let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
         let chal_point = &claim_vecs[0];
 
-        if common_idx.is_some() {
-            let common_idx = common_idx.unwrap();
-            common_idx.iter().for_each(
-                |chal_idx| {
-                    if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
-                        mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
-            }});
+        if ENABLE_PRE_FIX {
+            if common_idx.is_some() {
+                let common_idx = common_idx.unwrap();
+                common_idx.iter().for_each(
+                    |chal_idx| {
+                        if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
+                            mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+                }});
+            }
         }
         
         debug!("Evaluating {num_evals} times.");

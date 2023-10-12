@@ -32,7 +32,7 @@ use remainder_shared_types::{
 };
 
 use self::{
-    claims::{Claim, ClaimError, get_num_wlx_evaluations},
+    claims::{Claim, ClaimError, get_num_wlx_evaluations, ENABLE_PRE_FIX, ENABLE_RAW_MLE},
     layer_enum::LayerEnum, combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
 };
 
@@ -534,8 +534,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         let mut claim_mle_refs = claim_mle_refs.clone();
 
-        if common_idx.is_some() {
-            pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx.unwrap());
+        if ENABLE_PRE_FIX {
+            if common_idx.is_some() {
+                pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx.unwrap());
+            }
         }
         
         // TODO(Makis): This assert fails on `test_aggro_claim_4` and I'm not
@@ -560,6 +562,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         });
         */
 
+        let mut degree = 0;
+        if !ENABLE_RAW_MLE {
+            expr.index_mle_indices(0);
+            degree = get_round_degree(&expr, 0);
+        }
+
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
             .map(|idx| {
@@ -573,8 +581,19 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     })
                     .collect();
 
-                let wlx_eval_on_mle_ref = combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
-                wlx_eval_on_mle_ref.unwrap()
+                if !ENABLE_RAW_MLE {
+                    let mut beta = BetaTable::new(new_chal).unwrap();
+                    beta.table.index_mle_indices(0);
+                    let eval = compute_sumcheck_message(&expr, 0, degree, &beta).unwrap();
+                    let Evals(evals) = eval;
+                    evals[0] + evals[1]
+                }
+                else {
+                    let wlx_eval_on_mle_ref = combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
+                    wlx_eval_on_mle_ref.unwrap()
+                }
+
+                
             })
             .collect();
 
