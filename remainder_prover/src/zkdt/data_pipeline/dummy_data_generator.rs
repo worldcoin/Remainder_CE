@@ -2,8 +2,9 @@ use crate::layer::LayerId;
 use crate::mle::dense::DenseMle;
 use crate::mle::MleRef;
 use crate::utils::file_exists;
-use crate::zkdt::constants::get_cached_batched_mles_filename_with_exp_size;
-use crate::zkdt::data_pipeline::dt2zkdt::generate_upshot_data_all_batch_sizes;
+use crate::zkdt::constants::get_cached_batched_mles_filepath_with_exp_size;
+use crate::zkdt::data_pipeline::dt2zkdt::{Samples, to_samples, circuitize_samples, RawTreesModel, load_raw_trees_model, RawSamples, load_raw_samples, TreesModel, CircuitizedTrees};
+use crate::zkdt::input_data_to_circuit_adapter::{ZKDTCircuitData, convert_zkdt_circuit_data_into_mles, MinibatchData, load_upshot_data_single_tree_batch};
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_reader, to_writer};
@@ -911,7 +912,6 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
 // --- Create expressions using... testing modules? ---
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::{
         expression::ExpressionStandard,
@@ -921,7 +921,7 @@ mod tests {
             compute_sumcheck_message, get_round_degree,
             tests::{dummy_sumcheck, get_dummy_expression_eval, verify_sumcheck_messages},
             Evals,
-        },
+        }, zkdt::cache_upshot_catboost_inputs_for_testing::write_mles_batch_catboost_single_tree,
     };
     use ark_std::test_rng;
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;

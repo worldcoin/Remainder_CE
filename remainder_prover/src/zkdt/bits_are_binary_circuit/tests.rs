@@ -2,7 +2,7 @@
 mod tests {
     use std::{time::Instant, path::Path};
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, bits_are_binary_circuit::{circuits::{BinDecomp16BitIsBinaryCircuit, BinDecomp4BitIsBinaryCircuit}, dataparallel_circuits::{BinDecomp16BitIsBinaryCircuitBatched, BinDecomp4BitIsBinaryCircuitBatched}}}, prover::GKRCircuit};
+    use crate::{zkdt::{bits_are_binary_circuit::{circuits::{BinDecomp16BitIsBinaryCircuit, BinDecomp4BitIsBinaryCircuit}, dataparallel_circuits::{BinDecomp16BitIsBinaryCircuitBatched, BinDecomp4BitIsBinaryCircuitBatched}}, input_data_to_circuit_adapter::BatchedZKDTCircuitMles, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree}, prover::GKRCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
 
     #[test]
@@ -16,7 +16,7 @@ mod tests {
         //     ..
         // } = generate_dummy_mles();
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             binary_decomp_diffs_mle_vec, 
             ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data"));
@@ -57,7 +57,7 @@ mod tests {
         //     ..
         // } = generate_dummy_mles();
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             binary_decomp_diffs_mle_vec,
             ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(6, Path::new("upshot_data"));
@@ -98,7 +98,7 @@ mod tests {
         //     ..
         // } = generate_dummy_mles();
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             multiplicities_bin_decomp_mle_input_vec, 
             ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data"));
@@ -139,7 +139,7 @@ mod tests {
         //     ..
         // } = generate_dummy_mles();
 
-        let (BatchedCatboostMles {
+        let (BatchedZKDTCircuitMles {
             multiplicities_bin_decomp_mle_input_vec,
             ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(6, Path::new("upshot_data"));

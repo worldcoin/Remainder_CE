@@ -1,24 +1,21 @@
 #[cfg(test)]
 mod tests {
-    use std::{path::Path};
+    use std::path::Path;
 
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-    use ark_std::{test_rng};
+    use ark_std::test_rng;
     
     use rand::Rng;
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{BatchedCatboostMles, generate_mles_batch_catboost_single_tree}, multiset_circuit::legacy_circuits::MultiSetCircuit}};
-    use remainder_shared_types::transcript::{Transcript};
+    use crate::zkdt::{multiset_circuit::legacy_circuits::MultiSetCircuit, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::BatchedZKDTCircuitMles};
     use crate::prover::tests::test_circuit;
-
-    use super::super::circuits::{FSMultiSetCircuit};
 
     #[test]
     fn test_multiset_circuit_catboost_batched() {
 
         let mut rng = test_rng();
 
-        let (BatchedCatboostMles {decision_node_paths_mle_vec,
+        let (BatchedZKDTCircuitMles {decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             multiplicities_bin_decomp_mle_decision,
             multiplicities_bin_decomp_mle_leaf,

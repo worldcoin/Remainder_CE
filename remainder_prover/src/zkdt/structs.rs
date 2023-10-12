@@ -66,9 +66,9 @@ pub struct BinDecomp4Bit<F> {
 pub struct InputAttribute<F> {
     // pub attr_idx: F,
     ///The attr id of this input
-    pub(crate) attr_id: F,
+    pub attr_id: F,
     ///The threshold value of this input
-    pub(crate) attr_val: F,
+    pub attr_val: F,
 }
 
 // ------------------------------------ MLEABLE IMPLEMENTATIONS ------------------------------------
@@ -131,7 +131,7 @@ impl<F: FieldExt> From<Vec<bool>> for BinDecomp4Bit<F> {
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub(crate) fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
+pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
 
     let num_fields = items.len();
 
@@ -273,7 +273,7 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     /// 
     /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
-    pub(crate) fn combine_mle_batch(decision_mle_batch: Vec<DenseMle<F, DecisionNode<F>>>) -> DenseMle<F, F> {
+    pub fn combine_mle_batch(decision_mle_batch: Vec<DenseMle<F, DecisionNode<F>>>) -> DenseMle<F, F> {
         
         let batched_bits = log2(decision_mle_batch.len());
 
@@ -390,7 +390,7 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     /// 
     /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
-    pub(crate) fn combine_mle_batch(leaf_mle_batch: Vec<DenseMle<F, LeafNode<F>>>) -> DenseMle<F, F> {
+    pub fn combine_mle_batch(leaf_mle_batch: Vec<DenseMle<F, LeafNode<F>>>) -> DenseMle<F, F> {
         
         let batched_bits = log2(leaf_mle_batch.len());
 
@@ -544,7 +544,7 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// 
     /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
-    pub(crate) fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, InputAttribute<F>>>) -> DenseMle<F, F> {
+    pub fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, InputAttribute<F>>>) -> DenseMle<F, F> {
         
         let batched_bits = log2(input_mle_batch.len());
 

@@ -4,6 +4,7 @@ use ark_crypto_primitives::crh::sha256::digest::typenum::Or;
 use itertools::Either;
 use remainder_shared_types::transcript::{self};
 use remainder_shared_types::FieldExt;
+use tracing::instrument;
 
 use crate::layer::combine_mle_refs::get_og_mle_refs;
 use crate::mle::zero::ZeroMleRef;
@@ -145,6 +146,8 @@ impl<F: Clone> Claim<F> {
         self.from_layer_id
     }
 
+#[instrument(level = "trace", err)]
+#[instrument(level = "debug", skip_all, err)]
     /// Returns the destination Layer ID.
     pub fn get_to_layer_id(&self) -> Option<LayerId> {
         self.to_layer_id
@@ -454,6 +457,8 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     Ok(r)
 }
 
+#[instrument(skip(layer), err, level = "trace")]
+#[instrument(skip_all, err, level = "debug")]
 /// Part of the claim aggregation process. It returns a vector of evaluations
 /// [W(l(0)), W(l(1)), ..., W(l(k))] where W : F^n -> F is the layer MLE stored
 /// in `layer`, l : F -> F^n is the interpolated polynomial on the claim points
@@ -471,7 +476,6 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
     if claims.is_empty() {
         return Err(ClaimError::ClaimAggroError);
     }
-
     let num_claims = claims.get_num_claims();
     let num_vars = claims.get_num_vars();
     let claim_mle_refs = claims.get_claim_mle_refs();
@@ -714,6 +718,8 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> (usize,
 /// This function is used by the verifier in the process of verifying
 /// claim aggregation.
 /*
+#[instrument(level = "trace", err)]
+#[instrument(level = "debug", skip_all, err)]
 pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     wlx: &Vec<F>, // synonym for q(x)
     claims: &ClaimGroup<F>,
@@ -722,6 +728,8 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
     if claims.is_empty() {
         return Err(ClaimError::ClaimAggroError);
     }
+
+
 
     let num_claims = claims.get_num_claims();
 
@@ -806,6 +814,8 @@ pub(crate) mod tests {
 
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
+
+        
         layer
     }
 
@@ -823,6 +833,7 @@ pub(crate) mod tests {
         let results = claims.get_results();
         let points_matrix = claims.get_claim_points_matrix();
 
+        
         debug_assert_eq!(points_matrix.len(), num_claims);
         debug_assert_eq!(points_matrix[0].len(), num_vars);
 
@@ -851,6 +862,7 @@ pub(crate) mod tests {
     fn compute_l_star(claims: &ClaimGroup<Fr>, r_star: &Fr) -> Vec<Fr> {
         let num_vars = claims.get_num_vars();
 
+        
         (0..num_vars)
             .map(|i| {
                 let evals: &Vec<Fr> = claims.get_points_column(i);
@@ -874,6 +886,7 @@ pub(crate) mod tests {
         .unwrap()
     }
 
+    
     // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
     fn compute_expected_claim(
         layer: &GKRLayer<Fr, PoseidonTranscript<Fr>>,
@@ -885,6 +898,7 @@ pub(crate) mod tests {
         Claim::new_raw(l_star.clone(), result)
     }
 
+    
     // ----------------------------------------------------------
 
     /// Test claim aggregation small MLE on 2 variables
@@ -898,6 +912,9 @@ pub(crate) mod tests {
         ];
         let r_star = Fr::from(10);
 
+
+
+        
         // ---------------
 
         let layer = layer_from_evals(mle_evals);
@@ -917,9 +934,11 @@ pub(crate) mod tests {
         // assert_eq!(aggregated_claim, expected_claim);
     }
 
+    
     /// Test claim aggregation on another small MLE on 2 variables
     /// with 3 claims.
     #[test]
+    
     fn test_aggro_claim_2() {
         let mle_evals = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let points = vec![
@@ -927,15 +946,24 @@ pub(crate) mod tests {
             vec![Fr::from(2), Fr::from(3)],
             vec![Fr::from(3), Fr::from(1)],
         ];
+        
         let r_star = Fr::from(2).neg();
 
+        
         // ---------------
 
+
+
+        
         let layer = layer_from_evals(mle_evals);
         let claims = claims_from_expr_and_points(layer.expression(), &points);
 
+
+
+        
         let l_star = compute_l_star(&claims, &r_star);
 
+        
         // TODO: Assert l_star was computed correctly.
 
         let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
@@ -1162,10 +1190,12 @@ pub(crate) mod tests {
         expr_copy.index_mle_indices(0);
 
         let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
+        
         let claim_fixed_vars: Claim<Fr> = Claim::new_raw(fix_vars, eval_fixed_vars);
         assert_ne!(res.get_result(), claim_fixed_vars.get_result());
     }
 
+    
     #[test]
     fn test_aggro_claim_common_suffix1() {
         // MLE on 3 variables (2^3 = 8 evals)

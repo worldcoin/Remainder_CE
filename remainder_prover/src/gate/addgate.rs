@@ -442,6 +442,29 @@ pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     _marker: PhantomData<Tr>,
 }
 
+/// For circuit serialization to hash the circuit description into the transcript.
+impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
+    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+
+        // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
+        // --- so that it can be returned as an `impl std::fmt::Display` ---
+        struct AddGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a AddGate<F, Tr>);
+
+        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for AddGateCircuitDesc<'a, F, Tr> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("AddGate")
+                    .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
+                    .field("lhs_mle_ref_mle_indices", &self.0.lhs.mle_indices())
+                    .field("rhs_mle_ref_layer_id", &self.0.rhs.get_layer_id())
+                    .field("rhs_mle_ref_mle_indices", &self.0.rhs.mle_indices())
+                    .field("add_nonzero_gates", &self.0.nonzero_gates)
+                    .finish()
+            }
+        }
+        AddGateCircuitDesc(self)
+    }
+}
+
 impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
     /// new addgate mle (wrapper constructor)
     pub fn new(

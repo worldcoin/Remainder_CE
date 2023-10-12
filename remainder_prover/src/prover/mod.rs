@@ -24,22 +24,21 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         MleRef,
     },
-    mle::{mle_enum::MleEnum, MleIndex},
-    sumcheck::evaluate_at_a_point,
-    utils::pad_to_nearest_power_of_two,
+    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point, gate::{addgate::AddGate, mulgate::MulGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched},
+    utils::{pad_to_nearest_power_of_two, hash_layers}
 };
-
-// use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
-// use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 use ark_std::{end_timer, start_timer};
 use remainder_shared_types::transcript::Transcript;
+
+
 use remainder_shared_types::FieldExt;
 
 // use derive_more::From;
 use itertools::{Either, Itertools};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::{instrument, span, event, Level};
 
 use self::input_layer::{
     enum_input_layer::{CommitmentEnum, InputLayerEnum, OpeningEnum},
@@ -50,10 +49,12 @@ use core::cmp::Ordering;
 
 use log::{debug, info, trace, warn};
 
-// use lcpc_2d::ScalarField;
-// use lcpc_2d::adapter::LigeroProof;
+use core::cmp::Ordering;
 
-///  New  type for containing the list of Layers that make up the GKR circuit
+use log::{debug, info, trace, warn};
+
+
+/// New type for containing the list of Layers that make up the GKR circuit
 ///
 /// Literally just a Vec of pointers to various layer types!
 pub struct Layers<F: FieldExt, Tr: Transcript<F>>(pub Vec<LayerEnum<F, Tr>>);
@@ -79,11 +80,11 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add an Add Gate layer to a list of layers (unbatched version)
     ///
     /// # Arguments
-    /// `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where
+    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where 
     /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
-    /// `lhs`: the mle representing the left side of the sum
-    /// `rhs`: the mle representing the right side of the sum
-    ///
+    /// * `lhs`: the mle representing the left side of the sum
+    /// * `rhs`: the mle representing the right side of the sum
+    /// 
     /// # Returns
     /// A `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_add_gate(
@@ -120,11 +121,11 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add a Mul Gate layer to a list of layers (unbatched version)
     ///
     /// # Arguments
-    /// `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where
+    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where 
     /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
-    /// `lhs`: the mle representing the left side of the multiplication
-    /// `rhs`: the mle representing the right side of the multiplication
-    ///
+    /// * `lhs`: the mle representing the left side of the multiplication
+    /// * `rhs`: the mle representing the right side of the multiplication
+    /// 
     /// # Returns
     /// A `DenseMle` that represents the evaluations of the mul gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_mul_gate(
@@ -164,12 +165,12 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// flattened mle and each individual mle as a batched mle.
     ///
     /// # Arguments
-    /// `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
+    /// * `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
     /// x is the label on the batched mle `lhs`, y is the label on the batched mle `rhs`, and z is the label on the next layer, batched
-    /// `lhs`: the flattened mle representing the left side of the summation
-    /// `rhs`: the flattened mle representing the right side of the summation
-    /// `num_dataparallel_bits`: the number of bits representing the circuit copy we are looking at
-    ///
+    /// * `lhs`: the flattened mle representing the left side of the summation
+    /// * `rhs`: the flattened mle representing the right side of the summation
+    /// * `num_dataparallel_bits`: the number of bits representing the circuit copy we are looking at
+    /// 
     /// # Returns
     /// A flattened `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_add_gate_batched(
@@ -227,12 +228,12 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// flattened mle and each individual mle as a batched mle.
     ///
     /// # Arguments
-    /// `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
+    /// * `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
     /// x is the label on the batched mle `lhs`, y is the label on the batched mle `rhs`, and z is the label on the next layer, batched
-    /// `lhs`: the flattened mle representing the left side of the summation
-    /// `rhs`: the flattened mle representing the right side of the summation
-    /// `num_dataparallel_bits`: the number of bits representing the circuit copy we are looking at
-    ///
+    /// * `lhs`: the flattened mle representing the left side of the summation
+    /// * `rhs`: the flattened mle representing the right side of the summation
+    /// * `num_dataparallel_bits`: the number of bits representing the circuit copy we are looking at
+    /// 
     /// # Returns
     /// A flattened `DenseMle` that represents the evaluations of the mul gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_mul_gate_batched(
@@ -251,10 +252,6 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
             rhs.clone(),
             id,
         );
-        let max_gate_val = nonzero_gates
-            .clone()
-            .into_iter()
-            .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
         let max_gate_val = nonzero_gates
             .clone()
             .into_iter()
@@ -324,6 +321,7 @@ pub enum GKRError {
     #[error("Error when verifying output layer")]
     /// Error when verifying output layer
     ErrorWhenVerifyingOutputLayer,
+    /// Error for input layer commitment
     #[error("Error when commiting to InputLayer {0}")]
     InputLayerError(InputLayerError),
 }
@@ -391,10 +389,13 @@ pub trait GKRCircuit<F: FieldExt> {
     /// The transcript this circuit uses
     type Transcript: Transcript<F>;
 
+    const CIRCUIT_HASH: Option<[u8; 32]> = None;
+
     /// The forward pass, defining the layer relationships and generating the layers
     fn synthesize(&mut self) -> Witness<F, Self::Transcript>;
 
     /// Calls `synthesize` and also generates commitments from each of the input layers
+    #[instrument(skip_all, err)]
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut Self::Transcript,
@@ -414,7 +415,8 @@ pub trait GKRCircuit<F: FieldExt> {
         Ok((witness, commitments))
     }
 
-    ///  The backwards pass, creating the GKRProof
+    /// The backwards pass, creating the GKRProof
+    #[instrument(skip_all, err)]
     fn prove(
         &mut self,
         transcript: &mut Self::Transcript,
@@ -423,6 +425,13 @@ pub trait GKRCircuit<F: FieldExt> {
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
         // --- Also commit and add those commitments to the transcript
         info!("Synethesizing circuit...");
+
+        if let Some(circuit_hash) = Self::get_circuit_hash() {
+            transcript
+                .append_field_element("Circuit Hash", circuit_hash)
+                .unwrap();
+        }
+
         let (
             Witness {
                 input_layers,
@@ -435,6 +444,9 @@ pub trait GKRCircuit<F: FieldExt> {
         end_timer!(synthesize_commit_timer);
 
         let claims_timer = start_timer!(|| "output claims generation");
+
+        // --- TRACE: grabbing output claims ---
+        let output_claims_span = span!(Level::DEBUG, "output_claims_span").entered();
 
         // --- Keep track of GKR-style claims across all layers ---
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
@@ -485,6 +497,12 @@ pub trait GKRCircuit<F: FieldExt> {
         // Count the total number of wlx evaluations for benchmarking purposes.
         let mut wlx_count = 0;
 
+        // --- END TRACE: grabbing output claims ---
+        output_claims_span.exit();
+
+        // --- TRACE: Proving intermediate GKR layers ---
+        let all_layers_sumcheck_proving_span = span!(Level::DEBUG, "all_layers_sumcheck_proving_span").entered();
+
         // --- Collects all the prover messages for sumchecking over each layer, ---
         // --- as well as all the prover messages for claim aggregation at the ---
         // --- beginning of proving each layer ---
@@ -496,10 +514,15 @@ pub trait GKRCircuit<F: FieldExt> {
                 let layer_timer =
                     start_timer!(|| format!("proof generation for layer {:?}", *layer.id()));
 
-                // --- For each layer, get the ID and all the claims on that layer ---
+
+                // --- TRACE: Proving an individual GKR layer ---
                 let layer_id = *layer.id();
                 info!("New Intermediate Layer: {:?}", layer_id);
 
+                let layer_id_trace_repr = format!("{}", layer_id);
+                let _layer_sumcheck_proving_span = span!(Level::DEBUG, "layer_sumcheck_proving_span", layer_id = layer_id_trace_repr).entered();
+
+                // --- For each layer, get the ID and all the claims on that layer ---
                 let layer_claims_vec = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?
@@ -594,8 +617,15 @@ pub trait GKRCircuit<F: FieldExt> {
             .try_collect()?;
 
         end_timer!(intermediate_layers_timer);
+         // --- END TRACE: Proving intermediate GKR layers ---
+         all_layers_sumcheck_proving_span.exit();
 
         let input_layers_timer = start_timer!(|| "INPUT layers proof generation");
+
+       
+
+        // --- TRACE: Proving input layer ---
+        let input_layer_proving_span = span!(Level::DEBUG, "input_layer_proving_span").entered();
 
         let input_layer_proofs = input_layers
             .into_iter()
@@ -688,6 +718,9 @@ pub trait GKRCircuit<F: FieldExt> {
         end_timer!(input_layers_timer);
         println!("TOTAL EVALUATIONS: {}", wlx_count);
 
+        // --- END TRACE: Proving input layer ---
+        input_layer_proving_span.exit();
+
         let gkr_proof = GKRProof {
             layer_sumcheck_proofs,
             output_layers,
@@ -700,11 +733,14 @@ pub trait GKRCircuit<F: FieldExt> {
     /// Verifies the GKRProof produced by fn prove
     ///
     /// Takes in a transcript for FS and re-generates challenges on its own
+    #[instrument(skip_all, err)]
     fn verify(
         &mut self,
         transcript: &mut Self::Transcript,
         gkr_proof: GKRProof<F, Self::Transcript>,
     ) -> Result<(), GKRError> {
+
+        // --- Unpacking GKR proof + adding input commitments to transcript first ---
         let GKRProof {
             layer_sumcheck_proofs,
             output_layers,
@@ -712,6 +748,12 @@ pub trait GKRCircuit<F: FieldExt> {
         } = gkr_proof;
 
         let input_layers_timer = start_timer!(|| "append INPUT commitments to transcript");
+
+        if let Some(circuit_hash) = Self::get_circuit_hash() {
+            transcript
+                .append_field_element("Circuit Hash", circuit_hash)
+                .unwrap();
+        }
 
         for input_layer in input_layer_proofs.iter() {
             InputLayerEnum::append_commitment_to_transcript(
@@ -731,6 +773,9 @@ pub trait GKRCircuit<F: FieldExt> {
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
 
         let claims_timer = start_timer!(|| "output claims generation");
+
+        // --- TRACE: output claims ---
+        let verifier_output_claims_span = span!(Level::DEBUG, "verifier_output_claims_span").entered();
 
         // --- NOTE that all the `Expression`s and MLEs contained within `gkr_proof` are already bound! ---
         for output in output_layers.iter() {
@@ -777,10 +822,17 @@ pub trait GKRCircuit<F: FieldExt> {
             }
         }
 
+        // --- END TRACE: output claims ---
+        verifier_output_claims_span.exit();
+
+        // --- END TRACE: output claims ---
+        verifier_output_claims_span.exit();
+
         end_timer!(claims_timer);
 
         let intermediate_layers_timer =
             start_timer!(|| "ALL intermediate layers proof verification");
+            
 
         // --- Go through each of the layers' sumcheck proofs... ---
         for sumcheck_proof_single in layer_sumcheck_proofs {
@@ -793,10 +845,14 @@ pub trait GKRCircuit<F: FieldExt> {
             let layer_timer =
                 start_timer!(|| format!("proof verification for layer {:?}", *layer.id()));
 
-            // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
+            // --- TRACE: Proving an individual GKR layer ---
             let layer_id = *layer.id();
             info!("Intermediate Layer: {:?}", layer_id);
             debug!("The LayerEnum: {:#?}", layer);
+            let layer_id_trace_repr = format!("{}", layer_id);
+            let _layer_sumcheck_verification_span = span!(Level::DEBUG, "layer_sumcheck_verification_span", layer_id = layer_id_trace_repr).entered();
+
+            // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
             let layer_claims = claims
                 .get(&layer_id)
                 .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
@@ -1002,5 +1058,17 @@ pub trait GKRCircuit<F: FieldExt> {
         end_timer!(input_layers_timer);
 
         Ok(())
+    }
+
+    ///Gen the circuit hash
+    fn gen_circuit_hash(&mut self) -> F {
+        let mut transcript = Self::Transcript::new("blah");
+        let (Witness { layers, .. }, _) = self.synthesize_and_commit(&mut transcript).unwrap();
+
+        hash_layers(&layers)
+    }
+
+    fn get_circuit_hash() -> Option<F> {
+        Self::CIRCUIT_HASH.map(|bytes| F::from_bytes_le(&bytes))
     }
 }

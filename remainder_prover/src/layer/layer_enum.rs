@@ -1,6 +1,8 @@
+use rayon::iter::empty;
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
+use tracing::instrument;
 
 use crate::gate::{
     addgate::AddGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched,
@@ -29,6 +31,7 @@ pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     AddGateBatched(AddGateBatched<F, Tr>),
     /// Batched MulGate
     MulGateBatched(MulGateBatched<F, Tr>),
+    /// Layer with zero variables within it
     EmptyLayer(EmptyLayer<F, Tr>),
 }
 
@@ -48,6 +51,7 @@ impl<F: FieldExt, Tr: Transcript<F>> fmt::Debug for LayerEnum<F, Tr> {
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     type Transcript = Tr;
 
+    #[instrument(skip_all, level = "debug", err)]
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
@@ -63,6 +67,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         }
     }
 
+    #[instrument(skip_all, level = "debug", err)]
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
@@ -83,6 +88,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         }
     }
 
+    #[instrument(skip(self), level = "debug", err)]
     fn get_claims(&self) -> Result<Vec<Claim<F>>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
@@ -116,7 +122,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         self
     }
 
-    // TODO(Makis): Perhaps refactor to receive a `Claim<F>` instead.
+    /// NOTE: This function is effectively deprecated!!!
+    #[instrument(skip(self, claim_vecs, claimed_vals), level = "debug", err)]
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
@@ -162,4 +169,16 @@ impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
 
         expression.get_expression_size(0)
     }
+
+    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> Box<dyn std::fmt::Display + 'a> {
+        match self {
+            LayerEnum::Gkr(layer) => Box::new(layer.expression().circuit_description_fmt()),
+            LayerEnum::MulGate(mulgate_layer) => Box::new(mulgate_layer.circuit_description_fmt()),
+            LayerEnum::AddGate(addgate_layer) => Box::new(addgate_layer.circuit_description_fmt()),
+            LayerEnum::AddGateBatched(addgate_layer_batched) => Box::new(addgate_layer_batched.circuit_description_fmt()),
+            LayerEnum::MulGateBatched(mulgate_layer_batched) => Box::new(mulgate_layer_batched.circuit_description_fmt()),
+            LayerEnum::EmptyLayer(empty_layer) => Box::new(empty_layer.expression().circuit_description_fmt()),
+        }
+    }
+
 }

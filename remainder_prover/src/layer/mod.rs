@@ -12,8 +12,7 @@ use std::marker::PhantomData;
 use ark_std::cfg_into_iter;
 use itertools::repeat_n;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use tracing::Value;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
@@ -113,6 +112,19 @@ impl Ord for LayerId {
             (LayerId::Output(id1), LayerId::Output(id2)) => id1.cmp(&id2),
             (LayerId::Output(id1), _) => Ordering::Greater,
         }
+    }
+}
+
+impl std::fmt::Display for LayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+    
+}
+
+impl std::fmt::Display for LayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
