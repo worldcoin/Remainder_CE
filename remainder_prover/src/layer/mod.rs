@@ -33,7 +33,7 @@ use remainder_shared_types::{
 
 use self::{
     claims::{Claim, ClaimError, get_num_wlx_evaluations},
-    layer_enum::LayerEnum, combine_mle_refs::combine_mle_refs_with_aggregate,
+    layer_enum::LayerEnum, combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
 };
 
 use core::cmp::Ordering;
@@ -530,11 +530,14 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         //evaluate expr on the mutated expr
 
         // get the number of evaluations
-        let num_vars = expr.index_mle_indices(0);
-        let degree = get_round_degree(&expr, 0);
-        // expr.init_beta_tables(prev_layer_claim);
-        let num_evals = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
 
+        let mut claim_mle_refs = claim_mle_refs.clone();
+
+        if common_idx.is_some() {
+            pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx.unwrap());
+        }
+        
         // TODO(Makis): This assert fails on `test_aggro_claim_4` and I'm not
         // sure if the test is wrong or if the assert is wrong!
         /*

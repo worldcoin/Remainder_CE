@@ -526,7 +526,7 @@ mod tests {
             .init();
 
         let (batched_catboost_mles, (_, _)) =
-            generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
+            generate_mles_batch_catboost_single_tree::<Fr>(10, Path::new("upshot_data/"));
 
         let combined_circuit = ZKDTCircuit {
             batched_catboost_mles,

@@ -1,3 +1,5 @@
+use ark_std::{cfg_iter_mut, cfg_into_iter};
+use rayon::{iter::{IntoParallelRefMutIterator, IntoParallelIterator}, prelude::{ParallelIterator, IndexedParallelIterator}};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 use thiserror::Error;
@@ -227,13 +229,12 @@ fn combine_pair<F: FieldExt>(
 
     // depending on whether the lsb fixed bit was true or false, we bind it to the correct challenge point at this index 
     // this is either the challenge point at the index, or one minus this value
-    let bound_coord = {
-        if let MleIndex::Fixed(false) = mle_ref_first.original_mle_indices()[lsb_idx] {
-            F::one() - chal_point[lsb_idx]
-        }
-        else {
-            chal_point[lsb_idx]
-        }
+
+    let bound_coord = if let MleIndex::Fixed(false) = mle_ref_first.original_mle_indices()[lsb_idx] {
+        F::one() - chal_point[lsb_idx]
+    }
+    else {
+        chal_point[lsb_idx]
     };
 
     // the new bookkeeping table also only has size one, but now reflects that we have another bound index
@@ -301,6 +302,62 @@ fn find_pair_and_combine<F: FieldExt> (
     all_refs_updated
 }
 
+pub fn pre_fix_mle_refs<F: FieldExt>(
+    mle_refs: &mut Vec<MleEnum<F>>,
+    chal_point: &Vec<F>,
+    common_idx: Vec<usize>,
+) {
+    cfg_iter_mut!(mle_refs).for_each(
+        |mle_ref| {
+            common_idx.iter().for_each(
+                |chal_idx| {
+                    if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
+                        mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+        }});
+    });
+}
+
+pub fn get_og_mle_refs<F: FieldExt>(
+    mle_refs: Vec<MleEnum<F>>,
+) -> Vec<MleEnum<F>> {
+
+    let mle_refs = mle_refs.into_iter().unique_by(|mle_ref| {
+        match mle_ref {
+            MleEnum::Dense(dense_mle_ref) => { dense_mle_ref.original_mle_indices.clone() }
+            MleEnum::Zero(zero_mle_ref) => { zero_mle_ref.original_mle_indices.clone() }
+        }
+    }).collect_vec();
+
+    let mle_refs_split = collapse_mles_with_iterated_in_prefix(&mle_refs);
+
+    let mle_ref_fix = cfg_into_iter!(mle_refs_split).map(
+        |mle_ref| {
+            match mle_ref {
+                MleEnum::Dense(dense_mle_ref) => {
+                    let mut mle_ref_og = DenseMleRef {
+                        bookkeeping_table: dense_mle_ref.original_bookkeeping_table.clone(),
+                        original_bookkeeping_table: dense_mle_ref.original_bookkeeping_table.clone(),
+                        mle_indices: dense_mle_ref.original_mle_indices.clone(),
+                        original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
+                        num_vars: dense_mle_ref.original_num_vars,
+                        original_num_vars: dense_mle_ref.original_num_vars,
+                        layer_id: dense_mle_ref.get_layer_id(),
+                        indexed: false,
+                    };
+                    mle_ref_og.index_mle_indices(0);
+                    MleEnum::Dense(mle_ref_og)
+                }
+                zero => zero
+            }
+        }
+    );
+
+    let mut ret_mles: Vec<MleEnum<F>> = vec![];
+    mle_ref_fix.collect_into_vec(&mut ret_mles);
+    ret_mles
+
+}
+
 /// this function takes in a list of mle refs, a challenge point we want to combine them under, and returns 
 /// the final value in the bookkeeping table of the combined mle_ref. 
 /// this is equivalent to combining all of these mle refs according to their prefix bits, and then fixing
@@ -314,50 +371,28 @@ pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
     // first we want to filter out for mle_refs that are duplicates. we look at their original indices
     // instead of their bookkeeping tables because sometimes two mle_refs can have the same original_bookkeeping_table
     // but have different prefix bits. if they have the same prefix bits, they must be duplicates.
-    let mle_refs = mle_refs.clone().into_iter().unique_by(|mle_ref| {
-        match mle_ref {
-            MleEnum::Dense(dense_mle_ref) => { dense_mle_ref.original_mle_indices.clone() }
-            MleEnum::Zero(zero_mle_ref) => { zero_mle_ref.original_mle_indices.clone() }
-        }
-    }).collect_vec();
+
 
     // then, we split all the mle_refs with an iterated bit within the prefix bits
-    let mle_refs_split = collapse_mles_with_iterated_in_prefix(&mle_refs);
+
 
     // we go through all of the mle_refs and fix variable in all of them given the iterated indices they already have
     // so that they are fully bound. 
-    let fix_var_mle_refs = mle_refs_split.into_iter().map(
+    let fix_var_mle_refs = mle_refs.into_iter().map(
         |mle_ref| {
-            match mle_ref {
-                // create a new mle ref where the bookkeeping table we want to fix on is its original bookkeeping table that we saved
-                MleEnum::Dense(dense_mle_ref) => {
-                    let mut mle_ref_og = DenseMleRef {
-                        bookkeeping_table: dense_mle_ref.original_bookkeeping_table.clone(),
-                        original_bookkeeping_table: dense_mle_ref.original_bookkeeping_table.clone(),
-                        mle_indices: dense_mle_ref.original_mle_indices.clone(),
-                        original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
-                        num_vars: dense_mle_ref.original_num_vars,
-                        original_num_vars: dense_mle_ref.original_num_vars,
-                        layer_id: dense_mle_ref.get_layer_id(),
-                        indexed: false,
-                    };
-                    // fix variable according to the index in the challenge point
-                    mle_ref_og.index_mle_indices(0);
-                    mle_ref_og.mle_indices.clone().into_iter().enumerate().for_each(
+            match mle_ref.clone() {
+                MleEnum::Dense(mut dense_mle_ref) => {
+                    dense_mle_ref.mle_indices.clone().into_iter().enumerate().for_each(
                         |(idx, mle_idx)| {
                             if let MleIndex::IndexedBit(idx_num) = mle_idx {
-                                mle_ref_og.fix_variable(idx_num, chal_point[idx]);
+                                dense_mle_ref.fix_variable(idx_num, chal_point[idx]);
                             }
                         }
                     );
-                    MleEnum::Dense(mle_ref_og)
-
+                    MleEnum::Dense(dense_mle_ref)
                 }
-                MleEnum::Zero(zero_mle_ref) => {
-                    MleEnum::Zero(zero_mle_ref)
-                }
+                zero => zero
             }
-            
         }
     ).collect_vec();
 

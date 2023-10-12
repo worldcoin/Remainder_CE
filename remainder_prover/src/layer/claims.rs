@@ -5,6 +5,8 @@ use itertools::Either;
 use remainder_shared_types::transcript::{self};
 use remainder_shared_types::FieldExt;
 
+use crate::layer::combine_mle_refs::get_og_mle_refs;
+use crate::mle::zero::ZeroMleRef;
 use crate::mle::{MleRef, MleIndex};
 use crate::mle::mle_enum::MleEnum;
 use crate::mle::dense::{DenseMleRef, DenseMle};
@@ -340,7 +342,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
 /// implementation.
 pub(crate) fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Result<Vec<F>, GKRError>,
+    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>,
     transcript: &mut impl transcript::Transcript<F>,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
     let num_claims = claims.get_num_claims();
@@ -348,6 +350,8 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     info!("High-level claim aggregation on {num_claims} claims.");
 
     let claim_preproc_timer = start_timer!(|| format!("Claim preprocessing"));
+    
+    let layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
 
     // Holds a sequence of relevant wlx evaluations, one for each claim
     // group that is being aggregated.
@@ -370,7 +374,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     // TODO(Makis): Parallelize
     let intermediate_results: Result<Vec<(Claim<F>, Vec<Vec<F>>)>, GKRError> = claim_groups
         .into_iter()
-        .map(|claim_group| aggregate_claims_in_one_round(&claim_group, compute_wlx_fn, transcript))
+        .map(|claim_group| aggregate_claims_in_one_round(&claim_group, &layer_mle_refs, compute_wlx_fn, transcript))
         .collect();
     let intermediate_results = intermediate_results?;
 
@@ -395,6 +399,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     // Finally, aggregate all intermediate claims.
     let (claim, mut wlx_evals_option) = aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
+        &layer_mle_refs,
         compute_wlx_fn,
         transcript,
     )?;
@@ -577,7 +582,8 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 /// this 1-step claim aggregation.
 pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>) -> Result<Vec<F>, GKRError>,
+    layer_mle_refs: &Vec<MleEnum<F>>,
+    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>,
     transcript: &mut impl transcript::Transcript<F>,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
     let num_claims = claims.get_num_claims();
@@ -600,7 +606,7 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
 
     // Aggregate claims by performing the claim aggregation protocol.
     // First compute V_i(l(x)).
-    let wlx_evaluations = compute_wlx_fn(claims)?;
+    let wlx_evaluations = compute_wlx_fn(claims, Some(layer_mle_refs))?;
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
     // Append evaluations to the transcript before sampling a challenge.
@@ -647,7 +653,7 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
 /// claim_vecs.len()`.
 /// # Panics
 ///  if `claim_vecs` is empty.
-pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> usize {
+pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> (usize, Option<Vec<usize>>) {
     let num_claims = claim_vecs.len();
     let num_vars = claim_vecs[0].len();
 
@@ -660,16 +666,22 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> usize {
         // n * (m-1) which needs at least n * (m-1) + 1 evaluations to be fully
         // specified.
         debug!("Dummy num_evals");
-        max(num_vars * (num_claims - 1) + 1, num_claims)
+        (max(num_vars * (num_claims - 1) + 1, num_claims), None)
     } else {
         debug!("Smart num_evals");
         let mut degree_reduction = num_vars as i64;
+        let mut common_idx = vec![];
         for j in 0..num_vars {
+            let mut degree_reduced = true;
             for i in 1..num_claims {
                 if claim_vecs[i][j] != claim_vecs[i - 1][j] {
                     degree_reduction -= 1;
+                    degree_reduced = false;
                     break;
                 }
+            }
+            if degree_reduced {
+                common_idx.push(j);
             }
         }
         assert!(degree_reduction >= 0);
@@ -689,7 +701,7 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> usize {
         let num_evals =
             (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
         debug!("num_evals originally = {}", num_evals);
-        max(num_evals, num_claims)
+        (max(num_evals, num_claims), Some(common_idx))
     }
 }
 
@@ -852,7 +864,7 @@ pub(crate) mod tests {
         let mut transcript = PoseidonTranscript::<Fr>::new("Dummy transcript for testing");
         aggregate_claims(
             claims,
-            &mut |claim| Ok(compute_claim_wlx(claims, layer)),
+            &mut |claim, mle_refs| Ok(compute_claim_wlx(claims, layer)),
             &mut transcript,
         )
         .unwrap()
