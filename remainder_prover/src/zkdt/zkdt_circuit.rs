@@ -294,46 +294,49 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         let public_path_leaf_node_mles_input_layer_builder =
             InputLayerBuilder::new(public_path_leaf_node_mles, None, LayerId::Input(3));
 
-        // // --- Convert all the input layer builders into input layers ---
-        // let (
-        //     _ligero_encoding,
-        //     tree_ligero_commit,
-        //     tree_ligero_root,
-        //     tree_ligero_aux
-        // ): (
-        //     LigeroEncoding<F>,
-        //     LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-        //     LcRoot<LigeroEncoding<F>, F>,
-        //     LcProofAuxiliaryInfo,
-        // ) = {
-        //     let file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
-        //     from_reader(&file).unwrap()
-        // };
+        // --- Convert all the input layer builders into input layers ---
+        let (
+            _ligero_encoding,
+            tree_ligero_commit,
+            tree_ligero_root,
+            tree_ligero_aux
+        ): (
+            LigeroEncoding<F>,
+            LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+            LcRoot<LigeroEncoding<F>, F>,
+            LcProofAuxiliaryInfo,
+        ) = {
+            let timer = start_timer!(|| format!("reader 1"));
+            let file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
+            let res = from_reader(&file).unwrap();
+            end_timer!(timer);
+            res
+        };
         
-        // let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = tree_mle_input_layer_builder.to_input_layer_with_precommit(tree_ligero_commit, tree_ligero_aux, tree_ligero_root);
+        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = tree_mle_input_layer_builder.to_input_layer_with_precommit(tree_ligero_commit, tree_ligero_aux, tree_ligero_root);
 
-        // let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-        //     input_mles_input_layer_builder.to_input_layer();
-        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = tree_mle_input_layer_builder.to_input_layer();
+        // let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = tree_mle_input_layer_builder.to_input_layer();
 
-        // let (
-        //     _ligero_encoding,
-        //     sample_minibatch_ligero_commit,
-        //     sample_minibatch_ligero_root,
-        //     sample_minibatch_ligero_aux
-        // ): (
-        //     LigeroEncoding<F>,
-        //     LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-        //     LcRoot<LigeroEncoding<F>, F>,
-        //     LcProofAuxiliaryInfo,
-        // ) = {
-        //     let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-        //     from_reader(&file).unwrap()
-        // };
-        // let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = input_mles_input_layer_builder.to_input_layer_with_precommit(sample_minibatch_ligero_commit, sample_minibatch_ligero_aux, sample_minibatch_ligero_root);
+        let (
+            _ligero_encoding,
+            sample_minibatch_ligero_commit,
+            sample_minibatch_ligero_root,
+            sample_minibatch_ligero_aux
+        ): (
+            LigeroEncoding<F>,
+            LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+            LcRoot<LigeroEncoding<F>, F>,
+            LcProofAuxiliaryInfo,
+        ) = {
+            let timer = start_timer!(|| format!("reader 2"));
+            let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+            let res = from_reader(&file).unwrap();
+            end_timer!(timer);
+            res
+        };
+        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = input_mles_input_layer_builder.to_input_layer_with_precommit(sample_minibatch_ligero_commit, sample_minibatch_ligero_aux, sample_minibatch_ligero_root);
 
-        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            input_mles_input_layer_builder.to_input_layer();
+        // let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = input_mles_input_layer_builder.to_input_layer();
 
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = aux_mles_input_layer_builder.to_input_layer();
         let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> = public_path_leaf_node_mles_input_layer_builder.to_input_layer();
