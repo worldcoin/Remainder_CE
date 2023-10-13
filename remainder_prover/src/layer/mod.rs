@@ -12,7 +12,9 @@ use std::marker::PhantomData;
 use ark_std::cfg_into_iter;
 use itertools::repeat_n;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use serde::{Serialize, Deserialize};
 use tracing::Value;
+use thiserror::Error;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
@@ -119,13 +121,7 @@ impl std::fmt::Display for LayerId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
-    
-}
 
-impl std::fmt::Display for LayerId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression

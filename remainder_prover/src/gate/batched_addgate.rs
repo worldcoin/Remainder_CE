@@ -100,7 +100,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
                 self.nonzero_gates.clone(),
                 self.lhs.clone(),
                 self.rhs.clone(),
-                self.new_bits,
+                self.num_dataparallel_bits,
                 Some(beta_g2),
             );
             self.reduced_gate = Some(reduced_gate);

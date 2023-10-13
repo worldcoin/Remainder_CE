@@ -1,17 +1,16 @@
 use crate::layer::LayerId;
+
 use crate::mle::dense::DenseMle;
-use crate::mle::MleRef;
 use crate::utils::file_exists;
 use crate::zkdt::constants::get_cached_batched_mles_filepath_with_exp_size;
 use crate::zkdt::data_pipeline::dt2zkdt::{Samples, to_samples, circuitize_samples, RawTreesModel, load_raw_trees_model, RawSamples, load_raw_samples, TreesModel, CircuitizedTrees};
 use crate::zkdt::input_data_to_circuit_adapter::{ZKDTCircuitData, convert_zkdt_circuit_data_into_mles, MinibatchData, load_upshot_data_single_tree_batch};
 use remainder_shared_types::FieldExt;
-use serde::{Deserialize, Serialize};
-use serde_json::{from_reader, to_writer};
+use serde::{Serialize, Deserialize};
+use serde_json::{to_writer, from_reader};
 
 use super::super::constants::CACHED_BATCHED_MLES_FILE;
 use super::super::structs::*;
-use super::dt2zkdt::load_upshot_data_single_tree_batch;
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
@@ -202,46 +201,6 @@ impl<F: FieldExt> ZKDTDummyCircuitData<F> {
             dummy_multiplicities_bin_decomp,
             dummy_decision_nodes,
             dummy_leaf_nodes,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ZKDTCircuitData<F> {
-    input_data: Vec<Vec<InputAttribute<F>>>, // Input attributes
-    permuted_input_data: Vec<Vec<InputAttribute<F>>>, // Permuted input attributes
-    decision_node_paths: Vec<Vec<DecisionNode<F>>>, // Paths (decision node part only)
-    leaf_node_paths: Vec<LeafNode<F>>,       // Paths (leaf node part only)
-    binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>, // Binary decomp of differences
-    multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>, // Binary decomp of multiplicities
-    decision_nodes: Vec<DecisionNode<F>>,    // Actual tree decision nodes
-    leaf_nodes: Vec<LeafNode<F>>,            // Actual tree leaf nodes
-    multiplicities_bin_decomp_input: Vec<Vec<BinDecomp4Bit<F>>>, // Binary decomp of multiplicities, of input
-}
-
-impl<F: FieldExt> ZKDTCircuitData<F> {
-    /// creates new dummydata
-    pub fn new(
-        input_data: Vec<Vec<InputAttribute<F>>>,
-        permuted_input_data: Vec<Vec<InputAttribute<F>>>,
-        decision_node_paths: Vec<Vec<DecisionNode<F>>>,
-        leaf_node_paths: Vec<LeafNode<F>>,
-        binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>,
-        multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>,
-        decision_nodes: Vec<DecisionNode<F>>,
-        leaf_nodes: Vec<LeafNode<F>>,
-        multiplicities_bin_decomp_input: Vec<Vec<BinDecomp4Bit<F>>>,
-    ) -> ZKDTCircuitData<F> {
-        ZKDTCircuitData {
-            input_data,
-            permuted_input_data,
-            decision_node_paths,
-            leaf_node_paths,
-            binary_decomp_diffs,
-            multiplicities_bin_decomp,
-            decision_nodes,
-            leaf_nodes,
-            multiplicities_bin_decomp_input,
         }
     }
 }
@@ -513,213 +472,6 @@ pub struct BatchedDummyMles<F: FieldExt> {
     pub dummy_leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
 }
 
-// #[derive(Serialize, Deserialize)]
-#[derive(Clone)]
-pub struct BatchedCatboostMles<F: FieldExt> {
-    pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-    pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-    pub decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
-    pub leaf_node_paths_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,
-    pub binary_decomp_diffs_mle_vec: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
-    pub multiplicities_bin_decomp_mle_decision: DenseMle<F, BinDecomp16Bit<F>>,
-    pub multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
-    pub decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
-    pub leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
-    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
-}
-
-/// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
-/// to a file for ease of reading (i.e. faster testing, mostly lol)
-pub fn write_mles_batch_catboost_single_tree<F: FieldExt>() {
-    let loaded_zkdt_circuit_data = load_upshot_data_single_tree_batch::<F>(
-        Some(1),
-        None,
-        Path::new("upshot_data/quantized-upshot-model.json"),
-        Path::new("upshot_data/upshot-quantized-samples.npy"),
-    );
-    let mut f = fs::File::create(CACHED_BATCHED_MLES_FILE).unwrap();
-    to_writer(&mut f, &loaded_zkdt_circuit_data).unwrap();
-}
-
-/// Reads the cached results from [`load_upshot_data_single_tree_batch`] and returns them.
-pub fn read_upshot_data_single_tree_branch_from_file<F: FieldExt>(
-) -> (ZKDTCircuitData<F>, (usize, usize)) {
-    let file = std::fs::File::open(CACHED_BATCHED_MLES_FILE).unwrap();
-    from_reader(&file).unwrap()
-}
-
-/// Reads the cached results from `cached_file_path` and returns them
-pub fn read_upshot_data_single_tree_branch_from_filepath<F: FieldExt>(
-    cached_file_path: &str,
-) -> (ZKDTCircuitData<F>, (usize, usize)) {
-    let file = std::fs::File::open(cached_file_path).unwrap();
-    from_reader(&file).unwrap()
-}
-
-/// Loads a result from [`generate_upshot_data_all_batch_sizes`].
-pub fn read_upshot_data_single_tree_branch_from_file_with_batch_exp<F: FieldExt>(
-    exp_batch_size: usize,
-    upshot_data_dir_path: &Path,
-) -> (ZKDTCircuitData<F>, (usize, usize)) {
-    // --- Sanitychecks ---
-    debug_assert!(exp_batch_size >= 1);
-    debug_assert!(exp_batch_size <= 12);
-
-    // --- Load ---
-    let file = std::fs::File::open(get_cached_batched_mles_filename_with_exp_size(
-        exp_batch_size,
-        upshot_data_dir_path,
-    ))
-    .unwrap();
-    from_reader(&file).unwrap()
-}
-
-/// Generates circuit data in batched form for a single Catboost tree
-///
-/// ## Arguments
-/// * `exp_batch_size` - 2^{`exp_batch_size`} is the actual batch size that we want.
-///     Note that this value must be between 1 and 12, inclusive!
-pub fn generate_mles_batch_catboost_single_tree<F: FieldExt>(
-    exp_batch_size: usize,
-    upshot_data_dir_path: &Path,
-) -> (BatchedCatboostMles<F>, (usize, usize)) {
-    // --- Sanitychecks ---
-    debug_assert!(exp_batch_size >= 1);
-    debug_assert!(exp_batch_size <= 12);
-
-    // --- Check to see if the cached file exists ---
-    let cached_file_path =
-        get_cached_batched_mles_filename_with_exp_size(exp_batch_size, upshot_data_dir_path);
-
-    // --- If no cached file exists, run the entire cache thingy ---
-    if !file_exists(&cached_file_path) {
-        generate_upshot_data_all_batch_sizes::<F>(None, upshot_data_dir_path);
-    }
-
-    // --- First generate the dummy data, then convert to MLE form factor ---
-    let (zkdt_circuit_data, (tree_height, input_len)) =
-        read_upshot_data_single_tree_branch_from_filepath::<F>(&cached_file_path);
-    convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len)
-}
-
-/// Takes the output from presumably something like [`read_upshot_data_single_tree_branch_from_filepath`]
-/// and converts it into `BatchedCatboostMles<F>`, i.e. the input to the circuit.
-pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
-    zkdt_circuit_data: ZKDTCircuitData<F>,
-    tree_height: usize,
-    input_len: usize,
-) -> (BatchedCatboostMles<F>, (usize, usize)) {
-    // --- Unpacking ---
-    let ZKDTCircuitData {
-        input_data,
-        permuted_input_data,
-        decision_node_paths,
-        leaf_node_paths,
-        binary_decomp_diffs,
-        mut multiplicities_bin_decomp,
-        decision_nodes,
-        leaf_nodes,
-        multiplicities_bin_decomp_input,
-    } = zkdt_circuit_data;
-
-    let decision_len = 2_usize.pow(tree_height as u32 - 1);
-    let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
-    let multiplicities_bin_decomp_decision = multiplicities_bin_decomp;
-
-    // --- Generate MLEs for each ---
-    let input_data_mle_vec = input_data
-        .into_iter()
-        .map(|input| {
-            DenseMle::new_from_iter(
-                input.into_iter().map(InputAttribute::from),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect_vec();
-    let permuted_input_data_mle_vec = permuted_input_data
-        .iter()
-        .map(|datum| {
-            DenseMle::new_from_iter(
-                datum.clone().into_iter().map(InputAttribute::from),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect();
-    let decision_node_paths_mle_vec: Vec<DenseMle<F, DecisionNode<F>>> = decision_node_paths
-        .iter()
-        .map(|path| DenseMle::new_from_iter(path.clone().into_iter(), LayerId::Input(0), None))
-        .collect();
-    let leaf_node_paths_mle_vec = leaf_node_paths
-        .into_iter()
-        .map(|path| DenseMle::new_from_iter([path].into_iter(), LayerId::Input(0), None))
-        .collect();
-    let binary_decomp_diffs_mle_vec = binary_decomp_diffs
-        .iter()
-        .map(|binary_decomp_diff| {
-            DenseMle::new_from_iter(
-                binary_decomp_diff
-                    .clone()
-                    .into_iter()
-                    .map(BinDecomp16Bit::from),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect_vec();
-    let multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(
-        multiplicities_bin_decomp_decision
-            .into_iter()
-            .map(BinDecomp16Bit::from),
-        LayerId::Input(0),
-        None,
-    );
-    let multiplicities_bin_decomp_mle_leaf = DenseMle::new_from_iter(
-        multiplicities_bin_decomp_leaf
-            .into_iter()
-            .map(BinDecomp16Bit::from),
-        LayerId::Input(0),
-        None,
-    );
-    let decision_nodes_mle = DenseMle::new_from_iter(
-        decision_nodes.into_iter().map(DecisionNode::from),
-        LayerId::Input(0),
-        None,
-    );
-    let leaf_nodes_mle = DenseMle::new_from_iter(
-        leaf_nodes.into_iter().map(LeafNode::from),
-        LayerId::Input(0),
-        None,
-    );
-    let multiplicities_bin_decomp_mle_input = multiplicities_bin_decomp_input
-        .iter()
-        .map(|datum| {
-            DenseMle::new_from_iter(
-                datum.clone().into_iter().map(BinDecomp4Bit::from),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect_vec();
-
-    (
-        BatchedCatboostMles {
-            input_data_mle_vec,
-            permuted_input_data_mle_vec,
-            decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-            binary_decomp_diffs_mle_vec,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_nodes_mle,
-            leaf_nodes_mle,
-            multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input,
-        },
-        (tree_height, input_len),
-    )
-}
-
 pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
     // --- First generate the dummy data ---
     let ZKDTDummyCircuitData {
@@ -738,30 +490,22 @@ pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
     // --- Generate MLEs for each ---
     // TODO!(ryancao): Change this into batched form
     // let dummy_attr_idx_data_mle = DenseMle::<_, F>::new(dummy_attr_idx_data[0].clone());
-    let dummy_input_data_mle = dummy_input_data
+    let dummy_input_data_mle = dummy_input_data.into_iter().map(|input| DenseMle::new_from_iter(input
+        
         .into_iter()
-        .map(|input| {
-            DenseMle::new_from_iter(
-                input.into_iter().map(InputAttribute::from),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect_vec();
+        .map(InputAttribute::from), LayerId::Input(0), None)).collect_vec();
     // let dummy_permutation_indices_mle = DenseMle::<_, F>::new(dummy_permutation_indices[0].clone());
     let dummy_permuted_input_data_mle = dummy_permuted_input_data
-        .iter()
-        .map(|datum| {
-            DenseMle::new_from_iter(
-                datum.clone().into_iter().map(InputAttribute::from),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect();
+        .iter().map(|datum| DenseMle::new_from_iter(datum
+            .clone()
+            .into_iter()
+            .map(InputAttribute::from), LayerId::Input(0), None)).collect();
     let dummy_decision_node_paths_mle = dummy_decision_node_paths
         .iter()
-        .map(|path| DenseMle::new_from_iter(path.clone().into_iter(), LayerId::Input(0), None))
+        .map(|path|
+            DenseMle::new_from_iter(path
+            .clone()
+            .into_iter(), LayerId::Input(0), None))
         .collect();
     let dummy_leaf_node_paths_mle = dummy_leaf_node_paths
         .into_iter()
@@ -769,34 +513,24 @@ pub fn generate_dummy_mles_batch<F: FieldExt>() -> BatchedDummyMles<F> {
         .collect();
     let dummy_binary_decomp_diffs_mle = dummy_binary_decomp_diffs
         .iter()
-        .map(|dummy_binary_decomp_diff| {
-            DenseMle::new_from_iter(
-                dummy_binary_decomp_diff
-                    .clone()
-                    .into_iter()
-                    .map(BinDecomp16Bit::from),
-                LayerId::Input(0),
-                None,
-            )
-        })
+        .map(|dummy_binary_decomp_diff|
+            DenseMle::new_from_iter(dummy_binary_decomp_diff
+                .clone()
+                .into_iter()
+                .map(BinDecomp16Bit::from), LayerId::Input(0), None))
         .collect_vec();
-    let dummy_multiplicities_bin_decomp_mle = DenseMle::new_from_iter(
-        dummy_multiplicities_bin_decomp
-            .into_iter()
-            .map(BinDecomp16Bit::from),
-        LayerId::Input(0),
-        None,
-    );
-    let dummy_decision_nodes_mle = DenseMle::new_from_iter(
-        dummy_decision_nodes.into_iter().map(DecisionNode::from),
-        LayerId::Input(0),
-        None,
-    );
-    let dummy_leaf_nodes_mle = DenseMle::new_from_iter(
-        dummy_leaf_nodes.into_iter().map(LeafNode::from),
-        LayerId::Input(0),
-        None,
-    );
+    let dummy_multiplicities_bin_decomp_mle = DenseMle::new_from_iter(dummy_multiplicities_bin_decomp
+        
+        .into_iter()
+        .map(BinDecomp16Bit::from), LayerId::Input(0), None);
+    let dummy_decision_nodes_mle = DenseMle::new_from_iter(dummy_decision_nodes
+        
+        .into_iter()
+        .map(DecisionNode::from), LayerId::Input(0), None);
+    let dummy_leaf_nodes_mle = DenseMle::new_from_iter(dummy_leaf_nodes
+        
+        .into_iter()
+        .map(LeafNode::from), LayerId::Input(0), None);
 
     BatchedDummyMles {
         dummy_input_data_mle,
@@ -896,8 +630,7 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
         None,
     );
 
-    DummyMles {
-        // dummy_attr_idx_data_mle,
+    DummyMles {        // dummy_attr_idx_data_mle,
         dummy_input_data_mle,
         dummy_permuted_input_data_mle,
         dummy_decision_node_paths_mle,
@@ -915,7 +648,7 @@ mod tests {
     use super::*;
     use crate::{
         expression::ExpressionStandard,
-        layer::{claims::Claim, LayerId},
+        layer::{LayerId, claims::Claim},
         mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef},
         sumcheck::{
             compute_sumcheck_message, get_round_degree,
@@ -923,15 +656,8 @@ mod tests {
             Evals,
         }, zkdt::cache_upshot_catboost_inputs_for_testing::write_mles_batch_catboost_single_tree,
     };
-    use ark_std::test_rng;
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-
-    /// Literally just calls the [`write_mles_batch_catboost_single_tree`] function
-    /// to write the preprocessed stuff to file so we can load it in later
-    #[test]
-    fn test_write_mles_batch_catboost_single_tree() {
-        write_mles_batch_catboost_single_tree::<Fr>();
-    }
+    use ark_std::test_rng;
 
     /// Checks that bits within the diff binary decomp and the multiplicity
     /// binary decomp are all either 0 or 1
@@ -962,7 +688,8 @@ mod tests {
 
         // --- Checks the same for the multiplicity binary decompositions ---
         assert!(
-            dummy_multiplicities_bin_decomp.len() == (NUM_DECISION_NODES + NUM_LEAF_NODES) as usize
+            dummy_multiplicities_bin_decomp.len()
+                == (NUM_DECISION_NODES + NUM_LEAF_NODES) as usize
         );
         dummy_multiplicities_bin_decomp
             .into_iter()
@@ -1044,8 +771,7 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_multiplicities() {
         let mut rng = test_rng();
-        let layer_claim: Claim<Fr> =
-            Claim::new_raw(vec![Fr::from(rng.gen::<u64>()); 12], Fr::zero());
+        let layer_claim: Claim<Fr> = Claim::new_raw(vec![Fr::from(rng.gen::<u64>()); 12], Fr::zero());
         let mut beta = BetaTable::new(layer_claim.get_point().clone()).unwrap();
         beta.table.index_mle_indices(0);
 

@@ -24,7 +24,7 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         MleRef,
     },
-    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point, gate::{addgate::AddGate, mulgate::MulGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched},
+    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point,
     utils::{pad_to_nearest_power_of_two, hash_layers}
 };
 
@@ -44,10 +44,6 @@ use self::input_layer::{
     enum_input_layer::{CommitmentEnum, InputLayerEnum, OpeningEnum},
     InputLayer, InputLayerError,
 };
-
-use core::cmp::Ordering;
-
-use log::{debug, info, trace, warn};
 
 use core::cmp::Ordering;
 
@@ -825,14 +821,11 @@ pub trait GKRCircuit<F: FieldExt> {
         // --- END TRACE: output claims ---
         verifier_output_claims_span.exit();
 
-        // --- END TRACE: output claims ---
-        verifier_output_claims_span.exit();
-
         end_timer!(claims_timer);
 
         let intermediate_layers_timer =
             start_timer!(|| "ALL intermediate layers proof verification");
-            
+
 
         // --- Go through each of the layers' sumcheck proofs... ---
         for sumcheck_proof_single in layer_sumcheck_proofs {

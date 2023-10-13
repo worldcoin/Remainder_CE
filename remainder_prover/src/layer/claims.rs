@@ -145,9 +145,7 @@ impl<F: Clone> Claim<F> {
     pub fn get_from_layer_id(&self) -> Option<LayerId> {
         self.from_layer_id
     }
-
-#[instrument(level = "trace", err)]
-#[instrument(level = "debug", skip_all, err)]
+    
     /// Returns the destination Layer ID.
     pub fn get_to_layer_id(&self) -> Option<LayerId> {
         self.to_layer_id
@@ -433,6 +431,8 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 /// operating on the points and not on the results. However, the ClaimGroup API
 /// is convenient for accessing columns and makes the implementation more
 /// readable. We should consider alternative designs.
+#[instrument(level = "trace", err)]
+#[instrument(level = "debug", skip_all, err)]
 pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     claims: &ClaimGroup<F>,
     r_star: F,
@@ -457,8 +457,7 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
     Ok(r)
 }
 
-#[instrument(skip(layer), err, level = "trace")]
-#[instrument(skip_all, err, level = "debug")]
+
 /// Part of the claim aggregation process. It returns a vector of evaluations
 /// [W(l(0)), W(l(1)), ..., W(l(k))] where W : F^n -> F is the layer MLE stored
 /// in `layer`, l : F -> F^n is the interpolated polynomial on the claim points

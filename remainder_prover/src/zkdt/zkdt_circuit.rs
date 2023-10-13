@@ -1,4 +1,4 @@
-use ark_std::log2;
+use ark_std::{log2, start_timer, end_timer};
 use itertools::{repeat_n, Itertools};
 use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
@@ -546,8 +546,5 @@ mod tests {
         };
 
             test_circuit(combined_circuit, None);
-
-            end_timer!(circuit_timer);
-        });
+        }
     }
-}
