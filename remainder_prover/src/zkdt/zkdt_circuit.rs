@@ -303,8 +303,11 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             LcRoot<LigeroEncoding<F>, F>,
             LcProofAuxiliaryInfo,
         ) = {
+            let timer = start_timer!(|| "reader 1");
             let file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
-            from_reader(&file).unwrap()
+            let res = from_reader(&file).unwrap();
+            end_timer!(timer);
+            res
         };
         let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             tree_mle_input_layer_builder.to_input_layer_with_precommit(
@@ -324,8 +327,11 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             LcRoot<LigeroEncoding<F>, F>,
             LcProofAuxiliaryInfo,
         ) = {
+            let timer = start_timer!(|| "reader 2");
             let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-            from_reader(&file).unwrap()
+            let res = from_reader(&file).unwrap();
+            end_timer!(timer);
+            res
         };
         let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             input_mles_input_layer_builder.to_input_layer_with_precommit(
