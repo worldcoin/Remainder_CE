@@ -2,6 +2,7 @@
 
 pub mod batched;
 pub mod claims;
+pub mod combine_mle_refs;
 pub mod empty_layer;
 pub mod layer_enum;
 // mod gkr_layer;
@@ -19,13 +20,14 @@ use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
     mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
-        zero, MleIndex, MleRef,
+        dense::DenseMleRef,
+        mle_enum::MleEnum,
+        MleIndex, MleRef,
     },
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
     },
-    zkdt::helpers::get_field_val_as_usize_vec,
 };
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
@@ -33,7 +35,8 @@ use remainder_shared_types::{
 };
 
 use self::{
-    claims::{get_num_wlx_evaluations, Claim, ClaimError},
+    claims::{get_num_wlx_evaluations, Claim, ClaimError, ENABLE_PRE_FIX, ENABLE_RAW_MLE},
+    combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     layer_enum::LayerEnum,
 };
 
@@ -154,6 +157,7 @@ pub trait Layer<F: FieldExt> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mle_refs: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError>;
@@ -190,9 +194,6 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
             let expression_num_indices = expression.index_mle_indices(0);
             let beta_table_num_indices = beta.table.index_mle_indices(0);
-            // dbg!(&expression_num_indices);
-            // dbg!(&beta_table_num_indices);
-            // dbg!(&expression);
 
             // --- This should always be equivalent to the number of indices within the beta table ---
             let max_round = std::cmp::max(expression_num_indices, beta_table_num_indices);
@@ -463,6 +464,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         claimed_value,
                         Some(self.id().clone()),
                         Some(mle_layer_id),
+                        Some(MleEnum::Dense(mle_ref.clone())),
                     );
 
                     // --- Push it into the list of claims ---
@@ -484,21 +486,20 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         let mle_layer_id = mle_ref.get_layer_id();
 
                         // --- Grab the actual value that the claim is supposed to evaluate to ---
+
                         if mle_ref.bookkeeping_table().len() != 1 {
                             return Err(ClaimError::MleRefMleError);
                         }
                         let claimed_value = mle_ref.bookkeeping_table()[0];
 
                         // --- Construct the claim ---
-                        // println!(
-                        //     "========\n I'm making a GKR layer claim for a product!!\n=========="
-                        // );
-                        // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
+                        // need to populate the claim with the mle ref we are grabbing the claim from
                         let claim: Claim<F> = Claim::new(
                             fixed_mle_indices,
                             claimed_value,
                             Some(self.id().clone()),
                             Some(mle_layer_id),
+                            Some(MleEnum::Dense(mle_ref.clone())),
                         );
 
                         // --- Push it into the list of claims ---
@@ -526,18 +527,25 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claim_mle_refs: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         let mut expr = self.expression.clone();
+
         //fix variable hella times
         //evaluate expr on the mutated expr
 
         // get the number of evaluations
-        let num_vars = expr.index_mle_indices(0);
-        let degree = get_round_degree(&expr, 0);
-        // expr.init_beta_tables(prev_layer_claim);
-        let num_evals = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
+
+        let mut claim_mle_refs = claim_mle_refs.clone();
+
+        if ENABLE_PRE_FIX {
+            if common_idx.is_some() {
+                pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx.unwrap());
+            }
+        }
 
         // TODO(Makis): This assert fails on `test_aggro_claim_4` and I'm not
         // sure if the test is wrong or if the assert is wrong!
@@ -561,6 +569,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         });
         */
 
+        let mut degree = 0;
+        if !ENABLE_RAW_MLE {
+            expr.index_mle_indices(0);
+            degree = get_round_degree(&expr, 0);
+        }
+
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
             .map(|idx| {
@@ -574,21 +588,17 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     })
                     .collect();
 
-                // use fix_var to compute W(l(index))
-                // let mut fix_expr = expr.clone();
-                // let eval_w_l = fix_expr.evaluate_expr(new_chal);
-
-                let mut beta = BetaTable::new(new_chal).unwrap();
-                beta.table.index_mle_indices(0);
-                let eval = compute_sumcheck_message(&expr, 0, degree, &beta).unwrap();
-                let Evals(evals) = eval;
-                evals[0] + evals[1]
-
-                // this has to be a sum--get the overall evaluation
-                // match eval_w_l {
-                //     Ok(evaluation) => Ok(evaluation),
-                //     Err(_) => Err(ClaimError::ExpressionEvalError)
-                // }
+                if !ENABLE_RAW_MLE {
+                    let mut beta = BetaTable::new(new_chal).unwrap();
+                    beta.table.index_mle_indices(0);
+                    let eval = compute_sumcheck_message(&expr, 0, degree, &beta).unwrap();
+                    let Evals(evals) = eval;
+                    evals[0] + evals[1]
+                } else {
+                    let wlx_eval_on_mle_ref =
+                        combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
+                    wlx_eval_on_mle_ref.unwrap()
+                }
             })
             .collect();
 
@@ -771,12 +781,10 @@ impl<
     type Successor = S;
 
     fn build_expression(&self) -> ExpressionStandard<F> {
-        // dbg!(&hi);
         (self.expression_builder)(&self.mle)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        // dbg!(&id);
         (self.layer_builder)(&self.mle, id, prefix_bits)
     }
 }

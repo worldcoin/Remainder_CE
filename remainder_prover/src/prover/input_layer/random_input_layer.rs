@@ -58,7 +58,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
         claim: Claim<F>,
         _transcript: &mut Self::Transcript,
     ) -> Result<(), super::InputLayerError> {
-        println!("3, calling verify");
+        // println!("3, calling verify");
         let mut mle_ref =
             DenseMle::<F, F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
@@ -68,7 +68,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
-            println!("1, eval = {:#?}, claim = {:#?}", eval, claim);
+            // println!("1, eval = {:#?}, claim = {:#?}", eval, claim);
 
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
@@ -78,7 +78,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
             Ok(())
         } else {
-            println!("2, eval = {:#?}, claim = {:#?}", eval, claim);
+            // println!("2, eval = {:#?}, claim = {:#?}", eval, claim);
             Err(InputLayerError::PublicInputVerificationFailed)
         }
     }

@@ -71,6 +71,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
         ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
 
             let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
+            dbg!(tree_height);
         
             // --- Grab raw combined versions of the dataparallel MLEs and merge them for the input layer ---
             let mut dummy_decision_node_paths_mle_vec_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.decision_node_paths_mle_vec.clone());
@@ -137,7 +138,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             let packing_builders = decision_packing_builder.concat(leaf_packing_builder);
             let (decision_packed, leaf_packed) = layers.add_gkr(packing_builders);
 
-            // --- Layer 2, part 1: computes (r - x) * b_ij + (1 - b_ij) ---
+            // --- Layer 1, part 1: computes (r - x) * b_ij + (1 - b_ij) ---
             // Note that this is for the actual exponentiation computation:
             // we have that (r - x)^c_i = \prod_{j = 0}^{15} (r - x)^{2^{b_ij}} * b_{ij} + (1 - b_ij)
             // where \sum_{j = 0}^{15} 2^j b_{ij} = c_i.
@@ -154,7 +155,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             );
             let pre_prod_builders = prev_prod_builder_decision.concat(prev_prod_builder_leaf);
     
-            // --- Layer 2, part 2: (r - x)^2 ---
+            // --- Layer 1, part 2: (r - x)^2 ---
             // Note that we need to compute (r - x)^{2^0}, ..., (r - x)^{2^{15}}
             // We do this via repeated squaring of the previous power.
             let r_minus_x_square_builder_decision = SquaringBuilder::new(
@@ -169,7 +170,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             let layer_2_builders = pre_prod_builders.concat(r_minus_x_square_builders);
             let ((mut prev_prod_decision, mut prev_prod_leaf), (r_minus_x_power_decision, r_minus_x_power_leaf)) = layers.add_gkr(layer_2_builders);
     
-            // --- Layer 3, part 1: (r - x)^2 * b_ij + (1 - b_ij) ---
+            // --- Layer 2, part 1: (r - x)^2 * b_ij + (1 - b_ij) ---
             let prev_prod_builder_decision = BitExponentiationBuilderCatBoost::new(
                 self.multiplicities_bin_decomp_mle_decision.clone(),
                 1,
@@ -183,7 +184,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             );
             let pre_prod_builders = prev_prod_builder_decision.concat(prev_prod_builder_leaf);
     
-            // --- Layer 3, part 2: (r - x)^4 ---
+            // --- Layer 2, part 2: (r - x)^4 ---
             let r_minus_x_square_builder_decision = SquaringBuilder::new(
                 r_minus_x_power_decision
             );
@@ -308,7 +309,6 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             // --- Here is the part where we product across all `i` ---
             // In other words, computing \prod_{i = 0}^n (\prod_{j = 0}^{15} [(r - x)^(2^j) * b_ij + (1 - b_ij)])
             for _ in 0..tree_height-1 {
-    
                 // layer 20, or i+20
                 let prod_builder_decision = SplitProductBuilder::new(
                     exponentiated_decision

@@ -1,3 +1,4 @@
+use rayon::iter::empty;
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -7,6 +8,8 @@ use crate::gate::{
     addgate::AddGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched,
     mulgate::MulGate,
 };
+use crate::mle::dense::DenseMleRef;
+use crate::mle::mle_enum::MleEnum;
 
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
@@ -126,28 +129,53 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, super::claims::ClaimError> {
         match self {
-            LayerEnum::Gkr(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
-            }
-            LayerEnum::MulGate(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
-            }
-            LayerEnum::MulGateBatched(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
-            }
-            LayerEnum::AddGate(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
-            }
-            LayerEnum::AddGateBatched(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
-            }
-            LayerEnum::EmptyLayer(layer) => {
-                layer.get_wlx_evaluations(claim_vecs, claimed_vals, num_claims, num_idx)
-            }
+            LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            LayerEnum::MulGate(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            LayerEnum::MulGateBatched(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            LayerEnum::AddGate(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            LayerEnum::AddGateBatched(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            LayerEnum::EmptyLayer(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
         }
     }
 }
@@ -165,5 +193,22 @@ impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
         };
 
         expression.get_expression_size(0)
+    }
+
+    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> Box<dyn std::fmt::Display + 'a> {
+        match self {
+            LayerEnum::Gkr(layer) => Box::new(layer.expression().circuit_description_fmt()),
+            LayerEnum::MulGate(mulgate_layer) => Box::new(mulgate_layer.circuit_description_fmt()),
+            LayerEnum::AddGate(addgate_layer) => Box::new(addgate_layer.circuit_description_fmt()),
+            LayerEnum::AddGateBatched(addgate_layer_batched) => {
+                Box::new(addgate_layer_batched.circuit_description_fmt())
+            }
+            LayerEnum::MulGateBatched(mulgate_layer_batched) => {
+                Box::new(mulgate_layer_batched.circuit_description_fmt())
+            }
+            LayerEnum::EmptyLayer(empty_layer) => {
+                Box::new(empty_layer.expression().circuit_description_fmt())
+            }
+        }
     }
 }

@@ -11,7 +11,7 @@ use crate::{
         layer_enum::LayerEnum,
         Layer, LayerBuilder, LayerError, LayerId, VerificationError,
     },
-    mle::beta::BetaTable,
+    mle::{beta::BetaTable, mle_enum::MleEnum},
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::*,
 };
@@ -56,7 +56,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         transcript
             .append_field_elements("Initial Sumcheck evaluations", &first_message)
             .unwrap();
-        let num_rounds_copy_phase = self.new_bits;
+        let num_rounds_copy_phase = self.num_dataparallel_bits;
 
         // do the first copy bits number sumcheck rounds
         let mut sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -100,7 +100,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
                 self.nonzero_gates.clone(),
                 self.lhs.clone(),
                 self.rhs.clone(),
-                self.new_bits,
+                self.num_dataparallel_bits,
                 Some(beta_g2),
             );
             self.reduced_gate = Some(reduced_gate);
@@ -164,7 +164,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 
             // we want to separate the challenges into which ones are from the copy bits, which ones
             // are for binding x, and which are for binding y (non-batched)
-            if (..(self.new_bits + 1)).contains(&i) {
+            if (..(self.num_dataparallel_bits + 1)).contains(&i) {
                 first_copy_challenges.push(challenge);
             } else if (..(num_u + 1)).contains(&i) {
                 first_u_challenges.push(challenge);
@@ -216,8 +216,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         ]
         .concat();
 
-        let g2_challenges = claim.get_point()[..self.new_bits].to_vec();
-        let g1_challenges = claim.get_point()[self.new_bits..].to_vec();
+        let g2_challenges = claim.get_point()[..self.num_dataparallel_bits].to_vec();
+        let g1_challenges = claim.get_point()[self.num_dataparallel_bits..].to_vec();
 
         // compute the gate function bound at those variables
         let beta_u = BetaTable::new(first_u_challenges.clone()).unwrap();
@@ -321,6 +321,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             val,
             Some(self.id().clone()),
             Some(self.lhs.get_layer_id()),
+            Some(MleEnum::Dense(lhs_reduced.clone())),
         );
         claims.push(claim);
 
@@ -339,6 +340,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
             val,
             Some(self.id().clone()),
             Some(self.rhs.get_layer_id()),
+            Some(MleEnum::Dense(rhs_reduced.clone())),
         );
         claims.push(claim);
 
@@ -359,12 +361,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
         &self,
         claim_vecs: &Vec<Vec<F>>,
         claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
         let num_vars = std::cmp::max(self.lhs.num_vars(), self.rhs.num_vars());
-        let num_evals = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, _,) = get_num_wlx_evaluations(claim_vecs);
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
@@ -384,7 +387,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
                     &mut self.lhs.clone(),
                     &mut self.rhs.clone(),
                     &self.nonzero_gates,
-                    self.new_bits,
+                    self.num_dataparallel_bits,
                 )
             })
             .collect();
@@ -419,7 +422,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGateBatched<F, Tr> {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
-    pub new_bits: usize,
+    pub num_dataparallel_bits: usize,
     pub nonzero_gates: Vec<(usize, usize, usize)>,
     pub lhs: DenseMleRef<F>,
     pub rhs: DenseMleRef<F>,
@@ -433,6 +436,30 @@ pub struct AddGateBatched<F: FieldExt, Tr: Transcript<F>> {
     _marker: PhantomData<Tr>,
 }
 
+/// For circuit serialization to hash the circuit description into the transcript.
+impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
+    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+
+        // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
+        // --- so that it can be returned as an `impl std::fmt::Display` ---
+        struct AddGateBatchedCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a AddGateBatched<F, Tr>);
+
+        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for AddGateBatchedCircuitDesc<'a, F, Tr> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("AddGateBatched")
+                    .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
+                    .field("lhs_mle_ref_mle_indices", &self.0.lhs.mle_indices())
+                    .field("rhs_mle_ref_layer_id", &self.0.rhs.get_layer_id())
+                    .field("rhs_mle_ref_mle_indices", &self.0.rhs.mle_indices())
+                    .field("add_nonzero_gates", &self.0.nonzero_gates)
+                    .field("num_dataparallel_bits", &self.0.num_dataparallel_bits)
+                    .finish()
+            }
+        }
+        AddGateBatchedCircuitDesc(self)
+    }
+}
+
 impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
     /// new batched addgate thingy
     pub fn new(
@@ -443,7 +470,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
         layer_id: LayerId,
     ) -> Self {
         AddGateBatched {
-            new_bits,
+            num_dataparallel_bits: new_bits,
             nonzero_gates,
             lhs,
             rhs,
@@ -500,7 +527,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
             .iter()
             .enumerate()
             .for_each(|(bit_idx, challenge)| {
-                if bit_idx < self.new_bits {
+                if bit_idx < self.num_dataparallel_bits {
                     g2_challenges.push(*challenge);
                 } else {
                     g1_challenges.push(*challenge);
@@ -520,7 +547,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatched<F, Tr> {
         };
 
         // the bookkeeping tables of this phase must have size 2^copy_bits (refer to vibe check B))
-        let num_copy_vars = 1 << self.new_bits;
+        let num_copy_vars = 1 << self.num_dataparallel_bits;
         let mut a_f2 = vec![F::zero(); num_copy_vars];
         let mut a_f3 = vec![F::zero(); num_copy_vars];
 

@@ -1,4 +1,3 @@
-use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
@@ -66,6 +65,14 @@ pub struct ZKDTCircuit<F: FieldExt> {
 
 impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
+
+    // Uncomment this to turn on the circuit hash. Just make sure the hash you use is accurate to your batch size.
+    // This one is for a batch size of 2^9
+    // const CIRCUIT_HASH: Option<[u8; 32]> = Some([
+    //     244, 174, 223, 136, 11, 9, 112, 40, 60, 180, 81, 61, 132, 165, 170, 36,
+    //     31, 16, 66, 9, 54, 240, 75, 246, 68, 30, 31, 209, 242, 106, 147, 41,
+    // ]);
+
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         unimplemented!()
     }
@@ -520,8 +527,7 @@ mod tests {
     use std::path::Path;
 
     use chrono;
-    use env_logger::*;
-    use log::{info, LevelFilter};
+    use log::LevelFilter;
     use std::io::Write;
 
     #[test]
@@ -542,7 +548,7 @@ mod tests {
             .init();
 
         let (batched_catboost_mles, (_, _)) =
-            generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
+            generate_mles_batch_catboost_single_tree::<Fr>(10, Path::new("upshot_data/"));
 
         let combined_circuit = ZKDTCircuit {
             batched_zkdt_circuit_mles: batched_catboost_mles,
@@ -577,8 +583,6 @@ mod tests {
             };
 
             test_circuit(combined_circuit, None);
-
-            end_timer!(circuit_timer);
         });
     }
 }
