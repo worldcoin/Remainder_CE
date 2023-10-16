@@ -48,31 +48,33 @@ extern crate serde;
 extern crate serde_json;
 
 use crate::layer::LayerId;
-use crate::mle::{Mle, MleRef};
 use crate::mle::dense::DenseMle;
+use crate::mle::{Mle, MleRef};
 use crate::prover::input_layer::combine_input_layers::InputLayerBuilder;
 use crate::prover::input_layer::ligero_input_layer::LigeroInputLayer;
 use crate::utils::file_exists;
-use crate::zkdt::constants::{get_cached_batched_mles_filepath_with_exp_size, get_tree_commitment_filepath_for_tree_number};
+use crate::zkdt::constants::{
+    get_cached_batched_mles_filepath_with_exp_size, get_tree_commitment_filepath_for_tree_number,
+};
+use crate::zkdt::data_pipeline::trees::*;
 use crate::zkdt::helpers::*;
 use crate::zkdt::input_data_to_circuit_adapter::ZKDTCircuitData;
 use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode};
-use crate::zkdt::data_pipeline::trees::*;
 
-
+use ark_serialize::Read;
 use ark_std::log2;
-use remainder_ligero::ligero_commit::{remainder_ligero_commit_prove};
-use remainder_shared_types::FieldExt;
+use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
 use rand::Rng;
+use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
-use tracing::instrument;
-use std::fs::{File, self};
+use std::fs::{self, File};
 use std::path::Path;
+use tracing::instrument;
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
@@ -100,7 +102,7 @@ pub struct TreesModel {
 /// The dummy decision node has node id 2^depth - 1.
 pub struct CircuitizedTrees<F: FieldExt> {
     pub decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then by node (sorted by node id)
-    pub leaf_nodes: Vec<Vec<LeafNode<F>>>,         // indexed by tree, then by node (sorted by node id)
+    pub leaf_nodes: Vec<Vec<LeafNode<F>>>, // indexed by tree, then by node (sorted by node id)
     pub depth: usize,
     pub scaling: f64,
 }
@@ -112,19 +114,19 @@ pub struct CircuitizedTrees<F: FieldExt> {
 /// node_id for decision nodes, and by node id + 1 for leaf nodes (TODO, in discussion with Ende,
 /// break up this into decision_node_multiplicities and leaf_node_multiplicities).
 pub struct CircuitizedSamples<F: FieldExt> {
-    pub samples: Vec<Vec<InputAttribute<F>>>,                       // indexed by samples
-    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,             // indexed by trees, samples, steps in path
-    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,      // indexed by trees, samples, steps in path
-    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,              // indexed by trees, samples, steps in path
-    pub path_ends: Vec<Vec<LeafNode<F>>>,                           // indexed by trees, samples
-    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index
-    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,           // indexed by trees, tree nodes
+    pub samples: Vec<Vec<InputAttribute<F>>>, // indexed by samples
+    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
+    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>, // indexed by trees, samples, steps in path
+    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>, // indexed by trees, samples, steps in path
+    pub path_ends: Vec<Vec<LeafNode<F>>>,              // indexed by trees, samples
+    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>, // indexed by trees, samples, then by attribute index
+    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,          // indexed by trees, tree nodes
 }
 
 /// Output of [`to_samples`], input to [`circuitize_samples`].
 pub struct Samples {
     pub values: Vec<Vec<u16>>,
-    pub sample_length: usize
+    pub sample_length: usize,
 }
 
 /// Prepare the provided RawSamples for processing by the TreesModel by padding the raw sample
@@ -145,7 +147,7 @@ pub fn to_samples(raw_samples: &RawSamples) -> Samples {
     }
     Samples {
         values: samples,
-        sample_length
+        sample_length,
     }
 }
 
@@ -183,7 +185,8 @@ pub fn circuitize_samples<F: FieldExt>(
 
     for tree in &trees_model.trees {
         // initialize the node visit counts "node_multiplicities"
-        let mut node_multiplicities_for_tree: Vec<u32> = vec![0_u32; 2_usize.pow(trees_model.depth as u32)];
+        let mut node_multiplicities_for_tree: Vec<u32> =
+            vec![0_u32; 2_usize.pow(trees_model.depth as u32)];
         let mut attribute_multiplicities_for_tree: Vec<Vec<u32>> = vec![];
         let mut attributes_on_paths_for_tree: Vec<Vec<InputAttribute<F>>> = vec![];
         let mut decision_paths_for_tree: Vec<Vec<DecisionNode<F>>> = vec![];
@@ -253,12 +256,14 @@ pub fn circuitize_samples<F: FieldExt>(
         attribute_multiplicities.push(
             attribute_multiplicities_for_tree
                 .into_iter()
-                .map(|mults| mults
-                     .into_iter()
-                     .map(|mult| build_unsigned_bit_decomposition(mult, 4).unwrap())
-                     .map(BinDecomp4Bit::<F>::from)
-                     .collect())
-                .collect()
+                .map(|mults| {
+                    mults
+                        .into_iter()
+                        .map(|mult| build_unsigned_bit_decomposition(mult, 4).unwrap())
+                        .map(BinDecomp4Bit::<F>::from)
+                        .collect()
+                })
+                .collect(),
         );
         // calculate the bit decompositions of the node multiplicities
         node_multiplicities.push(
@@ -369,7 +374,7 @@ impl TreesModel {
         TreesModel {
             trees: trees,
             depth: self.depth,
-            scaling: self.scaling
+            scaling: self.scaling,
         }
     }
 }
@@ -399,7 +404,7 @@ pub fn generate_raw_trees_model(
 #[derive(Clone)]
 pub struct RawSamples {
     pub values: Vec<Vec<u16>>,
-    pub sample_length: usize
+    pub sample_length: usize,
 }
 
 /// Generate an array of samples for input into the trees model.  For demonstration purposes.
@@ -414,7 +419,7 @@ pub fn generate_raw_samples(n_samples: usize, n_features: usize) -> RawSamples {
         .collect();
     RawSamples {
         values,
-        sample_length: n_features
+        sample_length: n_features,
     }
 }
 
@@ -423,7 +428,7 @@ pub fn load_raw_samples(filename: &Path) -> RawSamples {
     let input_arr: Array2<u16> = read_npy(filename).unwrap();
     RawSamples {
         values: input_arr.outer_iter().map(|row| row.to_vec()).collect(),
-        sample_length: input_arr.shape()[1]
+        sample_length: input_arr.shape()[1],
     }
 }
 
@@ -431,9 +436,21 @@ pub fn load_raw_samples(filename: &Path) -> RawSamples {
 /// WARNING: note the pre-condition.  No checks are performed.
 /// Pre: all threshold values fit in a 16 bit signed bit decomposition.
 pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
-    let file = File::open(filename).unwrap_or_else(|_| panic!("'{:?}' should be available.", filename.to_path_buf()));
-    let raw_trees_model: RawTreesModel = serde_json::from_reader(file)
-        .unwrap_or_else(|_| panic!("'{:?}' should be valid RawTreesModel JSON.", filename.to_path_buf()));
+    let mut file = File::open(filename)
+        .unwrap_or_else(|_| panic!("'{:?}' should be available.", filename.to_path_buf()));
+
+    let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+    let mut bufreader = Vec::with_capacity(initial_buffer_size);
+    file.read_to_end(&mut bufreader).unwrap();
+
+    let raw_trees_model: RawTreesModel =
+        serde_json::from_slice(&bufreader[..]).unwrap_or_else(|_| {
+            panic!(
+                "'{:?}' should be valid RawTreesModel JSON.",
+                filename.to_path_buf()
+            )
+        });
+
     raw_trees_model
 }
 
@@ -479,7 +496,7 @@ mod tests {
         ];
         let raw_samples = RawSamples {
             values,
-            sample_length
+            sample_length,
         };
         // let tree = build_small_tree();
         // let raw_trees_model = RawTreesModel {
@@ -491,9 +508,15 @@ mod tests {
         // let trees_model: TreesModel = (&raw_trees_model).into();
         let samples = to_samples(&raw_samples);
         // check the number of samples
-        assert_eq!(samples.sample_length, next_power_of_two(raw_samples.sample_length).unwrap());
+        assert_eq!(
+            samples.sample_length,
+            next_power_of_two(raw_samples.sample_length).unwrap()
+        );
         // check length of individual samples
-        assert_eq!(samples.values.len(), next_power_of_two(raw_samples.values.len()).unwrap());
+        assert_eq!(
+            samples.values.len(),
+            next_power_of_two(raw_samples.values.len()).unwrap()
+        );
         for sample in &samples.values {
             assert_eq!(sample.len(), samples.sample_length);
         }
@@ -509,7 +532,7 @@ mod tests {
         ];
         let raw_samples = RawSamples {
             values,
-            sample_length
+            sample_length,
         };
         let tree = build_small_tree();
         let raw_trees_model = RawTreesModel {
@@ -706,8 +729,10 @@ mod tests {
         // notice: circuitize_samples takes trees_model, not ctrees!
         let _csamples = circuitize_samples::<Fr>(&samples, &trees_model);
         // .. continued
-        let _raw_trees_model: RawTreesModel = load_raw_trees_model(Path::new("src/zkdt/data_pipeline/test_qtrees.json"));
-        let _raw_samples: RawSamples = load_raw_samples(Path::new("src/zkdt/data_pipeline/test_samples_10x6.npy"));
+        let _raw_trees_model: RawTreesModel =
+            load_raw_trees_model(Path::new("src/zkdt/data_pipeline/test_qtrees.json"));
+        let _raw_samples: RawSamples =
+            load_raw_samples(Path::new("src/zkdt/data_pipeline/test_samples_10x6.npy"));
     }
 
     #[test]
@@ -716,8 +741,10 @@ mod tests {
         // for this to work, those files need to be in place (not stored on the repo):
         // 1. remainder_prover/upshot_data/upshot-quantized-samples.npy
         // 2. remainder_prover/upshot_data/quantized-upshot-model.json
-        let raw_trees_model: RawTreesModel = load_raw_trees_model(Path::new("upshot_data/quantized-upshot-model.json"));
-        let mut raw_samples: RawSamples = load_raw_samples(Path::new("upshot_data/upshot-quantized-samples.npy"));
+        let raw_trees_model: RawTreesModel =
+            load_raw_trees_model(Path::new("upshot_data/quantized-upshot-model.json"));
+        let mut raw_samples: RawSamples =
+            load_raw_samples(Path::new("upshot_data/upshot-quantized-samples.npy"));
         // use just a small batch
         raw_samples.values = raw_samples.values[0..4].to_vec();
 
