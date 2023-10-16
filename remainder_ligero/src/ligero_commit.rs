@@ -52,13 +52,13 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
 ) {
     // --- Auxiliaries ---
     // let rho = 1. / (rho_inv as f64);
-    let num_rows = 2_usize.pow(log_num_rows as u32);
-    let orig_num_cols = 2_usize.pow(log_orig_num_cols as u32);
+    let num_rows = 1 << log_num_rows;
+    let orig_num_cols = 1 << log_orig_num_cols;
     let encoded_num_cols = orig_num_cols * (rho_inv as usize);
 
     // --- Sanitycheck ---
-    assert!(coeffs.len().is_power_of_two());
-    assert_eq!(coeffs.len(), num_rows * orig_num_cols);
+    debug_assert!(coeffs.len().is_power_of_two());
+    debug_assert_eq!(coeffs.len(), num_rows * orig_num_cols);
 
     // --- Create commitment ---
     let enc = LigeroEncoding::<F>::new_from_dims(orig_num_cols, encoded_num_cols);
@@ -133,11 +133,11 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
 > {
     // --- Auxiliaries ---
     let rho = 1. / (rho_inv as f64);
-    let num_rows = 2_usize.pow(log_num_rows as u32);
-    let orig_num_cols = 2_usize.pow(log_orig_num_cols as u32);
+    let num_rows = 1 << log_num_rows;
+    let orig_num_cols = 1 << log_orig_num_cols;
 
     // --- Sanitycheck ---
-    assert_eq!(coeffs.len(), num_rows * orig_num_cols);
+    debug_assert_eq!(coeffs.len(), num_rows * orig_num_cols);
 
     // --- Compute "a" and "b" from `challenge_coord` ---
     let (_, outer_tensor) = get_ml_inner_outer_tensors(challenge_coord, num_rows, orig_num_cols);
@@ -152,15 +152,6 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     let enc = LigeroEncoding::<F>::new(coeffs.len(), rho); // This is basically just a wrapper
     let pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F> =
         prove(&comm, &outer_tensor[..], &enc, transcript).unwrap();
-
-    // --- Return the evaluation point value ---
-    // TODO!(ryancao): Do we need this?
-    let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, challenge_coord);
-
-    let _claim = LigeroClaim {
-        point: challenge_coord.clone(),
-        eval,
-    };
 
     // ------------------- SERIALIZATION -------------------
 
@@ -221,7 +212,7 @@ pub fn remainder_ligero_commit_prove<F: FieldExt>(
     LcProofAuxiliaryInfo,
 ) {
     // --- Sanitycheck ---
-    assert!(input_mle_bookkeeping_table.len().is_power_of_two());
+    debug_assert!(input_mle_bookkeeping_table.len().is_power_of_two());
 
     // --- Get Ligero matrix dims + sanitycheck ---
     let (num_rows, orig_num_cols, _) =
@@ -262,7 +253,7 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     root: LcRoot<LigeroEncoding<F>, F>,
 ) -> LigeroProof<F> {
     // --- Sanitycheck ---
-    assert!(input_layer_bookkeeping_table.len().is_power_of_two());
+    debug_assert!(input_layer_bookkeeping_table.len().is_power_of_two());
 
     // --- Extract data from aux ---
     let rho_inv = aux.rho_inv;
@@ -299,7 +290,7 @@ pub fn remainder_ligero_verify<F: FieldExt>(
     F: FieldExt,
 {
     // --- Sanitycheck ---
-    assert_eq!(
+    debug_assert_eq!(
         aux.num_rows * aux.orig_num_cols,
         2_usize.pow(challenge_coord.len() as u32)
     );
@@ -309,13 +300,13 @@ pub fn remainder_ligero_verify<F: FieldExt>(
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
     // --- Add the root to the transcript ---
-    let _ = tr.append_field_element("root", root.root);
+    tr.append_field_element("root", root.root).unwrap();
 
     // --- Reconstruct the encoding (TODO!(ryancao): Deprecate the encoding!) and verify ---
     let enc = LigeroEncoding::<F>::new_from_dims(proof.get_orig_num_cols(), proof.get_encoded_num_cols());
     let result = verify(&root.root, &outer_tensor[..], &inner_tensor[..], proof, &enc, tr).unwrap();
     
-    assert_eq!(result, claimed_value);
+    debug_assert_eq!(result, claimed_value);
 }
 
 #[cfg(test)]
