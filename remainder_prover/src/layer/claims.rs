@@ -359,6 +359,20 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
 
+    // Do nothing if there is only one claim.
+    if num_claims == 1 {
+        debug!("Received 1 claim. Doing nothing.");
+        // Return the claim but erase any from/to layer info so as not to
+        // trigger any checks from claim groups used in claim aggregation.
+        let claim = Claim {
+            from_layer_id: None,
+            to_layer_id: None,
+            ..claims.get_claim(0).clone()
+        };
+
+        return Ok((claim, vec![]));
+    }
+
     let claim_preproc_timer = start_timer!(|| format!("Claim preprocessing"));
 
     let layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
@@ -445,6 +459,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     )?;
 
     group_wlx_evaluations.append(&mut wlx_evals_option);
+    assert_eq!(group_wlx_evaluations.len(), num_groups + 1);
 
     end_timer!(final_timer);
     Ok((claim, group_wlx_evaluations))
@@ -644,7 +659,7 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
             ..claims.get_claim(0).clone()
         };
 
-        return Ok((claim, vec![]));
+        return Ok((claim, vec![vec![]]));
     }
 
     // Aggregate claims by performing the claim aggregation protocol.

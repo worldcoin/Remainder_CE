@@ -879,48 +879,36 @@ pub trait GKRCircuit<F: FieldExt> {
             // --- Perform the claim aggregation verification, first sampling `r` ---
             // --- Note that we ONLY do this if need be! ---
             let mut prev_claim = layer_claims[0].clone();
-            if layer_num_claims > 1 {
-                info!("Got > 1 claims. Verifying aggregation...");
+            // --- Perform the claim aggregation verification ---
+            let (claim, _) = aggregate_claims(
+                &layer_claim_group,
+                &|claim_group: &ClaimGroup<F>, idx, _| -> Result<Vec<F>, GKRError> {
+                    debug!("Compute_wlx was called during claim aggregation verification");
 
-                // --- Perform the claim aggregation verification ---
-                let mut idx = 0;
-                let (claim, _) = aggregate_claims(
-                    &layer_claim_group,
-                    &|claim_group: &ClaimGroup<F>, idx, _| -> Result<Vec<F>, GKRError> {
-                        debug!("Compute_wlx was called during claim aggregation verification");
+                    let current_wlx_evaluations = relevant_wlx_evaluations[*idx].clone();
+                    // idx += 1;
 
-                        let current_wlx_evaluations = relevant_wlx_evaluations[*idx].clone();
-                        // idx += 1;
+                    let claim_wlx_evaluations = claim_group.get_results().clone();
 
-                        let claim_wlx_evaluations = claim_group.get_results().clone();
+                    let all_wlx_evaluations: Vec<F> = claim_wlx_evaluations
+                        .into_iter()
+                        .chain(current_wlx_evaluations.into_iter())
+                        .collect();
 
-                        let all_wlx_evaluations: Vec<F> = claim_wlx_evaluations
-                            .into_iter()
-                            .chain(current_wlx_evaluations.into_iter())
-                            .collect();
+                    let claim_vecs = claim_group.get_claim_points_matrix();
+                    let (expected_num_evals, _) = get_num_wlx_evaluations(claim_vecs);
+                    if expected_num_evals != all_wlx_evaluations.len() {
+                        return Err(GKRError::ErrorWhenVerifyingLayer(
+                            layer_id,
+                            LayerError::AggregationError,
+                        ));
+                    }
 
-                        let claim_vecs = claim_group.get_claim_points_matrix();
-                        let (expected_num_evals, _) = get_num_wlx_evaluations(claim_vecs);
-                        if expected_num_evals != all_wlx_evaluations.len() {
-                            return Err(GKRError::ErrorWhenVerifyingLayer(
-                                layer_id,
-                                LayerError::AggregationError,
-                            ));
-                        }
-
-                        Ok(all_wlx_evaluations)
-                    },
-                    transcript,
-                )?;
-                prev_claim = claim;
-
-                if idx != relevant_wlx_evaluations.len() {
-                    return Err(GKRError::ErrorWhenVerifyingLayer(
-                        layer_id,
-                        LayerError::AggregationError,
-                    ));
-                }
-            }
+                    Ok(all_wlx_evaluations)
+                },
+                transcript,
+            )?;
+            prev_claim = claim;
             end_timer!(claim_aggr_timer);
 
             let sumcheck_msg_timer =
@@ -996,8 +984,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 input_layer.layer_id
             ));
 
-            let input_layer_claim = if input_layer_claims.len() > 1 {
-                let mut idx = 0;
+            let input_layer_claim = {
                 let (prev_claim, _) = aggregate_claims(
                     &input_layer_claim_group,
                     &|claim_group, idx, _| -> Result<Vec<F>, GKRError> {
@@ -1026,18 +1013,9 @@ pub trait GKRCircuit<F: FieldExt> {
                     },
                     transcript,
                 )?;
-
-                if idx != relevant_wlx_evaluations.len() {
-                    return Err(GKRError::ErrorWhenVerifyingLayer(
-                        input_layer_id,
-                        LayerError::AggregationError,
-                    ));
-                }
-
                 prev_claim
-            } else {
-                input_layer_claims[0].clone()
             };
+
             debug!("Input layer claim: {:#?}", input_layer_claim);
             end_timer!(claim_aggr_timer);
 
