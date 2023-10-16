@@ -1,7 +1,7 @@
 //! Executable which generates the Ligero samples commitment
 
-use std::{path::Path, fs};
-use ark_std::log2;
+use std::{path::Path, fs, io::BufWriter};
+use ark_std::{log2, start_timer, end_timer};
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use itertools::Itertools;
 use remainder::{zkdt::{data_pipeline::dt2zkdt::{RawSamples, load_raw_samples, Samples, to_samples}, structs::InputAttribute, constants::get_sample_minibatch_commitment_filepath_for_batch_size}, mle::{dense::DenseMle, Mle}, layer::LayerId, prover::input_layer::{combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer}};
@@ -140,8 +140,9 @@ pub fn generate_ligero_sample_minibatch_commitments<F: FieldExt>(
                         &minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer.mle.mle_ref().bookkeeping_table, rho_inv);
 
                     // --- Write to file ---
-                    let mut f = fs::File::create(sample_minibatch_commitment_filepath).unwrap();
-                    to_writer(&mut f, &ligero_commitment).unwrap();
+                    let mut file = fs::File::create(sample_minibatch_commitment_filepath).unwrap();
+                    let mut bw = BufWriter::new(file);
+                    serde_json::to_writer(bw, &ligero_commitment).unwrap();
                 }
             }
         }

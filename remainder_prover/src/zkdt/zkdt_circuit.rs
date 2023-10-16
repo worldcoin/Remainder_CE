@@ -1,3 +1,4 @@
+use ark_serialize::Read;
 use itertools::{repeat_n, Itertools};
 use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
@@ -51,6 +52,7 @@ use super::{
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
 
+use std::io::BufReader;
 use std::{marker::PhantomData, path::Path};
 
 /// The actual ZKDT circuit!
@@ -303,11 +305,11 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             LcRoot<LigeroEncoding<F>, F>,
             LcProofAuxiliaryInfo,
         ) = {
-            let timer = start_timer!(|| "reader 1");
-            let file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
-            let res = from_reader(&file).unwrap();
-            end_timer!(timer);
-            res
+            let mut file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
+            let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+            let mut bufreader = Vec::with_capacity(initial_buffer_size);
+            file.read_to_end(&mut bufreader).unwrap();
+            serde_json::de::from_slice(&bufreader[..]).unwrap()
         };
         let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             tree_mle_input_layer_builder.to_input_layer_with_precommit(
@@ -327,10 +329,21 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             LcRoot<LigeroEncoding<F>, F>,
             LcProofAuxiliaryInfo,
         ) = {
-            let timer = start_timer!(|| "reader 2");
-            let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-            let res = from_reader(&file).unwrap();
-            end_timer!(timer);
+            // METHOD 0: Use no buffer at all.
+            // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+            // let res = from_reader(&file).unwrap();
+
+            // METHOD 1: Read everything into the buffer.
+            let mut file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+            let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+            let mut bufreader = Vec::with_capacity(initial_buffer_size);
+            file.read_to_end(&mut bufreader).unwrap();
+            let res = serde_json::de::from_slice(&bufreader[..]).unwrap();
+
+            // METHOD 2: Use a buffer of a default size.
+            // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+            // let mut bufreader = BufReader::new(file);
+            // let res = from_reader(&mut bufreader).unwrap();
             res
         };
         let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =

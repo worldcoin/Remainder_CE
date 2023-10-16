@@ -1,5 +1,6 @@
 //! Executable for Remainder ZKDT prover!
 
+use ark_serialize::Read;
 use clap::Parser;
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use remainder::{
@@ -20,6 +21,7 @@ use remainder_shared_types::FieldExt;
 use serde_json::{from_reader, to_writer};
 use std::{
     fs,
+    io::BufWriter,
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -30,6 +32,8 @@ use tracing_subscriber::{
     prelude::*,
     FmtSubscriber,
 };
+
+use ark_std::{end_timer, start_timer};
 
 #[derive(Error, Debug, Clone)]
 /// Errors for running the binary over inputs and proving/verification
@@ -177,8 +181,14 @@ where
                     "Writing the serialized ZKDT GKR proof to {:?}",
                     filepath_to_proof
                 );
-                let mut f = fs::File::create(filepath_to_proof).unwrap();
-                to_writer(&mut f, &proof).unwrap();
+
+                let timer = start_timer!(|| "proof writer");
+
+                let mut file = fs::File::create(filepath_to_proof).unwrap();
+                let mut bw = BufWriter::new(file);
+                serde_json::to_writer(bw, &proof).unwrap();
+
+                end_timer!(timer);
             }
             let mut transcript = C::Transcript::new("GKR Verifier Transcript");
             let now = Instant::now();
@@ -187,8 +197,12 @@ where
             if verify_proof {
                 // --- Grab proof from filepath, if exists; else grab from memory ---
                 let proof = if let Some(filepath_to_proof) = maybe_filepath_to_proof {
-                    let file = std::fs::File::open(filepath_to_proof).unwrap();
-                    from_reader(&file).unwrap()
+                    let mut file = std::fs::File::open(&filepath_to_proof).unwrap();
+                    let initial_buffer_size =
+                        file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+                    let mut bufreader = Vec::with_capacity(initial_buffer_size);
+                    file.read_to_end(&mut bufreader).unwrap();
+                    serde_json::de::from_slice(&bufreader[..]).unwrap()
                 } else {
                     proof
                 };
