@@ -18,9 +18,10 @@ pub mod random_input_layer;
 use crate::{
     layer::{
         claims::{get_num_wlx_evaluations, Claim, ClaimError, ClaimGroup, ENABLE_PRE_FIX},
-        LayerId, combine_mle_refs::pre_fix_mle_refs,
+        combine_mle_refs::pre_fix_mle_refs,
+        LayerId,
     },
-    mle::{dense::DenseMle, MleRef, mle_enum::MleEnum, MleIndex},
+    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
     prover::ENABLE_OPTIMIZATION,
     sumcheck::evaluate_at_a_point,
 };
@@ -93,14 +94,14 @@ pub trait InputLayer<F: FieldExt> {
         if ENABLE_PRE_FIX {
             if common_idx.is_some() {
                 let common_idx = common_idx.unwrap();
-                common_idx.iter().for_each(
-                    |chal_idx| {
-                        if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
-                            mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
-                }});
+                common_idx.iter().for_each(|chal_idx| {
+                    if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
+                        mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+                    }
+                });
             }
         }
-        
+
         debug!("Evaluating {num_evals} times.");
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
@@ -122,10 +123,9 @@ pub trait InputLayer<F: FieldExt> {
                 let mut fix_mle = mle_ref.clone();
                 {
                     new_chal.into_iter().enumerate().for_each(|(idx, chal)| {
-                        if let MleIndex::IndexedBit(idx_num) = fix_mle.mle_indices()[idx] { 
+                        if let MleIndex::IndexedBit(idx_num) = fix_mle.mle_indices()[idx] {
                             fix_mle.fix_variable(idx_num, chal);
                         }
-                        
                     });
                     fix_mle.bookkeeping_table[0]
                 }
