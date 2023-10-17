@@ -3,7 +3,7 @@ use crate::ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_chal
 use crate::ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof};
 use crate::utils::get_ligero_matrix_dims;
 use crate::{verify, LcProofAuxiliaryInfo, LcRoot};
-use ark_std::log2;
+use ark_std::{log2, start_timer, end_timer};
 use remainder_shared_types::{
     transcript::{Transcript as RemainderTranscript, TranscriptError},
     FieldExt,
@@ -62,7 +62,9 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
 
     // --- Create commitment ---
     let enc = LigeroEncoding::<F>::new_from_dims(orig_num_cols, encoded_num_cols);
+    let commit_timer = start_timer!(|| "matrix commit");
     let comm = commit::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>(coeffs, &enc).unwrap();
+    end_timer!(commit_timer);
 
     // --- Only component of commitment which needs to be sent to the verifier is the commitment root ---
     let root: LcRoot<LigeroEncoding<F>, F> = comm.get_root();
