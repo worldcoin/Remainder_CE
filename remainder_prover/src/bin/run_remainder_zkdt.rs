@@ -35,6 +35,13 @@ use tracing_subscriber::{
 
 use ark_std::{end_timer, start_timer};
 
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 #[derive(Error, Debug, Clone)]
 /// Errors for running the binary over inputs and proving/verification
 /// TODO!(ryancao): File-handling errors!
