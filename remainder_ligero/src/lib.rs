@@ -471,12 +471,8 @@ where
 {
     // --- This is SUPER ugly, but for the sake of efficiency... ---
     // TODO!(ryancao): Riperoni
-    let merkle_hash = start_timer!(|| format!("first hash"));
     let master_default_poseidon_merkle_hasher = Poseidon::<F, 3, 2>::new(8, 57);
-    end_timer!(merkle_hash);
-    let column_hash = start_timer!(|| format!("second hash"));
     let master_default_poseidon_column_hasher = Poseidon::<F, 3, 2>::new(8, 57);
-    end_timer!(column_hash);
 
     // --- Basically `hashes` is of length 2^h - 1, where h is the height of the Merkle tree ---
     // The idea is that the first 2^{h - 1} items are the leaf nodes (i.e. the column hashes)
@@ -615,10 +611,7 @@ fn merkle_layer<D, F>(
         // base case: just compute all of the hashes
 
         // let mut digest = D::new();
-        // let hash_init = start_timer!(|| format!("initialize hash"));
         // let mut digest = D::new_merkle_hasher(master_default_poseidon_merkle_hasher);
-        // end_timer!(hash_init);
-        let ok = start_timer!(|| format!("bro idk {:?}", outs.len()));
         for idx in 0..outs.len() {
             let mut digest = D::new_merkle_hasher(master_default_poseidon_merkle_hasher);
             // --- I see. We update the digest with the things we want to "hash" ---
@@ -627,7 +620,6 @@ fn merkle_layer<D, F>(
             digest.update(&[ins[2 * idx + 1]]);
             outs[idx] = digest.finalize();
         }
-        end_timer!(ok);
     } else {
         // recursive case: split and compute
         let (inl, inr) = ins.split_at(ins.len() / 2);
