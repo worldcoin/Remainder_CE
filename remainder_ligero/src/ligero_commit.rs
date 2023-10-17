@@ -3,7 +3,7 @@ use crate::ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_chal
 use crate::ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof};
 use crate::utils::get_ligero_matrix_dims;
 use crate::{verify, LcProofAuxiliaryInfo, LcRoot};
-use ark_std::{log2, start_timer, end_timer};
+use ark_std::log2;
 use remainder_shared_types::{
     transcript::{Transcript as RemainderTranscript, TranscriptError},
     FieldExt,
@@ -57,14 +57,12 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
     let encoded_num_cols = orig_num_cols * (rho_inv as usize);
 
     // --- Sanitycheck ---
-    debug_assert!(coeffs.len().is_power_of_two());
-    debug_assert_eq!(coeffs.len(), num_rows * orig_num_cols);
+    assert!(coeffs.len().is_power_of_two());
+    assert_eq!(coeffs.len(), num_rows * orig_num_cols);
 
     // --- Create commitment ---
     let enc = LigeroEncoding::<F>::new_from_dims(orig_num_cols, encoded_num_cols);
-    let commit_timer = start_timer!(|| "matrix commit");
     let comm = commit::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>(coeffs, &enc).unwrap();
-    end_timer!(commit_timer);
 
     // --- Only component of commitment which needs to be sent to the verifier is the commitment root ---
     let root: LcRoot<LigeroEncoding<F>, F> = comm.get_root();
@@ -139,7 +137,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     let orig_num_cols = 1 << log_orig_num_cols;
 
     // --- Sanitycheck ---
-    debug_assert_eq!(coeffs.len(), num_rows * orig_num_cols);
+    assert_eq!(coeffs.len(), num_rows * orig_num_cols);
 
     // --- Compute "a" and "b" from `challenge_coord` ---
     let (_, outer_tensor) = get_ml_inner_outer_tensors(challenge_coord, num_rows, orig_num_cols);
@@ -154,6 +152,15 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     let enc = LigeroEncoding::<F>::new(coeffs.len(), rho); // This is basically just a wrapper
     let pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F> =
         prove(&comm, &outer_tensor[..], &enc, transcript).unwrap();
+
+    // --- Return the evaluation point value ---
+    // TODO!(ryancao): Do we need this?
+    let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, challenge_coord);
+
+    let _claim = LigeroClaim {
+        point: challenge_coord.clone(),
+        eval,
+    };
 
     // ------------------- SERIALIZATION -------------------
 
@@ -214,7 +221,7 @@ pub fn remainder_ligero_commit_prove<F: FieldExt>(
     LcProofAuxiliaryInfo,
 ) {
     // --- Sanitycheck ---
-    debug_assert!(input_mle_bookkeeping_table.len().is_power_of_two());
+    assert!(input_mle_bookkeeping_table.len().is_power_of_two());
 
     // --- Get Ligero matrix dims + sanitycheck ---
     let (num_rows, orig_num_cols, _) =
@@ -255,7 +262,7 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     root: LcRoot<LigeroEncoding<F>, F>,
 ) -> LigeroProof<F> {
     // --- Sanitycheck ---
-    debug_assert!(input_layer_bookkeeping_table.len().is_power_of_two());
+    assert!(input_layer_bookkeeping_table.len().is_power_of_two());
 
     // --- Extract data from aux ---
     let rho_inv = aux.rho_inv;
@@ -292,9 +299,9 @@ pub fn remainder_ligero_verify<F: FieldExt>(
     F: FieldExt,
 {
     // --- Sanitycheck ---
-    debug_assert_eq!(
+    assert_eq!(
         aux.num_rows * aux.orig_num_cols,
-        2_usize.pow(challenge_coord.len() as u32)
+        1 << challenge_coord.len()
     );
 
     // --- Grab the inner/outer tensors from the challenge point ---
@@ -302,13 +309,13 @@ pub fn remainder_ligero_verify<F: FieldExt>(
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
     // --- Add the root to the transcript ---
-    tr.append_field_element("root", root.root).unwrap();
+    let _ = tr.append_field_element("root", root.root);
 
     // --- Reconstruct the encoding (TODO!(ryancao): Deprecate the encoding!) and verify ---
     let enc = LigeroEncoding::<F>::new_from_dims(proof.get_orig_num_cols(), proof.get_encoded_num_cols());
     let result = verify(&root.root, &outer_tensor[..], &inner_tensor[..], proof, &enc, tr).unwrap();
     
-    debug_assert_eq!(result, claimed_value);
+    assert_eq!(result, claimed_value);
 }
 
 #[cfg(test)]
@@ -388,8 +395,8 @@ pub mod tests {
         let ligero_aux_data_filename = "ligero_aux_info.txt";
         let ligero_claim_filename = "ligero_claim_info.txt";
 
-        let num_rows = 2_usize.pow(log_num_rows as u32);
-        let orig_num_cols = 2_usize.pow(log_orig_num_cols as u32);
+        let num_rows = 1 << log_num_rows;
+        let orig_num_cols = 1 << log_orig_num_cols;
 
         // --- Generate random coeffs and random challenge point to evaluate at ---
         let mut rng = test_rng();
