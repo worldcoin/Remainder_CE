@@ -47,8 +47,7 @@ use self::input_layer::{
 
 use core::cmp::Ordering;
 
-use log::{debug, info, trace, warn};
-
+use tracing::{debug, info, trace, warn};
 
 /// New type for containing the list of Layers that make up the GKR circuit
 ///
