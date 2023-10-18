@@ -207,7 +207,7 @@ fn halo2_bn_fft_test() {
 
     // --- Creates the polynomial in coeff form and performs the FFT from 2^3 coeffs --> 2^3 evals ---
     let polynomial_coeff = evaluation_domain.coeff_from_vec(coeffs);
-    let polynomial_eval_form = evaluation_domain.coeff_to_extended(polynomial_coeff.clone());
+    let polynomial_eval_form = evaluation_domain.coeff_to_extended(&polynomial_coeff.clone());
     assert_eq!(polynomial_eval_form.len(), 2_usize.pow(log_num_evals));
 
     // --- Perform the IFFT and assert that the resulting polynomial has degree 7 ---
