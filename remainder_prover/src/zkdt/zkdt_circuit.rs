@@ -63,6 +63,8 @@ pub struct ZKDTCircuit<F: FieldExt> {
     pub tree_precommit_filepath: String,
     /// The filepath to the precommitted sample minibatch that we are proving
     pub sample_minibatch_precommit_filepath: String,
+    /// rho inverse value for ligero commit
+    pub rho_inv: u8,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
@@ -316,6 +318,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 tree_ligero_commit,
                 tree_ligero_aux,
                 tree_ligero_root,
+                self.rho_inv,
             );
 
         let (
@@ -351,10 +354,13 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 sample_minibatch_ligero_commit,
                 sample_minibatch_ligero_aux,
                 sample_minibatch_ligero_root,
+                self.rho_inv,
             );
 
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            aux_mles_input_layer_builder.to_input_layer();
+            aux_mles_input_layer_builder.to_input_layer_with_rho_inv(
+                self.rho_inv
+            );
         let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
             public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
@@ -573,6 +579,7 @@ mod tests {
             batched_zkdt_circuit_mles: batched_catboost_mles,
             tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
             sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
+            rho_inv: 4,
         };
 
         test_circuit(
@@ -599,6 +606,7 @@ mod tests {
                     "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
                 sample_minibatch_precommit_filepath:
                     "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
+                rho_inv: 4,
             };
 
             test_circuit(combined_circuit, None);

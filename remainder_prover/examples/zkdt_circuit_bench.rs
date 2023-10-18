@@ -75,6 +75,7 @@ fn main() {
         sample_minibatch_precommit_filepath:
             "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json"
                 .to_string(),
+        rho_inv: 4,
     };
 
     //Use this code to get the circuit hash for your circuit

@@ -31,6 +31,7 @@ pub struct LigeroInputLayer<F: FieldExt, Tr> {
     root: Option<LcRoot<LigeroEncoding<F>, F>>,
     _marker: PhantomData<Tr>,
     is_precommit: bool,
+    rho_inv: Option<u8>,
 }
 
 /// The *actual* Ligero evaluation proof the prover needs to send to the verifier
@@ -65,7 +66,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
             _ => {}
         }
 
-        let (_, comm, root, aux) = remainder_ligero_commit_prove(&self.mle.mle, RHO_INV);
+        let (_, comm, root, aux) = remainder_ligero_commit_prove(&self.mle.mle, self.rho_inv.unwrap());
 
         self.comm = Some(comm);
         self.aux = Some(aux);
@@ -158,6 +159,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for LigeroInputLayer<F, Tr
             root: None,
             _marker: PhantomData,
             is_precommit: false,
+            rho_inv: None,
         }
     }
 }
@@ -170,6 +172,7 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
         ligero_aux: LcProofAuxiliaryInfo,
         ligero_root: LcRoot<LigeroEncoding<F>, F>,
+        rho_inv: u8
     ) -> Self {
         Self {
             mle,
@@ -179,6 +182,25 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
             root: Some(ligero_root),
             _marker: PhantomData,
             is_precommit: true,
+            rho_inv: Some(rho_inv),
+        }
+    }
+
+    /// Creates new Ligero input layer with specified rho inverse
+    pub fn new_with_rho_inv(
+        mle: DenseMle<F, F>,
+        layer_id: LayerId,
+        rho_inv: u8,
+    ) -> Self {
+        Self {
+            mle,
+            layer_id,
+            comm: None,
+            aux: None,
+            root: None,
+            _marker: PhantomData,
+            is_precommit: false,
+            rho_inv: Some(rho_inv),
         }
     }
 }

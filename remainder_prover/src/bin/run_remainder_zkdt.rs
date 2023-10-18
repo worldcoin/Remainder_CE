@@ -135,6 +135,13 @@ struct Args {
     /// different trace levels
     #[arg(long, default_value_t = false)]
     debug_tracing_subscriber: bool,
+
+    /// sets the value for rho_inv for the ligero commit
+    #[arg(long, default_value_t = 4)]
+    rho_inv: u8,
+
+
+
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
     // flags after a refactor
@@ -330,6 +337,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
         batched_zkdt_circuit_mles: batched_catboost_mles,
         tree_precommit_filepath: tree_commit_filepath,
         sample_minibatch_precommit_filepath: sample_minibatch_commitment_filepath,
+        rho_inv: args.rho_inv
     };
 
     // --- Grab the proof filepath to write to and compute the circuit + prove ---
