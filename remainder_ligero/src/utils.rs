@@ -76,7 +76,7 @@ pub fn halo2_fft<F: FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
 
     // --- Creates the polynomial in coeff form and performs the FFT ---
     let polynomial_coeff = evaluation_domain.coeff_from_vec(coeffs);
-    let polynomial_eval_form = evaluation_domain.coeff_to_extended(polynomial_coeff);
+    let polynomial_eval_form = evaluation_domain.coeff_to_extended(&polynomial_coeff);
     debug_assert_eq!(polynomial_eval_form.len(), num_evals);
 
     polynomial_eval_form.to_vec()
