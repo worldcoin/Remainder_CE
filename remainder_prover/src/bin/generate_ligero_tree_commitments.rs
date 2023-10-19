@@ -135,9 +135,11 @@ pub fn generate_all_tree_ligero_commitments<F: FieldExt>(
 
                     // --- Create commitment to the combined MLEs via the input layer ---
                     let rho_inv = 4;
+                    let ratio = 1_f64;
                     let ligero_commitment = remainder_ligero_commit_prove(
                         &tree_input_layer.mle.mle_ref().bookkeeping_table,
                         rho_inv,
+                        ratio,
                     );
 
                     // --- Write to file ---

@@ -32,6 +32,7 @@ pub struct LigeroInputLayer<F: FieldExt, Tr> {
     _marker: PhantomData<Tr>,
     is_precommit: bool,
     rho_inv: Option<u8>,
+    ratio: Option<f64>,
 }
 
 /// The *actual* Ligero evaluation proof the prover needs to send to the verifier
@@ -66,7 +67,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
             _ => {}
         }
 
-        let (_, comm, root, aux) = remainder_ligero_commit_prove(&self.mle.mle, self.rho_inv.unwrap());
+        let (_, comm, root, aux) = remainder_ligero_commit_prove(&self.mle.mle, self.rho_inv.unwrap(), self.ratio.unwrap());
 
         self.comm = Some(comm);
         self.aux = Some(aux);
@@ -108,6 +109,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
             comm,
             root,
         );
+
 
         Ok(LigeroInputProof {
             proof: ligero_eval_proof,
@@ -160,6 +162,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for LigeroInputLayer<F, Tr
             _marker: PhantomData,
             is_precommit: false,
             rho_inv: None,
+            ratio: None,
         }
     }
 }
@@ -172,7 +175,6 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
         ligero_aux: LcProofAuxiliaryInfo,
         ligero_root: LcRoot<LigeroEncoding<F>, F>,
-        rho_inv: u8
     ) -> Self {
         Self {
             mle,
@@ -182,15 +184,17 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
             root: Some(ligero_root),
             _marker: PhantomData,
             is_precommit: true,
-            rho_inv: Some(rho_inv),
+            rho_inv: None,
+            ratio: None,
         }
     }
 
     /// Creates new Ligero input layer with specified rho inverse
-    pub fn new_with_rho_inv(
+    pub fn new_with_rho_inv_ratio(
         mle: DenseMle<F, F>,
         layer_id: LayerId,
         rho_inv: u8,
+        ratio: f64,
     ) -> Self {
         Self {
             mle,
@@ -201,6 +205,7 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
             _marker: PhantomData,
             is_precommit: false,
             rho_inv: Some(rho_inv),
+            ratio: Some(ratio),
         }
     }
 }

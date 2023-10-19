@@ -246,9 +246,10 @@ fn poseidon_commit_test() {
     // --- Grabs random (univariate poly!) coefficients and the rho value ---
     let (coeffs, rho) = random_coeffs_rho_bn254::<Fr>();
     let rho_inv: u8 = (1.0 / rho) as u8;
+    let ratio: f64 = 1_f64;
 
     // --- Preps the FFT encoding and grabs the matrix size ---
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho);
+    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho, ratio);
 
     // --- Commitment needs to use PoseidonHasher instead of Blake3 ---
     let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<_>, Fr>(&coeffs, &enc).unwrap();
@@ -334,7 +335,8 @@ fn poseidon_end_to_end_test() {
 
     // commit to a random polynomial at a random rate
     let (coeffs, rho) = random_coeffs_rho_bn254();
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho);
+    let ratio = 1_f64;
+    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho, ratio);
     let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(&coeffs, &enc).unwrap();
 
     // this is the polynomial commitment
@@ -500,9 +502,10 @@ fn poseidon_ml_commit_test() {
     let log_orig_num_cols = 8;
     let orig_num_cols = 2_usize.pow(log_orig_num_cols);
     let coeffs = get_random_coeffs_for_multilinear_poly::<Fr>(num_ml_vars);
+    let ratio = 1_f64;
 
     // --- Create commitment ---
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho);
+    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho, ratio);
     let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(&coeffs, &enc).unwrap();
 
     // --- Generating the random multilinear point ---
@@ -585,7 +588,8 @@ fn poseidon_ml_end_to_end_test() {
     let coeffs = get_random_coeffs_for_multilinear_poly::<Fr>(num_ml_vars);
 
     // --- Create commitment ---
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho);
+    let ratio = 1_f64;
+    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho, ratio);
     let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(&coeffs, &enc).unwrap();
 
     // --- Only component of commitment which needs to be sent to the verifier is the commitment root ---
@@ -757,8 +761,9 @@ fn random_comm<F: FieldExt>() -> LigeroCommit<PoseidonSpongeHasher<F>, F> {
     let len_base = 1 << (lgl - 1);
     let len = len_base + (rng.gen::<usize>() % len_base);
     let rho = rng.gen_range(0.1f64..0.9f64);
+    let ratio = 1_f64;
     let (n_rows, orig_num_cols, encoded_num_cols) =
-        LigeroEncoding::<F>::get_dims(len, rho).unwrap();
+        LigeroEncoding::<F>::get_dims(len, rho, ratio).unwrap();
 
     let coeffs_len = (orig_num_cols - 1) * n_rows + 1 + (rng.gen::<usize>() % n_rows);
     let coeffs = {

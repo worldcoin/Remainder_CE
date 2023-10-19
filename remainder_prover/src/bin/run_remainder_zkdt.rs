@@ -140,6 +140,11 @@ struct Args {
     #[arg(long, default_value_t = 4)]
     rho_inv: u8,
 
+    /// sets the matrix ratio (orig_num_cols : num_rows) for ligero commit, will do the dimensions
+    /// to achieve the ratio as close as possible
+    #[arg(long, default_value_t = 1_f64)]
+    matrix_ratio: f64,
+
 
 
     // --- NOTE: The below flags are all no-ops! ---
@@ -337,7 +342,8 @@ fn main() -> Result<(), ZKDTBinaryError> {
         batched_zkdt_circuit_mles: batched_catboost_mles,
         tree_precommit_filepath: tree_commit_filepath,
         sample_minibatch_precommit_filepath: sample_minibatch_commitment_filepath,
-        rho_inv: args.rho_inv
+        rho_inv: args.rho_inv,
+        ratio: args.matrix_ratio
     };
 
     // --- Grab the proof filepath to write to and compute the circuit + prove ---

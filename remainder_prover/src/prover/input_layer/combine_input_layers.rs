@@ -238,7 +238,6 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
         ligero_aux: LcProofAuxiliaryInfo,
         ligero_root: LcRoot<LigeroEncoding<F>, F>,
-        rho_inv: u8,
     ) -> LigeroInputLayer<F, Tr> {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
         LigeroInputLayer::<F, Tr>::new_with_ligero_commitment(
@@ -247,7 +246,6 @@ impl<F: FieldExt> InputLayerBuilder<F> {
             ligero_comm,
             ligero_aux,
             ligero_root,
-            rho_inv
         )
     }
 
@@ -255,12 +253,14 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     pub fn to_input_layer_with_rho_inv<Tr: Transcript<F>>(
         self,
         rho_inv: u8,
+        ratio: f64,
     ) -> LigeroInputLayer<F, Tr> {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
-        LigeroInputLayer::<F, Tr>::new_with_rho_inv(
+        LigeroInputLayer::<F, Tr>::new_with_rho_inv_ratio(
             final_mle,
             self.layer_id,
-            rho_inv
+            rho_inv,
+            ratio
         )
     }
 }

@@ -1058,14 +1058,14 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
 
         // --- We should have two input layers: a single pre-committed and a single regular Ligero layer ---
         let rho_inv = 4;
+        let ratio = 1_f64;
         let (_, ligero_comm, ligero_root, ligero_aux) =
-            remainder_ligero_commit_prove(&self.mle.mle, rho_inv);
+            remainder_ligero_commit_prove(&self.mle.mle, rho_inv, ratio);
         let precommitted_input_layer: LigeroInputLayer<F, Self::Transcript> =
             precommitted_input_layer_builder.to_input_layer_with_precommit(
                 ligero_comm,
                 ligero_aux,
                 ligero_root,
-                rho_inv
             );
         let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
             live_committed_input_layer_builder.to_input_layer();
