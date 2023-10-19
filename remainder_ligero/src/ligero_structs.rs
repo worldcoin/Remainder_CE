@@ -34,13 +34,9 @@ where
         // --- 0 < rho < 1 ---
         assert!(rho > 0f64);
         assert!(rho < 1f64);
-        
-
-        // TODO!(ryancao): Rather than create a square matrix, create a wider/flatter
-        // matrix which involves less hashing for the verifier per-column (subject to
-        // the FFT circuit being small enough, of course)
 
         // compute #cols, which must be a power of 2 because of FFT
+        // computes the encoded num cols that will get closest to the ratio for original num cols : num rows
         let encoded_num_cols = (((len as f64 * ratio).sqrt() / rho).ceil() as usize)
             .checked_next_power_of_two()?;
 

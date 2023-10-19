@@ -17,10 +17,6 @@ pub fn get_random_coeffs_for_multilinear_poly<F: FieldExt>(ml_num_vars: usize) -
 
 /// Grabs the matrix dimensions for M and M'
 ///
-/// TODO!(ryancao): Rather than create a square matrix, create a wider/flatter
-/// matrix which involves less hashing for the verifier per-column (subject to
-/// the FFT circuit being small enough, of course)
-///
 /// ## Arguments
 ///
 /// * `poly_len` - Number of coefficients in the actual polynomial
@@ -34,6 +30,7 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> Optio
     assert!(rho < 1f64);
 
     // compute #cols, which must be a power of 2 because of FFT
+    // computes the encoded num cols that will get closest to the ratio for original num cols : num rows
     let encoded_num_cols = (((poly_len as f64 * ratio).sqrt() / rho).ceil() as usize)
         .checked_next_power_of_two()?;
 
