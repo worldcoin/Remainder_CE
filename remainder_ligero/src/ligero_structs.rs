@@ -30,24 +30,25 @@ where
     F: FieldExt,
 {
     /// Grabs the matrix dimensions for M and M'
-    pub fn get_dims(len: usize, rho: f64) -> Option<(usize, usize, usize)> {
+    pub fn get_dims(len: usize, rho: f64, ratio: f64) -> Option<(usize, usize, usize)> {
         // --- 0 < rho < 1 ---
         assert!(rho > 0f64);
         assert!(rho < 1f64);
+        
 
         // TODO!(ryancao): Rather than create a square matrix, create a wider/flatter
         // matrix which involves less hashing for the verifier per-column (subject to
         // the FFT circuit being small enough, of course)
 
         // compute #cols, which must be a power of 2 because of FFT
-        let encoded_num_cols = (((len as f64).sqrt() / rho).ceil() as usize)
+        let encoded_num_cols = (((len as f64 * ratio).sqrt() / rho).ceil() as usize)
             .checked_next_power_of_two()?;
 
         // minimize nr subject to #cols and rho
         // --- Not sure what the above is talking about, but basically computes ---
         // --- the other dimensions with respect to `encoded_num_cols` ---
-        let orig_num_cols = ((encoded_num_cols as f64) * rho).floor() as usize;
-        let num_rows = (len + orig_num_cols - 1) / orig_num_cols;
+        let orig_num_cols = (((encoded_num_cols as f64) * rho).floor()) as usize;
+        let num_rows = (len + orig_num_cols - 1) / orig_num_cols; 
 
         // --- Sanitycheck that we aren't going overboard or underboard ---
         assert!(orig_num_cols * num_rows >= len);
@@ -63,10 +64,10 @@ where
     }
 
     /// Creates a new Ligero encoding (data structure)
-    pub fn new(len: usize, rho: f64) -> Self {
+    pub fn new(len: usize, rho: f64, ratio: f64) -> Self {
         let rho_inv = (1.0 / rho) as u8;
         // --- Computes the matrix size for the commitment ---
-        let (_, orig_num_cols, encoded_num_cols) = Self::get_dims(len, rho).unwrap();
+        let (_, orig_num_cols, encoded_num_cols) = Self::get_dims(len, rho, ratio).unwrap();
         assert!(Self::_dims_ok(orig_num_cols, encoded_num_cols));
         Self {
             orig_num_cols,
@@ -126,6 +127,7 @@ where
         let pc = true; // TODO!(ryancao): Fix this!!!
         let np = orig_num_cols == self.orig_num_cols;
         let nc = encoded_num_cols == self.encoded_num_cols;
+
         ok && pc && np && nc
     }
 
