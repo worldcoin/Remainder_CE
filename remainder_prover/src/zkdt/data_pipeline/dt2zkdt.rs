@@ -152,8 +152,8 @@ impl fmt::Display for RawSamples {
 }
 
 impl RawSamples {
-    pub fn slice(&self, start: usize, end: usize) -> Self {
-        let values = self.values[start..end].to_vec();
+    pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
+        let values = self.values[range].to_vec();
         RawSamples {
             values: values,
             sample_length: self.sample_length,
@@ -483,9 +483,21 @@ impl fmt::Display for RawTreesModel {
     }
 }
 
+impl RawTreesModel {
+    pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
+        let trees = self.trees[range].to_vec();
+        RawTreesModel {
+            trees: trees,
+            bias: self.bias,
+            scale: self.scale,
+            n_features: self.n_features
+        }
+    }
+}
+
 impl TreesModel {
-    pub fn slice(&self, start: usize, end: usize) -> Self {
-        let trees = self.trees[start..end].to_vec();
+    pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
+        let trees = self.trees[range].to_vec();
         TreesModel {
             trees: trees,
             depth: self.depth,
@@ -872,7 +884,7 @@ mod tests {
 
         let mut trees_model: TreesModel = (&raw_trees_model).into();
         // just take two trees
-        trees_model = trees_model.slice(0, 2);
+        trees_model = trees_model.slice(0..2);
 
         let samples: Samples = (&raw_samples).into();
 

@@ -9,7 +9,7 @@ const SAMPLES_FN: &str = "src/zkdt/data_pipeline/upshot_data/upshot-quantized-sa
 fn main() {
     println!("Starting tree loading ...");
     let start_time = Instant::now();
-    let raw_trees_model: RawTreesModel = load_raw_trees_model(Path::new(TREES_FN));
+    let mut raw_trees_model: RawTreesModel = load_raw_trees_model(Path::new(TREES_FN));
     println!("Loading trees from JSON took: {:?}", start_time.elapsed());
     
     println!("Starting sample loading ...");
@@ -17,8 +17,9 @@ fn main() {
     let mut raw_samples: RawSamples = load_raw_samples(Path::new(SAMPLES_FN));
     println!("Loading samples took: {:?}", start_time.elapsed());
 
-    // use just a small batch of samples
-    raw_samples = raw_samples.slice(0, 1000);
+    // use just a small batch of trees & samples
+    raw_trees_model = raw_trees_model.slice(0..32);
+    raw_samples = raw_samples.slice(0..1024);
     
     println!("Starting tree witness generation ...");
     let start_time = Instant::now();

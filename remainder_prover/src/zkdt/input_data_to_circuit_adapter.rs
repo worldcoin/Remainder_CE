@@ -214,7 +214,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
 
     // --- Conversions ---
     let full_trees_model: TreesModel = (&raw_trees_model).into();
-    let single_tree = full_trees_model.slice(tree_idx, tree_idx + 1);
+    let single_tree = full_trees_model.slice(tree_idx..tree_idx + 1);
     let samples: Samples = (&raw_samples).into();
     let ctrees: CircuitizedTrees<F> = (&single_tree).into();
 
