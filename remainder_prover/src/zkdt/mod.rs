@@ -2,9 +2,8 @@
 
 /// Example structs for zkDT circuit
 pub mod structs;
-/// Concrete circuit implementation
+/// Preparation of witnesses for trees & samples
 pub mod data_pipeline;
-pub mod helpers;
 pub mod builders;
 pub mod zkdt_circuit;
 /// For cache-ing and other auxiliary things
