@@ -283,7 +283,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
     let paths: Vec<Vec<TreePath<i64>>> = trees_model.trees
         .par_iter()
         .map(|tree| samples_in.values
-             .iter()
+             .par_iter()
              .map(|sample| tree.get_tree_path(&sample))
              .collect())
         .collect();
@@ -292,7 +292,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         .par_iter()
         .map(|tree_paths| {
             tree_paths
-                .iter()
+                .par_iter()
                 .map(DecisionPath::<F>::from)
                 .collect()
             })
@@ -302,7 +302,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         .par_iter()
         .map(|tree_paths| {
             tree_paths
-                .iter()
+                .par_iter()
                 .map(AttributesOnPath::<F>::from)
                 .collect()
         })
@@ -312,7 +312,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         .par_iter()
         .map(|tree_paths| {
             tree_paths
-                .iter()
+                .par_iter()
                 .map(DifferencesBits::<F>::from)
                 .collect()
         })
@@ -347,7 +347,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         .par_iter()
         .map(|tree_paths| {
             count_node_multiplicities(tree_paths, trees_model.depth)
-                .into_iter()
+                .into_par_iter()
                 .map(build_node_multiplicity_bindecomp)
                 .collect()
         })
