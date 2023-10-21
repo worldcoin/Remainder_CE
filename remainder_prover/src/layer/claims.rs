@@ -506,7 +506,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 
 /// Sorts claims by `from_layer_id` to prepare them for grouping. Also performs
 /// claim de-duplication if the `ENABLE_CLAIM_DEDUPLICATION` flag it set.
-fn preprocess_claims<F: FieldExt>(mut claims: Vec<Claim<F>>) -> Vec<Claim<F>> {
+pub fn preprocess_claims<F: FieldExt>(mut claims: Vec<Claim<F>>) -> Vec<Claim<F>> {
     if !ENABLE_CLAIM_DEDUPLICATION && !ENABLE_CLAIM_GROUPING {
         // There is no need to sort the claims if no optimizations are enabled.
         return claims;
@@ -551,7 +551,7 @@ fn preprocess_claims<F: FieldExt>(mut claims: Vec<Claim<F>>) -> Vec<Claim<F>> {
 /// # Requires
 /// All claims with the same `from_layer_id` should appear consecutively in the
 /// `claims` vector. For example, `claims` can be sorted by `from_layer_id`.
-fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
+pub fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
     info!("Forming claim group...");
 
     if !ENABLE_CLAIM_GROUPING {
