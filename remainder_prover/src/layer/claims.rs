@@ -357,7 +357,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
 /// the `k` naive claim aggregations performed.
 /// TODO(Makis): Refactor this file to better expose the interface vs
 /// implementation.
-pub(crate) fn aggregate_claims<F: FieldExt>(
+pub fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
     compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>,
     transcript: &mut impl transcript::Transcript<F>,
@@ -445,7 +445,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 /// readable. We should consider alternative designs.
 #[instrument(level = "trace", err)]
 #[instrument(level = "debug", skip_all, err)]
-pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
+pub fn compute_aggregated_challenges<F: FieldExt>(
     claims: &ClaimGroup<F>,
     r_star: F,
 ) -> Result<Vec<F>, ClaimError> {
@@ -599,7 +599,7 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 /// either contains no evaluations (in the trivial case of aggregating a single
 /// claim) or contains a single vector of the wlx evaluations produced during
 /// this 1-step claim aggregation.
-pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
+pub fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer_mle_refs: &Vec<MleEnum<F>>,
     compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>,
