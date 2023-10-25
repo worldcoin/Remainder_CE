@@ -1,3 +1,4 @@
+use ark_serialize::Read;
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use remainder_ligero::{
@@ -45,7 +46,7 @@ use super::{
         },
     },
     input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit,
-    multiset_circuit::{circuits::FSMultiSetCircuit},
+    multiset_circuit::circuits::FSMultiSetCircuit,
     path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
@@ -272,7 +273,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             vec![Box::new(&mut leaf_node_paths_mle_vec_combined)];
 
         // --- a) Precommitted Ligero input layer for tree itself (LayerId: 0) ---
-        let tree_mle_input_layer_builder = InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
+        let tree_mle_input_layer_builder =
+            InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
 
         // --- b) Ligero input layer for just the inputs themselves (LayerId: 1) ---
         let input_mles_input_layer_builder =
@@ -287,40 +289,65 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             InputLayerBuilder::new(public_path_leaf_node_mles, None, LayerId::Input(3));
 
         // --- Convert all the input layer builders into input layers ---
-        let (
-            _ligero_encoding,
-            tree_ligero_commit,
-            tree_ligero_root,
-            tree_ligero_aux
-        ): (
+        let (_ligero_encoding, tree_ligero_commit, tree_ligero_root, tree_ligero_aux): (
             LigeroEncoding<F>,
             LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
             LcRoot<LigeroEncoding<F>, F>,
             LcProofAuxiliaryInfo,
         ) = {
-            let file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
-            from_reader(&file).unwrap()
+            let mut file = std::fs::File::open(&self.tree_precommit_filepath).unwrap();
+            let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+            let mut bufreader = Vec::with_capacity(initial_buffer_size);
+            file.read_to_end(&mut bufreader).unwrap();
+            serde_json::de::from_slice(&bufreader[..]).unwrap()
         };
-        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = tree_mle_input_layer_builder.to_input_layer_with_precommit(tree_ligero_commit, tree_ligero_aux, tree_ligero_root);
+        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+            tree_mle_input_layer_builder.to_input_layer_with_precommit(
+                tree_ligero_commit,
+                tree_ligero_aux,
+                tree_ligero_root,
+            );
 
         let (
             _ligero_encoding,
             sample_minibatch_ligero_commit,
             sample_minibatch_ligero_root,
-            sample_minibatch_ligero_aux
+            sample_minibatch_ligero_aux,
         ): (
             LigeroEncoding<F>,
             LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
             LcRoot<LigeroEncoding<F>, F>,
             LcProofAuxiliaryInfo,
         ) = {
-            let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-            from_reader(&file).unwrap()
-        };
-        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = input_mles_input_layer_builder.to_input_layer_with_precommit(sample_minibatch_ligero_commit, sample_minibatch_ligero_aux, sample_minibatch_ligero_root);
+            // METHOD 0: Use no buffer at all.
+            // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+            // let res = from_reader(&file).unwrap();
 
-        let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = aux_mles_input_layer_builder.to_input_layer();
-        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> = public_path_leaf_node_mles_input_layer_builder.to_input_layer();
+            // METHOD 1: Read everything into the buffer.
+            let mut file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+            let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+            let mut bufreader = Vec::with_capacity(initial_buffer_size);
+            file.read_to_end(&mut bufreader).unwrap();
+            let res = serde_json::de::from_slice(&bufreader[..]).unwrap();
+
+            // METHOD 2: Use a buffer of a default size.
+            // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+            // let mut bufreader = BufReader::new(file);
+            // let res = from_reader(&mut bufreader).unwrap();
+
+            res
+        };
+        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+            input_mles_input_layer_builder.to_input_layer_with_precommit(
+                sample_minibatch_ligero_commit,
+                sample_minibatch_ligero_aux,
+                sample_minibatch_ligero_root,
+            );
+
+        let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+            aux_mles_input_layer_builder.to_input_layer();
+        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
+            public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
         let mut input_mles_input_layer = input_mles_input_layer.to_enum();
         let mut aux_mles_input_layer = aux_mles_input_layer.to_enum();
