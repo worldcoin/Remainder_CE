@@ -1,10 +1,12 @@
 pub mod transcript;
+pub mod poseidon;
 
-pub use poseidon::Poseidon;
+pub use crate::poseidon::Poseidon;
 
 use std::hash::Hash;
 
 use halo2curves::FieldExt as H2FieldExt;
+use poseidon_circuit::Hashable;
 use serde::{Deserialize, Serialize};
 
 pub use halo2curves::bn256::Fr;
@@ -13,7 +15,7 @@ pub use halo2curves::bn256::Fr;
 pub use halo2curves;
 
 ///External definition of Field element trait, will remain an Alias for now
-pub trait FieldExt: H2FieldExt + Serialize + for<'de> Deserialize<'de> + std::cmp::Ord + Hash {
+pub trait FieldExt: H2FieldExt + Serialize + for<'de> Deserialize<'de> + std::cmp::Ord + Hash + Hashable {
     // fn zero() -> Self {
     //     Self::ZERO
     // }
@@ -42,4 +44,4 @@ pub trait FieldExt: H2FieldExt + Serialize + for<'de> Deserialize<'de> + std::cm
     // }
 }
 
-impl<F: H2FieldExt + Serialize + for<'de> Deserialize<'de> + std::cmp::Ord + Hash> FieldExt for F {}
+impl<F: H2FieldExt + Serialize + for<'de> Deserialize<'de> + std::cmp::Ord + Hash + Hashable> FieldExt for F {}
