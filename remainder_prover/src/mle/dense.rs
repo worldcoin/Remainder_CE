@@ -45,7 +45,7 @@ where
         T::get_padded_evaluations(&self.mle)
     }
 
-    fn add_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>) {
+    fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>) {
         self.prefix_bits = new_bits;
     }
 
