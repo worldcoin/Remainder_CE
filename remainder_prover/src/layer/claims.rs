@@ -21,14 +21,15 @@ use ark_std::{cfg_into_iter, cfg_iter};
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use thiserror::Error;
 
-use super::Layer;
 use super::combine_mle_refs::CombineMleRefError;
+use super::Layer;
 use crate::layer::LayerId;
 
 use serde::{Deserialize, Serialize};
 
 use core::cmp::Ordering;
 use std::cmp::max;
+use std::fmt;
 
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
@@ -81,7 +82,7 @@ pub enum ClaimError {
 /// optionally maintain additional source/destination layer information through
 /// `from_layer_id` and `to_layer_id`. This information can be used to speed up
 /// claim aggregation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Claim<F> {
     /// The point in F^n where the layer MLE is to be evaluated on.
     point: Vec<F>,
@@ -145,10 +146,21 @@ impl<F: Clone> Claim<F> {
     pub fn get_from_layer_id(&self) -> Option<LayerId> {
         self.from_layer_id
     }
-    
+
     /// Returns the destination Layer ID.
     pub fn get_to_layer_id(&self) -> Option<LayerId> {
         self.to_layer_id
+    }
+}
+
+impl<F: fmt::Debug> fmt::Debug for Claim<F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Claim")
+            .field("point", &self.point)
+            .field("result", &self.result)
+            .field("from_layer_id", &self.from_layer_id)
+            .field("to_layer_id", &self.to_layer_id)
+            .finish()
     }
 }
 
@@ -165,7 +177,7 @@ pub struct ClaimGroup<F> {
     /// them on the next refactoring and consider using iterators instead!
     /// -------------- REFACTOR NEEDED ---------------------
     /// The common layer ID of all claims stored in this group.
-    layer_id: Option<LayerId>,
+    src_layer_id: Option<LayerId>,
     /// A 2D matrix with the claim's points as its rows.
     claim_points_matrix: Vec<Vec<F>>,
     /// The points in `claims` is effectively a matrix of elements in F. We also
@@ -188,7 +200,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
         if num_claims == 0 {
             return Ok(Self {
                 claims: vec![],
-                layer_id: None,
+                src_layer_id: None,
                 claim_points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
@@ -232,7 +244,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
 
         Ok(Self {
             claims,
-            layer_id,
+            src_layer_id: layer_id,
             claim_points_matrix: points_matrix,
             claim_points_transpose,
             result_vector,
@@ -258,7 +270,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
     /// Returns the common destination layer ID of all the claims stored in this
     /// group.
     pub fn get_layer_id(&self) -> Option<LayerId> {
-        self.layer_id
+        self.src_layer_id
     }
 
     /// Returns the i-th result.
@@ -676,13 +688,13 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> (usize,
         (max(num_vars * (num_claims - 1) + 1, num_claims), None)
     } else {
         debug!("Smart num_evals");
-        let mut degree_reduction = num_vars as i64;
+        let mut num_constant_columns = num_vars as i64;
         let mut common_idx = vec![];
         for j in 0..num_vars {
             let mut degree_reduced = true;
             for i in 1..num_claims {
                 if claim_vecs[i][j] != claim_vecs[i - 1][j] {
-                    degree_reduction -= 1;
+                    num_constant_columns -= 1;
                     degree_reduced = false;
                     break;
                 }
@@ -691,8 +703,8 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> (usize,
                 common_idx.push(j);
             }
         }
-        assert!(degree_reduction >= 0);
-        debug!("degree_reduction = {}", degree_reduction);
+        assert!(num_constant_columns >= 0);
+        debug!("degree_reduction = {}", num_constant_columns);
 
         // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
         // points. W : F^n -> F is a multi-linear polynomial on
@@ -706,7 +718,7 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> (usize,
         // constant polynomial of degree zero instead of `num_claims -
         // 1` which brings down the total degree by the same amount.
         let num_evals =
-            (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+            (num_vars) * (num_claims - 1) + 1 - (num_constant_columns as usize) * (num_claims - 1);
         debug!("num_evals originally = {}", num_evals);
         (max(num_evals, num_claims), Some(common_idx))
     }
@@ -813,13 +825,11 @@ pub(crate) mod tests {
 
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
-
-        
         layer
     }
 
     /// Returns a random MLE expression with an associated GKR layer.
-    fn build_random_mle(num_vars: usize) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
+    fn build_random_mle_layer(num_vars: usize) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
         let mut rng = test_rng();
         let mle_evals: Vec<Fr> = (0..num_vars).map(|_| Fr::from(rng.gen::<u64>())).collect();
         layer_from_evals(mle_evals)
@@ -985,7 +995,7 @@ pub(crate) mod tests {
 
         // ---------------
 
-        let layer = build_random_mle(3);
+        let layer = build_random_mle_layer(3);
         let claims = claims_from_expr_and_points(layer.expression(), &points);
 
         let l_star = compute_l_star(&claims, &r_star);
