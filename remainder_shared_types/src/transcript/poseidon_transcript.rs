@@ -5,7 +5,7 @@
 use std::marker::PhantomData;
 
 use itertools::Itertools;
-use poseidon::Poseidon;
+use crate::poseidon::Poseidon;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
