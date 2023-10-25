@@ -112,21 +112,15 @@ fn collapse_mles_with_iterated_in_prefix<F: FieldExt> (
     mle_refs.into_iter().flat_map(
         |mle_ref| {
             // this iterates through the mle indices to check whether there is an iterated bit within the fixed bits
-            let check_iterated_within_fixed = {
-                let mut iterated_seen = false;
-                let mut fixed_after_iterated = false;
-                mle_ref.original_mle_indices().iter().for_each(
-                    |mle_idx| {
-                        if let MleIndex::Iterated = mle_idx {
-                            iterated_seen = true;
-                        }
-                        if let MleIndex::Fixed(_) = mle_idx {
-                            fixed_after_iterated = iterated_seen;
-                        }
+            let (_, check_iterated_within_fixed) = mle_ref.original_mle_indices().iter().fold((false, false), 
+                |(iterated_seen_so_far, fixed_after_iterated_so_far), mle_idx| {
+                    match mle_idx {
+                        MleIndex::Iterated => (true, fixed_after_iterated_so_far),
+                        MleIndex::Fixed(_) => (iterated_seen_so_far, iterated_seen_so_far),
+                        _ => (iterated_seen_so_far, fixed_after_iterated_so_far),
                     }
-                );
-                fixed_after_iterated
-            };
+                }
+            );
             // if true, we split, otherwise, we don't
             if check_iterated_within_fixed {
                 split_mle_ref(mle_ref.clone())
