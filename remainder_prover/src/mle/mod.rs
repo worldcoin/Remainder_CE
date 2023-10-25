@@ -4,7 +4,7 @@ use core::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::layer::Claim;
+use crate::layer::claims::Claim;
 use crate::layer::LayerId;
 use remainder_shared_types::FieldExt;
 
@@ -52,6 +52,10 @@ pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     ///Get claim that this MleRef Represents
     fn mle_indices(&self) -> &[MleIndex<Self::F>];
 
+    fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>>;
+
+    fn original_bookkeeping_table(&self) -> &Vec<Self::F>;
+
     // ///Moves the claim by adding the new_claims to the left of the originals
     // fn relabel_mle_indices(&mut self, new_claims: &[MleIndex<Self::F>]);
 
@@ -59,6 +63,9 @@ pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
 
     ///Number of variables the Mle this is a reference to is over
     fn num_vars(&self) -> usize;
+
+    ///Number of original variables, not mutated
+    fn original_num_vars(&self) -> usize;
 
     ///Fix the variable at round_index at a given challenge point, mutates self to be the bookeeping table for the new Mle.
     /// If the Mle is fully bound will return the evaluation of the fully bound Mle
@@ -111,7 +118,7 @@ pub trait MleAble<F> {
 }
 
 ///The Enum that represents the possible indices for an MLE
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub enum MleIndex<F> {
     ///A Selector bit for fixed MLE access
     Fixed(bool),

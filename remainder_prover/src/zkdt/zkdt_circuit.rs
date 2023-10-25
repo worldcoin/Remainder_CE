@@ -1,5 +1,5 @@
+use ark_std::{log2, start_timer, end_timer};
 use ark_serialize::Read;
-use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
@@ -50,6 +50,7 @@ use super::{
     path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
+
 use std::{marker::PhantomData, path::Path};
 
 /// The actual ZKDT circuit!
@@ -86,6 +87,7 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
         ),
         crate::prover::GKRError,
     > {
+        let create_sub_circuits_timer = start_timer!(|| "input + instantiate sub circuits");
         let (
             // --- Actual circuit components ---
             mut attribute_consistency_circuit,
@@ -101,7 +103,9 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
             input_layers,
             inpunt_layers_commits,
         ) = self.create_sub_circuits(transcript).unwrap();
+        end_timer!(create_sub_circuits_timer);
 
+        let wit_gen_timer = start_timer!(|| "witness generation of subcircuits");
         let attribute_consistency_witness = attribute_consistency_circuit.yield_sub_circuit();
         let multiset_witness = multiset_circuit.yield_sub_circuit();
         let input_multiset_witness = input_multiset_circuit.yield_sub_circuit();
@@ -115,7 +119,9 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
             bits_are_binary_multiset_decision_circuit.yield_sub_circuit();
         let bits_are_binary_multiset_leaf_circuit_witness =
             bits_are_binary_multiset_leaf_circuit.yield_sub_circuit();
+        end_timer!(wit_gen_timer);
 
+        let combine_layers_timer = start_timer!(|| "combine layers + gate stuff");
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
                 attribute_consistency_witness.layers,
@@ -146,6 +152,8 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
                 &mut combined_circuit_layers,
                 combined_circuit_output_layers,
             );
+
+        end_timer!(combine_layers_timer);
 
         Ok((
             Witness {
@@ -527,7 +535,6 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         ))
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::ZKDTCircuit;
@@ -538,10 +545,29 @@ mod tests {
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use std::path::Path;
 
+    use chrono;
+    use log::LevelFilter;
+    use std::io::Write;
+
     #[test]
     fn test_zkdt_circuit() {
+        env_logger::Builder::new()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "----> {}:{} {} [{}]:\n{}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                    record.level(),
+                    record.args()
+                )
+            })
+            .filter(None, LevelFilter::Error)
+            .init();
+
         let (batched_catboost_mles, (_, _)) =
-            generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
+            generate_mles_batch_catboost_single_tree::<Fr>(10, Path::new("upshot_data/"));
 
         let combined_circuit = ZKDTCircuit {
             batched_zkdt_circuit_mles: batched_catboost_mles,
@@ -549,6 +575,6 @@ mod tests {
             sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
         };
 
-        test_circuit(combined_circuit, None);
+            test_circuit(combined_circuit, None);
+        }
     }
-}

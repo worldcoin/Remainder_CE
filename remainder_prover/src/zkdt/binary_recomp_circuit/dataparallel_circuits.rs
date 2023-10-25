@@ -220,6 +220,8 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
         let batched_recomp_checker_result_mle = layers.add_gkr(batched_recomp_checker_builder);
         let flattened_batched_recomp_checker_result_mle = combine_zero_mle_ref(batched_recomp_checker_result_mle);
 
+        println!("# layers -- binary recomp: {:?}", layers.next_layer_id());
+
         Witness { layers, output_layers: vec![flattened_batched_recomp_checker_result_mle.get_enum()], input_layers: vec![] }
     }
 }
