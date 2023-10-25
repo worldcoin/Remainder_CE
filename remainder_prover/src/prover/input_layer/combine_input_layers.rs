@@ -147,7 +147,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
                         total_num_vars,
                         input_mle.num_iterated_vars(),
                     );
-                    input_mle.add_prefix_bits(Some(prefix_bits));
+                    input_mle.set_prefix_bits(Some(prefix_bits));
                     current_padded_usage += 2_u32.pow(input_mle.num_iterated_vars() as u32);
                 } else {
                     let extra_mle_index = input_mles.len() - input_mle_idx;
@@ -178,7 +178,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     ) -> Result<(), &'static str> {
         let new_bits = self.extra_mle_indices.as_mut().ok_or("Called add_extra_mle too many times compared to the extra_mles that were declared when creating the builder")?;
         let new_bits = new_bits.remove(0);
-        extra_mle.add_prefix_bits(Some(new_bits));
+        extra_mle.set_prefix_bits(Some(new_bits));
         let extra_mle = dyn_clone::clone_box(*extra_mle);
         self.mles.push(extra_mle);
         Ok(())

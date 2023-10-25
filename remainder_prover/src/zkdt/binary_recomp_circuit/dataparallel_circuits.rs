@@ -43,7 +43,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
             // --- Prefix bits should be [input_prefix_bits], [dataparallel_bits] ---
             // TODO!(ryancao): Note that strictly speaking we shouldn't be adding dataparallel bits but need to for
             // now for a specific batching scenario
-            diff_signed_bit_decomp_mle.add_prefix_bits(
+            diff_signed_bit_decomp_mle.set_prefix_bits(
                 Some(
                     combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
@@ -62,12 +62,12 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
             ).map(|(decision_node_path_mle, permuted_inputs_mle)| {
 
                 // --- Add prefix bits and batching bits to both (same comment as above) ---
-                decision_node_path_mle.add_prefix_bits(Some(
+                decision_node_path_mle.set_prefix_bits(Some(
                     combined_batched_decision_node_path_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
-                permuted_inputs_mle.add_prefix_bits(Some(
+                permuted_inputs_mle.set_prefix_bits(Some(
                     combined_batched_permuted_inputs_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
@@ -90,7 +90,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
             .map(|(diff_signed_bit_decomp_mle, (pos_bin_recomp_mle, raw_diff_mle))| {
 
                 // --- Add prefix bits to the thing which was indexed earlier ---
-                diff_signed_bit_decomp_mle.add_prefix_bits(
+                diff_signed_bit_decomp_mle.set_prefix_bits(
                     Some(
                         combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                             repeat_n(MleIndex::Iterated, num_dataparallel_bits)
@@ -111,7 +111,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
         let flattened_batched_recomp_checker_result_mle = combine_zero_mle_ref(batched_recomp_checker_result_mle);
 
         // --- Create input layers ---
-        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer_with_rho_inv(4_u8, 1_f64);
 
         Witness { layers, output_layers: vec![flattened_batched_recomp_checker_result_mle.get_enum()], input_layers: vec![live_committed_input_layer.to_enum()] }
     }
@@ -148,12 +148,13 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
 
         let batched_diff_signed_bin_decomp_mle_prefix_bits = self.batched_diff_signed_bin_decomp_mle[0].get_prefix_bits();
         // --- First we create the positive binary recomp builder ---
+        dbg!(&self.batched_diff_signed_bin_decomp_mle[0]);
         let pos_bin_recomp_builders = self.batched_diff_signed_bin_decomp_mle.iter_mut().map(
             |diff_signed_bit_decomp_mle| {
             // --- Prefix bits should be [input_prefix_bits], [dataparallel_bits] ---
             // TODO!(ryancao): Note that strictly speaking we shouldn't be adding dataparallel bits but need to for
             // now for a specific batching scenario
-            diff_signed_bit_decomp_mle.add_prefix_bits(
+            diff_signed_bit_decomp_mle.set_prefix_bits(
                 Some(
                     diff_signed_bit_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
@@ -162,6 +163,7 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
             );
             BinaryRecompBuilder::new(diff_signed_bit_decomp_mle.clone())
         }).collect();
+        dbg!(&self.batched_diff_signed_bin_decomp_mle[0]);
 
         let batched_bin_recomp_builder = BatchedLayer::new(pos_bin_recomp_builders);
 
@@ -172,12 +174,12 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
             ).map(|(decision_node_path_mle, permuted_inputs_mle)| {
 
                 // --- Add prefix bits and batching bits to both (same comment as above) ---
-                decision_node_path_mle.add_prefix_bits(Some(
+                decision_node_path_mle.set_prefix_bits(Some(
                     decision_node_path_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
                 ));
-                permuted_inputs_mle.add_prefix_bits(Some(
+                permuted_inputs_mle.set_prefix_bits(Some(
                     permuted_inputs_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
@@ -200,7 +202,7 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
             .map(|(diff_signed_bit_decomp_mle, (pos_bin_recomp_mle, raw_diff_mle))| {
 
                 // --- Add prefix bits to the thing which was indexed earlier ---
-                diff_signed_bit_decomp_mle.add_prefix_bits(
+                diff_signed_bit_decomp_mle.set_prefix_bits(
                     Some(
                         batched_diff_signed_bin_decomp_mle_prefix_bits.iter().flatten().cloned().chain(
                             repeat_n(MleIndex::Iterated, num_dataparallel_bits)

@@ -76,7 +76,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
                     |input_data_mle| {
                         let mut input_data_mle = input_data_mle.clone();
                         // TODO!(ende) fix this atrocious fixed(false)
-                        input_data_mle.add_prefix_bits(Some(dummy_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        input_data_mle.set_prefix_bits(Some(dummy_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                         FSInputPackingBuilder::new(
                             input_data_mle,
                             r_mle.clone(),
@@ -89,7 +89,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
                     |input_data_mle| {
                         let mut input_data_mle = input_data_mle.clone();
                         // TODO!(ende) fix this atrocious fixed(true)
-                        input_data_mle.add_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        input_data_mle.set_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                         FSInputPackingBuilder::new(
                             input_data_mle,
                             r_mle.clone(),
@@ -180,7 +180,7 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
                     // TODO!(ende) fix this atrocious fixed(false)
-                    input_data_mle.add_prefix_bits(Some(dummy_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    input_data_mle.set_prefix_bits(Some(dummy_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     InputPackingBuilder::new(
                         input_data_mle,
                         self.r,
@@ -193,7 +193,7 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
                 |input_data_mle| {
                     let mut input_data_mle = input_data_mle.clone();
                     // TODO!(ende) fix this atrocious fixed(true)
-                    input_data_mle.add_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    input_data_mle.set_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     InputPackingBuilder::new(
                         input_data_mle,
                         self.r,

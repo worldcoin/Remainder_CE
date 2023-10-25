@@ -36,7 +36,7 @@ where
     ///Get the padded set of evaluations over the boolean hypercube; Useful for constructing the input layer
     fn get_padded_evaluations(&self) -> Vec<F>;
 
-    fn add_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
+    fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
 
     fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>>;
 }

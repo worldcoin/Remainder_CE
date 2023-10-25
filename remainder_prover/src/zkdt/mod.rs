@@ -7,6 +7,7 @@ pub mod data_pipeline;
 pub mod helpers;
 pub mod builders;
 pub mod zkdt_circuit;
+pub mod zkdt_multiple_tree_circuit;
 /// For cache-ing and other auxiliary things
 pub mod constants;
 /// Binary recomp circuit component

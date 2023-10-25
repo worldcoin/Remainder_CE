@@ -137,28 +137,38 @@ pub(crate) fn beta_split<F: FieldExt>(
 impl<F: FieldExt> BetaTable<F> {
     /// Construct a new beta table using a single claim
     pub(crate) fn new(layer_claim_vars: Vec<F>) -> Result<BetaTable<F>, BetaError> {
-        let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
-        let mut cur_table = vec![one_minus_r, r];
-
-        // TODO!(vishruti) make this parallelizable
-        for claim in layer_claim_vars.iter().skip(1) {
-            let (one_minus_r, r) = (F::one() - claim, claim);
-            let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone())
-                .map(|eval| eval * one_minus_r)
-                .collect();
-            let secondhalf: Vec<F> = cfg_into_iter!(cur_table).map(|eval| eval * r).collect();
-            firsthalf.extend(secondhalf.iter());
-            cur_table = firsthalf;
+        if layer_claim_vars.len() > 0 {
+            let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
+            let mut cur_table = vec![one_minus_r, r];
+    
+            // TODO!(vishruti) make this parallelizable
+            for claim in layer_claim_vars.iter().skip(1) {
+                let (one_minus_r, r) = (F::one() - claim, claim);
+                let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone())
+                    .map(|eval| eval * one_minus_r)
+                    .collect();
+                let secondhalf: Vec<F> = cfg_into_iter!(cur_table).map(|eval| eval * r).collect();
+                firsthalf.extend(secondhalf.iter());
+                cur_table = firsthalf;
+            }
+    
+            let iterated_bit_indices = (0..layer_claim_vars.len()).collect_vec();
+            let cur_table_mle_ref: DenseMleRef<F> =
+                DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
+            Ok(BetaTable {
+                layer_claim_vars,
+                table: cur_table_mle_ref,
+                relevant_indices: iterated_bit_indices,
+            })
         }
-
-        let iterated_bit_indices = (0..layer_claim_vars.len()).collect_vec();
-        let cur_table_mle_ref: DenseMleRef<F> =
-            DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
-        Ok(BetaTable {
-            layer_claim_vars,
-            table: cur_table_mle_ref,
-            relevant_indices: iterated_bit_indices,
-        })
+        else {
+            Ok(BetaTable {
+                layer_claim_vars: vec![],
+                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
+                relevant_indices: vec![],
+            })
+        }
+        
     }
 
     /// Fix variable for a beta table

@@ -57,7 +57,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedFSRandomCircuit<F> {
         // --- Create single batched layer ---
         let random_sub_layer_builders = self.batched_mle.iter_mut().map(|mle| {
             // --- First index the input + batched bits ---
-            mle.add_prefix_bits(
+            mle.set_prefix_bits(
                 Some(
                     combined_batched_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)

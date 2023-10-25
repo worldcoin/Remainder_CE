@@ -64,7 +64,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
             let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
 
             for multiplicities_bin_decomp_mle_input in self.multiplicities_bin_decomp_mle_input_vec.iter_mut() {
-                multiplicities_bin_decomp_mle_input.add_prefix_bits(Some(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()))
+                multiplicities_bin_decomp_mle_input.set_prefix_bits(Some(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()))
             }
 
             let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
@@ -106,7 +106,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
                 self.input_data_mle_vec.iter().map(
                     |input_data_mle| {
                         let mut input_data_mle: DenseMle<F, InputAttribute<F>> = input_data_mle.clone();
-                        input_data_mle.add_prefix_bits(Some(input_data_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        input_data_mle.set_prefix_bits(Some(input_data_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                         FSInputPackingBuilder::new(
                             input_data_mle,
                             r_mle.clone(),
@@ -118,7 +118,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
                 self.permuted_input_data_mle_vec.iter().map(
                     |input_data_mle| {
                         let mut input_data_mle = input_data_mle.clone();
-                        input_data_mle.add_prefix_bits(Some(permuted_input_data_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        input_data_mle.set_prefix_bits(Some(permuted_input_data_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                         FSInputPackingBuilder::new(
                             input_data_mle,
                             r_mle.clone(),
@@ -325,7 +325,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
                 self.permuted_input_data_mle_vec.iter().map(
                     |permuted_input_data_mle| {
                         let mut permuted_input_data_mle = permuted_input_data_mle.clone();
-                        permuted_input_data_mle.add_prefix_bits(Some(permuted_input_data_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        permuted_input_data_mle.set_prefix_bits(Some(permuted_input_data_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                         FSInputPackingBuilder::new(
                             permuted_input_data_mle,
                             r_mle.clone(),
@@ -385,7 +385,7 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
 
         let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
         for multiplicities_bin_decomp_mle_input in self.multiplicities_bin_decomp_mle_input_vec.iter_mut() {
-            multiplicities_bin_decomp_mle_input.add_prefix_bits(Some(multiplicities_bin_decomp_mle_input.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()))
+            multiplicities_bin_decomp_mle_input.set_prefix_bits(Some(multiplicities_bin_decomp_mle_input.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()))
         }
     
         // --- Layer 0: Compute the "packed" version of the decision and leaf tree nodes ---
@@ -395,7 +395,7 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
             self.input_data_mle_vec.iter().map(
                 |input_data_mle| {
                     let mut input_data_mle: DenseMle<F, InputAttribute<F>> = input_data_mle.clone();
-                    input_data_mle.add_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    input_data_mle.set_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     FSInputPackingBuilder::new(
                         input_data_mle,
                         self.r_mle.clone(),
@@ -602,7 +602,7 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
             self.permuted_input_data_mle_vec.iter().map(
                 |permuted_input_data_mle| {
                     let mut permuted_input_data_mle = permuted_input_data_mle.clone();
-                    permuted_input_data_mle.add_prefix_bits(Some(permuted_input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    permuted_input_data_mle.set_prefix_bits(Some(permuted_input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     FSInputPackingBuilder::new(
                         permuted_input_data_mle,
                         self.r_mle.clone(),

@@ -5,3 +5,4 @@ pub mod circuits;
 /// For testing
 pub mod tests;
 pub mod legacy_circuits;
+pub mod multitree_circuits;

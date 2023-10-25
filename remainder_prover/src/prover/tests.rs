@@ -245,7 +245,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
             .iter_mut()
             .map(|mle| {
                 // --- First add batching bits to the MLE (this is a hacky fix and will be removed) ---
-                mle.add_prefix_bits(Some(
+                mle.set_prefix_bits(Some(
                     combined_batched_first_second_mle
                         .get_prefix_bits()
                         .iter()
@@ -1599,7 +1599,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
                 .iter()
                 .cloned()
                 .map(|mut mle| {
-                    mle.add_prefix_bits(Some(
+                    mle.set_prefix_bits(Some(
                         mle_combined
                             .prefix_bits
                             .iter()
@@ -1633,7 +1633,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
                 .iter()
                 .cloned()
                 .map(|mut mle| {
-                    mle.add_prefix_bits(Some(
+                    mle.set_prefix_bits(Some(
                         mle_2_combined
                             .prefix_bits
                             .iter()
@@ -1709,7 +1709,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
                 .into_iter()
                 .zip(output_input_vec.into_iter())
                 .map(|(computed_output, mut output_input)| {
-                    output_input.add_prefix_bits(Some(
+                    output_input.set_prefix_bits(Some(
                         output_input_full
                             .prefix_bits
                             .iter()

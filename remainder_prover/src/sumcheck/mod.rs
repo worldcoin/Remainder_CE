@@ -433,13 +433,19 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
         let eval_count = 2;
 
         let range_var = {
-            if (beta_max_num_vars - 1) >= max_num_vars {
-                beta_max_num_vars - 1
+            if beta_max_num_vars > 0 {
+                if (beta_max_num_vars - 1) >= max_num_vars {
+                    beta_max_num_vars - 1
+                }
+                // should never be the case
+                else {
+                    max_num_vars
+                }
             }
-            // should never be the case
             else {
                 max_num_vars
             }
+            
         };
 
         let partials = cfg_into_iter!((0..1 << (range_var))).fold(

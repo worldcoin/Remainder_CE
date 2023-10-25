@@ -46,10 +46,10 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
                     .map(|(input_data_mle, decision_path_mle)| {
 
                         let mut input_data_mle = input_data_mle.clone();
-                        input_data_mle.add_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        input_data_mle.set_prefix_bits(Some(dummy_permuted_input_data_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         let mut decision_path_mle = decision_path_mle.clone();
-                        decision_path_mle.add_prefix_bits(Some(dummy_decision_node_paths_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        decision_path_mle.set_prefix_bits(Some(dummy_decision_node_paths_mle_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         // --- Simply subtracts the input data attribute IDs from the decision node attribute IDs ---
                         AttributeConsistencyBuilderZeroRef::new(
@@ -98,10 +98,10 @@ impl<F: FieldExt> AttributeConsistencyCircuit<F> {
                     .map(|(input_data_mle, decision_path_mle)| {
 
                         let mut input_data_mle = input_data_mle.clone();
-                        input_data_mle.add_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        input_data_mle.set_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         let mut decision_path_mle = decision_path_mle.clone();
-                        decision_path_mle.add_prefix_bits(Some(decision_path_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        decision_path_mle.set_prefix_bits(Some(decision_path_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
 
                         // --- Simply subtracts the input data attribute IDs from the decision node attribute IDs ---
                         AttributeConsistencyBuilderZeroRef::new(

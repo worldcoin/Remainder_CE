@@ -3,6 +3,7 @@
 use ark_serialize::Read;
 use clap::Parser;
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use itertools::Itertools;
 use remainder::{
     prover::{GKRCircuit, GKRError},
     zkdt::{
@@ -11,7 +12,7 @@ use remainder::{
             get_tree_commitment_filepath_for_tree_number,
         },
         input_data_to_circuit_adapter::{
-            convert_zkdt_circuit_data_into_mles, load_upshot_data_single_tree_batch, MinibatchData,
+            convert_zkdt_circuit_data_into_mles, load_upshot_data_single_tree_batch, MinibatchData, BatchedZKDTCircuitMles,
         },
         zkdt_circuit::ZKDTCircuit,
     },
@@ -82,6 +83,10 @@ struct Args {
     /// for the actual tree commitment file we are using)
     #[arg(long)]
     tree_number: usize,
+
+    /// the trees we are combining
+    #[arg(long)]
+    all_trees: Vec<usize>,
 
     /// Path to the sample minibatch commitment directory containing
     /// all of the sample minibatch commitments.
@@ -298,6 +303,22 @@ fn main() -> Result<(), ZKDTBinaryError> {
         }
     };
 
+    let trees_batched_data: Vec<BatchedZKDTCircuitMles<Fr>> = args.all_trees.into_iter().map(
+        |tree_num| {
+             // --- Read in the Upshot data from file ---
+            let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
+            load_upshot_data_single_tree_batch::<Fr>(
+                maybe_minibatch_data.clone(),
+                tree_num,
+                Path::new(&args.decision_forest_model_filepath),
+                Path::new(&args.quantized_samples_filepath),
+            );
+            let (batched_catboost_mles, (_, _)) =
+                convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
+            batched_catboost_mles
+        }
+    ).collect_vec();
+
     // --- Read in the Upshot data from file ---
     let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
         load_upshot_data_single_tree_batch::<Fr>(
@@ -345,6 +366,8 @@ fn main() -> Result<(), ZKDTBinaryError> {
         rho_inv: args.rho_inv,
         ratio: args.matrix_ratio
     };
+
+    // multi tree ZKDT circuit
 
     // --- Grab the proof filepath to write to and compute the circuit + prove ---
     let maybe_proof_filepath = args

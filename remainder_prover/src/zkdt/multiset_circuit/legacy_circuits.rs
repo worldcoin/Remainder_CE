@@ -83,12 +83,12 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         // Note that this also "evaluates" each packed entry at the random characteristic polynomial
         // evaluation challenge point `self.r`.
         let mut dummy_decision_nodes_mle = self.decision_nodes_mle.clone();
-        dummy_decision_nodes_mle.add_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
+        dummy_decision_nodes_mle.set_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
         let decision_packing_builder = DecisionPackingBuilder::new(
             dummy_decision_nodes_mle, self.r, self.r_packings);
 
         let mut dummy_leaf_nodes_mle = self.leaf_nodes_mle.clone();
-        dummy_leaf_nodes_mle.add_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
+        dummy_leaf_nodes_mle.set_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
         let leaf_packing_builder = LeafPackingBuilder::new(
             dummy_leaf_nodes_mle, self.r, self.r_packings.0
         );
@@ -97,7 +97,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let (decision_packed, leaf_packed) = layers.add_gkr(packing_builders);
 
         let mut dummy_multiplicities_bin_decomp_mle_decision = self.multiplicities_bin_decomp_mle_decision.clone();
-        dummy_multiplicities_bin_decomp_mle_decision.add_prefix_bits(self.multiplicities_bin_decomp_mle_decision.get_prefix_bits());
+        dummy_multiplicities_bin_decomp_mle_decision.set_prefix_bits(self.multiplicities_bin_decomp_mle_decision.get_prefix_bits());
 
         // --- Layer 2, part 1: computes (r - x) * b_ij + (1 - b_ij) ---
         // Note that this is for the actual exponentiation computation:
@@ -110,7 +110,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         );
 
         let mut dummy_multiplicities_bin_decomp_mle_leaf = self.multiplicities_bin_decomp_mle_leaf.clone();
-        dummy_multiplicities_bin_decomp_mle_leaf.add_prefix_bits(self.multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
+        dummy_multiplicities_bin_decomp_mle_leaf.set_prefix_bits(self.multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
             dummy_multiplicities_bin_decomp_mle_leaf.clone(),
             0,
@@ -308,7 +308,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             self.decision_node_paths_mle_vec.iter().map(
                 |decision_node_mle| {
                     let mut decision_node_mle = decision_node_mle.clone();
-                    decision_node_mle.add_prefix_bits(Some(dummy_decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    decision_node_mle.set_prefix_bits(Some(dummy_decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     DecisionPackingBuilder::new(
                         decision_node_mle.clone(),
                         self.r,
@@ -321,7 +321,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             self.leaf_node_paths_mle_vec.iter().map(
                 |leaf_node_mle| {
                     let mut leaf_node_mle = leaf_node_mle.clone();
-                    leaf_node_mle.add_prefix_bits(Some(dummy_leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    leaf_node_mle.set_prefix_bits(Some(dummy_leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     LeafPackingBuilder::new(
                         leaf_node_mle.clone(),
                         self.r,

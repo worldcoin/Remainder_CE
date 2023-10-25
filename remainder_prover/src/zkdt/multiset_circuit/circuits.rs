@@ -125,12 +125,12 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
             // Note that this also "evaluates" each packed entry at the random characteristic polynomial
             // evaluation challenge point `self.r`.
             let mut dummy_decision_nodes_mle = self.decision_nodes_mle.clone();
-            dummy_decision_nodes_mle.add_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
+            dummy_decision_nodes_mle.set_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
             let decision_packing_builder = FSDecisionPackingBuilder::new(
                 dummy_decision_nodes_mle, r_mle.clone(), r_packing_mle.clone(), r_packing_another_mle.clone());
     
             let mut dummy_leaf_nodes_mle = self.leaf_nodes_mle.clone();
-            dummy_leaf_nodes_mle.add_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
+            dummy_leaf_nodes_mle.set_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
             let leaf_packing_builder = FSLeafPackingBuilder::new(
                 dummy_leaf_nodes_mle, r_mle.clone(), r_packing_mle.clone()
             );
@@ -345,7 +345,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
                 self.decision_node_paths_mle_vec.iter().map(
                     |decision_node_mle| {
                         let mut decision_node_mle = decision_node_mle.clone();
-                        decision_node_mle.add_prefix_bits(Some(dummy_decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        decision_node_mle.set_prefix_bits(Some(dummy_decision_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                         FSDecisionPackingBuilder::new(
                             decision_node_mle.clone(),
                             r_mle.clone(),
@@ -359,7 +359,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuit<F> {
                 self.leaf_node_paths_mle_vec.iter().map(
                     |leaf_node_mle| {
                         let mut leaf_node_mle = leaf_node_mle.clone();
-                        leaf_node_mle.add_prefix_bits(Some(dummy_leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                        leaf_node_mle.set_prefix_bits(Some(dummy_leaf_node_paths_mle_vec_combined.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                         FSLeafPackingBuilder::new(
                             leaf_node_mle.clone(),
                             r_mle.clone(),
@@ -439,7 +439,7 @@ impl<F: FieldExt> FSMultiSetCircuit<F> {
         // Note that this also "evaluates" each packed entry at the random characteristic polynomial
         // evaluation challenge point `self.r`.
         let mut decision_nodes_mle = self.decision_nodes_mle.clone();
-        decision_nodes_mle.add_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
+        decision_nodes_mle.set_prefix_bits(self.decision_nodes_mle.get_prefix_bits());
         let decision_packing_builder = FSDecisionPackingBuilder::new(
             decision_nodes_mle,
             self.r_mle.clone(),
@@ -448,7 +448,7 @@ impl<F: FieldExt> FSMultiSetCircuit<F> {
         );
 
         let mut leaf_nodes_mle = self.leaf_nodes_mle.clone();
-        leaf_nodes_mle.add_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
+        leaf_nodes_mle.set_prefix_bits(self.leaf_nodes_mle.get_prefix_bits());
         let leaf_packing_builder = FSLeafPackingBuilder::new(
             leaf_nodes_mle,
             self.r_mle.clone(),
@@ -459,7 +459,7 @@ impl<F: FieldExt> FSMultiSetCircuit<F> {
         let (decision_packed, leaf_packed) = layers.add_gkr(packing_builders);
 
         let mut multiplicities_bin_decomp_mle_decision = self.multiplicities_bin_decomp_mle_decision.clone();
-        multiplicities_bin_decomp_mle_decision.add_prefix_bits(self.multiplicities_bin_decomp_mle_decision.get_prefix_bits());
+        multiplicities_bin_decomp_mle_decision.set_prefix_bits(self.multiplicities_bin_decomp_mle_decision.get_prefix_bits());
 
         // --- Layer 2, part 1: computes (r - x) * b_ij + (1 - b_ij) ---
         // Note that this is for the actual exponentiation computation:
@@ -472,7 +472,7 @@ impl<F: FieldExt> FSMultiSetCircuit<F> {
         );
 
         let mut multiplicities_bin_decomp_mle_leaf = self.multiplicities_bin_decomp_mle_leaf.clone();
-        multiplicities_bin_decomp_mle_leaf.add_prefix_bits(self.multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
+        multiplicities_bin_decomp_mle_leaf.set_prefix_bits(self.multiplicities_bin_decomp_mle_leaf.get_prefix_bits());
         let prev_prod_builder_leaf = BitExponentiationBuilderCatBoost::new(
             multiplicities_bin_decomp_mle_leaf.clone(),
             0,
@@ -671,7 +671,7 @@ impl<F: FieldExt> FSMultiSetCircuit<F> {
             self.decision_node_paths_mle_vec.iter().map(
                 |decision_node_mle| {
                     let mut decision_node_mle = decision_node_mle.clone();
-                    decision_node_mle.add_prefix_bits(Some(decision_node_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    decision_node_mle.set_prefix_bits(Some(decision_node_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     FSDecisionPackingBuilder::new(
                         decision_node_mle.clone(),
                         self.r_mle.clone(),
@@ -685,7 +685,7 @@ impl<F: FieldExt> FSMultiSetCircuit<F> {
             self.leaf_node_paths_mle_vec.iter().map(
                 |leaf_node_mle| {
                     let mut leaf_node_mle = leaf_node_mle.clone();
-                    leaf_node_mle.add_prefix_bits(Some(leaf_node_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+                    leaf_node_mle.set_prefix_bits(Some(leaf_node_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
                     FSLeafPackingBuilder::new(
                         leaf_node_mle.clone(),
                         self.r_mle.clone(),

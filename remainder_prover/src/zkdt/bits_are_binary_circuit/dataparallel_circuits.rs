@@ -29,7 +29,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitBatched<F> {
 
         // --- Create the builders for (b_i)^2 - b_i ---
         let diff_builders = self.batched_diff_signed_bin_decomp_mle.iter_mut().map(|diff_signed_bin_decomp_mle| {
-            diff_signed_bin_decomp_mle.add_prefix_bits(
+            diff_signed_bin_decomp_mle.set_prefix_bits(
                 Some(
                     diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
@@ -79,7 +79,7 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitBatched<F> {
 
         // --- Create the builders for (b_i)^2 - b_i ---
         let diff_builders = self.batched_diff_signed_bin_decomp_mle.iter_mut().map(|diff_signed_bin_decomp_mle| {
-            diff_signed_bin_decomp_mle.add_prefix_bits(
+            diff_signed_bin_decomp_mle.set_prefix_bits(
                 Some(
                     diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
@@ -130,7 +130,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuitBatched<F> {
 
         // --- Create the builders for (b_i)^2 - b_i ---
         let diff_builders = self.multiplicities_bin_decomp_mle_input_vec.iter_mut().map(|multiplicities_bin_decomp_mle| {
-            multiplicities_bin_decomp_mle.add_prefix_bits(
+            multiplicities_bin_decomp_mle.set_prefix_bits(
                 Some(
                     multiplicities_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         combined_batched_multiplicities_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
@@ -180,7 +180,7 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatched<F> {
 
         // --- Create the builders for (b_i)^2 - b_i ---
         let diff_builders = self.multiplicities_bin_decomp_mle_input_vec.iter_mut().map(|multiplicities_bin_decomp_mle| {
-            multiplicities_bin_decomp_mle.add_prefix_bits(
+            multiplicities_bin_decomp_mle.set_prefix_bits(
                 Some(
                     multiplicities_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)

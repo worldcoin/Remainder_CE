@@ -584,6 +584,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 ));
 
                 // --- Compute all sumcheck messages across this particular layer ---
+                // dbg!(&layer_claim);
+                // dbg!(&claims);
                 let prover_sumcheck_messages = layer
                     .prove_rounds(layer_claim, transcript)
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;

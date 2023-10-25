@@ -100,7 +100,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
 
         self.batched_bin_decomp_diff_mle.iter_mut().for_each(
             |bin_decomp_mle| {
-                bin_decomp_mle.add_prefix_bits(Some(
+                bin_decomp_mle.set_prefix_bits(Some(
                     combined_bit.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
@@ -110,7 +110,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
 
         self.batched_decision_node_paths_mle.iter_mut().for_each(
             |dec_mle| {
-                dec_mle.add_prefix_bits(Some(
+                dec_mle.set_prefix_bits(Some(
                     combined_decision.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
@@ -120,7 +120,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
 
         self.batched_leaf_node_paths_mle.iter_mut().for_each(
             |leaf_mle| {
-                leaf_mle.add_prefix_bits(Some(
+                leaf_mle.set_prefix_bits(Some(
                     combined_leaf.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
@@ -272,7 +272,7 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
 
         self.batched_bin_decomp_diff_mle.iter_mut().for_each(
             |bin_decomp_mle| {
-                bin_decomp_mle.add_prefix_bits(Some(
+                bin_decomp_mle.set_prefix_bits(Some(
                     bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
@@ -282,7 +282,7 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
 
         self.batched_decision_node_paths_mle.iter_mut().for_each(
             |dec_mle| {
-                dec_mle.add_prefix_bits(Some(
+                dec_mle.set_prefix_bits(Some(
                     dec_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
@@ -292,7 +292,7 @@ impl<F: FieldExt> PathCheckCircuitBatchedMul<F> {
 
         self.batched_leaf_node_paths_mle.iter_mut().for_each(
             |leaf_mle| {
-                leaf_mle.add_prefix_bits(Some(
+                leaf_mle.set_prefix_bits(Some(
                     leaf_mle.get_prefix_bits().iter().flatten().cloned().chain(
                         repeat_n(MleIndex::Iterated, num_dataparallel_bits)
                     ).collect_vec()
