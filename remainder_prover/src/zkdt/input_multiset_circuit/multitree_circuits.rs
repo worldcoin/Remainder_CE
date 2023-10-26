@@ -60,12 +60,27 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         let num_dataparallel_bits = log2(self.input_data_mle_vec_tree[0].len()) as usize;
         let num_tree_bits = log2(self.input_data_mle_vec_tree.len()) as usize;
 
-        for multiplicities_bin_decomp_mle_input_vec in self.multiplicities_bin_decomp_mle_input_vec_tree.iter_mut() {
-            for multiplicities_bin_decomp_mle_input in multiplicities_bin_decomp_mle_input_vec.iter_mut() {
-                multiplicities_bin_decomp_mle_input.set_prefix_bits(Some(multiplicities_bin_decomp_mle_input.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
-            }
-        }
-    
+        self.input_data_mle_vec_tree.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
+
+
+        self.permuted_input_data_mle_vec_tree.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
+
+
+        self.multiplicities_bin_decomp_mle_input_vec_tree.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
+
+
         // --- Layer 0: Compute the "packed" version of the decision and leaf tree nodes ---
         // Note that this also "evaluates" each packed entry at the random characteristic polynomial
         // evaluation challenge point `self.r`.
@@ -75,7 +90,6 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
                     input_data_mle_vec.iter().map(
                         |input_data_mle| {
                             let mut input_data_mle: DenseMle<F, InputAttribute<F>> = input_data_mle.clone();
-                            input_data_mle.set_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
                             FSInputPackingBuilder::new(
                                 input_data_mle,
                                 self.r_mle.clone(),
@@ -118,9 +132,7 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
                     ).collect_vec()
                 );
 
-                let layer_2_builders = prev_prod_builder.concat(r_minus_x_square_builders);
-
-                layer_2_builders
+                (prev_prod_builder, r_minus_x_square_builders)
 
             }
         ).collect_vec();
@@ -128,12 +140,14 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         // --- Layer 2, part 2: (r - x)^2 ---
         // Note that we need to compute (r - x)^{2^0}, ..., (r - x)^{2^{3}}
         // We do this via repeated squaring of the previous power.
+
+        let (prev_prod_builder_vec, r_minus_x_square_builders_vec): (Vec<_>, Vec<_>) = layer_2_builders_vec.into_iter().unzip();
         
-        let (prev_prod_vecs, r_minus_x_power_vecs): (Vec<_>, Vec<_>) = layers.add_gkr(BatchedLayer::new(layer_2_builders_vec)).into_iter().unzip();
+        let (prev_prod_vecs, r_minus_x_power_vecs): (Vec<_>, Vec<_>) = layers.add_gkr(BatchedLayer::new(prev_prod_builder_vec).concat(BatchedLayer::new(r_minus_x_square_builders_vec)));
 
         // layer 3, part 1: (r - x)^2 * b_ij + (1 - b_ij)
         // layer 3, part 2: (r - x)^4
-        let layer_3_builders_vec = r_minus_x_power_vecs.into_iter().zip(self.multiplicities_bin_decomp_mle_input_vec_tree.iter()).map(
+        let (prev_prod_builders_vec, r_minus_x_square_builders_vec): (Vec<_>, Vec<_>) = r_minus_x_power_vecs.into_iter().zip(self.multiplicities_bin_decomp_mle_input_vec_tree.iter()).map(
             |(r_minus_x_power_vec, multiplicities_bin_decomp_mle_input_vec)| {
                 let prev_prod_builders= BatchedLayer::new(
                     r_minus_x_power_vec.iter().zip(
@@ -161,17 +175,15 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
                     ).collect_vec()
                 );
 
-                let layer_3_builders = prev_prod_builders.concat(r_minus_x_square_builders);
-
-                layer_3_builders
+                (prev_prod_builders, r_minus_x_square_builders)
 
             }
-        ).collect_vec();
+        ).unzip();
         
 
-        let (curr_prod_vecs, r_minus_x_power_vecs): (Vec<_>, Vec<_>) = layers.add_gkr(BatchedLayer::new(layer_3_builders_vec)).into_iter().unzip();
+        let (curr_prod_vecs, r_minus_x_power_vecs): (Vec<_>, Vec<_>) = layers.add_gkr(BatchedLayer::new(prev_prod_builders_vec).concat(BatchedLayer::new(r_minus_x_square_builders_vec)));
         
-        let layer_4_builders_vec = 
+        let (r_minus_x_square_builders_vec, curr_prod_builders_vec, prod_builders_vec) = 
             multizip((r_minus_x_power_vecs.iter(), self.multiplicities_bin_decomp_mle_input_vec_tree.iter(), curr_prod_vecs.iter(), prev_prod_vecs.iter())).map(
                 |(r_minus_x_power_vec, multiplicities_bin_decomp_mle_input_vec, curr_prod_vec, prev_prod_vec)| {
                     // layer 4, part 1
@@ -213,20 +225,21 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
                         }).collect_vec()
                     );
 
-                    let layer_4_builders = r_minus_x_square_builders.concat(curr_prod_builders).concat_with_padding(prod_builders, Padding::Right(1));
+                    (r_minus_x_square_builders, curr_prod_builders, prod_builders)
 
-                    layer_4_builders
+                    // let layer_4_builders = r_minus_x_square_builders.concat(curr_prod_builders).concat_with_padding(prod_builders, Padding::Right(1));
+
+                    // layer_4_builders
                 }
-            ).collect_vec();
+            ).multiunzip();
         
-
-        let ((r_minus_x_power_vecs, curr_prod_vecs), prev_prod_vecs): ((Vec<_>, Vec<_>), Vec<_>) = layers.add_gkr(BatchedLayer::new(layer_4_builders_vec)).into_iter().unzip();
+        let ((r_minus_x_power_vecs, curr_prod_vecs), prev_prod_vecs) = layers.add_gkr(BatchedLayer::new(r_minus_x_square_builders_vec).concat(BatchedLayer::new(curr_prod_builders_vec)).concat_with_padding(BatchedLayer::new(prod_builders_vec), Padding::Right(1)));
         
         // at this point we have
         // (r - x)^(2^3), (r - x)^(2^2) * b_ij + (1 - b_ij), PROD ALL[(r - x)^(2^1) * b_ij + (1 - b_ij)]
         // need to BitExponentiate 1 time
         // and PROD w prev_prod 2 times
-        let layer_5_builders_vec = 
+        let (curr_prod_builders_vec, prod_builders_vec) = 
             multizip((r_minus_x_power_vecs.iter(), self.multiplicities_bin_decomp_mle_input_vec_tree.iter(), curr_prod_vecs.iter(), prev_prod_vecs.iter())).map(
                 |(r_minus_x_power_vec, multiplicities_bin_decomp_mle_input_vec, curr_prod_vec, prev_prod_vec)| {
                     // layer 5, part 1
@@ -256,14 +269,15 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
                         }).collect_vec()
                     );
 
-                    let layer_5_builders = curr_prod_builders.concat(prod_builders);
-                    layer_5_builders
-                }
-            ).collect_vec();
-        
+                    (curr_prod_builders, prod_builders)
 
+                    // let layer_5_builders = curr_prod_builders.concat(prod_builders);
+                    // layer_5_builders
+                }
+            ).unzip();
         
-        let (curr_prod_vecs, prev_prod_vecs): (Vec<_>, Vec<_>) = layers.add_gkr(BatchedLayer::new(layer_5_builders_vec)).into_iter().unzip();
+        
+        let (curr_prod_vecs, prev_prod_vecs) = layers.add_gkr(BatchedLayer::new(curr_prod_builders_vec).concat(BatchedLayer::new(prod_builders_vec)));
 
         
         let prod_builders_vec = curr_prod_vecs.iter().zip(prev_prod_vecs.iter()).map(
@@ -313,7 +327,6 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
                     permuted_input_data_mle_vec.iter().map(
                         |permuted_input_data_mle| {
                             let mut permuted_input_data_mle = permuted_input_data_mle.clone();
-                            permuted_input_data_mle.set_prefix_bits(Some(permuted_input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
                             FSInputPackingBuilder::new(
                                 permuted_input_data_mle,
                                 self.r_mle.clone(),

@@ -644,13 +644,13 @@ pub trait GKRCircuit<F: FieldExt> {
                 let layer_claims_vec = claims
                     .get(&layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+
                 let layer_claim_group = ClaimGroup::new(layer_claims_vec.clone()).unwrap();
                 trace!(
                     "Layer Claim Group for {:?}:\n{:#?}",
                     layer_id,
                     layer_claim_group
                 );
-                let num_claims = layer_claim_group.get_num_claims();
 
                 // --- Add the claimed values to the FS transcript ---
                 for claim in layer_claims_vec {
@@ -796,6 +796,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 // doing the initial step of evaluating V_1'(z) as specified in Thaler 13 page 14,
                 // but given the assumption we have that V_1'(z) = 0 for all z if the prover is honest.
                 if MleIndex::Bound(challenge, bit) != *index {
+                    dbg!(&(challenge, bit));
+                    dbg!(&index);
                     return Err(GKRError::ErrorWhenVerifyingOutputLayer);
                 }
                 claim_chal.push(challenge);

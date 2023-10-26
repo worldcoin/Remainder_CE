@@ -33,14 +33,14 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitMultiTree<F> {
         let mut layers: Layers<F, <BinDecomp16BitIsBinaryCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> = Layers::new();
         let num_tree_bits = log2(self.bin_decomp_16_bit_mle_tree.len()) as usize;
 
+        self.bin_decomp_16_bit_mle_tree.iter_mut().for_each(|mle| {
+            mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_tree_bits)).collect_vec()));
+        });
+
         // --- First we create the positive binary recomp ---
         let output_mle_ref_vec = layers.add_gkr(BatchedLayer::new(  
             self.bin_decomp_16_bit_mle_tree.iter_mut().map(
                 |bin_decomp_16_bit_mle| {
-
-                bin_decomp_16_bit_mle.set_prefix_bits(Some(bin_decomp_16_bit_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                    repeat_n(MleIndex::Iterated, num_tree_bits)
-                ).collect_vec()));
 
                 from_mle(
             bin_decomp_16_bit_mle.clone(), 
@@ -102,17 +102,16 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F> {
         let num_subcircuit_copies = self.batched_diff_signed_bin_decomp_tree_mle[0].len();
         let num_dataparallel_bits = log2(num_subcircuit_copies) as usize;
 
+        self.batched_diff_signed_bin_decomp_tree_mle.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
+
 
         let diff_builders_vec = self.batched_diff_signed_bin_decomp_tree_mle.clone().into_iter().map(|mut batched_diff_signed_bin_decomp_mle| {
             // --- Create the builders for (b_i)^2 - b_i ---
             let diff_builders = batched_diff_signed_bin_decomp_mle.iter_mut().map(|diff_signed_bin_decomp_mle| {
-                diff_signed_bin_decomp_mle.set_prefix_bits(
-                    Some(
-                        diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                            repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)
-                        ).collect_vec()
-                    )
-                );
                 
                 from_mle(
                     diff_signed_bin_decomp_mle.clone(), 
@@ -176,17 +175,15 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> {
         let num_tree_bits = log2(self.multiplicities_bin_decomp_mle_input_tree_vec.len()) as usize;
         let num_subcircuit_copies = self.multiplicities_bin_decomp_mle_input_tree_vec[0].len();
         let num_dataparallel_bits = log2(num_subcircuit_copies) as usize;
+        self.multiplicities_bin_decomp_mle_input_tree_vec.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
 
         let diff_builders_vec = self.multiplicities_bin_decomp_mle_input_tree_vec.clone().into_iter().map(|mut batched_diff_signed_bin_decomp_mle| {
             // --- Create the builders for (b_i)^2 - b_i ---
             let diff_builders = batched_diff_signed_bin_decomp_mle.iter_mut().map(|diff_signed_bin_decomp_mle| {
-                diff_signed_bin_decomp_mle.set_prefix_bits(
-                    Some(
-                        diff_signed_bin_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                            repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)
-                        ).collect_vec()
-                    )
-                );
                 
                 from_mle(
                     diff_signed_bin_decomp_mle.clone(), 

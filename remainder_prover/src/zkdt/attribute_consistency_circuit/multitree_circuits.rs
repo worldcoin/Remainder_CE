@@ -119,31 +119,34 @@ impl<F: FieldExt> AttributeConsistencyCircuitMultiTree<F> {
 
         let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
 
-        let tree_bits = log2(self.decision_node_paths_mle_trees_vec.len()) as usize;
+        let num_tree_bits = log2(self.decision_node_paths_mle_trees_vec.len()) as usize;
+        let num_dataparallel_bits = log2(self.decision_node_paths_mle_trees_vec[0].len()) as usize;
+
+        self.permuted_input_data_mle_trees_vec.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
+
+        self.decision_node_paths_mle_trees_vec.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
 
         let attr_consistency_builder_per_tree = self.decision_node_paths_mle_trees_vec.clone().into_iter().zip(self.permuted_input_data_mle_trees_vec.clone()).map(|(decision_node_paths_mle_vec, permuted_input_data_mle_vec)| {
-            let tree_height = (1 << (decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
-    
-            // --- Number of dataparallel circuit copies ---
-            let batch_bits = log2(decision_node_paths_mle_vec.len()) as usize;
-    
+            let tree_height = (1 << (decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;    
             let attribute_consistency_builder = BatchedLayer::new(
     
                 permuted_input_data_mle_vec
                         .iter()
                         .zip(decision_node_paths_mle_vec.iter())
                         .map(|(input_data_mle, decision_path_mle)| {
-    
-                            let mut input_data_mle = input_data_mle.clone();
-                            input_data_mle.set_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits + tree_bits)).collect_vec()));
-    
-                            let mut decision_path_mle = decision_path_mle.clone();
-                            decision_path_mle.set_prefix_bits(Some(decision_path_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits + tree_bits)).collect_vec()));
-    
+
                             // --- Simply subtracts the input data attribute IDs from the decision node attribute IDs ---
                             AttributeConsistencyBuilderZeroRef::new(
-                                input_data_mle,
-                                decision_path_mle,
+                                input_data_mle.clone(),
+                                decision_path_mle.clone(),
                                 tree_height
                             )
     

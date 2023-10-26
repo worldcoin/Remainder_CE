@@ -137,8 +137,8 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
             vec![
                 attribute_consistency_witness.layers,
                 multiset_witness.layers,
-                // input_multiset_witness.layers,
-                // binary_recomp_circuit_batched_witness.layers,
+                input_multiset_witness.layers,
+                binary_recomp_circuit_batched_witness.layers,
                 bin_decomp_4_bit_binary_batched_witness.layers,
                 bin_decomp_16_bit_binary_batched_witness.layers,
                 bits_are_binary_multiset_decision_circuit_witness.layers,
@@ -147,8 +147,8 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
             vec![
                 attribute_consistency_witness.output_layers,
                 multiset_witness.output_layers,
-                // input_multiset_witness.output_layers,
-                // binary_recomp_circuit_batched_witness.output_layers,
+                input_multiset_witness.output_layers,
+                binary_recomp_circuit_batched_witness.output_layers,
                 bin_decomp_4_bit_binary_batched_witness.output_layers,
                 bin_decomp_16_bit_binary_batched_witness.output_layers,
                 bits_are_binary_multiset_decision_circuit_witness.output_layers,
@@ -295,11 +295,11 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         ];
 
         decision_nodes_mle_vec.iter_mut().for_each(
-            |mle| mle.layer_id = LayerId::Input(2)
+            |mle| mle.layer_id = LayerId::Input(0)
         );
 
         leaf_nodes_mle_vec.iter_mut().for_each(
-            |mle| mle.layer_id = LayerId::Input(2)
+            |mle| mle.layer_id = LayerId::Input(0)
         );
 
 
@@ -506,21 +506,15 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             });
         });
 
-        decision_node_paths_mle_vecs.iter_mut().for_each(|decision_node_paths_mle_vec| {
-            decision_node_paths_mle_vec.iter_mut().for_each(|decision_node_paths_mle| {
-                decision_node_paths_mle.set_prefix_bits(decision_node_paths_mle_vec_combined.get_prefix_bits());
-            });
-        });
-
         binary_decomp_diffs_mle_vecs.iter_mut().for_each(|binary_decomp_diffs_mle_vec| {
             binary_decomp_diffs_mle_vec.iter_mut().for_each(|binary_decomp_diffs_mle| {
-                binary_decomp_diffs_mle.set_prefix_bits(binary_decomp_diffs_mle.get_prefix_bits())
+                binary_decomp_diffs_mle.set_prefix_bits(combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits())
             });
         });
 
         multiplicities_bin_decomp_mle_input_vecs.iter_mut().for_each(|multiplicities_bin_decomp_mle_input_vec| {
             multiplicities_bin_decomp_mle_input_vec.iter_mut().for_each(|multiplicities_bin_decomp_mle_input| {
-                multiplicities_bin_decomp_mle_input.set_prefix_bits(multiplicities_bin_decomp_mle_decision_combined.get_prefix_bits())
+                multiplicities_bin_decomp_mle_input.set_prefix_bits(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits())
             });
         });
 
@@ -532,23 +526,16 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             multiplicities_bin_decomp_mle_leaf.set_prefix_bits(multiplicities_bin_decomp_mle_leaf_combined.get_prefix_bits())
         });
 
-        // --- Last input layer ---
-        leaf_node_paths_mle_vecs.iter_mut().for_each(|leaf_node_paths_mle_vec| {
-            leaf_node_paths_mle_vec.iter_mut().for_each(|leaf_node_paths_mle| {
-                leaf_node_paths_mle.set_prefix_bits(leaf_node_paths_mle_vec_combined.get_prefix_bits())
-            });
-        });
-
         // --- Add commitments to transcript so they are taken into account before the FS input layers are sampled ---
-        let tree_mle_commit = tree_mle_input_layer
-            .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
-        InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
+        // let tree_mle_commit = tree_mle_input_layer
+        //     .commit()
+        //     .map_err(|err| GKRError::InputLayerError(err))?;
+        // InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
 
-        let input_mle_commit = input_mles_input_layer
-            .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
-        InputLayerEnum::append_commitment_to_transcript(&input_mle_commit, transcript).unwrap();
+        // let input_mle_commit = input_mles_input_layer
+        //     .commit()
+        //     .map_err(|err| GKRError::InputLayerError(err))?;
+        // InputLayerEnum::append_commitment_to_transcript(&input_mle_commit, transcript).unwrap();
 
         let aux_mle_commit = aux_mles_input_layer
             .commit()
@@ -705,7 +692,7 @@ mod tests {
             .filter(None, LevelFilter::Error)
             .init();
 
-        let minibatch_data = MinibatchData {log_sample_minibatch_size: 3, sample_minibatch_number: 2};
+        let minibatch_data = MinibatchData {log_sample_minibatch_size: 1, sample_minibatch_number: 2};
         let trees_batched_data: Vec<BatchedZKDTCircuitMles<Fr>> = (0..2).map(
             |tree_num| {
                 // --- Read in the Upshot data from file ---

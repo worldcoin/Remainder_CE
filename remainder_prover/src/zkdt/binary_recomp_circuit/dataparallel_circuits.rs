@@ -148,7 +148,6 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
 
         let batched_diff_signed_bin_decomp_mle_prefix_bits = self.batched_diff_signed_bin_decomp_mle[0].get_prefix_bits();
         // --- First we create the positive binary recomp builder ---
-        dbg!(&self.batched_diff_signed_bin_decomp_mle[0]);
         let pos_bin_recomp_builders = self.batched_diff_signed_bin_decomp_mle.iter_mut().map(
             |diff_signed_bit_decomp_mle| {
             // --- Prefix bits should be [input_prefix_bits], [dataparallel_bits] ---
@@ -163,7 +162,6 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
             );
             BinaryRecompBuilder::new(diff_signed_bit_decomp_mle.clone())
         }).collect();
-        dbg!(&self.batched_diff_signed_bin_decomp_mle[0]);
 
         let batched_bin_recomp_builder = BatchedLayer::new(pos_bin_recomp_builders);
 

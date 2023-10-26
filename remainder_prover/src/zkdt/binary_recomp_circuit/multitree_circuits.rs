@@ -101,13 +101,15 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitMultiTree<F> {
                 }).collect_vec());
 
                 // --- Concatenate the previous two builders and add them to the circuit ---
-                let builder = batched_bin_recomp_builder.concat(batched_diff_builder);
-                builder
+                // let builder = batched_bin_recomp_builder.concat(batched_diff_builder);
+                // builder
+                (batched_bin_recomp_builder, batched_diff_builder)
             }
         ).collect_vec();
 
-        let tree_batched_concat_builder = BatchedLayer::new(builder_vec);
-        let (multi_tree_batched_pos_bin_recomp_mle, multi_tree_batched_raw_diff_mle): (Vec<_>, Vec<_>) = layers.add_gkr(tree_batched_concat_builder).into_iter().unzip();
+        let (batched_bin_recomp_builder_vec, batched_diff_builder_vec): (Vec<_>, Vec<_>) = builder_vec.into_iter().unzip();
+        let tree_batched_concat_builder = BatchedLayer::new(batched_bin_recomp_builder_vec).concat(BatchedLayer::new(batched_diff_builder_vec));
+        let (multi_tree_batched_pos_bin_recomp_mle, multi_tree_batched_raw_diff_mle): (Vec<_>, Vec<_>) = layers.add_gkr(tree_batched_concat_builder);//.into_iter().unzip();
 
 
         let batched_recomp_checker_builder_vec = multizip((self.batched_diff_signed_bin_decomp_tree_mle.clone().into_iter(), multi_tree_batched_pos_bin_recomp_mle.into_iter(), multi_tree_batched_raw_diff_mle.into_iter())).map(
@@ -184,8 +186,24 @@ impl<F: FieldExt> BinaryRecompCircuitMultiTree<F> {
         let num_tree_bits = log2(self.batched_decision_node_path_tree_mle.len()) as usize;
         let num_subcircuit_copies = self.batched_decision_node_path_tree_mle[0].len() as usize;
         let num_dataparallel_bits = log2(num_subcircuit_copies) as usize;
-        let batched_diff_signed_bin_decomp_mle_prefix_bits = self.batched_diff_signed_bin_decomp_tree_mle[0][0].get_prefix_bits();
 
+        self.batched_decision_node_path_tree_mle.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
+
+        self.batched_permuted_inputs_tree_mle.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
+
+        self.batched_diff_signed_bin_decomp_tree_mle.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each(|mle| {
+                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            })
+        });
 
 
         let builder_vec = multizip((self.batched_decision_node_path_tree_mle.clone().into_iter(), self.batched_permuted_inputs_tree_mle.clone().into_iter(), self.batched_diff_signed_bin_decomp_tree_mle.clone().into_iter())).map(
@@ -197,13 +215,6 @@ impl<F: FieldExt> BinaryRecompCircuitMultiTree<F> {
                     // --- Prefix bits should be [input_prefix_bits], [dataparallel_bits] ---
                     // TODO!(ryancao): Note that strictly speaking we shouldn't be adding dataparallel bits but need to for
                     // now for a specific batching scenario
-                    diff_signed_bit_decomp_mle.set_prefix_bits(
-                        Some(
-                            diff_signed_bit_decomp_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                                repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)
-                            ).collect_vec()
-                        )
-                    );
                     BinaryRecompBuilder::new(diff_signed_bit_decomp_mle.clone())
                 }).collect();
 
@@ -215,29 +226,24 @@ impl<F: FieldExt> BinaryRecompCircuitMultiTree<F> {
                         batched_permuted_inputs_mle.iter_mut()
                     ).map(|(decision_node_path_mle, permuted_inputs_mle)| {
 
-                        // --- Add prefix bits and batching bits to both (same comment as above) ---
-                        decision_node_path_mle.set_prefix_bits(Some(
-                            decision_node_path_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                                repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)
-                            ).collect_vec()
-                        ));
-                        permuted_inputs_mle.set_prefix_bits(Some(
-                            permuted_inputs_mle.get_prefix_bits().iter().flatten().cloned().chain(
-                                repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)
-                            ).collect_vec()
-                        ));
-
                     NodePathDiffBuilder::new(decision_node_path_mle.clone(), permuted_inputs_mle.clone())
                 }).collect_vec());
 
+
+                (batched_bin_recomp_builder, batched_diff_builder)
+
                 // --- Concatenate the previous two builders and add them to the circuit ---
-                let builder = batched_bin_recomp_builder.concat(batched_diff_builder);
-                builder
+                // let builder = batched_bin_recomp_builder.concat(batched_diff_builder);
+                // builder
             }
         ).collect_vec();
 
-        let tree_batched_concat_builder = BatchedLayer::new(builder_vec);
-        let (multi_tree_batched_pos_bin_recomp_mle, multi_tree_batched_raw_diff_mle): (Vec<_>, Vec<_>) = layers.add_gkr(tree_batched_concat_builder).into_iter().unzip();
+        let (batched_bin_recomp_builder_vec, batched_diff_builder_vec): (Vec<_>, Vec<_>) = builder_vec.into_iter().unzip();
+
+        let tree_batched_concat_builder = BatchedLayer::new(batched_bin_recomp_builder_vec).concat(BatchedLayer::new(batched_diff_builder_vec));
+        let (multi_tree_batched_pos_bin_recomp_mle, multi_tree_batched_raw_diff_mle): (Vec<_>, Vec<_>) = layers.add_gkr(tree_batched_concat_builder);//.into_iter().unzip();
+        // dbg!(&multi_tree_batched_pos_bin_recomp_mle[0][0]);
+        // dbg!(&multi_tree_batched_raw_diff_mle[0][0]);
 
 
         let batched_recomp_checker_builder_vec = multizip((self.batched_diff_signed_bin_decomp_tree_mle.clone().into_iter(), multi_tree_batched_pos_bin_recomp_mle.into_iter(), multi_tree_batched_raw_diff_mle.into_iter())).map(
@@ -251,15 +257,6 @@ impl<F: FieldExt> BinaryRecompCircuitMultiTree<F> {
                         )
                     )
                     .map(|(diff_signed_bit_decomp_mle, (pos_bin_recomp_mle, raw_diff_mle))| {
-
-                        // --- Add prefix bits to the thing which was indexed earlier ---
-                        diff_signed_bit_decomp_mle.set_prefix_bits(
-                            Some(
-                                batched_diff_signed_bin_decomp_mle_prefix_bits.iter().flatten().cloned().chain(
-                                    repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)
-                                ).collect_vec()
-                            )
-                        );
 
                         BinaryRecompCheckerBuilder::new(
                             raw_diff_mle,
