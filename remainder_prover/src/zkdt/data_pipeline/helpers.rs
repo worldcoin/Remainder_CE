@@ -42,7 +42,7 @@ pub fn next_power_of_two(n: usize) -> Option<usize> {
 /// Return the `bit_length` bit signed decomposition of the specified i32, or None if the argument is too large.
 /// Result is little endian (so LSB has index 0).
 /// Sign bit has maximal index.
-/// Pre: bit_length > 1
+/// Pre: bit_length > 1.
 pub fn build_signed_bit_decomposition(value: i32, bit_length: usize) -> Option<Vec<bool>> {
     let unsigned = build_unsigned_bit_decomposition(value.unsigned_abs(), bit_length - 1);
     if let Some(mut bits) = unsigned {
@@ -67,7 +67,7 @@ pub fn build_unsigned_bit_decomposition(mut value: u32, bit_length: usize) -> Op
     }
 }
 
-/// Return a Vec containing a DecisionNode for each Node::Internal appearing in this tree, in arbitrary order.
+/// Return a Vec containing a [`DecisionNode`] for each Node::Internal appearing in this tree, in arbitrary order.
 /// Pre: if `node` is any descendent of this Node then `node.get_id()` is not None.
 pub fn extract_decision_nodes<T: Copy, F: FieldExt>(tree: &Node<T>) -> Vec<DecisionNode<F>> {
     let mut decision_nodes = Vec::new();
@@ -75,7 +75,7 @@ pub fn extract_decision_nodes<T: Copy, F: FieldExt>(tree: &Node<T>) -> Vec<Decis
     decision_nodes
 }
 
-/// Helper function to extract_decision_nodes.
+/// Helper function to [`extract_decision_nodes`].
 fn append_decision_nodes<T: Copy, F: FieldExt>(
     tree: &Node<T>,
     decision_nodes: &mut Vec<DecisionNode<F>>,
@@ -98,8 +98,8 @@ fn append_decision_nodes<T: Copy, F: FieldExt>(
     }
 }
 
-/// Return a Vec containing a LeafNode for each Node::Leaf appearing in this tree, in order of
-/// id, where the ids are allocated as in extract_decision_nodes().
+/// Return a Vec containing a [`LeafNode`] for each Node::Leaf appearing in this tree, in order of
+/// id, where the ids are allocated as in [`extract_decision_nodes`].
 pub fn extract_leaf_nodes<F: FieldExt>(tree: &Node<i64>) -> Vec<LeafNode<F>> {
     let mut leaf_nodes = Vec::new();
     append_leaf_nodes(tree, &mut leaf_nodes);
