@@ -42,6 +42,7 @@ use super::bits_are_binary_circuit::multitree_circuits::{BinDecomp4BitIsBinaryCi
 use super::input_data_to_circuit_adapter::BatchedZKDTCircuitMles;
 use super::input_multiset_circuit::multitree_circuits::InputMultiSetCircuitMultiTree;
 use super::multiset_circuit::multitree_circuits::FSMultiSetCircuitMultiTree;
+use super::path_consistency_circuit::multitree_circuits::PathCheckCircuitBatchedNoMulMultiTree;
 use super::{
     attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit,
     binary_recomp_circuit::dataparallel_circuits::BinaryRecompCircuitBatched,
@@ -158,19 +159,19 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
         .unwrap();
 
         // --- Manually add the layers and output layers from the circuit involving gate MLEs ---
-        // let updated_combined_output_layers = path_consistency_circuit_batched
-        //     .add_subcircuit_layers_to_combined_layers(
-        //         &mut combined_circuit_layers,
-        //         combined_circuit_output_layers,
-        //     );
+        let updated_combined_output_layers = path_consistency_circuit_batched
+            .add_subcircuit_layers_to_combined_layers(
+                &mut combined_circuit_layers,
+                combined_circuit_output_layers,
+            );
 
         end_timer!(combine_layers_timer);
 
         Ok((
             Witness {
                 layers: combined_circuit_layers,
-                output_layers: combined_circuit_output_layers,
-                // output_layers: updated_combined_output_layers,
+                // output_layers: combined_circuit_output_layers,
+                output_layers: updated_combined_output_layers,
                 input_layers,
             },
             inpunt_layers_commits,
@@ -188,7 +189,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             FSMultiSetCircuitMultiTree<F>,
             InputMultiSetCircuitMultiTree<F>,
             BinaryRecompCircuitMultiTree<F>,
-            PathCheckCircuitBatchedMul<F>,
+            PathCheckCircuitBatchedNoMulMultiTree<F>,
             BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F>,
             BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F>,
             BinDecomp16BitIsBinaryCircuitMultiTree<F>,
@@ -608,10 +609,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             binary_decomp_diffs_mle_vecs.clone(),
         );
 
-        let path_consistency_circuit_batched = PathCheckCircuitBatchedMul::new(
-            decision_node_paths_mle_vecs[0].clone(),
-            leaf_node_paths_mle_vecs[0].clone(),
-            binary_decomp_diffs_mle_vecs[0].clone(),
+        let path_consistency_circuit_batched = PathCheckCircuitBatchedNoMulMultiTree::new(
+            decision_node_paths_mle_vecs.clone(),
+            leaf_node_paths_mle_vecs.clone(),
+            binary_decomp_diffs_mle_vecs.clone(),
         );
 
         // --- Bits are binary check for each of the binary decomposition input MLEs ---

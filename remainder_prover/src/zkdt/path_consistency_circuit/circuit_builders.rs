@@ -2,6 +2,43 @@ use remainder_shared_types::FieldExt;
 
 use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef, Mle}, zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode}, layer::{LayerBuilder, LayerId}, expression::ExpressionStandard};
 
+
+pub struct SubtractBuilder<F: FieldExt> {
+    mle_one: DenseMle<F,F>,
+    mle_two: DenseMle<F,F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for SubtractBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        
+        ExpressionStandard::Negated(Box::new(ExpressionStandard::Mle(self.mle_one.mle_ref()) + ExpressionStandard::Mle(self.mle_two.mle_ref()) + ExpressionStandard::Constant(F::one())))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        DenseMle::new_from_iter(self
+            .mle_one
+            .into_iter().zip(self.mle_two.into_iter())
+            .map(|(first, second)|
+                (first + second + F::one()).neg()), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> SubtractBuilder<F> {
+    /// Constructor
+    pub fn new(
+        mle_one: DenseMle<F,F>,
+        mle_two: DenseMle<F,F>,
+    ) -> Self {
+        Self {
+            mle_one,
+            mle_two
+        }
+    }
+}
+
+
 pub struct TwoTimesBuilder<F: FieldExt> {
     mle_path_decision: DenseMle<F, DecisionNode<F>>,
 }
