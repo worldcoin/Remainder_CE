@@ -2,6 +2,40 @@ use remainder_shared_types::FieldExt;
 
 use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef, Mle}, zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode}, layer::{LayerBuilder, LayerId}, expression::ExpressionStandard};
 
+pub struct TwoTimesBuilder<F: FieldExt> {
+    mle_path_decision: DenseMle<F, DecisionNode<F>>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for TwoTimesBuilder<F> {
+    type Successor = DenseMle<F, F>;
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        
+        ExpressionStandard::Scaled(Box::new(ExpressionStandard::Mle(self.mle_path_decision.node_id())), F::from(2_u64))
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        DenseMle::new_from_iter(self
+            .mle_path_decision
+            .into_iter()
+            .map(|DecisionNode { node_id: path_node_id, ..}|
+                (F::from(2_u64) * path_node_id)), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> TwoTimesBuilder<F> {
+    /// Constructor
+    pub fn new(
+        mle_path_decision: DenseMle<F, DecisionNode<F>>
+    ) -> Self {
+        Self {
+            mle_path_decision
+        }
+    }
+}
+
+
+
 /// b_s grabbing
 pub struct SignBit<F: FieldExt> {
     bit_decomp_diff_mle: DenseMle<F, BinDecomp16Bit<F>>,
