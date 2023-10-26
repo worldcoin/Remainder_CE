@@ -364,8 +364,11 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     pub layer_sumcheck_proofs: Vec<LayerProof<F, Tr>>,
     /// All the output layers that this circuit yields
     pub output_layers: Vec<MleEnum<F>>,
-
+    /// Proofs for each input layer (e.g. `LigeroInputLayer` or `PublicInputLayer`).
     pub input_layer_proofs: Vec<InputLayerProof<F>>,
+    /// Hash of the entire circuit description, to be used in the FS transcript!
+    /// TODO!(%Labs): Actually make this secure!
+    pub maybe_circuit_hash: Option<F>,
 }
 
 pub struct Witness<F: FieldExt, Tr: Transcript<F>> {
@@ -421,11 +424,12 @@ pub trait GKRCircuit<F: FieldExt> {
         // --- Also commit and add those commitments to the transcript
         info!("Synethesizing circuit...");
 
-        // if let Some(circuit_hash) = Self::get_circuit_hash() {
-        //     transcript
-        //         .append_field_element("Circuit Hash", circuit_hash)
-        //         .unwrap();
-        // }
+        // --- Add circuit hash to transcript, if exists ---
+        if let Some(circuit_hash) = Self::get_circuit_hash() {
+            transcript
+                .append_field_element("Circuit Hash", circuit_hash)
+                .unwrap();
+        }
 
         let (
             Witness {
@@ -719,6 +723,7 @@ pub trait GKRCircuit<F: FieldExt> {
             layer_sumcheck_proofs,
             output_layers,
             input_layer_proofs,
+            maybe_circuit_hash: Self::get_circuit_hash(),
         };
 
         Ok(gkr_proof)
@@ -739,15 +744,16 @@ pub trait GKRCircuit<F: FieldExt> {
             layer_sumcheck_proofs,
             output_layers,
             input_layer_proofs,
+            maybe_circuit_hash
         } = gkr_proof;
 
         let input_layers_timer = start_timer!(|| "append INPUT commitments to transcript");
 
-        // if let Some(circuit_hash) = Self::get_circuit_hash() {
-        //     transcript
-        //         .append_field_element("Circuit Hash", circuit_hash)
-        //         .unwrap();
-        // }
+        if let Some(circuit_hash) = maybe_circuit_hash {
+            transcript
+                .append_field_element("Circuit Hash", circuit_hash)
+                .unwrap();
+        }
 
         for input_layer in input_layer_proofs.iter() {
             InputLayerEnum::append_commitment_to_transcript(
