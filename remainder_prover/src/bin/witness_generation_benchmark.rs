@@ -1,5 +1,5 @@
 use remainder::zkdt::data_pipeline::dt2zkdt::*;
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use remainder_shared_types::Fr;
 use std::path::Path;
 use std::time::Instant;
 

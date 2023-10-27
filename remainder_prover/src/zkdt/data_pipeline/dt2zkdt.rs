@@ -68,13 +68,12 @@ use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAtt
 
 use ark_serialize::Read;
 use ark_std::log2;
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{Fr, FieldExt};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use std::fs::{self, File};
@@ -576,7 +575,7 @@ pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     /// Returns a small tree for testing:
     ///       x[1]>=1?

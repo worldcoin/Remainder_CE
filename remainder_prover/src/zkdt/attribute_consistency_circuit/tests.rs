@@ -2,7 +2,7 @@
 mod tests {
     use std::{path::Path};
 
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     
     
     use ark_std::{start_timer, end_timer};

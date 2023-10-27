@@ -3,7 +3,7 @@
 pub mod poseidon_digest;
 
 use self::poseidon_digest::FieldHashFnDigest;
-use poseidon::Poseidon;
+use remainder_shared_types::Poseidon;
 use remainder_shared_types::FieldExt;
 use std::convert::TryInto;
 use std::marker::PhantomData;

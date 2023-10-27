@@ -1,23 +1,11 @@
 //! Executable for Remainder ZKDT prover!
 
 use ark_serialize::Read;
+use remainder_shared_types::Fr;
+use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}, input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}};
 use clap::Parser;
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use remainder::{
-    prover::{GKRCircuit, GKRError},
-    zkdt::{
-        constants::{
-            get_sample_minibatch_commitment_filepath_for_batch_size,
-            get_tree_commitment_filepath_for_tree_number,
-        },
-        input_data_to_circuit_adapter::{
-            convert_zkdt_circuit_data_into_mles, load_upshot_data_single_tree_batch, MinibatchData,
-        },
-        zkdt_circuit::ZKDTCircuit,
-    },
-};
-use remainder_shared_types::transcript::Transcript;
 use remainder_shared_types::FieldExt;
+use remainder_shared_types::transcript::Transcript;
 use serde_json::{from_reader, to_writer};
 use std::{
     fs,

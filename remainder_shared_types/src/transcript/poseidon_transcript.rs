@@ -2,12 +2,14 @@
 
 
 
+use std::marker::PhantomData;
+
 use itertools::Itertools;
-use poseidon::Poseidon;
+use crate::poseidon::Poseidon;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
-use crate::FieldExt;
+use crate::{FieldExt};
 
 use super::{Transcript, TranscriptError};
 
@@ -17,11 +19,13 @@ fn default_sponge<F: FieldExt>() -> Poseidon<F, 3, 2> {
 
 /// A transcript that uses the Poseidon hash function; Useful for recursive proving
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(bound = "F: FieldExt")]
 pub struct PoseidonTranscript<F: FieldExt> {
     #[serde(skip)]
     #[serde(default = "default_sponge")]
     sponge: Poseidon<F, 3, 2>,
     counter: usize,
+    _marker: PhantomData<F>
 }
 
 impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
@@ -34,6 +38,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         Self {
             sponge: default_sponge(),
             counter: 1,
+            _marker: PhantomData
         }
     }
 
@@ -92,7 +97,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
 
 #[cfg(test)]
 mod tests {
-    // use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    // use remainder_shared_types::Fr;
     // use ark_ff::One;
     // use itertools::Itertools;
 

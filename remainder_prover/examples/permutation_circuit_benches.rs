@@ -12,7 +12,7 @@ use std::time::Instant;
 
 fn main() {
     let mut rng = test_rng();
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     let BatchedDummyMles {
         dummy_input_data_mle,

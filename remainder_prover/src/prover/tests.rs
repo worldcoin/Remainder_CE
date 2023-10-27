@@ -1,5 +1,4 @@
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
@@ -27,7 +26,7 @@ use crate::{
 };
 use remainder_shared_types::{
     transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
-    FieldExt,
+    FieldExt, Fr,
 };
 
 use super::{

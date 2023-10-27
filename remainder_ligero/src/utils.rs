@@ -2,7 +2,7 @@ use std::iter::repeat_with;
 
 use crate::log2;
 use ark_std::test_rng;
-use halo2_base::halo2_proofs::{halo2curves::FieldExt as Halo2FieldExt, poly::EvaluationDomain};
+use halo2_proofs::poly::EvaluationDomain;
 use rand::{Rng};
 use remainder_shared_types::FieldExt;
 
@@ -58,7 +58,7 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8) -> Option<(usize, us
 ///
 /// ## Returns
 /// * `evals` -
-pub fn halo2_fft<F: Halo2FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
+pub fn halo2_fft<F: FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
     // --- Sanitycheck ---
     debug_assert!(coeffs.len().is_power_of_two());
     debug_assert!(rho_inv.is_power_of_two());
@@ -90,7 +90,7 @@ pub fn halo2_fft<F: Halo2FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
 ///
 /// ## Returns
 /// * `evals` -
-pub fn halo2_ifft<F: Halo2FieldExt>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
+pub fn halo2_ifft<F: FieldExt>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
     // --- Sanitycheck ---
     debug_assert!(evals.len().is_power_of_two());
     debug_assert!(rho_inv.is_power_of_two());
@@ -166,7 +166,7 @@ mod test {
 
     use crate::utils::get_least_significant_bits_to_usize_little_endian;
     use ark_std::test_rng;
-    use halo2_base::{halo2_proofs::halo2curves::bn256::Fr, utils::ScalarField};
+    use remainder_shared_types::{Fr, FieldExt};
     use rand::Rng;
     
     use std::ops::Range;

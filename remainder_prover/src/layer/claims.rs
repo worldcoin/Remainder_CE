@@ -31,8 +31,6 @@ use core::cmp::Ordering;
 use std::cmp::max;
 use std::fmt;
 
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-
 use log::{debug, info, warn};
 
 use itertools::Itertools;
@@ -781,7 +779,7 @@ pub(crate) mod tests {
 
     use super::*;
     use ark_std::test_rng;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     #[test]
     fn test_get_claim() {
