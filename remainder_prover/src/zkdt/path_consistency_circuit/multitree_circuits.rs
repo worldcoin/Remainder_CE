@@ -168,12 +168,12 @@ impl<F: FieldExt> PathCheckCircuitBatchedNoMulMultiTree<F> {
         let two_times_plus_sign_vals = two_times_plus_sign_vals_vec.into_iter().map(|two_times_plus_sign_vals| unbatch_mles(two_times_plus_sign_vals)).collect_vec();
         let flattened_two_times_plus_sign = unbatch_mles(two_times_plus_sign_vals);
 
-        let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_two_times_plus_sign.num_iterated_vars() - num_dataparallel_bits));
-        let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_two_times_plus_sign.num_iterated_vars() - num_dataparallel_bits));
+        let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_two_times_plus_sign.num_iterated_vars() - num_dataparallel_bits - num_tree_bits));
+        let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_two_times_plus_sign.num_iterated_vars() - num_dataparallel_bits - num_tree_bits));
 
-        let res_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_two_times_plus_sign.mle_ref(), num_dataparallel_bits); // ID is 6
+        let res_dec = combined_layers.add_add_gate_batched(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_two_times_plus_sign.mle_ref(), num_dataparallel_bits + num_tree_bits); // ID is 6
 
-        let res_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_two_times_plus_sign.mle_ref(), flattened_curr_leaf.mle_ref(), num_dataparallel_bits); // ID is 8
+        let res_leaf = combined_layers.add_add_gate_batched(nonzero_gates_add_leaf.clone(), flattened_two_times_plus_sign.mle_ref(), flattened_curr_leaf.mle_ref(), num_dataparallel_bits + num_tree_bits); // ID is 8
 
         let res_dec_zero = ZeroBuilder::new(res_dec);
         let res_leaf_zero = ZeroBuilder::new(res_leaf);

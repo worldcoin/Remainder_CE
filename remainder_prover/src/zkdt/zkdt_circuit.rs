@@ -37,6 +37,7 @@ use remainder_shared_types::{
 use ark_std::{end_timer, start_timer};
 
 use super::input_data_to_circuit_adapter::BatchedZKDTCircuitMles;
+use super::path_consistency_circuit::dataparallel_circuits::PathCheckCircuitBatchedNoMul;
 use super::{
     attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit,
     binary_recomp_circuit::dataparallel_circuits::BinaryRecompCircuitBatched,
@@ -182,7 +183,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             FSMultiSetCircuit<F>,
             InputMultiSetCircuit<F>,
             BinaryRecompCircuitBatched<F>,
-            PathCheckCircuitBatchedMul<F>,
+            PathCheckCircuitBatchedNoMul<F>,
             BinDecomp4BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
@@ -494,7 +495,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             binary_decomp_diffs_mle_vec.clone(),
         );
 
-        let path_consistency_circuit_batched = PathCheckCircuitBatchedMul::new(
+        let path_consistency_circuit_batched = PathCheckCircuitBatchedNoMul::new(
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec.clone(),

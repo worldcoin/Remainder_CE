@@ -384,6 +384,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         // --- c) Ligero input layer for all the auxiliaries (LayerId: 2) ---
         let aux_mles_input_layer_builder =
             InputLayerBuilder::new(aux_mles, None, LayerId::Input(2));
+        
 
         // --- d) Public input layer for the path leaf nodes (LayerId: 3) ---
         let public_path_leaf_node_mles_input_layer_builder =
@@ -693,8 +694,102 @@ mod tests {
             .filter(None, LevelFilter::Error)
             .init();
 
-        let minibatch_data = MinibatchData {log_sample_minibatch_size: 1, sample_minibatch_number: 2};
+        let minibatch_data = MinibatchData {log_sample_minibatch_size: 10, sample_minibatch_number: 2};
         let trees_batched_data: Vec<BatchedZKDTCircuitMles<Fr>> = (0..2).map(
+            |tree_num| {
+                // --- Read in the Upshot data from file ---
+                let (zkdt_circuit_data, (tree_height, input_len), _) =
+                load_upshot_data_single_tree_batch::<Fr>(
+                    Some(minibatch_data.clone()),
+                    tree_num,
+                    Path::new(&"upshot_data/quantized-upshot-model.json".to_string()),
+                    Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()),
+                );
+                let (batched_catboost_mles, (_, _)) =
+                    convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
+                batched_catboost_mles
+        }).collect_vec();
+        
+        let combined_circuit = ZKDTMultiTreeCircuit {
+            batched_zkdt_circuit_mles_tree: trees_batched_data,
+            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
+            sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
+            rho_inv: 4,
+            ratio: 1_f64,
+        };
+
+        test_circuit(
+            combined_circuit,
+            None,
+        );
+    }
+
+    #[test]
+    fn test_zkdt_4_tree_circuit() {
+        env_logger::Builder::new()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "----> {}:{} {} [{}]:\n{}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                    record.level(),
+                    record.args()
+                )
+            })
+            .filter(None, LevelFilter::Error)
+            .init();
+
+        let minibatch_data = MinibatchData {log_sample_minibatch_size: 10, sample_minibatch_number: 2};
+        let trees_batched_data: Vec<BatchedZKDTCircuitMles<Fr>> = (0..4).map(
+            |tree_num| {
+                // --- Read in the Upshot data from file ---
+                let (zkdt_circuit_data, (tree_height, input_len), _) =
+                load_upshot_data_single_tree_batch::<Fr>(
+                    Some(minibatch_data.clone()),
+                    tree_num,
+                    Path::new(&"upshot_data/quantized-upshot-model.json".to_string()),
+                    Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()),
+                );
+                let (batched_catboost_mles, (_, _)) =
+                    convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
+                batched_catboost_mles
+        }).collect_vec();
+        
+        let combined_circuit = ZKDTMultiTreeCircuit {
+            batched_zkdt_circuit_mles_tree: trees_batched_data,
+            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
+            sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
+            rho_inv: 4,
+            ratio: 1_f64,
+        };
+
+        test_circuit(
+            combined_circuit,
+            None,
+        );
+    }
+
+    #[test]
+    fn test_zkdt_8_tree_circuit() {
+        env_logger::Builder::new()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "----> {}:{} {} [{}]:\n{}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+                    record.level(),
+                    record.args()
+                )
+            })
+            .filter(None, LevelFilter::Error)
+            .init();
+
+        let minibatch_data = MinibatchData {log_sample_minibatch_size: 10, sample_minibatch_number: 2};
+        let trees_batched_data: Vec<BatchedZKDTCircuitMles<Fr>> = (0..8).map(
             |tree_num| {
                 // --- Read in the Upshot data from file ---
                 let (zkdt_circuit_data, (tree_height, input_len), _) =
