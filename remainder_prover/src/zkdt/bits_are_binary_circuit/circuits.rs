@@ -62,6 +62,7 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuit<F> {
                 ZeroMleRef::new(self.bin_decomp_16_bit_mle.num_iterated_vars(), prefix_bits, id)
             })
         );
+        println!("# layers -- bits r binary multiset: {:?}", layers.next_layer_id());
 
         Witness { layers, output_layers: vec![output_mle_ref.get_enum()], input_layers: vec![] }
     }

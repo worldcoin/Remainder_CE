@@ -15,22 +15,27 @@ use crate::{
         mulgate::MulGate,
     },
     layer::{
-        claims::compute_aggregated_challenges, claims::compute_claim_wlx,
-        claims::verify_aggregate_claim, layer_enum::LayerEnum, Claim, GKRLayer, Layer,
-        LayerBuilder, LayerError, LayerId,
+        claims::{aggregate_claims, get_num_wlx_evaluations},
+        claims::{Claim, ClaimGroup},
+        layer_enum::LayerEnum,
+        GKRLayer, Layer, LayerBuilder, LayerError, LayerId,
     },
     mle::{
         dense::{DenseMle, DenseMleRef},
         MleRef,
     },
-    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point, utils::hash_layers,
+    mle::{MleIndex, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point,
+    utils::{pad_to_nearest_power_of_two, hash_layers}
 };
 
-use remainder_shared_types::transcript::{Transcript};
+use ark_std::{end_timer, start_timer};
+use remainder_shared_types::transcript::Transcript;
+
+
 use remainder_shared_types::FieldExt;
 
 // use derive_more::From;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{instrument, span, event, Level};
@@ -39,6 +44,10 @@ use self::input_layer::{
     enum_input_layer::{CommitmentEnum, InputLayerEnum, OpeningEnum},
     InputLayer, InputLayerError,
 };
+
+use core::cmp::Ordering;
+
+use tracing::{debug, info, trace, warn};
 
 /// New type for containing the list of Layers that make up the GKR circuit
 ///
@@ -66,11 +75,11 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add an Add Gate layer to a list of layers (unbatched version)
     ///
     /// # Arguments
-    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where 
+    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where
     /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
     /// * `lhs`: the mle representing the left side of the sum
     /// * `rhs`: the mle representing the right side of the sum
-    /// 
+    ///
     /// # Returns
     /// A `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_add_gate(
@@ -107,11 +116,11 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// Add a Mul Gate layer to a list of layers (unbatched version)
     ///
     /// # Arguments
-    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where 
+    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where
     /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
     /// * `lhs`: the mle representing the left side of the multiplication
     /// * `rhs`: the mle representing the right side of the multiplication
-    /// 
+    ///
     /// # Returns
     /// A `DenseMle` that represents the evaluations of the mul gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_mul_gate(
@@ -156,7 +165,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// * `lhs`: the flattened mle representing the left side of the summation
     /// * `rhs`: the flattened mle representing the right side of the summation
     /// * `num_dataparallel_bits`: the number of bits representing the circuit copy we are looking at
-    /// 
+    ///
     /// # Returns
     /// A flattened `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_add_gate_batched(
@@ -219,7 +228,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// * `lhs`: the flattened mle representing the left side of the summation
     /// * `rhs`: the flattened mle representing the right side of the summation
     /// * `num_dataparallel_bits`: the number of bits representing the circuit copy we are looking at
-    /// 
+    ///
     /// # Returns
     /// A flattened `DenseMle` that represents the evaluations of the mul gate wiring on `lhs` and `rhs` over the boolean hypercube
     pub fn add_mul_gate_batched(
@@ -328,7 +337,9 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {
     pub sumcheck_proof: SumcheckProof<F>,
     pub layer: LayerEnum<F, Tr>,
-    pub wlx_evaluations: Vec<F>,
+    /// When the claim aggregation optimization is on, each Layer produces many
+    /// wlx evaluations.
+    pub wlx_evaluations: Vec<Vec<F>>,
 }
 
 /// Proof for circuit input layer
@@ -336,7 +347,9 @@ pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {
 #[serde(bound = "F: FieldExt")]
 pub struct InputLayerProof<F: FieldExt> {
     pub layer_id: LayerId,
-    pub input_layer_wlx_evaluations: Vec<F>,
+    /// When the claim aggregation optimization is on, each Layer produces many
+    /// wlx evaluations.
+    pub input_layer_wlx_evaluations: Vec<Vec<F>>,
     pub input_commitment: CommitmentEnum<F>,
     pub input_opening_proof: OpeningEnum<F>,
 }
@@ -351,8 +364,11 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     pub layer_sumcheck_proofs: Vec<LayerProof<F, Tr>>,
     /// All the output layers that this circuit yields
     pub output_layers: Vec<MleEnum<F>>,
-
+    /// Proofs for each input layer (e.g. `LigeroInputLayer` or `PublicInputLayer`).
     pub input_layer_proofs: Vec<InputLayerProof<F>>,
+    /// Hash of the entire circuit description, to be used in the FS transcript!
+    /// TODO!(%Labs): Actually make this secure!
+    pub maybe_circuit_hash: Option<F>,
 }
 
 pub struct Witness<F: FieldExt, Tr: Transcript<F>> {
@@ -360,6 +376,11 @@ pub struct Witness<F: FieldExt, Tr: Transcript<F>> {
     pub output_layers: Vec<MleEnum<F>>,
     pub input_layers: Vec<InputLayerEnum<F, Tr>>,
 }
+
+/// Controls claim aggregation behavior.
+pub const ENABLE_OPTIMIZATION: bool = true;
+
+/// Controls
 
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
@@ -398,9 +419,12 @@ pub trait GKRCircuit<F: FieldExt> {
         &mut self,
         transcript: &mut Self::Transcript,
     ) -> Result<GKRProof<F, Self::Transcript>, GKRError> {
+        let synthesize_commit_timer = start_timer!(|| "synthesize and commit");
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
         // --- Also commit and add those commitments to the transcript
+        info!("Synethesizing circuit...");
 
+        // --- Add circuit hash to transcript, if exists ---
         if let Some(circuit_hash) = Self::get_circuit_hash() {
             transcript
                 .append_field_element("Circuit Hash", circuit_hash)
@@ -415,6 +439,10 @@ pub trait GKRCircuit<F: FieldExt> {
             },
             commitments,
         ) = self.synthesize_and_commit(transcript)?;
+        info!("Circuit synthesized and witness generated.");
+        end_timer!(synthesize_commit_timer);
+
+        let claims_timer = start_timer!(|| "output claims generation");
 
         // --- TRACE: grabbing output claims ---
         let output_claims_span = span!(Level::DEBUG, "output_claims_span").entered();
@@ -424,10 +452,12 @@ pub trait GKRCircuit<F: FieldExt> {
 
         // --- Go through circuit output layers and grab claims on each ---
         for output in output_layers.iter_mut() {
+            info!("New Output Layer: {:?}", output.get_layer_id());
             let mut claim = None;
             let bits = output.index_mle_indices(0);
 
             let claim = if bits != 0 {
+                debug!("Bookkeeping table: {:?}", output.bookkeeping_table());
                 // --- Evaluate each output MLE at a random challenge point ---
                 for bit in 0..bits {
                     let challenge = transcript
@@ -439,10 +469,16 @@ pub trait GKRCircuit<F: FieldExt> {
                 // --- Gather the claim and layer ID ---
                 claim.unwrap()
             } else {
-                (vec![], output.bookkeeping_table()[0])
+                Claim::new_raw(vec![], output.bookkeeping_table()[0])
             };
 
+            // --- Gather the claim and layer ID ---
+            let mut claim = claim;
             let layer_id = output.get_layer_id();
+            claim.to_layer_id = Some(layer_id);
+            claim.mle_ref = Some(output.clone());
+            debug!("Creating a claim: {:#?}", claim);
+
 
             // --- Add the claim to either the set of current claims we're proving ---
             // --- or the global set of claims we need to eventually prove ---
@@ -452,6 +488,13 @@ pub trait GKRCircuit<F: FieldExt> {
                 claims.insert(layer_id, vec![claim]);
             }
         }
+
+        end_timer!(claims_timer);
+
+        let intermediate_layers_timer = start_timer!(|| "ALL intermediate layers proof generation");
+
+        // Count the total number of wlx evaluations for benchmarking purposes.
+        let mut wlx_count = 0;
 
         // --- END TRACE: grabbing output claims ---
         output_claims_span.exit();
@@ -467,94 +510,117 @@ pub trait GKRCircuit<F: FieldExt> {
             .into_iter()
             .rev()
             .map(|mut layer| {
+                let layer_timer =
+                    start_timer!(|| format!("proof generation for layer {:?}", *layer.id()));
 
                 // --- TRACE: Proving an individual GKR layer ---
                 let layer_id = *layer.id();
+                info!("New Intermediate Layer: {:?}", layer_id);
+
                 let layer_id_trace_repr = format!("{}", layer_id);
                 let _layer_sumcheck_proving_span = span!(Level::DEBUG, "layer_sumcheck_proving_span", layer_id = layer_id_trace_repr).entered();
 
                 // --- For each layer, get the ID and all the claims on that layer ---
-                let layer_claims = claims
+                let layer_claims_vec = claims
                     .get(&layer_id)
-                    .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
+                    .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?
+                    .clone();
+                let layer_claim_group = ClaimGroup::new(layer_claims_vec.clone()).unwrap();
+                debug!("Found Layer claims:\n{:#?}", layer_claim_group);
 
                 // --- Add the claimed values to the FS transcript ---
-                for claim in layer_claims {
+                for claim in &layer_claims_vec {
                     transcript
-                        .append_field_elements("Claimed bits to be aggregated", &claim.0)
+                        .append_field_elements("Claimed bits to be aggregated", claim.get_point())
                         .unwrap();
                     transcript
-                        .append_field_element("Claimed value to be aggregated", claim.1)
+                        .append_field_element("Claimed value to be aggregated", claim.get_result())
                         .unwrap();
                 }
 
-                // --- If it's an empty layer, skip the claim aggregation ---
-                let empty_layer = layer_claims.iter().all(|claim| claim.0.is_empty());
+                info!("Time for claim aggregation...");
+                let claim_aggr_timer =
+                    start_timer!(|| format!("claim aggregation for layer {:?}", *layer.id()));
 
-                // --- Aggregate claims by sampling r^\star from the verifier and performing the ---
-                // --- claim aggregation protocol. We ONLY aggregate if need be! ---
-                let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1
-                    && !empty_layer
-                {
-                    // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
-                    let wlx_evaluations = compute_claim_wlx(layer_claims, &layer).unwrap();
-                    let relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
+                let layer_init_wlx_count = wlx_count;
 
-                    transcript
-                        .append_field_elements(
-                            "Claim Aggregation Wlx_evaluations",
-                            &relevant_wlx_evaluations,
-                        )
-                        .unwrap();
+                let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
+                    &layer_claim_group,
+                    &mut |claims, _, layer_mle_refs| {
+                        let wlx_evals = layer
+                            .get_wlx_evaluations(
+                                claims.get_claim_points_matrix(),
+                                claims.get_results(),
+                                layer_mle_refs.unwrap().clone(),
+                                claims.get_num_claims(),
+                                claims.get_num_vars(),
+                            )
+                            .unwrap();
+                        wlx_count += wlx_evals.len();
+                        println!("Layer {:?}: +{} evaluations.", layer_id, wlx_evals.len());
+                        Ok(wlx_evals)
+                    },
+                    transcript,
+                )
+                .unwrap();
+                info!("Done aggregating claims! New claim: {:#?}", layer_claim);
 
-                    // --- Next, sample r^\star from the transcript ---
-                    let agg_chal = transcript
-                        .get_challenge("Challenge for claim aggregation")
-                        .unwrap();
+                println!(
+                    "Total Evaluations for Intermediate Layer {:?}: {}",
+                    layer_id,
+                    wlx_count - layer_init_wlx_count
+                );
 
-                    let aggregated_challenges =
-                        compute_aggregated_challenges(layer_claims, agg_chal).unwrap();
-
-                    let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
-
-                    (
-                        (aggregated_challenges, claimed_val),
-                        Some(relevant_wlx_evaluations),
-                    )
-                } else {
-                    (layer_claims[0].clone(), None)
-                };
+                debug!("Relevant wlx evals: {:#?}", relevant_wlx_evaluations);
+                end_timer!(claim_aggr_timer);
+                let sumcheck_msg_timer = start_timer!(|| format!(
+                    "compute sumcheck message for layer {:?}",
+                    *layer.id()
+                ));
 
                 // --- Compute all sumcheck messages across this particular layer ---
                 let prover_sumcheck_messages = layer
                     .prove_rounds(layer_claim, transcript)
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
+                debug!("sumcheck_proof: {:#?}", prover_sumcheck_messages);
+                end_timer!(sumcheck_msg_timer);
+
                 // --- Grab all the resulting claims from the above sumcheck procedure and add them to the claim tracking map ---
                 let post_sumcheck_new_claims = layer
                     .get_claims()
                     .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
-                // dbg!(layer_id, &post_sumcheck_new_claims);
+                debug!(
+                    "After sumcheck, I have the following claims: {:#?}",
+                    post_sumcheck_new_claims
+                );
 
-                for (layer_id, claim) in post_sumcheck_new_claims {
-                    if let Some(curr_claims) = claims.get_mut(&layer_id) {
+                for claim in post_sumcheck_new_claims {
+                    if let Some(curr_claims) = claims.get_mut(&claim.get_to_layer_id().unwrap()) {
                         curr_claims.push(claim);
                     } else {
-                        claims.insert(layer_id, vec![claim]);
+                        claims.insert(claim.get_to_layer_id().unwrap(), vec![claim]);
                     }
                 }
+
+                end_timer!(layer_timer);
 
                 Ok(LayerProof {
                     sumcheck_proof: prover_sumcheck_messages,
                     layer,
-                    wlx_evaluations: relevant_wlx_evaluations.unwrap_or_default(),
+                    wlx_evaluations: relevant_wlx_evaluations,
                 })
             })
             .try_collect()?;
 
-        // --- END TRACE: Proving intermediate GKR layers ---
-        all_layers_sumcheck_proving_span.exit();
+        end_timer!(intermediate_layers_timer);
+         // --- END TRACE: Proving intermediate GKR layers ---
+         all_layers_sumcheck_proving_span.exit();
+
+        let input_layers_timer = start_timer!(|| "INPUT layers proof generation");
+
+
 
         // --- TRACE: Proving input layer ---
         let input_layer_proving_span = span!(Level::DEBUG, "input_layer_proving_span").entered();
@@ -563,72 +629,92 @@ pub trait GKRCircuit<F: FieldExt> {
             .into_iter()
             .zip(commitments)
             .map(|(input_layer, commitment)| {
+                let layer_timer = start_timer!(|| format!(
+                    "proof generation for INPUT layer {:?}",
+                    input_layer.layer_id()
+                ));
                 let layer_id = input_layer.layer_id();
+                info!("New Input Layer: {:?}", layer_id);
 
-                let layer_claims = claims
-                    .get(layer_id)
-                    .ok_or(GKRError::NoClaimsForLayer(*layer_id))?;
+                let layer_claims_vec = claims
+                    .get(&layer_id)
+                    .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+                let layer_claim_group = ClaimGroup::new(layer_claims_vec.clone()).unwrap();
+                trace!(
+                    "Layer Claim Group for {:?}:\n{:#?}",
+                    layer_id,
+                    layer_claim_group
+                );
+                let num_claims = layer_claim_group.get_num_claims();
 
                 // --- Add the claimed values to the FS transcript ---
-                for claim in layer_claims {
+                for claim in layer_claims_vec {
                     transcript
                         .append_field_elements(
                             "Claimed challenge coordinates to be aggregated",
-                            &claim.0,
+                            claim.get_point(),
                         )
                         .unwrap();
                     transcript
-                        .append_field_element("Claimed value to be aggregated", claim.1)
+                        .append_field_element("Claimed value to be aggregated", claim.get_result())
                         .unwrap();
                 }
 
-                let (layer_claim, relevant_wlx_evaluations) = if layer_claims.len() > 1 {
-                    // --- Aggregate claims by performing the claim aggregation protocol. First compute V_i(l(x)) ---
-                    let wlx_evaluations =
-                        input_layer.compute_claim_wlx(layer_claims).map_err(|err| {
-                            GKRError::ErrorWhenProvingLayer(*layer_id, LayerError::ClaimError(err))
-                        })?;
-                    let relevant_wlx_evaluations = wlx_evaluations[layer_claims.len()..].to_vec();
+                let claim_aggr_timer = start_timer!(|| format!(
+                    "claim aggregation for INPUT layer {:?}",
+                    input_layer.layer_id()
+                ));
 
-                    transcript
-                        .append_field_elements(
-                            "Claim Aggregation Wlx_evaluations",
-                            &relevant_wlx_evaluations,
-                        )
-                        .unwrap();
+                let layer_init_wlx_count = wlx_count;
 
-                    // --- Next, sample r^\star from the transcript ---
-                    let agg_chal = transcript
-                        .get_challenge("Challenge for claim aggregation")
-                        .unwrap();
+                let (layer_claim, relevant_wlx_evaluations) = aggregate_claims(
+                    &layer_claim_group,
+                    &mut |claims, _, _| {
+                        let wlx_evals = input_layer.compute_claim_wlx(claims).unwrap();
+                        wlx_count += wlx_evals.len();
+                        println!(
+                            "Input Layer {:?}: +{} evaluations.",
+                            layer_id,
+                            wlx_evals.len()
+                        );
+                        Ok(wlx_evals)
+                    },
+                    transcript,
+                )
+                .unwrap();
 
-                    let aggregated_challenges = input_layer
-                        .compute_aggregated_challenges(layer_claims, agg_chal)
-                        .map_err(|err| {
-                            GKRError::ErrorWhenProvingLayer(*layer_id, LayerError::ClaimError(err))
-                        })?;
-                    let claimed_val = evaluate_at_a_point(&wlx_evaluations, agg_chal).unwrap();
+                println!(
+                    "Total Evaluations for Input Layer {:?}: {}",
+                    layer_id,
+                    wlx_count - layer_init_wlx_count
+                );
+                debug!("Relevant wlx evaluations: {:#?}", relevant_wlx_evaluations);
+                end_timer!(claim_aggr_timer);
 
-                    (
-                        (aggregated_challenges, claimed_val),
-                        Some(relevant_wlx_evaluations),
-                    )
-                } else {
-                    (layer_claims[0].clone(), None)
-                };
+                let opening_proof_timer = start_timer!(|| format!(
+                    "opening proof for INPUT layer {:?}",
+                    input_layer.layer_id()
+                ));
 
                 let opening_proof = input_layer
                     .open(transcript, layer_claim)
                     .map_err(GKRError::InputLayerError)?;
 
+                end_timer!(opening_proof_timer);
+
+                end_timer!(layer_timer);
+
                 Ok(InputLayerProof {
                     layer_id: *layer_id,
                     input_commitment: commitment,
-                    input_layer_wlx_evaluations: relevant_wlx_evaluations.unwrap_or_default(),
+                    input_layer_wlx_evaluations: relevant_wlx_evaluations,
                     input_opening_proof: opening_proof,
                 })
             })
             .try_collect()?;
+
+        end_timer!(input_layers_timer);
+        println!("TOTAL EVALUATIONS: {}", wlx_count);
 
         // --- END TRACE: Proving input layer ---
         input_layer_proving_span.exit();
@@ -637,6 +723,7 @@ pub trait GKRCircuit<F: FieldExt> {
             layer_sumcheck_proofs,
             output_layers,
             input_layer_proofs,
+            maybe_circuit_hash: Self::get_circuit_hash(),
         };
 
         Ok(gkr_proof)
@@ -657,9 +744,12 @@ pub trait GKRCircuit<F: FieldExt> {
             layer_sumcheck_proofs,
             output_layers,
             input_layer_proofs,
+            maybe_circuit_hash
         } = gkr_proof;
 
-        if let Some(circuit_hash) = Self::get_circuit_hash() {
+        let input_layers_timer = start_timer!(|| "append INPUT commitments to transcript");
+
+        if let Some(circuit_hash) = maybe_circuit_hash {
             transcript
                 .append_field_element("Circuit Hash", circuit_hash)
                 .unwrap();
@@ -677,9 +767,12 @@ pub trait GKRCircuit<F: FieldExt> {
                 )
             })?;
         }
+        end_timer!(input_layers_timer);
 
         // --- Verifier keeps track of the claims on its own ---
         let mut claims: HashMap<LayerId, Vec<Claim<F>>> = HashMap::new();
+
+        let claims_timer = start_timer!(|| "output claims generation");
 
         // --- TRACE: output claims ---
         let verifier_output_claims_span = span!(Level::DEBUG, "verifier_output_claims_span").entered();
@@ -688,6 +781,7 @@ pub trait GKRCircuit<F: FieldExt> {
         for output in output_layers.iter() {
             let mle_indices = output.mle_indices();
             let mut claim_chal: Vec<F> = vec![];
+            debug!("Bookkeeping table: {:#?}", output.bookkeeping_table());
             for (bit, index) in mle_indices
                 .iter()
                 .filter(|index| !matches!(index, &&MleIndex::Fixed(_)))
@@ -705,15 +799,21 @@ pub trait GKRCircuit<F: FieldExt> {
                 }
                 claim_chal.push(challenge);
             }
-            let claim = (
+            let layer_id = output.get_layer_id();
+            info!("New Output Layer {:?}", layer_id);
+
+            let claim = Claim::new(
                 mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect(),
                 F::zero(),
+                None,
+                Some(layer_id),
+                Some(output.clone()),
             );
-            let layer_id = output.get_layer_id();
 
+            debug!("Generating claim: {:#?}", claim);
             // --- Append claims to either the claim tracking map OR the first (sumchecked) layer's list of claims ---
             if let Some(curr_claims) = claims.get_mut(&layer_id) {
                 curr_claims.push(claim);
@@ -725,64 +825,98 @@ pub trait GKRCircuit<F: FieldExt> {
         // --- END TRACE: output claims ---
         verifier_output_claims_span.exit();
 
+        end_timer!(claims_timer);
+
+        let intermediate_layers_timer =
+            start_timer!(|| "ALL intermediate layers proof verification");
+
+
         // --- Go through each of the layers' sumcheck proofs... ---
         for sumcheck_proof_single in layer_sumcheck_proofs {
             let LayerProof {
                 sumcheck_proof,
                 mut layer,
-                wlx_evaluations,
+                wlx_evaluations: relevant_wlx_evaluations,
             } = sumcheck_proof_single;
+
+            let layer_timer =
+                start_timer!(|| format!("proof verification for layer {:?}", *layer.id()));
 
             // --- TRACE: Proving an individual GKR layer ---
             let layer_id = *layer.id();
+            info!("Intermediate Layer: {:?}", layer_id);
+            debug!("The LayerEnum: {:#?}", layer);
             let layer_id_trace_repr = format!("{}", layer_id);
             let _layer_sumcheck_verification_span = span!(Level::DEBUG, "layer_sumcheck_verification_span", layer_id = layer_id_trace_repr).entered();
 
             // --- Independently grab the claims which should've been imposed on this layer (based on the verifier's own claim tracking) ---
             let layer_claims = claims
                 .get(&layer_id)
-                .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
+                .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+            let layer_claim_group = ClaimGroup::new(layer_claims.clone()).unwrap();
+            debug!("Found Layer claims:\n{:#?}", layer_claim_group);
+            let layer_num_claims = layer_claim_group.get_num_claims();
 
             // --- Append claims to the FS transcript... TODO!(ryancao): Do we actually need to do this??? ---
             for claim in layer_claims {
                 transcript
-                    .append_field_elements("Claimed bits to be aggregated", &claim.0)
+                    .append_field_elements("Claimed bits to be aggregated", claim.get_point())
                     .unwrap();
                 transcript
-                    .append_field_element("Claimed value to be aggregated", claim.1)
+                    .append_field_element("Claimed value to be aggregated", claim.get_result())
                     .unwrap();
             }
 
+            let claim_aggr_timer =
+                start_timer!(|| format!("verify aggregated claim for layer {:?}", *layer.id()));
             // --- Perform the claim aggregation verification, first sampling `r` ---
             // --- Note that we ONLY do this if need be! ---
             let mut prev_claim = layer_claims[0].clone();
+            if layer_num_claims > 1 {
+                info!("Got > 1 claims. Verifying aggregation...");
 
-            // dbg!(&layer_claims);
-            if layer_claims.len() > 1 {
-                // --- Perform the claim aggregation verification, first sampling `r` ---
-                let all_wlx_evaluations: Vec<F> = layer_claims
-                    .iter()
-                    .map(|(_, val)| *val)
-                    .chain(wlx_evaluations.clone().into_iter())
-                    .collect();
+                // --- Perform the claim aggregation verification ---
+                let (claim, _) = aggregate_claims(
+                    &layer_claim_group, // This is the "claim group" representing ALL claims on this layer
+                    &mut |claim_group: &ClaimGroup<F>, prover_supplied_wlx_evaluations_idx: usize, _| -> Result<Vec<F>, GKRError> {
+                        debug!("Compute_wlx was called during claim aggregation verification");
 
-                transcript
-                    .append_field_elements("Claim Aggregation Wlx_evaluations", &wlx_evaluations)
-                    .unwrap();
-                let agg_chal = transcript
-                    .get_challenge("Challenge for claim aggregation")
-                    .unwrap();
+                        let claim_wlx_evaluations = claim_group.get_results().clone();
 
-                prev_claim = verify_aggregate_claim(&all_wlx_evaluations, layer_claims, agg_chal)
-                    .map_err(|_err| {
-                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::AggregationError)
-                })?;
+                        let all_wlx_evaluations: Vec<F> = claim_wlx_evaluations
+                            .into_iter()
+                            .chain(relevant_wlx_evaluations[prover_supplied_wlx_evaluations_idx].clone().into_iter())
+                            .collect();
+
+                        let claim_vecs = claim_group.get_claim_points_matrix();
+                        let (expected_num_evals, _) = get_num_wlx_evaluations(claim_vecs);
+                        if expected_num_evals != all_wlx_evaluations.len() {
+                            return Err(GKRError::ErrorWhenVerifyingLayer(
+                                layer_id,
+                                LayerError::AggregationError,
+                            ));
+                        }
+
+                        Ok(all_wlx_evaluations)
+                    },
+                    transcript,
+                )?;
+                prev_claim = claim;
             }
-            
+            end_timer!(claim_aggr_timer);
+
+            let sumcheck_msg_timer =
+                start_timer!(|| format!("verify sumcheck message for layer {:?}", *layer.id()));
+
+            debug!("Aggregated claim: {:#?}", prev_claim);
+            info!("Verifier: about to verify layer");
+
             // --- Performs the actual sumcheck verification step ---
             layer
                 .verify_rounds(prev_claim, sumcheck_proof.0, transcript)
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
+
+            end_timer!(sumcheck_msg_timer);
 
             // --- Extract/track claims from the expression independently (this ensures implicitly that the ---
             // --- prover is behaving correctly with respect to claim reduction, as otherwise the claim ---
@@ -791,69 +925,97 @@ pub trait GKRCircuit<F: FieldExt> {
                 .get_claims()
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
 
-            for (layer_id, claim) in other_claims {
-                if let Some(curr_claims) = claims.get_mut(&layer_id) {
+            debug!(
+                "After sumcheck, I have the following claims: {:#?}",
+                other_claims
+            );
+
+            for claim in other_claims {
+                if let Some(curr_claims) = claims.get_mut(&claim.get_to_layer_id().unwrap()) {
                     curr_claims.push(claim);
                 } else {
-                    claims.insert(layer_id, vec![claim]);
+                    claims.insert(claim.get_to_layer_id().unwrap(), vec![claim]);
                 }
             }
+
+            end_timer!(layer_timer);
         }
 
+        end_timer!(intermediate_layers_timer);
+
+        let input_layers_timer = start_timer!(|| "INPUT layers proof verification");
+
         for input_layer in input_layer_proofs {
+            let layer_timer = start_timer!(|| format!(
+                "proof generation for INPUT layer {:?}",
+                input_layer.layer_id
+            ));
+
             let input_layer_id = input_layer.layer_id;
+            let relevant_wlx_evaluations = input_layer.input_layer_wlx_evaluations.clone();
+            info!("--- Input Layer: {:?} ---", input_layer_id);
             let input_layer_claims = claims
                 .get(&input_layer_id)
-                .ok_or(GKRError::NoClaimsForLayer(input_layer_id))?;
-
-            // dbg!(&input_layer_claims);
+                .ok_or_else(|| GKRError::NoClaimsForLayer(input_layer_id.clone()))?;
+            let input_layer_claim_group = ClaimGroup::new(input_layer_claims.clone()).unwrap();
+            debug!("Layer Claim Group for input: {:#?}", input_layer_claims);
 
             // --- Add the claimed values to the FS transcript ---
             for claim in input_layer_claims {
                 transcript
                     .append_field_elements(
                         "Claimed challenge coordinates to be aggregated",
-                        &claim.0,
+                        claim.get_point(),
                     )
                     .unwrap();
                 transcript
-                    .append_field_element("Claimed value to be aggregated", claim.1)
+                    .append_field_element("Claimed value to be aggregated", claim.get_result())
                     .unwrap();
             }
 
+            let claim_aggr_timer = start_timer!(|| format!(
+                "verify aggregated claim for INPUT layer {:?}",
+                input_layer.layer_id
+            ));
+
             let input_layer_claim = if input_layer_claims.len() > 1 {
-                let all_input_wlx_evaluations: Vec<F> = input_layer_claims
-                    .iter()
-                    .map(|(_, val)| *val)
-                    .chain(input_layer.input_layer_wlx_evaluations.clone().into_iter())
-                    .collect();
+                let (prev_claim, _) = aggregate_claims(
+                    &input_layer_claim_group,
+                    &mut |claim_group, prover_supplied_wlx_evaluations_idx, _| -> Result<Vec<F>, GKRError> {
+                        debug!("Compute_wlx was called during claim aggregation verification in the input layer");
 
-                // dbg!(&all_input_wlx_evaluations);
+                        let claim_wlx_evaluations = claim_group.get_results().clone();
+                        let all_wlx_evaluations: Vec<F> = claim_wlx_evaluations
+                            .into_iter()
+                            .chain(relevant_wlx_evaluations[prover_supplied_wlx_evaluations_idx].clone().into_iter())
+                            .collect();
 
-                // --- Add the aggregation step to the transcript ---
-                transcript
-                    .append_field_elements(
-                        "Input claim aggregation Wlx_evaluations",
-                        &input_layer.input_layer_wlx_evaluations,
-                    )
-                    .unwrap();
+                        let claim_vecs = claim_group.get_claim_points_matrix();
+                        let (expected_num_evals, _) = get_num_wlx_evaluations(claim_vecs);
+                        if expected_num_evals != all_wlx_evaluations.len() {
+                            debug!("wlx eval lengths don't match:\nexpected = {expected_num_evals}\nfound = {}", all_wlx_evaluations.len());
+                            return Err(GKRError::ErrorWhenVerifyingLayer(
+                                input_layer_id,
+                                LayerError::AggregationError,
+                            ));
+                        }
 
-                // --- Grab the input claim aggregation challenge ---
-                let input_r_star = transcript
-                    .get_challenge("Challenge for input claim aggregation")
-                    .unwrap();
+                        Ok(all_wlx_evaluations)
+                    },
+                    transcript,
+                )?;
 
-                // --- Perform the aggregation verification step and extract the correct input layer claim ---
-                verify_aggregate_claim(&all_input_wlx_evaluations, input_layer_claims, input_r_star)
-                    .map_err(|_err| {
-                        GKRError::ErrorWhenVerifyingLayer(
-                            input_layer_id,
-                            LayerError::AggregationError,
-                        )
-                    })?
+                prev_claim
             } else {
                 input_layer_claims[0].clone()
             };
+            debug!("Input layer claim: {:#?}", input_layer_claim);
+            end_timer!(claim_aggr_timer);
+
+            let sumcheck_msg_timer = start_timer!(|| format!(
+                "verify sumcheck message for INPUT layer {:?}",
+                input_layer.layer_id
+            ));
 
             InputLayerEnum::verify(
                 &input_layer.input_commitment,
@@ -862,7 +1024,13 @@ pub trait GKRCircuit<F: FieldExt> {
                 transcript,
             )
             .map_err(GKRError::InputLayerError)?;
+
+            end_timer!(sumcheck_msg_timer);
+
+            end_timer!(layer_timer);
         }
+
+        end_timer!(input_layers_timer);
 
         Ok(())
     }

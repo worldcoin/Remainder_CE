@@ -648,7 +648,7 @@ mod tests {
     use super::*;
     use crate::{
         expression::ExpressionStandard,
-        layer::{Claim, LayerId},
+        layer::{LayerId, claims::Claim},
         mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef},
         sumcheck::{
             compute_sumcheck_message, get_round_degree,
@@ -704,7 +704,7 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_diff() {
         let mut rng = test_rng();
-        let layer_claim: Claim<Fr> = (
+        let layer_claim: Claim<Fr> = Claim::new_raw(
             vec![
                 Fr::from(rng.gen::<u64>()),
                 Fr::from(rng.gen::<u64>()),
@@ -713,7 +713,7 @@ mod tests {
             ],
             Fr::zero(),
         );
-        let mut beta = BetaTable::new(layer_claim).unwrap();
+        let mut beta = BetaTable::new(layer_claim.get_point().clone()).unwrap();
         beta.table.index_mle_indices(0);
 
         let DummyMles {
@@ -771,8 +771,8 @@ mod tests {
     #[test]
     fn circuit_dummy_bits_are_binary_test_multiplicities() {
         let mut rng = test_rng();
-        let layer_claim: Claim<Fr> = (vec![Fr::from(rng.gen::<u64>()); 12], Fr::zero());
-        let mut beta = BetaTable::new(layer_claim).unwrap();
+        let layer_claim: Claim<Fr> = Claim::new_raw(vec![Fr::from(rng.gen::<u64>()); 12], Fr::zero());
+        let mut beta = BetaTable::new(layer_claim.get_point().clone()).unwrap();
         beta.table.index_mle_indices(0);
 
         let DummyMles {
@@ -918,7 +918,7 @@ mod tests {
     #[test]
     fn circuit_dummy_binary_recomp_test() {
         let mut rng = test_rng();
-        let layer_claim: Claim<Fr> = (
+        let layer_claim: Claim<Fr> = Claim::new_raw(
             vec![
                 Fr::from(rng.gen::<u64>()),
                 Fr::from(rng.gen::<u64>()),
@@ -927,7 +927,7 @@ mod tests {
             ],
             Fr::zero(),
         );
-        let mut beta = BetaTable::new(layer_claim).unwrap();
+        let mut beta = BetaTable::new(layer_claim.get_point().clone()).unwrap();
         beta.table.index_mle_indices(0);
         let DummyMles {
             dummy_permuted_input_data_mle,

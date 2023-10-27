@@ -20,10 +20,24 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         }
     }
 
+    fn original_bookkeeping_table(&self) -> &Vec<Self::F> {
+        match self {
+            MleEnum::Dense(item) => item.original_bookkeeping_table(),
+            MleEnum::Zero(item) => item.original_bookkeeping_table(),
+        }
+    }
+
     fn mle_indices(&self) -> &[super::MleIndex<Self::F>] {
         match self {
             MleEnum::Dense(item) => item.mle_indices(),
             MleEnum::Zero(item) => item.mle_indices(),
+        }
+    }
+
+    fn original_mle_indices(&self) -> &Vec<super::MleIndex<Self::F>> {
+        match self {
+            MleEnum::Dense(item) => item.original_mle_indices(),
+            MleEnum::Zero(item) => item.original_mle_indices(),
         }
     }
 
@@ -34,11 +48,18 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         }
     }
 
+    fn original_num_vars(&self) -> usize {
+        match self {
+            MleEnum::Dense(item) => item.original_num_vars(),
+            MleEnum::Zero(item) => item.original_num_vars(),
+        }
+    }
+
     fn fix_variable(
         &mut self,
         round_index: usize,
         challenge: Self::F,
-    ) -> Option<crate::layer::Claim<Self::F>> {
+    ) -> Option<crate::layer::claims::Claim<Self::F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable(round_index, challenge),
             MleEnum::Zero(item) => item.fix_variable(round_index, challenge),
@@ -49,7 +70,7 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         &mut self,
         indexed_bit_index: usize,
         point: Self::F,
-    ) -> Option<crate::layer::Claim<Self::F>> {
+    ) -> Option<crate::layer::claims::Claim<Self::F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point),
             MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point),

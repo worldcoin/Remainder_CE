@@ -8,7 +8,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    layer::{Claim, LayerId},
+    layer::{claims::Claim, LayerId},
     mle::{dense::DenseMle, MleRef},
 };
 
@@ -58,24 +58,27 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
         claim: Claim<F>,
         _transcript: &mut Self::Transcript,
     ) -> Result<(), super::InputLayerError> {
+        // println!("3, calling verify");
         let mut mle_ref =
             DenseMle::<F, F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_vars != 0 {
             let mut eval = None;
-            for (curr_bit, &chal) in claim.0.iter().enumerate() {
+            for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
+            // println!("1, eval = {:#?}, claim = {:#?}", eval, claim);
 
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            (vec![], mle_ref.bookkeeping_table[0])
+            Claim::new_raw(vec![], mle_ref.bookkeeping_table[0])
         };
 
-        if eval == claim {
+        if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
             Ok(())
         } else {
+            // println!("2, eval = {:#?}, claim = {:#?}", eval, claim);
             Err(InputLayerError::PublicInputVerificationFailed)
         }
     }

@@ -15,9 +15,19 @@ pub mod ligero_input_layer;
 pub mod public_input_layer;
 pub mod random_input_layer;
 
-use crate::{layer::{LayerId, Claim, claims::ClaimError}, mle::{dense::DenseMle, MleRef}, sumcheck::evaluate_at_a_point};
+use crate::{
+    layer::{
+        claims::{get_num_wlx_evaluations, Claim, ClaimError, ClaimGroup, ENABLE_PRE_FIX},
+        LayerId, combine_mle_refs::pre_fix_mle_refs,
+    },
+    mle::{dense::DenseMle, MleRef, mle_enum::MleEnum, MleIndex},
+    prover::ENABLE_OPTIMIZATION,
+    sumcheck::evaluate_at_a_point,
+};
 
 use self::enum_input_layer::InputLayerEnum;
+
+use ark_std::{end_timer, start_timer};
 
 #[derive(Error, Clone, Debug)]
 pub enum InputLayerError {
@@ -25,8 +35,11 @@ pub enum InputLayerError {
     OpeningBeforeCommitment,
     #[error("failed to verify public input layer")]
     PublicInputVerificationFailed,
+    #[error("failed to verify random input layer")]
+    RandomInputVerificationFailed,
 }
 
+use log::{debug, info, trace, warn};
 ///Trait for dealing with the InputLayer
 pub trait InputLayer<F: FieldExt> {
     type Transcript: Transcript<F>;
@@ -59,42 +72,60 @@ pub trait InputLayer<F: FieldExt> {
 
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     #[instrument(skip_all, err, level = "debug")]
-    fn compute_claim_wlx(&self, claims: &[Claim<F>]) -> Result<Vec<F>, ClaimError> {
-        let mut mle = self.get_padded_mle().mle_ref();
-        let num_claims = claims.len();
-        let (claim_vecs, mut claimed_vals): (Vec<Vec<F>>, Vec<F>) =
-            cfg_iter!(claims).cloned().unzip();
-        let num_idx = claim_vecs[0].len();
+    fn compute_claim_wlx(&self, claims: &ClaimGroup<F>) -> Result<Vec<F>, ClaimError> {
+        let prep_timer = start_timer!(|| "Claim wlx prep");
+        let mut mle_ref = self.get_padded_mle().clone().mle_ref();
+        end_timer!(prep_timer);
+        info!("Wlx MLE len: {}", mle_ref.bookkeeping_table.len());
+        let num_claims = claims.get_num_claims();
+        let claim_vecs = claims.get_claim_points_matrix();
+        let claimed_vals = claims.get_results();
+        let num_idx = claims.get_num_vars();
 
         //fix variable hella times
         //evaluate expr on the mutated expr
 
         // get the number of evaluations
-        let num_vars = mle.index_mle_indices(0);
-        let num_evals = (num_vars) * (num_claims);
+        mle_ref.index_mle_indices(0);
+        let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
+        let chal_point = &claim_vecs[0];
+
+        if ENABLE_PRE_FIX {
+            if common_idx.is_some() {
+                let common_idx = common_idx.unwrap();
+                common_idx.iter().for_each(
+                    |chal_idx| {
+                        if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
+                            mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+                }});
+            }
+        }
+        
+        debug!("Evaluating {num_evals} times.");
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
-        // let next_evals: Vec<F> = (num_claims..num_evals).into_iter()
+            // let next_evals: Vec<F> = (num_claims..num_evals).into_iter()
             .map(|idx| {
                 // get the challenge l(idx)
                 let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                // let new_chal: Vec<F> = (0..num_idx).into_iter()
+                    // let new_chal: Vec<F> = (0..num_idx).into_iter()
                     .map(|claim_idx| {
                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                        // let evals: Vec<F> = (&claim_vecs).into_iter()
+                            // let evals: Vec<F> = (&claim_vecs).into_iter()
                             .map(|claim| claim[claim_idx])
                             .collect();
-                        
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
                     })
                     .collect();
 
-                let mut fix_mle = mle.clone();
-                
+                let mut fix_mle = mle_ref.clone();
                 {
                     new_chal.into_iter().enumerate().for_each(|(idx, chal)| {
-                        fix_mle.fix_variable(idx, chal);
+                        if let MleIndex::IndexedBit(idx_num) = fix_mle.mle_indices()[idx] { 
+                            fix_mle.fix_variable(idx_num, chal);
+                        }
+                        
                     });
                     fix_mle.bookkeeping_table[0]
                 }
@@ -102,8 +133,9 @@ pub trait InputLayer<F: FieldExt> {
             .collect();
 
         // concat this with the first k evaluations from the claims to get num_evals evaluations
-        claimed_vals.extend(&next_evals);
-        let wlx_evals = claimed_vals.clone();
+        let mut wlx_evals = claimed_vals.clone();
+        wlx_evals.extend(&next_evals);
+        debug!("Returning evals:\n{:#?} ", wlx_evals);
         Ok(wlx_evals)
     }
 
@@ -111,10 +143,10 @@ pub trait InputLayer<F: FieldExt> {
     #[instrument(skip_all, err, level = "debug")]
     fn compute_aggregated_challenges(
         &self,
-        claims: &[Claim<F>],
+        claims: &ClaimGroup<F>,
         rstar: F,
     ) -> Result<Vec<F>, ClaimError> {
-        let (claim_vecs, _): (Vec<Vec<F>>, Vec<F>) = cfg_iter!(claims).cloned().unzip();
+        let claim_vecs = claims.get_claim_points_matrix();
 
         if claims.is_empty() {
             return Err(ClaimError::ClaimAggroError);

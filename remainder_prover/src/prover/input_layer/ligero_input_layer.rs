@@ -84,7 +84,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
     fn open(
         &self,
         transcript: &mut Self::Transcript,
-        claim: crate::layer::Claim<F>,
+        claim: crate::layer::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, InputLayerError> {
         let aux = self
             .aux
@@ -101,7 +101,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
 
         let ligero_eval_proof: LigeroProof<F> = remainder_ligero_eval_prove(
             &self.mle.mle,
-            &claim.0,
+            claim.get_point(),
             transcript,
             aux.clone(),
             comm,
@@ -118,7 +118,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
     fn verify(
         commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
-        claim: crate::layer::Claim<F>,
+        claim: crate::layer::claims::Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), super::InputLayerError> {
         let ligero_aux = &opening_proof.aux;
@@ -129,8 +129,8 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
             &ligero_eval_proof,
             ligero_aux.clone(),
             transcript,
-            &claim.0,
-            claim.1,
+            claim.get_point(),
+            claim.get_result(),
         );
         Ok(())
     }

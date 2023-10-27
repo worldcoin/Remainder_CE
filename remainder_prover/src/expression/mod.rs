@@ -215,15 +215,11 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     ) -> Result<(), E> {
         observer_fn(self)?;
         match self {
-            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Product(_) => {
-                Ok(())
-            },
-            ExpressionStandard::Negated(exp) => {
-                exp.traverse(observer_fn)
-            },
-            ExpressionStandard::Scaled(exp, _) => {
-                exp.traverse(observer_fn)
-            }
+            ExpressionStandard::Constant(_)
+            | ExpressionStandard::Mle(_)
+            | ExpressionStandard::Product(_) => Ok(()),
+            ExpressionStandard::Negated(exp) => exp.traverse(observer_fn),
+            ExpressionStandard::Scaled(exp, _) => exp.traverse(observer_fn),
             ExpressionStandard::Selector(_, lhs, rhs) => {
                 lhs.traverse(observer_fn)?;
                 rhs.traverse(observer_fn)
@@ -599,15 +595,11 @@ impl<F: FieldExt> ExpressionStandard<F> {
         // dbg!(&self);
         observer_fn(self)?;
         match self {
-            ExpressionStandard::Constant(_) | ExpressionStandard::Mle(_) | ExpressionStandard::Product(_) => {
-                Ok(())
-            },
-            ExpressionStandard::Negated(exp) => {
-                exp.traverse_mut(observer_fn)
-            },
-            ExpressionStandard::Scaled(exp, _) => {
-                exp.traverse_mut(observer_fn)
-            }
+            ExpressionStandard::Constant(_)
+            | ExpressionStandard::Mle(_)
+            | ExpressionStandard::Product(_) => Ok(()),
+            ExpressionStandard::Negated(exp) => exp.traverse_mut(observer_fn),
+            ExpressionStandard::Scaled(exp, _) => exp.traverse_mut(observer_fn),
             ExpressionStandard::Selector(_, lhs, rhs) => {
                 lhs.traverse_mut(observer_fn)?;
                 rhs.traverse_mut(observer_fn)
@@ -677,7 +669,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
+impl<F: std::fmt::Debug> std::fmt::Debug for ExpressionStandard<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionStandard::Constant(scalar) => {

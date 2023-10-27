@@ -403,21 +403,23 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
                     )
                 }).collect_vec());
 
-        let input_permuted_packing_builders = BatchedLayer::new(
-            self.permuted_input_data_mle_vec.iter().map(
-                |input_data_mle| {
-                    let mut input_data_mle = input_data_mle.clone();
-                    input_data_mle.add_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
-                    FSInputPackingBuilder::new(
-                        input_data_mle,
-                        self.r_mle.clone(),
-                        self.r_packing_mle.clone()
-                    )
-                }).collect_vec());
+        // let input_permuted_packing_builders = BatchedLayer::new(
+        //     self.permuted_input_data_mle_vec.iter().map(
+        //         |input_data_mle| {
+        //             let mut input_data_mle = input_data_mle.clone();
+        //             input_data_mle.add_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
+        //             FSInputPackingBuilder::new(
+        //                 input_data_mle,
+        //                 self.r_mle.clone(),
+        //                 self.r_packing_mle.clone()
+        //             )
+        //         }).collect_vec());
 
-        let packing_builders = input_packing_builders.concat(input_permuted_packing_builders);
+        // let packing_builders = input_packing_builders.concat(input_permuted_packing_builders);
 
-        let (input_packed_vec, _input_permuted_packed_vec) = layers.add_gkr(packing_builders);
+        let input_packed_vec = layers.add_gkr(input_packing_builders);
+
+        // let (input_packed_vec, _input_permuted_packed_vec) = layers.add_gkr(packing_builders);
 
         let multiplicities_bin_decomp_mle_input_vec = self.multiplicities_bin_decomp_mle_input_vec.clone();
 
@@ -632,6 +634,8 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
         let circuit_output = layers.add_gkr(difference_builder);
 
         let circuit_output = combine_zero_mle_ref(circuit_output);
+
+        println!("# layers -- input multiset: {:?}", layers.next_layer_id());
 
         Witness {
             layers,

@@ -9,6 +9,7 @@ use crate::{
         Mle, MleAble, MleIndex, MleRef,
     }, layer::{batched::combine_mles, LayerId},
 };
+use ark_crypto_primitives::crh::sha256::digest::typenum::bit;
 use remainder_shared_types::FieldExt;
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
@@ -170,23 +171,28 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         // --- There are four components to this MLE ---
         let _len = self.mle.len() / 4;
 
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            // --- NOTE that prefix bits HAVE to be in little-endian ---
+            std::iter::once(MleIndex::Fixed(false))
+                .chain(std::iter::once(MleIndex::Fixed(false)))
+                .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
+        )
+        .collect_vec();
+
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
+            original_bookkeeping_table: self.mle[0].to_vec(),
             // --- [0, 0, b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    // --- NOTE that prefix bits HAVE to be in little-endian ---
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(std::iter::once(MleIndex::Fixed(false)))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-                )
-                .collect_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: num_vars - 2,
+            original_num_vars: num_vars - 2,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -199,23 +205,28 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         // --- There are four components to this MLE ---
         let _len = self.mle.len() / 4;
 
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            // --- NOTE that prefix bits HAVE to be in little-endian ---
+            std::iter::once(MleIndex::Fixed(true))
+                .chain(std::iter::once(MleIndex::Fixed(false)))
+                .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
+        )
+        .collect_vec();
+
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
+            original_bookkeeping_table: self.mle[1].to_vec(),
             // --- [0, 1, b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    // --- NOTE that prefix bits HAVE to be in little-endian ---
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(std::iter::once(MleIndex::Fixed(false)))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-                )
-                .collect_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: num_vars - 2,
+            original_num_vars: num_vars - 2,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -228,24 +239,29 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         // --- There are four components to this MLE ---
         // let len = self.mle.len() / 4;
 
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            // --- NOTE that prefix bits HAVE to be in little-endian ---
+            std::iter::once(MleIndex::Fixed(false))
+                .chain(std::iter::once(MleIndex::Fixed(true)))
+                .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
+        )
+        .collect_vec();
+
         DenseMleRef {
             bookkeeping_table: self.mle[2].to_vec(),
+            original_bookkeeping_table: self.mle[2].to_vec(),
             // --- [1, 0, b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
             // Answer: Lol not originally. The above comment is for ease of readability in big-endian
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    // --- NOTE that prefix bits HAVE to be in little-endian ---
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(std::iter::once(MleIndex::Fixed(true)))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-                )
-                .collect_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: num_vars - 2,
+            original_num_vars: num_vars - 2,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -315,21 +331,26 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
         // --- There are four components to this MLE ---
         let _len = self.mle.len() / 2;
 
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            std::iter::once(MleIndex::Fixed(false))
+                .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
+        )
+        .collect_vec();
+
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
+            original_bookkeeping_table: self.mle[0].to_vec(),
             // --- [0, b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
-                )
-                .collect_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: num_vars - 1,
+            original_num_vars: num_vars - 1,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -338,22 +359,26 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     /// MleRef grabbing just the list of attribute IDs
     pub(crate) fn node_val(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_iterated_vars();
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            std::iter::once(MleIndex::Fixed(true))
+                .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
+        )
+        .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
+            original_bookkeeping_table: self.mle[1].to_vec(),
             // --- [1, b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
-                )
-                .collect_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars: num_vars - 1,
+            original_num_vars: num_vars - 1,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -429,30 +454,35 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let len = 2_u32.pow(num_vars as u32) as usize;
         let concrete_len = cmp::min(len, self.mle[0].to_vec().len());
 
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            std::iter::once(MleIndex::Fixed(false))
+                .chain(repeat_n(MleIndex::Iterated, num_vars))
+                .chain(repeat_n(
+                    MleIndex::Fixed(false),
+                    self.num_iterated_vars() - 1 - num_vars,
+                )),
+            // repeat_n(MleIndex::Iterated, num_vars)
+            // .chain(repeat_n(
+            //             MleIndex::Fixed(false),
+            //             self.num_iterated_vars() - 1 - num_vars))
+            // .chain(std::iter::once(MleIndex::Fixed(false)))
+        )
+        .collect_vec();
+
         DenseMleRef {
             bookkeeping_table: self.mle[0][0..concrete_len].to_vec(),
+            original_bookkeeping_table: self.mle[0][0..concrete_len].to_vec(),
             // --- [0; 0, ..., 0; b_1, ..., b_n] ---
             // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(false))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars))
-                        .chain(repeat_n(
-                            MleIndex::Fixed(false),
-                            self.num_iterated_vars() - 1 - num_vars,
-                        )),
-                    // repeat_n(MleIndex::Iterated, num_vars)
-                    // .chain(repeat_n(
-                    //             MleIndex::Fixed(false),
-                    //             self.num_iterated_vars() - 1 - num_vars))
-                    // .chain(std::iter::once(MleIndex::Fixed(false)))
-                )
-                .collect_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars,
+            original_num_vars: num_vars,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -473,31 +503,36 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let len = 2_u32.pow(num_vars as u32) as usize;
         let concrete_len = cmp::min(len, self.mle[1].to_vec().len());
 
+        let mle_indices = self
+        .prefix_bits
+        .clone()
+        .into_iter()
+        .flatten()
+        .chain(
+            std::iter::once(MleIndex::Fixed(true))
+                .chain(repeat_n(MleIndex::Iterated, num_vars))
+                .chain(repeat_n(
+                    MleIndex::Fixed(false),
+                    self.num_iterated_vars() - 1 - num_vars,
+                )),
+            // repeat_n(MleIndex::Iterated, num_vars)
+            // .chain(repeat_n(
+            //             MleIndex::Fixed(false),
+            //             self.num_iterated_vars() - 1 - num_vars))
+            // .chain(std::iter::once(MleIndex::Fixed(true)))
+        )
+        .collect_vec();
+
         DenseMleRef {
             bookkeeping_table: self.mle[1][..concrete_len].to_vec(),
+            original_bookkeeping_table: self.mle[1][..concrete_len].to_vec(),
             // --- [1; 0, ..., 0; b_1, ..., b_n] ---
             // Note that the zeros are there to prefix all the things we chunked out
             // TODO!(ryancao): Does this give us the endian-ness we want???
-            mle_indices: self
-                .prefix_bits
-                .clone()
-                .into_iter()
-                .flatten()
-                .chain(
-                    std::iter::once(MleIndex::Fixed(true))
-                        .chain(repeat_n(MleIndex::Iterated, num_vars))
-                        .chain(repeat_n(
-                            MleIndex::Fixed(false),
-                            self.num_iterated_vars() - 1 - num_vars,
-                        )),
-                    // repeat_n(MleIndex::Iterated, num_vars)
-                    // .chain(repeat_n(
-                    //             MleIndex::Fixed(false),
-                    //             self.num_iterated_vars() - 1 - num_vars))
-                    // .chain(std::iter::once(MleIndex::Fixed(true)))
-                )
-                .collect_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars,
+            original_num_vars: num_vars,
             layer_id: self.layer_id,
             indexed: false,
         }
@@ -593,23 +628,28 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
             let third_prefix = (bit_idx % 8) >= 4;
             let fourth_prefix = (bit_idx % 16) >= 8;
 
+            let mle_indices = self
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                std::iter::once(MleIndex::Fixed(first_prefix))
+                    .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
+                    .chain(std::iter::once(MleIndex::Fixed(third_prefix)))
+                    .chain(std::iter::once(MleIndex::Fixed(fourth_prefix)))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars - 4)),
+            )
+            .collect_vec();
+
             let bit_mle_ref = DenseMleRef {
                 bookkeeping_table: self.mle[bit_idx].to_vec(),
+                original_bookkeeping_table: self.mle[bit_idx].to_vec(),
                 // --- [0, 0, 0, 0, b_1, ..., b_n] ---
-                mle_indices: self
-                    .prefix_bits
-                    .clone()
-                    .into_iter()
-                    .flatten()
-                    .chain(
-                        std::iter::once(MleIndex::Fixed(first_prefix))
-                            .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
-                            .chain(std::iter::once(MleIndex::Fixed(third_prefix)))
-                            .chain(std::iter::once(MleIndex::Fixed(fourth_prefix)))
-                            .chain(repeat_n(MleIndex::Iterated, num_vars - 4)),
-                    )
-                    .collect_vec(),
+                mle_indices: mle_indices.clone(),
+                original_mle_indices: mle_indices,
                 num_vars: num_vars - 4,
+                original_num_vars: num_vars - 4,
                 layer_id: self.layer_id,
                 indexed: false,
             };
@@ -728,21 +768,26 @@ impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {
             let first_prefix = (bit_idx % 2) >= 1;
             let second_prefix = (bit_idx % 4) >= 2;
 
+            let mle_indices = self
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                std::iter::once(MleIndex::Fixed(first_prefix))
+                    .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
+            )
+            .collect_vec();
+
             let bit_mle_ref = DenseMleRef {
                 bookkeeping_table: self.mle[bit_idx].to_vec(),
+                original_bookkeeping_table: self.mle[bit_idx].to_vec(),
                 // --- [0, 0, 0, 0, b_1, ..., b_n] ---
-                mle_indices: self
-                    .prefix_bits
-                    .clone()
-                    .into_iter()
-                    .flatten()
-                    .chain(
-                        std::iter::once(MleIndex::Fixed(first_prefix))
-                            .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
-                            .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-                    )
-                    .collect_vec(),
+                mle_indices: mle_indices.clone(),
+                original_mle_indices: mle_indices,
                 num_vars: num_vars - 2,
+                original_num_vars: num_vars - 2,
                 layer_id: self.layer_id,
                 indexed: false,
             };

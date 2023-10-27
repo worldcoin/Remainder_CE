@@ -1,5 +1,6 @@
 use ark_std::{log2};
 use itertools::{Itertools, repeat_n};
+use ark_std::{start_timer, end_timer};
 
 use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{batched::{BatchedLayer, combine_zero_mle_ref}, LayerId}, zkdt::builders::{AttributeConsistencyBuilderZeroRef}, prover::{input_layer::{ligero_input_layer::LigeroInputLayer, combine_input_layers::InputLayerBuilder, InputLayer, MleInputLayer}}};
 use crate::{prover::{GKRCircuit, Layers, Witness}};
@@ -113,6 +114,8 @@ impl<F: FieldExt> AttributeConsistencyCircuit<F> {
 
         let difference_mle = layers.add_gkr(attribute_consistency_builder);
         let circuit_output = combine_zero_mle_ref(difference_mle);
+
+        println!("# layers -- attr consis: {:?}", layers.next_layer_id());
 
         Witness {
             layers,

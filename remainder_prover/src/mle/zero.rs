@@ -5,7 +5,7 @@
 use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{Claim, LayerId};
+use crate::layer::{claims::Claim, LayerId};
 use remainder_shared_types::FieldExt;
 
 use super::{mle_enum::MleEnum, MleIndex, MleRef};
@@ -14,6 +14,7 @@ use super::{mle_enum::MleEnum, MleIndex, MleRef};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroMleRef<F> {
     pub(crate) mle_indices: Vec<MleIndex<F>>,
+    pub(crate) original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck)
     num_vars: usize,
@@ -32,7 +33,8 @@ impl<F: FieldExt> ZeroMleRef<F> {
             .collect_vec();
 
         Self {
-            mle_indices,
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
             num_vars,
             layer_id,
             zero: [F::zero()],
@@ -56,7 +58,19 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         &self.mle_indices
     }
 
+    fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>> {
+        &self.original_mle_indices
+    }
+
+    fn original_bookkeeping_table(&self) -> &Vec<Self::F> {
+        &self.original_bookkeeping_table()
+    }
+
     fn num_vars(&self) -> usize {
+        self.num_vars
+    }
+
+    fn original_num_vars(&self) -> usize {
         self.num_vars
     }
 
@@ -71,13 +85,15 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
-            Some((
+            let mut send_claim = Claim::new_raw(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect_vec(),
                 F::zero(),
-            ))
+            );
+            send_claim.mle_ref = Some(MleEnum::Zero(self.clone()));
+            Some(send_claim)
         } else {
             None
         }
