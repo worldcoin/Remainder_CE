@@ -64,7 +64,7 @@ use crate::zkdt::constants::{
 use crate::zkdt::data_pipeline::trees::*;
 use crate::zkdt::data_pipeline::helpers::*;
 use crate::zkdt::input_data_to_circuit_adapter::ZKDTCircuitData;
-use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode};
+use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp8Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode};
 
 use ark_serialize::Read;
 use ark_std::log2;
@@ -141,7 +141,8 @@ pub struct CircuitizedAuxiliaries<F: FieldExt> {
     pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,      // indexed by trees, samples, steps in path
     pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,              // indexed by trees, samples, steps in path
     pub path_ends: Vec<Vec<LeafNode<F>>>,                           // indexed by trees, samples
-    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index
+    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index FIXME TO BE REMOVED (@Ben)
+    pub attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>>,  // indexed by samples, then by attribute index (so aggregated over trees)
     pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,           // indexed by trees, tree nodes
 }
 
@@ -255,9 +256,15 @@ fn build_node_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDec
      BinDecomp16Bit::<F>::from(bits)
 }
 
-fn build_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp4Bit<F> {
+/// FIXME TO BE REMOVED (@Ben)
+fn build_4bit_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp4Bit<F> {
      let bits = build_unsigned_bit_decomposition(multiplicity as u32, 4).unwrap();
      BinDecomp4Bit::<F>::from(bits)
+}
+
+fn build_8bit_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp8Bit<F> {
+     let bits = build_unsigned_bit_decomposition(multiplicity as u32, 8).unwrap();
+     BinDecomp8Bit::<F>::from(bits)
 }
 
 /// Build the witnesses for a single sample.
@@ -327,6 +334,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
             })
         .collect();
 
+    // FIXME TO BE REMOVED (@Ben)
     let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
         .par_iter()
         .map(|tree_paths| {
@@ -336,10 +344,43 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
                 .into_iter()
                 .map(|multiplicities| multiplicities
                      .into_iter()
-                     .map(build_attribute_multiplicity_bindecomp)
+                     .map(build_4bit_attribute_multiplicity_bindecomp)
                      .collect())
                 .collect()
         })
+        .collect();
+
+    // BUILD THE ATTRIBUTE MULTIPLICITIES, AGGD OVER TREES
+    // check that each tree has one path per sample ...
+    let sample_count: usize = samples_in.values.len();
+    assert!(paths.iter().all(|paths_for_tree| paths_for_tree.len() == sample_count));
+    // ... so that the nesting can be reversed, to become: samples first, then trees
+    let _paths_per_sample: Vec<Vec<TreePath<i64>>> = (0..sample_count)
+        .map(|sample_idx| {
+            paths
+                .iter()
+                .filter_map(|paths_for_tree| paths_for_tree.get(sample_idx))
+                .cloned()
+                .collect()
+        }).collect();
+
+    let attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>> = _paths_per_sample
+        .par_iter()
+        .map(|paths_of_sample| {
+            let mut multiplicities = vec![0_usize; samples_in.sample_length];
+            paths_of_sample
+                .iter()
+                .for_each(|path_of_sample_thru_tree| {
+                    path_of_sample_thru_tree.path_steps
+                        .iter()
+                        .for_each(|step| multiplicities[step.feature_index as usize] += 1);
+                });
+            multiplicities
+        })
+        .map(|multiplicities| multiplicities
+             .into_iter()
+             .map(build_8bit_attribute_multiplicity_bindecomp)
+             .collect())
         .collect();
 
     let node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = paths
@@ -358,10 +399,12 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         differences,
         path_ends,
         attribute_multiplicities,
+        attribute_multiplicities_per_sample,
         node_multiplicities,
     }
 }
 
+/// FIXME TO BE REMOVED (@Ben)
 /// Given a vector of instances of [`PathStep`], return a vector counting how often each attribute
 /// is used.
 pub fn count_attribute_multiplicities(path_steps: &Vec<PathStep>, sample_length: usize) -> Vec<usize> {
@@ -591,6 +634,20 @@ mod tests {
         Node::new_internal(None, 1, 1, internal, right)
     }
 
+    /// Returns another small tree for testing:
+    ///       x[3]>=1?
+    ///        /    \
+    ///    x[4]>=2?  1.2
+    ///     /    \
+    ///  0.1      0.2
+    fn build_small_tree_variant() -> Node<f64> {
+        let left = Node::new_leaf(None, 0.1);
+        let middle = Node::new_leaf(None, 0.2);
+        let right = Node::new_leaf(None, 1.2);
+        let internal = Node::new_internal(None, 4, 2, left, middle);
+        Node::new_internal(None, 3, 1, internal, right)
+    }
+
     #[test]
     fn test_raw_trees_model_loading() {
         let filename = "src/zkdt/data_pipeline/test_qtrees.json";
@@ -759,6 +816,7 @@ mod tests {
                 assert_eq!(expected_bits.bits, bits.bits);
             });
 
+        // FIXME TO BE REMOVED (@Ben)
         // check attribute multiplicities
         // first, check their dimensions
         assert_eq!(caux.attribute_multiplicities.len(), n_trees);
@@ -775,9 +833,53 @@ mod tests {
         expected[1] = 1;
         am.iter().zip(expected.iter())
             .for_each(|(bits, expected)| {
-                let expected_bits = build_attribute_multiplicity_bindecomp::<Fr>(*expected);
+                let expected_bits = build_4bit_attribute_multiplicity_bindecomp::<Fr>(*expected);
                 assert_eq!(expected_bits.bits, bits.bits);
             })
+    }
+
+    #[test]
+    fn test_attribute_multiplicities_per_sample() {
+        let sample_length = 5;
+        let values = vec![
+            vec![0_u16; sample_length],
+            vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
+            vec![2_u16; sample_length],
+        ];
+        let raw_samples = RawSamples {
+            values,
+            sample_length
+        };
+
+        let raw_trees_model = RawTreesModel {
+            trees: vec![build_small_tree(), build_small_tree_variant()],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: sample_length,
+        };
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let samples: Samples = (&raw_samples).into();
+        let caux = circuitize_auxiliaries::<Fr>(&samples, &trees_model);
+        
+        let am = caux.attribute_multiplicities_per_sample;
+        // check dimensions
+        assert_eq!(am.len(), samples.values.len());
+        for am_for_sample in &am {
+            assert_eq!(am_for_sample.len(), samples.sample_length);
+        }
+        // check some values
+        assert_eq!(am[0][0], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
+        assert_eq!(am[0][1], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
+        assert_eq!(am[0][2], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
+        assert_eq!(am[0][3], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
+        assert_eq!(am[0][4], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
+        assert_eq!(am[0][5], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
+        assert_eq!(am[2][0], build_8bit_attribute_multiplicity_bindecomp::<Fr>(2));
+        assert_eq!(am[2][1], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
+        assert_eq!(am[2][2], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
+        assert_eq!(am[2][3], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
+        assert_eq!(am[2][4], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
+        assert_eq!(am[2][5], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
     }
 
     #[test]
@@ -945,6 +1047,7 @@ mod tests {
         assert_eq!(multiplicities, expected);
     }
 
+    // FIXME TO BE REMOVED (@Ben)
     #[test]
     fn test_count_attribute_multiplicities() {
         let sample_length: usize = 10;
