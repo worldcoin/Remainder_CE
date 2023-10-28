@@ -22,7 +22,7 @@ use ark_ff::biginteger::BigInteger;
 use ark_std::{start_timer, end_timer};
 use err_derive::Error;
 use itertools::Itertools;
-use poseidon::Poseidon;
+use remainder_shared_types::Poseidon;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;

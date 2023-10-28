@@ -647,7 +647,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     // ======== `fix_variable` tests ========
 
