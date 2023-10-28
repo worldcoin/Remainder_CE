@@ -1,21 +1,48 @@
 //! Executable for Remainder ZKDT prover!
 
 use ark_serialize::Read;
-use remainder_shared_types::Fr;
-use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}, input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}};
 use clap::Parser;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Fr;
+
+use remainder::{
+    prover::{GKRCircuit, GKRError},
+    zkdt::{
+        constants::{
+            get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_batch,
+        },
+        input_data_to_circuit_adapter::{
+            convert_zkdt_circuit_data_into_mles, load_upshot_data_single_tree_batch, MinibatchData, BatchedZKDTCircuitMles,
+        }, zkdt_multiple_tree_circuit::ZKDTMultiTreeCircuit,
+    },
+};
+
 use remainder_shared_types::transcript::Transcript;
-use serde_json::{from_reader, to_writer};
+use remainder_shared_types::FieldExt;
+
 use std::{
     fs,
     io::BufWriter,
     path::{Path, PathBuf},
     time::Instant,
 };
+
 use thiserror::Error;
 use tracing::debug;
-use tracing_subscriber::{fmt::format::FmtSpan, FmtSubscriber};
+use tracing_subscriber::{
+    fmt::format::{self, FmtSpan},
+    prelude::*,
+    FmtSubscriber,
+};
+
+use ark_std::{end_timer, start_timer};
+
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 
 #[derive(Error, Debug, Clone)]
 /// Errors for running the binary over inputs and proving/verification
@@ -52,12 +79,16 @@ struct Args {
     #[arg(long)]
     tree_commit_dir: String,
 
+    /// the batch size of trees we are combining
+    #[arg(long, default_value_t = 4)]
+    tree_batch_size: usize,
+
     /// The tree number we are actually running (note that this,
     /// alongside the `tree_commit_dir`, generates the filename
     /// for the actual tree commitment file we are using)
     #[arg(long)]
-    tree_number: usize,
-
+    tree_batch_number: usize,
+    
     /// Path to the sample minibatch commitment directory containing
     /// all of the sample minibatch commitments.
     ///
@@ -110,6 +141,19 @@ struct Args {
     /// different trace levels
     #[arg(long, default_value_t = false)]
     debug_tracing_subscriber: bool,
+
+    /// sets the value for rho_inv for the ligero commit
+    #[arg(long, default_value_t = 4)]
+    rho_inv: u8,
+
+    /// sets the matrix ratio (orig_num_cols : num_rows) for ligero commit, will do the dimensions
+    /// to achieve the ratio as close as possible
+    #[arg(long, default_value_t = 1_f64)]
+    matrix_ratio: f64,
+
+
+
+
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
     // flags after a refactor
@@ -139,11 +183,12 @@ struct Args {
 }
 
 /// Runs the actual circuit on the witness data
+
 pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
     mut circuit: C,
     maybe_filepath_to_proof: Option<PathBuf>,
     verify_proof: bool,
-) -> Result<(), ZKDTBinaryError> 
+) -> Result<(), ZKDTBinaryError>
 where
     <C as GKRCircuit<F>>::Transcript: Sync,
 {
@@ -164,14 +209,15 @@ where
                     filepath_to_proof
                 );
 
-                // let timer = start_timer!(|| "proof writer");
+                let timer = start_timer!(|| "proof writer");
 
-                let mut file = fs::File::create(filepath_to_proof).unwrap();
-                let mut bw = BufWriter::new(file);
+                let file = fs::File::create(filepath_to_proof).unwrap();
+                let bw = BufWriter::new(file);
                 serde_json::to_writer(bw, &proof).unwrap();
 
-                // end_timer!(timer);
+                end_timer!(timer);
             }
+
             let mut transcript = C::Transcript::new("GKR Verifier Transcript");
             let now = Instant::now();
 
@@ -185,6 +231,7 @@ where
                     let mut bufreader = Vec::with_capacity(initial_buffer_size);
                     file.read_to_end(&mut bufreader).unwrap();
                     serde_json::de::from_slice(&bufreader[..]).unwrap()
+
                 } else {
                     proof
                 };
@@ -218,13 +265,24 @@ where
 fn main() -> Result<(), ZKDTBinaryError> {
     let args = Args::parse();
 
-    // --- Tracing subscriber (i.e. outputs trace messages in stdout) if asked for ---
+    // --- Tracing subscriber (i.e. outputs trace messages in stdout) if asked
+    // for ---
+    let formatter =
+    // Construct a custom formatter for `Debug` fields
+    format::debug_fn(|writer, field, value| write!(writer, "{}: {:#?}", field, value))
+        // Use the `tracing_subscriber::MakeFmtExt` trait to wrap the
+        // formatter so that a delimiter is added between fields.
+        .delimited("\n");
+
     if args.debug_tracing_subscriber {
         let subscriber = FmtSubscriber::builder()
             .with_line_number(true)
-            .with_max_level(tracing::Level::DEBUG)
+            .with_max_level(tracing::Level::TRACE)
             .with_level(true)
-            .with_span_events(FmtSpan::ACTIVE)
+            .with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
+            .with_ansi(false)
+            .fmt_fields(formatter)
+            // .pretty()
             .finish();
         let _default_guard = tracing::subscriber::set_global_default(subscriber);
     }
@@ -234,6 +292,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
     debug!(args_as_string);
 
     // --- Sanitycheck (need minibatch number if we have batch size) + grabbing minibatch data ---
+    
     let maybe_minibatch_data = match (args.log_sample_minibatch_size, args.sample_minibatch_number)
     {
         (None, None) => None,
@@ -241,6 +300,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
         (Some(_), None) => {
             return Err(ZKDTBinaryError::MinibatchLogsizeNoIndex);
         }
+
         (Some(log_sample_minibatch_size), Some(sample_minibatch_number)) => {
             let minibatch_data = MinibatchData {
                 log_sample_minibatch_size,
@@ -250,22 +310,43 @@ fn main() -> Result<(), ZKDTBinaryError> {
         }
     };
 
-    // --- Read in the Upshot data from file ---
-    let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
-        load_upshot_data_single_tree_batch::<Fr>(
-            maybe_minibatch_data,
-            args.tree_number,
-            Path::new(&args.decision_forest_model_filepath),
-            Path::new(&args.quantized_samples_filepath),
-        );
-    let (batched_catboost_mles, (_, _)) =
-        convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
+
+    let tree_range = (args.tree_batch_number * args.tree_batch_size) .. ((args.tree_batch_number + 1) * args.tree_batch_size);
+
+    let (trees_batched_data, minibatch_data_vec): (Vec<BatchedZKDTCircuitMles<Fr>>, Vec<_>) = tree_range.into_iter().map(
+        |tree_num| {
+             // --- Read in the Upshot data from file ---
+            let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
+            load_upshot_data_single_tree_batch::<Fr>(
+                maybe_minibatch_data.clone(),
+                tree_num,
+                Path::new(&args.decision_forest_model_filepath),
+                Path::new(&args.quantized_samples_filepath),
+            );
+            let (batched_catboost_mles, (_, _)) =
+                convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
+            (batched_catboost_mles, minibatch_data)
+        }
+    ).unzip();
+
+
+    // // --- Read in the Upshot data from file ---
+    // let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
+    //     load_upshot_data_single_tree_batch::<Fr>(
+    //         maybe_minibatch_data,
+    //         args.tree_number,
+    //         Path::new(&args.decision_forest_model_filepath),
+    //         Path::new(&args.quantized_samples_filepath),
+    //     );
+    // let (batched_catboost_mles, (_, _)) =
+    //     convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
 
     // --- Sanitycheck (grab the minibatch commitment filename + check if exists) ---
-    let sample_minibatch_commitment_filepath =
+
+let sample_minibatch_commitment_filepath =
         get_sample_minibatch_commitment_filepath_for_batch_size(
-            minibatch_data.log_sample_minibatch_size,
-            minibatch_data.sample_minibatch_number,
+            minibatch_data_vec[0].log_sample_minibatch_size,
+            minibatch_data_vec[0].sample_minibatch_number,
             Path::new(&args.sample_minibatch_commit_dir),
         );
     debug!(
@@ -277,8 +358,10 @@ fn main() -> Result<(), ZKDTBinaryError> {
     }
 
     // --- Sanitycheck (check if the tree commitment exists) ---
-    let tree_commit_filepath = get_tree_commitment_filepath_for_tree_number(
-        args.tree_number,
+    
+    let tree_commit_filepath = get_tree_commitment_filepath_for_tree_batch(
+        args.tree_batch_size,
+        args.tree_batch_number,
         Path::new(&args.tree_commit_dir),
     );
     debug!(
@@ -290,12 +373,13 @@ fn main() -> Result<(), ZKDTBinaryError> {
     }
 
     // --- Create the full ZKDT circuit ---
-    let full_zkdt_circuit = ZKDTCircuit {
-        batched_zkdt_circuit_mles: batched_catboost_mles,
+    // multi tree ZKDT circuit
+    let full_zkdt_circuit = ZKDTMultiTreeCircuit {
+        batched_zkdt_circuit_mles_tree: trees_batched_data,
         tree_precommit_filepath: tree_commit_filepath,
         sample_minibatch_precommit_filepath: sample_minibatch_commitment_filepath,
-        rho_inv: 4,
-        ratio: 1.,
+        rho_inv: args.rho_inv,
+        ratio: args.matrix_ratio
     };
 
     // --- Grab the proof filepath to write to and compute the circuit + prove ---
