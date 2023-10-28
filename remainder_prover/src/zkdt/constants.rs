@@ -18,6 +18,17 @@ pub fn get_tree_commitment_filepath_for_tree_number(
     let tree_commitment_filepath = tree_commitment_dir_path.join(format!("tree_commitment_{}.json", tree_number));
     String::from(tree_commitment_filepath.to_str().unwrap())
 }
+
+/// For tree commitment cache-ing
+pub fn get_tree_commitment_filepath_for_tree_batch(
+    tree_batch_size: usize, 
+    tree_batch_number: usize,
+    tree_commitment_dir_path: &Path
+) -> String {
+    let tree_commitment_filepath = tree_commitment_dir_path.join(format!("tree_commitment_batch_num_{}_size_{}.json", tree_batch_number, tree_batch_size));
+    String::from(tree_commitment_filepath.to_str().unwrap())
+}
+
 /// For sample minibatch cache-ing
 pub fn get_sample_minibatch_commitment_filepath_for_batch_size(
     log_batch_size: usize, 

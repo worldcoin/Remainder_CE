@@ -9,12 +9,12 @@ use remainder::{
     zkdt::{
         constants::{
             get_sample_minibatch_commitment_filepath_for_batch_size,
-            get_tree_commitment_filepath_for_tree_number,
+            get_tree_commitment_filepath_for_tree_number, get_tree_commitment_filepath_for_tree_batch,
         },
         input_data_to_circuit_adapter::{
             convert_zkdt_circuit_data_into_mles, load_upshot_data_single_tree_batch, MinibatchData, BatchedZKDTCircuitMles,
         },
-        zkdt_circuit::ZKDTCircuit,
+        zkdt_circuit::ZKDTCircuit, zkdt_multiple_tree_circuit::ZKDTMultiTreeCircuit,
     },
 };
 use remainder_shared_types::transcript::Transcript;
@@ -78,16 +78,16 @@ struct Args {
     #[arg(long)]
     tree_commit_dir: String,
 
+    /// the batch size of trees we are combining
+    #[arg(long, default_value_t = 4)]
+    tree_batch_size: usize,
+
     /// The tree number we are actually running (note that this,
     /// alongside the `tree_commit_dir`, generates the filename
     /// for the actual tree commitment file we are using)
     #[arg(long)]
-    tree_number: usize,
-
-    /// the trees we are combining
-    #[arg(long)]
-    all_trees: Vec<usize>,
-
+    tree_batch_number: usize,
+    
     /// Path to the sample minibatch commitment directory containing
     /// all of the sample minibatch commitments.
     ///
@@ -303,7 +303,9 @@ fn main() -> Result<(), ZKDTBinaryError> {
         }
     };
 
-    let trees_batched_data: Vec<BatchedZKDTCircuitMles<Fr>> = args.all_trees.into_iter().map(
+    let tree_range = (args.tree_batch_number * args.tree_batch_size) .. ((args.tree_batch_number + 1) * args.tree_batch_size);
+
+    let (trees_batched_data, minibatch_data_vec): (Vec<BatchedZKDTCircuitMles<Fr>>, Vec<_>) = tree_range.into_iter().map(
         |tree_num| {
              // --- Read in the Upshot data from file ---
             let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
@@ -315,26 +317,27 @@ fn main() -> Result<(), ZKDTBinaryError> {
             );
             let (batched_catboost_mles, (_, _)) =
                 convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
-            batched_catboost_mles
+            (batched_catboost_mles, minibatch_data)
         }
-    ).collect_vec();
+    ).unzip();
 
-    // --- Read in the Upshot data from file ---
-    let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
-        load_upshot_data_single_tree_batch::<Fr>(
-            maybe_minibatch_data,
-            args.tree_number,
-            Path::new(&args.decision_forest_model_filepath),
-            Path::new(&args.quantized_samples_filepath),
-        );
-    let (batched_catboost_mles, (_, _)) =
-        convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
+    // // --- Read in the Upshot data from file ---
+    // let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
+    //     load_upshot_data_single_tree_batch::<Fr>(
+    //         maybe_minibatch_data,
+    //         args.tree_number,
+    //         Path::new(&args.decision_forest_model_filepath),
+    //         Path::new(&args.quantized_samples_filepath),
+    //     );
+    // let (batched_catboost_mles, (_, _)) =
+    //     convert_zkdt_circuit_data_into_mles(zkdt_circuit_data, tree_height, input_len);
 
     // --- Sanitycheck (grab the minibatch commitment filename + check if exists) ---
+
     let sample_minibatch_commitment_filepath =
         get_sample_minibatch_commitment_filepath_for_batch_size(
-            minibatch_data.log_sample_minibatch_size,
-            minibatch_data.sample_minibatch_number,
+            minibatch_data_vec[0].log_sample_minibatch_size,
+            minibatch_data_vec[0].sample_minibatch_number,
             Path::new(&args.sample_minibatch_commit_dir),
         );
     debug!(
@@ -346,8 +349,9 @@ fn main() -> Result<(), ZKDTBinaryError> {
     }
 
     // --- Sanitycheck (check if the tree commitment exists) ---
-    let tree_commit_filepath = get_tree_commitment_filepath_for_tree_number(
-        args.tree_number,
+    let tree_commit_filepath = get_tree_commitment_filepath_for_tree_batch(
+        args.tree_batch_size,
+        args.tree_batch_number,
         Path::new(&args.tree_commit_dir),
     );
     debug!(
@@ -359,15 +363,14 @@ fn main() -> Result<(), ZKDTBinaryError> {
     }
 
     // --- Create the full ZKDT circuit ---
-    let full_zkdt_circuit = ZKDTCircuit {
-        batched_zkdt_circuit_mles: batched_catboost_mles,
+    // multi tree ZKDT circuit
+    let full_zkdt_circuit = ZKDTMultiTreeCircuit {
+        batched_zkdt_circuit_mles_tree: trees_batched_data,
         tree_precommit_filepath: tree_commit_filepath,
         sample_minibatch_precommit_filepath: sample_minibatch_commitment_filepath,
         rho_inv: args.rho_inv,
         ratio: args.matrix_ratio
     };
-
-    // multi tree ZKDT circuit
 
     // --- Grab the proof filepath to write to and compute the circuit + prove ---
     let maybe_proof_filepath = args

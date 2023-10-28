@@ -12,7 +12,7 @@ use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
 /// Computes the multiset characteristic polynomial evaluated
 /// at `r_mle` for any input x and its "permutation" `\bar{x}`.
 pub(crate) struct InputMultiSetCircuitMultiTree<F: FieldExt> {
-    pub input_data_mle_vec_tree: Vec<Vec<DenseMle<F, InputAttribute<F>>>>,
+    pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
     pub permuted_input_data_mle_vec_tree: Vec<Vec<DenseMle<F, InputAttribute<F>>>>,
     pub multiplicities_bin_decomp_mle_input_vec_tree: Vec<Vec<DenseMle<F, BinDecomp4Bit<F>>>>,
     pub r_mle: DenseMle<F, F>,
@@ -21,14 +21,14 @@ pub(crate) struct InputMultiSetCircuitMultiTree<F: FieldExt> {
 
 impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
     pub fn new(
-        input_data_mle_vec_tree: Vec<Vec<DenseMle<F, InputAttribute<F>>>>,
+        input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
         permuted_input_data_mle_vec_tree: Vec<Vec<DenseMle<F, InputAttribute<F>>>>,
         multiplicities_bin_decomp_mle_input_vec_tree: Vec<Vec<DenseMle<F, BinDecomp4Bit<F>>>>,
         r_mle: DenseMle<F, F>,
         r_packing_mle: DenseMle<F, F>,
     ) -> Self {
         Self {
-            input_data_mle_vec_tree,
+            input_data_mle_vec,
             permuted_input_data_mle_vec_tree,
             multiplicities_bin_decomp_mle_input_vec_tree,
             r_mle,
@@ -57,13 +57,11 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
 
         let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
 
-        let num_dataparallel_bits = log2(self.input_data_mle_vec_tree[0].len()) as usize;
-        let num_tree_bits = log2(self.input_data_mle_vec_tree.len()) as usize;
+        let num_dataparallel_bits = log2(self.multiplicities_bin_decomp_mle_input_vec_tree[0].len()) as usize;
+        let num_tree_bits = log2(self.multiplicities_bin_decomp_mle_input_vec_tree.len()) as usize;
 
-        self.input_data_mle_vec_tree.iter_mut().for_each(|mle_vec| {
-            mle_vec.iter_mut().for_each(|mle| {
-                mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
-            })
+        self.input_data_mle_vec.iter_mut().for_each(|mle| {
+            mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
         });
 
 
@@ -84,22 +82,36 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         // --- Layer 0: Compute the "packed" version of the decision and leaf tree nodes ---
         // Note that this also "evaluates" each packed entry at the random characteristic polynomial
         // evaluation challenge point `self.r`.
-        let input_packing_builders_vec = self.input_data_mle_vec_tree.iter_mut().map(
-            |input_data_mle_vec| {
-                BatchedLayer::new(
-                    input_data_mle_vec.iter().map(
-                        |input_data_mle| {
-                            let mut input_data_mle: DenseMle<F, InputAttribute<F>> = input_data_mle.clone();
-                            FSInputPackingBuilder::new(
-                                input_data_mle,
-                                self.r_mle.clone(),
-                                self.r_packing_mle.clone()
-                            )
-                        }).collect_vec())
-            }
-        ).collect_vec();
 
-        let input_packed_vecs = layers.add_gkr(BatchedLayer::new(input_packing_builders_vec));
+        // let mut input_data_mle_vec_tree = vec![self.input_data_mle_vec.clone(); 1 << num_tree_bits];
+        // let input_packing_builders_vec = input_data_mle_vec_tree.iter_mut().map(
+        //     |input_data_mle_vec| {
+        //         BatchedLayer::new(
+        //             input_data_mle_vec.iter().map(
+        //                 |input_data_mle| {
+        //                     let mut input_data_mle: DenseMle<F, InputAttribute<F>> = input_data_mle.clone();
+        //                     FSInputPackingBuilder::new(
+        //                         input_data_mle,
+        //                         self.r_mle.clone(),
+        //                         self.r_packing_mle.clone()
+        //                     )
+        //                 }).collect_vec())
+        //     }
+        // ).collect_vec();
+
+        let input_packing_builders = BatchedLayer::new(
+            self.input_data_mle_vec.iter().map(
+                |input_data_mle| {
+                    let mut input_data_mle: DenseMle<F, InputAttribute<F>> = input_data_mle.clone();
+                    FSInputPackingBuilder::new(
+                        input_data_mle,
+                        self.r_mle.clone(),
+                        self.r_packing_mle.clone()
+                    )
+                }).collect_vec());
+
+        // let input_packed_vecs = layers.add_gkr(BatchedLayer::new(input_packing_builders_vec));
+        let input_packed_vec = layers.add_gkr(input_packing_builders);
 
         // --- Layer 2, part 1: computes (r - x) * b_ij + (1 - b_ij) ---
         // Note that this is for the actual exponentiation computation:
@@ -107,10 +119,10 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         // where \sum_{j = 0}^{15} 2^j b_{ij} = c_i.
 
         
-        let layer_2_builders_vec = input_packed_vecs.iter().zip(self.multiplicities_bin_decomp_mle_input_vec_tree.clone()).map(
-            |(input_packed_vec, multiplicities_bin_decomp_mle_input_vec)| {
+        let layer_2_builders_vec = self.multiplicities_bin_decomp_mle_input_vec_tree.iter().map(
+            |multiplicities_bin_decomp_mle_input_vec| {
                 let prev_prod_builder = BatchedLayer::new(
-                    input_packed_vec.iter().zip(
+                    input_packed_vec.clone().iter().zip(
                         multiplicities_bin_decomp_mle_input_vec.iter()
                     ).map(|(r_minus_x_power, multiplicities_bin_decomp_mle_input)| {
                         BitExponentiationBuilderInput::new(
@@ -301,7 +313,7 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
 
         let mut exponentiated_input_vecs = prev_prod_vecs;
 
-       let input_len = 1 << (self.input_data_mle_vec_tree[0][0].num_iterated_vars() - 1);
+       let input_len = 1 << (self.input_data_mle_vec[0].num_iterated_vars() - 1);
                 for _ in 0..log2(input_len) {
                     let split_product_builders_vec = exponentiated_input_vecs.clone().into_iter().map(
                         |exponentiated_input_vec| {
