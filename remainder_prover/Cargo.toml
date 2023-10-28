@@ -8,6 +8,10 @@ name = "run_remainder_zkdt"
 path = "src/bin/run_remainder_zkdt.rs"
 
 [[bin]]
+name = "run_remainder_multitree"
+path = "src/bin/run_remainder_multitree.rs"
+
+[[bin]]
 name = "generate_ligero_tree_commitments"
 path = "src/bin/generate_ligero_tree_commitments.rs"
 
