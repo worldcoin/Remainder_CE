@@ -282,10 +282,16 @@ fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>
 /// Circuitize the provided batch of samples using the specified TreesModel instance,
 /// returning a CircuitizedAuxiliaries instance.
 /// See documentation of [`CircuitizedAuxiliaries`].
+/// The following preconditions are required to ensure attribute multiplicities fit in 8 bit bindecomp:
+/// Pre: trees_model.trees.len() <= 2^5
+/// Pre: trees_model.depth <= 2^3 + 1
 pub fn circuitize_auxiliaries<F: FieldExt>(
     samples_in: &Samples,
     trees_model: &TreesModel,
     ) -> CircuitizedAuxiliaries<F> {
+    // 
+    assert!(trees_model.trees.len() <= 32);
+    assert!(trees_model.depth <= 9);
     let paths: Vec<Vec<TreePath<i64>>> = trees_model.trees
         .par_iter()
         .map(|tree| samples_in.values
