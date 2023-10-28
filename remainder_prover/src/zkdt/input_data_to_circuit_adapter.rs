@@ -10,7 +10,7 @@ use serde::{Serialize, Deserialize};
 use tracing::instrument;
 
 use crate::{mle::dense::DenseMle, layer::LayerId};
-use super::{data_pipeline::dt2zkdt::{load_raw_trees_model, RawTreesModel, load_raw_samples, RawSamples, TreesModel, Samples, CircuitizedTrees, circuitize_samples, to_samples}, structs::{InputAttribute, DecisionNode, BinDecomp16Bit, LeafNode, BinDecomp4Bit}};
+use super::{data_pipeline::dt2zkdt::{load_raw_trees_model, RawTreesModel, load_raw_samples, RawSamples, TreesModel, Samples, CircuitizedTrees, CircuitizedSamples, CircuitizedAuxiliaries, circuitize_auxiliaries}, structs::{InputAttribute, DecisionNode, BinDecomp16Bit, LeafNode, BinDecomp4Bit}};
 
 #[derive(Clone)]
 pub struct BatchedZKDTCircuitMles<F: FieldExt> {
@@ -214,35 +214,36 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
 
     // --- Conversions ---
     let full_trees_model: TreesModel = (&raw_trees_model).into();
-    let single_tree = full_trees_model.slice(tree_idx, tree_idx + 1);
-    let samples: Samples = to_samples(&raw_samples);
+    let single_tree = full_trees_model.slice(tree_idx..tree_idx + 1);
+    let samples: Samples = (&raw_samples).into();
     let ctrees: CircuitizedTrees<F> = (&single_tree).into();
 
     // --- Compute actual witnesses ---
-    let csamples = circuitize_samples::<F>(&samples, &single_tree);
+    let csamples: CircuitizedSamples<F> = (&samples).into();
+    let caux = circuitize_auxiliaries(&samples, &single_tree);
     let tree_height = ctrees.depth;
-    let input_len = csamples.samples[0].len();
+    let input_len = csamples[0].len();
 
     // --- Sanitycheck ---
-    debug_assert_eq!(csamples.attributes_on_paths.len(), 1);
-    debug_assert_eq!(csamples.decision_paths.len(), 1);
-    debug_assert_eq!(csamples.path_ends.len(), 1);
-    debug_assert_eq!(csamples.differences.len(), 1);
-    debug_assert_eq!(csamples.node_multiplicities.len(), 1);
+    debug_assert_eq!(caux.attributes_on_paths.len(), 1);
+    debug_assert_eq!(caux.decision_paths.len(), 1);
+    debug_assert_eq!(caux.path_ends.len(), 1);
+    debug_assert_eq!(caux.differences.len(), 1);
+    debug_assert_eq!(caux.node_multiplicities.len(), 1);
     debug_assert_eq!(ctrees.decision_nodes.len(), 1);
     debug_assert_eq!(ctrees.leaf_nodes.len(), 1);
-    debug_assert_eq!(csamples.attribute_multiplicities.len(), 1);
+    debug_assert_eq!(caux.attribute_multiplicities.len(), 1);
 
     // --- Grab only the slice of witnesses which are relevant to the target `tree_number` ---
     (ZKDTCircuitData::new(
-        csamples.samples,
-        csamples.attributes_on_paths[0].clone(),
-        csamples.decision_paths[0].clone(),
-        csamples.path_ends[0].clone(),
-        csamples.differences[0].clone(),
-        csamples.node_multiplicities[0].clone(),
+        csamples,
+        caux.attributes_on_paths[0].clone(),
+        caux.decision_paths[0].clone(),
+        caux.path_ends[0].clone(),
+        caux.differences[0].clone(),
+        caux.node_multiplicities[0].clone(),
         ctrees.decision_nodes[0].clone(),
         ctrees.leaf_nodes[0].clone(),
-        csamples.attribute_multiplicities[0].clone()
+        caux.attribute_multiplicities[0].clone()
     ), (tree_height, input_len), minibatch_data)
 }

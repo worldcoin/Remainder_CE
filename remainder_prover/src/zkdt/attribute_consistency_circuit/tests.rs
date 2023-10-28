@@ -2,11 +2,15 @@
 mod tests {
     use std::path::Path;
 
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
+    
+    
+    use ark_std::{start_timer, end_timer};
+    
 
-    use ark_std::{end_timer, start_timer};
-    use itertools::Itertools;
-
+    
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, TREE_HEIGHT}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::BatchedZKDTCircuitMles}};
+    use remainder_shared_types::transcript::{Transcript};
     use crate::prover::tests::test_circuit;
     use crate::zkdt::attribute_consistency_circuit::multitree_circuits::AttributeConsistencyCircuitMultiTree;
     use crate::zkdt::input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles};

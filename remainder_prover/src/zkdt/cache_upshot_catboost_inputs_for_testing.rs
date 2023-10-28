@@ -3,7 +3,7 @@
 use std::{path::Path, fs};
 use remainder_shared_types::FieldExt;
 use serde_json::{to_writer, from_reader};
-use crate::{zkdt::{constants::get_cached_batched_mles_filepath_with_exp_size, input_data_to_circuit_adapter::convert_zkdt_circuit_data_into_mles, data_pipeline::dt2zkdt::{RawTreesModel, load_raw_trees_model, load_raw_samples, RawSamples, TreesModel, CircuitizedTrees, to_samples, circuitize_samples, Samples}}, utils::file_exists};
+use crate::{zkdt::{constants::get_cached_batched_mles_filepath_with_exp_size, input_data_to_circuit_adapter::convert_zkdt_circuit_data_into_mles, data_pipeline::dt2zkdt::{RawTreesModel, load_raw_trees_model, load_raw_samples, RawSamples, TreesModel, CircuitizedTrees, CircuitizedSamples, circuitize_auxiliaries, Samples}}, utils::file_exists};
 use super::{input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, ZKDTCircuitData, BatchedZKDTCircuitMles}, constants::CACHED_BATCHED_MLES_FILE};
 
 /// Writes the results of the [`load_upshot_data_single_tree_batch`] function call
@@ -114,22 +114,23 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
         let true_input_batch_size = 2_usize.pow(batch_size_exp as u32);
         raw_samples.values = orig_raw_samples.values[0..true_input_batch_size].to_vec();
 
-        let samples: Samples = to_samples(&raw_samples);
-        let csamples = circuitize_samples::<F>(&samples, &trees_model);
+        let samples: Samples = (&raw_samples).into();
+        let csamples: CircuitizedSamples<F> = (&samples).into();
+        let caux = circuitize_auxiliaries::<F>(&samples, &trees_model);
     
         let tree_height = ctrees.depth;
-        let input_len = csamples.samples[0].len();
+        let input_len = csamples[0].len();
     
         let combined_zkdt_circuit_data = (ZKDTCircuitData::new(
-            csamples.samples,
-            csamples.attributes_on_paths[0].clone(),
-            csamples.decision_paths[0].clone(),
-            csamples.path_ends[0].clone(),
-            csamples.differences[0].clone(),
-            csamples.node_multiplicities[0].clone(),
+            csamples,
+            caux.attributes_on_paths[0].clone(),
+            caux.decision_paths[0].clone(),
+            caux.path_ends[0].clone(),
+            caux.differences[0].clone(),
+            caux.node_multiplicities[0].clone(),
             ctrees.decision_nodes[0].clone(),
             ctrees.leaf_nodes[0].clone(),
-            csamples.attribute_multiplicities[0].clone()
+            caux.attribute_multiplicities[0].clone()
         ), (tree_height, input_len));
 
         // --- Write to file ---
@@ -139,7 +140,7 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
 }
 
 mod tests {
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use super::write_mles_batch_catboost_single_tree;
 
     /// Literally just calls the [`write_mles_batch_catboost_single_tree`] function

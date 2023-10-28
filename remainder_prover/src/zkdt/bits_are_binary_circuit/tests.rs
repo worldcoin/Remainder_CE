@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::{time::Instant, path::Path};
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use crate::{zkdt::{bits_are_binary_circuit::{circuits::{BinDecomp16BitIsBinaryCircuit, BinDecomp4BitIsBinaryCircuit}, dataparallel_circuits::{BinDecomp16BitIsBinaryCircuitBatched, BinDecomp4BitIsBinaryCircuitBatched}}, input_data_to_circuit_adapter::BatchedZKDTCircuitMles, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree}, prover::GKRCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
 

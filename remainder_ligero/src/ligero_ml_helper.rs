@@ -101,7 +101,7 @@ pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
 #[test]
 fn test_initialize_tensor() {
     use ark_std::{test_rng, One};
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use rand::Rng;
 
     let mut rng = test_rng();
@@ -133,7 +133,7 @@ fn test_initialize_tensor() {
 #[test]
 fn test_split_tensor() {
     use ark_std::{test_rng, One};
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use rand::Rng;
 
     let mut rng = test_rng();

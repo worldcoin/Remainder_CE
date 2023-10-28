@@ -1,3 +1,4 @@
+use ark_std::{log2, start_timer, end_timer};
 use ark_serialize::Read;
 use itertools::{repeat_n, Itertools};
 use remainder_ligero::{
@@ -357,6 +358,12 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 sample_minibatch_ligero_aux,
                 sample_minibatch_ligero_root,
             );
+        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+            input_mles_input_layer_builder.to_input_layer_with_precommit(
+                sample_minibatch_ligero_commit,
+                sample_minibatch_ligero_aux,
+                sample_minibatch_ligero_root,
+            );
 
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             aux_mles_input_layer_builder.to_input_layer_with_rho_inv(
@@ -552,7 +559,7 @@ mod tests {
     use crate::prover::tests::test_circuit;
     use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
     use ark_std::{end_timer, start_timer};
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use std::path::Path;
 
     use chrono;

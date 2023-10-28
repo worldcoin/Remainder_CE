@@ -831,7 +831,7 @@ mod tests {
 
     use super::*;
     use crate::{mle::{dense::DenseMle, MleRef}, zkdt::{data_pipeline::dummy_data_generator::{generate_dummy_mles, NUM_DUMMY_INPUTS, TREE_HEIGHT, generate_dummy_mles_batch, DummyMles, BatchedDummyMles}, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::BatchedZKDTCircuitMles}};
-    use halo2_base::halo2_proofs::halo2curves::{bn256::Fr, FieldExt};
+    use remainder_shared_types::{Fr, halo2curves::FieldExt};
     use ark_std::log2;
 
     #[test]

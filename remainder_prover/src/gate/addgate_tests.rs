@@ -845,7 +845,7 @@ mod test {
 
     use super::*;
     use ark_std::test_rng;
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
 
     #[test]
     /// non-batched test

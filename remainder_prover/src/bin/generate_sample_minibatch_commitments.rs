@@ -2,9 +2,9 @@
 
 use std::{path::Path, fs, io::BufWriter};
 use ark_std::{log2, start_timer, end_timer};
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use remainder_shared_types::Fr;
 use itertools::Itertools;
-use remainder::{zkdt::{data_pipeline::dt2zkdt::{RawSamples, load_raw_samples, Samples, to_samples}, structs::InputAttribute, constants::get_sample_minibatch_commitment_filepath_for_batch_size}, mle::{dense::DenseMle, Mle}, layer::LayerId, prover::input_layer::{combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer}};
+use remainder::{zkdt::{data_pipeline::dt2zkdt::{RawSamples, load_raw_samples, Samples}, structs::InputAttribute, constants::get_sample_minibatch_commitment_filepath_for_batch_size}, mle::{dense::DenseMle, Mle}, layer::LayerId, prover::input_layer::{combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer}};
 use clap::Parser;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
@@ -101,7 +101,7 @@ pub fn generate_ligero_sample_minibatch_commitments<F: FieldExt>(
                         values: sample_minibatch.to_vec(),
                         sample_length: sample_minibatch[0].len(), // TODO!(ryancao): Is this actually correct?
                     };
-                    let minibatch_samples = to_samples(&minibatch_raw_samples);
+                    let minibatch_samples: Samples = (&minibatch_raw_samples).into();
 
                     // --- Convert into `Vec<Vec<InputAttribute<F>>` ---
                     let minibatch_converted_samples: Vec<Vec<InputAttribute<F>>> = minibatch_samples.values.iter().map(

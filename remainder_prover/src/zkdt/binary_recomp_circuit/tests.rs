@@ -2,7 +2,7 @@
 mod tests {
     use std::{time::Instant, path::Path};
 
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use remainder_shared_types::Fr;
     use itertools::Itertools;
     
     

@@ -17,6 +17,7 @@ use remainder::{
         zkdt_circuit::ZKDTCircuit, zkdt_multiple_tree_circuit::ZKDTMultiTreeCircuit,
     },
 };
+
 use remainder_shared_types::transcript::Transcript;
 use remainder_shared_types::FieldExt;
 use serde_json::{from_reader, to_writer};
@@ -26,6 +27,7 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
+
 use thiserror::Error;
 use tracing::debug;
 use tracing_subscriber::{
@@ -42,6 +44,7 @@ use jemallocator::Jemalloc;
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
+
 
 #[derive(Error, Debug, Clone)]
 /// Errors for running the binary over inputs and proving/verification
@@ -152,6 +155,7 @@ struct Args {
 
 
 
+
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
     // flags after a refactor
@@ -181,7 +185,9 @@ struct Args {
 }
 
 /// Runs the actual circuit on the witness data
+
 pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
+    
     mut circuit: C,
     maybe_filepath_to_proof: Option<PathBuf>,
     verify_proof: bool,
@@ -214,6 +220,7 @@ where
 
                 end_timer!(timer);
             }
+
             let mut transcript = C::Transcript::new("GKR Verifier Transcript");
             let now = Instant::now();
 
@@ -227,6 +234,7 @@ where
                     let mut bufreader = Vec::with_capacity(initial_buffer_size);
                     file.read_to_end(&mut bufreader).unwrap();
                     serde_json::de::from_slice(&bufreader[..]).unwrap()
+
                 } else {
                     proof
                 };
@@ -287,6 +295,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
     debug!(args_as_string);
 
     // --- Sanitycheck (need minibatch number if we have batch size) + grabbing minibatch data ---
+    
     let maybe_minibatch_data = match (args.log_sample_minibatch_size, args.sample_minibatch_number)
     {
         (None, None) => None,
@@ -294,6 +303,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
         (Some(_), None) => {
             return Err(ZKDTBinaryError::MinibatchLogsizeNoIndex);
         }
+
         (Some(log_sample_minibatch_size), Some(sample_minibatch_number)) => {
             let minibatch_data = MinibatchData {
                 log_sample_minibatch_size,
@@ -302,6 +312,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
             Some(minibatch_data)
         }
     };
+
 
     let tree_range = (args.tree_batch_number * args.tree_batch_size) .. ((args.tree_batch_number + 1) * args.tree_batch_size);
 
@@ -321,6 +332,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
         }
     ).unzip();
 
+
     // // --- Read in the Upshot data from file ---
     // let (zkdt_circuit_data, (tree_height, input_len), minibatch_data) =
     //     load_upshot_data_single_tree_batch::<Fr>(
@@ -334,7 +346,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
 
     // --- Sanitycheck (grab the minibatch commitment filename + check if exists) ---
 
-    let sample_minibatch_commitment_filepath =
+let sample_minibatch_commitment_filepath =
         get_sample_minibatch_commitment_filepath_for_batch_size(
             minibatch_data_vec[0].log_sample_minibatch_size,
             minibatch_data_vec[0].sample_minibatch_number,
@@ -349,6 +361,7 @@ fn main() -> Result<(), ZKDTBinaryError> {
     }
 
     // --- Sanitycheck (check if the tree commitment exists) ---
+    
     let tree_commit_filepath = get_tree_commitment_filepath_for_tree_batch(
         args.tree_batch_size,
         args.tree_batch_number,
