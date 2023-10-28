@@ -51,7 +51,7 @@ use self::input_layer::{
 
 use core::cmp::Ordering;
 
-use tracing::{debug, info, trace, warn};
+use tracing::{warn};
 
 /// New type for containing the list of Layers that make up the GKR circuit
 ///
@@ -1007,7 +1007,6 @@ pub trait GKRCircuit<F: FieldExt> {
 
             
             let input_layer_claim = if input_layer_claims.len() > 1 {
-                let mut idx = 0;
                 let (prev_claim, _) = aggregate_claims(
                     &input_layer_claim_group,
                     &mut |claim_group, prover_supplied_wlx_evaluations_idx, _| -> Result<Vec<F>, GKRError> {
@@ -1035,6 +1034,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 )?;
 
                 prev_claim
+            } else {
+                input_layer_claims[0].clone()
             };
 
             debug!("Input layer claim: {:#?}", input_layer_claim);

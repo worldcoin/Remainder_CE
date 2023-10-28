@@ -671,10 +671,9 @@ mod tests {
     use crate::{prover::tests::test_circuit, zkdt::input_data_to_circuit_adapter::BatchedZKDTCircuitMles};
     use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
     use ark_std::{end_timer, start_timer};
-    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use itertools::Itertools;
     use std::path::Path;
-
+    use remainder_shared_types::Fr;
     use chrono;
     use log::LevelFilter;
     use std::io::Write;

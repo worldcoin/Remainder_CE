@@ -1,18 +1,15 @@
 //! Executable which generates all Ligero tree commitments
 
 use std::{path::{Path, PathBuf}, time::Instant, fs};
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
-use remainder::{prover::{GKRError, GKRCircuit, input_layer::{combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer}}, zkdt::{data_pipeline::{dt2zkdt::{RawTreesModel, RawSamples, load_raw_trees_model, load_raw_samples, circuitize_samples, TreesModel, Samples, to_samples, CircuitizedTrees}}, zkdt_circuit::ZKDTCircuit, constants::get_tree_commitment_filepath_for_tree_number, structs::{LeafNode, DecisionNode}}, layer::LayerId, mle::{Mle, dense::DenseMle}};
+use remainder_shared_types::Fr;
+use remainder::{prover::{GKRError, GKRCircuit, input_layer::{combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer}}, zkdt::{data_pipeline::{dt2zkdt::{RawTreesModel, RawSamples, load_raw_trees_model, load_raw_samples, TreesModel, Samples, CircuitizedTrees}}, zkdt_circuit::ZKDTCircuit, constants::{get_tree_commitment_filepath_for_tree_number, get_tree_commitment_filepath_for_tree_batch}, structs::{LeafNode, DecisionNode}}, layer::LayerId, mle::{Mle, dense::DenseMle}};
 use clap::Parser;
 
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use remainder_shared_types::{transcript::poseidon_transcript::PoseidonTranscript, FieldExt};
 use serde_json::{from_reader, to_writer};
 use std::{
-    fs,
     io::BufWriter,
-    path::{Path, PathBuf},
-    time::Instant,
 };
 use thiserror::Error;
 use tracing::{debug, debug_span, event, span, Level};

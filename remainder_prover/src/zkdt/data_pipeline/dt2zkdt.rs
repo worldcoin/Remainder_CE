@@ -62,10 +62,6 @@ use crate::zkdt::constants::{
     get_cached_batched_mles_filepath_with_exp_size, get_tree_commitment_filepath_for_tree_number,
 };
 use crate::zkdt::data_pipeline::trees::*;
-use crate::zkdt::helpers::*;
-use crate::zkdt::constants::{
-    get_cached_batched_mles_filepath_with_exp_size, get_tree_commitment_filepath_for_tree_number,
-};
 use crate::zkdt::data_pipeline::trees::*;
 use crate::zkdt::data_pipeline::helpers::*;
 use crate::zkdt::input_data_to_circuit_adapter::ZKDTCircuitData;
@@ -666,27 +662,7 @@ mod tests {
         ];
         let raw_samples = RawSamples {
             values,
-            sample_length,
-            
-        };
-        let samples: Samples = (&raw_samples).into();
-        let csamples: CircuitizedSamples<Fr> = (&samples).into();
-        assert_eq!(csamples.len(), samples.values.len());
-        csamples.iter()
-            .for_each(|sample| assert_eq!(sample.len(), samples.sample_length));
-    }
-
-    #[test]
-    fn test_circuitize_auxiliaries() {
-        let sample_length = 5;
-        let values = vec![
-            vec![0_u16; sample_length],
-            vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
-            vec![2_u16; sample_length],
-        ];
-        let raw_samples = RawSamples {
-            values,
-            sample_length,
+            sample_length
         };
         let tree = build_small_tree();
         let raw_trees_model = RawTreesModel {

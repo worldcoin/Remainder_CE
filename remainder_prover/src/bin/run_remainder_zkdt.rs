@@ -2,7 +2,7 @@
 
 use ark_serialize::Read;
 use clap::Parser;
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use remainder_shared_types::Fr;
 use itertools::Itertools;
 use remainder::{
     prover::{GKRCircuit, GKRError},

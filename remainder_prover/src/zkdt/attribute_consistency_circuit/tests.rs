@@ -2,6 +2,7 @@
 mod tests {
     use std::path::Path;
 
+    use itertools::Itertools;
     use remainder_shared_types::Fr;
     
     
@@ -14,13 +15,7 @@ mod tests {
     use crate::prover::tests::test_circuit;
     use crate::zkdt::attribute_consistency_circuit::multitree_circuits::AttributeConsistencyCircuitMultiTree;
     use crate::zkdt::input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles};
-    use crate::zkdt::{
-        attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit,
-        cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree,
-        data_pipeline::dummy_data_generator::{generate_dummy_mles, DummyMles, TREE_HEIGHT},
-        input_data_to_circuit_adapter::BatchedZKDTCircuitMles,
-    };
-    use remainder_shared_types::transcript::Transcript;
+
 
     use super::super::circuits::NonBatchedAttributeConsistencyCircuit;
 

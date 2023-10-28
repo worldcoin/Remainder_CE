@@ -35,8 +35,6 @@ use remainder_shared_types::{
     FieldExt,
 };
 
-use ark_std::{end_timer, start_timer};
-
 use super::input_data_to_circuit_adapter::BatchedZKDTCircuitMles;
 use super::path_consistency_circuit::dataparallel_circuits::PathCheckCircuitBatchedNoMul;
 use super::{
@@ -352,12 +350,6 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             // let res = from_reader(&mut bufreader).unwrap();
             res
         };
-        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            input_mles_input_layer_builder.to_input_layer_with_precommit(
-                sample_minibatch_ligero_commit,
-                sample_minibatch_ligero_aux,
-                sample_minibatch_ligero_root,
-            );
         let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             input_mles_input_layer_builder.to_input_layer_with_precommit(
                 sample_minibatch_ligero_commit,
