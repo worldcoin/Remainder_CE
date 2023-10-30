@@ -14,7 +14,6 @@ pub struct Poseidon<F: FieldExt, const WIDTH: usize, const RATE: usize>
 impl<F: FieldExt, const WIDTH: usize, const RATE: usize> Poseidon<F, WIDTH, RATE>
 {
     pub fn new(r_f: usize, r_p: usize) -> Self {
-        dbg!("Calling a new sponge!!");
         Self {
             sponge: Either::Left(NativeSponge::new(<ConstantLength::<2> as Domain<F, 2>>::initial_capacity_element(), <ConstantLength::<2> as Domain<F, 2>>::layout(WIDTH)))
         }

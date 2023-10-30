@@ -136,24 +136,24 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
         let combine_layers_timer = start_timer!(|| "combine layers + gate stuff");
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
-                // attribute_consistency_witness.layers,
-                // multiset_witness.layers,
-                input_multiset_witness.layers,
-                // binary_recomp_circuit_batched_witness.layers,
-                // bin_decomp_4_bit_binary_batched_witness.layers,
-                // bin_decomp_16_bit_binary_batched_witness.layers,
-                // bits_are_binary_multiset_decision_circuit_witness.layers,
-                // bits_are_binary_multiset_leaf_circuit_witness.layers,
+                attribute_consistency_witness.layers,
+                multiset_witness.layers,
+                // input_multiset_witness.layers,
+                binary_recomp_circuit_batched_witness.layers,
+                bin_decomp_4_bit_binary_batched_witness.layers,
+                bin_decomp_16_bit_binary_batched_witness.layers,
+                bits_are_binary_multiset_decision_circuit_witness.layers,
+                bits_are_binary_multiset_leaf_circuit_witness.layers,
             ],
             vec![
-                // attribute_consistency_witness.output_layers,
-                // multiset_witness.output_layers,
-                input_multiset_witness.output_layers,
-                // binary_recomp_circuit_batched_witness.output_layers,
-                // bin_decomp_4_bit_binary_batched_witness.output_layers,
-                // bin_decomp_16_bit_binary_batched_witness.output_layers,
-                // bits_are_binary_multiset_decision_circuit_witness.output_layers,
-                // bits_are_binary_multiset_leaf_circuit_witness.output_layers,
+                attribute_consistency_witness.output_layers,
+                multiset_witness.output_layers,
+                // input_multiset_witness.output_layers,
+                binary_recomp_circuit_batched_witness.output_layers,
+                bin_decomp_4_bit_binary_batched_witness.output_layers,
+                bin_decomp_16_bit_binary_batched_witness.output_layers,
+                bits_are_binary_multiset_decision_circuit_witness.output_layers,
+                bits_are_binary_multiset_leaf_circuit_witness.output_layers,
             ],
         )
         .unwrap();
@@ -536,10 +536,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         //     .map_err(|err| GKRError::InputLayerError(err))?;
         // InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
 
-        let input_mle_commit = input_mles_input_layer
-            .commit()
-            .map_err(|err| GKRError::InputLayerError(err))?;
-        InputLayerEnum::append_commitment_to_transcript(&input_mle_commit, transcript).unwrap();
+        // let input_mle_commit = input_mles_input_layer
+        //     .commit()
+        //     .map_err(|err| GKRError::InputLayerError(err))?;
+        // InputLayerEnum::append_commitment_to_transcript(&input_mle_commit, transcript).unwrap();
 
         let aux_mle_commit = aux_mles_input_layer
             .commit()
@@ -627,6 +627,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 
         let bits_are_binary_multiset_decision_circuit =
             BinDecomp16BitIsBinaryCircuitMultiTree::new(multiplicities_bin_decomp_mle_decision_vec);
+
         let bits_are_binary_multiset_leaf_circuit =
             BinDecomp16BitIsBinaryCircuitMultiTree::new(multiplicities_bin_decomp_mle_leaf_vec);
 
@@ -644,7 +645,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             // --- Input layers ---
             vec![
                 // tree_mle_input_layer,
-                input_mles_input_layer,
+                // input_mles_input_layer,
                 aux_mles_input_layer,
                 public_path_leaf_node_mles_input_layer,
                 random_r,
@@ -653,7 +654,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             ],
             vec![
                 // tree_mle_commit,
-                input_mle_commit,
+                // input_mle_commit,
                 aux_mle_commit,
                 public_path_leaf_node_mle_commit,
                 random_r_commit,

@@ -61,7 +61,7 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         let num_tree_bits = log2(self.multiplicities_bin_decomp_mle_input_vec_tree.len()) as usize;
 
         self.input_data_mle_vec.iter_mut().for_each(|mle| {
-            mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits + num_tree_bits)).collect_vec()));
+            mle.set_prefix_bits(Some(mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits)).collect_vec()));
         });
 
 
