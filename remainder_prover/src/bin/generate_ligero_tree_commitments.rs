@@ -1,25 +1,20 @@
 //! Executable which generates all Ligero tree commitments
 
-use ark_std::{end_timer, start_timer};
 use clap::Parser;
 use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 use remainder::{
     layer::LayerId,
     mle::{dense::DenseMle, Mle},
-    prover::{
-        input_layer::{
+    prover::input_layer::{
             combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer,
         },
-        GKRCircuit, GKRError,
-    },
     zkdt::{
         constants::get_tree_commitment_filepath_for_tree_number,
         data_pipeline::dt2zkdt::{
-            circuitize_samples, load_raw_samples, load_raw_trees_model, to_samples,
-            CircuitizedTrees, RawSamples, RawTreesModel, Samples, TreesModel,
+            load_raw_trees_model,
+            CircuitizedTrees, RawTreesModel, TreesModel,
         },
         structs::{DecisionNode, LeafNode},
-        zkdt_circuit::ZKDTCircuit,
     },
 };
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;

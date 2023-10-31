@@ -1,16 +1,10 @@
+//! Dummy data generation for testing purpose
 use crate::layer::LayerId;
 
 use crate::mle::dense::DenseMle;
 use crate::utils::file_exists;
 use crate::zkdt::constants::get_cached_batched_mles_filepath_with_exp_size;
-use crate::zkdt::data_pipeline::dt2zkdt::{
-    circuitize_samples, load_raw_samples, load_raw_trees_model, to_samples, CircuitizedTrees,
-    RawSamples, RawTreesModel, Samples, TreesModel,
-};
-use crate::zkdt::input_data_to_circuit_adapter::{
-    convert_zkdt_circuit_data_into_mles, load_upshot_data_single_tree_batch, MinibatchData,
-    ZKDTCircuitData,
-};
+use crate::zkdt::input_data_to_circuit_adapter::{ZKDTCircuitData, convert_zkdt_circuit_data_into_mles, MinibatchData, load_upshot_data_single_tree_batch};
 use remainder_shared_types::FieldExt;
 use serde::{Serialize, Deserialize};
 use serde_json::{to_writer, from_reader};

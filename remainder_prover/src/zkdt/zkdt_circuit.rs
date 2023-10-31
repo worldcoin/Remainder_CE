@@ -1,3 +1,4 @@
+use ark_std::{log2, start_timer, end_timer};
 use ark_serialize::Read;
 use itertools::{repeat_n, Itertools};
 use remainder_ligero::{
@@ -33,8 +34,6 @@ use remainder_shared_types::{
     transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
     FieldExt,
 };
-
-use ark_std::{end_timer, start_timer};
 
 use super::input_data_to_circuit_adapter::BatchedZKDTCircuitMles;
 use super::{
@@ -348,8 +347,11 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
             // let mut bufreader = BufReader::new(file);
             // let res = from_reader(&mut bufreader).unwrap();
+
             res
         };
+        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
+            public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             input_mles_input_layer_builder.to_input_layer_with_precommit(
                 sample_minibatch_ligero_commit,
@@ -362,8 +364,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 self.rho_inv,
                 self.ratio,
             );
-        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
-            public_path_leaf_node_mles_input_layer_builder.to_input_layer();
+
         let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
         let mut input_mles_input_layer = input_mles_input_layer.to_enum();
         let mut aux_mles_input_layer = aux_mles_input_layer.to_enum();

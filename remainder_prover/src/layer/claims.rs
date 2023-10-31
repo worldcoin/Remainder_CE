@@ -7,10 +7,10 @@ use remainder_shared_types::FieldExt;
 use tracing::instrument;
 
 use crate::layer::combine_mle_refs::get_og_mle_refs;
-use crate::mle::dense::{DenseMle, DenseMleRef};
-use crate::mle::mle_enum::MleEnum;
 use crate::mle::zero::ZeroMleRef;
-use crate::mle::{MleIndex, MleRef};
+use crate::mle::{MleRef, MleIndex};
+use crate::mle::mle_enum::MleEnum;
+use crate::mle::dense::{DenseMleRef, DenseMle};
 use crate::prover::input_layer::enum_input_layer::InputLayerEnum;
 use crate::prover::input_layer::InputLayer;
 use crate::prover::{GKRError, ENABLE_OPTIMIZATION};
@@ -18,9 +18,7 @@ use crate::sumcheck::*;
 
 use ark_std::{cfg_into_iter, cfg_iter};
 
-use rayon::prelude::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-};
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use thiserror::Error;
 
 use super::combine_mle_refs::CombineMleRefError;
@@ -31,8 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use core::cmp::Ordering;
 use std::cmp::max;
-
-use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+use std::fmt;
 
 use log::{debug, info, warn};
 
@@ -83,7 +80,7 @@ pub enum ClaimError {
 /// optionally maintain additional source/destination layer information through
 /// `from_layer_id` and `to_layer_id`. This information can be used to speed up
 /// claim aggregation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Claim<F> {
     /// The point in F^n where the layer MLE is to be evaluated on.
     point: Vec<F>,
@@ -154,6 +151,17 @@ impl<F: Clone> Claim<F> {
     }
 }
 
+impl<F: fmt::Debug> fmt::Debug for Claim<F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Claim")
+            .field("point", &self.point)
+            .field("result", &self.result)
+            .field("from_layer_id", &self.from_layer_id)
+            .field("to_layer_id", &self.to_layer_id)
+            .finish()
+    }
+}
+
 /// A collection of claims for the same layer with an API for accessing the
 /// matrix of claim points in a multitude of ways (row-wise or column-wise).
 /// This struct is useful for claim aggregation.
@@ -167,7 +175,7 @@ pub struct ClaimGroup<F> {
     /// them on the next refactoring and consider using iterators instead!
     /// -------------- REFACTOR NEEDED ---------------------
     /// The common layer ID of all claims stored in this group.
-    layer_id: Option<LayerId>,
+    src_layer_id: Option<LayerId>,
     /// A 2D matrix with the claim's points as its rows.
     claim_points_matrix: Vec<Vec<F>>,
     /// The points in `claims` is effectively a matrix of elements in F. We also
@@ -190,7 +198,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
         if num_claims == 0 {
             return Ok(Self {
                 claims: vec![],
-                layer_id: None,
+                src_layer_id: None,
                 claim_points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
@@ -234,7 +242,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
 
         Ok(Self {
             claims,
-            layer_id,
+            src_layer_id: layer_id,
             claim_points_matrix: points_matrix,
             claim_points_transpose,
             result_vector,
@@ -260,7 +268,7 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
     /// Returns the common destination layer ID of all the claims stored in this
     /// group.
     pub fn get_layer_id(&self) -> Option<LayerId> {
-        self.layer_id
+        self.src_layer_id
     }
 
     /// Returns the i-th result.
@@ -316,12 +324,14 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
         &self.claims
     }
 
+    /// Temporary hacky fix -- claims store their respective (unmodified)
+    /// MleRefs instead of the layer itself. This simply looks at the list
+    /// of all claims within a single ClaimGroup and grabs the associated
+    /// MleRefs from there.
     pub fn get_claim_mle_refs(&self) -> Vec<MleEnum<F>> {
-        self.claims
-            .clone()
-            .into_iter()
-            .map(|claim| claim.mle_ref.unwrap())
-            .collect_vec()
+        self.claims.clone().into_iter().map(|claim| {
+            claim.mle_ref.unwrap()
+        }).collect_vec()
     }
 }
 
@@ -349,32 +359,18 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
 /// the `k` naive claim aggregations performed.
 /// TODO(Makis): Refactor this file to better expose the interface vs
 /// implementation.
-pub(crate) fn aggregate_claims<F: FieldExt>(
+pub fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &(impl Fn(&ClaimGroup<F>, &usize, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>
-          + std::marker::Sync),
+    
+    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>, usize, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>,
     transcript: &mut impl transcript::Transcript<F>,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
 
-    // Do nothing if there is only one claim.
-    if num_claims == 1 {
-        debug!("Received 1 claim. Doing nothing.");
-        // Return the claim but erase any from/to layer info so as not to
-        // trigger any checks from claim groups used in claim aggregation.
-        let claim = Claim {
-            from_layer_id: None,
-            to_layer_id: None,
-            ..claims.get_claim(0).clone()
-        };
-
-        return Ok((claim, vec![]));
-    }
-
     let claim_preproc_timer = start_timer!(|| format!("Claim preprocessing"));
-
+    
     let layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
 
     // Holds a sequence of relevant wlx evaluations, one for each claim
@@ -383,7 +379,8 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 
     let claims = preprocess_claims(claims.get_claim_vector().clone());
     let claim_groups = form_claim_groups(&claims);
-    let num_groups = claim_groups.len();
+    
+    let num_claim_groups = claim_groups.len();
 
     debug!("Grouped claims for aggregation: ");
     for group in &claim_groups {
@@ -396,29 +393,13 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     end_timer!(claim_preproc_timer);
     let intermediate_timer = start_timer!(|| format!("Intermediate claim aggregation."));
 
-    // Sample all challenges for intermediate claim aggregation.
-    let agg_challenges = (0..num_groups)
+    // TODO(Makis): Parallelize
+    let intermediate_results: Result<Vec<(Claim<F>, Vec<Vec<F>>)>, GKRError> = claim_groups
         .into_iter()
-        .map(|_| {
-            transcript
-                .get_challenge("Challenge for claim aggregation")
-                .unwrap()
-        })
-        .collect_vec();
-
-    let intermediate_results: Result<Vec<(Claim<F>, Vec<Vec<F>>)>, GKRError> =
-        cfg_into_iter!(claim_groups)
-            .enumerate()
-            .map(|(idx, claim_group)| {
-                aggregate_claims_in_one_round(
-                    &claim_group,
-                    compute_wlx_fn,
-                    &layer_mle_refs,
-                    &idx,
-                    agg_challenges[idx].clone(),
-                )
-            })
-            .collect();
+        
+        .enumerate()
+        .map(|(idx, claim_group)| aggregate_claims_in_one_round(&claim_group, &layer_mle_refs, compute_wlx_fn, idx, transcript))
+        .collect();
     let intermediate_results = intermediate_results?;
 
     // TODO(Makis): Parallelize both
@@ -433,13 +414,6 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
         .flatten()
         .collect();
 
-    // Appends all intermediate claim wlx evaluations to the transcript.
-    for wlx_evals in &intermediate_wlx_evals {
-        transcript
-            .append_field_elements("Claim Aggregation Wlx_evaluations", wlx_evals)
-            .unwrap();
-    }
-
     // Gather all wlx evaluations into one place.
     group_wlx_evaluations.append(&mut intermediate_wlx_evals);
 
@@ -447,19 +421,16 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
     let final_timer = start_timer!(|| format!("Final stage aggregation."));
 
     // Finally, aggregate all intermediate claims.
-    let agg_challenge = transcript
-        .get_challenge("Challenge for claim aggregation")
-        .unwrap();
     let (claim, mut wlx_evals_option) = aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
-        compute_wlx_fn,
         &layer_mle_refs,
-        &num_groups,
-        agg_challenge,
+        compute_wlx_fn,
+        
+        num_claim_groups, // Should be the final prover-supplied V_i(l(x)) evaluations
+        transcript,
     )?;
 
     group_wlx_evaluations.append(&mut wlx_evals_option);
-    assert_eq!(group_wlx_evaluations.len(), num_groups + 1);
 
     end_timer!(final_timer);
     Ok((claim, group_wlx_evaluations))
@@ -483,7 +454,7 @@ pub(crate) fn aggregate_claims<F: FieldExt>(
 /// readable. We should consider alternative designs.
 #[instrument(level = "trace", err)]
 #[instrument(level = "debug", skip_all, err)]
-pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
+pub fn compute_aggregated_challenges<F: FieldExt>(
     claims: &ClaimGroup<F>,
     r_star: F,
 ) -> Result<Vec<F>, ClaimError> {
@@ -506,6 +477,7 @@ pub(crate) fn compute_aggregated_challenges<F: FieldExt>(
 
     Ok(r)
 }
+
 
 /// Part of the claim aggregation process. It returns a vector of evaluations
 /// [W(l(0)), W(l(1)), ..., W(l(k))] where W : F^n -> F is the layer MLE stored
@@ -543,7 +515,7 @@ pub(crate) fn compute_claim_wlx<F: FieldExt>(
 
 /// Sorts claims by `from_layer_id` to prepare them for grouping. Also performs
 /// claim de-duplication if the `ENABLE_CLAIM_DEDUPLICATION` flag it set.
-fn preprocess_claims<F: FieldExt>(mut claims: Vec<Claim<F>>) -> Vec<Claim<F>> {
+pub fn preprocess_claims<F: FieldExt>(mut claims: Vec<Claim<F>>) -> Vec<Claim<F>> {
     if !ENABLE_CLAIM_DEDUPLICATION && !ENABLE_CLAIM_GROUPING {
         // There is no need to sort the claims if no optimizations are enabled.
         return claims;
@@ -555,12 +527,13 @@ fn preprocess_claims<F: FieldExt>(mut claims: Vec<Claim<F>>) -> Vec<Claim<F>> {
         match (claim1.get_from_layer_id(), claim2.get_from_layer_id()) {
             (Some(id1), Some(id2)) => match id1.cmp(&id2) {
                 // Ties are broken by point value.
-                Ordering::Equal => claim1.get_point().cmp(claim2.get_point()),
+                // Ordering::Equal => claim1.get_point().cmp(claim2.get_point()),
                 ordering => ordering,
             },
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
-            (None, None) => claim1.get_point().cmp(claim2.get_point()),
+            // (None, None) => claim1.get_point().cmp(claim2.get_point()),
+            (None, None) => Ordering::Equal,
         }
     });
 
@@ -588,7 +561,7 @@ fn preprocess_claims<F: FieldExt>(mut claims: Vec<Claim<F>>) -> Vec<Claim<F>> {
 /// # Requires
 /// All claims with the same `from_layer_id` should appear consecutively in the
 /// `claims` vector. For example, `claims` can be sorted by `from_layer_id`.
-fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
+pub fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
     info!("Forming claim group...");
 
     if !ENABLE_CLAIM_GROUPING {
@@ -600,7 +573,7 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 
         // Identify runs of claims with the same `from_layer_id` field.
         let mut start_index = 0;
-        for idx in (1..num_claims) {
+        for idx in 1..num_claims {
             if claims[idx].get_from_layer_id() != claims[idx - 1].get_from_layer_id() {
                 let end_index = idx;
                 claim_group_vec
@@ -636,13 +609,13 @@ fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>> {
 /// either contains no evaluations (in the trivial case of aggregating a single
 /// claim) or contains a single vector of the wlx evaluations produced during
 /// this 1-step claim aggregation.
-pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
+pub fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    compute_wlx_fn: &(impl Fn(&ClaimGroup<F>, &usize, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>
-          + std::marker::Sync),
     layer_mle_refs: &Vec<MleEnum<F>>,
-    index: &usize,
-    agg_chal: F,
+    
+    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>, usize, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>,
+    prover_supplied_wlx_group_idx: usize,
+    transcript: &mut impl transcript::Transcript<F>,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
@@ -664,9 +637,22 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
 
     // Aggregate claims by performing the claim aggregation protocol.
     // First compute V_i(l(x)).
-    let wlx_evaluations = compute_wlx_fn(claims, index, Some(layer_mle_refs))?;
+    
+    let wlx_evaluations = compute_wlx_fn(claims, prover_supplied_wlx_group_idx, Some(layer_mle_refs))?;
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
+    // Append evaluations to the transcript before sampling a challenge.
+    transcript
+        .append_field_elements(
+            "Claim Aggregation Wlx_evaluations",
+            &relevant_wlx_evaluations,
+        )
+        .unwrap();
+
+    // Next, sample `r^\star` from the transcript.
+    let agg_chal = transcript
+        .get_challenge("Challenge for claim aggregation")
+        .unwrap();
     debug!("Aggregate challenge: {:#?}", agg_chal);
 
     let aggregated_challenges = compute_aggregated_challenges(claims, agg_chal).unwrap();
@@ -699,9 +685,7 @@ pub(crate) fn aggregate_claims_in_one_round<F: FieldExt>(
 /// claim_vecs.len()`.
 /// # Panics
 ///  if `claim_vecs` is empty.
-pub fn get_num_wlx_evaluations<F: FieldExt>(
-    claim_vecs: &Vec<Vec<F>>,
-) -> (usize, Option<Vec<usize>>) {
+pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> (usize, Option<Vec<usize>>) {
     let num_claims = claim_vecs.len();
     let num_vars = claim_vecs[0].len();
 
@@ -717,13 +701,13 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(
         (max(num_vars * (num_claims - 1) + 1, num_claims), None)
     } else {
         debug!("Smart num_evals");
-        let mut degree_reduction = num_vars as i64;
+        let mut num_constant_columns = num_vars as i64;
         let mut common_idx = vec![];
         for j in 0..num_vars {
             let mut degree_reduced = true;
             for i in 1..num_claims {
                 if claim_vecs[i][j] != claim_vecs[i - 1][j] {
-                    degree_reduction -= 1;
+                    num_constant_columns -= 1;
                     degree_reduced = false;
                     break;
                 }
@@ -732,8 +716,8 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(
                 common_idx.push(j);
             }
         }
-        assert!(degree_reduction >= 0);
-        debug!("degree_reduction = {}", degree_reduction);
+        assert!(num_constant_columns >= 0);
+        debug!("degree_reduction = {}", num_constant_columns);
 
         // Evaluate the P(x) := W(l(x)) polynomial at deg(P) + 1
         // points. W : F^n -> F is a multi-linear polynomial on
@@ -747,17 +731,17 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(
         // constant polynomial of degree zero instead of `num_claims -
         // 1` which brings down the total degree by the same amount.
         let num_evals =
-            (num_vars) * (num_claims - 1) + 1 - (degree_reduction as usize) * (num_claims - 1);
+            (num_vars) * (num_claims - 1) + 1 - (num_constant_columns as usize) * (num_claims - 1);
         debug!("num_evals originally = {}", num_evals);
         (max(num_evals, num_claims), Some(common_idx))
     }
 }
 
-/*
 /// Aggregates `claims` into a single claim on challenge point
 /// `r_star` given the `wlx` evaluations of W(l(x)).
 /// This function is used by the verifier in the process of verifying
 /// claim aggregation.
+/*
 #[instrument(level = "trace", err)]
 #[instrument(level = "debug", skip_all, err)]
 pub(crate) fn verify_aggregate_claim<F: FieldExt>(
@@ -789,8 +773,6 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 }
 */
 
-/*
-
 #[cfg(test)]
 // Makis: Making this public so that I can access some of the helper functions
 // from "sumcheck/tests.rs".
@@ -803,6 +785,7 @@ pub(crate) mod tests {
 
     use super::*;
     use ark_std::test_rng;
+    // use remainder_shared_types::Fr;
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
 
     #[test]
@@ -825,7 +808,6 @@ pub(crate) mod tests {
     }
 
     // ------- Helper functions for claim aggregation tests -------
-
 
     /// Builds `ClaimGroup<Fr>` by evaluation an expression `expr` on
     /// each point in `points`.
@@ -858,12 +840,11 @@ pub(crate) mod tests {
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
 
-
         layer
     }
 
     /// Returns a random MLE expression with an associated GKR layer.
-    fn build_random_mle(num_vars: usize) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
+    fn build_random_mle_layer(num_vars: usize) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
         let mut rng = test_rng();
         let mle_evals: Vec<Fr> = (0..num_vars).map(|_| Fr::from(rng.gen::<u64>())).collect();
         layer_from_evals(mle_evals)
@@ -876,7 +857,7 @@ pub(crate) mod tests {
         let results = claims.get_results();
         let points_matrix = claims.get_claim_points_matrix();
 
-
+        
         debug_assert_eq!(points_matrix.len(), num_claims);
         debug_assert_eq!(points_matrix[0].len(), num_vars);
 
@@ -905,7 +886,7 @@ pub(crate) mod tests {
     fn compute_l_star(claims: &ClaimGroup<Fr>, r_star: &Fr) -> Vec<Fr> {
         let num_vars = claims.get_num_vars();
 
-
+        
         (0..num_vars)
             .map(|i| {
                 let evals: &Vec<Fr> = claims.get_points_column(i);
@@ -923,13 +904,14 @@ pub(crate) mod tests {
         let mut transcript = PoseidonTranscript::<Fr>::new("Dummy transcript for testing");
         aggregate_claims(
             claims,
-            &|claim, _| Ok(compute_claim_wlx(claims, layer)),
+            
+            &mut |claim, _, mle_refs| Ok(compute_claim_wlx(claims, layer)),
             &mut transcript,
         )
         .unwrap()
     }
 
-
+    
     // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
     fn compute_expected_claim(
         layer: &GKRLayer<Fr, PoseidonTranscript<Fr>>,
@@ -941,7 +923,7 @@ pub(crate) mod tests {
         Claim::new_raw(l_star.clone(), result)
     }
 
-
+    
     // ----------------------------------------------------------
 
     /// Test claim aggregation small MLE on 2 variables
@@ -957,7 +939,7 @@ pub(crate) mod tests {
 
 
 
-
+        
         // ---------------
 
         let layer = layer_from_evals(mle_evals);
@@ -977,11 +959,11 @@ pub(crate) mod tests {
         // assert_eq!(aggregated_claim, expected_claim);
     }
 
-
+    
     /// Test claim aggregation on another small MLE on 2 variables
     /// with 3 claims.
     #[test]
-
+    
     fn test_aggro_claim_2() {
         let mle_evals = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let points = vec![
@@ -989,24 +971,24 @@ pub(crate) mod tests {
             vec![Fr::from(2), Fr::from(3)],
             vec![Fr::from(3), Fr::from(1)],
         ];
-
+        
         let r_star = Fr::from(2).neg();
 
-
+        
         // ---------------
 
 
 
-
+        
         let layer = layer_from_evals(mle_evals);
         let claims = claims_from_expr_and_points(layer.expression(), &points);
 
 
 
-
+        
         let l_star = compute_l_star(&claims, &r_star);
 
-
+        
         // TODO: Assert l_star was computed correctly.
 
         let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
@@ -1029,7 +1011,7 @@ pub(crate) mod tests {
 
         // ---------------
 
-        let layer = build_random_mle(3);
+        let layer = build_random_mle_layer(3);
         let claims = claims_from_expr_and_points(layer.expression(), &points);
 
         let l_star = compute_l_star(&claims, &r_star);
@@ -1233,12 +1215,12 @@ pub(crate) mod tests {
         expr_copy.index_mle_indices(0);
 
         let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
-
+        
         let claim_fixed_vars: Claim<Fr> = Claim::new_raw(fix_vars, eval_fixed_vars);
         assert_ne!(res.get_result(), claim_fixed_vars.get_result());
     }
 
-
+    
     #[test]
     fn test_aggro_claim_common_suffix1() {
         // MLE on 3 variables (2^3 = 8 evals)
@@ -1418,4 +1400,3 @@ pub(crate) mod tests {
     }
     */
 }
-*/

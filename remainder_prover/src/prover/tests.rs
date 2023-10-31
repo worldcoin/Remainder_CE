@@ -165,9 +165,10 @@ struct SimplestCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
 
-    const CIRCUIT_HASH: Option<[u8; 32]> = Some([
-        201,181,0,14,124,41,18,30,207,198,237,142,57,140,114,224,28,140,62,0,109,36,200,27,208,218,32,166,8,35,115,46,
-    ]);
+    // const CIRCUIT_HASH: Option<[u8; 32]> = Some([
+    //     201,181,0,14,124,41,18,30,207,198,237,142,57,140,114,224,28,140,62,0,109,36,200,27,208,218,32,166,8,35,115,46,
+    // ]);
+    const CIRCUIT_HASH: Option<[u8; 32]> = None;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -893,7 +894,7 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
         batch_bits: 1,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof1.json")));
+    test_circuit(circuit, Some(Path::new("./gate_batch_proof1_optimized.json")));
 
     // panic!();
 }
@@ -936,7 +937,7 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
         neg_mle_2,
     };
 
-    test_circuit(circuit, Some(Path::new("./mul_gate_simple_proof.json")));
+    test_circuit(circuit, Some(Path::new("./mul_gate_simple_proof_optimized.json")));
 
     // panic!();
 }
@@ -1243,7 +1244,7 @@ fn test_gkr_simple_circuit() {
     );
 
     let circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
-    test_circuit(circuit, Some(Path::new("simple_circuit.json")));
+    test_circuit(circuit, Some(Path::new("simple_circuit_optimized.json")));
 }
 
 #[test]
@@ -1264,7 +1265,7 @@ fn test_gkr_simplest_circuit() {
 
     let mut circuit: SimplestCircuit<Fr> = SimplestCircuit { mle };
     dbg!(circuit.gen_circuit_hash().to_bytes());
-    test_circuit(circuit, Some(Path::new("simplest_circuit.json")));
+    test_circuit(circuit, Some(Path::new("simplest_circuit_optimized.json")));
 }
 
 #[test]
@@ -1288,7 +1289,7 @@ fn test_test_circuit() {
 
     let circuit: TestCircuit<Fr> = TestCircuit { mle, mle_2, size };
 
-    test_circuit(circuit, Some(Path::new("./gkr_proof.json")));
+    test_circuit(circuit, Some(Path::new("./gkr_proof_optimized.json")));
 }
 
 // ------------------------------------ REGULAR DATAPARALLEL TESTING CIRCUITS ------------------------------------
@@ -1347,7 +1348,7 @@ fn test_gkr_circuit_with_precommit() {
 
     let circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
 
-    test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit.json")));
+    test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit_optimized.json")));
 }
 
 // ------------------------------------ INPUT LAYER TESTING CIRCUITS ------------------------------------
@@ -1374,7 +1375,7 @@ fn test_multiple_input_layers_circuit() {
 
     test_circuit(
         circuit,
-        Some(Path::new("./multiple_input_layers_circuit.json")),
+        Some(Path::new("./multiple_input_layers_circuit_optimized.json")),
     );
 }
 
@@ -1390,7 +1391,7 @@ fn test_random_layer_circuit() {
     let mle = get_random_mle::<Fr>(num_vars, &mut rng);
     let circuit = RandomCircuit { mle };
 
-    test_circuit(circuit, Some(Path::new("./random_proof.json")));
+    test_circuit(circuit, Some(Path::new("./random_proof_optimized.json")));
 }
 
 // ------------------------------------ GATE CIRCUITS ------------------------------------
@@ -1418,7 +1419,7 @@ fn test_gkr_gate_simplest_circuit() {
 
     let circuit: SimplestGateCircuit<Fr> = SimplestGateCircuit { mle, negmle };
 
-    test_circuit(circuit, Some(Path::new("./gate_proof.json")));
+    test_circuit(circuit, Some(Path::new("./gate_proof_optimized.json")));
 
     // panic!();
 }
@@ -1456,7 +1457,7 @@ fn test_gkr_gate_batched_simplest_circuit() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof2.json")));
+    test_circuit(circuit, Some(Path::new("./gate_batch_proof2_optimized.json")));
 }
 
 #[test]
@@ -1492,7 +1493,7 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof_uneven.json")));
+    test_circuit(circuit, Some(Path::new("./gate_batch_proof_uneven_optimized.json")));
 }
 
 // ------------------------------------ EMPTY LAYER CIRCUITS ------------------------------------
@@ -1518,7 +1519,7 @@ fn test_empty_layer_circuit() {
         other_empty_layer_src_mle,
     };
 
-    test_circuit(circuit, Some(Path::new("empty_layer_proof.json")));
+    test_circuit(circuit, Some(Path::new("empty_layer_proof_optimized.json")));
 }
 
 // ------------------------------------ CIRCUIT COMBINATOR CIRCUITS ------------------------------------
