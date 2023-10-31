@@ -9,50 +9,7 @@ use remainder::{
 };
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use serde_json::{from_reader, to_writer};
-
-pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
-    let mut transcript = C::Transcript::new("GKR Prover Transcript");
-    let now = Instant::now();
-
-    match circuit.prove(&mut transcript) {
-        Ok(proof) => {
-            println!(
-                "proof generated successfully in {}!",
-                now.elapsed().as_secs_f32()
-            );
-            if let Some(path) = path {
-                let mut f = fs::File::create(path).unwrap();
-                to_writer(&mut f, &proof).unwrap();
-            }
-            let mut transcript = C::Transcript::new("GKR Verifier Transcript");
-            let now = Instant::now();
-
-            let proof = if let Some(path) = path {
-                let file = std::fs::File::open(path).unwrap();
-
-                from_reader(&file).unwrap()
-            } else {
-                proof
-            };
-            match circuit.verify(&mut transcript, proof) {
-                Ok(_) => {
-                    println!(
-                        "Verification succeeded: takes {}!",
-                        now.elapsed().as_secs_f32()
-                    );
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
-}
+use remainder::prover::helpers::test_circuit;
 
 fn main() {
     // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();

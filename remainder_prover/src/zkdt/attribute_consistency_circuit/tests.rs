@@ -11,7 +11,7 @@ mod tests {
     
     use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles, TREE_HEIGHT}, attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::BatchedZKDTCircuitMles}};
     use remainder_shared_types::transcript::{Transcript};
-    use crate::prover::tests::test_circuit;
+    use crate::prover::helpers::test_circuit;
 
     use super::super::circuits::{NonBatchedAttributeConsistencyCircuit};
 
