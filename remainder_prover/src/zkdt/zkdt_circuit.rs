@@ -51,6 +51,7 @@ use super::{
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
 
+use std::io::BufReader;
 use std::{marker::PhantomData, path::Path};
 
 /// The actual ZKDT circuit!
@@ -61,6 +62,10 @@ pub struct ZKDTCircuit<F: FieldExt> {
     pub tree_precommit_filepath: String,
     /// The filepath to the precommitted sample minibatch that we are proving
     pub sample_minibatch_precommit_filepath: String,
+    /// rho inverse value for ligero commit
+    pub rho_inv: u8,
+    /// ratio
+    pub ratio: f64,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
@@ -345,6 +350,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 
             res
         };
+        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
+            public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             input_mles_input_layer_builder.to_input_layer_with_precommit(
                 sample_minibatch_ligero_commit,
@@ -353,9 +360,11 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             );
 
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            aux_mles_input_layer_builder.to_input_layer();
-        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
-            public_path_leaf_node_mles_input_layer_builder.to_input_layer();
+            aux_mles_input_layer_builder.to_input_layer_with_rho_inv(
+                self.rho_inv,
+                self.ratio,
+            );
+
         let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
         let mut input_mles_input_layer = input_mles_input_layer.to_enum();
         let mut aux_mles_input_layer = aux_mles_input_layer.to_enum();
@@ -540,6 +549,7 @@ mod tests {
     use super::ZKDTCircuit;
     use crate::prover::helpers::test_circuit;
     use crate::{zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
+    use ark_std::{start_timer, end_timer};
     use remainder_shared_types::Fr;
     use std::path::Path;
 
@@ -571,8 +581,39 @@ mod tests {
             batched_zkdt_circuit_mles: batched_catboost_mles,
             tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
             sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
+            rho_inv: 4,
+            ratio: 1_f64,
         };
 
-            test_circuit(combined_circuit, None);
-        }
+        test_circuit(
+            combined_circuit,
+            Some(Path::new("upshot_data/zkdt_proof_opt.json")),
+        );
     }
+
+    #[test]
+    fn bench_zkdt_circuits() {
+        (10..11).for_each(|batch_size| {
+            let circuit_timer = start_timer!(|| format!("zkdt circuit, batch_size 2^{batch_size}"));
+            let wit_gen_timer = start_timer!(|| "wit gen");
+
+            let (batched_zkdt_circuit_mles, (_, _)) = generate_mles_batch_catboost_single_tree::<Fr>(
+                batch_size,
+                Path::new("upshot_data/"),
+            );
+            end_timer!(wit_gen_timer);
+
+            let combined_circuit = ZKDTCircuit {
+                batched_zkdt_circuit_mles,
+                tree_precommit_filepath:
+                    "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
+                sample_minibatch_precommit_filepath:
+                    "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
+                rho_inv: 4,
+                ratio: 1_f64,
+            };
+
+            test_circuit(combined_circuit, None);
+        });
+    }
+}

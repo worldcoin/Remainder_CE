@@ -15,7 +15,13 @@ use std::{
 };
 use thiserror::Error;
 use tracing::debug;
-use tracing_subscriber::{fmt::format::FmtSpan, FmtSubscriber};
+use tracing_subscriber::{
+    fmt::format::{self, FmtSpan},
+    prelude::*,
+    FmtSubscriber,
+};
+
+use ark_std::{end_timer, start_timer};
 
 #[derive(Error, Debug, Clone)]
 /// Errors for running the binary over inputs and proving/verification
@@ -110,6 +116,18 @@ struct Args {
     /// different trace levels
     #[arg(long, default_value_t = false)]
     debug_tracing_subscriber: bool,
+
+    /// sets the value for rho_inv for the ligero commit
+    #[arg(long, default_value_t = 4)]
+    rho_inv: u8,
+
+    /// sets the matrix ratio (orig_num_cols : num_rows) for ligero commit, will do the dimensions
+    /// to achieve the ratio as close as possible
+    #[arg(long, default_value_t = 1_f64)]
+    matrix_ratio: f64,
+
+
+
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
     // flags after a refactor
@@ -143,7 +161,10 @@ pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
     mut circuit: C,
     maybe_filepath_to_proof: Option<PathBuf>,
     verify_proof: bool,
-) -> Result<(), ZKDTBinaryError> {
+) -> Result<(), ZKDTBinaryError>
+where
+    <C as GKRCircuit<F>>::Transcript: Sync,
+{
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
     let now = Instant::now();
 
@@ -161,13 +182,13 @@ pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
                     filepath_to_proof
                 );
 
-                // let timer = start_timer!(|| "proof writer");
+                let timer = start_timer!(|| "proof writer");
 
                 let mut file = fs::File::create(filepath_to_proof).unwrap();
                 let mut bw = BufWriter::new(file);
                 serde_json::to_writer(bw, &proof).unwrap();
 
-                // end_timer!(timer);
+                end_timer!(timer);
             }
             let mut transcript = C::Transcript::new("GKR Verifier Transcript");
             let now = Instant::now();
@@ -215,13 +236,24 @@ pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
 fn main() -> Result<(), ZKDTBinaryError> {
     let args = Args::parse();
 
-    // --- Tracing subscriber (i.e. outputs trace messages in stdout) if asked for ---
+    // --- Tracing subscriber (i.e. outputs trace messages in stdout) if asked
+    // for ---
+    let formatter =
+    // Construct a custom formatter for `Debug` fields
+    format::debug_fn(|writer, field, value| write!(writer, "{}: {:#?}", field, value))
+        // Use the `tracing_subscriber::MakeFmtExt` trait to wrap the
+        // formatter so that a delimiter is added between fields.
+        .delimited("\n");
+
     if args.debug_tracing_subscriber {
         let subscriber = FmtSubscriber::builder()
             .with_line_number(true)
-            .with_max_level(tracing::Level::DEBUG)
+            .with_max_level(tracing::Level::TRACE)
             .with_level(true)
-            .with_span_events(FmtSpan::ACTIVE)
+            .with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
+            .with_ansi(false)
+            .fmt_fields(formatter)
+            // .pretty()
             .finish();
         let _default_guard = tracing::subscriber::set_global_default(subscriber);
     }
@@ -291,6 +323,8 @@ fn main() -> Result<(), ZKDTBinaryError> {
         batched_zkdt_circuit_mles: batched_catboost_mles,
         tree_precommit_filepath: tree_commit_filepath,
         sample_minibatch_precommit_filepath: sample_minibatch_commitment_filepath,
+        rho_inv: args.rho_inv,
+        ratio: args.matrix_ratio
     };
 
     // --- Grab the proof filepath to write to and compute the circuit + prove ---

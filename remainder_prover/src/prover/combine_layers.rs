@@ -3,13 +3,13 @@
 use std::cmp::min;
 
 use ark_std::log2;
-use itertools::{Itertools};
+use itertools::Itertools;
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use thiserror::Error;
 
 use crate::{
     expression::{Expression, ExpressionStandard},
-    layer::{layer_enum::LayerEnum, GKRLayer, Layer, LayerId, empty_layer::EmptyLayer},
+    layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };
@@ -47,10 +47,11 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
     //and each sub-circuit
     let bit_counts: Vec<Vec<Vec<MleIndex<F>>>> = interpolated_layers
         .map(|layers_at_combined_index| {
-
             // --- Global layer ID for this column ---
             let _layer_id = layers_at_combined_index[0].1.id();
-            let layer_sizes = layers_at_combined_index.iter().map(|layer| layer.1.layer_size());
+            let layer_sizes = layers_at_combined_index
+                .iter()
+                .map(|layer| layer.1.layer_size());
             // let layer_sizes_concrete = layer_sizes.clone().collect_vec();
             // dbg!(layer_sizes_concrete);
 
@@ -113,7 +114,6 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
         .iter_mut()
         .zip(output_layers.iter_mut())
         .zip(layer_bits)
-
         // --- For each subcircuit... ---
         .map(|((layers, output_layers), new_bits)| {
             for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
@@ -266,7 +266,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
 fn combine_expressions<F: FieldExt>(
     mut exprs: Vec<ExpressionStandard<F>>,
 ) -> ExpressionStandard<F> {
-    let _floor_size = exprs.iter().map(|expr| expr.get_expression_size(0)).min().unwrap();
+    let _floor_size = exprs
+        .iter()
+        .map(|expr| expr.get_expression_size(0))
+        .min()
+        .unwrap();
 
     exprs.sort_by(|first, second| {
         first

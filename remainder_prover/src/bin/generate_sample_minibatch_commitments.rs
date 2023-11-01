@@ -1,6 +1,6 @@
 //! Executable which generates the Ligero samples commitment
 
-use std::{path::Path, fs};
+use std::{path::Path, fs, io::BufWriter};
 use ark_std::log2;
 use remainder_shared_types::Fr;
 use itertools::Itertools;
@@ -8,9 +8,8 @@ use remainder::{zkdt::{data_pipeline::dt2zkdt::{RawSamples, load_raw_samples, Sa
 use clap::Parser;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
-use serde_json::to_writer;
 use thiserror::Error;
-use tracing::{debug, event, Level, debug_span, span};
+use tracing::debug;
 use tracing_subscriber::{FmtSubscriber, fmt::format::FmtSpan};
 
 #[derive(Error, Debug, Clone)]
@@ -136,12 +135,14 @@ pub fn generate_ligero_sample_minibatch_commitments<F: FieldExt>(
 
                     // --- Create commitment to the combined MLEs via the input layer ---
                     let rho_inv = 4;
+                    let ratio = 1_f64;
                     let ligero_commitment = remainder_ligero_commit_prove(
-                        &minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer.mle.mle_ref().bookkeeping_table, rho_inv);
+                        &minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer.mle.mle_ref().bookkeeping_table, rho_inv, ratio);
 
                     // --- Write to file ---
-                    let mut f = fs::File::create(sample_minibatch_commitment_filepath).unwrap();
-                    to_writer(&mut f, &ligero_commitment).unwrap();
+                    let file = fs::File::create(sample_minibatch_commitment_filepath).unwrap();
+                    let bw = BufWriter::new(file);
+                    serde_json::to_writer(bw, &ligero_commitment).unwrap();
                 }
             }
         }

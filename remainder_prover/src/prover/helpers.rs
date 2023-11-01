@@ -7,8 +7,10 @@ use serde_json::{from_reader, to_writer};
 use std::fs::File;
 use std::path::Path;
 
-// Note: we removed this from the tests module, since that module is not visible to project binaries.
-pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) {
+/// Note: we removed this from the tests module, since that module is not visible to project binaries.
+pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>) 
+    where <C as GKRCircuit<F>>::Transcript: Sync, 
+{
     let mut transcript = C::Transcript::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "proof generation");
 

@@ -577,15 +577,15 @@ pub(crate) fn evaluate_at_a_point<F: FieldExt>(
                     .map(|x| F::from(x as u64))
                     .fold(
                         // Compute vector of (numerator, denominator)
-                        vec![F::one(), F::one()],
-                        |acc, val| vec![acc[0] * (point - val), acc[1] * (F::from(x as u64) - val)],
+                        (F::one(), F::one()),
+                        |(num, denom), val| (num * (point - val), denom * (F::from(x as u64) - val)),
                     )
             },
         )
         .enumerate()
         .map(
             // Add up barycentric weight * current eval at point
-            |(x, y)| given_evals[x] * y[0] * y[1].invert().unwrap(),
+            |(x, (num, denom))| given_evals[x] * num * denom.invert().unwrap(),
         )
         .reduce(|x, y| x + y);
     eval.ok_or(InterpError::NoInverse)

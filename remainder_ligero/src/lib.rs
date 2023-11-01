@@ -19,6 +19,7 @@ to the codebase.
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
 use ark_ff::biginteger::BigInteger;
+use ark_std::{start_timer, end_timer};
 use err_derive::Error;
 use itertools::Itertools;
 use remainder_shared_types::Poseidon;
@@ -398,12 +399,15 @@ where
     // now compute FFTs
     // --- Go through each row of M' (the encoded matrix), as well as each row of M (the unencoded matrix) ---
     // --- and make a copy, then perform the encoding (i.e. FFT) ---
+
+    let fft_timer = start_timer!(|| format!("starting fft"));
     comm.par_chunks_mut(encoded_num_cols)
         .zip(coeffs.par_chunks(orig_num_cols))
         .try_for_each(|(r, c)| {
             r[..c.len()].copy_from_slice(c);
             enc.encode(r)
         })?;
+    end_timer!(fft_timer);
 
     // compute Merkle tree
     let encoded_num_cols_np2 = encoded_num_cols
@@ -428,7 +432,9 @@ where
 
     // --- Computes Merkle commitments for each column using the Digest ---
     // --- then hashes all the col commitments together using the Digest again ---
+    let merkel_timer = start_timer!(|| format!("merkelize root"));
     merkleize(&mut ret);
+    end_timer!(merkel_timer);
 
     Ok(ret)
 }
@@ -474,6 +480,8 @@ where
     // with the layers of the tree being flattened and literally appended from bottom to top
 
     // step 1: hash each column of the commitment (we always reveal a full column)
+
+    let hash_column_timer = start_timer!(|| format!("hashing the columns"));
     let hashes = &mut comm.hashes[..comm.encoded_num_cols];
     hash_columns::<D, E, F>(
         &comm.comm,
@@ -483,12 +491,16 @@ where
         0,
         &master_default_poseidon_column_hasher,
     );
+    end_timer!(hash_column_timer);
 
     // step 2: compute rest of Merkle tree
     let len_plus_one = comm.hashes.len() + 1;
     assert!(len_plus_one.is_power_of_two());
     let (hin, hout) = comm.hashes.split_at_mut(len_plus_one / 2);
+
+    let merkelize_tree = start_timer!(|| format!("merkelize tree"));
     merkle_tree::<D, F>(hin, hout, &master_default_poseidon_merkle_hasher);
+    end_timer!(merkelize_tree);
 }
 
 fn hash_columns<D, E, F>(
@@ -599,13 +611,14 @@ fn merkle_layer<D, F>(
         // base case: just compute all of the hashes
 
         // let mut digest = D::new();
-        let mut digest = D::new_merkle_hasher(master_default_poseidon_merkle_hasher);
+        // let mut digest = D::new_merkle_hasher(master_default_poseidon_merkle_hasher);
         for idx in 0..outs.len() {
+            let mut digest = D::new_merkle_hasher(master_default_poseidon_merkle_hasher);
             // --- I see. We update the digest with the things we want to "hash" ---
             // --- Then call `finalize()` or something like that to get the hash ---
             digest.update(&[ins[2 * idx]]);
             digest.update(&[ins[2 * idx + 1]]);
-            outs[idx] = digest.finalize_reset();
+            outs[idx] = digest.finalize();
         }
     } else {
         // recursive case: split and compute

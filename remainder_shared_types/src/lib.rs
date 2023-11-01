@@ -1,7 +1,4 @@
 pub mod transcript;
-pub mod poseidon;
-
-pub use crate::poseidon::Poseidon;
 
 use std::hash::Hash;
 
@@ -10,9 +7,8 @@ use poseidon_circuit::Hashable;
 use serde::{Deserialize, Serialize};
 
 pub use halo2curves::bn256::Fr;
-// pub use poseidon::Poseidon;
-
 pub use halo2curves;
+pub use poseidon::Poseidon;
 
 ///External definition of Field element trait, will remain an Alias for now
 pub trait FieldExt: H2FieldExt + Serialize + for<'de> Deserialize<'de> + std::cmp::Ord + Hash + Hashable {
