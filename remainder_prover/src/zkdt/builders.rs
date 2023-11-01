@@ -82,6 +82,43 @@ impl<F: FieldExt> EqualityCheck<F> {
     }
 }
 
+pub struct DumbProduct<F: FieldExt> {
+    mles: Vec<DenseMle<F, F>>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for DumbProduct<F> {
+    type Successor = DenseMle<F, F>;
+    // the difference between two mles, should be zero valued
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::products(self.mles.iter().map(|mle| mle.mle_ref()).collect_vec())
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+
+        let prod_bt = (0..self.mles[0].mle_ref().bookkeeping_table.len()).map(
+            |idx| {
+                self.mles.iter().fold(F::one(), 
+                |acc, mle| {
+                    mle.mle_ref().bookkeeping_table[idx] * acc
+                })
+            }
+        ).collect_vec();
+
+        DenseMle::new_from_raw(prod_bt, id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> DumbProduct<F> {
+    pub fn new(
+        mles: Vec<DenseMle<F, F>>,
+    ) -> Self {
+        Self {
+            mles
+        }
+    }
+}
+
+
 
 
 pub struct DumbBuilder<F: FieldExt> {
