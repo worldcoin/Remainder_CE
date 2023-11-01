@@ -519,6 +519,8 @@ impl<F: FieldExt> FSMultiSetCircuitMultiTree<F> {
 
         let difference_builder_vec = exponentiated_nodes_vec.into_iter().zip(path_product_vec.into_iter()).map(
             |(exponentiated_nodes, path_product)| {
+                dbg!(&exponentiated_nodes);
+                dbg!(&path_product);
                 let difference_builder = EqualityCheck::new(
                     exponentiated_nodes,
                     path_product

@@ -166,7 +166,7 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> {
     /// This does exactly the same thing as `synthesize()` above, but
     /// takes in prefix bits for each of the input layer MLEs as opposed
     /// to synthesizing its own input layer.
-    pub fn yield_sub_circuit(&mut self) -> Witness<F, <BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Transcript> {
+    pub fn yield_sub_circuit(&mut self) -> Witness<F, <BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Transcript> {
 
         // --- Create `Layers` struct to add layers to ---
         let mut layers: Layers<F, <BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Transcript> = Layers::new();

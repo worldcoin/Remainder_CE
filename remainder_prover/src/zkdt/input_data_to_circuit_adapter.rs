@@ -9,8 +9,8 @@ use remainder_shared_types::FieldExt;
 use serde::{Serialize, Deserialize};
 use tracing::instrument;
 
-use crate::{mle::dense::DenseMle, layer::LayerId};
-use super::{data_pipeline::dt2zkdt::{load_raw_trees_model, RawTreesModel, load_raw_samples, RawSamples, TreesModel, Samples, CircuitizedTrees, CircuitizedSamples, CircuitizedAuxiliaries, circuitize_auxiliaries}, structs::{InputAttribute, DecisionNode, BinDecomp16Bit, LeafNode, BinDecomp4Bit}};
+use crate::{mle::dense::DenseMle, layer::LayerId, prover::input_layer};
+use super::{data_pipeline::dt2zkdt::{load_raw_trees_model, RawTreesModel, load_raw_samples, RawSamples, TreesModel, Samples, CircuitizedTrees, CircuitizedSamples, CircuitizedAuxiliaries, circuitize_auxiliaries}, structs::{InputAttribute, DecisionNode, BinDecomp16Bit, LeafNode, BinDecomp4Bit, BinDecomp8Bit}};
 
 #[derive(Clone)]
 pub struct BatchedZKDTCircuitMles<F: FieldExt> {
@@ -23,7 +23,21 @@ pub struct BatchedZKDTCircuitMles<F: FieldExt> {
     pub multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
     pub decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
     pub leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
-    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
+    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
+}
+
+#[derive(Clone)]
+pub struct BatchedZKDTCircuitMlesMultiTree<F: FieldExt> {
+    pub input_samples_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub permuted_input_samples_mle_vec_vec: Vec<Vec<DenseMle<F, InputAttribute<F>>>>,
+    pub decision_node_paths_mle_vec_vec: Vec<Vec<DenseMle<F, DecisionNode<F>>>>,
+    pub leaf_node_paths_mle_vec_vec: Vec<Vec<DenseMle<F, LeafNode<F>>>>,
+    pub binary_decomp_diffs_mle_vec_vec: Vec<Vec<DenseMle<F, BinDecomp16Bit<F>>>>,
+    pub multiplicities_bin_decomp_mle_decision_vec: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
+    pub multiplicities_bin_decomp_mle_leaf_vec: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
+    pub decision_nodes_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
+    pub leaf_nodes_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,
+    pub multiplicities_bin_decomp_mle_input: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -36,7 +50,7 @@ pub struct ZKDTCircuitData<F> {
     pub multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>, // Binary decomp of multiplicities
     pub decision_nodes: Vec<DecisionNode<F>>,    // Actual tree decision nodes
     pub leaf_nodes: Vec<LeafNode<F>>,            // Actual tree leaf nodes
-    pub multiplicities_bin_decomp_input: Vec<Vec<BinDecomp4Bit<F>>>, // Binary decomp of multiplicities, of input
+    pub multiplicities_bin_decomp_input: Vec<Vec<BinDecomp8Bit<F>>>, // Binary decomp of multiplicities, of input
 }
 
 impl<F: FieldExt> ZKDTCircuitData<F> {
@@ -50,7 +64,7 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
         multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>,
         decision_nodes: Vec<DecisionNode<F>>,
         leaf_nodes: Vec<LeafNode<F>>,
-        multiplicities_bin_decomp_input: Vec<Vec<BinDecomp4Bit<F>>>,
+        multiplicities_bin_decomp_input: Vec<Vec<BinDecomp8Bit<F>>>,
     ) -> ZKDTCircuitData<F> {
         ZKDTCircuitData {
             input_data,
@@ -64,6 +78,142 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
             multiplicities_bin_decomp_input
         }
     }
+}
+
+
+#[instrument(skip(zkdt_circuit_data))]
+pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
+    zkdt_circuit_data: Vec<ZKDTCircuitData<F>>,
+    tree_height: usize,
+    input_len: usize,
+) -> (BatchedZKDTCircuitMlesMultiTree<F>, (usize, usize)) {
+
+    let (
+        input_data_vec,
+        permuted_input_data_vec,
+        decision_node_paths_vec,
+        leaf_node_paths_vec,
+        binary_decomp_diffs_vec,
+        mut multiplicities_bin_decomp_vec,
+        decision_nodes_vec,
+        leaf_nodes_vec,
+        multiplicities_bin_decomp_input_vec
+    ): (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>,) = zkdt_circuit_data.into_iter().map(
+        |zkdt_circuit_data| {
+            (
+                zkdt_circuit_data.input_data,
+                zkdt_circuit_data.permuted_input_data,
+                zkdt_circuit_data.decision_node_paths,
+                zkdt_circuit_data.leaf_node_paths,
+                zkdt_circuit_data.binary_decomp_diffs,
+                zkdt_circuit_data.multiplicities_bin_decomp,
+                zkdt_circuit_data.decision_nodes,
+                zkdt_circuit_data.leaf_nodes,
+                zkdt_circuit_data.multiplicities_bin_decomp_input,
+            )
+        }
+    ).multiunzip();
+
+    let decision_len = 2_usize.pow(tree_height as u32 - 1);
+
+    // --- Generate MLEs for each ---
+    let (multiplicities_bin_decomp_mle_decision_vec, multiplicities_bin_decomp_mle_leaf_vec): (Vec<_>, Vec<_>) = multiplicities_bin_decomp_vec.into_iter().map(
+        |mut multiplicities_bin_decomp| {
+            let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
+            let multiplicities_bin_decomp_decision = multiplicities_bin_decomp;
+            let multiplicities_bin_decomp_mle_decision = DenseMle::new_from_iter(multiplicities_bin_decomp_decision
+                .into_iter()
+                .map(BinDecomp16Bit::from), LayerId::Input(0), None);
+            let multiplicities_bin_decomp_mle_leaf = DenseMle::new_from_iter(multiplicities_bin_decomp_leaf
+                .into_iter()
+                .map(BinDecomp16Bit::from), LayerId::Input(0), None);
+            (multiplicities_bin_decomp_mle_decision, multiplicities_bin_decomp_mle_leaf)
+        }
+    ).unzip();
+
+    let input_samples_mle_vec = 
+        input_data_vec[0].clone().into_iter().map(|input| DenseMle::new_from_iter(input
+                .into_iter()
+                .map(InputAttribute::from), LayerId::Input(0), None)).collect_vec();
+
+    let permuted_input_samples_mle_vec_vec = permuted_input_data_vec.into_iter().map(
+        |permuted_input_data| {
+            permuted_input_data
+            .iter().map(|datum| DenseMle::new_from_iter(datum
+                .clone()
+                .into_iter()
+                .map(InputAttribute::from), LayerId::Input(0), None)).collect()
+        }
+    ).collect_vec();
+
+
+    let decision_node_paths_mle_vec_vec: Vec<Vec<DenseMle<F, DecisionNode<F>>>> = decision_node_paths_vec.into_iter().map(
+        |decision_node_paths| {
+            decision_node_paths
+        .iter()
+        .map(|path|
+            DenseMle::new_from_iter(path
+            .clone()
+            .into_iter(), LayerId::Input(0), None))
+        .collect()
+            }).collect_vec();
+
+    let leaf_node_paths_mle_vec_vec = leaf_node_paths_vec.into_iter().map(
+        |leaf_node_paths| {
+            leaf_node_paths.into_iter()
+            .map(|path| DenseMle::new_from_iter([path].into_iter(), LayerId::Input(0), None))
+            .collect()
+        }
+    ).collect_vec();
+
+    let binary_decomp_diffs_mle_vec_vec = binary_decomp_diffs_vec.into_iter().map(
+        |binary_decomp_diffs| {
+        binary_decomp_diffs.iter()
+        .map(|binary_decomp_diff|
+            DenseMle::new_from_iter(binary_decomp_diff
+                .clone()
+                .into_iter()
+                .map(BinDecomp16Bit::from), LayerId::Input(0), None))
+        .collect_vec()
+            }).collect_vec();
+
+    let decision_nodes_mle_vec = decision_nodes_vec.into_iter().map(
+        |decision_nodes| {
+            DenseMle::new_from_iter(decision_nodes
+                .into_iter()
+                .map(DecisionNode::from), LayerId::Input(0), None)
+        }
+    ).collect_vec();
+
+    let leaf_nodes_mle_vec = leaf_nodes_vec.into_iter().map(
+        |leaf_nodes| {
+            DenseMle::new_from_iter(leaf_nodes
+                .into_iter()
+                .map(LeafNode::from), LayerId::Input(0), None)
+        }
+    ).collect_vec();
+
+    let multiplicities_bin_decomp_mle_input = multiplicities_bin_decomp_input_vec[0]
+        .iter().map(|datum|
+            DenseMle::new_from_iter(datum
+            .clone()
+            .into_iter()
+            .map(BinDecomp8Bit::from), LayerId::Input(0), None))
+        .collect_vec();
+
+
+    (BatchedZKDTCircuitMlesMultiTree {
+        input_samples_mle_vec,
+        permuted_input_samples_mle_vec_vec,
+        decision_node_paths_mle_vec_vec,
+        leaf_node_paths_mle_vec_vec,
+        binary_decomp_diffs_mle_vec_vec,
+        multiplicities_bin_decomp_mle_decision_vec,
+        multiplicities_bin_decomp_mle_leaf_vec,
+        decision_nodes_mle_vec,
+        leaf_nodes_mle_vec,
+        multiplicities_bin_decomp_mle_input,
+    }, (tree_height, input_len))
 }
 
 /// Takes the output from presumably something like [`read_upshot_data_single_tree_branch_from_filepath`]
@@ -137,7 +287,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
             DenseMle::new_from_iter(datum
             .clone()
             .into_iter()
-            .map(BinDecomp4Bit::from), LayerId::Input(0), None))
+            .map(BinDecomp8Bit::from), LayerId::Input(0), None))
         .collect_vec();
 
     (BatchedZKDTCircuitMles {
@@ -244,6 +394,76 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
         caux.node_multiplicities[0].clone(),
         ctrees.decision_nodes[0].clone(),
         ctrees.leaf_nodes[0].clone(),
-        caux.attribute_multiplicities[0].clone()
+        caux.attribute_multiplicities_per_sample.clone()
     ), (tree_height, input_len), minibatch_data)
+}
+
+
+#[instrument]
+pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
+    maybe_minibatch_data: Option<MinibatchData>,
+    tree_batch_size: usize,
+    tree_batch_number: usize,
+    raw_trees_model_path: &Path,
+    raw_samples_path: &Path,
+) -> (Vec<ZKDTCircuitData<F>>, (usize, usize), MinibatchData) {
+
+    // --- Grab trees + raw samples ---
+    let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path);
+    let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path);
+
+    // --- Grab sample minibatch ---
+    let minibatch_data = match maybe_minibatch_data {
+        Some(param_minibatch_data) => param_minibatch_data,
+        None => {
+            MinibatchData {
+                sample_minibatch_number: 0,
+                log_sample_minibatch_size: log2(raw_samples.values.len() as usize) as usize,
+            }
+        }
+    };
+    let sample_minibatch_size = 2_usize.pow(minibatch_data.log_sample_minibatch_size as u32);
+    let minibatch_start_idx = minibatch_data.sample_minibatch_number * sample_minibatch_size;
+    raw_samples.values = raw_samples.values[minibatch_start_idx..(minibatch_start_idx + sample_minibatch_size)].to_vec();
+
+    // --- Conversions ---
+    let full_trees_model: TreesModel = (&raw_trees_model).into();
+    let tree_batch = full_trees_model.slice((tree_batch_size * tree_batch_number)..(tree_batch_size * (tree_batch_number + 1)));
+    let samples: Samples = (&raw_samples).into();
+    let ctrees: CircuitizedTrees<F> = (&tree_batch).into();
+
+    // --- Compute actual witnesses ---
+    let csamples: CircuitizedSamples<F> = (&samples).into();
+    let caux = circuitize_auxiliaries(&samples, &tree_batch);
+    let tree_height = ctrees.depth;
+    let input_len = csamples[0].len();
+
+    // --- Sanitycheck ---
+    debug_assert_eq!(caux.attributes_on_paths.len(), tree_batch_size);
+    debug_assert_eq!(caux.decision_paths.len(), tree_batch_size);
+    debug_assert_eq!(caux.path_ends.len(), tree_batch_size);
+    debug_assert_eq!(caux.differences.len(), tree_batch_size);
+    debug_assert_eq!(caux.node_multiplicities.len(), tree_batch_size);
+    debug_assert_eq!(ctrees.decision_nodes.len(), tree_batch_size);
+    debug_assert_eq!(ctrees.leaf_nodes.len(), tree_batch_size);
+    // debug_assert_eq!(caux.attribute_multiplicities.len(), tree_batch_number);
+
+    // --- Grab only the slice of witnesses which are relevant to the target `tree_number` ---
+
+    let circuitdata_vec = caux.attributes_on_paths.clone().into_iter().enumerate().map(
+        |(idx, _)| {
+            ZKDTCircuitData::new(
+                csamples.clone(),
+                caux.attributes_on_paths[idx].clone(),
+                caux.decision_paths[idx].clone(),
+                caux.path_ends[idx].clone(),
+                caux.differences[idx].clone(),
+                caux.node_multiplicities[idx].clone(),
+                ctrees.decision_nodes[idx].clone(),
+                ctrees.leaf_nodes[idx].clone(),
+                caux.attribute_multiplicities_per_sample.clone()
+            )
+        }
+    ).collect_vec();
+    (circuitdata_vec, (tree_height, input_len), minibatch_data)
 }

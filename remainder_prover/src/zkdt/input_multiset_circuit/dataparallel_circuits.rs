@@ -1,7 +1,7 @@
 use ark_std::{log2};
 use itertools::{Itertools, repeat_n};
 
-use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId, Padding}, zkdt::{builders::{BitExponentiationBuilderInput, FSInputPackingBuilder, FSRMinusXBuilder}, structs::BinDecomp4Bit}, prover::{input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, random_input_layer::RandomInputLayer}}};
+use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder, batched::{BatchedLayer, combine_zero_mle_ref}, LayerId, Padding}, zkdt::{builders::{BitExponentiationBuilderInput, FSInputPackingBuilder, FSRMinusXBuilder}, structs::{BinDecomp4Bit, BinDecomp8Bit}}, prover::{input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, random_input_layer::RandomInputLayer}}};
 use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
@@ -14,7 +14,7 @@ use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
 pub(crate) struct InputMultiSetCircuit<F: FieldExt> {
     pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
     pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
+    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
     pub r_mle: DenseMle<F, F>,
     pub r_packing_mle: DenseMle<F, F>,
 }
@@ -23,7 +23,7 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
     pub fn new(
         input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
         permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-        multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
+        multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
         r_mle: DenseMle<F, F>,
         r_packing_mle: DenseMle<F, F>,
     ) -> Self {
@@ -51,7 +51,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
         
             let mut input_data_mle_vec_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.input_data_mle_vec.clone());
             let mut permuted_input_data_mle_vec_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.permuted_input_data_mle_vec.clone());
-            let mut multiplicities_bin_decomp_mle_input_vec_combined = DenseMle::<F, BinDecomp4Bit<F>>::combine_mle_batch(self.multiplicities_bin_decomp_mle_input_vec.clone());
+            let mut multiplicities_bin_decomp_mle_input_vec_combined = DenseMle::<F, BinDecomp8Bit<F>>::combine_mle_batch(self.multiplicities_bin_decomp_mle_input_vec.clone());
     
             let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
                 Box::new(&mut input_data_mle_vec_combined),

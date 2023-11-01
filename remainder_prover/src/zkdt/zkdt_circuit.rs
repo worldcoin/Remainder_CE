@@ -35,8 +35,10 @@ use remainder_shared_types::{
     FieldExt,
 };
 
+use super::bits_are_binary_circuit::dataparallel_circuits::BinDecomp8BitIsBinaryCircuitBatched;
 use super::input_data_to_circuit_adapter::BatchedZKDTCircuitMles;
 use super::path_consistency_circuit::dataparallel_circuits::PathCheckCircuitBatchedNoMul;
+use super::structs::BinDecomp8Bit;
 use super::{
     attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit,
     binary_recomp_circuit::dataparallel_circuits::BinaryRecompCircuitBatched,
@@ -101,7 +103,7 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
             mut input_multiset_circuit,
             mut binary_recomp_circuit_batched,
             mut path_consistency_circuit_batched,
-            mut bin_decomp_4_bit_batched_bits_binary,
+            mut bin_decomp_8_bit_batched_bits_binary,
             mut bin_decomp_16_bit_batched_bits_binary,
             bits_are_binary_multiset_decision_circuit,
             bits_are_binary_multiset_leaf_circuit,
@@ -118,7 +120,7 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
         let binary_recomp_circuit_batched_witness =
             binary_recomp_circuit_batched.yield_sub_circuit();
         let bin_decomp_4_bit_binary_batched_witness =
-            bin_decomp_4_bit_batched_bits_binary.yield_sub_circuit();
+            bin_decomp_8_bit_batched_bits_binary.yield_sub_circuit();
         let bin_decomp_16_bit_binary_batched_witness =
             bin_decomp_16_bit_batched_bits_binary.yield_sub_circuit();
         let bits_are_binary_multiset_decision_circuit_witness =
@@ -130,24 +132,24 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
         let combine_layers_timer = start_timer!(|| "combine layers + gate stuff");
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
-                attribute_consistency_witness.layers,
-                multiset_witness.layers,
+                // attribute_consistency_witness.layers,
+                // multiset_witness.layers,
                 input_multiset_witness.layers,
-                binary_recomp_circuit_batched_witness.layers,
-                bin_decomp_4_bit_binary_batched_witness.layers,
-                bin_decomp_16_bit_binary_batched_witness.layers,
-                bits_are_binary_multiset_decision_circuit_witness.layers,
-                bits_are_binary_multiset_leaf_circuit_witness.layers,
+                // binary_recomp_circuit_batched_witness.layers,
+                // bin_decomp_4_bit_binary_batched_witness.layers,
+                // bin_decomp_16_bit_binary_batched_witness.layers,
+                // bits_are_binary_multiset_decision_circuit_witness.layers,
+                // bits_are_binary_multiset_leaf_circuit_witness.layers,
             ],
             vec![
-                attribute_consistency_witness.output_layers,
-                multiset_witness.output_layers,
+                // attribute_consistency_witness.output_layers,
+                // multiset_witness.output_layers,
                 input_multiset_witness.output_layers,
-                binary_recomp_circuit_batched_witness.output_layers,
-                bin_decomp_4_bit_binary_batched_witness.output_layers,
-                bin_decomp_16_bit_binary_batched_witness.output_layers,
-                bits_are_binary_multiset_decision_circuit_witness.output_layers,
-                bits_are_binary_multiset_leaf_circuit_witness.output_layers,
+                // binary_recomp_circuit_batched_witness.output_layers,
+                // bin_decomp_4_bit_binary_batched_witness.output_layers,
+                // bin_decomp_16_bit_binary_batched_witness.output_layers,
+                // bits_are_binary_multiset_decision_circuit_witness.output_layers,
+                // bits_are_binary_multiset_leaf_circuit_witness.output_layers,
             ],
         )
         .unwrap();
@@ -183,7 +185,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             InputMultiSetCircuit<F>,
             BinaryRecompCircuitBatched<F>,
             PathCheckCircuitBatchedNoMul<F>,
-            BinDecomp4BitIsBinaryCircuitBatched<F>,
+            BinDecomp8BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
@@ -221,7 +223,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 binary_decomp_diffs_mle_vec.clone(),
             );
         let mut multiplicities_bin_decomp_mle_input_vec_combined =
-            DenseMle::<F, BinDecomp4Bit<F>>::combine_mle_batch(
+            DenseMle::<F, BinDecomp8Bit<F>>::combine_mle_batch(
                 multiplicities_bin_decomp_mle_input_vec.clone(),
             );
 
@@ -504,8 +506,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         let bits_binary_16_bit_batched =
             BinDecomp16BitIsBinaryCircuitBatched::new(binary_decomp_diffs_mle_vec);
 
-        let bits_binary_4_bit_batched =
-            BinDecomp4BitIsBinaryCircuitBatched::new(multiplicities_bin_decomp_mle_input_vec);
+        let bits_binary_8_bit_batched = 
+            BinDecomp8BitIsBinaryCircuitBatched::new(multiplicities_bin_decomp_mle_input_vec);
 
         let bits_are_binary_multiset_decision_circuit =
             BinDecomp16BitIsBinaryCircuit::new(multiplicities_bin_decomp_mle_decision);
@@ -519,7 +521,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             input_multiset_circuit,
             binary_recomp_circuit_batched,
             path_consistency_circuit_batched,
-            bits_binary_4_bit_batched,
+            bits_binary_8_bit_batched,
             bits_binary_16_bit_batched,
             bits_are_binary_multiset_decision_circuit,
             bits_are_binary_multiset_leaf_circuit,
@@ -576,7 +578,7 @@ mod tests {
             .init();
 
         let (batched_catboost_mles, (_, _)) =
-            generate_mles_batch_catboost_single_tree::<Fr>(1, Path::new("upshot_data/"));
+            generate_mles_batch_catboost_single_tree::<Fr>(2, Path::new("upshot_data/"));
 
         let combined_circuit = ZKDTCircuit {
             batched_zkdt_circuit_mles: batched_catboost_mles,

@@ -10,8 +10,9 @@ use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle, Tuple2};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
+use crate::sumcheck::compute_sumcheck_message;
 use remainder_shared_types::FieldExt;
-use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode, BinDecomp4Bit};
+use super::structs::{BinDecomp16Bit, InputAttribute, DecisionNode, LeafNode, BinDecomp4Bit, BinDecomp8Bit};
 
 /// multiply the binary tree pair-wise between the tuple
 struct ProductTreeBuilder<F: FieldExt> {
@@ -78,6 +79,36 @@ impl<F: FieldExt> EqualityCheck<F> {
         BatchedLayer::new(mle_1.into_iter().zip(mle_2.into_iter()).map(|(mle_1, mle_2)| Self {
             mle_1, mle_2
         }).collect())
+    }
+}
+
+
+
+pub struct DumbBuilder<F: FieldExt> {
+    mle_1: DenseMle<F, F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for DumbBuilder<F> {
+    type Successor = ZeroMleRef<F>;
+    // the difference between two mles, should be zero valued
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::Mle(self.mle_1.mle_ref()) - ExpressionStandard::Mle(self.mle_1.mle_ref())
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let num_vars = self.mle_1.num_iterated_vars();
+        ZeroMleRef::new(num_vars, prefix_bits, id)
+    }
+}
+
+impl<F: FieldExt> DumbBuilder<F> {
+    /// creates new difference mle
+    pub fn new(
+        mle_1: DenseMle<F, F>,
+    ) -> Self {
+        Self {
+            mle_1,
+        }
     }
 }
 
@@ -483,7 +514,7 @@ impl<F: FieldExt> BitExponentiationBuilderCatBoost<F> {
 
 /// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
 pub struct BitExponentiationBuilderInput<F: FieldExt> {
-    bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
+    bin_decomp: DenseMle<F, BinDecomp8Bit<F>>,
     bit_index: usize,
     r_minus_x_power: DenseMle<F, F>,
 }
@@ -511,7 +542,7 @@ impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
 impl<F: FieldExt> BitExponentiationBuilderInput<F> {
     /// create new leaf node packed
     pub(crate) fn new(
-        bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
+        bin_decomp: DenseMle<F, BinDecomp8Bit<F>>,
         bit_index: usize,
         r_minus_x_power: DenseMle<F, F>,
     ) -> Self {
@@ -728,14 +759,17 @@ impl<F: FieldExt> LayerBuilder<F> for FSInputPackingBuilder<F> {
 
     // expressions = r - (x.attr_id + r_packing * x.attr_val)
     fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.mle.attr_id(None)) +
-        ExpressionStandard::products(vec![self.mle.attr_val(None), self.r_packing_mle.mle_ref()]))
+        let res = ExpressionStandard::Mle(self.r_mle.mle_ref()) - (ExpressionStandard::Mle(self.mle.attr_id(None)) +
+        ExpressionStandard::products(vec![self.mle.attr_val(None), self.r_packing_mle.mle_ref()]));
+        // dbg!(&res);
+        res
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let r = self.r_mle.mle_ref().bookkeeping_table[0];
         let r_packing = self.r_packing_mle.mle_ref().bookkeeping_table[0];
-        DenseMle::new_from_iter(self.mle.into_iter().map(|InputAttribute { attr_id, attr_val }| r - (attr_id + r_packing * attr_val)), id, prefix_bits)
+        let res = DenseMle::new_from_iter(self.mle.into_iter().map(|InputAttribute { attr_id, attr_val }| r - (attr_id + r_packing * attr_val)), id, prefix_bits);
+        res
     }
 }
 

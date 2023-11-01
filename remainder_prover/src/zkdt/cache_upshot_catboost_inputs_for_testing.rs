@@ -130,7 +130,7 @@ pub fn generate_upshot_data_all_batch_sizes<F: FieldExt>(
             caux.node_multiplicities[0].clone(),
             ctrees.decision_nodes[0].clone(),
             ctrees.leaf_nodes[0].clone(),
-            caux.attribute_multiplicities[0].clone()
+            caux.attribute_multiplicities_per_sample.clone()
         ), (tree_height, input_len));
 
         // --- Write to file ---

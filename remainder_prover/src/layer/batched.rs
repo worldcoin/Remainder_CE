@@ -9,7 +9,7 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         zero::ZeroMleRef,
         Mle, MleAble, MleIndex, MleRef,
-    },
+    }, zkdt::structs::InputAttribute,
 };
 use remainder_shared_types::FieldExt;
 
@@ -42,10 +42,34 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
 }
 
+
+// pub fn fake_unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>, num_dataparallel_bits: usize) -> DenseMle<F, F> {
+//     let old_layer_id = mles[0].layer_id;
+//     let new_bits = log2(mles.len()) as usize;
+
+//     // dbg!("hihi");
+//     // dbg!(new_bits);
+//     let old_prefix_bits = mles[0]
+//         .prefix_bits
+//         .clone()
+//         .map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - num_dataparallel_bits - new_bits].to_vec().into_iter().chain(old_prefix_bits[(old_prefix_bits.len() - num_dataparallel_bits)..].to_vec().into_iter()).collect_vec());
+//     let mut mle_ret = DenseMle::new_from_raw(
+//         combine_mles(
+//             mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(),
+//             new_bits,
+//         )
+//         .bookkeeping_table,
+//         old_layer_id,
+//         old_prefix_bits,
+//     );
+// }
+
 ///Helper function for "unbatching" when required by circuit design
 pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     let old_layer_id = mles[0].layer_id;
     let new_bits = log2(mles.len()) as usize;
+    // dbg!("hihi");
+    // dbg!(new_bits);
     let old_prefix_bits = mles[0]
         .prefix_bits
         .clone()
@@ -61,13 +85,44 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     )
 }
 
+///Helper function for "unbatching" when required by circuit design
+pub fn unbatch_mles_input<F: FieldExt>(mles: Vec<DenseMle<F, InputAttribute<F>>>) -> DenseMle<F, InputAttribute<F>> {
+    let old_layer_id = mles[0].layer_id;
+    let new_bits = log2(mles.len()) as usize;
+    // dbg!("hihi");
+    // dbg!(new_bits);
+    let old_prefix_bits = mles[0]
+        .prefix_bits
+        .clone()
+        .map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
+
+
+    let new_bt = (0..mles[0].attr_id(None).bookkeeping_table.len()).flat_map(
+        |idx| {
+            mles.iter().map(
+                |mle| {
+                    InputAttribute {
+                        attr_id: mle.attr_id(None).bookkeeping_table[idx],
+                        attr_val: mle.attr_val(None).bookkeeping_table[idx]
+                    }
+                }
+            ).collect_vec()
+        }
+    );
+    DenseMle::new_from_iter(
+        new_bt,
+        old_layer_id,
+        old_prefix_bits,
+    )
+}
+
 /// convert a flattened batch mle to a vector of mles
 pub fn unflatten_mle<F: FieldExt>(
     flattened_mle: DenseMle<F, F>,
-    num_copy_bits: usize,
+    num_dataparallel_bits: usize,
 ) -> Vec<DenseMle<F, F>> {
-    let num_copies = 1 << num_copy_bits;
-    let individual_mle_len = 1 << (flattened_mle.num_iterated_vars() - num_copy_bits);
+    let num_copies = 1 << num_dataparallel_bits;
+    let individual_mle_len = 1 << (flattened_mle.num_iterated_vars() - num_dataparallel_bits);
     
     (0..num_copies).map(
         |idx| {
@@ -86,7 +141,7 @@ pub fn unflatten_mle<F: FieldExt>(
             let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(
                 individual_mle_table,
                 flattened_mle.layer_id,
-                Some(repeat_n(MleIndex::Iterated, num_copy_bits).collect_vec()),
+                Some(flattened_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits)).collect_vec()),
             );
             individual_mle
         }
