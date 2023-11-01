@@ -52,8 +52,8 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
 ) {
     // --- Auxiliaries ---
     // let rho = 1. / (rho_inv as f64);
-    let num_rows = 2_usize.pow(log_num_rows as u32);
-    let orig_num_cols = 2_usize.pow(log_orig_num_cols as u32);
+    let num_rows = 1 << log_num_rows;
+    let orig_num_cols = 1 << log_orig_num_cols;
     let encoded_num_cols = orig_num_cols * (rho_inv as usize);
 
     // --- Sanitycheck ---
@@ -133,8 +133,8 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
 > {
     // --- Auxiliaries ---
     let rho = 1. / (rho_inv as f64);
-    let num_rows = 2_usize.pow(log_num_rows as u32);
-    let orig_num_cols = 2_usize.pow(log_orig_num_cols as u32);
+    let num_rows = 1 << log_num_rows;
+    let orig_num_cols = 1 << log_orig_num_cols;
 
     // --- Sanitycheck ---
     assert_eq!(coeffs.len(), num_rows * orig_num_cols);
@@ -149,9 +149,12 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     // Tl;dr this gives us the random vectors to check well-formedness from
     // As well as the actual columns we're opening at, plus proofs that those
     // columns are consistent against the Merkle root
-    let enc = LigeroEncoding::<F>::new(coeffs.len(), rho); // This is basically just a wrapper
-    let pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F> =
-        prove(&comm, &outer_tensor[..], &enc, transcript).unwrap();
+    let ratio = orig_num_cols as f64 / num_rows as f64;
+    let enc = LigeroEncoding::<F>::new(coeffs.len(), rho, ratio); // This is basically just a wrapper
+    let pf_ya: Result<LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>, _> =
+        prove(&comm, &outer_tensor[..], &enc, transcript);
+
+    let pf = pf_ya.unwrap();
 
     // --- Return the evaluation point value ---
     // TODO!(ryancao): Do we need this?
@@ -214,6 +217,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
 pub fn remainder_ligero_commit_prove<F: FieldExt>(
     input_mle_bookkeeping_table: &Vec<F>,
     rho_inv: u8,
+    ratio: f64,
 ) -> (
     LigeroEncoding<F>,
     crate::LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
@@ -225,7 +229,7 @@ pub fn remainder_ligero_commit_prove<F: FieldExt>(
 
     // --- Get Ligero matrix dims + sanitycheck ---
     let (num_rows, orig_num_cols, _) =
-        get_ligero_matrix_dims(input_mle_bookkeeping_table.len(), rho_inv).unwrap();
+        get_ligero_matrix_dims(input_mle_bookkeeping_table.len(), rho_inv, ratio).unwrap();
 
     // --- NOTE: These will have to be passed in later for the eval proof phase ---
     poseidon_ml_commit_prove(
@@ -301,7 +305,7 @@ pub fn remainder_ligero_verify<F: FieldExt>(
     // --- Sanitycheck ---
     assert_eq!(
         aux.num_rows * aux.orig_num_cols,
-        2_usize.pow(challenge_coord.len() as u32)
+        1 << challenge_coord.len()
     );
 
     // --- Grab the inner/outer tensors from the challenge point ---
@@ -346,6 +350,7 @@ pub mod tests {
         // --- Setup stuff ---
         let ml_num_vars = 16;
         let rho_inv = 4;
+        let ratio = 1_f64;
 
         // --- Generate random polynomial ---
         let ml_coeffs = get_random_coeffs_for_multilinear_poly(ml_num_vars);
@@ -359,7 +364,7 @@ pub mod tests {
         let mut poseidon_transcript = PoseidonTranscript::new("Test transcript");
 
         // --- Commit, prove, convert ---
-        let (_, comm, root, aux) = remainder_ligero_commit_prove(&ml_coeffs, rho_inv);
+        let (_, comm, root, aux) = remainder_ligero_commit_prove(&ml_coeffs, rho_inv, ratio);
         let h2_ligero_proof: crate::adapter::LigeroProof<Fr> = remainder_ligero_eval_prove(
             &ml_coeffs,
             &challenge_coord,
@@ -390,13 +395,14 @@ pub mod tests {
         let log_num_rows = 4;
         let log_orig_num_cols = 4;
         let rho_inv = 4;
+        let ratio = 1_f64;
         let ligero_root_filename = "ligero_root.txt";
         let ligero_proof_filename = "ligero_eval_proof.txt";
         let ligero_aux_data_filename = "ligero_aux_info.txt";
         let ligero_claim_filename = "ligero_claim_info.txt";
 
-        let num_rows = 2_usize.pow(log_num_rows as u32);
-        let orig_num_cols = 2_usize.pow(log_orig_num_cols as u32);
+        let num_rows = 1 << log_num_rows;
+        let orig_num_cols = 1 << log_orig_num_cols;
 
         // --- Generate random coeffs and random challenge point to evaluate at ---
         let mut rng = test_rng();
