@@ -34,6 +34,49 @@ impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
     }
 }
 
+impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
+    type Successor = Vec<A::Successor>;
+
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        let exprs = self
+            .layers
+            .iter()
+            .map(|layer| layer.build_expression())
+            .collect_vec();
+
+        
+        combine_expressions(exprs)
+            .expect("Expressions fed into BatchedLayer don't have the same structure!")
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+        let new_bits = log2(self.layers.len()) as usize;
+
+        //Mles yielded by this BatchedLayer have the batched bits taken into
+        //account so that they are ordered correctly compared to all other bits,
+        //even though there is some semantic incorrectness to having the batch
+        //bits be part of the individual mles
+
+        self.layers
+            .iter()
+            // .zip(bits)
+            .map(|layer| {
+                layer.next_layer(
+                    id,
+                    Some(
+                        prefix_bits
+                            .clone()
+                            .into_iter()
+                            .flatten()
+                            .chain(repeat_n(MleIndex::Iterated, new_bits))
+                            .collect_vec(),
+                    ),
+                )
+            })
+            .collect()
+    }
+}
+
 ///Helper function for "unbatching" when required by the output layer
 pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMleRef<F> {
     let new_bits = 0;
@@ -317,48 +360,7 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
     }
 }
 
-impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
-    type Successor = Vec<A::Successor>;
 
-    fn build_expression(&self) -> ExpressionStandard<F> {
-        let exprs = self
-            .layers
-            .iter()
-            .map(|layer| layer.build_expression())
-            .collect_vec();
-
-        
-        combine_expressions(exprs)
-            .expect("Expressions fed into BatchedLayer don't have the same structure!")
-    }
-
-    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let new_bits = log2(self.layers.len()) as usize;
-
-        //Mles yielded by this BatchedLayer have the batched bits taken into
-        //account so that they are ordered correctly compared to all other bits,
-        //even though there is some semantic incorrectness to having the batch
-        //bits be part of the individual mles
-
-        self.layers
-            .iter()
-            // .zip(bits)
-            .map(|layer| {
-                layer.next_layer(
-                    id,
-                    Some(
-                        prefix_bits
-                            .clone()
-                            .into_iter()
-                            .flatten()
-                            .chain(repeat_n(MleIndex::Iterated, new_bits))
-                            .collect_vec(),
-                    ),
-                )
-            })
-            .collect()
-    }
-}
 
 #[cfg(test)]
 mod tests {
