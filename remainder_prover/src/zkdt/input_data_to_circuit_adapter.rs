@@ -23,12 +23,12 @@ pub struct BatchedZKDTCircuitMles<F: FieldExt> {
     pub multiplicities_bin_decomp_mle_leaf: DenseMle<F, BinDecomp16Bit<F>>,
     pub decision_nodes_mle: DenseMle<F, DecisionNode<F>>,
     pub leaf_nodes_mle: DenseMle<F, LeafNode<F>>,
-    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
+    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
 }
 
 #[derive(Clone)]
 pub struct BatchedZKDTCircuitMlesMultiTree<F: FieldExt> {
-    pub input_samples_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
+    pub input_samples_mle_vec_vec: Vec<Vec<DenseMle<F, InputAttribute<F>>>>,
     pub permuted_input_samples_mle_vec_vec: Vec<Vec<DenseMle<F, InputAttribute<F>>>>,
     pub decision_node_paths_mle_vec_vec: Vec<Vec<DenseMle<F, DecisionNode<F>>>>,
     pub leaf_node_paths_mle_vec_vec: Vec<Vec<DenseMle<F, LeafNode<F>>>>,
@@ -37,7 +37,7 @@ pub struct BatchedZKDTCircuitMlesMultiTree<F: FieldExt> {
     pub multiplicities_bin_decomp_mle_leaf_vec: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
     pub decision_nodes_mle_vec: Vec<DenseMle<F, DecisionNode<F>>>,
     pub leaf_nodes_mle_vec: Vec<DenseMle<F, LeafNode<F>>>,
-    pub multiplicities_bin_decomp_mle_input: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
+    pub multiplicities_bin_decomp_mle_input_vec_vec: Vec<Vec<DenseMle<F, BinDecomp4Bit<F>>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -131,10 +131,15 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
         }
     ).unzip();
 
-    let input_samples_mle_vec = 
-        input_data_vec[0].clone().into_iter().map(|input| DenseMle::new_from_iter(input
-                .into_iter()
-                .map(InputAttribute::from), LayerId::Input(0), None)).collect_vec();
+    let input_samples_mle_vec_vec = input_data_vec.into_iter().map(
+        |input_data_vec| {
+            input_data_vec.into_iter().map(
+                |input| DenseMle::new_from_iter(input
+                    .into_iter()
+                    .map(InputAttribute::from), LayerId::Input(0), None)
+            ).collect_vec()
+        }
+    ).collect_vec();
 
     let permuted_input_samples_mle_vec_vec = permuted_input_data_vec.into_iter().map(
         |permuted_input_data| {
@@ -193,17 +198,21 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
         }
     ).collect_vec();
 
-    let multiplicities_bin_decomp_mle_input = multiplicities_bin_decomp_input_vec[0]
-        .iter().map(|datum|
-            DenseMle::new_from_iter(datum
-            .clone()
-            .into_iter()
-            .map(BinDecomp8Bit::from), LayerId::Input(0), None))
-        .collect_vec();
+    let multiplicities_bin_decomp_mle_input_vec_vec = multiplicities_bin_decomp_input_vec.into_iter().map(
+        |multiplicities_bin_decomp_input_vec| {
+            multiplicities_bin_decomp_input_vec.iter().map(|datum|
+                DenseMle::new_from_iter(datum
+                .clone()
+                .into_iter()
+                .map(BinDecomp4Bit::from), LayerId::Input(0), None)
+
+            ).collect_vec()
+        }
+    ).collect_vec();
 
 
     (BatchedZKDTCircuitMlesMultiTree {
-        input_samples_mle_vec,
+        input_samples_mle_vec_vec,
         permuted_input_samples_mle_vec_vec,
         decision_node_paths_mle_vec_vec,
         leaf_node_paths_mle_vec_vec,
@@ -212,7 +221,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
         multiplicities_bin_decomp_mle_leaf_vec,
         decision_nodes_mle_vec,
         leaf_nodes_mle_vec,
-        multiplicities_bin_decomp_mle_input,
+        multiplicities_bin_decomp_mle_input_vec_vec,
     }, (tree_height, input_len))
 }
 
@@ -287,7 +296,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
             DenseMle::new_from_iter(datum
             .clone()
             .into_iter()
-            .map(BinDecomp8Bit::from), LayerId::Input(0), None))
+            .map(BinDecomp4Bit::from), LayerId::Input(0), None))
         .collect_vec();
 
     (BatchedZKDTCircuitMles {

@@ -192,7 +192,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             InputMultiSetCircuitMultiTree<F>,
             BinaryRecompCircuitMultiTree<F>,
             PathCheckCircuitBatchedNoMulMultiTree<F>,
-            BinDecomp8BitIsBinaryCircuitBatched<F>,
+            BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F>,
             BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F>,
             BinDecomp16BitIsBinaryCircuitMultiTree<F>,
             BinDecomp16BitIsBinaryCircuitMultiTree<F>,
@@ -202,7 +202,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         GKRError,
     > {
         let BatchedZKDTCircuitMlesMultiTree {
-            input_samples_mle_vec: mut input_samples_mle_vecs,
+            input_samples_mle_vec_vec: mut input_samples_mle_vecs,
             permuted_input_samples_mle_vec_vec: mut permuted_input_samples_mle_vecs,
             decision_node_paths_mle_vec_vec: mut decision_node_paths_mle_vecs,
             leaf_node_paths_mle_vec_vec: mut leaf_node_paths_mle_vecs,
@@ -211,18 +211,18 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             mut multiplicities_bin_decomp_mle_leaf_vec,
             mut decision_nodes_mle_vec,
             mut leaf_nodes_mle_vec,
-            multiplicities_bin_decomp_mle_input: mut multiplicities_bin_decomp_mle_input_vecs,
+            multiplicities_bin_decomp_mle_input_vec_vec: mut multiplicities_bin_decomp_mle_input_vecs,
     } 
          = self.batched_zkdt_circuit_mles_tree.clone();
 
         // deal w input
-        let mut input_samples_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vecs.clone());
-        // let input_samples_mle_combined_vec =
-        //     input_samples_mle_vecs.iter().map( 
-        //         |input_samples_mle_vec| {
-        //             DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vec.clone())
-        //     }).collect_vec();
-        // // let mut input_samples_mle_combined = DenseMle::<F, F>::combine_mle_batch(input_samples_mle_combined_vec);
+        // let mut input_samples_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vecs.clone());
+        let input_samples_mle_combined_vec =
+            input_samples_mle_vecs.iter().map( 
+                |input_samples_mle_vec| {
+                    DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vec.clone())
+            }).collect_vec();
+        let mut input_samples_mle_combined = DenseMle::<F, F>::combine_mle_batch(input_samples_mle_combined_vec);
         // let mut input_samples_mle_combined = input_samples_mle_combined_vec[0].clone();
 
         // permuted_input_samples_mle_vecs = (0..permuted_input_samples_mle_vecs[0].len()).map(
@@ -264,7 +264,15 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         let mut combined_batched_diff_signed_bin_decomp_mle = DenseMle::<F, F>::combine_mle_batch(combined_batched_diff_signed_bin_decomp_mle_vec);
 
 
-        let mut multiplicities_bin_decomp_mle_input_vec_combined = DenseMle::<F, BinDecomp8Bit<F>>::combine_mle_batch(multiplicities_bin_decomp_mle_input_vecs.clone());
+        let multiplicities_bin_decomp_mle_input_vec_combined_vec = multiplicities_bin_decomp_mle_input_vecs.iter().map(
+            |multiplicities_bin_decomp_mle_input_vec| {
+                DenseMle::<F, BinDecomp4Bit<F>>::combine_mle_batch(
+                    multiplicities_bin_decomp_mle_input_vec.clone(),
+                )
+            }
+        ).collect_vec();
+        let mut multiplicities_bin_decomp_mle_input_vec_combined = DenseMle::<F, F>::combine_mle_batch(multiplicities_bin_decomp_mle_input_vec_combined_vec);
+        
         let mut multiplicities_bin_decomp_mle_decision_combined = DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(multiplicities_bin_decomp_mle_decision_vec.clone());
         let mut multiplicities_bin_decomp_mle_leaf_combined = DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(multiplicities_bin_decomp_mle_leaf_vec.clone());
         let mut decision_nodes_mle_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(decision_nodes_mle_vec.clone());
@@ -297,8 +305,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 
         // --- Input layer 1 ---
         input_samples_mle_combined.layer_id = LayerId::Input(1);
-        input_samples_mle_vecs.iter_mut().for_each(|mle| {
-            mle.layer_id = LayerId::Input(1);
+        input_samples_mle_vecs.iter_mut().for_each(|mle_vec| {
+            mle_vec.iter_mut().for_each (|mle| {
+                mle.layer_id = LayerId::Input(1);
+            })
         });
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut input_samples_mle_combined)];
 
@@ -328,8 +338,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         });
         multiplicities_bin_decomp_mle_input_vecs
             .iter_mut()
-            .for_each(|mle| {
+            .for_each(|mle_vec| {
+                mle_vec.iter_mut().for_each(|mle| {
                     mle.layer_id = LayerId::Input(2);
+                })
             });
         
         multiplicities_bin_decomp_mle_decision_vec.iter_mut().for_each(
@@ -481,8 +493,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         // --- Second input layer ---
 
         input_samples_mle_vecs.iter_mut().for_each(
-            |input_samples_mle| {
-                input_samples_mle.set_prefix_bits(input_samples_mle_combined.get_prefix_bits());
+            |input_samples_mle_vec| {
+                input_samples_mle_vec.iter_mut().for_each( |input_samples_mle| {
+                    input_samples_mle.set_prefix_bits(input_samples_mle_combined.get_prefix_bits());
+                });
             });
 
         // --- Third input layer ---
@@ -499,8 +513,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             });
         });
 
-        multiplicities_bin_decomp_mle_input_vecs.iter_mut().for_each(|multiplicities_bin_decomp_mle_input| {
-            multiplicities_bin_decomp_mle_input.set_prefix_bits(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits())
+        multiplicities_bin_decomp_mle_input_vecs.iter_mut().for_each(|multiplicities_bin_decomp_mle_input_vec| {
+            multiplicities_bin_decomp_mle_input_vec.iter_mut().for_each(|multiplicities_bin_decomp_mle_input| {
+                multiplicities_bin_decomp_mle_input.set_prefix_bits(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits())
+            });
         });
 
         multiplicities_bin_decomp_mle_decision_vec.iter_mut().for_each(|multiplicities_bin_decomp_mle_decision| {
@@ -581,9 +597,9 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         let input_multiset_circuit = InputMultiSetCircuitMultiTree {
             r_mle,
             r_packing_mle,
-            input_data_mle_vec: input_samples_mle_vecs.clone(),
+            input_data_mle_vec_tree: input_samples_mle_vecs.clone(),
             permuted_input_data_mle_vec_tree: permuted_input_samples_mle_vecs.clone(),
-            multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vecs.clone(),
+            multiplicities_bin_decomp_mle_input_vec_tree: multiplicities_bin_decomp_mle_input_vecs.clone(),
         };
 
 
@@ -603,8 +619,8 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         let bits_binary_16_bit_batched =
             BinDecomp16BitIsBinaryCircuitBatchedMultiTree::new(binary_decomp_diffs_mle_vecs);
 
-        let bits_binary_8_bit_batched =
-            BinDecomp8BitIsBinaryCircuitBatched::new(multiplicities_bin_decomp_mle_input_vecs.clone());
+        let bits_binary_4_bit_batched =
+            BinDecomp4BitIsBinaryCircuitBatchedMultiTree::new(multiplicities_bin_decomp_mle_input_vecs.clone());
 
         let bits_are_binary_multiset_decision_circuit =
             BinDecomp16BitIsBinaryCircuitMultiTree::new(multiplicities_bin_decomp_mle_decision_vec);
@@ -619,7 +635,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             input_multiset_circuit,
             binary_recomp_circuit_batched,
             path_consistency_circuit_batched,
-            bits_binary_8_bit_batched,
+            bits_binary_4_bit_batched,
             bits_binary_16_bit_batched,
             bits_are_binary_multiset_decision_circuit,
             bits_are_binary_multiset_leaf_circuit,

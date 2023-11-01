@@ -551,7 +551,7 @@ impl<F: FieldExt> BitExponentiationBuilderCatBoost<F> {
 
 /// Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
 pub struct BitExponentiationBuilderInput<F: FieldExt> {
-    bin_decomp: DenseMle<F, BinDecomp8Bit<F>>,
+    bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
     bit_index: usize,
     r_minus_x_power: DenseMle<F, F>,
 }
@@ -579,7 +579,7 @@ impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
 impl<F: FieldExt> BitExponentiationBuilderInput<F> {
     /// create new leaf node packed
     pub(crate) fn new(
-        bin_decomp: DenseMle<F, BinDecomp8Bit<F>>,
+        bin_decomp: DenseMle<F, BinDecomp4Bit<F>>,
         bit_index: usize,
         r_minus_x_power: DenseMle<F, F>,
     ) -> Self {

@@ -185,7 +185,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             InputMultiSetCircuit<F>,
             BinaryRecompCircuitBatched<F>,
             PathCheckCircuitBatchedNoMul<F>,
-            BinDecomp8BitIsBinaryCircuitBatched<F>,
+            BinDecomp4BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
@@ -223,7 +223,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 binary_decomp_diffs_mle_vec.clone(),
             );
         let mut multiplicities_bin_decomp_mle_input_vec_combined =
-            DenseMle::<F, BinDecomp8Bit<F>>::combine_mle_batch(
+            DenseMle::<F, BinDecomp4Bit<F>>::combine_mle_batch(
                 multiplicities_bin_decomp_mle_input_vec.clone(),
             );
 
@@ -506,8 +506,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         let bits_binary_16_bit_batched =
             BinDecomp16BitIsBinaryCircuitBatched::new(binary_decomp_diffs_mle_vec);
 
-        let bits_binary_8_bit_batched = 
-            BinDecomp8BitIsBinaryCircuitBatched::new(multiplicities_bin_decomp_mle_input_vec);
+        let bits_binary_4_bit_batched = 
+            BinDecomp4BitIsBinaryCircuitBatched::new(multiplicities_bin_decomp_mle_input_vec);
 
         let bits_are_binary_multiset_decision_circuit =
             BinDecomp16BitIsBinaryCircuit::new(multiplicities_bin_decomp_mle_decision);
@@ -521,7 +521,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             input_multiset_circuit,
             binary_recomp_circuit_batched,
             path_consistency_circuit_batched,
-            bits_binary_8_bit_batched,
+            bits_binary_4_bit_batched,
             bits_binary_16_bit_batched,
             bits_are_binary_multiset_decision_circuit,
             bits_are_binary_multiset_leaf_circuit,

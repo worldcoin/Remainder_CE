@@ -14,7 +14,7 @@ use crate::prover::input_layer::enum_input_layer::CommitmentEnum;
 pub(crate) struct InputMultiSetCircuit<F: FieldExt> {
     pub input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
     pub permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
+    pub multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
     pub r_mle: DenseMle<F, F>,
     pub r_packing_mle: DenseMle<F, F>,
 }
@@ -23,7 +23,7 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
     pub fn new(
         input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
         permuted_input_data_mle_vec: Vec<DenseMle<F, InputAttribute<F>>>,
-        multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
+        multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
         r_mle: DenseMle<F, F>,
         r_packing_mle: DenseMle<F, F>,
     ) -> Self {
@@ -51,7 +51,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
         
             let mut input_data_mle_vec_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.input_data_mle_vec.clone());
             let mut permuted_input_data_mle_vec_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.permuted_input_data_mle_vec.clone());
-            let mut multiplicities_bin_decomp_mle_input_vec_combined = DenseMle::<F, BinDecomp8Bit<F>>::combine_mle_batch(self.multiplicities_bin_decomp_mle_input_vec.clone());
+            let mut multiplicities_bin_decomp_mle_input_vec_combined = DenseMle::<F, BinDecomp4Bit<F>>::combine_mle_batch(self.multiplicities_bin_decomp_mle_input_vec.clone());
     
             let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
                 Box::new(&mut input_data_mle_vec_combined),

@@ -185,7 +185,7 @@ mod tests {
             ..
         }, (_tree_height, _)) = generate_mles_batch_catboost_single_tree::<Fr>(6, Path::new("upshot_data"));
 
-        let mut circuit = BinDecomp8BitIsBinaryCircuitBatched::new(
+        let mut circuit = BinDecomp4BitIsBinaryCircuitBatched::new(
             multiplicities_bin_decomp_mle_input_vec,
         );
 
