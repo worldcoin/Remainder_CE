@@ -50,7 +50,7 @@ pub struct ZKDTCircuitData<F> {
     pub multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>, // Binary decomp of multiplicities
     pub decision_nodes: Vec<DecisionNode<F>>,    // Actual tree decision nodes
     pub leaf_nodes: Vec<LeafNode<F>>,            // Actual tree leaf nodes
-    pub multiplicities_bin_decomp_input: Vec<Vec<BinDecomp8Bit<F>>>, // Binary decomp of multiplicities, of input
+    pub multiplicities_bin_decomp_input: Vec<Vec<BinDecomp4Bit<F>>>, // Binary decomp of multiplicities, of input
 }
 
 impl<F: FieldExt> ZKDTCircuitData<F> {
@@ -64,7 +64,7 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
         multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>,
         decision_nodes: Vec<DecisionNode<F>>,
         leaf_nodes: Vec<LeafNode<F>>,
-        multiplicities_bin_decomp_input: Vec<Vec<BinDecomp8Bit<F>>>,
+        multiplicities_bin_decomp_input: Vec<Vec<BinDecomp4Bit<F>>>,
     ) -> ZKDTCircuitData<F> {
         ZKDTCircuitData {
             input_data,
@@ -394,7 +394,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
         caux.node_multiplicities[0].clone(),
         ctrees.decision_nodes[0].clone(),
         ctrees.leaf_nodes[0].clone(),
-        caux.attribute_multiplicities_per_sample.clone()
+        caux.attribute_multiplicities[0].clone()
     ), (tree_height, input_len), minibatch_data)
 }
 
@@ -461,7 +461,7 @@ pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
                 caux.node_multiplicities[idx].clone(),
                 ctrees.decision_nodes[idx].clone(),
                 ctrees.leaf_nodes[idx].clone(),
-                caux.attribute_multiplicities_per_sample.clone()
+                caux.attribute_multiplicities[idx].clone()
             )
         }
     ).collect_vec();
