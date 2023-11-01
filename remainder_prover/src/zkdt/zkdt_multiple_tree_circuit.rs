@@ -138,24 +138,24 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
         let combine_layers_timer = start_timer!(|| "combine layers + gate stuff");
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
-                // attribute_consistency_witness.layers,
-                // multiset_witness.layers,
+                attribute_consistency_witness.layers,
+                multiset_witness.layers,
                 input_multiset_witness.layers,
-                // binary_recomp_circuit_batched_witness.layers,
-                // bin_decomp_8_bit_binary_batched_witness.layers,
-                // bin_decomp_16_bit_binary_batched_witness.layers,
-                // bits_are_binary_multiset_decision_circuit_witness.layers,
-                // bits_are_binary_multiset_leaf_circuit_witness.layers,
+                binary_recomp_circuit_batched_witness.layers,
+                bin_decomp_8_bit_binary_batched_witness.layers,
+                bin_decomp_16_bit_binary_batched_witness.layers,
+                bits_are_binary_multiset_decision_circuit_witness.layers,
+                bits_are_binary_multiset_leaf_circuit_witness.layers,
             ],
             vec![
-                // attribute_consistency_witness.output_layers,
-                // multiset_witness.output_layers,
+                attribute_consistency_witness.output_layers,
+                multiset_witness.output_layers,
                 input_multiset_witness.output_layers,
-                // binary_recomp_circuit_batched_witness.output_layers,
-                // bin_decomp_8_bit_binary_batched_witness.output_layers,
-                // bin_decomp_16_bit_binary_batched_witness.output_layers,
-                // bits_are_binary_multiset_decision_circuit_witness.output_layers,
-                // bits_are_binary_multiset_leaf_circuit_witness.output_layers,
+                binary_recomp_circuit_batched_witness.output_layers,
+                bin_decomp_8_bit_binary_batched_witness.output_layers,
+                bin_decomp_16_bit_binary_batched_witness.output_layers,
+                bits_are_binary_multiset_decision_circuit_witness.output_layers,
+                bits_are_binary_multiset_leaf_circuit_witness.output_layers,
             ],
         )
         .unwrap();
@@ -528,10 +528,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         });
 
         // --- Add commitments to transcript so they are taken into account before the FS input layers are sampled ---
-        // let tree_mle_commit = tree_mle_input_layer
-        //     .commit()
-        //     .map_err(|err| GKRError::InputLayerError(err))?;
-        // InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
+        let tree_mle_commit = tree_mle_input_layer
+            .commit()
+            .map_err(|err| GKRError::InputLayerError(err))?;
+        InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
 
         // let input_mle_commit = input_mles_input_layer
         //     .commit()
@@ -641,7 +641,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             bits_are_binary_multiset_leaf_circuit,
             // --- Input layers ---
             vec![
-                // tree_mle_input_layer,
+                tree_mle_input_layer,
                 // input_mles_input_layer,
                 aux_mles_input_layer,
                 public_path_leaf_node_mles_input_layer,
@@ -650,7 +650,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
                 random_r_packing_another,
             ],
             vec![
-                // tree_mle_commit,
+                tree_mle_commit,
                 // input_mle_commit,
                 aux_mle_commit,
                 public_path_leaf_node_mle_commit,
