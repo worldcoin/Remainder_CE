@@ -520,7 +520,6 @@ fn hash_columns<D, E, F>(
 
         // 1. prepare the digests for each column
         let mut digests = Vec::with_capacity(hashes.len());
-        let timer = start_timer!(|| format!("hasher init"));
         for _ in 0..hashes.len() {
             // let column_hash_poseidon_params = PoseidonParams::new(8, 63, 8, 9);
             // let dig = PoseidonSpongeHasher::new_with_params(column_hash_poseidon_params);
@@ -530,11 +529,8 @@ fn hash_columns<D, E, F>(
                 PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
             digests.push(dig);
         }
-        end_timer!(timer);
 
-        let timer_2 = start_timer!(|| "digest update");
         // 2. for each row, update the digests for each column
-        dbg!(n_rows * digests.len());
         for row in 0..n_rows {
             for (col, digest) in digests.iter_mut().enumerate() {
                 // --- Updates the digest with the value at `comm[row * encoded_num_cols + offset + col]` ---
@@ -543,14 +539,11 @@ fn hash_columns<D, E, F>(
                 com_val.digest_update(digest);
             }
         }
-        end_timer!(timer_2);
 
-        let timer_3 = start_timer!(|| "finalize");
         // 3. finalize each digest and write the results back
         for (col, digest) in digests.into_iter().enumerate() {
             hashes[col] = digest.finalize();
         }
-        end_timer!(timer_3);
     } else {
         // recursive case: split and execute in parallel
         let half_cols = hashes.len() / 2;
