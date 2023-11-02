@@ -8,7 +8,7 @@ use remainder::{
     prover::{GKRCircuit, GKRError},
     zkdt::{
         constants::{
-            get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_batch,
+            get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_batch, get_sample_minibatch_commitment_filepath_for_batch_size_tree_batch,
         },
         input_data_to_circuit_adapter::{
             convert_zkdt_circuit_data_into_mles, load_upshot_data_single_tree_batch, MinibatchData, BatchedZKDTCircuitMles, convert_zkdt_circuit_data_multi_tree_into_mles, load_upshot_data_multi_tree_batch,
@@ -35,13 +35,6 @@ use tracing_subscriber::{
 };
 
 use ark_std::{end_timer, start_timer};
-
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
-
-#[cfg(not(target_env = "msvc"))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
 
 
 #[derive(Error, Debug, Clone)]
@@ -327,10 +320,11 @@ fn main() -> Result<(), ZKDTBinaryError> {
     // --- Sanitycheck (grab the minibatch commitment filename + check if exists) ---
 
 let sample_minibatch_commitment_filepath =
-        get_sample_minibatch_commitment_filepath_for_batch_size(
+        get_sample_minibatch_commitment_filepath_for_batch_size_tree_batch(
             minibatch_data.log_sample_minibatch_size,
             minibatch_data.sample_minibatch_number,
             Path::new(&args.sample_minibatch_commit_dir),
+            args.tree_batch_size,
         );
     debug!(
         sample_minibatch_commitment_filepath,

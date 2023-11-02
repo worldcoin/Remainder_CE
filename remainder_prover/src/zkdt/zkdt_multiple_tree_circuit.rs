@@ -533,10 +533,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             .map_err(|err| GKRError::InputLayerError(err))?;
         InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
 
-        // let input_mle_commit = input_mles_input_layer
-        //     .commit()
-        //     .map_err(|err| GKRError::InputLayerError(err))?;
-        // InputLayerEnum::append_commitment_to_transcript(&input_mle_commit, transcript).unwrap();
+        let input_mle_commit = input_mles_input_layer
+            .commit()
+            .map_err(|err| GKRError::InputLayerError(err))?;
+        InputLayerEnum::append_commitment_to_transcript(&input_mle_commit, transcript).unwrap();
 
         let aux_mle_commit = aux_mles_input_layer
             .commit()
@@ -642,7 +642,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             // --- Input layers ---
             vec![
                 tree_mle_input_layer,
-                // input_mles_input_layer,
+                input_mles_input_layer,
                 aux_mles_input_layer,
                 public_path_leaf_node_mles_input_layer,
                 random_r,
@@ -651,7 +651,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             ],
             vec![
                 tree_mle_commit,
-                // input_mle_commit,
+                input_mle_commit,
                 aux_mle_commit,
                 public_path_leaf_node_mle_commit,
                 random_r_commit,
@@ -665,8 +665,8 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 #[cfg(test)]
 mod tests {
     use super::ZKDTMultiTreeCircuit;
+    use crate::prover::helpers::test_circuit;
     use crate::zkdt::input_data_to_circuit_adapter::{load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles, MinibatchData, load_upshot_data_multi_tree_batch, convert_zkdt_circuit_data_multi_tree_into_mles};
-    use crate::{prover::tests::test_circuit, zkdt::input_data_to_circuit_adapter::BatchedZKDTCircuitMles};
     use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
     use ark_std::{end_timer, start_timer};
     use itertools::Itertools;

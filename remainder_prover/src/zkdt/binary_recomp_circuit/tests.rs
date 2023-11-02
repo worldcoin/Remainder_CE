@@ -8,7 +8,7 @@ mod tests {
     
     
 
-    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles}, binary_recomp_circuit::{circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}, dataparallel_circuits::BinaryRecompCircuitBatched, multitree_circuits::BinaryRecompCircuitMultiTree}, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::{BatchedZKDTCircuitMles, MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}, prover::{GKRCircuit, tests::test_circuit}};
+    use crate::{zkdt::{data_pipeline::dummy_data_generator::{DummyMles, generate_dummy_mles}, binary_recomp_circuit::{circuits::{PartialBitsCheckerCircuit, BinaryRecompCircuit}, dataparallel_circuits::BinaryRecompCircuitBatched, multitree_circuits::BinaryRecompCircuitMultiTree}, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::{BatchedZKDTCircuitMles, MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}, prover::{GKRCircuit, helpers::test_circuit}};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     
 

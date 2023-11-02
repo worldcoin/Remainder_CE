@@ -352,8 +352,6 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             // let res = from_reader(&mut bufreader).unwrap();
             res
         };
-        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
-            public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             input_mles_input_layer_builder.to_input_layer_with_precommit(
                 sample_minibatch_ligero_commit,

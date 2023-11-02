@@ -170,12 +170,9 @@ fn arkworks_bn_fft_test() {
     let orig_coeffs = vec![Fr::from(1u8), Fr::from(2u8), Fr::from(3u8), Fr::from(4u8)];
     let small_domain = GeneralEvaluationDomain::<Fr>::new(8).unwrap();
     let fft_evals: Vec<Fr> = small_domain.ifft(&orig_coeffs);
-    dbg!(fft_evals.len());
     let ifft_coeffs: Vec<Fr> = small_domain.fft(&fft_evals);
     let orig_poly = DensePolynomial::from_coefficients_vec(orig_coeffs);
     let ifft_poly = DensePolynomial::from_coefficients_vec(ifft_coeffs);
-    dbg!(orig_poly.clone());
-    dbg!(ifft_poly.clone());
     assert_eq!(orig_poly.degree(), 3);
     assert_eq!(ifft_poly.degree(), 3);
     assert_eq!(orig_poly, ifft_poly);

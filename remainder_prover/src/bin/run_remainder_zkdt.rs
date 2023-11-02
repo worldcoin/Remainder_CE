@@ -5,7 +5,6 @@ use remainder_shared_types::Fr;
 use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}, input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}};
 use clap::Parser;
 use remainder_shared_types::FieldExt;
-use remainder_shared_types::FieldExt;
 use remainder_shared_types::transcript::Transcript;
 use serde_json::{from_reader, to_writer};
 use std::{
