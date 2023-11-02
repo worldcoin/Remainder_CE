@@ -17,7 +17,6 @@ mod tests {
     use crate::zkdt::input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles};
 
 
-    use super::super::circuits::NonBatchedAttributeConsistencyCircuit;
 
     #[test]
     fn test_attribute_consistency_circuit_dummy_non_batched() {

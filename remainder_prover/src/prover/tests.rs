@@ -3,6 +3,7 @@ use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
+use crate::prover::helpers::test_circuit;
 
 use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 
@@ -39,49 +40,6 @@ use super::{
     test_helper_circuits::{EmptyLayerAddBuilder, EmptyLayerBuilder, EmptyLayerSubBuilder},
     GKRCircuit, GKRError, Layers, Witness,
 };
-
-pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>)
-where
-    <C as GKRCircuit<F>>::Transcript: Sync,
-{
-    let mut transcript = C::Transcript::new("GKR Prover Transcript");
-    let prover_timer = start_timer!(|| "proof generation");
-
-    match circuit.prove(&mut transcript) {
-        Ok(proof) => {
-            end_timer!(prover_timer);
-            if let Some(path) = path {
-                let mut f = fs::File::create(path).unwrap();
-                to_writer(&mut f, &proof).unwrap();
-            }
-            let mut transcript = C::Transcript::new("GKR Verifier Transcript");
-            let verifier_timer = start_timer!(|| "proof verification");
-
-            let proof = if let Some(path) = path {
-                let file = std::fs::File::open(path).unwrap();
-
-                from_reader(&file).unwrap()
-            } else {
-                proof
-            };
-
-            // Makis: Ignore verify for now.
-            match circuit.verify(&mut transcript, proof) {
-                Ok(_) => {
-                    end_timer!(verifier_timer);
-                }
-                Err(err) => {
-                    println!("Verify failed! Error: {err}");
-                    panic!();
-                }
-            }
-        }
-        Err(err) => {
-            println!("Proof failed! Error: {err}");
-            panic!();
-        }
-    }
-}
 
 /// This circuit is a 4 --> 2 circuit, such that
 /// [x_1, x_2, x_3, x_4, (y_1, y_2)] --> [x_1 * x_3, x_2 * x_4] --> [x_1 * x_3 - y_1, x_2 * x_4 - y_2]

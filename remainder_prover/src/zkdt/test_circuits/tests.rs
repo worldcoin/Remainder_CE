@@ -8,7 +8,7 @@ mod tests {
     
 
     use crate::{zkdt::test_circuits::circuits::BatchedFSRandomCircuit, utils::get_random_mle};
-    use crate::prover::tests::test_circuit;
+    use crate::prover::helpers::test_circuit;
 
     #[test]
     fn test_batched_random_layer_circuit() {

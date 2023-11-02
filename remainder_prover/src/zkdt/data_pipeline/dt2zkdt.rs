@@ -83,6 +83,8 @@ use std::fmt;
 use rayon::prelude::*;
 use tracing::instrument;
 
+use super::helpers::{next_power_of_two, i64_to_field, build_signed_bit_decomposition, build_unsigned_bit_decomposition, extract_decision_nodes, extract_leaf_nodes};
+
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
 #[derive(Debug, Serialize, Deserialize)]
@@ -341,7 +343,6 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
             })
         .collect();
 
-    // FIXME TO BE REMOVED (@Ben)
     let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
         .par_iter()
         .map(|tree_paths| {

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::{path::Path};
-    use crate::prover::tests::test_circuit;
+    use crate::prover::helpers::test_circuit;
 
     // --- Note: This test will only compile/run if we have the FS input layer stuff ---
     // TODO!(ryancao): Unfortunately I do not have expertise in this area to implement at the moment :(

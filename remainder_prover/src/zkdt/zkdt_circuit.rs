@@ -352,6 +352,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             // let res = from_reader(&mut bufreader).unwrap();
             res
         };
+        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
+            public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             input_mles_input_layer_builder.to_input_layer_with_precommit(
                 sample_minibatch_ligero_commit,
@@ -550,9 +552,9 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 #[cfg(test)]
 mod tests {
     use super::ZKDTCircuit;
-    use crate::prover::tests::test_circuit;
-    use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
-    use ark_std::{end_timer, start_timer};
+    use crate::prover::helpers::test_circuit;
+    use crate::{zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
+    use ark_std::{start_timer, end_timer};
     use remainder_shared_types::Fr;
     use std::path::Path;
 

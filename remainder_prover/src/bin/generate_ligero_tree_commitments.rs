@@ -12,7 +12,7 @@ use std::{
     io::BufWriter,
 };
 use thiserror::Error;
-use tracing::{debug, debug_span, event, span, Level};
+use tracing::{debug, span, Level};
 use tracing_subscriber::{fmt::format::FmtSpan, FmtSubscriber};
 
 #[derive(Error, Debug, Clone)]

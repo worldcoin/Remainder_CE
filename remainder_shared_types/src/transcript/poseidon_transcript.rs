@@ -1,15 +1,12 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
-
-
-
 use std::marker::PhantomData;
 
 use itertools::Itertools;
-use crate::poseidon::Poseidon;
+use crate::Poseidon;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
-use crate::{FieldExt};
+use crate::FieldExt;
 
 use super::{Transcript, TranscriptError};
 

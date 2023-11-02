@@ -5,6 +5,7 @@ use remainder_shared_types::Fr;
 use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}, input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}};
 use clap::Parser;
 use remainder_shared_types::FieldExt;
+use remainder_shared_types::FieldExt;
 use remainder_shared_types::transcript::Transcript;
 use serde_json::{from_reader, to_writer};
 use std::{
@@ -110,6 +111,18 @@ struct Args {
     /// different trace levels
     #[arg(long, default_value_t = false)]
     debug_tracing_subscriber: bool,
+
+    /// sets the value for rho_inv for the ligero commit
+    #[arg(long, default_value_t = 4)]
+    rho_inv: u8,
+
+    /// sets the matrix ratio (orig_num_cols : num_rows) for ligero commit, will do the dimensions
+    /// to achieve the ratio as close as possible
+    #[arg(long, default_value_t = 1_f64)]
+    matrix_ratio: f64,
+
+
+
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
     // flags after a refactor
