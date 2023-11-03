@@ -128,37 +128,6 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     )
 }
 
-///Helper function for "unbatching" when required by circuit design
-pub fn unbatch_mles_input<F: FieldExt>(mles: Vec<DenseMle<F, InputAttribute<F>>>) -> DenseMle<F, InputAttribute<F>> {
-    let old_layer_id = mles[0].layer_id;
-    let new_bits = log2(mles.len()) as usize;
-    // dbg!("hihi");
-    // dbg!(new_bits);
-    let old_prefix_bits = mles[0]
-        .prefix_bits
-        .clone()
-        .map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
-
-
-    let new_bt = (0..mles[0].attr_id(None).bookkeeping_table.len()).flat_map(
-        |idx| {
-            mles.iter().map(
-                |mle| {
-                    InputAttribute {
-                        attr_id: mle.attr_id(None).bookkeeping_table[idx],
-                        attr_val: mle.attr_val(None).bookkeeping_table[idx]
-                    }
-                }
-            ).collect_vec()
-        }
-    );
-    DenseMle::new_from_iter(
-        new_bt,
-        old_layer_id,
-        old_prefix_bits,
-    )
-}
-
 /// convert a flattened batch mle to a vector of mles
 pub fn unflatten_mle<F: FieldExt>(
     flattened_mle: DenseMle<F, F>,

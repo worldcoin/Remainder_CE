@@ -1,7 +1,8 @@
 use ark_std::{log2};
 use itertools::{Itertools, repeat_n, multizip};
+use rayon::iter::plumbing::UnindexedProducer;
 
-use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles, unflatten_mle, combine_mles}, LayerId, Padding}, zkdt::{builders::{BitExponentiationBuilderInput, FSInputPackingBuilder, FSRMinusXBuilder, DumbProduct}, structs::{BinDecomp4Bit, BinDecomp8Bit}}, prover::{input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, random_input_layer::RandomInputLayer}}};
+use crate::{mle::{dense::DenseMle, MleRef, Mle, MleIndex}, layer::{LayerBuilder, batched::{BatchedLayer, combine_zero_mle_ref, unbatch_mles, unflatten_mle, combine_mles}, LayerId, Padding}, zkdt::{builders::{BitExponentiationBuilderInput, FSInputPackingBuilder, FSRMinusXBuilder, DumbProduct, SplitProductBuilderTupleTree}, structs::{BinDecomp4Bit, BinDecomp8Bit}}, prover::{input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer, MleInputLayer, enum_input_layer::InputLayerEnum, random_input_layer::RandomInputLayer}}};
 use crate::{prover::{GKRCircuit, Layers, Witness, GKRError}};
 use remainder_shared_types::{FieldExt, transcript::{Transcript, poseidon_transcript::PoseidonTranscript}};
 
@@ -82,27 +83,13 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         let input_packing_builders = BatchedLayer::new(
             self.input_data_mle_vec.iter().map(
                 |input_data_mle| {
-                    let mut input_data_mle: DenseMle<F, InputAttribute<F>> = input_data_mle.clone();
+                    let input_data_mle: DenseMle<F, InputAttribute<F>> = input_data_mle.clone();
                     FSInputPackingBuilder::new(
                         input_data_mle,
                         self.r_mle.clone(),
                         self.r_packing_mle.clone()
                     )
                 }).collect_vec());
-
-        // let input_permuted_packing_builders = BatchedLayer::new(
-        //     self.permuted_input_data_mle_vec.iter().map(
-        //         |input_data_mle| {
-        //             let mut input_data_mle = input_data_mle.clone();
-        //             input_data_mle.add_prefix_bits(Some(input_data_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, batch_bits)).collect_vec()));
-        //             FSInputPackingBuilder::new(
-        //                 input_data_mle,
-        //                 self.r_mle.clone(),
-        //                 self.r_packing_mle.clone()
-        //             )
-        //         }).collect_vec());
-
-        // let packing_builders = input_packing_builders.concat(input_permuted_packing_builders);
 
         let input_packed_vec = layers.add_gkr(input_packing_builders);
 
@@ -302,173 +289,49 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
             }
         ).collect_vec();
 
-        // --- Now everything is packed, in Vec<Vec<DenseMle<F>>> form (outer is tree, inner is samples) ---
-
-        // let permuted_input_data_mle_vec_tree_transposed = (0..self.permuted_input_data_mle_vec_tree[0].len()).map(
-        //     |idx| {
-        //         self.permuted_input_data_mle_vec_tree.iter().map(
-        //             |mle_vec| mle_vec[idx].clone()
-        //         ).collect_vec()
-        //     }
-        // ).collect_vec();
-
-        // let path_packing_builders_vec = permuted_input_data_mle_vec_tree_transposed.iter().map(
-        //     |permuted_input_data_mle_vec| {
-        //         let permuted_input_packing_builders = BatchedLayer::new(
-        //             permuted_input_data_mle_vec.iter().map(
-        //                 |permuted_input_data_mle| {
-        //                     let permuted_input_data_mle = permuted_input_data_mle.clone();
-        //                     FSInputPackingBuilder::new(
-        //                         permuted_input_data_mle,
-        //                         self.r_mle.clone(),
-        //                         self.r_packing_mle.clone()
-        //                     )
-        //                 }
-        //             ).collect_vec());
-        //         permuted_input_packing_builders
-        //     }
-        // ).collect_vec();
-        
         let permuted_input_packed_vecs = layers.add_gkr(BatchedLayer::new(path_packing_builders_vec));
-
+        dbg!(&permuted_input_packed_vecs);
         let permuted_product_vecs = permuted_input_packed_vecs;
 
-        // permuted_product_vecs.iter_mut().for_each(
-        //     |permuted_product_vec| {
-        //         permuted_product_vec.iter_mut().for_each(
-        //             |mle| {
-        //                 let prefix_bits = mle.prefix_bits.clone().unwrap();
-        //                 let nonbatching_bits = prefix_bits[0..(prefix_bits.len() - (num_tree_bits + num_dataparallel_bits))].to_vec();
-        //                 let dataparallel_bits = prefix_bits[(prefix_bits.len() - num_dataparallel_bits)..].to_vec();
-        //                 let tree_bits = prefix_bits[(prefix_bits.len() - (num_tree_bits + num_dataparallel_bits)) .. (prefix_bits.len() - num_dataparallel_bits)].to_vec();
+        
+        let mut permuted_product_huge = unbatch_mles(permuted_product_vecs.into_iter().map(|vec| unbatch_mles(vec)).collect_vec());
 
-        //                 dbg!(&prefix_bits, &nonbatching_bits, &dataparallel_bits, &tree_bits);
-        //                 mle.set_prefix_bits(Some(nonbatching_bits.into_iter().chain(dataparallel_bits.into_iter()).chain(tree_bits.into_iter()).collect_vec()));
-        //             }
-        //         )
-        //     }
-        // );
-
-
-        // vec<vec
-
-        // prefix bits = (tree_1, tree_2, data_1, )
-        // prefix bits (tree_1)
-        // (data_1)
-
-        // let mut permuted_product_vec = permuted_product_vecs.into_iter().map(
-        //     |mle_vec| {
-        //         unbatch_mles(mle_vec)
-        //     }
-        // ).collect_vec();
-
-        // let permuted_product_unbatched_by_tree_and_samples = unbatch_mles(permuted_product_unbatched_by_samples);
-
-        // let mut permuted_packed_vec = unflatten_mle(permuted_product_unbatched_by_tree_and_samples, num_dataparallel_bits);
-
-
-
-        let mut permuted_product_vec = (0..permuted_product_vecs[0].len()).map(
-            |idx| {
-                let orig_prefix_bits = permuted_product_vecs[idx][0].get_prefix_bits().unwrap();
-                let new_prefix_bits = Some(
-                    orig_prefix_bits[0..(orig_prefix_bits.len() - num_tree_bits - num_dataparallel_bits)].to_vec().into_iter().chain(
-                        vec![MleIndex::Fixed(idx % 2 != 0)]
-                    ).chain(orig_prefix_bits[(orig_prefix_bits.len() - num_dataparallel_bits)..].to_vec().into_iter()).collect_vec()
-                );
-
-                let combined_mle_ref = combine_mles(permuted_product_vecs.iter().map(
-                    |vec| {
-                     vec[idx].mle_ref()
-                }
-                ).collect_vec(), num_tree_bits);
-
-                DenseMle::new_from_raw(
-                    combined_mle_ref.bookkeeping_table,
-                    permuted_product_vecs[idx][0].layer_id,
-                    new_prefix_bits
-                )
-            }
-        ).collect_vec();
-
-        dbg!(&permuted_product_vec);
-      
+        dbg!(&permuted_product_huge);
 
         // layer 15, 16, 17
 
-    
 
-        
-        for _ in 0..permuted_product_vec[0].num_iterated_vars() {
-            let split_product_builders = BatchedLayer::new(
-                permuted_product_vec.into_iter().map(
-                    |permuted_packed_mle| SplitProductBuilder::new(permuted_packed_mle)
-                ).collect());
+        for _ in 0..(num_tree_bits) {
+            let permuted_product_tuple = permuted_product_huge.split(F::one());
+            let mle_first = permuted_product_tuple.first();
+            let mle_second = permuted_product_tuple.second();
+            let split_product_builder = SplitProductBuilderTupleTree::new(mle_first, mle_second);
+            permuted_product_huge = layers.add_gkr(split_product_builder);
+        }
 
-                permuted_product_vec = layers.add_gkr(split_product_builders);
+        for _ in 0..(self.permuted_input_data_mle_vec_tree[0][0].num_iterated_vars() - 1) {
+            let permuted_product_tuple = permuted_product_huge.split_tree(1 << num_dataparallel_bits);
+            let mle_first = permuted_product_tuple.first(num_dataparallel_bits);
+            let mle_second = permuted_product_tuple.second(num_dataparallel_bits);
+            let split_product_builder = SplitProductBuilderTupleTree::new(mle_first, mle_second);
+            permuted_product_huge = layers.add_gkr(split_product_builder);
         }
 
 
-        dbg!(&permuted_product_vec);
-        dbg!(&exponentiated_input_vec);
-        // // --- This will go through and product each individual `DenseMleRef<F>` in the `Vec<Vec<DenseMle<F>>>` such that we end up with bookkeeping tables of size 1 ---
-        // let permuted_input_len = 1 << (self.permuted_input_data_mle_vec_tree[0][0].num_iterated_vars() - 1);
-        // for _ in 0..log2(permuted_input_len) {
-        //     let split_product_builders_vec = permuted_product_vecs.clone().into_iter().map(
-        //         |permuted_product_vec| {
-        //             BatchedLayer::new(
-        //                 permuted_product_vec.into_iter().map(
-        //                     |permuted_product| SplitProductBuilder::new(permuted_product)
-        //                 ).collect())
-        //         }
-        //     ).collect_vec();
-            
-        //     permuted_product_vecs = layers.add_gkr(BatchedLayer::new(split_product_builders_vec));
-        // }
 
-        // dbg!(&permuted_product_vecs);
+        let unbatched_expo = unbatch_mles(exponentiated_input_vec);
 
-        // --- So now we take the product over the 
-        // let product_vec = (0..permuted_product_vecs[0].len()).map(
-        //     |idx| {
-        //         let products = DumbProduct::new(
-        //             permuted_product_vecs.iter().map(
-        //                 |permuted_product_vec| {
-        //                     let mut permuted_product_mle = permuted_product_vec[idx].clone();
-        //                     // --- TODO!(ryancao, vishady): Alter the prefix bits of the `permuted_product_mle` here ---
-        //                     let orig_prefix_bits = permuted_product_mle.get_prefix_bits().unwrap();
-        //                     permuted_product_mle.set_prefix_bits(
-        //                         Some(
-        //                             orig_prefix_bits[0..(orig_prefix_bits.len() - num_tree_bits - num_dataparallel_bits)].to_vec().into_iter().chain(
-        //                                 vec![MleIndex::Fixed(idx % 2 == 0)]
-        //                             ).chain(orig_prefix_bits[(orig_prefix_bits.len() - num_dataparallel_bits)..].to_vec().into_iter()).collect_vec()
-        //                         )
-        //                     );
-        //                     dbg!(permuted_product_mle.get_prefix_bits());
-        //                     dbg!(permuted_product_mle.mle_ref().mle_indices());
-        //                     permuted_product_mle
-        //                 }
-        //             ).collect_vec()
-        //         );
-        //         products
-        //     }
-        // ).collect_vec();
+        // dbg!(unbatched_expo.mle[0] * unbatched_expo.mle[2] * unbatched_expo.mle[1] * unbatched_expo.mle[3]);
+        // dbg!(permuted_product_huge.mle[2] * permuted_product_huge.mle[3] * permuted_product_huge.mle[0] * permuted_product_huge.mle[1]);
 
-        // let permuted_product_vec_builder = BatchedLayer::new(vec![BatchedLayer::new(product_vec)]);
-
-        // let permuted_product_vec = layers.add_gkr(permuted_product_vec_builder);
-        
-        // dbg!(&permuted_product_vec);
-
-
-        let difference_builder = EqualityCheck::new_batched(
-                exponentiated_input_vec,
-                permuted_product_vec
+        let difference_builder = EqualityCheck::new(
+                unbatched_expo,
+                permuted_product_huge
             );
 
-        let circuit_output_vecs = layers.add_gkr(difference_builder);
+        let circuit_output = layers.add_gkr(difference_builder);
 
-        let circuit_output = combine_zero_mle_ref(circuit_output_vecs);
+        // let circuit_output = combine_zero_mle_ref(circuit_output_vecs);
 
         println!("# layers -- input multiset: {:?}", layers.next_layer_id());
 

@@ -222,6 +222,28 @@ impl<F: FieldExt> DenseMle<F, F> {
         )
     }
 
+    ///Splits the mle into a new mle with a tuple of size 2 as it's element
+    pub fn split_tree(&self, num_split: usize) -> DenseMle<F, TupleTree<F>> {
+
+        let mut first_half = vec![];
+        let mut second_half = vec![];
+        self.mle.clone().into_iter().enumerate().for_each(
+            |(idx, elem)| {
+                if (idx % (num_split*2)) < (num_split) {
+                    first_half.push(elem);
+                } else {
+                    second_half.push(elem);
+                }
+            }
+        );
+
+        DenseMle::new_from_raw(
+            [first_half, second_half],
+            self.layer_id,
+            self.prefix_bits.clone(),
+        )
+    }
+
     pub fn one(
         mle_len: usize,
         layer_id: LayerId,
@@ -396,6 +418,110 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         )
     }
 }
+
+
+
+
+
+#[derive(Debug, Clone)]
+///Newtype around a tuple of field elements
+pub struct TupleTree<F: FieldExt>(pub ((F, F)));
+
+impl<F: FieldExt> MleAble<F> for TupleTree<F> {
+    type Repr = [Vec<F>; 2];
+
+    fn get_padded_evaluations(items: &Self::Repr) -> Vec<F> {
+        get_padded_evaluations_for_list(items)
+    }
+
+    type IntoIter<'a> = Map<Zip<std::slice::Iter<'a, F>, std::slice::Iter<'a, F>>, fn((&F, &F)) -> Self> where Self: 'a;
+
+    fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr {
+        let iter = iter.into_iter();
+        let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0 .1)).unzip();
+        [first, second]
+    }
+
+    fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
+        items[0]
+            .iter()
+            .zip(items[1].iter())
+            .map(|(first, second)| TupleTree((*first, *second)))
+    }
+
+    fn num_vars(items: &Self::Repr) -> usize {
+        log2(items[0].len() + items[1].len()) as usize
+    }
+}
+
+impl<F: FieldExt> From<(F, F)> for TupleTree<F> {
+    fn from(value: (F, F)) -> Self {
+        Self(value)
+    }
+}
+
+
+impl<F: FieldExt> DenseMle<F, TupleTree<F>> {
+    ///Gets an MleRef to the first element in the tuple
+    pub fn first(&'_ self, splitter: usize) -> DenseMleRef<F> {
+        // --- Number of *remaining* iterated variables ---
+        let new_num_iterated_vars = self.num_iterated_vars - 1;
+
+        let mle_indices = self
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                repeat_n(MleIndex::Iterated, splitter).chain(
+                    std::iter::once(MleIndex::Fixed(false)) 
+                    .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars - splitter))
+                ),
+            )
+            .collect_vec();
+
+        DenseMleRef {
+            bookkeeping_table: self.mle[0].to_vec(),
+            original_bookkeeping_table: self.mle[0].to_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
+            num_vars: new_num_iterated_vars,
+            original_num_vars: new_num_iterated_vars,
+            layer_id: self.layer_id,
+            indexed: false,
+        }
+    }
+
+    ///Gets an MleRef to the second element in the tuple
+    pub fn second(&'_ self, splitter: usize) -> DenseMleRef<F> {
+        let new_num_iterated_vars = self.num_iterated_vars - 1;
+        let mle_indices = self
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                repeat_n(MleIndex::Iterated, splitter).chain(
+                    std::iter::once(MleIndex::Fixed(true)) 
+                    .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars - splitter))
+                ),
+            )
+            .collect_vec();
+
+        DenseMleRef {
+            bookkeeping_table: self.mle[1].to_vec(),
+            original_bookkeeping_table: self.mle[1].to_vec(),
+            mle_indices: mle_indices.clone(),
+            original_mle_indices: mle_indices,
+            num_vars: new_num_iterated_vars,
+            original_num_vars: new_num_iterated_vars,
+            layer_id: self.layer_id,
+            indexed: false,
+        }
+    }
+
+}
+
 
 // --------------------------- MleRef stuff ---------------------------
 

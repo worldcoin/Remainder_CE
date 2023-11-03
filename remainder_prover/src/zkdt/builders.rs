@@ -8,7 +8,7 @@ use crate::expression::{ExpressionStandard, Expression};
 use crate::layer::batched::BatchedLayer;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
-use crate::mle::dense::{DenseMle, Tuple2};
+use crate::mle::dense::{DenseMle, Tuple2, TupleTree, DenseMleRef};
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use crate::sumcheck::compute_sumcheck_message;
 use remainder_shared_types::FieldExt;
@@ -222,6 +222,47 @@ impl<F: FieldExt> AttributeConsistencyBuilderZeroRef<F> {
         }
     }
 }
+
+
+
+/// chunks mle into two halfs, multiply them together
+pub struct SplitProductBuilderTupleTree<F: FieldExt> {
+    mle_first: DenseMleRef<F>,
+    mle_second: DenseMleRef<F>,
+}
+
+impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilderTupleTree<F> {
+    type Successor = DenseMle<F, F>;
+    //a function that multiplies the parts of the tuple pair-wise
+    fn build_expression(&self) -> ExpressionStandard<F> {
+        ExpressionStandard::products(vec![self.mle_first.clone(), self.mle_second.clone()])
+    }
+
+    fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
+
+        // Create flatmle from tuple mle
+        // let split_mle = self.mle.split(F::one());
+        DenseMle::new_from_iter(self.mle_first.clone().bookkeeping_table
+            .into_iter().zip(self.mle_second.clone().bookkeeping_table)
+            .map(|(a, b)| a * b), id, prefix_bits)
+    }
+}
+
+impl<F: FieldExt> SplitProductBuilderTupleTree<F> {
+    /// create new halfed multiplied mle
+    pub fn new(
+        mle_first: DenseMleRef<F>,
+        mle_second: DenseMleRef<F>,
+    ) -> Self {
+        Self {
+            mle_first,
+            mle_second
+        }
+    }
+}
+
+
+
 
 /// chunks mle into two halfs, multiply them together
 pub struct SplitProductBuilder<F: FieldExt> {

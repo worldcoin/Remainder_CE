@@ -138,24 +138,24 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
         let combine_layers_timer = start_timer!(|| "combine layers + gate stuff");
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
-                // attribute_consistency_witness.layers,
-                // multiset_witness.layers,
+                attribute_consistency_witness.layers,
+                multiset_witness.layers,
                 input_multiset_witness.layers,
-                // binary_recomp_circuit_batched_witness.layers,
-                // bin_decomp_8_bit_binary_batched_witness.layers,
-                // bin_decomp_16_bit_binary_batched_witness.layers,
-                // bits_are_binary_multiset_decision_circuit_witness.layers,
-                // bits_are_binary_multiset_leaf_circuit_witness.layers,
+                binary_recomp_circuit_batched_witness.layers,
+                bin_decomp_8_bit_binary_batched_witness.layers,
+                bin_decomp_16_bit_binary_batched_witness.layers,
+                bits_are_binary_multiset_decision_circuit_witness.layers,
+                bits_are_binary_multiset_leaf_circuit_witness.layers,
             ],
             vec![
-                // attribute_consistency_witness.output_layers,
-                // multiset_witness.output_layers,
+                attribute_consistency_witness.output_layers,
+                multiset_witness.output_layers,
                 input_multiset_witness.output_layers,
-                // binary_recomp_circuit_batched_witness.output_layers,
-                // bin_decomp_8_bit_binary_batched_witness.output_layers,
-                // bin_decomp_16_bit_binary_batched_witness.output_layers,
-                // bits_are_binary_multiset_decision_circuit_witness.output_layers,
-                // bits_are_binary_multiset_leaf_circuit_witness.output_layers,
+                binary_recomp_circuit_batched_witness.output_layers,
+                bin_decomp_8_bit_binary_batched_witness.output_layers,
+                bin_decomp_16_bit_binary_batched_witness.output_layers,
+                bits_are_binary_multiset_decision_circuit_witness.output_layers,
+                bits_are_binary_multiset_leaf_circuit_witness.output_layers,
             ],
         )
         .unwrap();
@@ -217,21 +217,6 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 
         // deal w input
         let mut input_samples_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vecs.clone());
-        // let input_samples_mle_combined_vec =
-        //     input_samples_mle_vecs.iter().map( 
-        //         |input_samples_mle_vec| {
-        //             DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vec.clone())
-        //     }).collect_vec();
-        // // let mut input_samples_mle_combined = DenseMle::<F, F>::combine_mle_batch(input_samples_mle_combined_vec);
-        // let mut input_samples_mle_combined = input_samples_mle_combined_vec[0].clone();
-
-        // permuted_input_samples_mle_vecs = (0..permuted_input_samples_mle_vecs[0].len()).map(
-        //     |idx| {
-        //         permuted_input_samples_mle_vecs.iter().map(
-        //             |mle_vec| mle_vec[idx].clone()
-        //         ).collect_vec()
-        //     }
-        // ).collect_vec();
 
         let permuted_input_samples_mle_vec_combined_vec = permuted_input_samples_mle_vecs.iter().map(
             |permuted_input_samples_mle_vec| {
@@ -512,10 +497,10 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         });
 
         // --- Add commitments to transcript so they are taken into account before the FS input layers are sampled ---
-        // let tree_mle_commit = tree_mle_input_layer
-        //     .commit()
-        //     .map_err(|err| GKRError::InputLayerError(err))?;
-        // InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
+        let tree_mle_commit = tree_mle_input_layer
+            .commit()
+            .map_err(|err| GKRError::InputLayerError(err))?;
+        InputLayerEnum::append_commitment_to_transcript(&tree_mle_commit, transcript).unwrap();
 
         // let input_mle_commit = input_mles_input_layer
         //     .commit()
@@ -625,7 +610,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             bits_are_binary_multiset_leaf_circuit,
             // --- Input layers ---
             vec![
-                // tree_mle_input_layer,
+                tree_mle_input_layer,
                 // input_mles_input_layer,
                 aux_mles_input_layer,
                 public_path_leaf_node_mles_input_layer,
@@ -634,7 +619,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
                 random_r_packing_another,
             ],
             vec![
-                // tree_mle_commit,
+                tree_mle_commit,
                 // input_mle_commit,
                 aux_mle_commit,
                 public_path_leaf_node_mle_commit,
@@ -677,14 +662,14 @@ mod tests {
             .filter(None, LevelFilter::Error)
             .init();
 
-        let minibatch_data = MinibatchData {log_sample_minibatch_size: 1, sample_minibatch_number: 2};
+        let minibatch_data = MinibatchData {log_sample_minibatch_size: 10, sample_minibatch_number: 2};
 
         let (trees_batched_data, (tree_height, input_len), _) = load_upshot_data_multi_tree_batch::<Fr>(Some(minibatch_data), 2, 0, Path::new(&"upshot_data/quantized-upshot-model.json".to_string()), Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()));
         let (tree_batched_circuit_mles, (_, _)) = convert_zkdt_circuit_data_multi_tree_into_mles(trees_batched_data, tree_height, input_len);
         
         let combined_circuit = ZKDTMultiTreeCircuit {
             batched_zkdt_circuit_mles_tree: tree_batched_circuit_mles,
-            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
+            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_batch_num_0_size_2.json".to_string(),
             sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_2.json".to_string(),
             rho_inv: 4,
             ratio: 1_f64,

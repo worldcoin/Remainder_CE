@@ -205,11 +205,6 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
             });
         }
         let num_vars = claims[0].get_num_vars();
-        claims.iter().for_each(
-            |claim| {
-                dbg!(&claim.get_num_vars());
-            }
-        );
 
         // Check all claims match on the number of variables.
         if !claims
