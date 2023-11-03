@@ -175,6 +175,7 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
         ligero_aux: LcProofAuxiliaryInfo,
         ligero_root: LcRoot<LigeroEncoding<F>, F>,
+        verifier_is_precommit: bool,
     ) -> Self {
         Self {
             mle,
@@ -183,7 +184,7 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
             aux: Some(ligero_aux),
             root: Some(ligero_root),
             _marker: PhantomData,
-            is_precommit: true,
+            is_precommit: verifier_is_precommit,
             rho_inv: None,
             ratio: None,
         }

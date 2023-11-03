@@ -415,6 +415,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
                 tree_ligero_commit,
                 tree_ligero_aux,
                 tree_ligero_root,
+                true,
             );
 
         // let (

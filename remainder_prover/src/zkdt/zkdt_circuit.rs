@@ -322,6 +322,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 tree_ligero_commit,
                 tree_ligero_aux,
                 tree_ligero_root,
+                true,
             );
 
         let (
@@ -357,6 +358,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 sample_minibatch_ligero_commit,
                 sample_minibatch_ligero_aux,
                 sample_minibatch_ligero_root,
+                false,
             );
 
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =

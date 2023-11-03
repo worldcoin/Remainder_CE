@@ -1024,6 +1024,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
                 ligero_comm,
                 ligero_aux,
                 ligero_root,
+                true,
             );
         let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
             live_committed_input_layer_builder.to_input_layer();
