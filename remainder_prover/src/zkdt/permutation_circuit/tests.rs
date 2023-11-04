@@ -9,7 +9,7 @@ mod tests {
 
     use crate::zkdt::{data_pipeline::dummy_data_generator::{generate_dummy_mles_batch, BatchedDummyMles}, input_data_to_circuit_adapter::BatchedZKDTCircuitMles, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
     use remainder_shared_types::transcript::{Transcript};
-    use crate::prover::tests::test_circuit;
+    use crate::prover::helpers::test_circuit;
 
     use super::super::circuits::{NonBatchedPermutationCircuit, PermutationCircuit, FSPermutationCircuit};
 

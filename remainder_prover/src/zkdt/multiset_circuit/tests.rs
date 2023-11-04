@@ -8,7 +8,7 @@ mod tests {
     use rand::Rng;
 
     use crate::zkdt::{multiset_circuit::legacy_circuits::MultiSetCircuit, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree, input_data_to_circuit_adapter::BatchedZKDTCircuitMles};
-    use crate::prover::tests::test_circuit;
+    use crate::prover::helpers::test_circuit;
 
     #[test]
     fn test_multiset_circuit_catboost_batched() {

@@ -38,3 +38,14 @@ pub fn get_sample_minibatch_commitment_filepath_for_batch_size(
     let get_sample_minibatch_commitment_filepath = sample_minibatch_commitments_dir.join(format!("sample_minibatch_logsize_{}_commitment_{}.json", log_batch_size, batch_number));
     String::from(get_sample_minibatch_commitment_filepath.to_str().unwrap())
 }
+
+/// For sample minibatch cache-ing
+pub fn get_sample_minibatch_commitment_filepath_for_batch_size_tree_batch(
+    log_batch_size: usize, 
+    batch_number: usize, 
+    sample_minibatch_commitments_dir: &Path,
+    tree_batch_size: usize,
+) -> String {
+    let get_sample_minibatch_commitment_filepath = sample_minibatch_commitments_dir.join(format!("sample_minibatch_logsize_{}_commitment_{}_num_trees_{}.json", log_batch_size, batch_number, tree_batch_size));
+    String::from(get_sample_minibatch_commitment_filepath.to_str().unwrap())
+}

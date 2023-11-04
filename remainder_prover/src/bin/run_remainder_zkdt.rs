@@ -110,6 +110,18 @@ struct Args {
     /// different trace levels
     #[arg(long, default_value_t = false)]
     debug_tracing_subscriber: bool,
+
+    /// sets the value for rho_inv for the ligero commit
+    #[arg(long, default_value_t = 4)]
+    rho_inv: u8,
+
+    /// sets the matrix ratio (orig_num_cols : num_rows) for ligero commit, will do the dimensions
+    /// to achieve the ratio as close as possible
+    #[arg(long, default_value_t = 1_f64)]
+    matrix_ratio: f64,
+
+
+
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
     // flags after a refactor

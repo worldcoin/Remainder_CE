@@ -83,6 +83,8 @@ use std::fmt;
 use rayon::prelude::*;
 use tracing::instrument;
 
+use super::helpers::{next_power_of_two, i64_to_field, build_signed_bit_decomposition, build_unsigned_bit_decomposition, extract_decision_nodes, extract_leaf_nodes};
+
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
 #[derive(Debug, Serialize, Deserialize)]
@@ -265,7 +267,24 @@ fn build_4bit_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize)
 
 fn build_8bit_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp8Bit<F> {
      let bits = build_unsigned_bit_decomposition(multiplicity as u32, 8).unwrap();
+    //  assert_eq!(recomp_8bit(&bits), multiplicity);
+    let recomp = recomp_8bit(&bits);
+    if recomp != multiplicity {
+        dbg!("Not equal: {}, {}", &bits, &multiplicity);
+        dbg!(multiplicity);
+        panic!();
+    }
      BinDecomp8Bit::<F>::from(bits)
+}
+
+/// Testing/sanitycheck
+fn recomp_8bit(bits: &Vec<bool>) -> usize {
+    assert_eq!(bits.len(), 8);
+    bits.into_iter().enumerate().fold(
+        0, |acc, (idx, bit)| {
+            acc + ((1 << idx) * (if *bit {1} else {0}))
+        }
+    )
 }
 
 /// Build the witnesses for a single sample.
@@ -341,7 +360,6 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
             })
         .collect();
 
-    // FIXME TO BE REMOVED (@Ben)
     let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
         .par_iter()
         .map(|tree_paths| {

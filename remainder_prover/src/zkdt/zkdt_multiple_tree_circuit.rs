@@ -138,42 +138,42 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
         let combine_layers_timer = start_timer!(|| "combine layers + gate stuff");
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
-                attribute_consistency_witness.layers,
-                multiset_witness.layers,
+                // attribute_consistency_witness.layers,
+                // multiset_witness.layers,
                 input_multiset_witness.layers,
-                binary_recomp_circuit_batched_witness.layers,
-                bin_decomp_8_bit_binary_batched_witness.layers,
-                bin_decomp_16_bit_binary_batched_witness.layers,
-                bits_are_binary_multiset_decision_circuit_witness.layers,
-                bits_are_binary_multiset_leaf_circuit_witness.layers,
+                // binary_recomp_circuit_batched_witness.layers,
+                // bin_decomp_8_bit_binary_batched_witness.layers,
+                // bin_decomp_16_bit_binary_batched_witness.layers,
+                // bits_are_binary_multiset_decision_circuit_witness.layers,
+                // bits_are_binary_multiset_leaf_circuit_witness.layers,
             ],
             vec![
-                attribute_consistency_witness.output_layers,
-                multiset_witness.output_layers,
+                // attribute_consistency_witness.output_layers,
+                // multiset_witness.output_layers,
                 input_multiset_witness.output_layers,
-                binary_recomp_circuit_batched_witness.output_layers,
-                bin_decomp_8_bit_binary_batched_witness.output_layers,
-                bin_decomp_16_bit_binary_batched_witness.output_layers,
-                bits_are_binary_multiset_decision_circuit_witness.output_layers,
-                bits_are_binary_multiset_leaf_circuit_witness.output_layers,
+                // binary_recomp_circuit_batched_witness.output_layers,
+                // bin_decomp_8_bit_binary_batched_witness.output_layers,
+                // bin_decomp_16_bit_binary_batched_witness.output_layers,
+                // bits_are_binary_multiset_decision_circuit_witness.output_layers,
+                // bits_are_binary_multiset_leaf_circuit_witness.output_layers,
             ],
         )
         .unwrap();
 
         // --- Manually add the layers and output layers from the circuit involving gate MLEs ---
-        let updated_combined_output_layers = path_consistency_circuit_batched
-            .add_subcircuit_layers_to_combined_layers(
-                &mut combined_circuit_layers,
-                combined_circuit_output_layers,
-            );
+        // let updated_combined_output_layers = path_consistency_circuit_batched
+        //     .add_subcircuit_layers_to_combined_layers(
+        //         &mut combined_circuit_layers,
+        //         combined_circuit_output_layers,
+        //     );
 
         end_timer!(combine_layers_timer);
 
         Ok((
             Witness {
                 layers: combined_circuit_layers,
-                // output_layers: combined_circuit_output_layers,
-                output_layers: updated_combined_output_layers,
+                output_layers: combined_circuit_output_layers,
+                // output_layers: updated_combined_output_layers,
                 input_layers,
             },
             inpunt_layers_commits,
@@ -285,7 +285,6 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         input_samples_mle_vecs.iter_mut().for_each(|mle| {
             mle.layer_id = LayerId::Input(1);
         });
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut input_samples_mle_combined)];
 
         // --- Input layer 2 ---
         permuted_input_samples_mle_vec_combined.layer_id = LayerId::Input(2);
@@ -327,6 +326,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 
 
         let aux_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            Box::new(&mut input_samples_mle_combined),
             Box::new(&mut permuted_input_samples_mle_vec_combined),
             Box::new(&mut decision_node_paths_mle_vec_combined),
             Box::new(&mut multiplicities_bin_decomp_mle_decision_combined),
@@ -349,9 +349,9 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         let tree_mle_input_layer_builder =
             InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
 
-        // --- b) Ligero input layer for just the inputs themselves (LayerId: 1) ---
-        let input_mles_input_layer_builder =
-            InputLayerBuilder::new(input_mles, None, LayerId::Input(1));
+        // // --- b) Ligero input layer for just the inputs themselves (LayerId: 1) ---
+        // let input_mles_input_layer_builder =
+        //     InputLayerBuilder::new(input_mles, None, LayerId::Input(1));
 
         // --- c) Ligero input layer for all the auxiliaries (LayerId: 2) ---
         let aux_mles_input_layer_builder =
@@ -380,42 +380,44 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
                 tree_ligero_commit,
                 tree_ligero_aux,
                 tree_ligero_root,
+                true,
             );
 
-        let (
-            _ligero_encoding,
-            sample_minibatch_ligero_commit,
-            sample_minibatch_ligero_root,
-            sample_minibatch_ligero_aux,
-        ): (
-            LigeroEncoding<F>,
-            LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-            LcRoot<LigeroEncoding<F>, F>,
-            LcProofAuxiliaryInfo,
-        ) = {
-            // METHOD 0: Use no buffer at all.
-            // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-            // let res = from_reader(&file).unwrap();
+        // let (
+        //     _ligero_encoding,
+        //     sample_minibatch_ligero_commit,
+        //     sample_minibatch_ligero_root,
+        //     sample_minibatch_ligero_aux,
+        // ): (
+        //     LigeroEncoding<F>,
+        //     LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+        //     LcRoot<LigeroEncoding<F>, F>,
+        //     LcProofAuxiliaryInfo,
+        // ) = {
+        //     // METHOD 0: Use no buffer at all.
+        //     // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+        //     // let res = from_reader(&file).unwrap();
 
-            // METHOD 1: Read everything into the buffer.
-            let mut file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-            let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
-            let mut bufreader = Vec::with_capacity(initial_buffer_size);
-            file.read_to_end(&mut bufreader).unwrap();
-            let res = serde_json::de::from_slice(&bufreader[..]).unwrap();
+        //     // METHOD 1: Read everything into the buffer.
+        //     let mut file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+        //     let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+        //     let mut bufreader = Vec::with_capacity(initial_buffer_size);
+        //     file.read_to_end(&mut bufreader).unwrap();
+        //     let res = serde_json::de::from_slice(&bufreader[..]).unwrap();
 
-            // METHOD 2: Use a buffer of a default size.
-            // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-            // let mut bufreader = BufReader::new(file);
-            // let res = from_reader(&mut bufreader).unwrap();
-            res
-        };
-        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            input_mles_input_layer_builder.to_input_layer_with_precommit(
-                sample_minibatch_ligero_commit,
-                sample_minibatch_ligero_aux,
-                sample_minibatch_ligero_root,
-            );
+        //     // METHOD 2: Use a buffer of a default size.
+        //     // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
+        //     // let mut bufreader = BufReader::new(file);
+        //     // let res = from_reader(&mut bufreader).unwrap();
+        //     res
+        // };
+        // let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+        //     input_mles_input_layer_builder.to_input_layer_with_precommit(
+        //         sample_minibatch_ligero_commit,
+        //         sample_minibatch_ligero_aux,
+        //         sample_minibatch_ligero_root,
+        //         true,
+        //     );
 
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
             aux_mles_input_layer_builder.to_input_layer_with_rho_inv(
@@ -425,7 +427,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
             public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
-        let mut input_mles_input_layer = input_mles_input_layer.to_enum();
+        // let mut input_mles_input_layer = input_mles_input_layer.to_enum();
         let mut aux_mles_input_layer = aux_mles_input_layer.to_enum();
         let mut public_path_leaf_node_mles_input_layer =
             public_path_leaf_node_mles_input_layer.to_enum();
@@ -634,8 +636,8 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 #[cfg(test)]
 mod tests {
     use super::ZKDTMultiTreeCircuit;
+    use crate::prover::helpers::test_circuit;
     use crate::zkdt::input_data_to_circuit_adapter::{load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles, MinibatchData, load_upshot_data_multi_tree_batch, convert_zkdt_circuit_data_multi_tree_into_mles};
-    use crate::{prover::tests::test_circuit, zkdt::input_data_to_circuit_adapter::BatchedZKDTCircuitMles};
     use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
     use ark_std::{end_timer, start_timer};
     use itertools::Itertools;

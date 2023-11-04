@@ -4,6 +4,7 @@ pub mod combine_layers;
 /// For the input layer to the GKR circuit
 pub mod input_layer;
 pub mod test_helper_circuits;
+pub mod helpers;
 #[cfg(test)]
 pub(crate) mod tests;
 

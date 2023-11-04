@@ -238,6 +238,21 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         let layer_5_builders = curr_prod_builders.concat(prod_builders);
         let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_5_builders);
 
+        // --- Layer 6 part 1 (i.e. exponentiation part) ---
+        let curr_prod_builders = BatchedLayer::new(
+            r_minus_x_power_vec.iter().zip(
+                multiplicities_bin_decomp_mle_input_vec.iter()
+            ).map(
+                |(r_minus_x_power, multiplicities_bin_decomp_mle)| {
+                    BitExponentiationBuilderInput::new(
+                        multiplicities_bin_decomp_mle.clone(),
+                        4,
+                        r_minus_x_power.clone()
+                    )
+                }
+            ).collect_vec()
+        );
+
         // layer 6
         let prod_builders = BatchedLayer::new(
             curr_prod_vec.iter().zip(
@@ -250,10 +265,119 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
             }).collect_vec()
         );
 
+        let layer_6_builders = curr_prod_builders.concat(prod_builders);
+        let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_6_builders);
+
+        // --- Layer 7 ---
+
+        let curr_prod_builders = BatchedLayer::new(
+            r_minus_x_power_vec.iter().zip(
+                multiplicities_bin_decomp_mle_input_vec.iter()
+            ).map(
+                |(r_minus_x_power, multiplicities_bin_decomp_mle)| {
+                    BitExponentiationBuilderInput::new(
+                        multiplicities_bin_decomp_mle.clone(),
+                        5,
+                        r_minus_x_power.clone()
+                    )
+                }
+            ).collect_vec()
+        );
+
+        // layer 7
+        let prod_builders = BatchedLayer::new(
+            curr_prod_vec.iter().zip(
+                prev_prod_vec.iter()
+            ).map(|(curr_prod, prev_prod)| {
+                ProductBuilder::new(
+                    curr_prod.clone(),
+                    prev_prod.clone()
+                )
+            }).collect_vec()
+        );
+
+        let layer_7_builders = curr_prod_builders.concat(prod_builders);
+        let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_7_builders);
+
+
+        // --- Layer 8 ---
+
+        let curr_prod_builders = BatchedLayer::new(
+            r_minus_x_power_vec.iter().zip(
+                multiplicities_bin_decomp_mle_input_vec.iter()
+            ).map(
+                |(r_minus_x_power, multiplicities_bin_decomp_mle)| {
+                    BitExponentiationBuilderInput::new(
+                        multiplicities_bin_decomp_mle.clone(),
+                        6,
+                        r_minus_x_power.clone()
+                    )
+                }
+            ).collect_vec()
+        );
+
+        // layer 8
+        let prod_builders = BatchedLayer::new(
+            curr_prod_vec.iter().zip(
+                prev_prod_vec.iter()
+            ).map(|(curr_prod, prev_prod)| {
+                ProductBuilder::new(
+                    curr_prod.clone(),
+                    prev_prod.clone()
+                )
+            }).collect_vec()
+        );
+
+        let layer_8_builders = curr_prod_builders.concat(prod_builders);
+        let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_8_builders);
+
+        // --- Layer 9 ---
+
+        let curr_prod_builders = BatchedLayer::new(
+            r_minus_x_power_vec.iter().zip(
+                multiplicities_bin_decomp_mle_input_vec.iter()
+            ).map(
+                |(r_minus_x_power, multiplicities_bin_decomp_mle)| {
+                    BitExponentiationBuilderInput::new(
+                        multiplicities_bin_decomp_mle.clone(),
+                        7,
+                        r_minus_x_power.clone()
+                    )
+                }
+            ).collect_vec()
+        );
+
+        // layer 9
+        let prod_builders = BatchedLayer::new(
+            curr_prod_vec.iter().zip(
+                prev_prod_vec.iter()
+            ).map(|(curr_prod, prev_prod)| {
+                ProductBuilder::new(
+                    curr_prod.clone(),
+                    prev_prod.clone()
+                )
+            }).collect_vec()
+        );
+
+        let layer_9_builders = curr_prod_builders.concat(prod_builders);
+        let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_9_builders);
+
+        // --- Layer 10 ---
+
+        let prod_builders = BatchedLayer::new(
+            curr_prod_vec.iter().zip(
+                prev_prod_vec.iter()
+            ).map(|(curr_prod, prev_prod)| {
+                ProductBuilder::new(
+                    curr_prod.clone(),
+                    prev_prod.clone()
+                )
+            }).collect_vec()
+        );
+
         let prev_prod_vec = layers.add_gkr(prod_builders);
-
+        
         let mut exponentiated_input_vec = prev_prod_vec;
-
 
         let input_len = 1 << (self.input_data_mle_vec[0].num_iterated_vars() - 1);
         for _ in 0..log2(input_len) {
@@ -290,37 +414,54 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         ).collect_vec();
 
         let permuted_input_packed_vecs = layers.add_gkr(BatchedLayer::new(path_packing_builders_vec));
-        dbg!(&permuted_input_packed_vecs);
         let permuted_product_vecs = permuted_input_packed_vecs;
-
+        // dbg!(&permuted_product_vecs);
         
         let mut permuted_product_huge = unbatch_mles(permuted_product_vecs.into_iter().map(|vec| unbatch_mles(vec)).collect_vec());
 
-        dbg!(&permuted_product_huge);
-
         // layer 15, 16, 17
 
+        let unbatched_expo = unbatch_mles(exponentiated_input_vec);
+        let all_prod = permuted_product_huge.clone().mle.into_iter().reduce(
+            |elem, acc| elem * acc
+        );
+        let all_expo = unbatched_expo.clone().mle.into_iter().reduce(
+            |elem, acc| acc * elem
+        );
 
+        
         for _ in 0..(num_tree_bits) {
-            let permuted_product_tuple = permuted_product_huge.split(F::one());
-            let mle_first = permuted_product_tuple.first();
-            let mle_second = permuted_product_tuple.second();
+            let permuted_product_tuple = permuted_product_huge.split_tree(1);
+            let mle_first = permuted_product_tuple.first(0);
+            let mle_second = permuted_product_tuple.second(0);
+            // dbg!(&mle_first.bookkeeping_table, &mle_second.bookkeeping_table);
             let split_product_builder = SplitProductBuilderTupleTree::new(mle_first, mle_second);
             permuted_product_huge = layers.add_gkr(split_product_builder);
+            
+            // dbg!(&permuted_product_huge.mle);
         }
+
+        dbg!(&self.permuted_input_data_mle_vec_tree[0][0].num_iterated_vars());
 
         for _ in 0..(self.permuted_input_data_mle_vec_tree[0][0].num_iterated_vars() - 1) {
             let permuted_product_tuple = permuted_product_huge.split_tree(1 << num_dataparallel_bits);
             let mle_first = permuted_product_tuple.first(num_dataparallel_bits);
             let mle_second = permuted_product_tuple.second(num_dataparallel_bits);
+            // dbg!(&mle_first.bookkeeping_table, &mle_second.bookkeeping_table);
             let split_product_builder = SplitProductBuilderTupleTree::new(mle_first, mle_second);
             permuted_product_huge = layers.add_gkr(split_product_builder);
+            // dbg!(&permuted_product_huge.mle);
+            
         }
 
+        let all_prod_split_product = permuted_product_huge.clone().mle.into_iter().reduce(
+            |acc, elem| acc * elem
+        );
 
-
-        let unbatched_expo = unbatch_mles(exponentiated_input_vec);
-
+        
+        dbg!(all_expo);
+        dbg!(all_prod);
+        dbg!(all_prod_split_product);
         // dbg!(unbatched_expo.mle[0] * unbatched_expo.mle[2] * unbatched_expo.mle[1] * unbatched_expo.mle[3]);
         // dbg!(permuted_product_huge.mle[2] * permuted_product_huge.mle[3] * permuted_product_huge.mle[0] * permuted_product_huge.mle[1]);
 

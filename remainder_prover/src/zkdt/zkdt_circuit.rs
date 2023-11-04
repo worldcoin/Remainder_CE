@@ -322,6 +322,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 tree_ligero_commit,
                 tree_ligero_aux,
                 tree_ligero_root,
+                true,
             );
 
         let (
@@ -357,6 +358,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 sample_minibatch_ligero_commit,
                 sample_minibatch_ligero_aux,
                 sample_minibatch_ligero_root,
+                false,
             );
 
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
@@ -550,9 +552,9 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 #[cfg(test)]
 mod tests {
     use super::ZKDTCircuit;
-    use crate::prover::tests::test_circuit;
-    use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
-    use ark_std::{end_timer, start_timer};
+    use crate::prover::helpers::test_circuit;
+    use crate::{zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
+    use ark_std::{start_timer, end_timer};
     use remainder_shared_types::Fr;
     use std::path::Path;
 
