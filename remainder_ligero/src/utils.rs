@@ -179,7 +179,7 @@ mod test {
             let fr_value = Fr::from(value);
             let num_cols = rng.gen_range::<usize, Range<usize>>(0..30);
             let expected_result = ((value as f64) % (2_usize.pow(num_cols as u32) as f64)) as usize;
-            let value_le_bytes = fr_value.to_bytes_le().to_vec();
+            let value_le_bytes = fr_value.to_bytes().to_vec();
             let actual_result =
                 get_least_significant_bits_to_usize_little_endian(value_le_bytes, num_cols);
             assert_eq!(expected_result, actual_result);

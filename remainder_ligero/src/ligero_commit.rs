@@ -138,7 +138,6 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
 
     // --- Sanitycheck ---
     assert_eq!(coeffs.len(), num_rows * orig_num_cols);
-    dbg!(&coeffs.len(), challenge_coord.len());
 
     // --- Compute "a" and "b" from `challenge_coord` ---
     let (_, outer_tensor) = get_ml_inner_outer_tensors(challenge_coord, num_rows, orig_num_cols);
