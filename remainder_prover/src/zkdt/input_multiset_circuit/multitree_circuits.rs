@@ -145,7 +145,7 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
             ).collect_vec()
         );
 
-        // layer 3, part 2: (r - x)^4
+        // layer 3, part 2: (r - x)^(2^2)
         let r_minus_x_square_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().map(
                 |r_minus_x_power| {
@@ -160,7 +160,7 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         let layer_3_builders = prev_prod_builders.concat(r_minus_x_square_builders);
         let (mut curr_prod_vec, mut r_minus_x_power_vec) = layers.add_gkr(layer_3_builders);
 
-        // layer 4, part 1
+        // layer 4, part 1: (r - x)^(2^3)
         let r_minus_x_square_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().map(
                 |r_minus_x_power| {
@@ -208,6 +208,19 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
         // need to BitExponentiate 1 time
         // and PROD w prev_prod 2 times
 
+        // --- Layer 5 ---
+        // (r - x)^(2^4) from (r - x)^(2^3)
+        let r_minus_x_square_builders = BatchedLayer::new(
+            r_minus_x_power_vec.iter().map(
+                |r_minus_x_power| {
+                    let r_minus_x_power = r_minus_x_power.clone();
+                    SquaringBuilder::new(
+                        r_minus_x_power
+                    )
+                }
+            ).collect_vec()
+        );
+
         // layer 5, part 1
         let curr_prod_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().zip(
@@ -235,10 +248,25 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
             }).collect_vec()
         );
 
-        let layer_5_builders = curr_prod_builders.concat(prod_builders);
-        let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_5_builders);
+        // let layer_5_builders = curr_prod_builders.concat(prod_builders);
+        // let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_5_builders);
+        let layer_5_builders = r_minus_x_square_builders.concat(curr_prod_builders).concat_with_padding(prod_builders, Padding::Right(1));
+        ((r_minus_x_power_vec, curr_prod_vec), prev_prod_vec) = layers.add_gkr(layer_5_builders);
 
-        // --- Layer 6 part 1 (i.e. exponentiation part) ---
+        // --- Layer 6 ---
+        // (r - x)^(2^5) from (r - x)^(2^4)
+        let r_minus_x_square_builders = BatchedLayer::new(
+            r_minus_x_power_vec.iter().map(
+                |r_minus_x_power| {
+                    let r_minus_x_power = r_minus_x_power.clone();
+                    SquaringBuilder::new(
+                        r_minus_x_power
+                    )
+                }
+            ).collect_vec()
+        );
+
+        // --- Layer 6 part 2 (i.e. exponentiation part) ---
         let curr_prod_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().zip(
                 multiplicities_bin_decomp_mle_input_vec.iter()
@@ -265,11 +293,23 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
             }).collect_vec()
         );
 
-        let layer_6_builders = curr_prod_builders.concat(prod_builders);
-        let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_6_builders);
+        let layer_6_builders = r_minus_x_square_builders.concat(curr_prod_builders).concat_with_padding(prod_builders, Padding::Right(1));
+        ((r_minus_x_power_vec, curr_prod_vec), prev_prod_vec) = layers.add_gkr(layer_6_builders);
 
-        // --- Layer 7 ---
+        // --- Layer 7 part 1 ---
+        // (r - x)^(2^6) from (r - x)^(2^5)
+        let r_minus_x_square_builders = BatchedLayer::new(
+            r_minus_x_power_vec.iter().map(
+                |r_minus_x_power| {
+                    let r_minus_x_power = r_minus_x_power.clone();
+                    SquaringBuilder::new(
+                        r_minus_x_power
+                    )
+                }
+            ).collect_vec()
+        );
 
+        // --- Layer 7 part 2 ---
         let curr_prod_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().zip(
                 multiplicities_bin_decomp_mle_input_vec.iter()
@@ -296,12 +336,24 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
             }).collect_vec()
         );
 
-        let layer_7_builders = curr_prod_builders.concat(prod_builders);
-        let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_7_builders);
+        let layer_7_builders = r_minus_x_square_builders.concat(curr_prod_builders).concat_with_padding(prod_builders, Padding::Right(1));
+        ((r_minus_x_power_vec, curr_prod_vec), prev_prod_vec) = layers.add_gkr(layer_7_builders);
 
+
+        // --- Layer 8 part 1 ---
+        // (r - x)^(2^7) from (r - x)^(2^6)
+        let r_minus_x_square_builders = BatchedLayer::new(
+            r_minus_x_power_vec.iter().map(
+                |r_minus_x_power| {
+                    let r_minus_x_power = r_minus_x_power.clone();
+                    SquaringBuilder::new(
+                        r_minus_x_power
+                    )
+                }
+            ).collect_vec()
+        );
 
         // --- Layer 8 ---
-
         let curr_prod_builders = BatchedLayer::new(
             r_minus_x_power_vec.iter().zip(
                 multiplicities_bin_decomp_mle_input_vec.iter()
@@ -328,8 +380,8 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
             }).collect_vec()
         );
 
-        let layer_8_builders = curr_prod_builders.concat(prod_builders);
-        let (curr_prod_vec, prev_prod_vec) = layers.add_gkr(layer_8_builders);
+        let layer_8_builders = r_minus_x_square_builders.concat(curr_prod_builders).concat_with_padding(prod_builders, Padding::Right(1));
+        ((r_minus_x_power_vec, curr_prod_vec), prev_prod_vec) = layers.add_gkr(layer_8_builders);
 
         // --- Layer 9 ---
 

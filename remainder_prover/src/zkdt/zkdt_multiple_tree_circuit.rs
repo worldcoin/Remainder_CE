@@ -138,24 +138,24 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
         let combine_layers_timer = start_timer!(|| "combine layers + gate stuff");
         let (mut combined_circuit_layers, combined_circuit_output_layers) = combine_layers(
             vec![
-                // attribute_consistency_witness.layers,
-                // multiset_witness.layers,
+                attribute_consistency_witness.layers,
+                multiset_witness.layers,
                 input_multiset_witness.layers,
-                // binary_recomp_circuit_batched_witness.layers,
-                // bin_decomp_8_bit_binary_batched_witness.layers,
-                // bin_decomp_16_bit_binary_batched_witness.layers,
-                // bits_are_binary_multiset_decision_circuit_witness.layers,
-                // bits_are_binary_multiset_leaf_circuit_witness.layers,
+                binary_recomp_circuit_batched_witness.layers,
+                bin_decomp_8_bit_binary_batched_witness.layers,
+                bin_decomp_16_bit_binary_batched_witness.layers,
+                bits_are_binary_multiset_decision_circuit_witness.layers,
+                bits_are_binary_multiset_leaf_circuit_witness.layers,
             ],
             vec![
-                // attribute_consistency_witness.output_layers,
-                // multiset_witness.output_layers,
+                attribute_consistency_witness.output_layers,
+                multiset_witness.output_layers,
                 input_multiset_witness.output_layers,
-                // binary_recomp_circuit_batched_witness.output_layers,
-                // bin_decomp_8_bit_binary_batched_witness.output_layers,
-                // bin_decomp_16_bit_binary_batched_witness.output_layers,
-                // bits_are_binary_multiset_decision_circuit_witness.output_layers,
-                // bits_are_binary_multiset_leaf_circuit_witness.output_layers,
+                binary_recomp_circuit_batched_witness.output_layers,
+                bin_decomp_8_bit_binary_batched_witness.output_layers,
+                bin_decomp_16_bit_binary_batched_witness.output_layers,
+                bits_are_binary_multiset_decision_circuit_witness.output_layers,
+                bits_are_binary_multiset_leaf_circuit_witness.output_layers,
             ],
         )
         .unwrap();
