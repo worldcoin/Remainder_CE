@@ -50,7 +50,7 @@ pub enum Node<T: Copy> {
 pub struct TreePath<T: Copy> {
     pub path_steps: Vec<PathStep>,
     pub leaf_node_id: u32,
-    pub leaf_value: T
+    pub leaf_value: T,
 }
 
 /// A single decision step of a sample through a tree.
@@ -59,7 +59,7 @@ pub struct PathStep {
     pub node_id: u32,
     pub feature_index: usize,
     pub threshold: u16,
-    pub feature_value: u16 // i.e. from the sample
+    pub feature_value: u16, // i.e. from the sample
 }
 
 impl<T: Copy> Node<T> {
@@ -159,8 +159,10 @@ impl<T: Copy> Node<T> {
         self.depth(std::cmp::max) == self.depth(std::cmp::min)
     }
 
-    const DUMMY_THRESHOLD: u16 = 0;
-    const DUMMY_FEATURE_INDEX: usize = 0;
+    /// Dummy threshold value used for padding trees.
+    pub const DUMMY_THRESHOLD: u16 = 0;
+    /// Dummy feature index used for padding trees.
+    pub const DUMMY_FEATURE_INDEX: usize = 0;
     /// Return a new `Node<T>` instance which is perfect with the specified depth.
     /// New Nodes will not have ids assigned.
     /// All new Leaf nodes will have the value of the Leaf they replaced.
@@ -227,28 +229,35 @@ impl<T: Copy> Node<T> {
     /// Pre: sample.len() > node.feature_index for this node and all descendents.
     pub fn get_tree_path(&self, sample: &[u16]) -> TreePath<T> {
         match self {
-            Node::Internal { id, left, right, feature_index, threshold } => {
+            Node::Internal {
+                id,
+                left,
+                right,
+                feature_index,
+                threshold,
+            } => {
                 let next = if sample[*feature_index] >= *threshold {
                     right
                 } else {
                     left
                 };
                 let mut tree_path = next.get_tree_path(sample);
-                tree_path.path_steps.insert(0, PathStep {
-                    node_id: id.unwrap(),
-                    feature_index: *feature_index,
-                    threshold: *threshold,
-                    feature_value: sample[*feature_index]
-                });
+                tree_path.path_steps.insert(
+                    0,
+                    PathStep {
+                        node_id: id.unwrap(),
+                        feature_index: *feature_index,
+                        threshold: *threshold,
+                        feature_value: sample[*feature_index],
+                    },
+                );
                 tree_path
-            },
-            Node::Leaf { id, value } => {
-                TreePath::<T> {
-                    path_steps: vec![],
-                    leaf_node_id: id.unwrap(),
-                    leaf_value: *value
-                }
             }
+            Node::Leaf { id, value } => TreePath::<T> {
+                path_steps: vec![],
+                leaf_node_id: id.unwrap(),
+                leaf_value: *value,
+            },
         }
     }
 }

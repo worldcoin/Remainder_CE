@@ -52,38 +52,26 @@
 extern crate serde;
 extern crate serde_json;
 
-use crate::layer::LayerId;
-use crate::mle::dense::DenseMle;
-use crate::mle::{Mle, MleRef};
-use crate::prover::input_layer::combine_input_layers::InputLayerBuilder;
-use crate::prover::input_layer::ligero_input_layer::LigeroInputLayer;
-use crate::utils::file_exists;
-use crate::zkdt::constants::{
-    get_cached_batched_mles_filepath_with_exp_size, get_tree_commitment_filepath_for_tree_number,
+use crate::zkdt::data_pipeline::trees::*;
+use crate::zkdt::structs::{
+    BinDecomp16Bit, BinDecomp4Bit, BinDecomp8Bit, DecisionNode, InputAttribute, LeafNode,
 };
-use crate::zkdt::data_pipeline::trees::*;
-use crate::zkdt::data_pipeline::trees::*;
-use crate::zkdt::data_pipeline::helpers::*;
-use crate::zkdt::input_data_to_circuit_adapter::ZKDTCircuitData;
-use crate::zkdt::structs::{BinDecomp16Bit, BinDecomp8Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode};
 
 use ark_serialize::Read;
-use ark_std::log2;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
 use rand::Rng;
-use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
-use remainder_shared_types::{Fr, FieldExt};
-use serde::{Deserialize, Serialize};
-use serde_json::to_writer;
-use std::fs::{self, File};
-use std::path::Path;
-use std::fmt;
 use rayon::prelude::*;
-use tracing::instrument;
+use remainder_shared_types::{FieldExt, Fr};
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::fs::File;
+use std::path::Path;
 
-use super::helpers::{next_power_of_two, i64_to_field, build_signed_bit_decomposition, build_unsigned_bit_decomposition, extract_decision_nodes, extract_leaf_nodes};
+use super::helpers::{
+    build_signed_bit_decomposition, build_unsigned_bit_decomposition, extract_decision_nodes,
+    extract_leaf_nodes, i64_to_field, next_power_of_two,
+};
 
 /// The trees model resulting from the Python pipeline.
 /// This struct is used for parsing JSON.
@@ -121,14 +109,14 @@ pub struct CircuitizedTrees<F: FieldExt> {
 #[derive(Clone)]
 pub struct RawSamples {
     pub values: Vec<Vec<u16>>,
-    pub sample_length: usize
+    pub sample_length: usize,
 }
 
 /// Difference to RawSamples: each sample is padded length-wise to the next power of two, and
-/// the number of samples is also padded to be the next power of two. 
+/// the number of samples is also padded to be the next power of two.
 pub struct Samples {
     pub values: Vec<Vec<u16>>,
-    pub sample_length: usize
+    pub sample_length: usize,
 }
 
 /// Represents the circuitization of a batch of samples.
@@ -140,18 +128,23 @@ pub type CircuitizedSamples<F: FieldExt> = Vec<Vec<InputAttribute<F>>>;
 /// * Each vector in `node_multiplicities` has length `2.pow(trees_model.depth)`; it is indexed by
 /// node_id for decision nodes, and by node id + 1 for leaf nodes.
 pub struct CircuitizedAuxiliaries<F: FieldExt> {
-    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,             // indexed by trees, samples, steps in path
-    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,      // indexed by trees, samples, steps in path
-    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,              // indexed by trees, samples, steps in path
-    pub path_ends: Vec<Vec<LeafNode<F>>>,                           // indexed by trees, samples
-    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,  // indexed by trees, samples, then by attribute index FIXME TO BE REMOVED (@Ben)
-    pub attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>>,  // indexed by samples, then by attribute index (so aggregated over trees)
-    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,           // indexed by trees, tree nodes
+    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
+    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>, // indexed by trees, samples, steps in path
+    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>, // indexed by trees, samples, steps in path
+    pub path_ends: Vec<Vec<LeafNode<F>>>,              // indexed by trees, samples
+    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>, // indexed by trees, samples, then by attribute index FIXME TO BE REMOVED (@Ben)
+    pub attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>>, // indexed by samples, then by attribute index (so aggregated over trees)
+    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>, // indexed by trees, tree nodes
 }
 
 impl fmt::Display for RawSamples {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} samples with {:?} attributes", self.values.len(), self.sample_length)
+        write!(
+            f,
+            "{:?} samples with {:?} attributes",
+            self.values.len(),
+            self.sample_length
+        )
     }
 }
 
@@ -184,7 +177,7 @@ impl From<&RawSamples> for Samples {
         }
         Samples {
             values: samples,
-            sample_length
+            sample_length,
         }
     }
 }
@@ -194,14 +187,15 @@ impl<F: FieldExt> From<&TreePath<i64>> for LeafNode<F> {
     fn from(tree_path: &TreePath<i64>) -> Self {
         LeafNode {
             node_id: F::from(tree_path.leaf_node_id as u64),
-            node_val: i64_to_field(tree_path.leaf_value)
+            node_val: i64_to_field(tree_path.leaf_value),
         }
     }
 }
 
 impl<F: FieldExt> From<&Samples> for CircuitizedSamples<F> {
     fn from(samples: &Samples) -> Self {
-        samples.values
+        samples
+            .values
             .par_iter()
             .map(build_sample_witness)
             .collect()
@@ -211,12 +205,13 @@ impl<F: FieldExt> From<&Samples> for CircuitizedSamples<F> {
 type DecisionPath<F> = Vec<DecisionNode<F>>;
 impl<F: FieldExt, T: Copy> From<&TreePath<T>> for DecisionPath<F> {
     fn from(tree_path: &TreePath<T>) -> Self {
-        tree_path.path_steps
+        tree_path
+            .path_steps
             .iter()
             .map(|path_step| DecisionNode::<F> {
                 node_id: F::from(path_step.node_id as u64),
                 attr_id: F::from(path_step.feature_index as u64),
-                threshold: F::from(path_step.threshold as u64)
+                threshold: F::from(path_step.threshold as u64),
             })
             .collect()
     }
@@ -226,11 +221,12 @@ type AttributesOnPath<F> = Vec<InputAttribute<F>>;
 // conversion from tree path to attributes on path
 impl<F: FieldExt> From<&TreePath<i64>> for AttributesOnPath<F> {
     fn from(tree_path: &TreePath<i64>) -> Self {
-        tree_path.path_steps
+        tree_path
+            .path_steps
             .iter()
             .map(|step| InputAttribute::<F> {
                 attr_id: F::from(step.feature_index as u64),
-                attr_val: F::from(step.feature_value as u64)
+                attr_val: F::from(step.feature_value as u64),
             })
             .collect()
     }
@@ -239,7 +235,8 @@ impl<F: FieldExt> From<&TreePath<i64>> for AttributesOnPath<F> {
 type DifferencesBits<F> = Vec<BinDecomp16Bit<F>>;
 impl<F: FieldExt> From<&TreePath<i64>> for DifferencesBits<F> {
     fn from(tree_path: &TreePath<i64>) -> Self {
-        tree_path.path_steps
+        tree_path
+            .path_steps
             .iter()
             .map(|step| {
                 let difference = (step.feature_value as i32) - (step.threshold as i32);
@@ -255,18 +252,22 @@ fn build_differences_bindecomp<F: FieldExt>(difference: i32) -> BinDecomp16Bit<F
 }
 
 fn build_node_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp16Bit<F> {
-     let bits = build_unsigned_bit_decomposition(multiplicity as u32, 16).unwrap();
-     BinDecomp16Bit::<F>::from(bits)
+    let bits = build_unsigned_bit_decomposition(multiplicity as u32, 16).unwrap();
+    BinDecomp16Bit::<F>::from(bits)
 }
 
 /// FIXME TO BE REMOVED (@Ben)
-fn build_4bit_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp4Bit<F> {
-     let bits = build_unsigned_bit_decomposition(multiplicity as u32, 4).unwrap();
-     BinDecomp4Bit::<F>::from(bits)
+fn build_4bit_attribute_multiplicity_bindecomp<F: FieldExt>(
+    multiplicity: usize,
+) -> BinDecomp4Bit<F> {
+    let bits = build_unsigned_bit_decomposition(multiplicity as u32, 4).unwrap();
+    BinDecomp4Bit::<F>::from(bits)
 }
 
-fn build_8bit_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize) -> BinDecomp8Bit<F> {
-     let bits = build_unsigned_bit_decomposition(multiplicity as u32, 8).unwrap();
+fn build_8bit_attribute_multiplicity_bindecomp<F: FieldExt>(
+    multiplicity: usize,
+) -> BinDecomp8Bit<F> {
+    let bits = build_unsigned_bit_decomposition(multiplicity as u32, 8).unwrap();
     //  assert_eq!(recomp_8bit(&bits), multiplicity);
     let recomp = recomp_8bit(&bits);
     if recomp != multiplicity {
@@ -274,22 +275,20 @@ fn build_8bit_attribute_multiplicity_bindecomp<F: FieldExt>(multiplicity: usize)
         dbg!(multiplicity);
         panic!();
     }
-     BinDecomp8Bit::<F>::from(bits)
+    BinDecomp8Bit::<F>::from(bits)
 }
 
 /// Testing/sanitycheck
 fn recomp_8bit(bits: &Vec<bool>) -> usize {
     assert_eq!(bits.len(), 8);
-    bits.into_iter().enumerate().fold(
-        0, |acc, (idx, bit)| {
-            acc + ((1 << idx) * (if *bit {1} else {0}))
-        }
-    )
+    bits.into_iter().enumerate().fold(0, |acc, (idx, bit)| {
+        acc + ((1 << idx) * (if *bit { 1 } else { 0 }))
+    })
 }
 
 /// Build the witnesses for a single sample.
 fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>> {
-     sample
+    sample
         .iter()
         .enumerate()
         .map(|(index, value)| InputAttribute {
@@ -308,26 +307,25 @@ fn build_sample_witness<F: FieldExt>(sample: &Vec<u16>) -> Vec<InputAttribute<F>
 pub fn circuitize_auxiliaries<F: FieldExt>(
     samples_in: &Samples,
     trees_model: &TreesModel,
-    ) -> CircuitizedAuxiliaries<F> {
-    // 
+) -> CircuitizedAuxiliaries<F> {
+    //
     assert!(trees_model.trees.len() <= 32);
     assert!(trees_model.depth <= 9);
-    let paths: Vec<Vec<TreePath<i64>>> = trees_model.trees
+    let paths: Vec<Vec<TreePath<i64>>> = trees_model
+        .trees
         .par_iter()
-        .map(|tree| samples_in.values
-             .par_iter()
-             .map(|sample| tree.get_tree_path(&sample))
-             .collect())
+        .map(|tree| {
+            samples_in
+                .values
+                .par_iter()
+                .map(|sample| tree.get_tree_path(&sample))
+                .collect()
+        })
         .collect();
 
     let decision_paths: Vec<Vec<DecisionPath<F>>> = paths
         .par_iter()
-        .map(|tree_paths| {
-            tree_paths
-                .par_iter()
-                .map(DecisionPath::<F>::from)
-                .collect()
-            })
+        .map(|tree_paths| tree_paths.par_iter().map(DecisionPath::<F>::from).collect())
         .collect();
 
     let attributes_on_paths: Vec<Vec<AttributesOnPath<F>>> = paths
@@ -352,12 +350,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
 
     let path_ends: Vec<Vec<LeafNode<F>>> = paths
         .par_iter()
-        .map(|tree_paths| {
-            tree_paths
-                .iter()
-                .map(LeafNode::<F>::from)
-                .collect()
-            })
+        .map(|tree_paths| tree_paths.iter().map(LeafNode::<F>::from).collect())
         .collect();
 
     let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
@@ -365,12 +358,16 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         .map(|tree_paths| {
             tree_paths
                 .iter()
-                .map(|tree_path| count_attribute_multiplicities(&tree_path.path_steps, samples_in.sample_length))
+                .map(|tree_path| {
+                    count_attribute_multiplicities(&tree_path.path_steps, samples_in.sample_length)
+                })
                 .into_iter()
-                .map(|multiplicities| multiplicities
-                     .into_iter()
-                     .map(build_4bit_attribute_multiplicity_bindecomp)
-                     .collect())
+                .map(|multiplicities| {
+                    multiplicities
+                        .into_iter()
+                        .map(build_4bit_attribute_multiplicity_bindecomp)
+                        .collect()
+                })
                 .collect()
         })
         .collect();
@@ -378,7 +375,9 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
     // BUILD THE ATTRIBUTE MULTIPLICITIES, AGGD OVER TREES
     // check that each tree has one path per sample ...
     let sample_count: usize = samples_in.values.len();
-    assert!(paths.iter().all(|paths_for_tree| paths_for_tree.len() == sample_count));
+    assert!(paths
+        .iter()
+        .all(|paths_for_tree| paths_for_tree.len() == sample_count));
     // ... so that the nesting can be reversed, to become: samples first, then trees
     let _paths_per_sample: Vec<Vec<TreePath<i64>>> = (0..sample_count)
         .map(|sample_idx| {
@@ -387,25 +386,27 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
                 .filter_map(|paths_for_tree| paths_for_tree.get(sample_idx))
                 .cloned()
                 .collect()
-        }).collect();
+        })
+        .collect();
 
     let attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>> = _paths_per_sample
         .par_iter()
         .map(|paths_of_sample| {
             let mut multiplicities = vec![0_usize; samples_in.sample_length];
-            paths_of_sample
-                .iter()
-                .for_each(|path_of_sample_thru_tree| {
-                    path_of_sample_thru_tree.path_steps
-                        .iter()
-                        .for_each(|step| multiplicities[step.feature_index as usize] += 1);
-                });
+            paths_of_sample.iter().for_each(|path_of_sample_thru_tree| {
+                path_of_sample_thru_tree
+                    .path_steps
+                    .iter()
+                    .for_each(|step| multiplicities[step.feature_index as usize] += 1);
+            });
             multiplicities
         })
-        .map(|multiplicities| multiplicities
-             .into_iter()
-             .map(build_8bit_attribute_multiplicity_bindecomp)
-             .collect())
+        .map(|multiplicities| {
+            multiplicities
+                .into_iter()
+                .map(build_8bit_attribute_multiplicity_bindecomp)
+                .collect()
+        })
         .collect();
 
     let node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = paths
@@ -432,7 +433,10 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
 /// FIXME TO BE REMOVED (@Ben)
 /// Given a vector of instances of [`PathStep`], return a vector counting how often each attribute
 /// is used.
-pub fn count_attribute_multiplicities(path_steps: &Vec<PathStep>, sample_length: usize) -> Vec<usize> {
+pub fn count_attribute_multiplicities(
+    path_steps: &Vec<PathStep>,
+    sample_length: usize,
+) -> Vec<usize> {
     let mut multiplicities = vec![0_usize; sample_length];
     path_steps
         .iter()
@@ -443,18 +447,20 @@ pub fn count_attribute_multiplicities(path_steps: &Vec<PathStep>, sample_length:
 /// Given a vector of instances of [`TreePath`] all belonging to the same tree, return a vector
 /// counting the number of times each node was visited.
 /// **WARNING**: Vector is indexed by node id for internal nodes, and by node_id + 1 for leaf nodes.
-pub fn count_node_multiplicities<T: Copy>(tree_paths: &Vec<TreePath<T>>, tree_depth: usize) -> Vec<usize> {
+pub fn count_node_multiplicities<T: Copy>(
+    tree_paths: &Vec<TreePath<T>>,
+    tree_depth: usize,
+) -> Vec<usize> {
     let mut multiplicities = vec![0_usize; 2_usize.pow(tree_depth as u32)];
-    tree_paths
-        .iter()
-        .for_each(|tree_path| {
-            // count visits to internal nodes
-            tree_path.path_steps
-                .iter()
-                .for_each(|step| multiplicities[step.node_id as usize] += 1);
-            // count visits to leaf nodes
-            multiplicities[tree_path.leaf_node_id as usize + 1] += 1;
-        });
+    tree_paths.iter().for_each(|tree_path| {
+        // count visits to internal nodes
+        tree_path
+            .path_steps
+            .iter()
+            .for_each(|step| multiplicities[step.node_id as usize] += 1);
+        // count visits to leaf nodes
+        multiplicities[tree_path.leaf_node_id as usize + 1] += 1;
+    });
     multiplicities
 }
 
@@ -542,12 +548,18 @@ impl From<&RawTreesModel> for TreesModel {
 
 impl fmt::Display for RawTreesModel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let max_depth = self.trees
+        let max_depth = self
+            .trees
             .iter()
             .map(|tree: &Node<f64>| tree.depth(std::cmp::max))
             .max()
             .unwrap();
-        write!(f, "{:?} trees of maximum depth {:?}", self.trees.len(), max_depth)
+        write!(
+            f,
+            "{:?} trees of maximum depth {:?}",
+            self.trees.len(),
+            max_depth
+        )
     }
 }
 
@@ -558,7 +570,7 @@ impl RawTreesModel {
             trees: trees,
             bias: self.bias,
             scale: self.scale,
-            n_features: self.n_features
+            n_features: self.n_features,
         }
     }
 }
@@ -571,6 +583,34 @@ impl TreesModel {
             depth: self.depth,
             scaling: self.scaling,
         }
+    }
+
+    /// Pad (in-place) the trees to a multiple of the provided number.
+    /// Padding trees are perfect of the same depth as existing trees, use decision nodes with DUMMY_FEATURE_INDEX and DUMMY_THRESHOLD, have leaf values of 0_i64, have ids assigned, and are appended to the end of self.trees.
+    /// Pre: multiple > 0.
+    pub fn pad_tree_count_to_multiple(&mut self, multiple: usize) {
+        assert!(multiple > 0);
+        if self.trees.len() % multiple == 0 {
+            return;
+        }
+        // number of new trees required
+        let shortfall = multiple - (self.trees.len() % multiple);
+        //let trees: Vec<Node<i64>> = self
+        self.trees = self
+            .trees
+            .iter()
+            .cloned()
+            .chain((0..shortfall).map(|_| {
+                let mut tree = Node::new_constant_tree(
+                    self.depth,
+                    Node::<i64>::DUMMY_FEATURE_INDEX,
+                    Node::<i64>::DUMMY_THRESHOLD,
+                    0_i64,
+                );
+                tree.assign_id(0);
+                tree
+            }))
+            .collect();
     }
 }
 
@@ -729,7 +769,8 @@ mod tests {
         let samples: Samples = (&raw_samples).into();
         let csamples: CircuitizedSamples<Fr> = (&samples).into();
         assert_eq!(csamples.len(), samples.values.len());
-        csamples.iter()
+        csamples
+            .iter()
             .for_each(|sample| assert_eq!(sample.len(), samples.sample_length));
     }
 
@@ -743,7 +784,7 @@ mod tests {
         ];
         let raw_samples = RawSamples {
             values,
-            sample_length
+            sample_length,
         };
         let tree = build_small_tree();
         let raw_trees_model = RawTreesModel {
@@ -856,11 +897,10 @@ mod tests {
         let mut expected: Vec<usize> = vec![0; samples.sample_length];
         expected[0] = 1;
         expected[1] = 1;
-        am.iter().zip(expected.iter())
-            .for_each(|(bits, expected)| {
-                let expected_bits = build_4bit_attribute_multiplicity_bindecomp::<Fr>(*expected);
-                assert_eq!(expected_bits.bits, bits.bits);
-            })
+        am.iter().zip(expected.iter()).for_each(|(bits, expected)| {
+            let expected_bits = build_4bit_attribute_multiplicity_bindecomp::<Fr>(*expected);
+            assert_eq!(expected_bits.bits, bits.bits);
+        })
     }
 
     #[test]
@@ -873,7 +913,7 @@ mod tests {
         ];
         let raw_samples = RawSamples {
             values,
-            sample_length
+            sample_length,
         };
 
         let raw_trees_model = RawTreesModel {
@@ -885,7 +925,7 @@ mod tests {
         let trees_model: TreesModel = (&raw_trees_model).into();
         let samples: Samples = (&raw_samples).into();
         let caux = circuitize_auxiliaries::<Fr>(&samples, &trees_model);
-        
+
         let am = caux.attribute_multiplicities_per_sample;
         // check dimensions
         assert_eq!(am.len(), samples.values.len());
@@ -893,18 +933,54 @@ mod tests {
             assert_eq!(am_for_sample.len(), samples.sample_length);
         }
         // check some values
-        assert_eq!(am[0][0], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
-        assert_eq!(am[0][1], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
-        assert_eq!(am[0][2], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
-        assert_eq!(am[0][3], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
-        assert_eq!(am[0][4], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
-        assert_eq!(am[0][5], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
-        assert_eq!(am[2][0], build_8bit_attribute_multiplicity_bindecomp::<Fr>(2));
-        assert_eq!(am[2][1], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
-        assert_eq!(am[2][2], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
-        assert_eq!(am[2][3], build_8bit_attribute_multiplicity_bindecomp::<Fr>(1));
-        assert_eq!(am[2][4], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
-        assert_eq!(am[2][5], build_8bit_attribute_multiplicity_bindecomp::<Fr>(0));
+        assert_eq!(
+            am[0][0],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(1)
+        );
+        assert_eq!(
+            am[0][1],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(1)
+        );
+        assert_eq!(
+            am[0][2],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(0)
+        );
+        assert_eq!(
+            am[0][3],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(1)
+        );
+        assert_eq!(
+            am[0][4],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(1)
+        );
+        assert_eq!(
+            am[0][5],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(0)
+        );
+        assert_eq!(
+            am[2][0],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(2)
+        );
+        assert_eq!(
+            am[2][1],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(1)
+        );
+        assert_eq!(
+            am[2][2],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(0)
+        );
+        assert_eq!(
+            am[2][3],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(1)
+        );
+        assert_eq!(
+            am[2][4],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(0)
+        );
+        assert_eq!(
+            am[2][5],
+            build_8bit_attribute_multiplicity_bindecomp::<Fr>(0)
+        );
     }
 
     #[test]
@@ -1085,7 +1161,7 @@ mod tests {
                 node_id: 1,
                 feature_index: 2,
                 threshold: 3,
-                feature_value: 4
+                feature_value: 4,
             });
         }
         let multiplicities = count_attribute_multiplicities(&path, sample_length);
@@ -1101,5 +1177,74 @@ mod tests {
         let sample: Vec<u16> = vec![3, 1, 4];
         let witness = build_sample_witness::<Fr>(&sample);
         assert_eq!(witness.len(), sample.len());
+    }
+
+    #[test]
+    fn test_pad_tree_count_to_multiple() {
+        let n_trees = 7;
+        let n_features = 4;
+        let depth = 6;
+        // start with some random (probably not perfect) trees with f64 leaf values
+        let raw_trees_model = generate_raw_trees_model(n_trees, depth, n_features, 0.5);
+        // padding to multiple of 1 should be noop
+        let mut padded_trees_model: TreesModel = (&raw_trees_model).into();
+        padded_trees_model.pad_tree_count_to_multiple(1);
+        assert_eq!(padded_trees_model.trees.len(), n_trees);
+        // padding with multiple equal to the tree count should be a noop
+        let mut padded_trees_model: TreesModel = (&raw_trees_model).into();
+        padded_trees_model.pad_tree_count_to_multiple(n_trees);
+        assert_eq!(padded_trees_model.trees.len(), n_trees);
+        // try some non-trival cases
+        let mut padded_trees_model: TreesModel = (&raw_trees_model).into();
+        padded_trees_model.pad_tree_count_to_multiple(4);
+        assert_eq!(padded_trees_model.trees.len(), 8);
+        let mut padded_trees_model: TreesModel = (&raw_trees_model).into();
+        padded_trees_model.pad_tree_count_to_multiple(15);
+        assert_eq!(padded_trees_model.trees.len(), 15);
+        // examine some resultant trees by comparing to unpadded
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let mut padded_trees_model: TreesModel = (&raw_trees_model).into();
+        padded_trees_model.pad_tree_count_to_multiple(5);
+        assert_eq!(padded_trees_model.trees.len(), 10);
+        // check that the first 7 trees are the same as the original trees
+        trees_model
+            .trees
+            .iter()
+            .zip(padded_trees_model.trees.iter())
+            .for_each(|(tree, padded_tree)| {
+                assert_eq!(tree.depth(std::cmp::max), padded_tree.depth(std::cmp::max));
+                assert_eq!(tree.get_id(), padded_tree.get_id());
+                if let Node::Internal {
+                    feature_index,
+                    threshold,
+                    ..
+                } = tree
+                {
+                    if let Node::Internal {
+                        feature_index: padded_feature_index,
+                        threshold: padded_threshold,
+                        ..
+                    } = padded_tree
+                    {
+                        assert_eq!(feature_index, padded_feature_index);
+                        assert_eq!(threshold, padded_threshold);
+                    } else {
+                        panic!("Expected internal node, got leaf node.");
+                    }
+                } else {
+                    panic!("Expected internal node, got leaf node.");
+                }
+                assert!(tree.is_perfect());
+                assert!(padded_tree.is_perfect());
+            });
+        // check that the last 3 trees are perfect
+        padded_trees_model.trees[7..10].iter().for_each(|tree| {
+            assert_eq!(tree.depth(std::cmp::max), trees_model.depth);
+            assert!(tree.is_perfect());
+        });
+        // get a TreePath, and check that the leaf value is 0.0
+        let sample = vec![0_u16; n_features];
+        let tree_path = padded_trees_model.trees[7].get_tree_path(&sample);
+        assert_eq!(tree_path.leaf_value, 0_i64);
     }
 }
