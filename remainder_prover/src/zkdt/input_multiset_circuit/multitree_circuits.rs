@@ -461,61 +461,33 @@ impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
                         }
                     ).collect_vec());
                 permuted_input_packing_builders
-                // layers.add_gkr(permuted_input_packing_builders)
             }
         ).collect_vec();
 
         let permuted_input_packed_vecs = layers.add_gkr(BatchedLayer::new(path_packing_builders_vec));
         let permuted_product_vecs = permuted_input_packed_vecs;
-        // dbg!(&permuted_product_vecs);
         
         let mut permuted_product_huge = unbatch_mles(permuted_product_vecs.into_iter().map(|vec| unbatch_mles(vec)).collect_vec());
 
         // layer 15, 16, 17
 
         let unbatched_expo = unbatch_mles(exponentiated_input_vec);
-        let all_prod = permuted_product_huge.clone().mle.into_iter().reduce(
-            |elem, acc| elem * acc
-        );
-        let all_expo = unbatched_expo.clone().mle.into_iter().reduce(
-            |elem, acc| acc * elem
-        );
-
         
         for _ in 0..(num_tree_bits) {
             let permuted_product_tuple = permuted_product_huge.split_tree(1);
             let mle_first = permuted_product_tuple.first(0);
             let mle_second = permuted_product_tuple.second(0);
-            // dbg!(&mle_first.bookkeeping_table, &mle_second.bookkeeping_table);
             let split_product_builder = SplitProductBuilderTupleTree::new(mle_first, mle_second);
             permuted_product_huge = layers.add_gkr(split_product_builder);
-            
-            // dbg!(&permuted_product_huge.mle);
         }
-
-        dbg!(&self.permuted_input_data_mle_vec_tree[0][0].num_iterated_vars());
 
         for _ in 0..(self.permuted_input_data_mle_vec_tree[0][0].num_iterated_vars() - 1) {
             let permuted_product_tuple = permuted_product_huge.split_tree(1 << num_dataparallel_bits);
             let mle_first = permuted_product_tuple.first(num_dataparallel_bits);
             let mle_second = permuted_product_tuple.second(num_dataparallel_bits);
-            // dbg!(&mle_first.bookkeeping_table, &mle_second.bookkeeping_table);
             let split_product_builder = SplitProductBuilderTupleTree::new(mle_first, mle_second);
-            permuted_product_huge = layers.add_gkr(split_product_builder);
-            // dbg!(&permuted_product_huge.mle);
-            
+            permuted_product_huge = layers.add_gkr(split_product_builder);            
         }
-
-        let all_prod_split_product = permuted_product_huge.clone().mle.into_iter().reduce(
-            |acc, elem| acc * elem
-        );
-
-        
-        dbg!(all_expo);
-        dbg!(all_prod);
-        dbg!(all_prod_split_product);
-        // dbg!(unbatched_expo.mle[0] * unbatched_expo.mle[2] * unbatched_expo.mle[1] * unbatched_expo.mle[3]);
-        // dbg!(permuted_product_huge.mle[2] * permuted_product_huge.mle[3] * permuted_product_huge.mle[0] * permuted_product_huge.mle[1]);
 
         let difference_builder = EqualityCheck::new(
                 unbatched_expo,
