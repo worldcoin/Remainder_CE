@@ -17,6 +17,7 @@ use remainder::{
             load_upshot_data_multi_tree_batch, load_upshot_data_single_tree_batch,
             BatchedZKDTCircuitMles, MinibatchData,
         },
+        structs::ZKDTProof,
         zkdt_multiple_tree_circuit::ZKDTMultiTreeCircuit,
     },
 };
@@ -172,6 +173,7 @@ pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
     mut circuit: C,
     maybe_filepath_to_proof: Option<PathBuf>,
     verify_proof: bool,
+    tree_batch_size: usize,
 ) -> Result<(), ZKDTBinaryError>
 where
     <C as GKRCircuit<F>>::Transcript: Sync,
@@ -186,6 +188,11 @@ where
                 now.elapsed().as_secs_f32()
             );
 
+            let zkdt_proof = ZKDTProof {
+                gkr_proof: proof,
+                tree_batch_size,
+            };
+
             // --- Write proof to file, if filepath exists ---
             if let Some(filepath_to_proof) = maybe_filepath_to_proof.clone() {
                 println!(
@@ -197,7 +204,7 @@ where
 
                 let file = fs::File::create(filepath_to_proof).unwrap();
                 let bw = BufWriter::new(file);
-                serde_json::to_writer(bw, &proof).unwrap();
+                serde_json::to_writer(bw, &zkdt_proof).unwrap();
 
                 end_timer!(timer);
             }
@@ -214,9 +221,11 @@ where
                         file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
                     let mut bufreader = Vec::with_capacity(initial_buffer_size);
                     file.read_to_end(&mut bufreader).unwrap();
-                    serde_json::de::from_slice(&bufreader[..]).unwrap()
+                    let zkdt_proof: ZKDTProof<F, C::Transcript> =
+                        serde_json::de::from_slice(&bufreader[..]).unwrap();
+                    zkdt_proof.gkr_proof
                 } else {
-                    proof
+                    zkdt_proof.gkr_proof
                 };
                 match circuit.verify(&mut transcript, proof) {
                     Ok(_) => {
@@ -343,5 +352,10 @@ fn main() -> Result<(), ZKDTBinaryError> {
     let maybe_proof_filepath = args
         .gkr_proof_to_be_written_filepath
         .map(|maybe_path| Path::new(&maybe_path).to_owned());
-    run_zkdt_circuit(full_zkdt_circuit, maybe_proof_filepath, args.verify_proof)
+    run_zkdt_circuit(
+        full_zkdt_circuit,
+        maybe_proof_filepath,
+        args.verify_proof,
+        args.tree_batch_size,
+    )
 }
