@@ -39,8 +39,13 @@ use ark_std::{end_timer, start_timer};
 use super::attribute_consistency_circuit::multitree_circuits::AttributeConsistencyCircuitMultiTree;
 use super::binary_recomp_circuit::multitree_circuits::BinaryRecompCircuitMultiTree;
 use super::bits_are_binary_circuit::dataparallel_circuits::BinDecomp8BitIsBinaryCircuitBatched;
-use super::bits_are_binary_circuit::multitree_circuits::{BinDecomp4BitIsBinaryCircuitBatchedMultiTree, BinDecomp16BitIsBinaryCircuitBatchedMultiTree, BinDecomp16BitIsBinaryCircuitMultiTree};
-use super::input_data_to_circuit_adapter::{BatchedZKDTCircuitMles, BatchedZKDTCircuitMlesMultiTree};
+use super::bits_are_binary_circuit::multitree_circuits::{
+    BinDecomp16BitIsBinaryCircuitBatchedMultiTree, BinDecomp16BitIsBinaryCircuitMultiTree,
+    BinDecomp4BitIsBinaryCircuitBatchedMultiTree,
+};
+use super::input_data_to_circuit_adapter::{
+    BatchedZKDTCircuitMles, BatchedZKDTCircuitMlesMultiTree,
+};
 use super::input_multiset_circuit::multitree_circuits::InputMultiSetCircuitMultiTree;
 use super::multiset_circuit::multitree_circuits::FSMultiSetCircuitMultiTree;
 use super::path_consistency_circuit::multitree_circuits::PathCheckCircuitBatchedNoMulMultiTree;
@@ -69,8 +74,6 @@ pub struct ZKDTMultiTreeCircuit<F: FieldExt> {
     pub batched_zkdt_circuit_mles_tree: BatchedZKDTCircuitMlesMultiTree<F>,
     /// The filepath to the precommitted tree that we are proving
     pub tree_precommit_filepath: String,
-    /// The filepath to the precommitted sample minibatch that we are proving
-    pub sample_minibatch_precommit_filepath: String,
     /// rho inverse value for ligero commit
     pub rho_inv: u8,
     /// ratio
@@ -212,48 +215,70 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             mut decision_nodes_mle_vec,
             mut leaf_nodes_mle_vec,
             multiplicities_bin_decomp_mle_input: mut multiplicities_bin_decomp_mle_input_vecs,
-    } 
-         = self.batched_zkdt_circuit_mles_tree.clone();
+        } = self.batched_zkdt_circuit_mles_tree.clone();
 
         // deal w input
-        let mut input_samples_mle_combined = DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vecs.clone());
+        let mut input_samples_mle_combined =
+            DenseMle::<F, InputAttribute<F>>::combine_mle_batch(input_samples_mle_vecs.clone());
 
-        let permuted_input_samples_mle_vec_combined_vec = permuted_input_samples_mle_vecs.iter().map(
-            |permuted_input_samples_mle_vec| {
+        let permuted_input_samples_mle_vec_combined_vec = permuted_input_samples_mle_vecs
+            .iter()
+            .map(|permuted_input_samples_mle_vec| {
                 DenseMle::<F, InputAttribute<F>>::combine_mle_batch(
                     permuted_input_samples_mle_vec.clone(),
                 )
-            }).collect_vec();
-        let mut permuted_input_samples_mle_vec_combined = DenseMle::<F, F>::combine_mle_batch(permuted_input_samples_mle_vec_combined_vec);
-                
-        let decision_node_paths_mle_vec_combined_vec = decision_node_paths_mle_vecs.iter().map(
-            |decision_node_paths_mle_vec| {
-                DenseMle::<F, DecisionNode<F>>::combine_mle_batch(decision_node_paths_mle_vec.clone())
-            }).collect_vec();
-        let mut decision_node_paths_mle_vec_combined = DenseMle::<F, F>::combine_mle_batch(decision_node_paths_mle_vec_combined_vec);
+            })
+            .collect_vec();
+        let mut permuted_input_samples_mle_vec_combined =
+            DenseMle::<F, F>::combine_mle_batch(permuted_input_samples_mle_vec_combined_vec);
 
-        let leaf_node_paths_mle_vec_combined_vec = leaf_node_paths_mle_vecs.iter().map(
-            |leaf_node_paths_mle_vec| {
+        let decision_node_paths_mle_vec_combined_vec = decision_node_paths_mle_vecs
+            .iter()
+            .map(|decision_node_paths_mle_vec| {
+                DenseMle::<F, DecisionNode<F>>::combine_mle_batch(
+                    decision_node_paths_mle_vec.clone(),
+                )
+            })
+            .collect_vec();
+        let mut decision_node_paths_mle_vec_combined =
+            DenseMle::<F, F>::combine_mle_batch(decision_node_paths_mle_vec_combined_vec);
+
+        let leaf_node_paths_mle_vec_combined_vec = leaf_node_paths_mle_vecs
+            .iter()
+            .map(|leaf_node_paths_mle_vec| {
                 DenseMle::<F, LeafNode<F>>::combine_mle_batch(leaf_node_paths_mle_vec.clone())
-            }
-        ).collect_vec();
-        let mut leaf_node_paths_mle_vec_combined = DenseMle::<F, F>::combine_mle_batch(leaf_node_paths_mle_vec_combined_vec);
- 
-        let combined_batched_diff_signed_bin_decomp_mle_vec = binary_decomp_diffs_mle_vecs.iter().map(
-            |binary_decomp_diffs_mle_vec| {
+            })
+            .collect_vec();
+        let mut leaf_node_paths_mle_vec_combined =
+            DenseMle::<F, F>::combine_mle_batch(leaf_node_paths_mle_vec_combined_vec);
+
+        let combined_batched_diff_signed_bin_decomp_mle_vec = binary_decomp_diffs_mle_vecs
+            .iter()
+            .map(|binary_decomp_diffs_mle_vec| {
                 DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(
                     binary_decomp_diffs_mle_vec.clone(),
                 )
-            }
-        ).collect_vec();
-        let mut combined_batched_diff_signed_bin_decomp_mle = DenseMle::<F, F>::combine_mle_batch(combined_batched_diff_signed_bin_decomp_mle_vec);
+            })
+            .collect_vec();
+        let mut combined_batched_diff_signed_bin_decomp_mle =
+            DenseMle::<F, F>::combine_mle_batch(combined_batched_diff_signed_bin_decomp_mle_vec);
 
-
-        let mut multiplicities_bin_decomp_mle_input_vec_combined = DenseMle::<F, BinDecomp8Bit<F>>::combine_mle_batch(multiplicities_bin_decomp_mle_input_vecs.clone());
-        let mut multiplicities_bin_decomp_mle_decision_combined = DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(multiplicities_bin_decomp_mle_decision_vec.clone());
-        let mut multiplicities_bin_decomp_mle_leaf_combined = DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(multiplicities_bin_decomp_mle_leaf_vec.clone());
-        let mut decision_nodes_mle_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(decision_nodes_mle_vec.clone());
-        let mut leaf_nodes_mle_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(leaf_nodes_mle_vec.clone());
+        let mut multiplicities_bin_decomp_mle_input_vec_combined =
+            DenseMle::<F, BinDecomp8Bit<F>>::combine_mle_batch(
+                multiplicities_bin_decomp_mle_input_vecs.clone(),
+            );
+        let mut multiplicities_bin_decomp_mle_decision_combined =
+            DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(
+                multiplicities_bin_decomp_mle_decision_vec.clone(),
+            );
+        let mut multiplicities_bin_decomp_mle_leaf_combined =
+            DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(
+                multiplicities_bin_decomp_mle_leaf_vec.clone(),
+            );
+        let mut decision_nodes_mle_combined =
+            DenseMle::<F, DecisionNode<F>>::combine_mle_batch(decision_nodes_mle_vec.clone());
+        let mut leaf_nodes_mle_combined =
+            DenseMle::<F, LeafNode<F>>::combine_mle_batch(leaf_nodes_mle_vec.clone());
 
         // Input layer shenanigans -- we need the following:
         // a) Precommitted Ligero input layer for tree itself (LayerId: 0)
@@ -271,14 +296,13 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             Box::new(&mut leaf_nodes_mle_combined),
         ];
 
-        decision_nodes_mle_vec.iter_mut().for_each(
-            |mle| mle.layer_id = LayerId::Input(0)
-        );
+        decision_nodes_mle_vec
+            .iter_mut()
+            .for_each(|mle| mle.layer_id = LayerId::Input(0));
 
-        leaf_nodes_mle_vec.iter_mut().for_each(
-            |mle| mle.layer_id = LayerId::Input(0)
-        );
-
+        leaf_nodes_mle_vec
+            .iter_mut()
+            .for_each(|mle| mle.layer_id = LayerId::Input(0));
 
         // --- Input layer 1 ---
         input_samples_mle_combined.layer_id = LayerId::Input(1);
@@ -294,12 +318,13 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         combined_batched_diff_signed_bin_decomp_mle.layer_id = LayerId::Input(2);
         multiplicities_bin_decomp_mle_input_vec_combined.layer_id = LayerId::Input(2);
 
-
-        permuted_input_samples_mle_vecs.iter_mut().for_each(|mle_vec| {
-            mle_vec.iter_mut().for_each(|mle| {
-                mle.layer_id = LayerId::Input(2);
-            })
-        });
+        permuted_input_samples_mle_vecs
+            .iter_mut()
+            .for_each(|mle_vec| {
+                mle_vec.iter_mut().for_each(|mle| {
+                    mle.layer_id = LayerId::Input(2);
+                })
+            });
         decision_node_paths_mle_vecs.iter_mut().for_each(|mle_vec| {
             mle_vec.iter_mut().for_each(|mle| {
                 mle.layer_id = LayerId::Input(2);
@@ -313,17 +338,16 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         multiplicities_bin_decomp_mle_input_vecs
             .iter_mut()
             .for_each(|mle| {
-                    mle.layer_id = LayerId::Input(2);
+                mle.layer_id = LayerId::Input(2);
             });
-        
-        multiplicities_bin_decomp_mle_decision_vec.iter_mut().for_each(
-            |mle| mle.layer_id = LayerId::Input(2)
-        );
 
-        multiplicities_bin_decomp_mle_leaf_vec.iter_mut().for_each(
-            |mle| mle.layer_id = LayerId::Input(2)
-        );
+        multiplicities_bin_decomp_mle_decision_vec
+            .iter_mut()
+            .for_each(|mle| mle.layer_id = LayerId::Input(2));
 
+        multiplicities_bin_decomp_mle_leaf_vec
+            .iter_mut()
+            .for_each(|mle| mle.layer_id = LayerId::Input(2));
 
         let aux_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut input_samples_mle_combined),
@@ -356,7 +380,6 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         // --- c) Ligero input layer for all the auxiliaries (LayerId: 2) ---
         let aux_mles_input_layer_builder =
             InputLayerBuilder::new(aux_mles, None, LayerId::Input(2));
-        
 
         // --- d) Public input layer for the path leaf nodes (LayerId: 3) ---
         let public_path_leaf_node_mles_input_layer_builder =
@@ -383,47 +406,8 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
                 true,
             );
 
-        // let (
-        //     _ligero_encoding,
-        //     sample_minibatch_ligero_commit,
-        //     sample_minibatch_ligero_root,
-        //     sample_minibatch_ligero_aux,
-        // ): (
-        //     LigeroEncoding<F>,
-        //     LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-        //     LcRoot<LigeroEncoding<F>, F>,
-        //     LcProofAuxiliaryInfo,
-        // ) = {
-        //     // METHOD 0: Use no buffer at all.
-        //     // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-        //     // let res = from_reader(&file).unwrap();
-
-        //     // METHOD 1: Read everything into the buffer.
-        //     let mut file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-        //     let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
-        //     let mut bufreader = Vec::with_capacity(initial_buffer_size);
-        //     file.read_to_end(&mut bufreader).unwrap();
-        //     let res = serde_json::de::from_slice(&bufreader[..]).unwrap();
-
-        //     // METHOD 2: Use a buffer of a default size.
-        //     // let file = std::fs::File::open(&self.sample_minibatch_precommit_filepath).unwrap();
-        //     // let mut bufreader = BufReader::new(file);
-        //     // let res = from_reader(&mut bufreader).unwrap();
-        //     res
-        // };
-        // let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-        //     input_mles_input_layer_builder.to_input_layer_with_precommit(
-        //         sample_minibatch_ligero_commit,
-        //         sample_minibatch_ligero_aux,
-        //         sample_minibatch_ligero_root,
-        //         true,
-        //     );
-
         let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            aux_mles_input_layer_builder.to_input_layer_with_rho_inv(
-                self.rho_inv,
-                self.ratio,
-            );
+            aux_mles_input_layer_builder.to_input_layer_with_rho_inv(self.rho_inv, self.ratio);
         let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
             public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
@@ -436,67 +420,97 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 
         // --- Zeroth input layer ---
 
-        decision_nodes_mle_vec.iter_mut().for_each(
-            |decision_nodes_mle| {
+        decision_nodes_mle_vec
+            .iter_mut()
+            .for_each(|decision_nodes_mle| {
                 decision_nodes_mle.set_prefix_bits(decision_nodes_mle_combined.get_prefix_bits())
-            }
-        );
-
-        leaf_nodes_mle_vec.iter_mut().for_each(
-            |leaf_nodes_mle| {
-                leaf_nodes_mle.set_prefix_bits(leaf_nodes_mle_combined.get_prefix_bits())
-            }
-        );
-
-
-        // --- First input layer ---
-        
-        decision_node_paths_mle_vecs.iter_mut().for_each(
-            |decision_node_paths_mle_vec| {
-                decision_node_paths_mle_vec.iter_mut().for_each(|decision_node_paths_mle| {
-                    decision_node_paths_mle.set_prefix_bits(decision_node_paths_mle_vec_combined.get_prefix_bits());
-                });
             });
 
-        leaf_node_paths_mle_vecs.iter_mut().for_each(
-            |leaf_node_paths_mle_vec| {
-                leaf_node_paths_mle_vec.iter_mut().for_each(|leaf_node_paths_mle| {
-                    leaf_node_paths_mle.set_prefix_bits(leaf_node_paths_mle_vec_combined.get_prefix_bits());
-                });
+        leaf_nodes_mle_vec.iter_mut().for_each(|leaf_nodes_mle| {
+            leaf_nodes_mle.set_prefix_bits(leaf_nodes_mle_combined.get_prefix_bits())
+        });
+
+        // --- First input layer ---
+
+        decision_node_paths_mle_vecs
+            .iter_mut()
+            .for_each(|decision_node_paths_mle_vec| {
+                decision_node_paths_mle_vec
+                    .iter_mut()
+                    .for_each(|decision_node_paths_mle| {
+                        decision_node_paths_mle.set_prefix_bits(
+                            decision_node_paths_mle_vec_combined.get_prefix_bits(),
+                        );
+                    });
+            });
+
+        leaf_node_paths_mle_vecs
+            .iter_mut()
+            .for_each(|leaf_node_paths_mle_vec| {
+                leaf_node_paths_mle_vec
+                    .iter_mut()
+                    .for_each(|leaf_node_paths_mle| {
+                        leaf_node_paths_mle
+                            .set_prefix_bits(leaf_node_paths_mle_vec_combined.get_prefix_bits());
+                    });
             });
 
         // --- Second input layer ---
 
-        input_samples_mle_vecs.iter_mut().for_each(
-            |input_samples_mle| {
+        input_samples_mle_vecs
+            .iter_mut()
+            .for_each(|input_samples_mle| {
                 input_samples_mle.set_prefix_bits(input_samples_mle_combined.get_prefix_bits());
             });
 
         // --- Third input layer ---
 
-        permuted_input_samples_mle_vecs.iter_mut().for_each(|permuted_input_samples_mle_vec| {
-            permuted_input_samples_mle_vec.iter_mut().for_each(|permuted_input_samples_mle| {
-                permuted_input_samples_mle.set_prefix_bits(permuted_input_samples_mle_vec_combined.get_prefix_bits());
+        permuted_input_samples_mle_vecs
+            .iter_mut()
+            .for_each(|permuted_input_samples_mle_vec| {
+                permuted_input_samples_mle_vec
+                    .iter_mut()
+                    .for_each(|permuted_input_samples_mle| {
+                        permuted_input_samples_mle.set_prefix_bits(
+                            permuted_input_samples_mle_vec_combined.get_prefix_bits(),
+                        );
+                    });
             });
-        });
 
-        binary_decomp_diffs_mle_vecs.iter_mut().for_each(|binary_decomp_diffs_mle_vec| {
-            binary_decomp_diffs_mle_vec.iter_mut().for_each(|binary_decomp_diffs_mle| {
-                binary_decomp_diffs_mle.set_prefix_bits(combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits())
+        binary_decomp_diffs_mle_vecs
+            .iter_mut()
+            .for_each(|binary_decomp_diffs_mle_vec| {
+                binary_decomp_diffs_mle_vec
+                    .iter_mut()
+                    .for_each(|binary_decomp_diffs_mle| {
+                        binary_decomp_diffs_mle.set_prefix_bits(
+                            combined_batched_diff_signed_bin_decomp_mle.get_prefix_bits(),
+                        )
+                    });
             });
-        });
 
-        multiplicities_bin_decomp_mle_input_vecs.iter_mut().for_each(|multiplicities_bin_decomp_mle_input| {
-            multiplicities_bin_decomp_mle_input.set_prefix_bits(multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits())
-        });
+        multiplicities_bin_decomp_mle_input_vecs
+            .iter_mut()
+            .for_each(|multiplicities_bin_decomp_mle_input| {
+                multiplicities_bin_decomp_mle_input.set_prefix_bits(
+                    multiplicities_bin_decomp_mle_input_vec_combined.get_prefix_bits(),
+                )
+            });
 
-        multiplicities_bin_decomp_mle_decision_vec.iter_mut().for_each(|multiplicities_bin_decomp_mle_decision| {
-            multiplicities_bin_decomp_mle_decision.set_prefix_bits(multiplicities_bin_decomp_mle_decision_combined.get_prefix_bits())
-        });
+        multiplicities_bin_decomp_mle_decision_vec
+            .iter_mut()
+            .for_each(|multiplicities_bin_decomp_mle_decision| {
+                multiplicities_bin_decomp_mle_decision.set_prefix_bits(
+                    multiplicities_bin_decomp_mle_decision_combined.get_prefix_bits(),
+                )
+            });
 
-        multiplicities_bin_decomp_mle_leaf_vec.iter_mut().for_each(|multiplicities_bin_decomp_mle_leaf| {
-            multiplicities_bin_decomp_mle_leaf.set_prefix_bits(multiplicities_bin_decomp_mle_leaf_combined.get_prefix_bits())
-        });
+        multiplicities_bin_decomp_mle_leaf_vec.iter_mut().for_each(
+            |multiplicities_bin_decomp_mle_leaf| {
+                multiplicities_bin_decomp_mle_leaf
+                    .set_prefix_bits(multiplicities_bin_decomp_mle_leaf_combined.get_prefix_bits())
+            },
+        );
 
         // --- Add commitments to transcript so they are taken into account before the FS input layers are sampled ---
         let tree_mle_commit = tree_mle_input_layer
@@ -539,7 +553,8 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             .map_err(GKRError::InputLayerError)?;
 
         // Input(6)
-        let random_r_packing_another = RandomInputLayer::new(transcript, 1, LayerId::RandomInput(2));
+        let random_r_packing_another =
+            RandomInputLayer::new(transcript, 1, LayerId::RandomInput(2));
         let r_packing_another_mle = random_r_packing_another.get_mle();
         let mut random_r_packing_another = random_r_packing_another.to_enum();
         let random_r_packing_another_commit = random_r_packing_another
@@ -559,7 +574,8 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             r_mle: r_mle.clone(),
             r_packing_mle: r_packing_mle.clone(),
             r_packing_another_mle,
-            multiplicities_bin_decomp_mle_decision_tree: multiplicities_bin_decomp_mle_decision_vec.clone(),
+            multiplicities_bin_decomp_mle_decision_tree: multiplicities_bin_decomp_mle_decision_vec
+                .clone(),
             multiplicities_bin_decomp_mle_leaf_tree: multiplicities_bin_decomp_mle_leaf_vec.clone(),
             decision_node_paths_mle_vec_tree: decision_node_paths_mle_vecs.clone(),
             leaf_node_paths_mle_vec_tree: leaf_node_paths_mle_vecs.clone(),
@@ -570,9 +586,9 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             r_packing_mle,
             input_data_mle_vec: input_samples_mle_vecs.clone(),
             permuted_input_data_mle_vec_tree: permuted_input_samples_mle_vecs.clone(),
-            multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vecs.clone(),
+            multiplicities_bin_decomp_mle_input_vec: multiplicities_bin_decomp_mle_input_vecs
+                .clone(),
         };
-
 
         let binary_recomp_circuit_batched = BinaryRecompCircuitMultiTree::new(
             decision_node_paths_mle_vecs.clone(),
@@ -590,8 +606,9 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
         let bits_binary_16_bit_batched =
             BinDecomp16BitIsBinaryCircuitBatchedMultiTree::new(binary_decomp_diffs_mle_vecs);
 
-        let bits_binary_8_bit_batched =
-            BinDecomp8BitIsBinaryCircuitBatched::new(multiplicities_bin_decomp_mle_input_vecs.clone());
+        let bits_binary_8_bit_batched = BinDecomp8BitIsBinaryCircuitBatched::new(
+            multiplicities_bin_decomp_mle_input_vecs.clone(),
+        );
 
         let bits_are_binary_multiset_decision_circuit =
             BinDecomp16BitIsBinaryCircuitMultiTree::new(multiplicities_bin_decomp_mle_decision_vec);
@@ -637,15 +654,18 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 mod tests {
     use super::ZKDTMultiTreeCircuit;
     use crate::prover::helpers::test_circuit;
-    use crate::zkdt::input_data_to_circuit_adapter::{load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles, MinibatchData, load_upshot_data_multi_tree_batch, convert_zkdt_circuit_data_multi_tree_into_mles};
     use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
+    use crate::zkdt::input_data_to_circuit_adapter::{
+        convert_zkdt_circuit_data_into_mles, convert_zkdt_circuit_data_multi_tree_into_mles,
+        load_upshot_data_multi_tree_batch, load_upshot_data_single_tree_batch, MinibatchData,
+    };
     use ark_std::{end_timer, start_timer};
-    use itertools::Itertools;
-    use std::path::Path;
-    use remainder_shared_types::Fr;
     use chrono;
+    use itertools::Itertools;
     use log::LevelFilter;
+    use remainder_shared_types::Fr;
     use std::io::Write;
+    use std::path::Path;
 
     #[test]
     fn test_zkdt_2_tree_circuit() {
@@ -664,23 +684,35 @@ mod tests {
             .filter(None, LevelFilter::Error)
             .init();
 
-        let minibatch_data = MinibatchData {log_sample_minibatch_size: 10, sample_minibatch_number: 2};
+        let minibatch_data = MinibatchData {
+            log_sample_minibatch_size: 10,
+            sample_minibatch_number: 2,
+        };
 
-        let (trees_batched_data, (tree_height, input_len), _) = load_upshot_data_multi_tree_batch::<Fr>(Some(minibatch_data), 2, 0, Path::new(&"upshot_data/quantized-upshot-model.json".to_string()), Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()));
-        let (tree_batched_circuit_mles, (_, _)) = convert_zkdt_circuit_data_multi_tree_into_mles(trees_batched_data, tree_height, input_len);
-        
+        let (trees_batched_data, (tree_height, input_len), _) =
+            load_upshot_data_multi_tree_batch::<Fr>(
+                Some(minibatch_data),
+                2,
+                0,
+                Path::new(&"upshot_data/quantized-upshot-model.json".to_string()),
+                Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()),
+            );
+        let (tree_batched_circuit_mles, (_, _)) = convert_zkdt_circuit_data_multi_tree_into_mles(
+            trees_batched_data,
+            tree_height,
+            input_len,
+        );
+
         let combined_circuit = ZKDTMultiTreeCircuit {
             batched_zkdt_circuit_mles_tree: tree_batched_circuit_mles,
-            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_batch_num_0_size_2.json".to_string(),
-            sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_2.json".to_string(),
+            tree_precommit_filepath:
+                "upshot_data/tree_ligero_commitments/tree_commitment_batch_num_0_size_2.json"
+                    .to_string(),
             rho_inv: 4,
             ratio: 1_f64,
         };
 
-        test_circuit(
-            combined_circuit,
-            None,
-        );
+        test_circuit(combined_circuit, None);
     }
 
     #[test]
@@ -700,23 +732,33 @@ mod tests {
             .filter(None, LevelFilter::Error)
             .init();
 
-        let minibatch_data = MinibatchData {log_sample_minibatch_size: 10, sample_minibatch_number: 2};
-        let (trees_batched_data, (tree_height, input_len), _) = load_upshot_data_multi_tree_batch::<Fr>(Some(minibatch_data), 2, 0, Path::new(&"upshot_data/quantized-upshot-model.json".to_string()), Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()));
-        let (tree_batched_circuit_mles, (_, _)) = convert_zkdt_circuit_data_multi_tree_into_mles(trees_batched_data, tree_height, input_len);
-        
-        
+        let minibatch_data = MinibatchData {
+            log_sample_minibatch_size: 10,
+            sample_minibatch_number: 2,
+        };
+        let (trees_batched_data, (tree_height, input_len), _) =
+            load_upshot_data_multi_tree_batch::<Fr>(
+                Some(minibatch_data),
+                2,
+                0,
+                Path::new(&"upshot_data/quantized-upshot-model.json".to_string()),
+                Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()),
+            );
+        let (tree_batched_circuit_mles, (_, _)) = convert_zkdt_circuit_data_multi_tree_into_mles(
+            trees_batched_data,
+            tree_height,
+            input_len,
+        );
+
         let combined_circuit = ZKDTMultiTreeCircuit {
             batched_zkdt_circuit_mles_tree: tree_batched_circuit_mles,
-            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
-            sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
+            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json"
+                .to_string(),
             rho_inv: 4,
             ratio: 1_f64,
         };
 
-        test_circuit(
-            combined_circuit,
-            None,
-        );
+        test_circuit(combined_circuit, None);
     }
 
     #[test]
@@ -736,23 +778,33 @@ mod tests {
             .filter(None, LevelFilter::Error)
             .init();
 
-        let minibatch_data = MinibatchData {log_sample_minibatch_size: 10, sample_minibatch_number: 2};
-        let (trees_batched_data, (tree_height, input_len), _) = load_upshot_data_multi_tree_batch::<Fr>(Some(minibatch_data), 2, 0, Path::new(&"upshot_data/quantized-upshot-model.json".to_string()), Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()));
-        let (tree_batched_circuit_mles, (_, _)) = convert_zkdt_circuit_data_multi_tree_into_mles(trees_batched_data, tree_height, input_len);
-        
-        
+        let minibatch_data = MinibatchData {
+            log_sample_minibatch_size: 10,
+            sample_minibatch_number: 2,
+        };
+        let (trees_batched_data, (tree_height, input_len), _) =
+            load_upshot_data_multi_tree_batch::<Fr>(
+                Some(minibatch_data),
+                2,
+                0,
+                Path::new(&"upshot_data/quantized-upshot-model.json".to_string()),
+                Path::new(&"upshot_data/upshot-quantized-samples.npy".to_string()),
+            );
+        let (tree_batched_circuit_mles, (_, _)) = convert_zkdt_circuit_data_multi_tree_into_mles(
+            trees_batched_data,
+            tree_height,
+            input_len,
+        );
+
         let combined_circuit = ZKDTMultiTreeCircuit {
             batched_zkdt_circuit_mles_tree: tree_batched_circuit_mles,
-            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
-            sample_minibatch_precommit_filepath: "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_2.json".to_string(),
+            tree_precommit_filepath: "upshot_data/tree_ligero_commitments/tree_commitment_0.json"
+                .to_string(),
             rho_inv: 4,
             ratio: 1_f64,
         };
 
-        test_circuit(
-            combined_circuit,
-            None,
-        );
+        test_circuit(combined_circuit, None);
     }
 
     // #[test]
@@ -771,8 +823,6 @@ mod tests {
     //             batched_zkdt_circuit_mles,
     //             tree_precommit_filepath:
     //                 "upshot_data/tree_ligero_commitments/tree_commitment_0.json".to_string(),
-    //             sample_minibatch_precommit_filepath:
-    //                 "upshot_data/sample_minibatch_commitments/sample_minibatch_logsize_10_commitment_0.json".to_string(),
     //             rho_inv: 4,
     //             ratio: 1_f64,
     //         };
