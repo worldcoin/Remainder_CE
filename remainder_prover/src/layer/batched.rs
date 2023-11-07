@@ -44,6 +44,8 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
             .map(|layer| layer.build_expression())
             .collect_vec();
 
+        // dbg!(&exprs);
+
         
         combine_expressions(exprs)
             .expect("Expressions fed into BatchedLayer don't have the same structure!")
@@ -302,7 +304,7 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
 
     // --- TODO!(ryancao): SUPER hacky fix for the random packing constants ---
     // --- Basically if all the MLEs are exactly the same, we don't combine at all ---
-    if matches!(layer_id, LayerId::Input(_)) && old_num_vars == 0 {
+    if matches!(layer_id, LayerId::RandomInput(_)) && old_num_vars == 0 {
         let all_same = (0..mles[0].bookkeeping_table().len()).all(|idx| mles.iter().skip(1).all(|mle| (mles[0].bookkeeping_table()[idx] == mle.bookkeeping_table()[idx])));
         if all_same {
             return mles[0].clone();
