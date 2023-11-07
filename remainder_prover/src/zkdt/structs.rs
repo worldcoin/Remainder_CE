@@ -7,13 +7,29 @@ use crate::{
     mle::{
         dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
         Mle, MleAble, MleIndex, MleRef,
-    }, layer::{batched::combine_mles, LayerId},
+    }, layer::{batched::combine_mles, LayerId}, prover::GKRProof,
 };
 use ark_crypto_primitives::crh::sha256::digest::typenum::bit;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{FieldExt, transcript::Transcript};
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use serde::{Serialize, Deserialize};
+
+
+// ------------------------------------ ZKDT PROOF STRUCTS ------------------------------------
+
+/// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
+/// ZKDT specific, with information like number of trees batched (multi-tree setting) 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
+pub struct ZKDTProof<F: FieldExt, Tr: Transcript<F>> {
+    /// The GKR proof for a ZKDT circuit
+    pub gkr_proof: GKRProof<F, Tr>,
+
+    /// The number of trees in a ZKDT proof
+    pub tree_batch_size: usize,
+}
+
 
 // ------------------------------------ ACTUAL DATA STRUCTS ------------------------------------
 
