@@ -161,19 +161,19 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
         .unwrap();
 
         // --- Manually add the layers and output layers from the circuit involving gate MLEs ---
-        // let updated_combined_output_layers = path_consistency_circuit_batched
-        //     .add_subcircuit_layers_to_combined_layers(
-        //         &mut combined_circuit_layers,
-        //         combined_circuit_output_layers,
-        //     );
+        let updated_combined_output_layers = path_consistency_circuit_batched
+            .add_subcircuit_layers_to_combined_layers(
+                &mut combined_circuit_layers,
+                combined_circuit_output_layers,
+            );
 
         end_timer!(combine_layers_timer);
 
         Ok((
             Witness {
                 layers: combined_circuit_layers,
-                output_layers: combined_circuit_output_layers,
-                // output_layers: updated_combined_output_layers,
+                // output_layers: combined_circuit_output_layers,
+                output_layers: updated_combined_output_layers,
                 input_layers,
             },
             inpunt_layers_commits,
@@ -525,13 +525,13 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
 
         // --- FS layers must also have LayerId::Input(.)s! ---
         // Input(4)
-        let random_r = RandomInputLayer::new(transcript, 1, LayerId::Input(4));
+        let random_r = RandomInputLayer::new(transcript, 1, LayerId::RandomInput(0));
         let r_mle = random_r.get_mle();
         let mut random_r = random_r.to_enum();
         let random_r_commit = random_r.commit().map_err(GKRError::InputLayerError)?;
 
         // Input(5)
-        let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::Input(5));
+        let random_r_packing = RandomInputLayer::new(transcript, 1, LayerId::RandomInput(1));
         let r_packing_mle = random_r_packing.get_mle();
         let mut random_r_packing = random_r_packing.to_enum();
         let random_r_packing_commit = random_r_packing
@@ -539,7 +539,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             .map_err(GKRError::InputLayerError)?;
 
         // Input(6)
-        let random_r_packing_another = RandomInputLayer::new(transcript, 1, LayerId::Input(6));
+        let random_r_packing_another = RandomInputLayer::new(transcript, 1, LayerId::RandomInput(2));
         let r_packing_another_mle = random_r_packing_another.get_mle();
         let mut random_r_packing_another = random_r_packing_another.to_enum();
         let random_r_packing_another_commit = random_r_packing_another
