@@ -98,6 +98,8 @@ pub enum VerificationError {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, PartialOrd)]
 ///  The location of a layer within the GKR circuit
 pub enum LayerId {
+    /// A random mle input layer
+    RandomInput(usize),
     /// An Mle located in the input layer
     Input(usize),
     /// A layer within the GKR protocol, indexed by it's layer id
@@ -109,6 +111,8 @@ pub enum LayerId {
 impl Ord for LayerId {
     fn cmp(&self, layer2: &LayerId) -> Ordering {
         match (self, layer2) {
+            (LayerId::RandomInput(id1), LayerId::RandomInput(id2)) => id1.cmp(&id2),
+            (LayerId::RandomInput(id1), _) => Ordering::Less,
             (LayerId::Input(id1), LayerId::Input(id2)) => id1.cmp(&id2),
             (LayerId::Input(id1), _) => Ordering::Less,
             (LayerId::Layer(id1), LayerId::Input(id2)) => Ordering::Greater,

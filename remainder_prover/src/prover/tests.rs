@@ -1131,6 +1131,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
             .chain(simple_inputs.into_iter().map(|mut input| {
                 let new_layer_id = match input.layer_id() {
                     LayerId::Input(id) => LayerId::Input(id + 1),
+                    LayerId::RandomInput(id) => LayerId::RandomInput(id + 1),
                     LayerId::Layer(_) => panic!(),
                     LayerId::Output(_) => panic!(),
                 };
@@ -1784,6 +1785,7 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
             .into_iter()
             .chain(simple_inputs.into_iter().map(|mut input| {
                 let new_layer_id = match input.layer_id() {
+                    LayerId::RandomInput(id) => LayerId::RandomInput(id + 1),
                     LayerId::Input(id) => LayerId::Input(id + 1),
                     LayerId::Layer(_) => panic!(),
                     LayerId::Output(_) => panic!(),
@@ -1793,6 +1795,7 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
             }))
             .chain(batch_inputs.into_iter().map(|mut input| {
                 let new_layer_id = match input.layer_id() {
+                    LayerId::RandomInput(id) => LayerId::RandomInput(id + 2),
                     LayerId::Input(id) => LayerId::Input(id + 2),
                     LayerId::Layer(_) => panic!(),
                     LayerId::Output(_) => panic!(),
