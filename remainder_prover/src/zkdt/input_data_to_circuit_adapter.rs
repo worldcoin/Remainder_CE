@@ -519,18 +519,23 @@ pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
             log_sample_minibatch_size: log2(raw_samples.values.len() as usize) as usize,
         },
     };
+
+    // --- Do the truncation if needed ---
     let sample_minibatch_size = 2_usize.pow(minibatch_data.log_sample_minibatch_size as u32);
-    let minibatch_start_idx = minibatch_data.sample_minibatch_number * sample_minibatch_size;
-    raw_samples.values = raw_samples.values
-        [minibatch_start_idx..(minibatch_start_idx + sample_minibatch_size)]
-        .to_vec();
+    if sample_minibatch_size < raw_samples.values.len() {
+        let minibatch_start_idx = minibatch_data.sample_minibatch_number * sample_minibatch_size;
+        raw_samples.values = raw_samples.values
+            [minibatch_start_idx..(minibatch_start_idx + sample_minibatch_size)]
+            .to_vec();
+    }
 
     // --- Conversions ---
     let full_trees_model: TreesModel = (&raw_trees_model).into();
     let mut tree_batch = full_trees_model
         .slice((tree_batch_size * tree_batch_number)..(tree_batch_size * (tree_batch_number + 1)));
     tree_batch.pad_tree_count_to_multiple(tree_batch_size);
-    let samples: Samples = (&raw_samples).into();
+    // let samples: Samples = (&raw_samples).into();
+    let samples: Samples = raw_samples.to_samples_with_target_larger_minibatch_size(sample_minibatch_size);
     let ctrees: CircuitizedTrees<F> = (&tree_batch).into();
 
     // --- Compute actual witnesses ---

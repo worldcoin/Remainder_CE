@@ -104,12 +104,20 @@ struct Args {
     /// log_2 of the minibatch size. Note that passing in `None` here
     /// will result in the entire dataset being treated as a single
     /// minibatch.
+    /// 
+    /// Passing in something *larger* than the actual batch size will
+    /// result in the batch being padded to that size!
     #[arg(long)]
     log_sample_minibatch_size: Option<usize>,
 
     /// The minibatch number we are generating a proof for.
     /// Note that if `log_sample_batch_size` is `Some` then
     /// this value cannot be `None`.
+    /// 
+    /// Passing in something *larger* than the actual batch size (in 
+    /// `log_sample_minibatch_size`) will result in this parameter
+    /// being ignored, as the whole batch becomes a small part of
+    /// the singular minibatch which is being proven.
     #[arg(long)]
     sample_minibatch_number: Option<usize>,
 

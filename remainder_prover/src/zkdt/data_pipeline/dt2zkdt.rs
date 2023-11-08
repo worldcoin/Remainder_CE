@@ -156,6 +156,33 @@ impl RawSamples {
             sample_length: self.sample_length,
         }
     }
+
+    /// For the somewhat silly use case where we want to test with a minibatch which is
+    /// in fact larger than the full batch which we have
+    pub fn to_samples_with_target_larger_minibatch_size(&self, target_sample_count: usize) -> Samples {
+
+        // --- Sanitycheck: We passed in something smaller ---
+        let cur_padded_sample_count = next_power_of_two(self.values.len()).unwrap();
+        if target_sample_count <= cur_padded_sample_count {
+            return self.into();
+        }
+
+        let sample_length = next_power_of_two(self.values[0].len()).unwrap();
+        let mut samples: Vec<Vec<u16>> = vec![];
+
+        for raw_sample in &self.values {
+            let mut sample = raw_sample.clone();
+            sample.resize(sample_length, 0);
+            samples.push(sample);
+        }
+        for i in self.values.len()..target_sample_count {
+            samples.push(vec![0_u16; sample_length]);
+        }
+        Samples {
+            values: samples,
+            sample_length,
+        }
+    }
 }
 
 impl From<&RawSamples> for Samples {
