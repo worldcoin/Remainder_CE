@@ -135,6 +135,15 @@ struct Args {
     #[arg(long, default_value_t = false)]
     debug_tracing_subscriber: bool,
 
+    /// Whether we want info tracing subscriber logs or not.
+    /// By default, we use `INFO` as the subscriber level.
+    /// 
+    /// Note that if `debug_tracing_subscriber` is also `true`, 
+    /// we will set the tracing subscriber to `DEBUG` (always
+    /// use the more detailed of the two).
+    #[arg(long, default_value_t = false)]
+    info_tracing_subscriber: bool,
+
     /// sets the value for rho_inv for the ligero commit
     #[arg(long, default_value_t = 4)]
     rho_inv: u8,
@@ -143,9 +152,6 @@ struct Args {
     /// to achieve the ratio as close as possible
     #[arg(long, default_value_t = 1_f64)]
     matrix_ratio: f64,
-
-
-
 
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
@@ -267,10 +273,10 @@ fn main() -> Result<(), ZKDTBinaryError> {
         // formatter so that a delimiter is added between fields.
         .delimited("\n");
 
-    if args.debug_tracing_subscriber {
+    if args.debug_tracing_subscriber || args.info_tracing_subscriber {
         let subscriber = FmtSubscriber::builder()
             .with_line_number(true)
-            .with_max_level(tracing::Level::TRACE)
+            .with_max_level(if args.debug_tracing_subscriber {tracing::Level::DEBUG} else {tracing::Level::INFO})
             .with_level(true)
             .with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
             .with_ansi(false)
