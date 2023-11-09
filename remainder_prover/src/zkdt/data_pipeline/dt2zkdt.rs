@@ -57,9 +57,12 @@ use crate::zkdt::structs::{
     BinDecomp16Bit, BinDecomp4Bit, BinDecomp8Bit, DecisionNode, InputAttribute, LeafNode,
 };
 
+use approx::abs_diff_eq;
 use ark_serialize::Read;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
+use num_bigint::{BigInt, Sign};
+use num_traits::cast::ToPrimitive;
 use rand::Rng;
 use rayon::prelude::*;
 use remainder_shared_types::{FieldExt, Fr};
@@ -77,18 +80,18 @@ use super::helpers::{
 /// This struct is used for parsing JSON.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RawTreesModel {
-    trees: Vec<Node<f64>>,
-    bias: f64,
-    scale: f64,
-    n_features: usize,
+    pub trees: Vec<Node<f64>>,
+    pub bias: f64,
+    pub scale: f64,
+    pub n_features: usize,
 }
 
 /// Used for deriving CircuitizedTrees and CircuitizedAuxiliaries (given samples).
 /// For properties, see TreesModel.from().
 pub struct TreesModel {
-    trees: Vec<Node<i64>>,
-    depth: usize,
-    scaling: f64,
+    pub trees: Vec<Node<i64>>,
+    pub depth: usize,
+    pub scaling: f64,
 }
 
 /// Circuitized trees use flat (i.e. non-recursive) structs for the decision and leaf nodes and
@@ -120,7 +123,7 @@ pub struct Samples {
 }
 
 /// Represents the circuitization of a batch of samples.
-pub type CircuitizedSamples<F: FieldExt> = Vec<Vec<InputAttribute<F>>>;
+pub type CircuitizedSamples<F> = Vec<Vec<InputAttribute<F>>>;
 
 /// Represents the circuitization of a batch of samples with respect to a TreesModel.
 /// * Bit decompositions are little endian.
@@ -159,8 +162,10 @@ impl RawSamples {
 
     /// For the somewhat silly use case where we want to test with a minibatch which is
     /// in fact larger than the full batch which we have
-    pub fn to_samples_with_target_larger_minibatch_size(&self, target_sample_count: usize) -> Samples {
-
+    pub fn to_samples_with_target_larger_minibatch_size(
+        &self,
+        target_sample_count: usize,
+    ) -> Samples {
         // --- Sanitycheck: We passed in something smaller ---
         let cur_padded_sample_count = next_power_of_two(self.values.len()).unwrap();
         if target_sample_count <= cur_padded_sample_count {
@@ -583,9 +588,12 @@ impl fmt::Display for RawTreesModel {
             .unwrap();
         write!(
             f,
-            "{:?} trees of maximum depth {:?}",
+            "{} trees of maximum depth {}, taking {} features, aggregating predictions with scale {} and bias {}",
             self.trees.len(),
-            max_depth
+            max_depth,
+            self.n_features,
+            self.scale,
+            self.bias
         )
     }
 }
@@ -638,6 +646,18 @@ impl TreesModel {
                 tree
             }))
             .collect();
+    }
+}
+
+impl fmt::Display for TreesModel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "TreesModel with {} trees of depth {}, with quantization scale {}",
+            self.trees.len(),
+            self.depth,
+            self.scaling,
+        )
     }
 }
 
@@ -705,6 +725,59 @@ pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
         });
 
     raw_trees_model
+}
+
+/// Used for decoding field elements representing leaf values to a f64 value, i.e. dequantizing.
+/// Adding together, for a single sample, the decoded leaf values for all trees in the forest yields (approximately) the forest's prediction for that sample.
+/// Example usage:
+/// ```
+/// let trees_model: TreesModel = (&raw_trees_model).into();
+/// let decoder = LeafValueDecoder::build(&trees_model);
+/// for tree in &trees_model.trees {
+///     let tree_path = tree.get_tree_path(&sample);
+///     let leaf_node: LeafNode<Fr> = (&tree_path).into();
+///     acc_pred += decoder.decode(&leaf_node.node_val);
+/// }
+/// ```
+pub struct LeafValueDecoder {
+    modulus: BigInt,
+    scaling: f64,
+}
+
+/// Decodes a hex string (without leading "0x") as a non-negative BigInt.
+pub fn hex_to_bigint(hex: &str) -> BigInt {
+    let bytes = hex::decode(hex).expect("Invalid hex literal");
+    BigInt::from_bytes_be(Sign::Plus, &bytes)
+}
+
+/// Extracts a field element as a non-negative BigInt.
+pub fn field_element_to_bigint(num: &Fr) -> BigInt {
+    BigInt::from_bytes_le(Sign::Plus, &num.to_bytes())
+}
+
+// TODO the value below is lifted from the Fr docs
+// Find a cleaner way to do this.
+const MODULUS: &'static str = "30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001";
+impl LeafValueDecoder {
+    /// Build a LeafValueDecoder for this TreesModel.
+    /// The TreesModel is used to determine the scaling factor.
+    pub fn build(trees_model: &TreesModel) -> LeafValueDecoder {
+        let modulus = hex_to_bigint(MODULUS);
+        LeafValueDecoder {
+            modulus,
+            scaling: trees_model.scaling,
+        }
+    }
+
+    /// Decodes a field element representing a leaf value to a f64 value.
+    /// Adding together, for a single sample, the decoded leaf values for all trees in the forest yields (approximately) the forest's prediction for that sample..
+    pub fn decode(&self, value: &Fr) -> f64 {
+        let bigint = field_element_to_bigint(value);
+        let leaf_val_i64 = bigint
+            .to_i64()
+            .unwrap_or_else(|| -1 * (&self.modulus - bigint).to_i64().unwrap());
+        leaf_val_i64 as f64 / self.scaling
+    }
 }
 
 #[cfg(test)]
@@ -1273,5 +1346,61 @@ mod tests {
         let sample = vec![0_u16; n_features];
         let tree_path = padded_trees_model.trees[7].get_tree_path(&sample);
         assert_eq!(tree_path.leaf_value, 0_i64);
+    }
+
+    #[test]
+    fn test_leaf_value_decoder() {
+        let sample_length = 5;
+        let values = vec![
+            vec![0_u16; sample_length],
+            vec![2_u16, 0_u16, 0_u16, 0_u16, 0_u16],
+            vec![2_u16; sample_length],
+        ];
+        let raw_samples = RawSamples {
+            values,
+            sample_length,
+        };
+        let samples: Samples = (&raw_samples).into();
+
+        let raw_trees_model = RawTreesModel {
+            trees: vec![build_small_tree(), build_small_tree_variant()],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: sample_length,
+        };
+        let trees_model: TreesModel = (&raw_trees_model).into();
+        let decoder = LeafValueDecoder::build(&trees_model);
+
+        // check leaf values decode to approximately the correct values
+        let eps: f64 = 1e-5;
+        let sample = &samples.values[0];
+        let expected_pred: f64 = raw_trees_model.scale * (0.1 + 0.1) + raw_trees_model.bias;
+        let mut acc_pred: f64 = 0.0;
+        for tree in &trees_model.trees {
+            let tree_path = tree.get_tree_path(&sample);
+            let leaf_node: LeafNode<Fr> = (&tree_path).into();
+            acc_pred += decoder.decode(&leaf_node.node_val);
+        }
+        assert!(abs_diff_eq!(expected_pred, acc_pred, epsilon = eps));
+
+        let sample = &samples.values[1];
+        let expected_pred: f64 = raw_trees_model.scale * (0.2 + 0.1) + raw_trees_model.bias;
+        let mut acc_pred: f64 = 0.0;
+        for tree in &trees_model.trees {
+            let tree_path = tree.get_tree_path(&sample);
+            let leaf_node: LeafNode<Fr> = (&tree_path).into();
+            acc_pred += decoder.decode(&leaf_node.node_val);
+        }
+        assert!(abs_diff_eq!(expected_pred, acc_pred, epsilon = eps));
+
+        let sample = &samples.values[2];
+        let expected_pred: f64 = raw_trees_model.scale * (1.2 + 1.2) + raw_trees_model.bias;
+        let mut acc_pred: f64 = 0.0;
+        for tree in &trees_model.trees {
+            let tree_path = tree.get_tree_path(&sample);
+            let leaf_node: LeafNode<Fr> = (&tree_path).into();
+            acc_pred += decoder.decode(&leaf_node.node_val);
+        }
+        assert!(abs_diff_eq!(expected_pred, acc_pred, epsilon = eps));
     }
 }
