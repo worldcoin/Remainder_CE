@@ -57,7 +57,6 @@ use crate::zkdt::structs::{
     BinDecomp16Bit, BinDecomp4Bit, BinDecomp8Bit, DecisionNode, InputAttribute, LeafNode,
 };
 
-use approx::abs_diff_eq;
 use ark_serialize::Read;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
@@ -80,17 +79,24 @@ use super::helpers::{
 /// This struct is used for parsing JSON.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RawTreesModel {
+    /// the decision trees in the model
     pub trees: Vec<Node<f64>>,
+    /// bias is added to sum of the scaled leaf values
     pub bias: f64,
+    /// scale multiplies the leaf values
     pub scale: f64,
+    /// number of features that are used by the trees
     pub n_features: usize,
 }
 
 /// Used for deriving CircuitizedTrees and CircuitizedAuxiliaries (given samples).
 /// For properties, see TreesModel.from().
 pub struct TreesModel {
+    /// the decision trees in the model, padded for perfection
     pub trees: Vec<Node<i64>>,
+    /// the depth of the trees (uniform)
     pub depth: usize,
+    /// the scaling factor to approximately undo the leaf value quantization (via division)
     pub scaling: f64,
 }
 
@@ -101,9 +107,13 @@ pub struct TreesModel {
 /// the number of leaf nodes).
 /// The dummy decision node has node id 2^depth - 1.
 pub struct CircuitizedTrees<F: FieldExt> {
-    pub decision_nodes: Vec<Vec<DecisionNode<F>>>, // indexed by tree, then by node (sorted by node id)
-    pub leaf_nodes: Vec<Vec<LeafNode<F>>>, // indexed by tree, then by node (sorted by node id)
+    /// indexed by tree, then by node (sorted by node id)
+    pub decision_nodes: Vec<Vec<DecisionNode<F>>>,
+    /// indexed by tree, then by node (sorted by node id)
+    pub leaf_nodes: Vec<Vec<LeafNode<F>>>,
+    /// the depth of the trees
     pub depth: usize,
+    /// the scaling factor to approximately undo the leaf value quantization (via division)
     pub scaling: f64,
 }
 
@@ -111,14 +121,18 @@ pub struct CircuitizedTrees<F: FieldExt> {
 /// Pre: Values do not exceed a 15-bit (not 16 bit!) representation.
 #[derive(Clone)]
 pub struct RawSamples {
+    /// the samples, indexed by sample, then by attribute
     pub values: Vec<Vec<u16>>,
+    /// the number of attributes (features) in each sample
     pub sample_length: usize,
 }
 
 /// Difference to RawSamples: each sample is padded length-wise to the next power of two, and
 /// the number of samples is also padded to be the next power of two.
 pub struct Samples {
+    /// the samples, indexed by sample, then by attribute; padded to the next power of two
     pub values: Vec<Vec<u16>>,
+    /// the number of attributes (features) in each sample (a power of two)
     pub sample_length: usize,
 }
 
@@ -131,13 +145,20 @@ pub type CircuitizedSamples<F> = Vec<Vec<InputAttribute<F>>>;
 /// * Each vector in `node_multiplicities` has length `2.pow(trees_model.depth)`; it is indexed by
 /// node_id for decision nodes, and by node id + 1 for leaf nodes.
 pub struct CircuitizedAuxiliaries<F: FieldExt> {
-    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>, // indexed by trees, samples, steps in path
-    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>, // indexed by trees, samples, steps in path
-    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>, // indexed by trees, samples, steps in path
-    pub path_ends: Vec<Vec<LeafNode<F>>>,              // indexed by trees, samples
-    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>, // indexed by trees, samples, then by attribute index FIXME TO BE REMOVED (@Ben)
-    pub attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>>, // indexed by samples, then by attribute index (so aggregated over trees)
-    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>, // indexed by trees, tree nodes
+    /// indexed by trees, samples, steps in path
+    pub decision_paths: Vec<Vec<Vec<DecisionNode<F>>>>,
+    /// indexed by trees, samples, steps in path
+    pub attributes_on_paths: Vec<Vec<Vec<InputAttribute<F>>>>,
+    /// indexed by trees, samples, steps in path
+    pub differences: Vec<Vec<Vec<BinDecomp16Bit<F>>>>,
+    /// indexed by trees, samples
+    pub path_ends: Vec<Vec<LeafNode<F>>>,
+    /// indexed by trees, samples, then by attribute index FIXME TO BE REMOVED (@Ben)
+    pub attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>>,
+    /// indexed by samples, then by attribute index (so aggregated over trees)
+    pub attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>>,
+    /// indexed by trees, tree nodes
+    pub node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>>,
 }
 
 impl fmt::Display for RawSamples {
@@ -152,6 +173,7 @@ impl fmt::Display for RawSamples {
 }
 
 impl RawSamples {
+    /// Return a new RawSamples with the specified range of samples.
     pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
         let values = self.values[range].to_vec();
         RawSamples {
@@ -180,7 +202,7 @@ impl RawSamples {
             sample.resize(sample_length, 0);
             samples.push(sample);
         }
-        for i in self.values.len()..target_sample_count {
+        for _i in self.values.len()..target_sample_count {
             samples.push(vec![0_u16; sample_length]);
         }
         Samples {
@@ -204,7 +226,7 @@ impl From<&RawSamples> for Samples {
             samples.push(sample);
         }
         let target_sample_count = next_power_of_two(raw_samples.values.len()).unwrap();
-        for i in raw_samples.values.len()..target_sample_count {
+        for _ in raw_samples.values.len()..target_sample_count {
             samples.push(vec![0_u16; sample_length]);
         }
         Samples {
@@ -599,11 +621,19 @@ impl fmt::Display for RawTreesModel {
 }
 
 impl RawTreesModel {
+    /// Return a new RawTreesModel with the specified range of trees, keeping the bias iff
+    /// the 0th tree is included in the range (the scale is always kept).
+    /// This is done to ensure that conversion to TreesModel commutes with slicing.
     pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
+        let bias = if range.contains(&0_usize) {
+            self.bias
+        } else {
+            0_f64
+        };
         let trees = self.trees[range].to_vec();
         RawTreesModel {
             trees: trees,
-            bias: self.bias,
+            bias: bias,
             scale: self.scale,
             n_features: self.n_features,
         }
@@ -611,6 +641,7 @@ impl RawTreesModel {
 }
 
 impl TreesModel {
+    /// Return a new TreesModel with the specified range of trees.
     pub fn slice(&self, range: std::ops::Range<usize>) -> Self {
         let trees = self.trees[range].to_vec();
         TreesModel {
@@ -728,7 +759,10 @@ pub fn load_raw_trees_model(filename: &Path) -> RawTreesModel {
 }
 
 /// Used for decoding field elements representing leaf values to a f64 value, i.e. dequantizing.
-/// Adding together, for a single sample, the decoded leaf values for all trees in the forest yields (approximately) the forest's prediction for that sample.
+/// Adding together, for a single sample, the decoded leaf values for all trees in the forest yields the forest's prediction for that sample.
+/// This is approximate, due to the quantization.
+/// These aggregate predictions will match those of the TreesModel or the original RawTreesModel.
+/// However, due to the treatment of the RawTreesModel bias and scale, it does not match the predictions of RawTreesModel on the level of individual trees (but the aggregates do match).
 /// Example usage:
 /// ```
 /// let trees_model: TreesModel = (&raw_trees_model).into();
@@ -783,6 +817,7 @@ impl LeafValueDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::abs_diff_eq;
     use remainder_shared_types::Fr;
 
     /// Returns a small tree for testing:
@@ -1256,7 +1291,7 @@ mod tests {
         assert_eq!(multiplicities.len(), 10);
         assert_eq!(multiplicities[1], 0);
         let mut path: Vec<PathStep> = vec![];
-        for i in 0..2 {
+        for _ in 0..2 {
             path.push(PathStep {
                 node_id: 1,
                 feature_index: 2,
@@ -1402,5 +1437,25 @@ mod tests {
             acc_pred += decoder.decode(&leaf_node.node_val);
         }
         assert!(abs_diff_eq!(expected_pred, acc_pred, epsilon = eps));
+    }
+
+    #[test]
+    pub fn test_rawtreesmodel_slice() {
+        let tree = build_small_tree();
+        let rtm = RawTreesModel {
+            trees: vec![tree, Node::new_leaf(Some(0), 3.0)],
+            bias: 1.1,
+            scale: 6.6,
+            n_features: 5,
+        };
+        let sliced_rtm = &rtm.slice(0..2);
+        assert_eq!(sliced_rtm.trees.len(), 2);
+        assert_eq!(sliced_rtm.bias, rtm.bias);
+        assert_eq!(sliced_rtm.scale, rtm.scale);
+        // check the bias is set to zero if tree 0 is not included.
+        let sliced_rtm = &rtm.slice(1..2);
+        assert_eq!(sliced_rtm.trees.len(), 1);
+        assert_eq!(sliced_rtm.bias, 0.0_f64);
+        assert_eq!(sliced_rtm.scale, rtm.scale);
     }
 }
