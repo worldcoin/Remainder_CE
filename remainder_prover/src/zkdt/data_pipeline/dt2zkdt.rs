@@ -804,9 +804,11 @@ impl LeafValueDecoder {
     }
 
     /// Decodes a field element representing a leaf value to a f64 value.
-    /// Adding together, for a single sample, the decoded leaf values for all trees in the forest yields (approximately) the forest's prediction for that sample..
+    /// Adding together, for a single sample, the decoded leaf values for all trees in the forest yields
+    /// (approximately) the forest's prediction for that sample.
     pub fn decode(&self, value: &Fr) -> f64 {
         let bigint = field_element_to_bigint(value);
+        // NB the following works since leaf values have bitwidth of only 52 bits (cf `LEAF_QUANTILE_BITWIDTH`)
         let leaf_val_i64 = bigint
             .to_i64()
             .unwrap_or_else(|| -1 * (&self.modulus - bigint).to_i64().unwrap());

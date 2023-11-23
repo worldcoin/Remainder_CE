@@ -262,10 +262,12 @@ impl<T: Copy> Node<T> {
     }
 }
 
-const LEAF_QUANTILE_BITWIDTH: u64 = 52; // 52 is mantissa length of a f64
+/// The number of bits to use for quantizing (sums of) leaf values.
+/// (52 is chosen for computational convenience; it is the mantissa length of a f64)
+const LEAF_QUANTILE_BITWIDTH: u64 = 52;
 /// Given a vector of trees ([`Node`] instances) with f64 leaf values, quantize the leaf values
 /// symmetrically, returning the quantized trees and the rescaling factor.  The scale is chosen
-/// such that no leaf value or sum trees.len() distinct leaf values will exceed
+/// such that no leaf value or sum of trees.len() distinct leaf values will exceed
 /// LEAF_QUANTILE_BITWIDTH.
 /// Pre: trees.len() > 0; no leaf values are NaN.
 /// Post: (quantized leaf values) / rescaling ~= (original leaf values)
