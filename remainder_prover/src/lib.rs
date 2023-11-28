@@ -9,4 +9,3 @@ pub mod gate;
 pub mod prover;
 pub mod sumcheck;
 pub mod utils;
-pub mod zkdt;

@@ -1,9 +1,12 @@
 use ark_std::{cfg_iter_mut, cfg_into_iter};
 use rayon::{iter::{IntoParallelRefMutIterator, IntoParallelIterator}, prelude::{ParallelIterator, IndexedParallelIterator}};
-use itertools::Itertools;
+use itertools::{Itertools, repeat_n};
 use remainder_shared_types::FieldExt;
 use thiserror::Error;
-use crate::mle::{mle_enum::MleEnum, MleRef, MleIndex, dense::DenseMleRef};
+use crate::mle::{mle_enum::MleEnum, MleRef, MleIndex, dense::{DenseMleRef, DenseMle}};
+use ark_std::log2;
+
+use super::LayerId;
 
 
 /// Error handling for gate mle construction
@@ -421,4 +424,40 @@ pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
 
     Ok(updated_list[0].bookkeeping_table()[0])
 
+}
+
+
+/// for input layer stuff, combining refs together
+/// Takes the individual bookkeeping tables from the MleRefs within an MLE
+/// and merges them with padding, using a little-endian representation
+/// merge strategy. Assumes that ALL MleRefs are the same size.
+pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
+
+    let num_fields = items.len();
+
+    // --- All the items within should be the same size ---
+    let max_size = items
+        .iter()
+        .map(|mle_ref| mle_ref.bookkeeping_table.len())
+        .max().unwrap();
+
+    let part_size = 1 << log2(max_size);
+    let part_count = 2_u32.pow(log2(num_fields)) as usize;
+
+    // --- Number of "part" slots which need to filled with padding ---
+    let padding_count = part_count - num_fields;
+    let total_size = part_size * part_count;
+    let total_padding: usize = total_size - max_size * part_count;
+
+    let result = (0..max_size)
+        .flat_map(|index| {
+            items
+                .iter()
+                .map(move |item| *item.bookkeeping_table().get(index).unwrap_or(&F::zero()))
+                .chain(repeat_n(F::zero(), padding_count))
+        })
+        .chain(repeat_n(F::zero(), total_padding))
+        .collect_vec();
+
+    DenseMle::new_from_raw(result, LayerId::Input(0), None)
 }

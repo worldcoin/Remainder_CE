@@ -9,7 +9,7 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         zero::ZeroMleRef,
         Mle, MleAble, MleIndex, MleRef,
-    }, zkdt::structs::InputAttribute,
+    },
 };
 use remainder_shared_types::FieldExt;
 

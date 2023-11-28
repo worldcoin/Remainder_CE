@@ -165,7 +165,7 @@ pub fn get_dummy_claim<F: FieldExt>(
     Claim::new_raw(claim, eval)
 }
 
-pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
+pub fn get_dummy_expression_eval<F: FieldExt>(
     expression: &ExpressionStandard<F>,
     rng: &mut impl Rng,
 ) -> Claim<F> {

@@ -136,7 +136,7 @@ pub(crate) fn beta_split<F: FieldExt>(
 
 impl<F: FieldExt> BetaTable<F> {
     /// Construct a new beta table using a single claim
-    pub(crate) fn new(layer_claim_vars: Vec<F>) -> Result<BetaTable<F>, BetaError> {
+    pub fn new(layer_claim_vars: Vec<F>) -> Result<BetaTable<F>, BetaError> {
         if layer_claim_vars.len() > 0 {
             let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
             let mut cur_table = vec![one_minus_r, r];

@@ -1,9 +1,23 @@
 [package]
-name = "remainder"
+name = "remainder-zkdt"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "run_remainder_zkdt"
+path = "src/bin/run_remainder_zkdt.rs"
+
+[[bin]]
+name = "run_remainder_multitree"
+path = "src/bin/run_remainder_multitree.rs"
+
+[[bin]]
+name = "generate_ligero_tree_commitments"
+path = "src/bin/generate_ligero_tree_commitments.rs"
+
+[[bin]]
+name = "generate_sample_minibatch_commitments"
+path = "src/bin/generate_sample_minibatch_commitments.rs"
 
 [dependencies]
 ark-bn254 = "0.4.0"
@@ -29,6 +43,7 @@ ndarray-npy = "0.8.1"
 tracing-subscriber = "0.3.17"
 remainder-ligero = { path = "../remainder_ligero" }
 remainder-shared-types = { path = "../remainder_shared_types" }
+remainder = { path = "../remainder_prover" } # might need this
 # halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", tag = "v0.3.0-ce" } # For BN-254 from Halo2
 dyn-clone = "1.0.13"
 dyn-clonable = "0.9.0"

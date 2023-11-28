@@ -15,6 +15,7 @@ use crate::{
         from_mle,
         layer_enum::LayerEnum,
         LayerBuilder, LayerId,
+        simple_builders::{EqualityCheck, ZeroBuilder},
     },
     mle::{
         dense::{DenseMle, Tuple2},
@@ -23,7 +24,6 @@ use crate::{
     },
     prover::input_layer::enum_input_layer::CommitmentEnum,
     utils::get_random_mle,
-    zkdt::builders::{EqualityCheck, ZeroBuilder},
 };
 use remainder_shared_types::{
     transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
