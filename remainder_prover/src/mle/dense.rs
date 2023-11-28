@@ -13,10 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
 use crate::{expression::ExpressionStandard, layer::claims::Claim};
-use crate::{
-    layer::{batched::combine_mles, LayerId},
-    zkdt::structs::combine_mle_refs,
-};
+use crate::layer::{batched::combine_mles, LayerId, combine_mle_refs::combine_mle_refs};
 use remainder_shared_types::FieldExt;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -118,7 +115,7 @@ impl<'a, F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> IntoIterator
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub(crate) fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(
+pub fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(
     items: &[Vec<F>; L],
 ) -> Vec<F> {
     // --- All the items within should be the same size ---
