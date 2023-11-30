@@ -18,7 +18,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuit<F> {
         let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- First we create the positive binary recomp ---
         let output_mle_ref = layers.add_gkr(from_mle(
@@ -49,7 +49,7 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuit<F> {
     pub fn yield_sub_circuit(&self) -> Witness<F, <BinDecomp16BitIsBinaryCircuit<F> as GKRCircuit<F>>::Transcript> {
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinDecomp16BitIsBinaryCircuit<F> as GKRCircuit<F>>::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- First we create the positive binary recomp ---
         let output_mle_ref = layers.add_gkr(from_mle(
@@ -84,7 +84,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuit<F> {
         let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- First we create the positive binary recomp ---
         let output_mle_ref = layers.add_gkr(from_mle(

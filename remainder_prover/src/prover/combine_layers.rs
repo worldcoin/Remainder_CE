@@ -22,10 +22,10 @@ pub struct CombineError;
 
 ///Utility for combining sub-circuits into a single circuit
 /// DOES NOT WORK FOR GATE MLE
-pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
-    mut layers: Vec<Layers<F, Tr>>,
+pub fn combine_layers<F: FieldExt>(
+    mut layers: Vec<Layers<F>>,
     mut output_layers: Vec<Vec<MleEnum<F>>>,
-) -> Result<(Layers<F, Tr>, Vec<MleEnum<F>>), CombineError> {
+) -> Result<(Layers<F>, Vec<MleEnum<F>>), CombineError> {
     //We're going to add multiple selectors to merge the sub-circuits, and then
     //the future layers need to take those selectors into account in thier claims.
     let layer_count = layers.iter().map(|layers| layers.0.len()).max().unwrap();
@@ -132,7 +132,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
 
     //Combine all the sub-circuits expressions in such a way that it matches the
     //extra bits we calculated
-    let layers: Vec<LayerEnum<F, Tr>> = (0..layer_count)
+    let layers: Vec<LayerEnum<F>> = (0..layer_count)
         .map(|layer_idx| {
             layers
                 .iter()
@@ -155,9 +155,9 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
             let expression = combine_expressions(expressions);
 
             if expression.get_expression_size(0) == 0 {
-                Ok(EmptyLayer::new_raw(layer_id, expression).get_enum())
+                Ok(EmptyLayer::new_raw(layer_id, expression).into())
             } else {
-                Ok(GKRLayer::new_raw(layer_id, expression).get_enum())
+                Ok(GKRLayer::new_raw(layer_id, expression).into())
             }
         })
         .try_collect()?;
@@ -170,8 +170,8 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
 
 ///Add all the extra bits that represent selectors between the sub-circuits to
 ///the future DenseMleRefs that refer to the modified layer
-fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
-    layers: &mut [LayerEnum<F, Tr>],
+fn add_bits_to_layer_refs<F: FieldExt>(
+    layers: &mut [LayerEnum<F>],
     output_layers: &mut Vec<MleEnum<F>>,
     new_bits: Vec<MleIndex<F>>,
     effected_layer: LayerId,

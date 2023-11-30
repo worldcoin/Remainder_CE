@@ -60,7 +60,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_paths_mle), Box::new(&mut self.leaf_node_paths_mle), Box::new(&mut self.bin_decomp_diff_mle)];
         let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
@@ -85,7 +85,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
             self.leaf_node_paths_mle.clone());
 
         let curr_decision = layers.add_gkr(curr_node_decision_builder);
-        let curr_leaf = layers.add::<_, EmptyLayer<F, Self::Transcript>>(curr_node_leaf_builder);
+        let curr_leaf = layers.add_empty(curr_node_leaf_builder);
 
         let curr_node_decision_leaf_builder = ConcatBuilder::new(curr_decision, curr_leaf);
         let curr_node_decision_leaf_mle_ref = layers.add_gkr(curr_node_decision_leaf_builder).mle_ref();
@@ -140,7 +140,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathMulCheckCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_paths_mle), Box::new(&mut self.leaf_node_paths_mle), Box::new(&mut self.bin_decomp_diff_mle)];
         let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
@@ -165,7 +165,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathMulCheckCircuit<F> {
             self.leaf_node_paths_mle.clone());
 
         let curr_decision_mle_ref = layers.add_gkr(curr_node_decision_builder).mle_ref();
-        let curr_leaf_mle_ref = layers.add::<_, EmptyLayer<F, Self::Transcript>>(curr_node_leaf_builder).mle_ref();
+        let curr_leaf_mle_ref = layers.add_empty(curr_node_leaf_builder).mle_ref();
         let prev_node_right_mle_ref = layers.add_gkr(prev_node_right_builder).mle_ref();
         let prev_node_left_mle_ref = layers.add_gkr(prev_node_left_builder).mle_ref();
 
@@ -227,7 +227,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let num_copy = self.batched_decision_node_paths_mle.len();
         let num_copy_bits = log2(num_copy) as usize;
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let mut combined_decision = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.batched_decision_node_paths_mle.clone());
         let mut combined_leaf = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.batched_leaf_node_paths_mle.clone());
@@ -436,7 +436,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let num_copy = self.batched_decision_node_paths_mle.len();
         let num_copy_bits = log2(num_copy) as usize;
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let mut combined_decision = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.batched_decision_node_paths_mle.clone());
         let mut combined_leaf = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.batched_leaf_node_paths_mle.clone());
@@ -753,7 +753,7 @@ impl<F: FieldExt> GKRCircuit<F> for OneMinusCheckCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.bin_decomp_diff_mle)];
         let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));

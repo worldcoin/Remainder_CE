@@ -16,7 +16,7 @@ pub struct PermutationSubCircuit<F: FieldExt> {
 
 impl<F: FieldExt> PermutationSubCircuit<F> {
     pub fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
-        let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
+        let mut layers: Layers<_> = Layers::new();
 
         let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
 

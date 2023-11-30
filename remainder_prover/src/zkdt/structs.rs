@@ -22,9 +22,9 @@ use serde::{Serialize, Deserialize};
 /// ZKDT specific, with information like number of trees batched (multi-tree setting) 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct ZKDTProof<F: FieldExt, Tr: Transcript<F>> {
+pub struct ZKDTProof<F: FieldExt> {
     /// The GKR proof for a ZKDT circuit
-    pub gkr_proof: GKRProof<F, Tr>,
+    pub gkr_proof: GKRProof<F>,
 
     /// The number of trees in a ZKDT proof
     pub tree_batch_size: usize,

@@ -49,7 +49,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitMultiTree<F> {
 
         // --- NOTE: There is no input layer creation, since this gets handled in the large circuit ---
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinaryRecompCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let num_tree_bits = log2(self.batched_decision_node_path_tree_mle.len()) as usize;
         let num_subcircuit_copies = self.batched_decision_node_path_tree_mle[0].len() as usize;
@@ -181,7 +181,7 @@ impl<F: FieldExt> BinaryRecompCircuitMultiTree<F> {
 
         // --- NOTE: There is no input layer creation, since this gets handled in the large circuit ---
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinaryRecompCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let num_tree_bits = log2(self.batched_decision_node_path_tree_mle.len()) as usize;
         let num_subcircuit_copies = self.batched_decision_node_path_tree_mle[0].len() as usize;

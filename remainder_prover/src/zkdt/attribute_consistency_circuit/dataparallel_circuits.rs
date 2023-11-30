@@ -33,7 +33,7 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
         let _input_prefix_bits = input_layer.fetch_prefix_bits();
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Number of dataparallel circuit copies ---
         let batch_bits = log2(self.permuted_input_data_mle_vec.len()) as usize;
@@ -85,7 +85,7 @@ impl<F: FieldExt> AttributeConsistencyCircuit<F> {
     pub fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
 
         let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
-        let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
+        let mut layers: Layers<_> = Layers::new();
 
         // --- Number of dataparallel circuit copies ---
         let batch_bits = log2(self.permuted_input_data_mle_vec.len()) as usize;

@@ -21,19 +21,22 @@ use super::{
 ///A Layer with 0 num_vars
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct EmptyLayer<F, Tr> {
+pub struct EmptyLayer<F> {
     pub(crate) expr: ExpressionStandard<F>,
     id: LayerId,
-    _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt> Into<LayerEnum<F>> for EmptyLayer<F> {
+    fn into(self) -> LayerEnum<F> {
+        LayerEnum::EmptyLayer(self)
+    }
+}
 
+impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
     fn prove_rounds(
         &mut self,
         _: Claim<F>,
-        _: &mut Self::Transcript,
+        _: &mut impl Transcript<F>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let eval = gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
 
@@ -44,7 +47,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        _: &mut Self::Transcript,
+        _: &mut impl Transcript<F>,
     ) -> Result<(), LayerError> {
         if sumcheck_rounds[0][0] != claim.get_result() {
             return Err(LayerError::VerificationError(
@@ -53,10 +56,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         }
 
         Ok(())
-    }
-
-    fn get_enum(self) -> LayerEnum<F, Tr> {
-        LayerEnum::EmptyLayer(self)
     }
 
     fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
@@ -167,20 +166,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
     ) -> Result<Vec<F>, ClaimError> {
         unimplemented!()
     }
-
-    fn new<L: super::LayerBuilder<F>>(builder: L, id: LayerId) -> Self
-    where
-        Self: Sized,
-    {
-        Self {
-            id,
-            expr: builder.build_expression(),
-            _marker: PhantomData,
-        }
-    }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
+impl<F: FieldExt> EmptyLayer<F> {
     ///Gets this layer's underlying expression
     pub fn expression(&self) -> &ExpressionStandard<F> {
         &self.expr
@@ -190,7 +178,16 @@ impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
         Self {
             id,
             expr,
-            _marker: PhantomData,
+        }
+    }
+
+    pub(crate) fn new<L: super::LayerBuilder<F>>(builder: L, id: LayerId) -> Self
+    where
+        Self: Sized,
+    {
+        Self {
+            id,
+            expr: builder.build_expression(),
         }
     }
 }

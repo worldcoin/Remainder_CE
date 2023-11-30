@@ -28,14 +28,19 @@ use super::gate_helpers::{
     index_mle_indices_gate, prove_round_mul, GateError,
 };
 
+impl<F: FieldExt> Into<LayerEnum<F>> for MulGate<F> {
+    fn into(self) -> LayerEnum<F> {
+        LayerEnum::MulGate(self)
+    }
+}
+
 /// implement the layer trait for addgate struct
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt> Layer<F> for MulGate<F> {
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let first_message = self
             .init_phase_1(claim)
@@ -158,7 +163,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), LayerError> {
         let mut prev_evals = &sumcheck_rounds[0];
 
@@ -345,11 +350,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         &self.layer_id
     }
 
-    ///Create new ConcreteLayer from a LayerBuilder
-    fn new<L: LayerBuilder<F>>(_builder: L, _id: LayerId) -> Self {
-        todo!()
-    }
-
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
@@ -394,10 +394,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         let wlx_evals = claimed_vals;
         Ok(wlx_evals)
     }
-
-    fn get_enum(self) -> crate::layer::layer_enum::LayerEnum<F, Self::Transcript> {
-        LayerEnum::MulGate(self)
-    }
 }
 
 /// very (not) cool addgate
@@ -413,7 +409,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
 /// * `num_copy_bits` - length of `p_2`
 #[derive(Error, Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
-pub struct MulGate<F: FieldExt, Tr: Transcript<F>> {
+pub struct MulGate<F: FieldExt> {
     pub layer_id: LayerId,
     pub nonzero_gates: Vec<(usize, usize, usize)>,
     pub lhs_num_vars: usize,
@@ -425,18 +421,17 @@ pub struct MulGate<F: FieldExt, Tr: Transcript<F>> {
     pub phase_2_mles: Option<[DenseMleRef<F>; 2]>,
     pub num_dataparallel_bits: usize,
     pub beta_scaled: Option<F>,
-    _marker: PhantomData<Tr>,
 }
 
 /// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
+impl<F: std::fmt::Debug + FieldExt> MulGate<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
 
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct MulGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a MulGate<F, Tr>);
+        struct MulGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a MulGate<F>);
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for MulGateCircuitDesc<'a, F, Tr> {
+        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for MulGateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("MulGate")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
@@ -451,7 +446,7 @@ impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
+impl<F: FieldExt> MulGate<F> {
     /// new addgate mle (wrapper constructor)
     pub fn new(
         layer_id: LayerId,
@@ -460,7 +455,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
         rhs: DenseMleRef<F>,
         num_dataparallel_bits: usize,
         beta_scaled: Option<F>,
-    ) -> MulGate<F, Tr> {
+    ) -> MulGate<F> {
         MulGate {
             layer_id,
             nonzero_gates,
@@ -473,7 +468,6 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
             phase_2_mles: None,
             num_dataparallel_bits,
             beta_scaled,
-            _marker: PhantomData,
         }
     }
 

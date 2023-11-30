@@ -134,7 +134,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         let mle_clone = self.mle.clone();
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let diff_builder = from_mle(
@@ -195,7 +195,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
         let num_dataparallel_bits = log2(num_dataparallel_circuit_copies) as usize;
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let diff_builders = self
@@ -544,7 +544,7 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         // --- Create Layers to be added to ---
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let builder = from_mle(
@@ -977,7 +977,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         let mle2_clone = self.mle2.clone();
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let diff_builder = from_mle(
@@ -1075,7 +1075,7 @@ impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
         .to_input_layer::<PublicInputLayer<F, _>>();
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Creates empty layer and adds to circuit ---
         let empty_layer_builder = EmptyLayerBuilder::new(
@@ -1083,7 +1083,7 @@ impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
             self.other_empty_layer_src_mle.clone(),
         );
         let empty_layer_result =
-            layers.add::<_, EmptyLayer<F, Self::Transcript>>(empty_layer_builder);
+            layers.add_empty(empty_layer_builder);
 
         // --- Subtracts from `self.mle` ---
         let sub_builder = EmptyLayerSubBuilder::new(empty_layer_result.clone(), self.mle.clone());
@@ -1551,7 +1551,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
         );
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let builder = BatchedLayer::new(

@@ -25,7 +25,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- First we create the positive binary recomp ---
         let pos_bin_recomp_builder = BinaryRecompBuilder::new(self.diff_signed_bin_decomp.clone());

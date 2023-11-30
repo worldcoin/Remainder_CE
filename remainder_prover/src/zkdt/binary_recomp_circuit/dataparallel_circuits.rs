@@ -36,7 +36,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
         debug_assert_eq!(num_dataparallel_bits, log2(self.batched_diff_signed_bin_decomp_mle.len()) as usize);
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- First we create the positive binary recomp builder ---
         let pos_bin_recomp_builders = self.batched_diff_signed_bin_decomp_mle.iter_mut().map(|diff_signed_bit_decomp_mle| {
@@ -144,7 +144,7 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
         debug_assert_eq!(num_dataparallel_bits, log2(self.batched_diff_signed_bin_decomp_mle.len()) as usize);
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinaryRecompCircuitBatched<F> as GKRCircuit<F>>::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let batched_diff_signed_bin_decomp_mle_prefix_bits = self.batched_diff_signed_bin_decomp_mle[0].get_prefix_bits();
         // --- First we create the positive binary recomp builder ---

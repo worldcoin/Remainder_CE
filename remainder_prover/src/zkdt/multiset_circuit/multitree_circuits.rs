@@ -76,7 +76,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuitMultiTree<F> {
 impl<F: FieldExt> FSMultiSetCircuitMultiTree<F> {
     pub fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
 
-        let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
+        let mut layers: Layers<_> = Layers::new();
         let num_dataparallel_bits = log2(self.decision_node_paths_mle_vec_tree[0].len()) as usize;
         let tree_bits = log2(self.decision_node_paths_mle_vec_tree.len()) as usize;
 
@@ -527,7 +527,7 @@ impl<F: FieldExt> FSMultiSetCircuitMultiTree<F> {
             }
         ).collect_vec();
 
-        let circuit_output_vec = layers.add::<_, EmptyLayer<F, PoseidonTranscript<F>>>(BatchedLayer::new(difference_builder_vec));
+        let circuit_output_vec = layers.add_empty(BatchedLayer::new(difference_builder_vec));
         let circuit_output = combine_zero_mle_ref(circuit_output_vec);
 
         println!("Multiset circuit finished, number of layers {:?}", layers.next_layer_id());

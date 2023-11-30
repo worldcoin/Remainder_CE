@@ -142,7 +142,7 @@ pub fn file_exists(file_path: &String) -> bool {
     }
 }
 
-pub fn hash_layers<F: FieldExt, Tr: Transcript<F>>(layers: &Layers<F, Tr>) -> F {
+pub fn hash_layers<F: FieldExt>(layers: &Layers<F>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 
     layers.0.iter().for_each(|layer| {

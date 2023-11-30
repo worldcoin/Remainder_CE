@@ -27,14 +27,19 @@ use crate::mle::{
 };
 use thiserror::Error;
 
+impl<F: FieldExt> Into<LayerEnum<F>> for AddGate<F> {
+    fn into(self) -> LayerEnum<F> {
+        LayerEnum::AddGate(self)
+    }
+}
+
 /// implement the layer trait for addgate struct
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt> Layer<F> for AddGate<F> {
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         // initialization, get the first sumcheck message
         let first_message = self
@@ -172,7 +177,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), LayerError> {
         let mut prev_evals = &sumcheck_rounds[0];
 
@@ -360,11 +365,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         &self.layer_id
     }
 
-    ///Create new ConcreteLayer from a LayerBuilder
-    fn new<L: LayerBuilder<F>>(_builder: L, _id: LayerId) -> Self {
-        todo!()
-    }
-
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
@@ -408,10 +408,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
         let wlx_evals = claimed_vals;
         Ok(wlx_evals)
     }
-
-    fn get_enum(self) -> crate::layer::layer_enum::LayerEnum<F, Self::Transcript> {
-        LayerEnum::AddGate(self)
-    }
 }
 
 /// very (not) cool addgate
@@ -427,7 +423,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
 /// * `num_copy_bits` - length of `p_2`
 #[derive(Error, Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
-pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
+pub struct AddGate<F: FieldExt> {
     pub layer_id: LayerId,
     pub nonzero_gates: Vec<(usize, usize, usize)>,
     pub lhs_num_vars: usize,
@@ -439,18 +435,17 @@ pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
     pub phase_2_mles: Option<([DenseMleRef<F>; 1], [DenseMleRef<F>; 2])>,
     pub num_dataparallel_bits: usize,
     pub beta_scaled: Option<F>,
-    _marker: PhantomData<Tr>,
 }
 
 /// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
+impl<F: std::fmt::Debug + FieldExt> AddGate<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
 
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct AddGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a AddGate<F, Tr>);
+        struct AddGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a AddGate<F>);
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for AddGateCircuitDesc<'a, F, Tr> {
+        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for AddGateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("AddGate")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
@@ -465,7 +460,7 @@ impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
+impl<F: FieldExt> AddGate<F> {
     /// new addgate mle (wrapper constructor)
     pub fn new(
         layer_id: LayerId,
@@ -474,7 +469,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
         rhs: DenseMleRef<F>,
         num_dataparallel_bits: usize,
         beta_scaled: Option<F>,
-    ) -> AddGate<F, Tr> {
+    ) -> AddGate<F> {
         AddGate {
             layer_id,
             nonzero_gates,
@@ -487,7 +482,6 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
             phase_2_mles: None,
             num_dataparallel_bits,
             beta_scaled,
-            _marker: PhantomData,
         }
     }
 

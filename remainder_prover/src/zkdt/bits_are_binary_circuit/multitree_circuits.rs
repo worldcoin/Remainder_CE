@@ -30,7 +30,7 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitMultiTree<F> {
     pub fn yield_sub_circuit(&mut self) -> Witness<F, <BinDecomp16BitIsBinaryCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> {
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinDecomp16BitIsBinaryCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
         let num_tree_bits = log2(self.bin_decomp_16_bit_mle_tree.len()) as usize;
 
         self.bin_decomp_16_bit_mle_tree.iter_mut().for_each(|mle| {

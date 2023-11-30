@@ -13,7 +13,7 @@ pub(crate) struct NonBatchedAttributeConsistencyCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for NonBatchedAttributeConsistencyCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let attribute_consistency_builder = AttributeConsistencyBuilder::new(
             self.permuted_input_data_mle_vec.clone(),

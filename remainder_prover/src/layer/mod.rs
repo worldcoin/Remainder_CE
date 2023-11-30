@@ -132,14 +132,11 @@ impl std::fmt::Display for LayerId {
 
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
-    /// The transcript that this layer uses
-    type Transcript: Transcript<F>;
-
     /// Creates a sumcheck proof for this Layer
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<SumcheckProof<F>, LayerError>;
 
     ///  Verifies the sumcheck protocol
@@ -147,7 +144,7 @@ pub trait Layer<F: FieldExt> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), LayerError>;
 
     /// Get the claims that this layer makes on other layers
@@ -165,26 +162,17 @@ pub trait Layer<F: FieldExt> {
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError>;
-
-    /// Create new ConcreteLayer from a LayerBuilder
-    fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self
-    where
-        Self: Sized;
-
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript>;
 }
 
 /// Default Layer abstraction
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct GKRLayer<F, Tr> {
+pub struct GKRLayer<F> {
     id: LayerId,
     pub(crate) expression: ExpressionStandard<F>,
     beta: Option<BetaTable<F>>,
-    #[serde(skip)]
-    _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
+impl<F: FieldExt> GKRLayer<F> {
     /// Ingest a claim, initialize beta tables, and do any other
     /// bookkeeping that needs to be done before the sumcheck starts
     fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<(Vec<F>, usize), LayerError> {
@@ -259,26 +247,31 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
             id,
             expression,
             beta: None,
-            _marker: PhantomData,
         }
     }
-}
 
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
-    type Transcript = Tr;
-    fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
+    pub(crate) fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
         Self {
             id,
             expression: builder.build_expression(),
             beta: None,
-            _marker: PhantomData,
         }
     }
+
+}
+
+impl<F: FieldExt> Into<LayerEnum<F>> for GKRLayer<F> {
+    fn into(self) -> LayerEnum<F> {
+        LayerEnum::Gkr(self)
+    }
+}
+
+impl<F: FieldExt> Layer<F> for GKRLayer<F> {
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let val = claim.get_result().clone();
 
@@ -343,7 +336,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_prover_messages: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), LayerError> {
         // --- Keeps track of challenges u_1, ..., u_n to be bound ---
         let mut challenges = vec![];
@@ -613,10 +606,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let mut wlx_evals = claimed_vals.clone();
         wlx_evals.extend(&next_evals);
         Ok(wlx_evals)
-    }
-
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
-        LayerEnum::Gkr(self)
     }
 }
 

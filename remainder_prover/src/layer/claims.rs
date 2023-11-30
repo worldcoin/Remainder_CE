@@ -828,7 +828,7 @@ pub(crate) mod tests {
 
     /// Builds GKR layer whose MLE is the function whose evaluations
     /// on the boolean hypercube are given by `mle_evals`.
-    fn layer_from_evals(mle_evals: Vec<Fr>) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
+    fn layer_from_evals(mle_evals: Vec<Fr>) -> GKRLayer<Fr> {
         let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0), None);
 
         let layer = from_mle(
@@ -837,14 +837,14 @@ pub(crate) mod tests {
             |_, _, _| unimplemented!(),
         );
 
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
+        let layer: GKRLayer<_> = GKRLayer::new(layer, LayerId::Input(0));
 
 
         layer
     }
 
     /// Returns a random MLE expression with an associated GKR layer.
-    fn build_random_mle_layer(num_vars: usize) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
+    fn build_random_mle_layer(num_vars: usize) -> GKRLayer<Fr> {
         let mut rng = test_rng();
         let mle_evals: Vec<Fr> = (0..num_vars).map(|_| Fr::from(rng.gen::<u64>())).collect();
         layer_from_evals(mle_evals)
@@ -914,7 +914,7 @@ pub(crate) mod tests {
     
     // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
     fn compute_expected_claim(
-        layer: &GKRLayer<Fr, PoseidonTranscript<Fr>>,
+        layer: &GKRLayer<Fr>,
         l_star: &Vec<Fr>,
     ) -> Claim<Fr> {
         let mut expr = layer.expression().clone();
@@ -1049,7 +1049,7 @@ pub(crate) mod tests {
             |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]),
             |_, _, _| unimplemented!(),
         );
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
+        let layer: GKRLayer<_> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -1114,7 +1114,7 @@ pub(crate) mod tests {
             |mle| mle.mle_ref().expression(),
             |_, _, _| unimplemented!(),
         );
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
+        let layer: GKRLayer<_> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -1179,7 +1179,7 @@ pub(crate) mod tests {
             |mle| mle.mle_ref().expression(),
             |_, _, _| unimplemented!(),
         );
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
+        let layer: GKRLayer<_> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];

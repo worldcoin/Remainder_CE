@@ -56,7 +56,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuitMultiTree<F> {
 impl<F: FieldExt> InputMultiSetCircuitMultiTree<F> {
     pub fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
 
-        let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
+        let mut layers: Layers<_> = Layers::new();
 
         let num_dataparallel_bits = log2(self.permuted_input_data_mle_vec_tree[0].len()) as usize;
         let num_tree_bits = log2(self.permuted_input_data_mle_vec_tree.len()) as usize;

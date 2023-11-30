@@ -29,13 +29,17 @@ use super::{
 use crate::mle::{dense::DenseMleRef, MleRef};
 use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
 
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt> Into<LayerEnum<F>> for MulGateBatched<F> {
+    fn into(self) -> LayerEnum<F> {
+        LayerEnum::MulGateBatched(self)
+    }
+}
 
+impl<F: FieldExt> Layer<F> for MulGateBatched<F> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         // initialization, first message comes from here
         let first_message = self
@@ -105,7 +109,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
 
             // reduced gate is how we represent the rest of the protocol as a non-batched gate mle
             // this essentially takes in the two mles bound only at the copy bits
-            let reduced_gate: MulGate<F, Tr> = MulGate::new(
+            let reduced_gate: MulGate<F> = MulGate::new(
                 self.layer_id,
                 self.nonzero_gates.clone(),
                 self.lhs.clone(),
@@ -134,7 +138,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), LayerError> {
         let mut prev_evals = &sumcheck_rounds[0];
         let mut challenges = vec![];
@@ -364,11 +368,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         &self.layer_id
     }
 
-    ///Create new ConcreteLayer from a LayerBuilder
-    fn new<L: LayerBuilder<F>>(_builder: L, _id: LayerId) -> Self {
-        unimplemented!()
-    }
-
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
@@ -411,10 +410,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         let wlx_evals = claimed_vals;
         Ok(wlx_evals)
     }
-
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
-        LayerEnum::MulGateBatched(self)
-    }
 }
 
 /// batched impl for gate
@@ -433,7 +428,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
 /// * `reduced_gate` - the non-batched gate that this reduces to after the copy phase
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct MulGateBatched<F: FieldExt, Tr: Transcript<F>> {
+pub struct MulGateBatched<F: FieldExt> {
     pub num_dataparallel_bits: usize,
     pub nonzero_gates: Vec<(usize, usize, usize)>,
     pub lhs: DenseMleRef<F>,
@@ -443,20 +438,19 @@ pub struct MulGateBatched<F: FieldExt, Tr: Transcript<F>> {
     pub g1_challenges: Option<Vec<F>>,
     pub g2_challenges: Option<Vec<F>>,
     pub layer_id: LayerId,
-    pub reduced_gate: Option<MulGate<F, Tr>>,
+    pub reduced_gate: Option<MulGate<F>>,
     pub beta_g2: Option<BetaTable<F>>,
-    _marker: PhantomData<Tr>,
 }
 
 /// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
+impl<F: std::fmt::Debug + FieldExt> MulGateBatched<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
 
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct MulGateBatchedCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a MulGateBatched<F, Tr>);
+        struct MulGateBatchedCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a MulGateBatched<F>);
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for MulGateBatchedCircuitDesc<'a, F, Tr> {
+        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for MulGateBatchedCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("MulGateBatched")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())
@@ -472,7 +466,7 @@ impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
+impl<F: FieldExt> MulGateBatched<F> {
     /// new batched addgate thingy
     pub fn new(
         new_bits: usize,
@@ -493,7 +487,6 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
             layer_id,
             reduced_gate: None,
             beta_g2: None,
-            _marker: PhantomData,
         }
     }
 

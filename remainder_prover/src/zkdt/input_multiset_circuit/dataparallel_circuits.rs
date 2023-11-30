@@ -98,7 +98,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
                 .map_err(GKRError::InputLayerError)?;
             // FS
 
-            let mut layers: Layers<_, Self::Transcript> = Layers::new();
+            let mut layers: Layers<F> = Layers::new();
     
             let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
         
@@ -381,7 +381,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
 impl<F: FieldExt> InputMultiSetCircuit<F> {
     pub fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
 
-        let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
+        let mut layers: Layers<_> = Layers::new();
 
         let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
         for multiplicities_bin_decomp_mle_input in self.multiplicities_bin_decomp_mle_input_vec.iter_mut() {

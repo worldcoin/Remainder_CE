@@ -66,7 +66,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
                 .map_err(GKRError::InputLayerError)?;
             // FS
 
-            let mut layers: Layers<_, Self::Transcript> = Layers::new();
+            let mut layers: Layers<F> = Layers::new();
     
             let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
         
@@ -170,7 +170,7 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
         let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
         // TODO!(ende) change back to ligero
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
     
@@ -264,7 +264,7 @@ pub(crate) struct NonBatchedPermutationCircuit<F: FieldExt> {
 impl<F: FieldExt> GKRCircuit<F> for NonBatchedPermutationCircuit<F> {
     type Transcript = PoseidonTranscript<F>;
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // layer 0: packing
         let input_packing_builder: InputPackingBuilder<F> = InputPackingBuilder::new(
@@ -297,7 +297,7 @@ impl<F: FieldExt> GKRCircuit<F> for NonBatchedPermutationCircuit<F> {
             input_permuted_packed,
         );
 
-        let _difference_mle = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
+        let _difference_mle = layers.add_empty(difference_builder);
 
         todo!()
     }

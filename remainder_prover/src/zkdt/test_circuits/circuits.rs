@@ -52,7 +52,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedFSRandomCircuit<F> {
         let num_dataparallel_bits = log2(num_subcircuit_copies) as usize;
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Create single batched layer ---
         let random_sub_layer_builders = self.batched_mle.iter_mut().map(|mle| {

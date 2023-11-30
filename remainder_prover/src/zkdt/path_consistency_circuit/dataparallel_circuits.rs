@@ -88,7 +88,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedMul<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let num_dataparallel_circuits = self.batched_decision_node_paths_mle.len();
         let num_dataparallel_bits = log2(num_dataparallel_circuits) as usize;
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let mut combined_decision = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.batched_decision_node_paths_mle.clone());
         let mut combined_leaf = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.batched_leaf_node_paths_mle.clone());
@@ -440,7 +440,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedNoMul<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let num_dataparallel_circuits = self.batched_decision_node_paths_mle.len();
         let num_dataparallel_bits = log2(num_dataparallel_circuits) as usize;
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         let mut combined_decision = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(self.batched_decision_node_paths_mle.clone());
         let mut combined_leaf = DenseMle::<F, LeafNode<F>>::combine_mle_batch(self.batched_leaf_node_paths_mle.clone());

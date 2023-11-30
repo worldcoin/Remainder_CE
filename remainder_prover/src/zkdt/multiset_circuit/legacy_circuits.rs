@@ -77,7 +77,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
         let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Layer 0: Compute the "packed" version of the decision and leaf tree nodes ---
         // Note that this also "evaluates" each packed entry at the random characteristic polynomial
@@ -292,7 +292,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         // --- This is our final answer \prod_{i = 0}^n (\prod_{j = 0}^{15} [(r - x)^(2^j) * b_ij + (1 - b_ij)]) for the exponentiated characteristic polynomial
         // evaluated at a random challenge point ---
-        let exponentiated_nodes = layers.add::<_, EmptyLayer<F, Self::Transcript>>(prod_builder_nodes);
+        let exponentiated_nodes = layers.add_empty(prod_builder_nodes);
         
         // **** above is nodes exponentiated ****
         // **** below is all decision nodes on the path multiplied ****
@@ -345,7 +345,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             vector_x_decision = if curr_num_vars != 1 {
                 layers.add_gkr(layer)
             } else {
-                layers.add::<_, EmptyLayer<_, _>>(layer)
+                layers.add_empty(layer)
             }
         }
 
@@ -356,7 +356,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             vector_x_leaf = if curr_num_vars != 1 {
                 layers.add_gkr(layer)
             } else {
-                layers.add::<_, EmptyLayer<_, _>>(layer)
+                layers.add_empty(layer)
             }
         }
 
@@ -368,14 +368,14 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         // --- This is our final answer \prod_{i = 0}^n (r - x_i) for the path node characteristic polynomial
         // evaluated at the same random challenge point ---
-        let path_product = layers.add::<_, EmptyLayer<F, Self::Transcript>>(path_product_builder);
+        let path_product = layers.add_empty(path_product_builder);
 
         let difference_builder = EqualityCheck::new(
             exponentiated_nodes,
             path_product
         );
 
-        let circuit_output = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
+        let circuit_output = layers.add_empty(difference_builder);
 
         println!("Multiset circuit finished, number of layers {:?}", layers.next_layer_id());
 

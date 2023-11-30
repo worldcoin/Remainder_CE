@@ -44,7 +44,7 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuitMultiTree<F> {
             1_f64
           );
   
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // rest of the stuff
         
@@ -117,7 +117,7 @@ impl<F: FieldExt> AttributeConsistencyCircuitMultiTree<F> {
     
     pub fn yield_sub_circuit(&mut self) -> Witness<F, PoseidonTranscript<F>> {
 
-        let mut layers: Layers<_, PoseidonTranscript<F>> = Layers::new();
+        let mut layers: Layers<_> = Layers::new();
 
         let num_tree_bits = log2(self.decision_node_paths_mle_trees_vec.len()) as usize;
         let num_dataparallel_bits = log2(self.decision_node_paths_mle_trees_vec[0].len()) as usize;

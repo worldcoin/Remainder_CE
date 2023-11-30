@@ -21,7 +21,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitBatched<F> {
         let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---
         let num_subcircuit_copies = self.batched_diff_signed_bin_decomp_mle.len();
@@ -122,7 +122,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuitBatched<F> {
         let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F> = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---
         let num_subcircuit_copies = self.multiplicities_bin_decomp_mle_input_vec.len();
