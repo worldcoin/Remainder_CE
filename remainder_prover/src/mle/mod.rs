@@ -18,6 +18,8 @@ pub mod dense;
 pub mod mle_enum;
 pub mod zero;
 
+pub mod evals;
+
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
 /// T should always be a composite type containing Fs. For example (F, F) or a struct containing Fs.

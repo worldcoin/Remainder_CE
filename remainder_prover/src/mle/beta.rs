@@ -2,7 +2,6 @@
 
 use std::fmt::Debug;
 
-
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
@@ -17,8 +16,26 @@ use super::{
 };
 use thiserror::Error;
 
+/// A beta table stores a beta function represented as a list of evaluations
+/// over the hypercube.
+/// A beta function, parameterized by `r \in F^n` is a function
+/// `\beta: {0, 1}^n -> F` defined as follows:
+/// ```
+///     \beta_{r_1, ..., r_n}(x_1, ..., x_n) =
+///         \prod_{i = 1}^n [ r_i * x_i + (1-r_i) * (1 - x_i) ]
+/// ````
+/// The independent variables `x_1, ..., x_n` are called indices and
+/// Therefore, the little-endian evaluation representation of this function is a
+/// list with `2^n` elements:
+/// ```
+///     [
+///         \beta_{r1, ..., r_n}(0, 0, ..., 0),
+///         \beta_{r1, ..., r_n}(1, 0, ..., 0),
+///         ...,
+///         \beta_{r_1, ..., r_n}(1, 1, ..., 1)
+///     ]
+/// ```
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
-/// Beta table struct for a product of mle refs
 pub struct BetaTable<F> {
     pub(crate) layer_claim_vars: Vec<F>,
     ///The bookkeeping table for the beta table
@@ -50,9 +67,12 @@ pub enum BetaError {
     IndexedBitNotFoundError,
 }
 
-/// Computes \tilde{\beta}((x_1, ..., x_n), (y_1, ..., y_n))
+/// Computes `\tilde{\beta}((x_1, ..., x_n), (y_1, ..., y_n))`
 ///
-/// Panics if `challenge_one` and `challenge_two` don't have
+/// # Complexity
+/// `O(n)` field element multiplications and additions.
+/// # Panics
+/// When `challenge_one` and `challenge_two` don't have
 /// the same length!
 pub fn compute_beta_over_two_challenges<F: FieldExt>(
     challenge_one: &Vec<F>,
@@ -140,7 +160,7 @@ impl<F: FieldExt> BetaTable<F> {
         if layer_claim_vars.len() > 0 {
             let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
             let mut cur_table = vec![one_minus_r, r];
-    
+
             // TODO!(vishruti) make this parallelizable
             for claim in layer_claim_vars.iter().skip(1) {
                 let (one_minus_r, r) = (F::one() - claim, claim);
@@ -151,7 +171,7 @@ impl<F: FieldExt> BetaTable<F> {
                 firsthalf.extend(secondhalf.iter());
                 cur_table = firsthalf;
             }
-    
+
             let iterated_bit_indices = (0..layer_claim_vars.len()).collect_vec();
             let cur_table_mle_ref: DenseMleRef<F> =
                 DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
@@ -160,15 +180,13 @@ impl<F: FieldExt> BetaTable<F> {
                 table: cur_table_mle_ref,
                 relevant_indices: iterated_bit_indices,
             })
-        }
-        else {
+        } else {
             Ok(BetaTable {
                 layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
                 relevant_indices: vec![],
             })
         }
-        
     }
 
     /// Fix variable for a beta table
