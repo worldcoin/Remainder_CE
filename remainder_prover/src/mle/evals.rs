@@ -6,7 +6,7 @@ use rayon::{
 };
 use remainder_shared_types::FieldExt;
 
-/// Stores a boolean function `f: {0, 1}^n -> F` represented as a list of all
+/// Stores a boolean function `f: {0, 1}^n -> F` represented as a list of up to
 /// `2^n` evaluations of `f` on the boolean hypercube.
 /// This struct additionally supports operations related to the unique
 /// Multi-linear Extension (MLE) `\tilde{f}` of `f` over the field `F`.
@@ -18,55 +18,55 @@ pub struct Evaluations<F: FieldExt> {
     /// will be referred to as the Most Significant Bit (MSB) and bit `b_0` as
     /// Least Significant Bit (LSB). This ordering is sometimes referred to as
     /// "little-endian" due to its resemblance to little-endian byte ordering.
-    /// # Invariant
-    /// `evals.len()` is a power of two.
+    /// A suffix of contiguous evaluations all equal to `F::zero()` may be
+    /// omitted.
     /// # Example
-    /// The evaluations of a 2-dimensional function are stored as follows:
-    /// ```
-    ///   [ f(0, 0), f(1, 0), f(0, 1), f(1, 1) ]
-    /// ```
+    /// * The evaluations of a 2-dimensional function are stored in the
+    ///   following order: `[ f(0, 0), f(1, 0), f(0, 1), f(1, 1) ]`.
+    /// * The evaluation table `[ 1, 0, 5, 0 ]` may be stored as `[1, 0, 5]` by
+    ///   omitting the trailing zero.
     evals: Vec<F>,
 
-    /// Number of inputs to `f`.
-    /// Invariant: `evals.len() == 2^num_vars`.
+    /// Number of input variables to `f`.
+    /// Invariant: `0 < evals.len() <= 2^num_vars`.
     num_vars: usize,
 }
 
 impl<F: FieldExt> Evaluations<F> {
-    /// Build an evaluation representation from a vector of evaluations ordered
-    /// by MSB first (see documentation comment for `evals` for explanation).
+    /// Builds an evaluation representation for a function `f: {0, 1}^num_vars
+    /// -> F` from a vector of evaluations which are ordered by MSB first (see
+    /// documentation comment for `self.evals` for explanation).
     /// # Example
-    /// ```
-    ///   Evaluations::new(vec![ f(0, 0), f(1, 0), f(0, 1), f(1, 1) ]);
-    /// ```
+    /// For a function `f: {0, 1}^2 -> F`, an evaluations table may be built as:
+    /// `Evaluations::new(2, vec![ f(0, 0), f(1, 0), f(0, 1), f(1, 1) ])`.  In
+    /// case, for example,`f(0, 1) = f(1, 1) = F::zero()`, those values may be
+    /// omitted and the following will generate an equivalent representation:
+    /// `Evaluations::new(2, vec![ f(0, 0), f(1, 0) ])`.
     /// # Panics
-    /// If the length of the input is not a power of two.
-    pub fn new(evals: Vec<F>) -> Self {
-        let num_evals = evals.len();
-
-        assert!(Self::is_power_of_two(num_evals));
-        let num_vars = log2(num_evals) as usize;
-
+    /// If `evals.is_empty()` or if `eval` contains more than `2^num_vars`
+    /// evaluations.
+    pub fn new(num_vars: usize, evals: Vec<F>) -> Self {
+        assert!(0 < evals.len() && evals.len() <= (1 << num_vars));
         Evaluations::<F> { evals, num_vars }
     }
 
-    /// Builds an evaluation representation from a given list of evaluations
-    /// that is ordered by LSB first (or big-endian).
+    /// Builds an evaluation representation for a function `f: {0, 1}^num_vars
+    /// -> F` from a vector of evaluations which are ordered by LSB first, in
+    /// contrast to `new` which assumes an MSB-first representation.
     /// # Example
-    /// For a 2-dimensional function `f: {0, 1}^2 -> F`:
-    /// ```
-    ///   Evaluations::new_from_big_endian(&[ f(0, 0), f(0, 1), f(1, 0), f(1, 1) ]);
-    /// ```
+    /// For a function `f: {0, 1}^2 -> F`, an evaluations table may be built as:
+    /// `Evaluations::new(2, &[ f(0, 0), f(0, 1), f(1, 0), f(1, 1) ])`.  In
+    /// case, for example,`f(1, 0) = f(1, 1) = F::zero()`, those values may be
+    /// omitted and the following will generate an equivalent representation:
+    /// `Evaluations::new(2, &[ f(0, 0), f(0, 1) ])`.
     /// # Panics
-    /// If the length of the input is not a power of two.
-    pub fn new_from_big_endian(big_endian_evals: &[F]) -> Self {
-        let num_evals = big_endian_evals.len();
-
-        assert!(Self::is_power_of_two(num_evals));
-        let num_vars = log2(num_evals) as usize;
+    /// If `evals.is_empty()` or if `eval` contains more than `2^num_vars`
+    /// evaluations.
+    pub fn new_from_big_endian(num_vars: usize, evals: &[F]) -> Self {
+        assert!(0 < evals.len() && evals.len() <= (1 << num_vars));
 
         Self {
-            evals: Self::big_endian_to_little_endian(big_endian_evals),
+            evals: Self::flip_endianess(num_vars, evals),
             num_vars,
         }
     }
@@ -100,11 +100,12 @@ impl<F: FieldExt> Evaluations<F> {
         let var_index = var_index + 1;
         assert!(1 <= var_index && var_index <= self.num_vars);
 
-        // TODO(Makis): Explain how this function works.
-
         let chunk_size: usize = 1 << var_index;
 
         let outer_transform = |chunk: &[F]| {
+            // This produces the wrong result when `self.evals.len()` is not an
+            // exact power of 2.
+            /*
             let window_size: usize = (1 << (var_index - 1)) + 1;
 
             let inner_transform = |window: &[F]| {
@@ -126,22 +127,45 @@ impl<F: FieldExt> Evaluations<F> {
             let inner_bookkeeping_table: Vec<F> = new.collect();
 
             inner_bookkeeping_table
+            */
+            let window_len = 1_usize << (var_index - 1);
+
+            let inner_transform = |i: usize| {
+                let first = *chunk.get(i).unwrap_or(&F::zero());
+                let second = *chunk.get(i + window_len).unwrap_or(&F::zero());
+
+                first + (second - first) * point
+            };
+
+            #[cfg(feature = "parallel")]
+            let evals: Vec<F> = cfg_into_iter!(0..window_len).map(inner_transform).collect();
+
+            #[cfg(not(feature = "parallel"))]
+            let evals: Vec<F> = (0..window_len).into_iter().map(inner_transform).collect();
+
+            evals
         };
 
         // --- So this goes through and applies the formula from [Tha13], bottom ---
         // --- of page 23 ---
         #[cfg(feature = "parallel")]
-        let new = self
+        let evals: Vec<F> = self
             .evals
             .par_chunks(chunk_size)
             .map(outer_transform)
-            .flatten();
+            .flatten()
+            .collect();
 
         #[cfg(not(feature = "parallel"))]
-        let new = self.evals.chunks(chunk_size).map(outer_transform).flatten();
+        let evals: Vec<F> = self
+            .evals
+            .chunks(chunk_size)
+            .map(outer_transform)
+            .flatten()
+            .collect();
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
-        self.evals = new.collect();
+        self.evals = evals;
         self.num_vars -= 1;
     }
 
@@ -180,20 +204,19 @@ impl<F: FieldExt> Evaluations<F> {
         n > 0 && n & (n - 1) == 0
     }
 
-    /// Mirrors the `num_bits` least significant bits of `value`.
+    /// Mirrors the `num_bits` LSBs of `value`.
     /// # Example
     /// ```
     ///     use remainder::mle::evals::Evaluations;
     ///     use remainder_shared_types::Fr;
     ///
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 4), 0b0111);
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 3), 0b1011);
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 2), 0b1101);
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 1), 0b1110);
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 0), 0b1110);
+    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(4, 0b1110), 0b0111);
+    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(3, 0b1110), 0b1011);
+    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(2, 0b1110), 0b1101);
+    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(1, 0b1110), 0b1110);
+    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(0, 0b1110), 0b1110);
     /// ```
-    /// TODO(Makis): Fix Doctest compile error due to the method being private.
-    fn mirror_bits(mut value: usize, num_bits: usize) -> usize {
+    fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
         let mut result: usize = 0;
 
         for _ in 0..num_bits {
@@ -205,26 +228,28 @@ impl<F: FieldExt> Evaluations<F> {
         result | (value << num_bits)
     }
 
-    /// Returns the elements of `big_endian_evals` ordered by their
-    /// "little-endian" index.
+    /// Sorts the elements of `values` by their 0-based index transformed by
+    /// mirroring the `num_bits` LSBs. This operation effectively flips the
+    /// "endianess" of the index ordering. If `values.len() < 2^num_bits`, the
+    /// missing values are assumed to be zeros. The resulting vector is always
+    /// of size `2^num_bits`.
     /// # Example
     /// ```
-    /// big_endian_to_little_endian(&[ a_0b00, a_0b01, a_0b10, a_0b11 ])
-    ///     == vec![a_0b00, a_0b10, a_0b01, a_0b11 ]
+    ///     assert_eq!(flip_endianess(2, &[ 1, 2, 3, 4 ]), vec![ 1, 3, 2, 4 ]);
+    ///     assert_eq!(flip_endianess(2, &[ 1, 2 ]), vec![ 1, 0, 2, 0 ]);
     /// ```
-    ///
     /// TODO(Makis): Benchmark and provide alternative implementations.
-    /// TODO(Makis): Change function name. The terms "big-endian" and
-    /// "little-endian" traditionally refer to byte ordering, not bit ordering,
-    /// and thus they can be confusing.
-    fn big_endian_to_little_endian(big_endian_evals: &[F]) -> Vec<F> {
-        let num_evals = big_endian_evals.len();
-        let n = log2(num_evals) as usize;
+    fn flip_endianess(num_bits: usize, values: &[F]) -> Vec<F> {
+        let num_evals = values.len();
 
-        cfg_into_iter!(0..num_evals)
+        cfg_into_iter!(0..(1 << num_bits))
             .map(|idx| {
-                let mirrored_index = Self::mirror_bits(idx, n);
-                big_endian_evals[mirrored_index]
+                let mirrored_idx = Self::mirror_bits(num_bits, idx);
+                if mirrored_idx >= num_evals {
+                    F::zero()
+                } else {
+                    values[mirrored_idx]
+                }
             })
             .collect()
     }
@@ -233,7 +258,7 @@ impl<F: FieldExt> Evaluations<F> {
 #[cfg(test)]
 mod test {
     use quickcheck::{Arbitrary, TestResult};
-    use remainder_shared_types::Fr;
+    use remainder_shared_types::{halo2curves::group::ff::Field, Fr};
 
     use super::*;
 
@@ -243,6 +268,7 @@ mod test {
 
     impl Arbitrary for Qfr {
         fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            // Qfr(Fr::random(g))
             Qfr(Fr::from_raw([
                 u64::arbitrary(g),
                 u64::arbitrary(g),
@@ -275,35 +301,41 @@ mod test {
     #[test]
     #[should_panic]
     fn evals_new_empty() {
-        let _f: Evaluations<Fr> = Evaluations::new(vec![]);
+        let _f: Evaluations<Fr> = Evaluations::new(0, vec![]);
     }
 
     #[test]
-    fn evals_new_one_element() {
-        let _f = Evaluations::new(vec![Fr::one()]);
+    fn evals_new_1_var() {
+        let _f = Evaluations::new(0, vec![Fr::one()]);
     }
 
     #[test]
-    fn evals_new_four_elements() {
-        let _f = Evaluations::new(vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
+    fn evals_new_2_vars() {
+        let _f = Evaluations::new(2, vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
     }
 
     #[test]
-    fn evals_new_from_big_endian_four_elements() {
-        let _f = Evaluations::new_from_big_endian(&[Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
+    fn evals_new_from_big_endian_2_vars() {
+        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(|v| Fr::from(v)).collect();
+        let expected_evals: Vec<Fr> = [1, 3, 2, 4].into_iter().map(|v| Fr::from(v)).collect();
+
+        let f = Evaluations::new_from_big_endian(2, &evals);
+
+        assert_eq!(f.evals, expected_evals);
     }
 
     #[test]
     fn test_mirror_bits() {
-        assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 4), 0b0111);
-        assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 3), 0b1011);
-        assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 2), 0b1101);
-        assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 1), 0b1110);
-        assert_eq!(Evaluations::<Fr>::mirror_bits(0b1110, 0), 0b1110);
+        assert_eq!(Evaluations::<Fr>::mirror_bits(4, 0b1110), 0b0111);
+        assert_eq!(Evaluations::<Fr>::mirror_bits(3, 0b1110), 0b1011);
+        assert_eq!(Evaluations::<Fr>::mirror_bits(2, 0b1110), 0b1101);
+        assert_eq!(Evaluations::<Fr>::mirror_bits(1, 0b1110), 0b1110);
+        assert_eq!(Evaluations::<Fr>::mirror_bits(0, 0b1110), 0b1110);
     }
 
+    /// Property: mirror_bits(n, mirror_bits(n, value)) == value.
     #[quickcheck]
-    fn test_mirror_bit_prop((value, num_bits): (usize, usize)) -> TestResult {
+    fn test_mirror_bit_prop(num_bits: usize, value: usize) -> TestResult {
         if num_bits > std::mem::size_of::<usize>() * 8 {
             return TestResult::discard();
         }
@@ -311,67 +343,79 @@ mod test {
         TestResult::from_bool(
             value
                 == Evaluations::<Fr>::mirror_bits(
-                    Evaluations::<Fr>::mirror_bits(value, num_bits),
                     num_bits,
+                    Evaluations::<Fr>::mirror_bits(num_bits, value),
                 ),
         )
     }
 
+    /// Extends `vals` to length `2^n` by appending zeros if necessary.
+    fn pad_with_zeros(n: usize, vals: &[Fr]) -> Vec<Fr> {
+        debug_assert!(vals.len() <= (1 << n));
+        let mut vals: Vec<Fr> = vals.to_vec();
+        vals.resize(1 << n, Fr::zero());
+        vals
+    }
+
+    /// Property: flip_endianess(n, flip_endianess(n, vals)) == pad_with_zeros(vals).
     #[quickcheck]
-    fn big_endian_to_little_endian_cancelation_property(mut evals: Vec<Qfr>) -> TestResult {
-        // Shrink `evals` to the nearest power of two.
-        if evals.len() < 2 {
+    fn flip_endianess_cancellation_property(vals: Vec<Qfr>) -> TestResult {
+        if vals.len() == 0 {
             return TestResult::discard();
         }
-        let n = log2(evals.len());
-        let num_evals = 1 << n;
-        evals.resize(num_evals, Qfr(Fr::zero()));
+        let n = log2(vals.len()) as usize;
 
-        let evals: Vec<Fr> = evals.into_iter().map(|x| x.0).collect();
+        let vals: Vec<Fr> = vals.into_iter().map(|x| x.0).collect();
+
+        let padded_vals = pad_with_zeros(n, &vals);
 
         TestResult::from_bool(
-            Evaluations::<Fr>::big_endian_to_little_endian(
-                &Evaluations::<Fr>::big_endian_to_little_endian(&evals),
-            ) == evals,
+            Evaluations::<Fr>::flip_endianess(n, &Evaluations::<Fr>::flip_endianess(n, &vals))
+                == padded_vals,
         )
     }
 
     #[test]
-    fn test_big_endian_to_little_endian() {
-        let zero = Fr::zero();
-        let one = Fr::one();
-
-        let input_1 = [zero];
-        let expected_output_1 = vec![zero];
+    fn test_flip_endianess_0() {
+        let input = [Fr::from(0)];
+        let expected_output = vec![Fr::from(0)];
 
         assert_eq!(
-            Evaluations::<Fr>::big_endian_to_little_endian(&input_1),
-            expected_output_1,
+            Evaluations::<Fr>::flip_endianess(0, &input),
+            expected_output,
         );
+    }
 
-        let input_2 = [zero, one];
-        let expected_output_2 = vec![zero, one];
+    #[test]
+    fn test_flip_endianess_1() {
+        let input = [Fr::from(0), Fr::from(1)];
+        let expected_output = vec![Fr::from(0), Fr::from(1)];
 
         assert_eq!(
-            Evaluations::<Fr>::big_endian_to_little_endian(&input_2),
-            expected_output_2,
+            Evaluations::<Fr>::flip_endianess(1, &input),
+            expected_output,
         );
+    }
 
-        let input_4: Vec<Fr> = [0, 1, 2, 3].into_iter().map(Fr::from).collect();
-        let expected_output_4: Vec<Fr> = [0, 2, 1, 3].into_iter().map(Fr::from).collect();
+    #[test]
+    fn test_flip_endianess_2() {
+        let input: Vec<Fr> = [0, 1, 2, 3].into_iter().map(Fr::from).collect();
+        let expected_output: Vec<Fr> = [0, 2, 1, 3].into_iter().map(Fr::from).collect();
 
         assert_eq!(
-            Evaluations::<Fr>::big_endian_to_little_endian(&input_4),
-            expected_output_4
+            Evaluations::<Fr>::flip_endianess(2, &input),
+            expected_output
         );
+    }
 
-        let input_8: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
-        let expected_output_8: Vec<Fr> =
-            [0, 4, 2, 6, 1, 5, 3, 7].into_iter().map(Fr::from).collect();
+    #[test]
+    fn test_flip_endianess_3() {
+        let input: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
+        let expected_output: Vec<Fr> = [0, 4, 2, 6, 1, 5, 3, 7].into_iter().map(Fr::from).collect();
 
         assert_eq!(
-            Evaluations::<Fr>::big_endian_to_little_endian(&input_8),
-            expected_output_8,
+            Evaluations::<Fr>::flip_endianess(3, &input),
+            expected_output,
         );
     }
 
@@ -380,7 +424,7 @@ mod test {
     /// using the definition of an MLE.
     /// # Complexity
     /// `O(n * 2^n)`
-    fn evaluate_MLE_at_point(f: &Evaluations<Fr>, point: Vec<Fr>) -> Fr {
+    fn evaluate_mle_at_point(f: &Evaluations<Fr>, point: Vec<Fr>) -> Fr {
         assert_eq!(f.num_vars, point.len());
         let n = f.num_vars;
 
@@ -401,20 +445,15 @@ mod test {
             })
     }
 
-    // ======== `fix_variable_at_index` tests ========
-
     #[quickcheck]
-    fn test_fix_variable_evaluation((mut evals, mut point): (Vec<Qfr>, Vec<Qfr>)) -> TestResult {
-        // Shrink evals to nearest power of two.
-        if evals.len() < 2 {
+    fn test_fix_variable_evaluation(mut evals: Vec<Qfr>, mut point: Vec<Qfr>) -> TestResult {
+        if evals.is_empty() {
             return TestResult::discard();
         }
-        let n = (log2(evals.len()) - 1) as usize;
-        let num_evals = 1 << n;
-        evals.resize(num_evals, Qfr(Fr::zero()));
-        assert!(Evaluations::<Fr>::is_power_of_two(evals.len()));
 
-        // Shrink `point` if it contains at least `n` points.
+        let n = log2(evals.len()) as usize;
+
+        // Discard or shrink `point` as necessary
         if point.len() < n {
             return TestResult::discard();
         }
@@ -424,42 +463,36 @@ mod test {
         let evals: Vec<Fr> = evals.into_iter().map(|x| x.0).collect();
         let point: Vec<Fr> = point.into_iter().map(|x| x.0).collect();
 
-        let mut f1 = Evaluations::<Fr>::new(evals.clone());
-        let f2 = Evaluations::<Fr>::new(evals);
+        let mut f1 = Evaluations::<Fr>::new(n, evals.clone());
+        let f2 = Evaluations::<Fr>::new(n, evals);
 
         for i in 0..n {
             f1.fix_variable(point[i]);
         }
-        assert_eq!(f1.evals.len(), 1);
+        assert!(f1.evals.len() == 1);
         assert_eq!(f1.num_vars, 0);
 
         let res1 = f1.evals[0];
-        let res2 = evaluate_MLE_at_point(&f2, point);
+        let res2 = evaluate_mle_at_point(&f2, point);
 
         TestResult::from_bool(res1 == res2)
     }
 
-    /// Property:
-    /// ```
-    ///     f.fix_variable(r) == f.fix_variable_at_index(0, r)
-    /// ```
+    /// Property: f.fix_variable(r) == f.fix_variable_at_index(0, r)
     #[quickcheck]
-    fn fix_variable_at_index_equivalence((mut evals, r): (Vec<Qfr>, Qfr)) -> TestResult {
-        // Shrink evals to nearest power of two.
-        if evals.len() < 4 {
+    fn fix_variable_at_index_equivalence(evals: Vec<Qfr>, r: Qfr) -> TestResult {
+        if evals.len() <= 1 {
             return TestResult::discard();
         }
-        let n = (log2(evals.len()) - 1) as usize;
-        let num_evals = 1 << n;
-        evals.resize(num_evals, Qfr(Fr::zero()));
-        assert!(Evaluations::<Fr>::is_power_of_two(evals.len()));
+        let n = log2(evals.len()) as usize;
+        debug_assert!(n >= 1);
 
         // Unwrap `evals` and `r`
         let evals: Vec<Fr> = evals.into_iter().map(|x| x.0).collect();
         let r = r.0;
 
-        let mut f1 = Evaluations::new(evals.clone());
-        let mut f2 = Evaluations::new(evals);
+        let mut f1 = Evaluations::new(n, evals.clone());
+        let mut f2 = Evaluations::new(n, evals);
 
         f1.fix_variable(r);
         f2.fix_variable_at_index(0, r);
@@ -468,34 +501,42 @@ mod test {
     }
 
     #[test]
-    fn fix_variable_two_vars() {
+    fn evaluate_mle_at_point_2_vars() {
+        // f(x, y) = 5(1 - x)(1-y) + 2x(1-y) + (1-x)y + 3xy
         let input: Vec<Fr> = [5, 2, 1, 3].into_iter().map(Fr::from).collect();
-        let mut f = Evaluations::<Fr>::new(input.clone());
+        let f = Evaluations::<Fr>::new(2, input);
 
-        // Fix 1st variable to 2.
-        f.fix_variable_at_index(0, Fr::from(2));
-        let expected_output: Vec<Fr> = vec![Fr::from(1).neg(), Fr::from(5)];
-
-        assert_eq!(f.evals, expected_output);
-
-        f.fix_variable_at_index(0, Fr::from(3));
-        let expected_output: Vec<Fr> = vec![Fr::from(17)];
-
-        assert_eq!(f.evals, expected_output);
-
+        // Ensure f(2, 3) = 17.
         assert_eq!(
-            evaluate_MLE_at_point(
-                &Evaluations::<Fr>::new(input),
-                vec![Fr::from(2), Fr::from(3)]
-            ),
+            evaluate_mle_at_point(&f, vec![Fr::from(2), Fr::from(3)]),
             Fr::from(17)
         );
     }
 
     #[test]
-    fn fix_variable_at_index_two_vars_fix_first() {
+    fn fix_variable_2_vars() {
+        // f(x, y) = 5(1 - x)(1-y) + 2x(1-y) + (1-x)y + 3xy
         let input: Vec<Fr> = [5, 2, 1, 3].into_iter().map(Fr::from).collect();
-        let mut f = Evaluations::<Fr>::new(input);
+        let mut f = Evaluations::<Fr>::new(2, input.clone());
+
+        // Fix 1st variable to 2:
+        // f(2, y) = ... = -(1-y) + 5y
+        f.fix_variable(Fr::from(2));
+        let expected_output: Vec<Fr> = vec![Fr::from(1).neg(), Fr::from(5)];
+        assert_eq!(f.evals, expected_output);
+
+        // Now fix y to 3.
+        // f(2, 3) = ... = 17.
+        f.fix_variable(Fr::from(3));
+        let expected_output: Vec<Fr> = vec![Fr::from(17)];
+        assert_eq!(f.evals, expected_output);
+    }
+
+    #[test]
+    fn fix_variable_at_index_two_vars_fix_first() {
+        // f(x, y) = 5(1 - x)(1-y) + 2x(1-y) + (1-x)y + 3xy
+        let input: Vec<Fr> = [5, 2, 1, 3].into_iter().map(Fr::from).collect();
+        let mut f = Evaluations::<Fr>::new(2, input);
 
         // Fix 1st variable to 2.
         f.fix_variable_at_index(0, Fr::from(2));
@@ -506,10 +547,12 @@ mod test {
 
     #[test]
     fn fix_variable_at_index_two_vars_fix_second() {
+        // f(x, y) = 5(1 - x)(1-y) + 2x(1-y) + (1-x)y + 3xy
         let input: Vec<Fr> = [5, 2, 1, 3].into_iter().map(Fr::from).collect();
-        let mut f = Evaluations::<Fr>::new(input);
+        let mut f = Evaluations::<Fr>::new(2, input);
 
         // Fix 2nd variable to 2.
+        // f(x, 2) = ... = -3(1-x) + 4x
         f.fix_variable_at_index(1, Fr::from(2));
         let expected_output: Vec<Fr> = vec![Fr::from(3).neg(), Fr::from(4)];
 
@@ -517,8 +560,8 @@ mod test {
     }
 
     #[test]
-    ///test fixing variables in an mle with three variables
-    fn fix_variable_at_index_three_vars_fix_first() {
+    fn fix_variable_at_index_3_vars_fix_first() {
+        // f(x, y, z) = 2x(1-y)(1-z) + 2xy(1-z) + 3x(1-y)z + (1-x)yz + 4xyz
         let evals = vec![
             Fr::from(0),
             Fr::from(2),
@@ -529,18 +572,19 @@ mod test {
             Fr::from(1),
             Fr::from(4),
         ];
+        let mut f = Evaluations::<Fr>::new(3, evals);
+
+        // Fix x = 3:
+        // f(3, y, z) = ... = 6(1-y)(1-z) + 6y(1-z) + 9(1-y)z + 10yz.
+        f.fix_variable_at_index(0, Fr::from(3));
         let expected_output = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
 
-        let mut f = Evaluations::<Fr>::new(evals);
-        // Fix 1st variable to 3.
-        f.fix_variable_at_index(0, Fr::from(3));
-
         assert_eq!(f.evals, expected_output);
     }
 
     #[test]
-    ///test fixing variables in an mle with three variables
-    fn fix_variable_at_index_three_vars_fix_second() {
+    fn fix_variable_at_index_3_vars_fix_second() {
+        // f(x, y, z) = 2x(1-y)(1-z) + 2xy(1-z) + 3x(1-y)z + (1-x)yz + 4xyz
         let evals = vec![
             Fr::from(0),
             Fr::from(2),
@@ -551,18 +595,19 @@ mod test {
             Fr::from(1),
             Fr::from(4),
         ];
+        let mut f = Evaluations::<Fr>::new(3, evals);
+
+        // Fix y = 4:
+        // f(x, 4, z) = ... = 2x(1-z) + 4(1-x)z + 7xz.
+        f.fix_variable_at_index(1, Fr::from(4));
         let expected_output = vec![Fr::from(0), Fr::from(2), Fr::from(4), Fr::from(7)];
 
-        let mut f = Evaluations::<Fr>::new(evals);
-        // Fix 2nd variable to 4.
-        f.fix_variable_at_index(1, Fr::from(4));
-
         assert_eq!(f.evals, expected_output);
     }
 
     #[test]
-    ///test fixing variables in an mle with three variables
-    fn fix_variable_at_index_three_vars_fix_third() {
+    fn fix_variable_at_index_3_vars_fix_third() {
+        // f(x, y, z) = 2x(1-y)(1-z) + 2xy(1-z) + 3x(1-y)z + (1-x)yz + 4xyz
         let evals = vec![
             Fr::from(0),
             Fr::from(2),
@@ -573,11 +618,12 @@ mod test {
             Fr::from(1),
             Fr::from(4),
         ];
-        let expected_output = vec![Fr::from(0), Fr::from(7), Fr::from(5), Fr::from(12)];
+        let mut f = Evaluations::<Fr>::new(3, evals);
 
-        let mut f = Evaluations::<Fr>::new(evals);
-        // Fix 3rd variable to 5.
+        // Fix z = 5:
+        // f(x, y, 5) = 7x(1-y) + 5(1-x)y + 12xy.
         f.fix_variable_at_index(2, Fr::from(5));
+        let expected_output = vec![Fr::from(0), Fr::from(7), Fr::from(5), Fr::from(12)];
 
         assert_eq!(f.evals, expected_output);
     }
