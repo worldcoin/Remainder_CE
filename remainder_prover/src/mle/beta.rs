@@ -17,9 +17,9 @@ use super::{
 use thiserror::Error;
 
 /// A beta table stores a beta function represented as a list of evaluations
-/// over the hypercube.
-/// A beta function, parameterized by `r \in F^n` is a function
-/// `\beta: {0, 1}^n -> F` defined as follows:
+/// over the hypercube.  A beta function (sometimes denoted by "EQ"),
+/// parameterized by `r \in F^n` is a function `\beta: {0, 1}^n -> F` defined as
+/// follows:
 /// ```
 ///     \beta_{r_1, ..., r_n}(x_1, ..., x_n) =
 ///         \prod_{i = 1}^n [ r_i * x_i + (1-r_i) * (1 - x_i) ]
