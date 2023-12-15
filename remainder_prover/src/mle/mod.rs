@@ -42,7 +42,7 @@ where
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
+pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     ///The Field Element this MleRef refers to
     type F: FieldExt;
 

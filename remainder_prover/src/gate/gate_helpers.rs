@@ -289,18 +289,12 @@ pub fn compute_sumcheck_message_copy_add<F: FieldExt>(
 ) -> Result<Vec<F>, GateError> {
     // degree is 2 because we use a beta table
     let degree = 2;
-    let independent_lhs = lhs
-        .mle_indices()
-        .contains(&MleIndex::IndexedBit(round_index));
-    let independent_rhs = rhs
-        .mle_indices()
-        .contains(&MleIndex::IndexedBit(round_index));
 
     let evals_lhs =
-        evaluate_mle_ref_product(&[lhs.clone()], independent_lhs, degree, beta.clone().table)
+        evaluate_mle_ref_product_with_beta(&[lhs.clone()], round_index, degree, beta.clone().table)
             .unwrap();
     let evals_rhs =
-        evaluate_mle_ref_product(&[rhs.clone()], independent_rhs, degree, beta.clone().table)
+        evaluate_mle_ref_product_with_beta(&[rhs.clone()], round_index, degree, beta.clone().table)
             .unwrap();
 
     let eval = evals_lhs + evals_rhs;
