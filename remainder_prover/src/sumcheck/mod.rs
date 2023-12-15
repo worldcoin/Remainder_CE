@@ -252,8 +252,8 @@ pub(crate) fn compute_sumcheck_message<
         _ => Err(ExpressionError::InvalidMleIndex),
     };
 
-    let mle_eval = for<'a, 'b> |mle_ref: &'a Exp::MleRef,
-                                beta_mle_ref: &'b Exp::MleRef|
+    let mle_eval = for<'a, 'b> |mle_ref: &'a DenseMleRef<F>,
+                                beta_mle_ref: &'b DenseMleRef<F>|
                  -> Result<Evals<F>, ExpressionError> {
         // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---
         evaluate_mle_ref_product_with_beta(
@@ -279,8 +279,7 @@ pub(crate) fn compute_sumcheck_message<
     // --- First see whether there are any iterated variables we should go over ---
     // --- Then just call the `evaluate_mle_ref_product` function ---
     let product =
-        // for<'a, 'b> |mle_refs: &'a [Exp::MleRef], beta_table: Option<&'b mut BetaTable<F>>| -> Result<PartialSum<F>, ExpressionError> {
-        for<'a, 'b> |mle_refs: &'a [Exp::MleRef], beta_mle_ref: &'b Exp::MleRef| -> Result<Evals<F>, ExpressionError> {
+        for<'a, 'b> |mle_refs: &'a [DenseMleRef<F>], beta_mle_ref: &'b DenseMleRef<F>| -> Result<Evals<F>, ExpressionError> {
             // have to include the beta table and evaluate as a product
             evaluate_mle_ref_product_with_beta(mle_refs, round_index, max_degree, beta_mle_ref.clone())
                 .map_err(ExpressionError::MleError)
@@ -400,11 +399,11 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
 /// # Errors:
 /// - MleError::EmptyMleList -- when there are zero MLEs within the list
 /// - TODO!(ryancao || vishady): MleError::NotIndexedError -- when ANY MLE is not fully indexed
-pub fn evaluate_mle_ref_product_with_beta<F: FieldExt, T: MleRef<F = F>>(
-    mle_refs: &[T],
+pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
+    mle_refs: &[DenseMleRef<F>],
     round_index: usize,
     degree: usize,
-    beta_ref: T,
+    beta_ref: DenseMleRef<F>,
 ) -> Result<Evals<F>, MleError> {
     for mle_ref in mle_refs {
         if !mle_ref.indexed() {
