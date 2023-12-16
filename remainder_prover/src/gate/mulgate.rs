@@ -24,7 +24,7 @@ use crate::mle::{
 use thiserror::Error;
 
 use super::gate_helpers::{
-    check_fully_bound, compute_full_gate, compute_sumcheck_message_mul_gate, fix_var_gate,
+    check_fully_bound, compute_full_gate, compute_sumcheck_message_no_beta_table, fix_var_gate,
     index_mle_indices_gate, prove_round_mul, GateError,
 };
 
@@ -560,7 +560,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
         self.set_phase_1(phase_1_mles.clone());
 
         // returns the first sumcheck message
-        compute_sumcheck_message_mul_gate(&phase_1_mles, self.num_dataparallel_bits)
+        compute_sumcheck_message_no_beta_table(&phase_1_mles, self.num_dataparallel_bits)
     }
 
     /// initialize bookkeeping tables for phase 2 of sumcheck
@@ -623,6 +623,6 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
 
         // return the first sumcheck message of this phase
 
-        compute_sumcheck_message_mul_gate(&phase_2_mles, self.num_dataparallel_bits)
+        compute_sumcheck_message_no_beta_table(&phase_2_mles, self.num_dataparallel_bits)
     }
 }

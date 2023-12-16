@@ -22,7 +22,7 @@ use crate::{
 
 use super::{
     gate_helpers::{
-        check_fully_bound, compute_full_gate, libra_giraffe, prove_round_copy_mul, GateError,
+        check_fully_bound, compute_full_gate, libra_giraffe, prove_round_dataparallel_phase, GateError,
     },
     mulgate::MulGate,
 };
@@ -53,7 +53,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         let beta_g2 = self.beta_g2.as_mut().unwrap();
         let (lhs, rhs) = (&mut self.lhs, &mut self.rhs);
 
-        let mut challenges: Vec<F> = vec![];
 
         // new bits is the number of bits representing which copy of the gate we are looking at
         transcript
@@ -65,8 +64,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         let mut sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds_copy_phase).map(|round| {
                 let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
-                challenges.push(challenge);
-                let eval = prove_round_copy_mul(
+                let eval = prove_round_dataparallel_phase(
                     lhs,
                     rhs,
                     &beta_g1,
@@ -88,7 +86,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         let final_chal_copy = transcript
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
-        challenges.push(final_chal_copy);
         // fix the variable and everything as you would in the last round of sumcheck
         // the evaluations from this is what you return from the first round of sumcheck in the next phase!
         beta_g2

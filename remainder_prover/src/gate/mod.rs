@@ -5,3 +5,4 @@ pub mod mulgate;
 pub mod batched_mulgate;
 pub mod mulgate_tests;
 pub mod gate_helpers;
+pub mod gate;

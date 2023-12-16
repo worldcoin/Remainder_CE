@@ -10,6 +10,8 @@ use remainder_shared_types::{transcript::Transcript, FieldExt};
 use crate::mle::{dense::DenseMleRef, MleIndex, MleRef};
 use thiserror::Error;
 
+use super::gate::{Operation, perform_operation};
+
 /// Error handling for gate mle construction
 #[derive(Error, Debug, Clone)]
 pub enum GateError {
@@ -46,7 +48,7 @@ pub enum GateError {
 /// * `mle_refs` - MLEs pointing to the actual bookkeeping tables for the above
 /// * `independent_variable` - whether the `x` from above resides within at least one of the `mle_refs`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus one!)
-fn evaluate_mle_ref_product_gate<F: FieldExt>(
+fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
     degree: usize,
@@ -246,7 +248,7 @@ pub fn compute_sumcheck_message_add_gate<F: FieldExt>(
         })
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
-    let eval_lhs = evaluate_mle_ref_product_gate(lhs, independent_variable_lhs, degree).unwrap();
+    let eval_lhs = evaluate_mle_ref_product_no_beta_table(lhs, independent_variable_lhs, degree).unwrap();
 
     // --- Similarly, but for the RHS ---
     let independent_variable_rhs = rhs
@@ -258,7 +260,7 @@ pub fn compute_sumcheck_message_add_gate<F: FieldExt>(
         })
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
-    let eval_rhs = evaluate_mle_ref_product_gate(rhs, independent_variable_rhs, degree).unwrap();
+    let eval_rhs = evaluate_mle_ref_product_no_beta_table(rhs, independent_variable_rhs, degree).unwrap();
 
     // --- The evaluations of g_i(x) (i.e. the univariate sumcheck message) are simply the sum of those of the two sides ---
     let eval = eval_lhs + eval_rhs;
@@ -412,11 +414,11 @@ pub fn prove_round_mul<F: FieldExt>(
     mles: &mut [impl MleRef<F = F>],
 ) -> Result<Vec<F>, GateError> {
     fix_var_gate(mles, round_index - 1, challenge);
-    compute_sumcheck_message_mul_gate(mles, round_index)
+    compute_sumcheck_message_no_beta_table(mles, round_index)
 }
 
 /// compute sumcheck message without a beta table!!!!!!!!!!!!!!
-pub fn compute_sumcheck_message_mul_gate<F: FieldExt>(
+pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
     mles: &[impl MleRef<F = F>],
     round_index: usize,
 ) -> Result<Vec<F>, GateError> {
@@ -434,7 +436,7 @@ pub fn compute_sumcheck_message_mul_gate<F: FieldExt>(
         })
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
-    let eval = evaluate_mle_ref_product_gate(mles, independent_variable, degree).unwrap();
+    let eval = evaluate_mle_ref_product_no_beta_table(mles, independent_variable, degree).unwrap();
 
     let Evals(evaluations) = eval;
 
@@ -442,7 +444,7 @@ pub fn compute_sumcheck_message_mul_gate<F: FieldExt>(
 }
 
 /// does all the necessary updates when proving a round for batched gate mles
-pub fn prove_round_copy_mul<F: FieldExt>(
+pub fn prove_round_dataparallel_phase<F: FieldExt>(
     // phase_lhs: &mut DenseMleRef<F>,
     // phase_rhs: &mut DenseMleRef<F>,
     lhs: &mut DenseMleRef<F>,
@@ -453,6 +455,7 @@ pub fn prove_round_copy_mul<F: FieldExt>(
     challenge: F,
     nonzero_gates: &Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
+    operation: Operation<F>,
 ) -> Result<Vec<F>, GateError> {
     // phase_lhs.fix_variable(round_index - 1, challenge);
     // phase_rhs.fix_variable(round_index - 1, challenge);
@@ -466,6 +469,7 @@ pub fn prove_round_copy_mul<F: FieldExt>(
         rhs,
         &beta_g2.table,
         &beta_g1.table,
+        operation,
         nonzero_gates,
         num_dataparallel_bits,
     )
@@ -477,6 +481,7 @@ pub fn libra_giraffe<F: FieldExt>(
     f3_p2_y: &DenseMleRef<F>,
     beta_g2: &DenseMleRef<F>,
     beta_g1: &DenseMleRef<F>,
+    operation: Operation<F>,
     nonzero_gates: &Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
 ) -> Result<Vec<F>, GateError> {
@@ -570,7 +575,7 @@ pub fn libra_giraffe<F: FieldExt>(
                     // --- The evals we want are simply the element-wise product of the accessed evals ---
                     let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = g1_z_successors
                         .zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y))
-                        .map(|(g1_z_eval, (f2_eval, f3_eval))| g1_z_eval * f2_eval * f3_eval);
+                        .map(|(g1_z_eval, (f2_eval, f3_eval))| g1_z_eval * perform_operation(f2_eval, f3_eval, operation));
 
                     let evals_iter: Box<dyn Iterator<Item = F>> =
                         Box::new(g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y);

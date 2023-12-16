@@ -17,8 +17,8 @@ use crate::mle::{
 };
 
 use super::gate_helpers::{
-    check_fully_bound, compute_sumcheck_message_mul_gate, fix_var_gate, index_mle_indices_gate,
-    libra_giraffe, prove_round_copy_mul, prove_round_mul, GateError,
+    check_fully_bound, compute_sumcheck_message_no_beta_table, fix_var_gate, index_mle_indices_gate,
+    libra_giraffe, prove_round_dataparallel_phase, prove_round_mul, GateError,
 };
 
 /// very (not) cool addgate
@@ -158,7 +158,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateTest<F, Tr> {
         self.set_phase_1(phase_1_mles.clone());
 
         // returns the first sumcheck message
-        compute_sumcheck_message_mul_gate(&phase_1_mles, self.num_dataparallel_bits)
+        compute_sumcheck_message_no_beta_table(&phase_1_mles, self.num_dataparallel_bits)
     }
 
     /// initialize bookkeeping tables for phase 2 of sumcheck
@@ -221,7 +221,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateTest<F, Tr> {
 
         // return the first sumcheck message of this phase
 
-        compute_sumcheck_message_mul_gate(&phase_2_mles, self.num_dataparallel_bits)
+        compute_sumcheck_message_no_beta_table(&phase_2_mles, self.num_dataparallel_bits)
     }
 
     /// dummy sumcheck prover for this, testing purposes
@@ -578,7 +578,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MulGateBatchedTest<F, Tr> {
 
             let evals =
                 // prove_round_copy(&mut lhs, &mut rhs, beta_g2, round, chal).unwrap();
-                prove_round_copy_mul(lhs, rhs, &beta_g1, beta_g2, round, chal, &self.nonzero_gates, self.new_bits - round).unwrap();
+                prove_round_dataparallel_phase(lhs, rhs, &beta_g1, beta_g2, round, chal, &self.nonzero_gates, self.new_bits - round).unwrap();
 
             messages.push((evals, challenge));
         }
