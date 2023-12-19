@@ -299,6 +299,74 @@ pub(crate) fn compute_sumcheck_message<
 }
 
 
+/// evaluate mle refs when there's no independent variable, i.e.
+/// sum_{x_1, ..., x_n} V_1(x_1, ..., x_n) * V_2(x_1, ..., x_n),
+/// with x_1, ..., x_n over the boolean hypercube
+/// the evaluation will be one single field element
+pub fn evaluate_mle_ref_product_no_inde_var<F: FieldExt>(
+    mle_refs: &[impl MleRef<F = F>],
+) -> Result<F, MleError> {
+
+    // --- Gets the total number of iterated variables across all MLEs within this product ---
+    let max_num_vars = mle_refs
+        .iter()
+        .map(|mle_ref| mle_ref.num_vars())
+        .max()
+        .ok_or(MleError::EmptyMleList)?;
+
+    // eval_count = 1 because there's no independent variable
+    let eval_count = 1;
+
+    //iterate across all pairs of evaluations
+    let evals = cfg_into_iter!((0..1 << max_num_vars)).fold(
+        #[cfg(feature = "parallel")]
+        || vec![F::zero(); eval_count],
+        #[cfg(not(feature = "parallel"))]
+        vec![F::zero(); eval_count],
+        |mut acc, index| {
+            //get the product of all evaluations over 0/1/..degree
+            let evals = mle_refs
+                .iter()
+                .map(|mle_ref| {
+                    let zero = F::zero();
+                    let index = if mle_ref.num_vars() < max_num_vars {
+                        let max = 1 << mle_ref.num_vars();
+                        index % max
+                    } else {
+                        index
+                    };
+                    let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
+
+                    std::iter::once(first)
+                })
+                .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
+                .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
+                .unwrap();
+
+            acc.iter_mut()
+                .zip(evals)
+                .for_each(|(acc, eval)| *acc += eval);
+            acc
+        },
+    );
+
+    #[cfg(feature = "parallel")]
+    let evals = evals.reduce(
+        || vec![F::zero(); eval_count],
+        |mut acc, partial| {
+            acc.iter_mut()
+                .zip(partial)
+                .for_each(|(acc, partial)| *acc += partial);
+            acc
+        },
+    );
+
+    assert_eq!(evals.len(), 1);
+
+    Ok(evals[0])
+}
+
+
 /// evaluates in the evalutaion form,
 /// the mle that is the result of a product of mles
 /// the mles could be beta tables as well
@@ -421,49 +489,6 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
         evaluate_mle_ref_product(&mle_refs, degree)
     } else {
 
-        // when none of the mles has an independent variable,
-        // it means we have a selector bit, which means,
-        // beta's num_var >= 1 + any of one mle_refs' num_var
-        // when beta's num_var = 1, it means all the mle_refs'
-        // num_var = 0, i.e. their bookkeeping tables are of 
-        // size 1, i.e. fix_variable is called on them max times
-        // we just product them together, no need to call
-        // evaluate_mle_ref_product.
-        if beta_ref.num_vars() == 1 {
-
-            // mle_refs should be be fixed
-            mle_refs.iter().for_each(
-                |mle_ref| {
-                    assert_eq!(mle_ref.num_vars(), 0)
-                }
-            );
-
-            let mle_refs_product = mle_refs.iter().fold(
-                F::one(), |acc, mle_ref| {
-                    acc * mle_ref.bookkeeping_table()[0]
-                }
-            );
-
-            let partials = beta_ref.bookkeeping_table().into_iter().map(
-                |val| {
-                    *val * mle_refs_product
-                }
-            ).collect_vec();
-
-            let eval_count = degree + 1;
-        
-            let step: F = partials[1] - partials[0];
-            let mut counter = 2;
-            let evals =
-            std::iter::once(partials[0]).chain(std::iter::successors(Some(partials[1]), move |item| if counter < eval_count {counter += 1; Some(*item + step)} else {None})).collect_vec();
-        
-            return Ok(Evals(evals));
-
-        }
-
-        // we only need two evaluation, see comments below
-        let beta_eval_degree = 1;
-
         // say we have some expression like sum_{x_1, x_2} beta(x_0, x_1, x_2) \times V(x_1, x_2)^2
         //     (we assume there's only one extra variable in the beginning of beta mle,
         //     otherwise, we need to use beta split)
@@ -476,14 +501,7 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
 
         let mut mle_ref_first_half = mle_refs.to_vec().clone();
         mle_ref_first_half.push(beta_first_half);
-        // println!("mle_ref_first_half {:?}", mle_ref_first_half);
-        let eval_first_half = evaluate_mle_ref_product(&mle_ref_first_half, beta_eval_degree)?;
-
-        // because we only get the evaluation form, what we get from evaluate_mle_ref_product is the
-        // evaluations of this expression: sum_{x_2} beta(0, X, x_2) \times V(X, x_2)^2
-        // so, we only need two evaluations, with X = 0, and X = 1, to compute:
-        // sum_{x_1, x_2} beta(0, x_1, x_2) \times V(x_1, x_2)^2 (remember the sum is over boolean hypercube)
-        let beta_at_0 = eval_first_half.0[0] + eval_first_half.0[1];
+        let beta_at_0 = evaluate_mle_ref_product_no_inde_var(&mle_ref_first_half)?;
 
 
         // we do the same for the second half of the beta table, i.e. fixing x_0 = 1
@@ -495,9 +513,8 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
 
         let mut mle_ref_second_half = mle_refs.to_vec().clone();
         mle_ref_second_half.push(beta_second_half);
-        // println!("mle_ref_second_half {:?}", mle_ref_second_half);
-        let eval_second_half = evaluate_mle_ref_product(&mle_ref_second_half, beta_eval_degree)?;
-        let beta_at_1 = eval_second_half.0[0] + eval_second_half.0[1];
+        let beta_at_1 = evaluate_mle_ref_product_no_inde_var(&mle_ref_second_half)?;
+
 
         // partials have two elements (beta is always linear)
         // 1. sum_{x_1, x_2} beta(x_0 = 0, x_1, x_2) \times V(x_1, x_2)^2
