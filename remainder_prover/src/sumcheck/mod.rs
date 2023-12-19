@@ -367,9 +367,12 @@ pub fn evaluate_mle_ref_product_no_inde_var<F: FieldExt>(
 }
 
 
-/// evaluates in the evalutaion form,
-/// the mle that is the result of a product of mles
-/// the mles could be beta tables as well
+/// evaluates the product of multiple mle refs (in the evalutaion form),
+/// (the mles could be beta tables as well)
+/// the returned results can be the following expresssion: 
+/// sum_{x_2, ..., x_n} V_1(X, x_2, ..., x_n) * V_2(X, x_2, ..., x_n) * V_2(X, x_2, x_3),
+/// evaluated at X = 0, 1, ..., degree
+/// note that when one of the mle_refs have less variables, there's a wrap around: % max
 pub fn evaluate_mle_ref_product<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     degree: usize,
@@ -443,21 +446,15 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
     Ok(Evals(evals))
 }
 
-// pub fn evaluate_mle_ref_product_beta_only_variable<F: FieldExt>(
-//     mle_refs: &[impl MleRef<F = F>],
-//     degree: usize,
-// ) -> Result<Evals<F>, MleError> {
-//     todo!()
-// }
 
-/// Evaluates a product in the form factor V_1(x_1, ..., x_n) * V_2(y_1, ..., y_m) * ...
 /// @param mle_refs: The list of MLEs which are being multiplied together
-/// @param independent_variable: Whether there is an iterated variable (for this)
-///     sumcheck round) which we need to take into account
+/// @param round_index: Which round of sumcheck it currently is
+/// @param degree: The degree of the indexed variable
+/// @param beta_ref: The beta table which is being multiplied with the MLEs
 ///
 /// # Errors:
 /// - MleError::EmptyMleList -- when there are zero MLEs within the list
-/// - TODO!(ryancao || vishady): MleError::NotIndexedError -- when ANY MLE is not fully indexed
+/// - MleError::NotIndexedError -- when any MLE within the list is not indexed
 pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
     mle_refs: &[DenseMleRef<F>],
     round_index: usize,
@@ -492,7 +489,8 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
         // say we have some expression like sum_{x_1, x_2} beta(x_0, x_1, x_2) \times V(x_1, x_2)^2
         //     (we assume there's only one extra variable in the beginning of beta mle,
         //     otherwise, we need to use beta split)
-        // first we fix x_0 = 0, and want to get sum_{x_1, x_2} beta(0, x_1, x_2) \times V(x_1, x_2)^2
+        // First,
+        // we fix x_0 = 0, and want to get sum_{x_1, x_2} beta(0, x_1, x_2) \times V(x_1, x_2)^2
         let beta_first_half: DenseMleRef<F> = DenseMle::new_from_raw(
             beta_ref.bookkeeping_table().iter().step_by(2).cloned().collect_vec(),
             beta_ref.get_layer_id(),
@@ -504,7 +502,9 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
         let beta_at_0 = evaluate_mle_ref_product_no_inde_var(&mle_ref_first_half)?;
 
 
-        // we do the same for the second half of the beta table, i.e. fixing x_0 = 1
+        // Then,
+        // we do the same for the second half of the beta table, i.e. fixing x_0 = 1,
+        // to get sum_{x_1, x_2} beta(1, x_1, x_2) \times V(x_1, x_2)^2
         let beta_second_half: DenseMleRef<F> = DenseMle::new_from_raw(
             beta_ref.bookkeeping_table().iter().skip(1).step_by(2).cloned().collect_vec(),
             beta_ref.get_layer_id(),
