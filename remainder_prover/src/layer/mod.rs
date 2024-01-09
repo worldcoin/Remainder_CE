@@ -177,7 +177,8 @@ pub trait Layer<F: FieldExt> {
 
 /// Default Layer abstraction
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct GKRLayer<F, Tr> {
+#[serde(bound = "F: FieldExt")]
+pub struct GKRLayer<F: FieldExt, Tr> {
     id: LayerId,
     pub(crate) expression: ExpressionStandard<F>,
     beta: Option<BetaTable<F>>,

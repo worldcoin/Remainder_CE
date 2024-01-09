@@ -12,6 +12,7 @@ use remainder_shared_types::FieldExt;
 
 use super::{
     dense::{DenseMle, DenseMleRef},
+    evals::Evaluations,
     MleIndex, MleRef,
 };
 use thiserror::Error;
@@ -36,7 +37,8 @@ use thiserror::Error;
 ///     ]
 /// ```
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
-pub struct BetaTable<F> {
+#[serde(bound = "F: FieldExt")]
+pub struct BetaTable<F: FieldExt> {
     pub(crate) layer_claim_vars: Vec<F>,
     ///The bookkeeping table for the beta table
     /// TODO(Get rid of BetaTable's reliance on the DenseMleRef type; Create a shared subtype for the shared behavior)
@@ -206,7 +208,8 @@ impl<F: FieldExt> BetaTable<F> {
                         mle_index.bind_index(challenge);
                     }
                 }
-                self.table.bookkeeping_table = new_beta_table;
+                self.table.bookkeeping_table =
+                    Evaluations::<F>::new(self.table.num_vars - 1, new_beta_table);
                 self.table.num_vars -= 1;
                 Ok(())
             }

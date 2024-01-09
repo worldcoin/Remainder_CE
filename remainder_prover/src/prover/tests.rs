@@ -1,9 +1,9 @@
+use crate::prover::helpers::test_circuit;
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
-use crate::prover::helpers::test_circuit;
 
 use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 
@@ -14,8 +14,8 @@ use crate::{
         empty_layer::EmptyLayer,
         from_mle,
         layer_enum::LayerEnum,
-        LayerBuilder, LayerId,
         simple_builders::{EqualityCheck, ZeroBuilder},
+        LayerBuilder, LayerId,
     },
     mle::{
         dense::{DenseMle, Tuple2},
@@ -833,6 +833,7 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
         mle_2
             .mle_ref()
             .bookkeeping_table
+            .to_vec()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -851,7 +852,10 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
         batch_bits: 1,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof1_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof1_optimized.json")),
+    );
 
     // panic!();
 }
@@ -877,6 +881,7 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
         mle_2
             .mle_ref()
             .bookkeeping_table
+            .to_vec()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -894,7 +899,10 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
         neg_mle_2,
     };
 
-    test_circuit(circuit, Some(Path::new("./mul_gate_simple_proof_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./mul_gate_simple_proof_optimized.json")),
+    );
 
     // panic!();
 }
@@ -1307,7 +1315,10 @@ fn test_gkr_circuit_with_precommit() {
 
     let circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
 
-    test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gkr_proof_with_precommit_optimized.json")),
+    );
 }
 
 // ------------------------------------ INPUT LAYER TESTING CIRCUITS ------------------------------------
@@ -1370,6 +1381,7 @@ fn test_gkr_gate_simplest_circuit() {
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
             .bookkeeping_table
+            .to_vec()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1403,6 +1415,7 @@ fn test_gkr_gate_batched_simplest_circuit() {
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
             .bookkeeping_table
+            .to_vec()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1416,7 +1429,10 @@ fn test_gkr_gate_batched_simplest_circuit() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof2_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof2_optimized.json")),
+    );
 }
 
 #[test]
@@ -1438,7 +1454,7 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
     );
 
     let negmle = DenseMle::new_from_iter(
-        mle.mle_ref().bookkeeping_table[0..size2]
+        mle.mle_ref().bookkeeping_table.repr()[0..size2]
             .iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1452,7 +1468,10 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof_uneven_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof_uneven_optimized.json")),
+    );
 }
 
 // ------------------------------------ EMPTY LAYER CIRCUITS ------------------------------------
@@ -1657,8 +1676,11 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
             output_input_vec.iter().map(|mle| mle.mle_ref()).collect(),
             new_bits,
         );
-        let mut output_input_full: DenseMle<F, F> =
-            DenseMle::new_from_raw(output_input.bookkeeping_table, LayerId::Input(0), None);
+        let mut output_input_full: DenseMle<F, F> = DenseMle::new_from_raw(
+            output_input.bookkeeping_table.to_vec(),
+            LayerId::Input(0),
+            None,
+        );
         input_layer
             .add_extra_mle(Box::new(&mut output_input_full))
             .unwrap();

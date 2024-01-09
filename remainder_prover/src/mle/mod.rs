@@ -56,7 +56,7 @@ pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
 
     fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>>;
 
-    fn original_bookkeeping_table(&self) -> &Vec<Self::F>;
+    fn original_bookkeeping_table(&self) -> &[Self::F];
 
     // ///Moves the claim by adding the new_claims to the left of the originals
     // fn relabel_mle_indices(&mut self, new_claims: &[MleIndex<Self::F>]);
