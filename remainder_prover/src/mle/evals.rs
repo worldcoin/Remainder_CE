@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use rayon::{
@@ -5,12 +7,33 @@ use rayon::{
     slice::ParallelSlice,
 };
 use remainder_shared_types::FieldExt;
+use serde::{Deserialize, Serialize};
+
+/// Mirrors the `num_bits` LSBs of `value`.
+/// # Example
+/// ```
+///     assert_eq!(mirror_bits(4, 0b1110), 0b0111);
+///     assert_eq!(mirror_bits(3, 0b1110), 0b1011);
+///     assert_eq!(mirror_bits(2, 0b1110), 0b1101);
+///     assert_eq!(mirror_bits(1, 0b1110), 0b1110);
+///     assert_eq!(mirror_bits(0, 0b1110), 0b1110);
+/// ```
+fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
+    let mut result: usize = 0;
+
+    for _ in 0..num_bits {
+        result = (result << 1) | (value & 1);
+        value >>= 1;
+    }
+
+    // Add back the remaining bits.
+    result | (value << num_bits)
+}
 
 /// Stores a boolean function `f: {0, 1}^n -> F` represented as a list of up to
 /// `2^n` evaluations of `f` on the boolean hypercube.
-/// This struct additionally supports operations related to the unique
-/// Multi-linear Extension (MLE) `\tilde{f}` of `f` over the field `F`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
 pub struct Evaluations<F: FieldExt> {
     /// To understand how evaluations are stored, let's index `f`'s input bits
     /// as follows: `f(b_0, b_1, ..., b_{n-1})`. Evaluations are ordered using
@@ -30,9 +53,15 @@ pub struct Evaluations<F: FieldExt> {
     /// Number of input variables to `f`.
     /// Invariant: `0 < evals.len() <= 2^num_vars`.
     num_vars: usize,
+
+    zero: F,
 }
 
 impl<F: FieldExt> Evaluations<F> {
+    pub fn new_zero() -> Self {
+        Self::new(0, vec![F::zero()])
+    }
+
     /// Builds an evaluation representation for a function `f: {0, 1}^num_vars
     /// -> F` from a vector of evaluations which are ordered by MSB first (see
     /// documentation comment for `self.evals` for explanation).
@@ -47,7 +76,11 @@ impl<F: FieldExt> Evaluations<F> {
     /// evaluations.
     pub fn new(num_vars: usize, evals: Vec<F>) -> Self {
         assert!(0 < evals.len() && evals.len() <= (1 << num_vars));
-        Evaluations::<F> { evals, num_vars }
+        Evaluations::<F> {
+            evals,
+            num_vars,
+            zero: F::zero(),
+        }
     }
 
     /// Builds an evaluation representation for a function `f: {0, 1}^num_vars
@@ -68,7 +101,38 @@ impl<F: FieldExt> Evaluations<F> {
         Self {
             evals: Self::flip_endianess(num_vars, evals),
             num_vars,
+            zero: F::zero(),
         }
+    }
+
+    fn num_vars(&self) -> usize {
+        self.num_vars
+    }
+
+    pub fn iter(&self, fixed_variable_index: usize) -> EvaluationsIterator<F> {
+        let lsb_mask = (1_usize << fixed_variable_index) - 1;
+
+        EvaluationsIterator::<F> {
+            evals: self,
+            lsb_mask,
+            current_eval_index: 0,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.evals.len()
+    }
+
+    pub fn repr(&self) -> &[F] {
+        &self.evals
+    }
+
+    pub fn to_vec(&self) -> Vec<F> {
+        self.evals.clone()
+    }
+
+    pub fn get(&self, idx: usize) -> Option<&F> {
+        self.evals.get(idx)
     }
 
     /// Fix the `var_index`-th bit of the Multi-linear Extension `\tilde{f}(x_0,
@@ -204,30 +268,6 @@ impl<F: FieldExt> Evaluations<F> {
         n > 0 && n & (n - 1) == 0
     }
 
-    /// Mirrors the `num_bits` LSBs of `value`.
-    /// # Example
-    /// ```
-    ///     use remainder::mle::evals::Evaluations;
-    ///     use remainder_shared_types::Fr;
-    ///
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(4, 0b1110), 0b0111);
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(3, 0b1110), 0b1011);
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(2, 0b1110), 0b1101);
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(1, 0b1110), 0b1110);
-    ///     assert_eq!(Evaluations::<Fr>::mirror_bits(0, 0b1110), 0b1110);
-    /// ```
-    fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
-        let mut result: usize = 0;
-
-        for _ in 0..num_bits {
-            result = (result << 1) | (value & 1);
-            value >>= 1;
-        }
-
-        // Add back the remaining bits.
-        result | (value << num_bits)
-    }
-
     /// Sorts the elements of `values` by their 0-based index transformed by
     /// mirroring the `num_bits` LSBs. This operation effectively flips the
     /// "endianess" of the index ordering. If `values.len() < 2^num_bits`, the
@@ -244,7 +284,7 @@ impl<F: FieldExt> Evaluations<F> {
 
         cfg_into_iter!(0..(1 << num_bits))
             .map(|idx| {
-                let mirrored_idx = Self::mirror_bits(num_bits, idx);
+                let mirrored_idx = mirror_bits(num_bits, idx);
                 if mirrored_idx >= num_evals {
                     F::zero()
                 } else {
@@ -252,6 +292,47 @@ impl<F: FieldExt> Evaluations<F> {
                 }
             })
             .collect()
+    }
+}
+
+impl<F: FieldExt> Index<usize> for Evaluations<F> {
+    type Output = F;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.evals.get(index).unwrap_or(&self.zero)
+    }
+}
+
+pub struct EvaluationsIterator<'a, F: FieldExt> {
+    evals: &'a Evaluations<F>,
+    lsb_mask: usize,
+    current_eval_index: usize,
+}
+
+impl<'a, F: FieldExt> Iterator for EvaluationsIterator<'a, F> {
+    type Item = (F, F);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let num_vars = self.evals.num_vars();
+        let num_evals = 1_usize << (num_vars - 1);
+
+        if self.current_eval_index < num_evals {
+            let lsb_idx = self.current_eval_index & self.lsb_mask;
+            let msb_idx = (self.current_eval_index & (!self.lsb_mask)) << 1;
+            let mid_idx = self.lsb_mask + 1;
+
+            let idx1 = mirror_bits(num_vars, lsb_idx | msb_idx);
+            let idx2 = mirror_bits(num_vars, lsb_idx | mid_idx | msb_idx);
+
+            self.current_eval_index += 1;
+
+            let val1 = self.evals[idx1];
+            let val2 = self.evals[idx2];
+
+            Some((val1, val2))
+        } else {
+            None
+        }
     }
 }
 
@@ -326,11 +407,11 @@ mod test {
 
     #[test]
     fn test_mirror_bits() {
-        assert_eq!(Evaluations::<Fr>::mirror_bits(4, 0b1110), 0b0111);
-        assert_eq!(Evaluations::<Fr>::mirror_bits(3, 0b1110), 0b1011);
-        assert_eq!(Evaluations::<Fr>::mirror_bits(2, 0b1110), 0b1101);
-        assert_eq!(Evaluations::<Fr>::mirror_bits(1, 0b1110), 0b1110);
-        assert_eq!(Evaluations::<Fr>::mirror_bits(0, 0b1110), 0b1110);
+        assert_eq!(mirror_bits(4, 0b1110), 0b0111);
+        assert_eq!(mirror_bits(3, 0b1110), 0b1011);
+        assert_eq!(mirror_bits(2, 0b1110), 0b1101);
+        assert_eq!(mirror_bits(1, 0b1110), 0b1110);
+        assert_eq!(mirror_bits(0, 0b1110), 0b1110);
     }
 
     /// Property: mirror_bits(n, mirror_bits(n, value)) == value.
@@ -340,13 +421,7 @@ mod test {
             return TestResult::discard();
         }
 
-        TestResult::from_bool(
-            value
-                == Evaluations::<Fr>::mirror_bits(
-                    num_bits,
-                    Evaluations::<Fr>::mirror_bits(num_bits, value),
-                ),
-        )
+        TestResult::from_bool(value == mirror_bits(num_bits, mirror_bits(num_bits, value)))
     }
 
     /// Extends `vals` to length `2^n` by appending zeros if necessary.
@@ -417,6 +492,48 @@ mod test {
             Evaluations::<Fr>::flip_endianess(3, &input),
             expected_output,
         );
+    }
+
+    #[test]
+    fn test_eval_iterator_1() {
+        let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
+        let f = Evaluations::<Fr>::new_from_big_endian(3, &evals);
+
+        let mut it = f.iter(0);
+
+        assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(1)));
+        assert_eq!(it.next().unwrap(), (Fr::from(2), Fr::from(3)));
+        assert_eq!(it.next().unwrap(), (Fr::from(4), Fr::from(5)));
+        assert_eq!(it.next().unwrap(), (Fr::from(6), Fr::from(7)));
+        assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn test_eval_iterator_2() {
+        let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
+        let f = Evaluations::<Fr>::new_from_big_endian(3, &evals);
+
+        let mut it = f.iter(1);
+
+        assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(2)));
+        assert_eq!(it.next().unwrap(), (Fr::from(1), Fr::from(3)));
+        assert_eq!(it.next().unwrap(), (Fr::from(4), Fr::from(6)));
+        assert_eq!(it.next().unwrap(), (Fr::from(5), Fr::from(7)));
+        assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn test_eval_iterator_3() {
+        let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
+        let f = Evaluations::<Fr>::new_from_big_endian(3, &evals);
+
+        let mut it = f.iter(2);
+
+        assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(4)));
+        assert_eq!(it.next().unwrap(), (Fr::from(1), Fr::from(5)));
+        assert_eq!(it.next().unwrap(), (Fr::from(2), Fr::from(6)));
+        assert_eq!(it.next().unwrap(), (Fr::from(3), Fr::from(7)));
+        assert_eq!(it.next(), None);
     }
 
     /// Helper function for testing purposes.

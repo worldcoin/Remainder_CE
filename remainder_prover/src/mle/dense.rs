@@ -11,9 +11,9 @@ use rand::seq::index;
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
-use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
+use super::{evals::Evaluations, mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
+use crate::layer::{batched::combine_mles, combine_mle_refs::combine_mle_refs, LayerId};
 use crate::{expression::ExpressionStandard, layer::claims::Claim};
-use crate::layer::{batched::combine_mles, LayerId, combine_mle_refs::combine_mle_refs};
 use remainder_shared_types::FieldExt;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -115,9 +115,7 @@ impl<'a, F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> IntoIterator
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(
-    items: &[Vec<F>; L],
-) -> Vec<F> {
+pub fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec<F>; L]) -> Vec<F> {
     // --- All the items within should be the same size ---
     let max_size = items.iter().map(|mle_ref| mle_ref.len()).max().unwrap();
 
@@ -197,8 +195,11 @@ impl<F: FieldExt> DenseMle<F, F> {
             .chain((0..self.num_iterated_vars()).map(|_| MleIndex::Iterated))
             .collect();
         DenseMleRef {
-            bookkeeping_table: self.mle.clone(),
-            original_bookkeeping_table: self.mle.clone(),
+            bookkeeping_table: Evaluations::<F>::new(self.num_iterated_vars, self.mle.clone()),
+            original_bookkeeping_table: Evaluations::<F>::new(
+                self.num_iterated_vars,
+                self.mle.clone(),
+            ),
             mle_indices: mle_indices.clone(),
             original_mle_indices: mle_indices,
             num_vars: self.num_iterated_vars,
@@ -221,18 +222,19 @@ impl<F: FieldExt> DenseMle<F, F> {
 
     ///Splits the mle into a new mle with a tuple of size 2 as it's element
     pub fn split_tree(&self, num_split: usize) -> DenseMle<F, TupleTree<F>> {
-
         let mut first_half = vec![];
         let mut second_half = vec![];
-        self.mle.clone().into_iter().enumerate().for_each(
-            |(idx, elem)| {
-                if (idx % (num_split*2)) < (num_split) {
+        self.mle
+            .clone()
+            .into_iter()
+            .enumerate()
+            .for_each(|(idx, elem)| {
+                if (idx % (num_split * 2)) < (num_split) {
                     first_half.push(elem);
                 } else {
                     second_half.push(elem);
                 }
-            }
-        );
+            });
 
         DenseMle::new_from_raw(
             [first_half, second_half],
@@ -266,7 +268,7 @@ impl<F: FieldExt> DenseMle<F, F> {
             combine_mles(mle_batch_ref_combined, batched_bits as usize);
 
         DenseMle::new_from_raw(
-            mle_batch_ref_combined_ref.bookkeeping_table,
+            mle_batch_ref_combined_ref.bookkeeping_table.repr().to_vec(),
             LayerId::Input(0),
             None,
         )
@@ -356,8 +358,11 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
             .collect_vec();
 
         DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec(),
-            original_bookkeeping_table: self.mle[0].to_vec(),
+            bookkeeping_table: Evaluations::<F>::new(new_num_iterated_vars, self.mle[0].clone()),
+            original_bookkeeping_table: Evaluations::<F>::new(
+                new_num_iterated_vars,
+                self.mle[0].clone(),
+            ),
             mle_indices: mle_indices.clone(),
             original_mle_indices: mle_indices,
             num_vars: new_num_iterated_vars,
@@ -382,8 +387,11 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
             .collect_vec();
 
         DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec(),
-            original_bookkeeping_table: self.mle[1].to_vec(),
+            bookkeeping_table: Evaluations::<F>::new(new_num_iterated_vars, self.mle[1].clone()),
+            original_bookkeeping_table: Evaluations::<F>::new(
+                new_num_iterated_vars,
+                self.mle[1].clone(),
+            ),
             mle_indices: mle_indices.clone(),
             original_mle_indices: mle_indices,
             num_vars: new_num_iterated_vars,
@@ -409,16 +417,15 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
             combine_mles(tuple2_mle_batch_ref_combined, batched_bits as usize);
 
         DenseMle::new_from_raw(
-            tuple2_mle_batch_ref_combined_ref.bookkeeping_table,
+            tuple2_mle_batch_ref_combined_ref
+                .bookkeeping_table
+                .repr()
+                .to_vec(),
             LayerId::Input(0),
             None,
         )
     }
 }
-
-
-
-
 
 #[derive(Debug, Clone)]
 ///Newtype around a tuple of field elements
@@ -457,7 +464,6 @@ impl<F: FieldExt> From<(F, F)> for TupleTree<F> {
     }
 }
 
-
 impl<F: FieldExt> DenseMle<F, TupleTree<F>> {
     ///Gets an MleRef to the first element in the tuple
     pub fn first(&'_ self, splitter: usize) -> DenseMleRef<F> {
@@ -469,17 +475,20 @@ impl<F: FieldExt> DenseMle<F, TupleTree<F>> {
             .clone()
             .into_iter()
             .flatten()
-            .chain(
-                repeat_n(MleIndex::Iterated, splitter).chain(
-                    std::iter::once(MleIndex::Fixed(false)) 
-                    .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars - splitter))
-                ),
-            )
+            .chain(repeat_n(MleIndex::Iterated, splitter).chain(
+                std::iter::once(MleIndex::Fixed(false)).chain(repeat_n(
+                    MleIndex::Iterated,
+                    new_num_iterated_vars - splitter,
+                )),
+            ))
             .collect_vec();
 
         DenseMleRef {
-            bookkeeping_table: self.mle[0].to_vec(),
-            original_bookkeeping_table: self.mle[0].to_vec(),
+            bookkeeping_table: Evaluations::<F>::new(new_num_iterated_vars, self.mle[0].clone()),
+            original_bookkeeping_table: Evaluations::<F>::new(
+                new_num_iterated_vars,
+                self.mle[0].clone(),
+            ),
             mle_indices: mle_indices.clone(),
             original_mle_indices: mle_indices,
             num_vars: new_num_iterated_vars,
@@ -497,17 +506,20 @@ impl<F: FieldExt> DenseMle<F, TupleTree<F>> {
             .clone()
             .into_iter()
             .flatten()
-            .chain(
-                repeat_n(MleIndex::Iterated, splitter).chain(
-                    std::iter::once(MleIndex::Fixed(true)) 
-                    .chain(repeat_n(MleIndex::Iterated, new_num_iterated_vars - splitter))
-                ),
-            )
+            .chain(repeat_n(MleIndex::Iterated, splitter).chain(
+                std::iter::once(MleIndex::Fixed(true)).chain(repeat_n(
+                    MleIndex::Iterated,
+                    new_num_iterated_vars - splitter,
+                )),
+            ))
             .collect_vec();
 
         DenseMleRef {
-            bookkeeping_table: self.mle[1].to_vec(),
-            original_bookkeeping_table: self.mle[1].to_vec(),
+            bookkeeping_table: Evaluations::<F>::new(new_num_iterated_vars, self.mle[1].clone()),
+            original_bookkeeping_table: Evaluations::<F>::new(
+                new_num_iterated_vars,
+                self.mle[1].clone(),
+            ),
             mle_indices: mle_indices.clone(),
             original_mle_indices: mle_indices,
             num_vars: new_num_iterated_vars,
@@ -516,21 +528,20 @@ impl<F: FieldExt> DenseMle<F, TupleTree<F>> {
             indexed: false,
         }
     }
-
 }
-
 
 // --------------------------- MleRef stuff ---------------------------
 
 /// An [MleRef] that is dense
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DenseMleRef<F> {
+#[serde(bound = "F: FieldExt")]
+pub struct DenseMleRef<F: FieldExt> {
     ///The bookkeeping table of this MleRefs evaluations over the boolean hypercube
-    pub bookkeeping_table: Vec<F>,
+    pub bookkeeping_table: Evaluations<F>,
     /// The original bookkeeping table (that does not get destructively modified during fix variable)
     #[serde(skip)]
-    #[serde(default = "Vec::new")]
-    pub original_bookkeeping_table: Vec<F>,
+    #[serde(default = "Evaluations::new_zero")]
+    pub original_bookkeeping_table: Evaluations<F>,
     ///The MleIndices of this MleRef e.g. V(0, 1, r_1, r_2)
     pub mle_indices: Vec<MleIndex<F>>,
     /// The original mle indices (not modified during fix var)
@@ -557,11 +568,11 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
     type F = F;
 
     fn bookkeeping_table(&self) -> &[F] {
-        &self.bookkeeping_table
+        &self.bookkeeping_table.repr()
     }
 
-    fn original_bookkeeping_table(&self) -> &Vec<Self::F> {
-        &self.original_bookkeeping_table
+    fn original_bookkeeping_table(&self) -> &[Self::F] {
+        &self.original_bookkeeping_table.repr()
     }
 
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
@@ -675,7 +686,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
             .flatten();
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
-        self.bookkeeping_table = new.collect();
+        self.bookkeeping_table = Evaluations::<F>::new(self.num_vars, new.collect());
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
             // dbg!(&self);
@@ -724,10 +735,9 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         let new = self.bookkeeping_table().chunks(2).map(transform);
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
-        self.bookkeeping_table = new.collect();
+        self.bookkeeping_table = Evaluations::<F>::new(self.num_vars, new.collect());
         // --- Just returns the final value if we've collapsed the table into a single value ---
         if self.bookkeeping_table.len() == 1 {
-
             // dbg!(&self);
             let mut fixed_claim_return = Claim::new_raw(
                 self.mle_indices
@@ -788,7 +798,7 @@ mod tests {
         let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.to_vec(), mle_exp.mle);
     }
     #[test]
     ///test fixing variables in an mle with three variables
@@ -811,7 +821,7 @@ mod tests {
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.to_vec(), mle_exp.mle);
     }
 
     #[test]
@@ -836,7 +846,7 @@ mod tests {
         let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     #[test]
@@ -863,7 +873,7 @@ mod tests {
         let mle_vec_exp = vec![Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     // ======== `fix_variable_at_index` tests ========
@@ -883,7 +893,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 2nd variable to 1.
         mle_ref.fix_variable_at_index(1, Fr::from(1));
@@ -892,7 +902,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     #[test]
@@ -909,7 +919,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 1st variable to 1.
         mle_ref.fix_variable_at_index(0, Fr::from(1));
@@ -918,7 +928,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     #[test]
@@ -945,7 +955,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 2nd variable to 4.
         mle_ref.fix_variable_at_index(1, Fr::from(4));
@@ -954,7 +964,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 3rd variable to 5.
         mle_ref.fix_variable_at_index(2, Fr::from(5));
@@ -963,7 +973,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     #[test]
@@ -990,7 +1000,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 3rd variable to 5.
         mle_ref.fix_variable_at_index(2, Fr::from(5));
@@ -999,7 +1009,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 2nd variable to 4.
         mle_ref.fix_variable_at_index(1, Fr::from(4));
@@ -1008,7 +1018,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     #[test]
@@ -1035,7 +1045,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 1st variable to 3.
         mle_ref.fix_variable_at_index(0, Fr::from(3));
@@ -1044,7 +1054,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 3rd variable to 5.
         mle_ref.fix_variable_at_index(2, Fr::from(5));
@@ -1053,7 +1063,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     #[test]
@@ -1080,7 +1090,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 3rd variable to 5.
         mle_ref.fix_variable_at_index(2, Fr::from(5));
@@ -1089,7 +1099,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 1st variable to 3.
         mle_ref.fix_variable_at_index(0, Fr::from(3));
@@ -1098,7 +1108,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     #[test]
@@ -1125,7 +1135,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 1st variable to 3.
         mle_ref.fix_variable_at_index(0, Fr::from(3));
@@ -1134,7 +1144,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 2nd variable to 4.
         mle_ref.fix_variable_at_index(1, Fr::from(4));
@@ -1143,7 +1153,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
     #[test]
 
@@ -1170,7 +1180,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 2nd variable to 4.
         mle_ref.fix_variable_at_index(1, Fr::from(4));
@@ -1179,7 +1189,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
 
         // Fix 1st variable to 3.
         mle_ref.fix_variable_at_index(0, Fr::from(3));
@@ -1188,7 +1198,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(mle_ref.bookkeeping_table, mle_exp.mle);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_exp.mle);
     }
 
     #[test]
@@ -1262,7 +1272,7 @@ mod tests {
         assert!(
             mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]
         );
-        assert!(mle_ref.bookkeeping_table == mle_vec);
+        assert_eq!(mle_ref.bookkeeping_table.repr(), mle_vec);
     }
 
     #[test]
