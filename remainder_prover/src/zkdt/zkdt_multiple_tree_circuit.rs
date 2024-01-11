@@ -61,7 +61,6 @@ use super::{
     },
     input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit,
     multiset_circuit::circuits::FSMultiSetCircuit,
-    path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
 
@@ -162,6 +161,8 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
             ],
         )
         .unwrap();
+
+        let (mut combined_circuit_layers, combined_circuit_output_layers) = (Layers::new(), vec![]);
 
         // --- Manually add the layers and output layers from the circuit involving gate MLEs ---
         let updated_combined_output_layers = path_consistency_circuit_batched
