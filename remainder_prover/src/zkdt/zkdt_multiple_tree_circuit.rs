@@ -162,8 +162,6 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
         )
         .unwrap();
 
-        let (mut combined_circuit_layers, combined_circuit_output_layers) = (Layers::new(), vec![]);
-
         // --- Manually add the layers and output layers from the circuit involving gate MLEs ---
         let updated_combined_output_layers = path_consistency_circuit_batched
             .add_subcircuit_layers_to_combined_layers(
