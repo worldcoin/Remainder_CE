@@ -359,8 +359,6 @@ pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
 
 /// does all the necessary updates when proving a round for batched gate mles
 pub fn prove_round_dataparallel_phase<F: FieldExt>(
-    // phase_lhs: &mut DenseMleRef<F>,
-    // phase_rhs: &mut DenseMleRef<F>,
     lhs: &mut DenseMleRef<F>,
     rhs: &mut DenseMleRef<F>,
     beta_g1: &BetaTable<F>,
@@ -371,13 +369,10 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
     num_dataparallel_bits: usize,
     operation: BinaryOperation,
 ) -> Result<Vec<F>, GateError> {
-    // phase_lhs.fix_variable(round_index - 1, challenge);
-    // phase_rhs.fix_variable(round_index - 1, challenge);
     beta_g2.beta_update(round_index - 1, challenge).unwrap();
     // need to separately update these because the phase_lhs and phase_rhs has no version of them
     lhs.fix_variable(round_index - 1, challenge);
     rhs.fix_variable(round_index - 1, challenge);
-    // compute_sumcheck_message_copy_phase_mul(&[phase_lhs.clone(), phase_rhs.clone()], beta, round_index)
     libra_giraffe(
         lhs,
         rhs,
@@ -402,7 +397,10 @@ pub fn libra_giraffe<F: FieldExt>(
     // always always ALWAYS 3!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // because we have a beta(g2, p2), f2(p2, x), and f3(p2, y)
 
-    let degree = 3;
+    let degree = match operation {
+        BinaryOperation::Add => 2,
+        BinaryOperation::Mul => 3
+    };
 
     if !beta_g2.indexed() {
         return Err(GateError::BetaTableNotIndexed);
