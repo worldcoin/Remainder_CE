@@ -394,9 +394,11 @@ pub fn libra_giraffe<F: FieldExt>(
     nonzero_gates: &Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
 ) -> Result<Vec<F>, GateError> {
-    // always always ALWAYS 3!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // because we have a beta(g2, p2), f2(p2, x), and f3(p2, y)
-
+    
+    // when we have an add gate, we can distribute the beta table over the dataparallel challenges
+    // so we only multiply to the function with the x variables or y variables one at a time
+    // when we have a mul gate, we have to multiply the beta table over the dataparallel challenges
+    // with the function on the x variables and the function on the y variables
     let degree = match operation {
         BinaryOperation::Add => 2,
         BinaryOperation::Mul => 3
