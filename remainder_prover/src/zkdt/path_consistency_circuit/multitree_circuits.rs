@@ -179,8 +179,8 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedNoMulMultiTree<F> {
         let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_two_times_plus_sign.num_iterated_vars() - num_dataparallel_bits - num_tree_bits));
         let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_two_times_plus_sign.num_iterated_vars() - num_dataparallel_bits - num_tree_bits));
 
-        let res_leaf = layers.add_gate(nonzero_gates_add_leaf.clone(), flattened_two_times_plus_sign.mle_ref(), flattened_curr_leaf.mle_ref(), num_dataparallel_bits + num_tree_bits, BinaryOperation::Add); // ID is 5
-        let res_dec = layers.add_gate(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_two_times_plus_sign.mle_ref(), num_dataparallel_bits + num_tree_bits, BinaryOperation::Add); // ID is 6
+        let res_leaf = layers.add_gate(nonzero_gates_add_leaf.clone(), flattened_two_times_plus_sign.mle_ref(), flattened_curr_leaf.mle_ref(), Some(num_dataparallel_bits + num_tree_bits), BinaryOperation::Add); // ID is 5
+        let res_dec = layers.add_gate(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_two_times_plus_sign.mle_ref(), Some(num_dataparallel_bits + num_tree_bits), BinaryOperation::Add); // ID is 6
 
 
         let res_dec_zero = ZeroBuilder::new(res_dec);
@@ -348,9 +348,9 @@ impl<F: FieldExt> PathCheckCircuitBatchedNoMulMultiTree<F> {
         let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (flattened_two_times_plus_sign.num_iterated_vars() - num_dataparallel_bits - num_tree_bits));
         let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (flattened_two_times_plus_sign.num_iterated_vars() - num_dataparallel_bits - num_tree_bits));
 
-        let res_dec = combined_layers.add_gate(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_two_times_plus_sign.mle_ref(), num_dataparallel_bits + num_tree_bits, BinaryOperation::Add); // ID is 5
+        let res_dec = combined_layers.add_gate(nonzero_gates_add_decision.clone(), flattened_curr_dec.mle_ref(), flattened_two_times_plus_sign.mle_ref(), Some(num_dataparallel_bits + num_tree_bits), BinaryOperation::Add); // ID is 5
 
-        let res_leaf = combined_layers.add_gate(nonzero_gates_add_leaf.clone(), flattened_two_times_plus_sign.mle_ref(), flattened_curr_leaf.mle_ref(), num_dataparallel_bits + num_tree_bits, BinaryOperation::Add); // ID is 6
+        let res_leaf = combined_layers.add_gate(nonzero_gates_add_leaf.clone(), flattened_two_times_plus_sign.mle_ref(), flattened_curr_leaf.mle_ref(), Some(num_dataparallel_bits + num_tree_bits), BinaryOperation::Add); // ID is 6
 
         let res_dec_zero = ZeroBuilder::new(res_dec);
         let res_leaf_zero = ZeroBuilder::new(res_leaf);

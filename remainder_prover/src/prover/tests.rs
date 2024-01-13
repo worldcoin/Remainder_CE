@@ -658,7 +658,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
         });
 
         let first_layer_output =
-            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), 0, BinaryOperation::Add);
+            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), None, BinaryOperation::Add);
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
@@ -694,7 +694,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
         let mut nonzero_gates = vec![(0,0,0)];
 
         let first_layer_output =
-            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), 0, BinaryOperation::Add);
+            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), None, BinaryOperation::Add);
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
@@ -742,7 +742,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.mle_2.mle_ref(),
-            0, 
+            None, 
             BinaryOperation::Mul,
         );
 
@@ -750,7 +750,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.neg_mle_2.mle_ref(),
-            0, 
+            None, 
             BinaryOperation::Mul,
         );
 
@@ -758,7 +758,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
             nonzero_gates,
             pos_mul_output.mle_ref(),
             neg_mul_output.mle_ref(),
-            0,
+            None,
             BinaryOperation::Add,
         );
 
@@ -809,7 +809,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.neg_mle_2.mle_ref(),
-            self.batch_bits,
+            Some(self.batch_bits),
             BinaryOperation::Mul,
         );
 
@@ -817,7 +817,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.mle_2.mle_ref(),
-            self.batch_bits,
+            Some(self.batch_bits),
             BinaryOperation::Mul,
         );
 
@@ -825,7 +825,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
             nonzero_gates,
             pos_mul_output.mle_ref(),
             neg_mul_output.mle_ref(),
-            self.batch_bits,
+            Some(self.batch_bits),
             BinaryOperation::Add,
         );
 
@@ -869,7 +869,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitCombined<F> {
         });
 
         let first_layer_output =
-            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), 0, BinaryOperation::Add);
+            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), None, BinaryOperation::Add);
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
@@ -914,7 +914,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedGateCircuit<F> {
             nonzero_gates,
             self.mle.mle_ref(),
             self.negmle.mle_ref(),
-            self.batch_bits,
+            Some(self.batch_bits),
             BinaryOperation::Add,
         );
 

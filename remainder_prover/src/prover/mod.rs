@@ -94,7 +94,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         nonzero_gates: Vec<(usize, usize, usize)>,
         lhs: DenseMleRef<F>,
         rhs: DenseMleRef<F>,
-        num_dataparallel_bits: usize,
+        num_dataparallel_bits: Option<usize>,
         gate_operation: BinaryOperation,
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
@@ -114,7 +114,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
 
         // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
         // evaluating over all values in the boolean hypercube which includes dataparallel bits
-        let num_dataparallel_vals = 1 << num_dataparallel_bits;
+        let num_dataparallel_vals = 1 << (num_dataparallel_bits.unwrap_or(0));
         let res_table_num_entries = (max_gate_val + 1) * num_dataparallel_vals;
         self.0.push(gate.get_enum());
 

@@ -89,8 +89,8 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
 
         let nonzero_gates = create_wiring_from_size(1 << (prev_node_left_mle_ref.num_vars() - self.num_copy));
 
-        let res_negative = layers.add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref, 0, BinaryOperation::Add);
-        let res_positive = layers.add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref, 0, BinaryOperation::Add);
+        let res_negative = layers.add_gate(nonzero_gates.clone(), curr_node_decision_leaf_mle_ref.clone(), prev_node_left_mle_ref, None, BinaryOperation::Add);
+        let res_positive = layers.add_gate(nonzero_gates, curr_node_decision_leaf_mle_ref, prev_node_right_mle_ref, None, BinaryOperation::Add);
 
         let sign_bit_sum_builder: SignBitProductBuilder<F> = SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative);
         let final_res = layers.add_gkr(sign_bit_sum_builder);
@@ -167,20 +167,20 @@ impl<F: FieldExt> GKRCircuit<F> for PathMulCheckCircuit<F> {
         let nonzero_gates_add_decision = decision_add_wiring_from_size(1 << (prev_node_left_mle_ref.num_vars()));
         let nonzero_gates_add_leaf = leaf_add_wiring_from_size(1 << (prev_node_left_mle_ref.num_vars()));
 
-        let res_negative_dec = layers.add_gate(nonzero_gates_add_decision.clone(), curr_decision_mle_ref.clone(), prev_node_left_mle_ref.clone(), 0, BinaryOperation::Add);
-        let res_positive_dec = layers.add_gate(nonzero_gates_add_decision, curr_decision_mle_ref, prev_node_right_mle_ref.clone(), 0, BinaryOperation::Add);
+        let res_negative_dec = layers.add_gate(nonzero_gates_add_decision.clone(), curr_decision_mle_ref.clone(), prev_node_left_mle_ref.clone(), None, BinaryOperation::Add);
+        let res_positive_dec = layers.add_gate(nonzero_gates_add_decision, curr_decision_mle_ref, prev_node_right_mle_ref.clone(), None, BinaryOperation::Add);
 
-        let res_negative_leaf = layers.add_gate(nonzero_gates_add_leaf.clone(), prev_node_left_mle_ref, curr_leaf_mle_ref.clone(), 0, BinaryOperation::Add);
-        let res_positive_leaf = layers.add_gate(nonzero_gates_add_leaf, prev_node_right_mle_ref, curr_leaf_mle_ref, 0, BinaryOperation::Add);
+        let res_negative_leaf = layers.add_gate(nonzero_gates_add_leaf.clone(), prev_node_left_mle_ref, curr_leaf_mle_ref.clone(), None, BinaryOperation::Add);
+        let res_positive_leaf = layers.add_gate(nonzero_gates_add_leaf, prev_node_right_mle_ref, curr_leaf_mle_ref, None, BinaryOperation::Add);
 
 
         let nonzero_gates_mul_decision = decision_mul_wiring_from_size(1 << (pos_sign_bits.num_iterated_vars()));
         let nonzero_gates_mul_leaf = leaf_mul_wiring_from_size(1 << (pos_sign_bits.num_iterated_vars()));
 
-        let dec_pos_prod = layers.add_gate(nonzero_gates_mul_decision.clone(), pos_sign_bits.mle_ref(), res_positive_dec.mle_ref(), 0, BinaryOperation::Mul);
-        let dec_neg_prod = layers.add_gate(nonzero_gates_mul_decision, neg_sign_bits.mle_ref(), res_negative_dec.mle_ref(), 0, BinaryOperation::Mul);
-        let leaf_pos_prod = layers.add_gate(nonzero_gates_mul_leaf.clone(), pos_sign_bits.mle_ref(), res_positive_leaf.mle_ref(), 0, BinaryOperation::Mul);
-        let leaf_neg_prod = layers.add_gate(nonzero_gates_mul_leaf, neg_sign_bits.mle_ref(), res_negative_leaf.mle_ref(), 0, BinaryOperation::Mul);
+        let dec_pos_prod = layers.add_gate(nonzero_gates_mul_decision.clone(), pos_sign_bits.mle_ref(), res_positive_dec.mle_ref(), None, BinaryOperation::Mul);
+        let dec_neg_prod = layers.add_gate(nonzero_gates_mul_decision, neg_sign_bits.mle_ref(), res_negative_dec.mle_ref(), None, BinaryOperation::Mul);
+        let leaf_pos_prod = layers.add_gate(nonzero_gates_mul_leaf.clone(), pos_sign_bits.mle_ref(), res_positive_leaf.mle_ref(), None, BinaryOperation::Mul);
+        let leaf_neg_prod = layers.add_gate(nonzero_gates_mul_leaf, neg_sign_bits.mle_ref(), res_negative_leaf.mle_ref(), None, BinaryOperation::Mul);
 
         let witness: Witness<F, Self::Transcript> = Witness {
             layers,
