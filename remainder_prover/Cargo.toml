@@ -50,4 +50,9 @@ quickcheck_macros = "1.0.0"
 
 [features]
 default = ["parallel"]
-parallel = ["ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "ark-crypto-primitives/parallel"]
+parallel = [
+  "ark-ff/parallel",
+  "ark-poly/parallel",
+  "ark-std/parallel",
+  "ark-crypto-primitives/parallel",
+]
