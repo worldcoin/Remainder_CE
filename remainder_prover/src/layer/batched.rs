@@ -332,7 +332,7 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
 
     DenseMleRef {
         bookkeeping_table: Evaluations::<F>::new(old_num_vars + new_bits, out.clone()),
-        original_bookkeeping_table: Evaluations::<F>::new(old_num_vars, out),
+        original_bookkeeping_table: Evaluations::<F>::new(old_num_vars + new_bits, out),
         mle_indices: old_indices.to_vec(),
         original_mle_indices: old_indices.to_vec(),
         num_vars: old_num_vars + new_bits,
