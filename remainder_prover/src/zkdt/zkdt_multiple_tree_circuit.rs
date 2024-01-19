@@ -61,7 +61,6 @@ use super::{
     },
     input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit,
     multiset_circuit::circuits::FSMultiSetCircuit,
-    path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
 
