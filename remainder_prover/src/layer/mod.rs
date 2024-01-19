@@ -458,7 +458,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
                     // --- Grab the actual value that the claim is supposed to evaluate to ---
                     if mle_ref.bookkeeping_table().len() != 1 {
-                        dbg!(&mle_ref.bookkeeping_table);
+                        dbg!(&mle_ref.current_mle);
                         return Err(ClaimError::MleRefMleError);
                     }
                     let claimed_value = mle_ref.bookkeeping_table()[0];

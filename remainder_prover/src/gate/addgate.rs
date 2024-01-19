@@ -97,8 +97,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
 
         // transition into binding y
         let f_2 = &phase_1_lhs[1];
-        if f_2.bookkeeping_table.len() == 1 {
-            let f_at_u = f_2.bookkeeping_table[0];
+        if f_2.current_mle.get_evals_vector_ref().len() == 1 {
+            let f_at_u = f_2.current_mle[0];
             let u_challenges = Claim::new_raw(challenges.clone(), F::zero());
             let first_message = self
                 .init_phase_2(u_challenges, f_at_u)
@@ -240,8 +240,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for AddGate<F, Tr> {
             if self.rhs_num_vars > 0 {
                 check_fully_bound(&mut [rhs.clone()], last_v_challenges.clone()).unwrap()
             } else {
-                debug_assert_eq!(rhs.bookkeeping_table.len(), 1);
-                rhs.bookkeeping_table[0]
+                debug_assert_eq!(rhs.current_mle.get_evals_vector_ref().len(), 1);
+                rhs.current_mle[0]
             }
         };
 
@@ -445,12 +445,15 @@ pub struct AddGate<F: FieldExt, Tr: Transcript<F>> {
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> AddGate<F, Tr> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct AddGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a AddGate<F, Tr>);
+        struct AddGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(
+            &'a AddGate<F, Tr>,
+        );
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for AddGateCircuitDesc<'a, F, Tr> {
+        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display
+            for AddGateCircuitDesc<'a, F, Tr>
+        {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("AddGate")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())

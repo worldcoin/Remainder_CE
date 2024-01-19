@@ -9,7 +9,7 @@ use rayon::{
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 
-// TODO: Check for iter() vs into_inter()
+// -------------- Various Helper Functions -----------------
 
 /// Mirrors the `num_bits` LSBs of `value`.
 /// # Example
@@ -32,8 +32,12 @@ fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
     result | (value << num_bits)
 }
 
+// ---------------------------------------------------------
+
 /// Stores a boolean function `f: {0, 1}^n -> F` represented as a list of up to
 /// `2^n` evaluations of `f` on the boolean hypercube.
+/// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
+/// the object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct Evaluations<F: FieldExt> {
@@ -62,6 +66,7 @@ pub struct Evaluations<F: FieldExt> {
     /// When accessing an element of the bookkeping table, we return a reference
     /// to a field element. In case the element is stored implicitly as a
     /// missing entry, we need someone to own the "zero" of the field.
+    /// If I make this a const, I'm not sure how to initialize it.
     zero: F,
 }
 
@@ -132,13 +137,13 @@ impl<F: FieldExt> Evaluations<F> {
     ///      ....
     ///     ( f(1, 1, ..., 0, ..., 1), f(1, 1, ..., 1, ..., 1) ),
     /// ]
-    pub fn iter(&self, fixed_variable_index: usize) -> EvaluationsIterator<F> {
+    pub fn project(&self, fixed_variable_index: usize) -> EvaluationsPairIterator<F> {
         let lsb_mask = (1_usize << fixed_variable_index) - 1;
 
-        EvaluationsIterator::<F> {
+        EvaluationsPairIterator::<F> {
             evals: self,
             lsb_mask,
-            current_eval_index: 0,
+            current_pair_index: 0,
         }
     }
 
@@ -235,7 +240,7 @@ impl<F: FieldExt> Index<usize> for Evaluations<F> {
 /// An iterator over evaluations indexed by vertices of a projection of the
 /// boolean hypercube on `num_vars - 1` dimensions. See documentation for
 /// `Evaluations::iter` for more information.
-pub struct EvaluationsIterator<'a, F: FieldExt> {
+pub struct EvaluationsPairIterator<'a, F: FieldExt> {
     /// Reference to original bookkeeping table.
     evals: &'a Evaluations<F>,
 
@@ -243,27 +248,39 @@ pub struct EvaluationsIterator<'a, F: FieldExt> {
     /// is the dimension on which the original hypercube is projected on.
     lsb_mask: usize,
 
-    /// Index of the next element to be returned.
-    /// Resides in `[0, 2^(num_vars - 1))`.
-    current_eval_index: usize,
+    /// 0-base index of the next element to be returned.
+    /// Invariant: `current_eval_index \in [0, 2^(evals.num_vars() - 1)]`.
+    /// If equal to `2^(evals.num_vars() - 1)`, the iterator has reached the
+    /// end.
+    current_pair_index: usize,
 }
 
-impl<'a, F: FieldExt> Iterator for EvaluationsIterator<'a, F> {
+impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
     type Item = (F, F);
 
     fn next(&mut self) -> Option<Self::Item> {
         let num_vars = self.evals.num_vars();
-        let num_evals = 1_usize << (num_vars - 1);
+        let num_pairs = 1_usize << (num_vars - 1);
 
-        if self.current_eval_index < num_evals {
-            let lsb_idx = self.current_eval_index & self.lsb_mask;
-            let msb_idx = (self.current_eval_index & (!self.lsb_mask)) << 1;
+        if self.current_pair_index < num_pairs {
+            // Compute the two indices by inserting a `0` and a `1` respectively
+            // in the appropriate position of `current_pair_index`.
+            // For example, if this is an Iterator projecting on
+            // `fix_variable_index == 2` for an Evaluations table of `num_vars
+            // == 5`, then `lsb_mask == 0b00011` (the `fix_variable_index` LSBs
+            // are on). When, for example `current_pair_index == 0b1010`, it is
+            // split into a "right part": `lsb_idx == 0b00 0 10`, and a "shifted
+            // left part": `msb_idx == 0b10 0 00`.  The two parts are then
+            // combined with the middle bit on and off respectively: `idx1 ==
+            // 0b10 0 10`, `idx2 == 0b10 1 10`.
+            let lsb_idx = self.current_pair_index & self.lsb_mask;
+            let msb_idx = (self.current_pair_index & (!self.lsb_mask)) << 1;
             let mid_idx = self.lsb_mask + 1;
 
             let idx1 = lsb_idx | msb_idx;
             let idx2 = lsb_idx | mid_idx | msb_idx;
 
-            self.current_eval_index += 1;
+            self.current_pair_index += 1;
 
             let val1 = self.evals[idx1];
             let val2 = self.evals[idx2];
@@ -290,17 +307,47 @@ impl<'a, F: FieldExt> Iterator for EvaluationsIterator<'a, F> {
 /// ```
 /// Internally, `f` is represented as a list of evaluations of `f` on the
 /// boolean hypercube.
-struct MultilinearExtension<F: FieldExt> {
+/// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
+/// the object even if `n` is modified by fixing a variable to a constant value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
+pub struct MultilinearExtension<F: FieldExt> {
     pub f: Evaluations<F>,
 }
 
 impl<F: FieldExt> MultilinearExtension<F> {
+    /// Generate a new MultilinearExtension from a representation `evals` of a
+    /// function `f`.
     pub fn new(evals: Evaluations<F>) -> Self {
         Self { f: evals }
     }
 
+    /// Generates a representation for the MLE of the zero function on zero
+    /// variables.
+    pub fn new_zero() -> Self {
+        Self {
+            f: Evaluations::new_zero(),
+        }
+    }
+
     pub fn num_vars(&self) -> usize {
         self.f.num_vars()
+    }
+
+    pub fn get_evals(&self) -> Evaluations<F> {
+        self.f.clone()
+    }
+
+    pub fn get_evals_vector(&self) -> Vec<F> {
+        self.f.evals.clone()
+    }
+
+    pub fn get_evals_ref(&self) -> &Evaluations<F> {
+        &self.f
+    }
+
+    pub fn get_evals_vector_ref(&self) -> &Vec<F> {
+        &self.f.evals
     }
 
     /// Evaluate `\tilde{f}` at `point \in F^n`.
@@ -329,8 +376,17 @@ impl<F: FieldExt> MultilinearExtension<F> {
             })
     }
 
-    /// Fix the `var_index`-th bit of `\tilde{f}` to an arbitrary field element
-    /// `point \in F` by destructively modifying `self`.
+    /// For constant-function MLEs, returns its value.
+    /// # Panics
+    /// If `self.num_vars()` is non-zero.
+    pub fn value(&self) -> F {
+        assert_eq!(self.num_vars(), 0);
+
+        self.f[0]
+    }
+
+    /// Fix the 0-based `var_index`-th bit of `\tilde{f}` to an arbitrary field
+    /// element `point \in F` by destructively modifying `self`.
     /// # Params
     /// * `var_index`: A 0-based index of the input variable to be fixed.
     /// * `point`: The field element to set `x_{var_index}` equal to.
@@ -344,7 +400,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
     /// ```
     /// # Panics
     /// if `var_index` is outside the interval `[0, self.num_vars())`.
-    fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
+    pub fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
         // OLD IMPLEMENTATION: By accessing the bookkeeping table directly and
         // using parallel iterators.
         // ------------------------------------
@@ -423,10 +479,12 @@ impl<F: FieldExt> MultilinearExtension<F> {
         */
         // ------------------------------------
 
+        // NEW IMPLEMENTATION: using projection iterators for succinct
+        // description.
         let n = self.num_vars();
         let new_evals: Vec<F> = self
             .f
-            .iter(var_index)
+            .project(var_index)
             .map(|(v1, v2)| v1 + (v2 - v1) * point)
             .collect();
         debug_assert_eq!(new_evals.len(), 1 << (n - 1));
@@ -437,7 +495,8 @@ impl<F: FieldExt> MultilinearExtension<F> {
     /// Optimized version of `fix_variable_at_index` for `var_index == 0`.
     /// # Panics
     /// If `self.num_vars() == 0`.
-    fn fix_variable(&mut self, point: F) {
+    pub fn fix_variable(&mut self, point: F) {
+        // OLD IMPLEMENTATION: Using direct access mechanism.
         assert!(self.num_vars() > 0);
 
         let transform = |chunk: &[F]| {
@@ -460,6 +519,16 @@ impl<F: FieldExt> MultilinearExtension<F> {
         // --- Note that MLE is destructively modified into the new bookkeeping
         // table here ---
         self.f = Evaluations::<F>::new(self.num_vars() - 1, new.collect());
+    }
+}
+
+/// Provides a vector-like interface to MultilinearExtensions;
+/// useful during refactoring.
+impl<F: FieldExt> Index<usize> for MultilinearExtension<F> {
+    type Output = F;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.f[index]
     }
 }
 
@@ -617,7 +686,7 @@ mod test {
         let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
         let f = Evaluations::<Fr>::new(3, evals);
 
-        let mut it = f.iter(0);
+        let mut it = f.project(0);
 
         assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(1)));
         assert_eq!(it.next().unwrap(), (Fr::from(2), Fr::from(3)));
@@ -631,7 +700,7 @@ mod test {
         let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
         let f = Evaluations::<Fr>::new(3, evals);
 
-        let mut it = f.iter(1);
+        let mut it = f.project(1);
 
         assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(2)));
         assert_eq!(it.next().unwrap(), (Fr::from(1), Fr::from(3)));
@@ -645,7 +714,7 @@ mod test {
         let evals: Vec<Fr> = [0, 1, 2, 3, 4, 5, 6, 7].into_iter().map(Fr::from).collect();
         let f = Evaluations::<Fr>::new(3, evals);
 
-        let mut it = f.iter(2);
+        let mut it = f.project(2);
 
         assert_eq!(it.next().unwrap(), (Fr::from(0), Fr::from(4)));
         assert_eq!(it.next().unwrap(), (Fr::from(1), Fr::from(5)));

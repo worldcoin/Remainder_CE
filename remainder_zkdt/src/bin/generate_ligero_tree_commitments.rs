@@ -1,16 +1,39 @@
 //! Executable which generates all Ligero tree commitments
 
-use std::{path::{Path, PathBuf}, time::Instant, fs};
-use remainder_shared_types::Fr;
-use remainder::{prover::{GKRError, GKRCircuit, input_layer::{combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer}}, zkdt::{data_pipeline::{dt2zkdt::{RawTreesModel, RawSamples, load_raw_trees_model, load_raw_samples, TreesModel, Samples, CircuitizedTrees}}, zkdt_circuit::ZKDTCircuit, constants::{get_tree_commitment_filepath_for_tree_number, get_tree_commitment_filepath_for_tree_batch}, structs::{LeafNode, DecisionNode}}, layer::LayerId, mle::{Mle, dense::DenseMle}};
 use clap::Parser;
+use remainder::{
+    layer::LayerId,
+    mle::{dense::DenseMle, Mle},
+    prover::{
+        input_layer::{
+            combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer,
+        },
+        GKRCircuit, GKRError,
+    },
+    zkdt::{
+        constants::{
+            get_tree_commitment_filepath_for_tree_batch,
+            get_tree_commitment_filepath_for_tree_number,
+        },
+        data_pipeline::dt2zkdt::{
+            load_raw_samples, load_raw_trees_model, CircuitizedTrees, RawSamples, RawTreesModel,
+            Samples, TreesModel,
+        },
+        structs::{DecisionNode, LeafNode},
+        zkdt_circuit::ZKDTCircuit,
+    },
+};
+use remainder_shared_types::Fr;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use remainder_shared_types::{transcript::poseidon_transcript::PoseidonTranscript, FieldExt};
 use serde_json::{from_reader, to_writer};
-use std::{
-    io::BufWriter,
-};
+use std::io::BufWriter;
 use thiserror::Error;
 use tracing::{debug, span, Level};
 use tracing_subscriber::{fmt::format::FmtSpan, FmtSubscriber};
@@ -120,7 +143,7 @@ pub fn generate_all_tree_ligero_commitments<F: FieldExt>(
                     let rho_inv = 4;
                     let ratio = 1_f64;
                     let ligero_commitment = remainder_ligero_commit_prove(
-                        &tree_input_layer.mle.mle_ref().bookkeeping_table,
+                        &tree_input_layer.mle.mle_ref().current_mle,
                         rho_inv,
                         ratio,
                     );
@@ -133,8 +156,6 @@ pub fn generate_all_tree_ligero_commitments<F: FieldExt>(
             }
         });
 }
-
-
 
 pub fn generate_batch_tree_ligero_commitments<F: FieldExt>(
     decision_forest_model_filepath: &Path,
@@ -149,75 +170,89 @@ pub fn generate_batch_tree_ligero_commitments<F: FieldExt>(
     // --- Generate Ligero commitments for trees ---
     debug_assert_eq!(ctrees.decision_nodes.len(), ctrees.leaf_nodes.len());
 
+    let batch_numbers = 0..ctrees.decision_nodes.len() / tree_batch_size;
 
-    let batch_numbers = 0 .. ctrees.decision_nodes.len() / tree_batch_size;
+    (batch_numbers).for_each(|tree_batch_number| {
+        let tree_range =
+            (tree_batch_size * tree_batch_number)..(tree_batch_size * (tree_batch_number + 1));
+        let tree_batch_commitment_filepath = get_tree_commitment_filepath_for_tree_batch(
+            tree_batch_size,
+            tree_batch_number,
+            tree_commit_dir,
+        );
 
-    (batch_numbers).for_each(
-        |tree_batch_number| {
-            let tree_range = (tree_batch_size * tree_batch_number) .. (tree_batch_size * (tree_batch_number + 1));
-    let tree_batch_commitment_filepath =
-        get_tree_commitment_filepath_for_tree_batch(tree_batch_size, tree_batch_number, tree_commit_dir);
+        match fs::metadata(tree_batch_commitment_filepath.clone()) {
+            Ok(_) => {
+                debug!(
+                    tree_batch_size,
+                    tree_batch_number,
+                    tree_batch_commitment_filepath,
+                    "File already exists! Skipping."
+                );
+            }
 
-    match fs::metadata(tree_batch_commitment_filepath.clone()) {
-        Ok(_) => {
-            debug!(
-                tree_batch_size,
-                tree_batch_number,
-                tree_batch_commitment_filepath, "File already exists! Skipping."
-            );
-        }
+            Err(_) => {
+                debug!(
+                    tree_batch_size,
+                    tree_batch_number,
+                    tree_batch_commitment_filepath,
+                    "File doesn't exist yet! Generating commitment..."
+                );
 
-        Err(_) => {
-            debug!(
-                tree_batch_size,
-                tree_batch_number,
-                tree_batch_commitment_filepath,
-                "File doesn't exist yet! Generating commitment..."
-            );
+                let (tree_decision_nodes_mle_vec, tree_leaf_nodes_mle_vec): (Vec<_>, Vec<_>) =
+                    ctrees.decision_nodes[tree_range.clone()]
+                        .to_vec()
+                        .into_iter()
+                        .zip(ctrees.leaf_nodes[tree_range].to_vec().into_iter())
+                        .map(|(tree_decision_nodes, tree_leaf_nodes)| {
+                            let _ligero_tree_batch_commit_span = span!(
+                                Level::DEBUG,
+                                "ligero_batch_tree_commit_span",
+                                tree_batch_number,
+                                tree_batch_size
+                            )
+                            .entered();
 
-                let (tree_decision_nodes_mle_vec, tree_leaf_nodes_mle_vec): (Vec<_>, Vec<_>) = ctrees.decision_nodes[tree_range.clone()].to_vec().into_iter().zip(ctrees.leaf_nodes[tree_range].to_vec().into_iter()).map(
-                    |(tree_decision_nodes, tree_leaf_nodes)| {
- 
-                        let _ligero_tree_batch_commit_span = span!(Level::DEBUG, "ligero_batch_tree_commit_span", tree_batch_number, tree_batch_size).entered();
-                        
-                        // --- Create MLEs from each tree decision + leaf node list ---
-                        let tree_decision_nodes_mle = DenseMle::new_from_iter(
-                            tree_decision_nodes.into_iter().map(DecisionNode::from),
-                            LayerId::Input(0),
-                            None,
-                        );
-                        
-                        let tree_leaf_nodes_mle = DenseMle::new_from_iter(
-                            tree_leaf_nodes.into_iter().map(LeafNode::from),
-                            LayerId::Input(0),
-                            None,
-                        );
+                            // --- Create MLEs from each tree decision + leaf node list ---
+                            let tree_decision_nodes_mle = DenseMle::new_from_iter(
+                                tree_decision_nodes.into_iter().map(DecisionNode::from),
+                                LayerId::Input(0),
+                                None,
+                            );
 
-                        (tree_decision_nodes_mle, tree_leaf_nodes_mle)
-                    }).unzip();
+                            let tree_leaf_nodes_mle = DenseMle::new_from_iter(
+                                tree_leaf_nodes.into_iter().map(LeafNode::from),
+                                LayerId::Input(0),
+                                None,
+                            );
 
-                let mut tree_decision_nodes_mle_combined = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(tree_decision_nodes_mle_vec);
-                let mut tree_leaf_nodes_mle_combined = DenseMle::<F, LeafNode<F>>::combine_mle_batch(tree_leaf_nodes_mle_vec);
+                            (tree_decision_nodes_mle, tree_leaf_nodes_mle)
+                        })
+                        .unzip();
+
+                let mut tree_decision_nodes_mle_combined =
+                    DenseMle::<F, DecisionNode<F>>::combine_mle_batch(tree_decision_nodes_mle_vec);
+                let mut tree_leaf_nodes_mle_combined =
+                    DenseMle::<F, LeafNode<F>>::combine_mle_batch(tree_leaf_nodes_mle_vec);
 
                 tree_decision_nodes_mle_combined.layer_id = LayerId::Input(0);
                 tree_leaf_nodes_mle_combined.layer_id = LayerId::Input(0);
 
                 let tree_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-                        Box::new(&mut tree_decision_nodes_mle_combined),
-                        Box::new(&mut tree_leaf_nodes_mle_combined),
-                    ];
+                    Box::new(&mut tree_decision_nodes_mle_combined),
+                    Box::new(&mut tree_leaf_nodes_mle_combined),
+                ];
 
                 let tree_input_layer_builder =
                     InputLayerBuilder::new(tree_mles, None, LayerId::Input(0));
                 let tree_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
                     tree_input_layer_builder.to_input_layer();
 
-                
                 // --- Create commitment to the combined MLEs via the input layer ---
                 let rho_inv = 4;
                 let ratio = 1_f64;
                 let ligero_commitment = remainder_ligero_commit_prove(
-                    &tree_input_layer.mle.mle_ref().bookkeeping_table,
+                    &tree_input_layer.mle.mle_ref().current_mle,
                     rho_inv,
                     ratio,
                 );
@@ -226,12 +261,10 @@ pub fn generate_batch_tree_ligero_commitments<F: FieldExt>(
                 let file = fs::File::create(tree_batch_commitment_filepath).unwrap();
                 let bw = BufWriter::new(file);
                 serde_json::to_writer(bw, &ligero_commitment).unwrap();
-            }}
+            }
         }
-    );
-    
+    });
 }
-
 
 /// This binary performs the following:
 /// * Take in as input the files which the Python code generates.

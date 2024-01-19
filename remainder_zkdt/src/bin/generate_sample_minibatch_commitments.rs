@@ -140,7 +140,7 @@ pub fn generate_ligero_sample_minibatch_commitments<F: FieldExt>(
                     let rho_inv = 4;
                     let ratio = 1_f64;
                     let ligero_commitment = remainder_ligero_commit_prove(
-                        &minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer.mle.mle_ref().bookkeeping_table, rho_inv, ratio);
+                        &minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer.mle.mle_ref().current_mle, rho_inv, ratio);
 
                     // --- Write to file ---
                     let file = fs::File::create(sample_minibatch_commitment_filepath).unwrap();
@@ -244,7 +244,7 @@ pub fn generate_ligero_sample_minibatch_commitments_batched<F: FieldExt>(
                     let rho_inv = 4;
                     let ratio = 1_f64;
                     let ligero_commitment = remainder_ligero_commit_prove(
-                        &minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer.mle.mle_ref().bookkeeping_table, rho_inv, ratio);
+                        &minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer.mle.mle_ref().current_mle, rho_inv, ratio);
 
                     // --- Write to file ---
                     let file = fs::File::create(sample_minibatch_commitment_filepath).unwrap();

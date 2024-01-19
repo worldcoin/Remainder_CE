@@ -14,7 +14,8 @@ use crate::{
     },
     mle::{
         beta::{compute_beta_over_two_challenges, BetaTable},
-        dense::DenseMle, mle_enum::MleEnum,
+        dense::DenseMle,
+        mle_enum::MleEnum,
     },
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::evaluate_at_a_point,
@@ -99,7 +100,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
         self.rhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.table.bookkeeping_table.len() == 1 {
+        if beta_g2.table.current_mle.get_evals_vector_ref().len() == 1 {
             let beta_g2 = beta_g2.table.bookkeeping_table()[0];
             let next_claims = Claim::new_raw(self.g1_challenges.clone().unwrap(), F::zero());
 
@@ -379,7 +380,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGateBatched<F, Tr> {
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
         let num_vars = std::cmp::max(self.lhs.num_vars(), self.rhs.num_vars());
-        let (num_evals, _,) = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, _) = get_num_wlx_evaluations(claim_vecs);
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
@@ -451,12 +452,15 @@ pub struct MulGateBatched<F: FieldExt, Tr: Transcript<F>> {
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> MulGateBatched<F, Tr> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct MulGateBatchedCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a MulGateBatched<F, Tr>);
+        struct MulGateBatchedCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(
+            &'a MulGateBatched<F, Tr>,
+        );
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for MulGateBatchedCircuitDesc<'a, F, Tr> {
+        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display
+            for MulGateBatchedCircuitDesc<'a, F, Tr>
+        {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("MulGateBatched")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())

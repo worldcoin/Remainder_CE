@@ -63,7 +63,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
             DenseMle::<F, F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_vars != 0 {
+        let eval = if mle_ref.num_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -72,7 +72,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
 
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            Claim::new_raw(vec![], mle_ref.bookkeeping_table[0])
+            Claim::new_raw(vec![], mle_ref.current_mle[0])
         };
 
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {

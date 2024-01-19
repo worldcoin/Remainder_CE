@@ -1,5 +1,5 @@
 use ark_std::log2;
-use itertools::{repeat_n, Itertools};
+use itertools::{repeat_n, Itertools, MultiPeek};
 use std::marker::PhantomData;
 use thiserror::Error;
 
@@ -7,7 +7,7 @@ use crate::{
     expression::ExpressionStandard,
     mle::{
         dense::{DenseMle, DenseMleRef},
-        evals::Evaluations,
+        evals::{Evaluations, MultilinearExtension},
         zero::ZeroMleRef,
         Mle, MleAble, MleIndex, MleRef,
     },
@@ -123,8 +123,8 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
             mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(),
             new_bits,
         )
-        .bookkeeping_table
-        .to_vec(),
+        .current_mle
+        .get_evals_vector(),
         old_layer_id,
         old_prefix_bits,
     )
@@ -145,11 +145,8 @@ pub fn unflatten_mle<F: FieldExt>(
             let individual_mle_table = (0..individual_mle_len)
                 .map(|mle_idx| {
                     let flat_mle_ref = flattened_mle.mle_ref();
-                    let val = flat_mle_ref
-                        .bookkeeping_table
-                        .get(copy_idx + (mle_idx * num_copies))
-                        .unwrap_or(zero);
-                    *val
+                    let val = flat_mle_ref.current_mle.f[copy_idx + (mle_idx * num_copies)];
+                    val
                 })
                 .collect_vec();
             let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(
@@ -322,7 +319,7 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
         }
     }
 
-    let out = (0..mles[0].bookkeeping_table.len())
+    let out = (0..mles[0].current_mle.get_evals_vector_ref().len())
         .flat_map(|index| {
             mles.iter()
                 .map(|mle| mle.bookkeeping_table()[index])
@@ -330,13 +327,13 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
         })
         .collect_vec();
 
+    let mle = MultilinearExtension::new(Evaluations::new(old_num_vars + new_bits, out));
+
     DenseMleRef {
-        bookkeeping_table: Evaluations::<F>::new(old_num_vars + new_bits, out.clone()),
-        original_bookkeeping_table: Evaluations::<F>::new(old_num_vars + new_bits, out),
+        current_mle: mle.clone(),
+        original_mle: mle,
         mle_indices: old_indices.to_vec(),
         original_mle_indices: old_indices.to_vec(),
-        num_vars: old_num_vars + new_bits,
-        original_num_vars: old_num_vars + new_bits,
         layer_id,
         indexed: false,
     }

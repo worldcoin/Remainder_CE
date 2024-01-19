@@ -12,7 +12,7 @@ use remainder_shared_types::FieldExt;
 
 use super::{
     dense::{DenseMle, DenseMleRef},
-    evals::Evaluations,
+    evals::{Evaluations, MultilinearExtension},
     MleIndex, MleRef,
 };
 use thiserror::Error;
@@ -208,9 +208,10 @@ impl<F: FieldExt> BetaTable<F> {
                         mle_index.bind_index(challenge);
                     }
                 }
-                self.table.bookkeeping_table =
-                    Evaluations::<F>::new(self.table.num_vars - 1, new_beta_table);
-                self.table.num_vars -= 1;
+                self.table.current_mle = MultilinearExtension::new(Evaluations::<F>::new(
+                    self.table.num_vars() - 1,
+                    new_beta_table,
+                ));
                 Ok(())
             }
         }

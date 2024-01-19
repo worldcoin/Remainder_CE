@@ -288,8 +288,8 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateTest<F, Tr> {
         );
         let f_2 = &phase_1_lhs[1];
 
-        if f_2.bookkeeping_table.len() == 1 {
-            let f_at_u = f_2.bookkeeping_table[0];
+        if f_2.current_mle.get_evals_vector_ref().len() == 1 {
+            let f_at_u = f_2.current_mle[0];
             let u_challenges = Claim::new_raw(challenges.clone(), F::zero());
 
             // first message of the next phase includes the random challenge from the last phase
@@ -811,10 +811,7 @@ impl<F: FieldExt, Tr: Transcript<F>> AddGateBatchedTest<F, Tr> {
             .unwrap()
             .clone();
 
-        let (f2_bound, f3_bound) = (
-            lhs_reduced.bookkeeping_table[0],
-            rhs_reduced.bookkeeping_table[0],
-        );
+        let (f2_bound, f3_bound) = (lhs_reduced.current_mle[0], rhs_reduced.current_mle[0]);
 
         let beta_bound = compute_beta_over_two_challenges(
             &self.g2_challenges.clone().unwrap(),

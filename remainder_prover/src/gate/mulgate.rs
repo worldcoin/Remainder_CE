@@ -87,10 +87,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
         );
 
         let f_2 = &phase_1_mles[1];
-        if f_2.bookkeeping_table.len() == 1 {
+        if f_2.current_mle.get_evals_vector_ref().len() == 1 {
             // first message of the next phase includes the random challenge from the last phase
             // (this transition checks that we did the bookkeeping optimization correctly between each phase)
-            let f_at_u = f_2.bookkeeping_table[0];
+            let f_at_u = f_2.current_mle[0];
             let u_challenges = Claim::new_raw(challenges.clone(), F::zero());
             let first_message = self
                 .init_phase_2(u_challenges, f_at_u)
@@ -225,8 +225,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
             if self.rhs_num_vars > 0 {
                 check_fully_bound(&mut [rhs.clone()], last_v_challenges.clone()).unwrap()
             } else {
-                debug_assert_eq!(rhs.bookkeeping_table.len(), 1);
-                rhs.bookkeeping_table[0]
+                debug_assert_eq!(rhs.current_mle.get_evals_vector_ref().len(), 1);
+                rhs.current_mle[0]
             }
         };
 
@@ -360,7 +360,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for MulGate<F, Tr> {
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
         let num_vars = std::cmp::max(self.lhs.num_vars(), self.rhs.num_vars());
-        let (num_evals, _,) = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, _) = get_num_wlx_evaluations(claim_vecs);
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
@@ -431,12 +431,15 @@ pub struct MulGate<F: FieldExt, Tr: Transcript<F>> {
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> MulGate<F, Tr> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct MulGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a MulGate<F, Tr>);
+        struct MulGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(
+            &'a MulGate<F, Tr>,
+        );
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for MulGateCircuitDesc<'a, F, Tr> {
+        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display
+            for MulGateCircuitDesc<'a, F, Tr>
+        {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("MulGate")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())

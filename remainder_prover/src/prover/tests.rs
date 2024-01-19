@@ -832,8 +832,8 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
     let neg_mle_2 = DenseMle::new_from_iter(
         mle_2
             .mle_ref()
-            .bookkeeping_table
-            .to_vec()
+            .current_mle
+            .get_evals_vector()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -880,8 +880,8 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
     let neg_mle_2 = DenseMle::new_from_iter(
         mle_2
             .mle_ref()
-            .bookkeeping_table
-            .to_vec()
+            .current_mle
+            .get_evals_vector()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1380,8 +1380,8 @@ fn test_gkr_gate_simplest_circuit() {
 
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
-            .bookkeeping_table
-            .to_vec()
+            .current_mle
+            .get_evals_vector()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1414,8 +1414,8 @@ fn test_gkr_gate_batched_simplest_circuit() {
 
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
-            .bookkeeping_table
-            .to_vec()
+            .current_mle
+            .get_evals_vector()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1454,7 +1454,7 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
     );
 
     let negmle = DenseMle::new_from_iter(
-        mle.mle_ref().bookkeeping_table.repr()[0..size2]
+        mle.mle_ref().current_mle.get_evals_vector_ref()[0..size2]
             .iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1677,7 +1677,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
             new_bits,
         );
         let mut output_input_full: DenseMle<F, F> = DenseMle::new_from_raw(
-            output_input.bookkeeping_table.to_vec(),
+            output_input.current_mle.get_evals_vector(),
             LayerId::Input(0),
             None,
         );
