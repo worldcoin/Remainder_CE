@@ -4,7 +4,7 @@ use std::cmp::max;
 use ark_std::log2;
 use itertools::Itertools;
 
-use crate::expression::{ExpressionStandard, Expression};
+use crate::expression::ExpressionStandard;
 use crate::layer::batched::BatchedLayer;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;

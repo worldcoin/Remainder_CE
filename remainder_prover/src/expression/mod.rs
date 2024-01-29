@@ -17,61 +17,6 @@ use crate::{
 
 use remainder_shared_types::FieldExt;
 
-///trait that defines what an Expression needs to be able to do
-///TODO!(Fix to make this more general)
-pub trait Expression<F: FieldExt>: Debug + Sized {
-    ///The MleRef that this Expression contains
-    type MleRef: MleRef<F = F>;
-
-    #[allow(clippy::too_many_arguments)]
-    ///Evaluate an expression and return a custom type
-    fn evaluate<T>(
-        &self,
-        constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&Self::MleRef) -> T,
-        negated: &impl Fn(T) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[Self::MleRef]) -> T,
-        scaled: &impl Fn(T, F) -> T,
-    ) -> T;
-
-    #[allow(clippy::too_many_arguments)]
-    /// Evaluate an expression for sumcheck
-    fn evaluate_sumcheck<T>(
-        &self,
-        constant: &impl Fn(F, &DenseMleRef<F>) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, &DenseMleRef<F>) -> T,
-        negated: &impl Fn(T) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[DenseMleRef<F>], &DenseMleRef<F>) -> T,
-        scaled: &impl Fn(T, F) -> T,
-        beta_mle_ref: &DenseMleRef<F>,
-        round_index: usize,
-    ) -> T;
-
-    /// Traverses the expression tree, similarly to `evaluate()`, but with a single
-    /// "observer" function which is called at each node. Also takes an immutable reference
-    /// to `self` rather than a mutable one (as in `evaluate()`).
-    fn traverse<E>(
-        &self,
-        observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
-    ) -> Result<(), E>;
-
-    /// Add two expressions together
-    fn concat_expr(self, lhs: Self) -> Self;
-
-    /// Fix the bit corresponding to `round_index` to `challenge` mutating the MleRefs
-    /// so they are accurate as Bookeeping Tables
-    fn fix_variable(&mut self, round_index: usize, challenge: F);
-
-    /// Evaluates the current expression (as a multivariate function) at `challenges`
-    ///
-    /// If the expression is already bound, this will check that the challenges match the already bound indices
-    fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError>;
-}
-
 #[derive(Error, Debug, Clone, PartialEq)]
 ///Error for handling the parsing and evaluation of expressions
 pub enum ExpressionError {
@@ -121,8 +66,8 @@ pub enum ExpressionStandard<F> {
     Scaled(Box<ExpressionStandard<F>>, F),
 }
 
-impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
-    type MleRef = DenseMleRef<F>;
+impl<F: FieldExt> ExpressionStandard<F> {
+
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
     #[allow(clippy::too_many_arguments)]
@@ -209,7 +154,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         }
     }
 
-    fn traverse<E>(
+    pub fn traverse<E>(
         &self,
         observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
     ) -> Result<(), E> {
@@ -232,11 +177,11 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
     }
 
     ///Concatenates two expressions together
-    fn concat_expr(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
+    pub fn concat_expr(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
         ExpressionStandard::Selector(MleIndex::Iterated, Box::new(lhs), Box::new(self))
     }
 
-    fn fix_variable(&mut self, round_index: usize, challenge: F) {
+    pub fn fix_variable(&mut self, round_index: usize, challenge: F) {
         match self {
             ExpressionStandard::Selector(index, a, b) => {
                 if *index == MleIndex::IndexedBit(round_index) {
@@ -276,7 +221,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
         }
     }
 
-    fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
+    pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
         // --- It's as simple as fixing all variables ---
         challenges
             .iter()
@@ -344,7 +289,7 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 
     ///Similar function to eval, but with minor changes to accomodate sumcheck's peculiarities
     #[allow(clippy::too_many_arguments)]
-    fn evaluate_sumcheck<T>(
+    pub fn evaluate_sumcheck<T>(
         &self,
         constant: &impl Fn(F, &DenseMleRef<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
@@ -509,8 +454,8 @@ impl<F: FieldExt> Expression<F> for ExpressionStandard<F> {
 /// gather all of the evaluations, combining them as appropriate.
 /// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
 /// within.
-pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
-    expr: &Exp,
+pub fn gather_combine_all_evals<F: FieldExt>(
+    expr: &ExpressionStandard<F>,
 ) -> Result<F, ExpressionError> {
     let constant = |c| Ok(c);
     let selector_column =
@@ -521,7 +466,7 @@ pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
             }
             Err(ExpressionError::SelectorBitNotBoundError)
         };
-    let mle_eval = for<'a> |mle_ref: &'a Exp::MleRef| -> Result<F, ExpressionError> {
+    let mle_eval = for<'a> |mle_ref: &'a DenseMleRef<F>| -> Result<F, ExpressionError> {
         if mle_ref.bookkeeping_table().len() != 1 {
             return Err(ExpressionError::EvaluateNotFullyBoundError);
         }
@@ -532,7 +477,7 @@ pub fn gather_combine_all_evals<F: FieldExt, Exp: Expression<F>>(
         Ok(val) => Ok(val.neg()),
     };
     let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
-    let product = for<'a, 'b> |mle_refs: &'a [Exp::MleRef]| -> Result<F, ExpressionError> {
+    let product = for<'a, 'b> |mle_refs: &'a [DenseMleRef<F>]| -> Result<F, ExpressionError> {
         mle_refs.iter().try_fold(F::one(), |acc, new_mle_ref| {
             // --- Accumulate either errors or multiply ---
             if new_mle_ref.bookkeeping_table().len() != 1 {

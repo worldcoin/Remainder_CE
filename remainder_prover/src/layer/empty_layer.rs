@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{gather_combine_all_evals, Expression, ExpressionStandard},
+    expression::{gather_combine_all_evals, ExpressionStandard},
     mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable},
     prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals},
 };

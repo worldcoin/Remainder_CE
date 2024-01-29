@@ -14,7 +14,7 @@ use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
 
 use crate::{
-    expression::{Expression, ExpressionError, ExpressionStandard},
+    expression::{ExpressionError, ExpressionStandard},
     mle::{beta::BetaTable, dense::{DenseMleRef, DenseMle}, MleIndex, MleRef},
 };
 use remainder_shared_types::FieldExt;
@@ -151,10 +151,8 @@ impl<F: FieldExt> Mul<&F> for Evals<F> {
 ///     fully indexed.
 pub(crate) fn compute_sumcheck_message<
     F: FieldExt,
-    Exp: Expression<F, MleRef = Mle>,
-    Mle: MleRef<F = F> + Clone,
 >(
-    expr: &Exp,
+    expr: &ExpressionStandard<F>,
     round_index: usize,
     max_degree: usize,
     beta_table: &BetaTable<F>,

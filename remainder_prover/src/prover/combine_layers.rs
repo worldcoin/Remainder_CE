@@ -8,7 +8,7 @@ use remainder_shared_types::{transcript::Transcript, FieldExt};
 use thiserror::Error;
 
 use crate::{
-    expression::{Expression, ExpressionStandard},
+    expression::ExpressionStandard,
     layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},

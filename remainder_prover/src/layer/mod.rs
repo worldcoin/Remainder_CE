@@ -17,7 +17,7 @@ use thiserror::Error;
 use tracing::Value;
 
 use crate::{
-    expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
+    expression::{gather_combine_all_evals, ExpressionError, ExpressionStandard},
     mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
         dense::DenseMleRef,
