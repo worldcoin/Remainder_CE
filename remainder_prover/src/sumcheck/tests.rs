@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    expression::ExpressionStandard,
+    expression::Expression,
     layer::{
         // claims::tests::claim_aggregation_testing_wrapper,
         claims::Claim,
@@ -26,7 +26,7 @@ use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript
 
 /// Does a dummy version of sumcheck with a testing RNG
 pub fn dummy_sumcheck<F: FieldExt>(
-    expr: &mut ExpressionStandard<F>,
+    expr: &mut Expression<F, ProverExpression>,
     rng: &mut impl Rng,
     layer_claim: Claim<F>,
 ) -> Vec<(Vec<F>, Option<F>)> {
@@ -80,7 +80,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
 /// TODO!(ryancao): Change this to take in the expression as well and do the final sumcheck check
 pub fn verify_sumcheck_messages<F: FieldExt>(
     messages: Vec<(Vec<F>, Option<F>)>,
-    mut expression: ExpressionStandard<F>,
+    mut expression: Expression<F, ProverExpression>,
     layer_claim: Claim<F>,
     rng: &mut impl Rng,
 ) -> Result<F, VerifyError> {
@@ -155,7 +155,7 @@ pub fn get_dummy_claim<F: FieldExt>(
     };
     let eval = expression.evaluate_expr(challenges).unwrap();
     let claim = match expression {
-        ExpressionStandard::Mle(mle) => mle
+        Expression::Mle(mle) => mle
             .mle_indices
             .iter()
             .map(|index: &MleIndex<F>| index.val().unwrap())
@@ -166,7 +166,7 @@ pub fn get_dummy_claim<F: FieldExt>(
 }
 
 pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
-    expression: &ExpressionStandard<F>,
+    expression: &Expression<F, ProverExpression>,
     rng: &mut impl Rng,
 ) -> Claim<F> {
     let mut expression = expression.clone();
@@ -189,7 +189,7 @@ fn eval_expr_nums() {
     let layer_claim_point = vec![Fr::from(2), Fr::from(3)];
     let mut beta_table = BetaTable::new(layer_claim_point).unwrap();
     beta_table.table.index_mle_indices(0);
-    let mut expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::from(6));
+    let mut expression1: Expression<Fr, ProverExpression> = Expression::Constant(Fr::from(6));
     let res = compute_sumcheck_message(&mut expression1, 0, 1, &mut beta_table);
     let exp = Evals(vec![Fr::from(6).neg(), Fr::from(12)]);
     assert_eq!(res.unwrap(), exp);
@@ -239,7 +239,7 @@ fn test_linear_sum() {
     let mut beta_table = BetaTable::new(layer_claim_point).unwrap();
     let mle_v1 = vec![Fr::from(3), Fr::from(2), Fr::from(2), Fr::from(5)];
     let mle1: DenseMleRef<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None).mle_ref();
-    let mut mleexpr = ExpressionStandard::Mle(mle1);
+    let mut mleexpr = Expression::Mle(mle1);
     mleexpr.index_mle_indices(0);
     beta_table.table.index_mle_indices(0);
     // mleexpr.init_beta_tables(layer_claim);
@@ -261,7 +261,7 @@ fn test_quadratic_sum() {
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
-    let mut expression = ExpressionStandard::Product(vec![mle1.mle_ref(), mle2.mle_ref()]);
+    let mut expression = Expression::Product(vec![mle1.mle_ref(), mle2.mle_ref()]);
     expression.index_mle_indices(0);
     beta_table.table.index_mle_indices(0);
     // expression.init_beta_tables(layer_claim);
@@ -298,7 +298,7 @@ fn test_quadratic_sum_differently_sized_mles2() {
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
     let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
-    let mut expression = ExpressionStandard::Product(vec![mle1.mle_ref(), mle2.mle_ref()]);
+    let mut expression = Expression::Product(vec![mle1.mle_ref(), mle2.mle_ref()]);
     expression.index_mle_indices(0);
     beta_table.table.index_mle_indices(0);
 
@@ -338,7 +338,7 @@ fn test_dummy_sumcheck_1() {
     let mle_ref_1 = mle_new.mle_ref();
     let mle_ref_2 = mle_2.mle_ref();
 
-    let mut expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+    let mut expression = Expression::Product(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -367,7 +367,7 @@ fn test_dummy_sumcheck_2() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let mut expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+    let mut expression = Expression::Product(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -404,7 +404,7 @@ fn test_dummy_sumcheck_3() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let mut expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+    let mut expression = Expression::Product(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -461,8 +461,8 @@ fn test_dummy_sumcheck_concat() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let expression = ExpressionStandard::Mle(mle_ref_1);
-    let expr2 = ExpressionStandard::Mle(mle_ref_2);
+    let expression = Expression::Mle(mle_ref_1);
+    let expr2 = Expression::Mle(mle_ref_2);
 
     let mut expression = expr2.concat_expr(expression);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -503,8 +503,8 @@ fn test_dummy_sumcheck_concat_2() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let expression = ExpressionStandard::Mle(mle_ref_1);
-    let expr2 = ExpressionStandard::Mle(mle_ref_2);
+    let expression = Expression::Mle(mle_ref_1);
+    let expr2 = Expression::Mle(mle_ref_2);
 
     let mut expression = expr2.concat_expr(expression);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -548,7 +548,7 @@ fn test_dummy_sumcheck_concat_aggro() {
     );
     let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
 
-    let expression = ExpressionStandard::Product(vec![mle_ref_1, mle_ref_2]);
+    let expression = Expression::Product(vec![mle_ref_1, mle_ref_2]);
     let expr2 = expression.clone();
 
     let mut expression = expr2.concat_expr(expression);
@@ -574,8 +574,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let expression = ExpressionStandard::Mle(mle_ref_1);
-    let expr2 = ExpressionStandard::Mle(mle_ref_2);
+    let expression = Expression::Mle(mle_ref_1);
+    let expr2 = Expression::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat_expr(expression);
     let mut expression_aggro = expression.concat_expr(expr2);
@@ -599,8 +599,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let expression = ExpressionStandard::Mle(mle_ref_1);
-    let expr2 = ExpressionStandard::Mle(mle_ref_2);
+    let expression = Expression::Mle(mle_ref_1);
+    let expr2 = Expression::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat_expr(expression);
     let expression_aggro = expression.concat_expr(expr2.clone());
@@ -625,8 +625,8 @@ fn test_dummy_sumcheck_sum() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let expression = ExpressionStandard::Mle(mle_ref_1);
-    let expr2 = ExpressionStandard::Mle(mle_ref_2);
+    let expression = Expression::Mle(mle_ref_1);
+    let expr2 = Expression::Mle(mle_ref_2);
 
     let expression = expr2.clone().concat_expr(expression);
     let mut expression_aggro = expression.concat_expr(expr2);
@@ -748,11 +748,11 @@ fn test_dummy_sumcheck_product_and_claim_aggregate() {
     let mle_ref_1 = mle1.mle_ref();
     let mle_ref_2 = mle2.mle_ref();
 
-    let mut expression = ExpressionStandard::products(vec![mle_ref_1, mle_ref_2]);
+    let mut expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
 
     let layer = from_mle(
         (mle1, mle2),
-        |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]),
+        |mle| Expression::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]),
         |_, _, _| unimplemented!(),
     );
     let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
@@ -827,11 +827,11 @@ fn test_dummy_sumcheck_example() {
         Some(first_claim.get_point()[1..].to_vec()),
     );
 
-    let expr_1 = ExpressionStandard::products(vec![mle.first(), mle.second()]);
+    let expr_1 = Expression::products(vec![mle.first(), mle.second()]);
 
     let layer = from_mle(
         mle,
-        |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
+        |mle| Expression::products(vec![mle.first(), mle.second()]),
         |_, _, _| unimplemented!(),
     );
 
@@ -887,7 +887,7 @@ fn test_dummy_sumcheck_constant() {
     let mle_ref_1 = mle1.mle_ref();
 
     let mut expression =
-        ExpressionStandard::Mle(mle_ref_1) + ExpressionStandard::Constant(Fr::from(5));
+        Expression::Mle(mle_ref_1) + Expression::Constant(Fr::from(5));
 
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
