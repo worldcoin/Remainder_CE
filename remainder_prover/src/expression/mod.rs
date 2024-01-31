@@ -765,474 +765,6 @@ pub enum ExpressionError {
     EvaluateBoundIndicesDontMatch,
 }
 
-///TODO!(Genericise this over the MleRef Trait)
-///Expression representing the relationship between the current layer and layers claims are being made on
-#[derive(Clone, Serialize, Deserialize)]
-pub enum ExpressionStandard<F> {
-    /// This is a constant polynomial
-    Constant(F),
-    /// This is a virtual selector
-    Selector(
-        MleIndex<F>,
-        Box<ExpressionStandard<F>>,
-        Box<ExpressionStandard<F>>,
-    ),
-    /// This is an MLE
-    Mle(DenseMleRef<F>),
-    /// This is a negated polynomial
-    Negated(Box<ExpressionStandard<F>>),
-    /// This is the sum of two polynomials
-    Sum(Box<ExpressionStandard<F>>, Box<ExpressionStandard<F>>),
-    /// This is the product of some polynomials
-    Product(Vec<DenseMleRef<F>>),
-    /// This is a scaled polynomial; Optionally a MleIndex to represent a fully bound mle that was this scalar
-    Scaled(Box<ExpressionStandard<F>>, F),
-}
-
-impl<F: FieldExt> ExpressionStandard<F> {
-
-    // generic, verifier
-
-    /// Evaluate the polynomial using the provided closures to perform the
-    /// operations.
-    #[allow(clippy::too_many_arguments)]
-    fn evaluate<T>(
-        &self,
-        constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>) -> T,
-        negated: &impl Fn(T) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[DenseMleRef<F>]) -> T,
-        scaled: &impl Fn(T, F) -> T,
-    ) -> T {
-        match self {
-            ExpressionStandard::Constant(scalar) => constant(*scalar),
-            ExpressionStandard::Selector(index, a, b) => selector_column(
-                index,
-                a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                ),
-                b.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                ),
-            ),
-            ExpressionStandard::Mle(query) => mle_eval(query),
-            ExpressionStandard::Negated(a) => {
-                let a = a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                negated(a)
-            }
-            ExpressionStandard::Sum(a, b) => {
-                let a = a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                let b = b.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                sum(a, b)
-            }
-            ExpressionStandard::Product(queries) => product(queries),
-            ExpressionStandard::Scaled(a, f) => {
-                let a = a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                scaled(a, *f)
-            }
-        }
-    }
-
-    // generic, all
-    /// traverse an expression
-    pub fn traverse<E>(
-        &self,
-        observer_fn: &mut impl FnMut(&ExpressionStandard<F>) -> Result<(), E>,
-    ) -> Result<(), E> {
-        observer_fn(self)?;
-        match self {
-            ExpressionStandard::Constant(_)
-            | ExpressionStandard::Mle(_)
-            | ExpressionStandard::Product(_) => Ok(()),
-            ExpressionStandard::Negated(exp) => exp.traverse(observer_fn),
-            ExpressionStandard::Scaled(exp, _) => exp.traverse(observer_fn),
-            ExpressionStandard::Selector(_, lhs, rhs) => {
-                lhs.traverse(observer_fn)?;
-                rhs.traverse(observer_fn)
-            }
-            ExpressionStandard::Sum(lhs, rhs) => {
-                lhs.traverse(observer_fn)?;
-                rhs.traverse(observer_fn)
-            }
-        }
-    }
-
-    // generic, all
-    ///Concatenates two expressions together
-    pub fn concat_expr(self, lhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
-        ExpressionStandard::Selector(MleIndex::Iterated, Box::new(lhs), Box::new(self))
-    }
-
-    // prover
-    /// fix the variable at a certain round index
-    pub fn fix_variable(&mut self, round_index: usize, challenge: F) {
-        match self {
-            ExpressionStandard::Selector(index, a, b) => {
-                if *index == MleIndex::IndexedBit(round_index) {
-                    index.bind_index(challenge);
-                } else {
-                    a.fix_variable(round_index, challenge);
-                    b.fix_variable(round_index, challenge);
-                }
-            }
-            ExpressionStandard::Mle(mle_ref) => {
-                if mle_ref
-                    .mle_indices()
-                    .contains(&MleIndex::IndexedBit(round_index))
-                {
-                    mle_ref.fix_variable(round_index, challenge);
-                }
-            }
-            ExpressionStandard::Negated(a) => a.fix_variable(round_index, challenge),
-            ExpressionStandard::Sum(a, b) => {
-                a.fix_variable(round_index, challenge);
-                b.fix_variable(round_index, challenge);
-            }
-            ExpressionStandard::Product(mle_refs) => {
-                for mle_ref in mle_refs {
-                    if mle_ref
-                        .mle_indices()
-                        .contains(&MleIndex::IndexedBit(round_index))
-                    {
-                        mle_ref.fix_variable(round_index, challenge);
-                    }
-                }
-            }
-            ExpressionStandard::Scaled(a, _) => {
-                a.fix_variable(round_index, challenge);
-            }
-            ExpressionStandard::Constant(_) => (),
-        }
-    }
-
-    /// prover
-    pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
-        // --- It's as simple as fixing all variables ---
-        challenges
-            .iter()
-            .enumerate()
-            .for_each(|(round_idx, &challenge)| {
-                self.fix_variable(round_idx, challenge);
-            });
-
-        let mut observer_fn = |exp: &ExpressionStandard<F>| -> Result<(), ExpressionError> {
-            match exp {
-                ExpressionStandard::Mle(mle_ref) => {
-                    let indices = mle_ref
-                        .mle_indices()
-                        .iter()
-                        .filter_map(|index| match index {
-                            MleIndex::Bound(chal, index) => Some((*chal, index)),
-                            _ => None,
-                        })
-                        .collect_vec();
-
-                    let start = *indices[0].1;
-                    let end = *indices[indices.len() - 1].1;
-
-                    let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
-
-                    if indices.as_slice() == &challenges[start..=end] {
-                        Ok(())
-                    } else {
-                        Err(ExpressionError::EvaluateBoundIndicesDontMatch)
-                    }
-                }
-                ExpressionStandard::Product(mle_refs) => mle_refs
-                    .iter()
-                    .map(|mle_ref| {
-                        let indices = mle_ref
-                            .mle_indices()
-                            .iter()
-                            .filter_map(|index| match index {
-                                MleIndex::Bound(chal, index) => Some((*chal, index)),
-                                _ => None,
-                            })
-                            .collect_vec();
-
-                        let start = *indices[0].1;
-                        let end = *indices[indices.len() - 1].1;
-
-                        let (indices, _): (Vec<_>, Vec<usize>) = indices.into_iter().unzip();
-
-                        if indices.as_slice() == &challenges[start..=end] {
-                            Ok(())
-                        } else {
-                            Err(ExpressionError::EvaluateBoundIndicesDontMatch)
-                        }
-                    })
-                    .try_collect(),
-
-                _ => Ok(()),
-            }
-        };
-        self.traverse(&mut observer_fn)?;
-
-        // --- Traverse the expression and pick up all the evals ---
-        gather_combine_all_evals(self)
-    }
-
-    // prover
-
-    ///Similar function to eval, but with minor changes to accomodate sumcheck's peculiarities
-    #[allow(clippy::too_many_arguments)]
-    pub fn evaluate_sumcheck<T>(
-        &self,
-        constant: &impl Fn(F, &DenseMleRef<F>) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, &DenseMleRef<F>) -> T,
-        negated: &impl Fn(T) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[DenseMleRef<F>], &DenseMleRef<F>) -> T,
-        scaled: &impl Fn(T, F) -> T,
-        beta_mle_ref: &DenseMleRef<F>,
-        round_index: usize,
-    ) -> T {
-        match self {
-            ExpressionStandard::Constant(scalar) => constant(*scalar, beta_mle_ref),
-            ExpressionStandard::Selector(index, a, b) => {
-                // need to check whether the selector bit is the current independent variable
-                if let MleIndex::IndexedBit(idx) = index {
-                    match Ord::cmp(&round_index, idx) {
-                        // if not, need to split the beta table according to the beta_split function
-                        std::cmp::Ordering::Less => {
-                            let (beta_mle_first, beta_mle_second) = beta_split(beta_mle_ref);
-                            selector_column(
-                                index,
-                                a.evaluate_sumcheck(
-                                    constant,
-                                    selector_column,
-                                    mle_eval,
-                                    negated,
-                                    sum,
-                                    product,
-                                    scaled,
-                                    &beta_mle_first,
-                                    round_index,
-                                ),
-                                b.evaluate_sumcheck(
-                                    constant,
-                                    selector_column,
-                                    mle_eval,
-                                    negated,
-                                    sum,
-                                    product,
-                                    scaled,
-                                    &beta_mle_second,
-                                    round_index,
-                                ),
-                            )
-                        }
-                        // otherwise, proceed normally
-                        std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => selector_column(
-                            index,
-                            a.evaluate_sumcheck(
-                                constant,
-                                selector_column,
-                                mle_eval,
-                                negated,
-                                sum,
-                                product,
-                                scaled,
-                                beta_mle_ref,
-                                round_index,
-                            ),
-                            b.evaluate_sumcheck(
-                                constant,
-                                selector_column,
-                                mle_eval,
-                                negated,
-                                sum,
-                                product,
-                                scaled,
-                                beta_mle_ref,
-                                round_index,
-                            ),
-                        ),
-                    }
-                } else {
-                    selector_column(
-                        index,
-                        a.evaluate_sumcheck(
-                            constant,
-                            selector_column,
-                            mle_eval,
-                            negated,
-                            sum,
-                            product,
-                            scaled,
-                            beta_mle_ref,
-                            round_index,
-                        ),
-                        b.evaluate_sumcheck(
-                            constant,
-                            selector_column,
-                            mle_eval,
-                            negated,
-                            sum,
-                            product,
-                            scaled,
-                            beta_mle_ref,
-                            round_index,
-                        ),
-                    )
-                }
-            }
-            ExpressionStandard::Mle(query) => mle_eval(query, beta_mle_ref),
-            ExpressionStandard::Negated(a) => {
-                let a = a.evaluate_sumcheck(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_mle_ref,
-                    round_index,
-                );
-                negated(a)
-            }
-            ExpressionStandard::Sum(a, b) => {
-                let a = a.evaluate_sumcheck(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_mle_ref,
-                    round_index,
-                );
-                let b = b.evaluate_sumcheck(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_mle_ref,
-                    round_index,
-                );
-                sum(a, b)
-            }
-            ExpressionStandard::Product(queries) => product(queries, beta_mle_ref),
-            ExpressionStandard::Scaled(a, f) => {
-                let a = a.evaluate_sumcheck(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_mle_ref,
-                    round_index,
-                );
-                scaled(a, *f)
-            }
-        }
-    }
-}
-
-// generic, verifier
-
-/// Helper function for `evaluate_expr` to traverse the expression and simply
-/// gather all of the evaluations, combining them as appropriate.
-/// Strictly speaking this doesn't need to be `&mut` but we call `self.evaluate()`
-/// within.
-pub fn gather_combine_all_evals<F: FieldExt>(
-    expr: &ExpressionStandard<F>,
-) -> Result<F, ExpressionError> {
-    let constant = |c| Ok(c);
-    let selector_column =
-        |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
-            // --- Selector bit must be bound ---
-            if let MleIndex::Bound(val, _) = idx {
-                return Ok(*val * rhs? + (F::one() - val) * lhs?);
-            }
-            Err(ExpressionError::SelectorBitNotBoundError)
-        };
-    let mle_eval = for<'a> |mle_ref: &'a DenseMleRef<F>| -> Result<F, ExpressionError> {
-        if mle_ref.bookkeeping_table().len() != 1 {
-            return Err(ExpressionError::EvaluateNotFullyBoundError);
-        }
-        Ok(mle_ref.bookkeeping_table()[0])
-    };
-    let negated = |a: Result<F, ExpressionError>| match a {
-        Err(e) => Err(e),
-        Ok(val) => Ok(val.neg()),
-    };
-    let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
-    let product = for<'a, 'b> |mle_refs: &'a [DenseMleRef<F>]| -> Result<F, ExpressionError> {
-        mle_refs.iter().try_fold(F::one(), |acc, new_mle_ref| {
-            // --- Accumulate either errors or multiply ---
-            if new_mle_ref.bookkeeping_table().len() != 1 {
-                return Err(ExpressionError::EvaluateNotFullyBoundError);
-            }
-            Ok(acc * new_mle_ref.bookkeeping_table()[0])
-        })
-    };
-    let scaled = |a: Result<F, ExpressionError>, scalar: F| Ok(a? * scalar);
-    expr.evaluate(
-        &constant,
-        &selector_column,
-        &mle_eval,
-        &negated,
-        &sum,
-        &product,
-        &scaled,
-    )
-}
-
 // generic, verifier
 
 /// Helper function for `evaluate_expr` to traverse the expression and simply
@@ -1276,217 +808,6 @@ pub fn gather_combine_all_evals_verifier<F: FieldExt>(
     )
 }
 
-impl<F: FieldExt> ExpressionStandard<F> {
-
-    // generic, all
-    ///Create a product Expression that multiplies many MLEs together
-    pub fn products(product_list: Vec<DenseMleRef<F>>) -> Self {
-        Self::Product(product_list)
-    }
-
-    // prover
-    /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
-    ///
-    /// Returns the max number of bits that are indexed
-    pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
-        match self {
-            ExpressionStandard::Selector(mle_index, a, b) => {
-                *mle_index = MleIndex::IndexedBit(curr_index);
-                let a_bits = a.index_mle_indices(curr_index + 1);
-                let b_bits = b.index_mle_indices(curr_index + 1);
-                max(a_bits, b_bits)
-            }
-            ExpressionStandard::Mle(mle_ref) => mle_ref.index_mle_indices(curr_index),
-            ExpressionStandard::Sum(a, b) => {
-                let a_bits = a.index_mle_indices(curr_index);
-                let b_bits = b.index_mle_indices(curr_index);
-                max(a_bits, b_bits)
-            }
-            ExpressionStandard::Product(mle_refs) => mle_refs
-                .iter_mut()
-                .map(|mle_ref| mle_ref.index_mle_indices(curr_index))
-                .reduce(max)
-                .unwrap_or(curr_index),
-            ExpressionStandard::Scaled(a, _) => a.index_mle_indices(curr_index),
-            ExpressionStandard::Negated(a) => a.index_mle_indices(curr_index),
-            ExpressionStandard::Constant(_) => curr_index,
-        }
-    }
-
-    // generic, all
-    ///traverse an expression mutably changing it's contents
-    pub fn traverse_mut<E>(
-        &mut self,
-        observer_fn: &mut impl FnMut(&mut ExpressionStandard<F>) -> Result<(), E>,
-    ) -> Result<(), E> {
-        // dbg!(&self);
-        observer_fn(self)?;
-        match self {
-            ExpressionStandard::Constant(_)
-            | ExpressionStandard::Mle(_)
-            | ExpressionStandard::Product(_) => Ok(()),
-            ExpressionStandard::Negated(exp) => exp.traverse_mut(observer_fn),
-            ExpressionStandard::Scaled(exp, _) => exp.traverse_mut(observer_fn),
-            ExpressionStandard::Selector(_, lhs, rhs) => {
-                lhs.traverse_mut(observer_fn)?;
-                rhs.traverse_mut(observer_fn)
-            }
-            ExpressionStandard::Sum(lhs, rhs) => {
-                lhs.traverse_mut(observer_fn)?;
-                rhs.traverse_mut(observer_fn)
-            }
-        }
-    }
-
-    // prover
-    ///Gets the size of an expression in terms of the number of rounds of sumcheck
-    pub fn get_expression_size(&self, curr_size: usize) -> usize {
-        match self {
-            ExpressionStandard::Selector(_mle_index, a, b) => {
-                let a_bits = a.get_expression_size(curr_size + 1);
-                let b_bits = b.get_expression_size(curr_size + 1);
-                max(a_bits, b_bits)
-            }
-            ExpressionStandard::Mle(mle_ref) => {
-                mle_ref
-                    .mle_indices()
-                    .iter()
-                    .filter(|item| {
-                        matches!(
-                            item,
-                            &&MleIndex::Iterated
-                                | &&MleIndex::IndexedBit(_)
-                                | &&MleIndex::Bound(_, _)
-                        )
-                    })
-                    .collect_vec()
-                    .len()
-                    + curr_size
-            }
-            ExpressionStandard::Sum(a, b) => {
-                let a_bits = a.get_expression_size(curr_size);
-                let b_bits = b.get_expression_size(curr_size);
-                max(a_bits, b_bits)
-            }
-            ExpressionStandard::Product(mle_refs) => {
-                mle_refs
-                    .iter()
-                    .map(|mle_ref| {
-                        mle_ref
-                            .mle_indices()
-                            .iter()
-                            .filter(|item| {
-                                matches!(
-                                    item,
-                                    &&MleIndex::Iterated
-                                        | &&MleIndex::IndexedBit(_)
-                                        | &&MleIndex::Bound(_, _)
-                                )
-                            })
-                            .collect_vec()
-                            .len()
-                    })
-                    .max()
-                    .unwrap_or(0)
-                    + curr_size
-            }
-            ExpressionStandard::Scaled(a, _) => a.get_expression_size(curr_size),
-            ExpressionStandard::Negated(a) => a.get_expression_size(curr_size),
-            ExpressionStandard::Constant(_) => curr_size,
-        }
-    }
-}
-
-// generic, all
-impl<F: std::fmt::Debug> std::fmt::Debug for ExpressionStandard<F> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExpressionStandard::Constant(scalar) => {
-                f.debug_tuple("Constant").field(scalar).finish()
-            }
-            ExpressionStandard::Selector(index, a, b) => f
-                .debug_tuple("Selector")
-                .field(index)
-                .field(a)
-                .field(b)
-                .finish(),
-            // Skip enum variant and print query struct directly to maintain backwards compatibility.
-            ExpressionStandard::Mle(_mle_ref) => {
-                f.debug_struct("Mle").field("mle_ref", _mle_ref).finish()
-            }
-            ExpressionStandard::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
-            ExpressionStandard::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),
-            ExpressionStandard::Product(a) => f.debug_tuple("Product").field(a).finish(),
-            ExpressionStandard::Scaled(poly, scalar) => {
-                f.debug_tuple("Scaled").field(poly).field(scalar).finish()
-            }
-        }
-    }
-}
-
-// generic, all
-impl<F: std::fmt::Debug + FieldExt> ExpressionStandard<F> {
-    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-        struct CircuitDesc<'a, F>(&'a ExpressionStandard<F>);
-        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for CircuitDesc<'a, F> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self.0 {
-                    ExpressionStandard::Constant(scalar) => {
-                        f.debug_tuple("const").field(scalar).finish()
-                    }
-                    ExpressionStandard::Selector(index, a, b) => f.write_fmt(format_args!("sel {index:?}; {}; {}", CircuitDesc(a), CircuitDesc(b))),
-                    // Skip enum variant and print query struct directly to maintain backwards compatibility.
-                    ExpressionStandard::Mle(mle_ref) => {
-                        f.debug_struct("mle").field("layer", &mle_ref.get_layer_id()).field("indices", &mle_ref.mle_indices()).finish()
-                    }
-                    ExpressionStandard::Negated(poly) => f.write_fmt(format_args!("-{}", CircuitDesc(poly))),
-                    ExpressionStandard::Sum(a, b) => f.write_fmt(format_args!("+ {}; {}", CircuitDesc(a), CircuitDesc(b))),
-                    ExpressionStandard::Product(a) => {
-                        let str = a.iter().map(|mle| {
-                            format!("{:?}; {:?}", mle.get_layer_id(), mle.mle_indices())
-                        }).reduce(|acc, str| acc + &str).unwrap();
-                        f.write_str(&str)
-                    },
-                    ExpressionStandard::Scaled(poly, scalar) => {
-                        f.write_fmt(format_args!("* {}; {:?}", CircuitDesc(poly), scalar))
-                    }
-                }
-            }
-        }
-
-        CircuitDesc(self)
-    }
-}
-
-// generic, all
-impl<F: FieldExt> Neg for ExpressionStandard<F> {
-    type Output = ExpressionStandard<F>;
-    fn neg(self) -> Self::Output {
-        ExpressionStandard::Negated(Box::new(self))
-    }
-}
-
-impl<F: FieldExt> Add for ExpressionStandard<F> {
-    type Output = ExpressionStandard<F>;
-    fn add(self, rhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
-        ExpressionStandard::Sum(Box::new(self), Box::new(rhs))
-    }
-}
-
-impl<F: FieldExt> Sub for ExpressionStandard<F> {
-    type Output = ExpressionStandard<F>;
-    fn sub(self, rhs: ExpressionStandard<F>) -> ExpressionStandard<F> {
-        ExpressionStandard::Sum(Box::new(self), Box::new(rhs.neg()))
-    }
-}
-
-impl<F: FieldExt> Mul<F> for ExpressionStandard<F> {
-    type Output = ExpressionStandard<F>;
-    fn mul(self, rhs: F) -> ExpressionStandard<F> {
-        ExpressionStandard::Scaled(Box::new(self), rhs)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{layer::LayerId, mle::dense::DenseMle};
@@ -1497,7 +818,7 @@ mod tests {
 
     // #[test]
     // fn test_expression_operators() {
-    //     let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+    //     let expression1: Expression<Fr, ProverExpression> = Expression::Constant(Fr::one());
 
     //     let mle = DenseMle::new_from_raw(
     //         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
@@ -1506,11 +827,11 @@ mod tests {
     //     )
     //     .mle_ref();
 
-    //     let expression3 = ExpressionStandard::Mle(mle.clone());
+    //     let expression3 = Expression::Mle(mle.clone());
 
     //     let expression = expression1.clone() + expression3.clone();
 
-    //     let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
+    //     let expression_product = Expression::products(vec![mle.clone(), mle]);
 
     //     let expression = expression_product + expression;
 
@@ -1527,9 +848,9 @@ mod tests {
 
     #[test]
     fn test_constants_eval() {
-        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+        let expression1: Expression<Fr, ProverExpression> = Expression::Constant(Fr::one());
 
-        let expression2: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::from(2));
+        let expression2: Expression<Fr, ProverExpression> = Expression::Constant(Fr::from(2));
 
         let expression3 = expression1.clone() + expression2.clone();
 
@@ -1553,7 +874,7 @@ mod tests {
         )
         .mle_ref();
 
-        let mut expression = ExpressionStandard::Mle(mle);
+        let mut expression = Expression::Mle(mle);
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 2);
 
@@ -1580,7 +901,7 @@ mod tests {
         )
         .mle_ref();
 
-        let mut expression = ExpressionStandard::Mle(mle);
+        let mut expression = Expression::Mle(mle);
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 3);
 
@@ -1598,8 +919,8 @@ mod tests {
         )
         .mle_ref();
 
-        let expression = ExpressionStandard::Mle(mle);
-        let mut expression = (expression + ExpressionStandard::Constant(Fr::from(5))) * Fr::from(2);
+        let expression = Expression::Mle(mle);
+        let mut expression = (expression + Expression::Constant(Fr::from(5))) * Fr::from(2);
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 2);
 
@@ -1617,7 +938,7 @@ mod tests {
         )
         .mle_ref();
 
-        let expression_1 = ExpressionStandard::Mle(mle_1);
+        let expression_1 = Expression::Mle(mle_1);
 
         let mle_2 = DenseMle::new_from_raw(
             vec![Fr::from(1), Fr::from(9), Fr::from(8), Fr::from(2)],
@@ -1626,7 +947,7 @@ mod tests {
         )
         .mle_ref();
 
-        let expression_2 = ExpressionStandard::Mle(mle_2);
+        let expression_2 = Expression::Mle(mle_2);
 
         let mut expression = expression_1.concat_expr(expression_2);
 
@@ -1654,7 +975,7 @@ mod tests {
 
         let challenge_concat = vec![Fr::from(7), Fr::from(3), Fr::from(2)]; // move the first challenge towards the end
 
-        let mut expression_concat = ExpressionStandard::Mle(mle_concat);
+        let mut expression_concat = Expression::Mle(mle_concat);
 
         let num_indices_concat = expression_concat.index_mle_indices(0);
         assert_eq!(num_indices_concat, 3);
@@ -1673,9 +994,9 @@ mod tests {
         )
         .mle_ref();
 
-        let expression_1 = ExpressionStandard::Mle(mle_1);
+        let expression_1 = Expression::Mle(mle_1);
 
-        let mut expression = expression_1.concat_expr(ExpressionStandard::Constant(Fr::from(5)));
+        let mut expression = expression_1.concat_expr(Expression::Constant(Fr::from(5)));
 
         let num_indices = expression.index_mle_indices(0);
         assert_eq!(num_indices, 3);
@@ -1698,7 +1019,7 @@ mod tests {
         )
         .mle_ref();
 
-        let mut expression_1 = ExpressionStandard::Mle(mle_1.clone());
+        let mut expression_1 = Expression::Mle(mle_1.clone());
         let _ = expression_1.index_mle_indices(0);
         let eval_1 = expression_1.evaluate_expr(challenge.clone()).unwrap();
 
@@ -1709,11 +1030,11 @@ mod tests {
         )
         .mle_ref();
 
-        let mut expression_2 = ExpressionStandard::Mle(mle_2.clone());
+        let mut expression_2 = Expression::Mle(mle_2.clone());
         let _ = expression_2.index_mle_indices(0);
         let eval_2 = expression_2.evaluate_expr(challenge.clone()).unwrap();
 
-        let mut expression_product = ExpressionStandard::products(vec![mle_1, mle_2]);
+        let mut expression_product = Expression::products(vec![mle_1, mle_2]);
         let num_indices = expression_product.index_mle_indices(0);
         assert_eq!(num_indices, 2);
 
@@ -1735,7 +1056,7 @@ mod tests {
         )
         .mle_ref();
 
-        let expression_1 = ExpressionStandard::Mle(mle_1);
+        let expression_1 = Expression::Mle(mle_1);
 
         let mle_2 = DenseMle::new_from_raw(
             vec![
@@ -1753,7 +1074,7 @@ mod tests {
         )
         .mle_ref();
 
-        let expression_2 = ExpressionStandard::Mle(mle_2);
+        let expression_2 = Expression::Mle(mle_2);
 
         let mut expression = expression_1 + expression_2;
         let num_indices = expression.index_mle_indices(0);
@@ -1792,7 +1113,7 @@ mod tests {
         )
         .mle_ref();
 
-        let mut expression_product = ExpressionStandard::products(vec![mle_1, mle_2]);
+        let mut expression_product = Expression::products(vec![mle_1, mle_2]);
         let num_indices = expression_product.index_mle_indices(0);
         assert_eq!(num_indices, 3);
 
@@ -1816,7 +1137,7 @@ mod tests {
     //     ])
     //     .mle_ref();
 
-    //     let mut expression = ExpressionStandard::Mle(mle);
+    //     let mut expression = Expression::Mle(mle);
     //     let _ = expression.index_mle_indices(3);
 
     //     let challenge = vec![Fr::from(-2), Fr::from(3), Fr::from(5)];
@@ -1826,7 +1147,7 @@ mod tests {
 
     #[test]
     fn big_test_eval() {
-        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+        let expression1: Expression<Fr, ProverExpression> = Expression::Constant(Fr::one());
 
         let mle = DenseMle::new_from_raw(
             vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::one()],
@@ -1835,11 +1156,11 @@ mod tests {
         )
         .mle_ref();
 
-        let expression3 = ExpressionStandard::Mle(mle.clone());
+        let expression3 = Expression::Mle(mle.clone());
 
         let expression = expression1.clone() + expression3.clone();
 
-        let expression_product = ExpressionStandard::products(vec![mle.clone(), mle]);
+        let expression_product = Expression::products(vec![mle.clone(), mle]);
 
         let expression = expression_product + expression;
 
