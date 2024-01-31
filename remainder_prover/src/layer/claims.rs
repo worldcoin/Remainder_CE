@@ -778,7 +778,8 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 // Makis: Making this public so that I can access some of the helper functions
 // from "sumcheck/tests.rs".
 pub(crate) mod tests {
-    use crate::expression::{Expression, ProverExpression};
+    use crate::expression::generic_expr::Expression;
+    use crate::expression::prover_expr::ProverExpression;
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::dense::DenseMle;
     use rand::Rng;

@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use thiserror::Error;
 
 use crate::{
-    expression::{Expression, ProverExpression},
+    expression::{generic_expr::Expression, prover_expr::ProverExpression},
     mle::{
         dense::{DenseMle, DenseMleRef},
         zero::ZeroMleRef,
@@ -340,7 +340,7 @@ mod tests {
     use itertools::Itertools;
 
     use crate::{
-        expression::{Expression, ProverExpression},
+        expression::{generic_expr::Expression, prover_expr::ProverExpression},
         layer::{from_mle, LayerBuilder, LayerId},
         mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},

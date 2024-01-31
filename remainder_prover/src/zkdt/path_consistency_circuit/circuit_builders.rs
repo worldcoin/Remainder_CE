@@ -1,6 +1,6 @@
 use remainder_shared_types::FieldExt;
 
-use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef, Mle}, zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode}, layer::{LayerBuilder, LayerId}, expression::{Expression, ProverExpression}};
+use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef, Mle}, zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode}, layer::{LayerBuilder, LayerId}, expression::{generic_expr::Expression, prover_expr::ProverExpression}};
 
 
 pub struct SubtractBuilder<F: FieldExt> {

@@ -14,7 +14,7 @@ use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
 
 use crate::{
-    expression::{Expression, ExpressionError, ProverExpression},
+    expression::{expr_errors::ExpressionError, generic_expr::Expression, prover_expr::ProverExpression},
     mle::{beta::BetaTable, dense::{DenseMleRef, DenseMle}, MleIndex, MleRef},
 };
 use remainder_shared_types::FieldExt;

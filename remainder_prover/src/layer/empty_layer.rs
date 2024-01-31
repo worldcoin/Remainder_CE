@@ -3,9 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{gather_combine_all_evals_verifier, Expression, ProverExpression},
-    mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable},
-    prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals},
+    expression::{generic_expr::Expression, prover_expr::ProverExpression, verifier_expr::gather_combine_all_evals_verifier}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
 };
 use ark_std::{cfg_into_iter};
 use remainder_shared_types::{transcript::Transcript, FieldExt};

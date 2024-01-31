@@ -12,7 +12,7 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
-use crate::{expression::{Expression, ProverExpression}, layer::claims::Claim};
+use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpression}, layer::claims::Claim};
 use crate::{
     layer::{batched::combine_mles, LayerId},
     zkdt::structs::combine_mle_refs,

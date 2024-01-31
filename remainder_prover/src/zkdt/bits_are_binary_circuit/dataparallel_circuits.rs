@@ -2,7 +2,7 @@ use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use crate::{mle::{dense::DenseMle, Mle, MleRef, zero::ZeroMleRef, MleIndex}, zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, BinDecomp8Bit}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}, Layers}, layer::{LayerId, batched::{BatchedLayer, combine_zero_mle_ref}, from_mle}, expression::Expression};
+use crate::{expression::generic_expr::Expression, layer::{LayerId, batched::{BatchedLayer, combine_zero_mle_ref}, from_mle}, mle::{dense::DenseMle, Mle, MleRef, zero::ZeroMleRef, MleIndex}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}, Layers}, zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, BinDecomp8Bit}};
 
 /// Checks that all of the bits within a `BinDecomp16Bit` are indeed binary
 /// via b_i^2 - b_i = 0 (but it's batched)

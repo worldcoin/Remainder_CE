@@ -647,15 +647,11 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
 mod tests {
     use super::*;
     use crate::{
-        expression::{Expression, ProverExpression},
-        layer::{LayerId, claims::Claim},
-        mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef},
-        sumcheck::{
+        expression::{generic_expr::Expression, prover_expr::ProverExpression}, layer::{LayerId, claims::Claim}, mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef}, sumcheck::{
             compute_sumcheck_message, get_round_degree,
             tests::{dummy_sumcheck, get_dummy_expression_eval, verify_sumcheck_messages},
             Evals,
-        },
-        zkdt::cache_upshot_catboost_inputs_for_testing::write_mles_batch_catboost_single_tree,
+        }, zkdt::cache_upshot_catboost_inputs_for_testing::write_mles_batch_catboost_single_tree
     };
     use remainder_shared_types::Fr;
     use ark_std::test_rng;

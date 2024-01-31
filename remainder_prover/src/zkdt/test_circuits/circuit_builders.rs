@@ -1,5 +1,6 @@
 //! Extra builders for debugging/circuit testing
-use crate::expression::{Expression, ProverExpression};
+use crate::expression::generic_expr::Expression;
+use crate::expression::prover_expr::ProverExpression;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle};

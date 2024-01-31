@@ -17,17 +17,14 @@ use thiserror::Error;
 use tracing::Value;
 
 use crate::{
-    expression::{gather_combine_all_evals_verifier, Expression, ExpressionError, ProverExpression},
-    mle::{
+    expression::{expr_errors::ExpressionError, generic_expr::Expression, prover_expr::ProverExpression, verifier_expr::gather_combine_all_evals_verifier}, mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
         dense::DenseMleRef,
         mle_enum::MleEnum,
         MleIndex, MleRef,
-    },
-    prover::{SumcheckProof, ENABLE_OPTIMIZATION},
-    sumcheck::{
+    }, prover::{SumcheckProof, ENABLE_OPTIMIZATION}, sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
-    },
+    }
 };
 use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},

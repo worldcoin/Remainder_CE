@@ -1,7 +1,7 @@
 
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 
-use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef}, layer::{LayerBuilder, LayerId}, expression::{Expression, ProverExpression}};
+use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef}, layer::{LayerBuilder, LayerId}, expression::{generic_expr::Expression, prover_expr::ProverExpression}};
 
 /// Does the building for taking two MLEs of size two and multiplying each 
 /// to itself, then adding the results into a single MLE of size 1

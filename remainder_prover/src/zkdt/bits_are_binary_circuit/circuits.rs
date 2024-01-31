@@ -1,6 +1,6 @@
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use crate::{mle::{dense::DenseMle, Mle, MleRef, zero::ZeroMleRef}, zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}, Layers}, layer::{LayerId, from_mle}, expression::Expression};
+use crate::{expression::generic_expr::Expression, layer::{LayerId, from_mle}, mle::{dense::DenseMle, Mle, MleRef, zero::ZeroMleRef}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}, Layers}, zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit}};
 
 /// Checks that all of the bits within a `BinDecomp16Bit` are indeed binary
 /// via b_i^2 - b_i = 0
