@@ -1,5 +1,5 @@
 //! Extra builders for debugging/circuit testing
-use crate::expression::ExpressionStandard;
+use crate::expression::{Expression, ProverExpression};
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle};
@@ -17,8 +17,8 @@ pub struct FSRandomBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for FSRandomBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle.mle_ref()) - ExpressionStandard::Mle(self.val_mle.mle_ref())
+    fn build_expression(&self) -> Expression<F, ProverExpression> {
+        Expression::Mle(self.mle.mle_ref()) - Expression::Mle(self.val_mle.mle_ref())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -49,8 +49,8 @@ pub struct SelfMinusSelfBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for SelfMinusSelfBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self.mle.mle_ref()) - ExpressionStandard::Mle(self.mle.mle_ref())
+    fn build_expression(&self) -> Expression<F, ProverExpression> {
+        Expression::Mle(self.mle.mle_ref()) - Expression::Mle(self.mle.mle_ref())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {

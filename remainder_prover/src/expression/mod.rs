@@ -20,33 +20,38 @@ use remainder_shared_types::FieldExt;
 
 /// Different Expression Types corresponds to different stages in the
 /// lift cycle of an expression
-pub trait ExpressionType<F: FieldExt> {
+pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
     /// What the expression is over
     /// for prover expression, it's over DenseMleRef
     /// for verifier expression, it's over Vec<F>
     /// for abstract expression, it's over []
-    type Container;
+    type Container: Serialize + for<'de> Deserialize<'de>;
 }
 
 /// Prover Expression
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProverExpression;
 impl<F: FieldExt> ExpressionType<F> for ProverExpression {
     type Container = DenseMleRef<F>;
 }
 
 /// Verifier Expression
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct VerifierExpression;
 impl<F: FieldExt> ExpressionType<F> for VerifierExpression {
     type Container = F;
 }
 
 /// Abstract Expression
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AbstractExpression;
 impl<F: FieldExt> ExpressionType<F> for AbstractExpression {
     type Container = Vec<F>;
 }
 
 /// Generic Expression
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(bound = "F: FieldExt")]
 pub enum Expression<F: FieldExt, E: ExpressionType<F>> {
     /// constant
     Constant(F),

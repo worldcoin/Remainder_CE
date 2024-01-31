@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{gather_combine_all_evals, ExpressionStandard},
+    expression::{gather_combine_all_evals, gather_combine_all_evals_verifier, Expression, ProverExpression},
     mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable},
     prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals},
 };
@@ -21,8 +21,8 @@ use super::{
 ///A Layer with 0 num_vars
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct EmptyLayer<F, Tr> {
-    pub(crate) expr: ExpressionStandard<F>,
+pub struct EmptyLayer<F: FieldExt, Tr> {
+    pub(crate) expr: Expression<F, ProverExpression>,
     id: LayerId,
     _marker: PhantomData<Tr>,
 }
@@ -35,7 +35,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         _: Claim<F>,
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-        let eval = gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
+        let eval = gather_combine_all_evals_verifier(&self.expr.transform_to_verifier_expression().unwrap()).map_err(LayerError::ExpressionError)?;
 
         Ok(vec![vec![eval]].into())
     }
@@ -71,9 +71,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionStandard<F>| {
+        let mut observer_fn = |exp: &Expression<F, ProverExpression>| {
             match exp {
-                ExpressionStandard::Mle(mle_ref) => {
+                Expression::Mle(mle_ref) => {
                     // --- First ensure that all the indices are fixed ---
                     let mle_indices = mle_ref.mle_indices();
 
@@ -105,7 +105,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                     // --- Also push the layer_id ---
                     claims.push(claim);
                 }
-                ExpressionStandard::Product(mle_refs) => {
+                Expression::Product(mle_refs) => {
                     for mle_ref in mle_refs {
                         // --- First ensure that all the indices are fixed ---
                         let mle_indices = mle_ref.mle_indices();
@@ -182,11 +182,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
 impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
     ///Gets this layer's underlying expression
-    pub fn expression(&self) -> &ExpressionStandard<F> {
+    pub fn expression(&self) -> &Expression<F, ProverExpression> {
         &self.expr
     }
 
-    pub(crate) fn new_raw(id: LayerId, expr: ExpressionStandard<F>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expr: Expression<F, ProverExpression>) -> Self {
         Self {
             id,
             expr,

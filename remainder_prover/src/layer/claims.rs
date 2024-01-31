@@ -778,7 +778,7 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 // Makis: Making this public so that I can access some of the helper functions
 // from "sumcheck/tests.rs".
 pub(crate) mod tests {
-    use crate::expression::ExpressionStandard;
+    use crate::expression::{Expression, ProverExpression};
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
@@ -791,13 +791,13 @@ pub(crate) mod tests {
     #[test]
     fn test_get_claim() {
         // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
-        let expression1: ExpressionStandard<Fr> = ExpressionStandard::Constant(Fr::one());
+        let expression1: Expression<Fr, ProverExpression> = Expression::Constant(Fr::one());
         let mle = DenseMle::<_, Fr>::new_from_raw(
             vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
             LayerId::Input(0),
             None,
         );
-        let expression3 = ExpressionStandard::Mle(mle.mle_ref());
+        let expression3 = Expression::Mle(mle.mle_ref());
         let expression = expression1.clone() + expression3.clone();
         // let expression = expression1.clone() * expression;
         let expression = expression1 - expression;
@@ -812,7 +812,7 @@ pub(crate) mod tests {
     /// Builds `ClaimGroup<Fr>` by evaluation an expression `expr` on
     /// each point in `points`.
     fn claims_from_expr_and_points(
-        expr: &ExpressionStandard<Fr>,
+        expr: &Expression<Fr, ProverExpression>,
         points: &Vec<Vec<Fr>>,
     ) -> ClaimGroup<Fr> {
         let claims_vector: Vec<Claim<Fr>> = cfg_into_iter!(points)
@@ -1041,12 +1041,12 @@ pub(crate) mod tests {
         let mle_ref = mle1.mle_ref();
         let mle_ref2 = mle2.mle_ref();
 
-        let expr = ExpressionStandard::Product(vec![mle_ref, mle_ref2]);
+        let expr = Expression::Product(vec![mle_ref, mle_ref2]);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
             (mle1, mle2),
-            |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]),
+            |mle| Expression::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]),
             |_, _, _| unimplemented!(),
         );
         let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
@@ -1106,7 +1106,7 @@ pub(crate) mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let expr = ExpressionStandard::Mle(mle_ref);
+        let expr = Expression::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -1171,7 +1171,7 @@ pub(crate) mod tests {
         ];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let expr = ExpressionStandard::Mle(mle_ref);
+        let expr = Expression::Mle(mle_ref);
         let mut expr_copy = expr.clone();
 
         let layer = from_mle(
@@ -1360,7 +1360,7 @@ pub(crate) mod tests {
         let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
         let mle_ref = mle1.mle_ref();
-        let mut expr = ExpressionStandard::Mle(mle_ref);
+        let mut expr = Expression::Mle(mle_ref);
         let _expr_copy = expr.clone();
 
         let layer = from_mle(

@@ -8,7 +8,7 @@ use remainder_shared_types::{transcript::Transcript, FieldExt};
 use thiserror::Error;
 
 use crate::{
-    expression::ExpressionStandard,
+    expression::{Expression, ProverExpression},
     layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
@@ -183,9 +183,9 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
             _ => Err(CombineError),
         }?;
 
-        let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
+        let mut closure = for<'a> |expr: &'a mut Expression<F, ProverExpression>| -> Result<(), ()> {
             match expr {
-                ExpressionStandard::Mle(mle) => {
+                Expression::Mle(mle) => {
                     if mle.layer_id == effected_layer {
                         mle.mle_indices = new_bits
                             .iter()
@@ -200,7 +200,7 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                     }
                     Ok(())
                 }
-                ExpressionStandard::Product(mles) => {
+                Expression::Product(mles) => {
                     for mle in mles {
                         if mle.layer_id == effected_layer {
                             mle.mle_indices = new_bits
@@ -217,11 +217,11 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
                     }
                     Ok(())
                 }
-                ExpressionStandard::Constant(_)
-                | ExpressionStandard::Scaled(_, _)
-                | ExpressionStandard::Sum(_, _)
-                | ExpressionStandard::Negated(_)
-                | ExpressionStandard::Selector(_, _, _) => Ok(()),
+                Expression::Constant(_)
+                | Expression::Scaled(_, _)
+                | Expression::Sum(_, _)
+                | Expression::Negated(_)
+                | Expression::Selector(_, _, _) => Ok(()),
             }
         };
 
@@ -264,8 +264,8 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
 
 ///Combine expression w/ padding using selectors
 fn combine_expressions<F: FieldExt>(
-    mut exprs: Vec<ExpressionStandard<F>>,
-) -> ExpressionStandard<F> {
+    mut exprs: Vec<Expression<F, ProverExpression>>,
+) -> Expression<F, ProverExpression> {
     let _floor_size = exprs
         .iter()
         .map(|expr| expr.get_expression_size(0))
@@ -313,11 +313,11 @@ fn combine_expressions<F: FieldExt>(
 ///
 /// Basically turns V(b_1) = \[1, 2\] to V(b_1, b_2) = \[1, 2, 0, 0\] but with expressions
 fn add_padding<F: FieldExt>(
-    mut expr: ExpressionStandard<F>,
+    mut expr: Expression<F, ProverExpression>,
     num_padding: usize,
-) -> ExpressionStandard<F> {
+) -> Expression<F, ProverExpression> {
     for _ in 0..num_padding {
-        expr = ExpressionStandard::Constant(F::zero()).concat_expr(expr);
+        expr = Expression::Constant(F::zero()).concat_expr(expr);
     }
     expr
 }
