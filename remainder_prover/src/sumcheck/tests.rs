@@ -1,6 +1,5 @@
 use super::*;
 use crate::{
-    expression::Expression,
     layer::{
         // claims::tests::claim_aggregation_testing_wrapper,
         claims::Claim,
