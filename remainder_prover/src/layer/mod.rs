@@ -17,7 +17,7 @@ use thiserror::Error;
 use tracing::Value;
 
 use crate::{
-    expression::{expr_errors::ExpressionError, generic_expr::Expression, prover_expr::ProverExpression, verifier_expr::gather_combine_all_evals_verifier}, mle::{
+    expression::{expr_errors::ExpressionError, generic_expr::Expression, prover_expr::ProverExpression}, mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
         dense::DenseMleRef,
         mle_enum::MleEnum,
@@ -394,7 +394,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- This automatically asserts that the expression is fully bound and simply ---
         // --- attempts to combine/collect the expression evaluated at the (already bound) challenge coords ---
-        let expr_evaluated_at_challenge_coord = gather_combine_all_evals_verifier(&self.expression.transform_to_verifier_expression().unwrap()).unwrap();
+        let expr_evaluated_at_challenge_coord = self.expression.transform_to_verifier_expression().unwrap().gather_combine_all_evals().unwrap();
 
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---

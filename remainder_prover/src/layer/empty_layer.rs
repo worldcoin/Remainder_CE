@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{generic_expr::Expression, prover_expr::ProverExpression, verifier_expr::gather_combine_all_evals_verifier}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
+    expression::{generic_expr::Expression, prover_expr::ProverExpression}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
 };
 use ark_std::{cfg_into_iter};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -33,7 +33,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         _: Claim<F>,
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-        let eval = gather_combine_all_evals_verifier(&self.expr.transform_to_verifier_expression().unwrap()).map_err(LayerError::ExpressionError)?;
+        let eval = self.expr.transform_to_verifier_expression().unwrap().gather_combine_all_evals().map_err(LayerError::ExpressionError)?;
 
         Ok(vec![vec![eval]].into())
     }
