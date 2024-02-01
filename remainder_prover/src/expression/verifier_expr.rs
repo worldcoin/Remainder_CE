@@ -1,7 +1,4 @@
-use std::{
-    cmp::max,
-    fmt::Debug,
-};
+use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 use crate::mle::MleIndex;
 
