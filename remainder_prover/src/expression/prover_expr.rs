@@ -1,25 +1,15 @@
-//! An expression is a type which allows for expressing the definition of a GKR layer
-
 use std::{
     cmp::max,
     fmt::Debug,
-    ops::{Add, Mul, Neg, Sub},
 };
-
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
-use crate::{
-    mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef},
-    sumcheck::MleError,
-};
-
+use crate::mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef};
 use remainder_shared_types::FieldExt;
-
-use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionType}, verifier_expr::{gather_combine_all_evals_verifier, VerifierExpression}};
+use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionType}, verifier_expr::{VerifierExpression}};
 
 /// Prover Expression
+/// the leaf nodes of the expression tree are DenseMleRefs
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProverExpression;
 impl<F: FieldExt> ExpressionType<F> for ProverExpression {
@@ -27,7 +17,8 @@ impl<F: FieldExt> ExpressionType<F> for ProverExpression {
 }
 
 
-/// specific methods for prover expressions
+/// this is what the prover manipulates to prove the correctness of the computation.
+/// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
 impl<F: FieldExt> Expression<F, ProverExpression> {
 
     /// transforms the expression to a verifier expression
@@ -87,7 +78,6 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
         }
     }
 
-    // prover
     /// fix the variable at a certain round index
     pub fn fix_variable(&mut self, round_index: usize, challenge: F) {
         match self {
@@ -129,7 +119,7 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
         }
     }
 
-    /// prover
+    /// evaluates an expression on the given challenges points, by fixing the variables
     pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
         // --- It's as simple as fixing all variables ---
         challenges
@@ -192,15 +182,14 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
             }
         };
         self.traverse(&mut observer_fn)?;
-        // ----- this is literally a check -----
+        // ----- this is literally a check ends -----
 
         // --- Traverse the expression and pick up all the evals ---
-        gather_combine_all_evals_verifier(&self.transform_to_verifier_expression().unwrap())
+        self.transform_to_verifier_expression().unwrap().gather_combine_all_evals()
     }
 
-    // prover
 
-    ///Similar function to eval, but with minor changes to accomodate sumcheck's peculiarities
+    /// computes the sumcheck message for the given round index, and beta mle
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate_sumcheck<T>(
         &self,
@@ -362,9 +351,7 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
         }
     }
 
-    // prover
     /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
-    ///
     /// Returns the max number of bits that are indexed
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {
@@ -391,8 +378,7 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
         }
     }
 
-    // prover
-    ///Gets the size of an expression in terms of the number of rounds of sumcheck
+    /// Gets the size of an expression in terms of the number of rounds of sumcheck
     pub fn get_expression_size(&self, curr_size: usize) -> usize {
         match self {
             Expression::Selector(_mle_index, a, b) => {
@@ -451,7 +437,7 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
 }
 
 
-// prover
+/// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
 impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpression> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
         struct CircuitDesc<'a, F: FieldExt>(&'a Expression<F, ProverExpression>);

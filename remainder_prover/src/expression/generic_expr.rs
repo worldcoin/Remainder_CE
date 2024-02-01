@@ -1,18 +1,9 @@
 use std::{
-    cmp::max,
     fmt::Debug,
     ops::{Add, Mul, Neg, Sub},
 };
-
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
-use crate::{
-    mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef},
-    sumcheck::MleError,
-};
-
+use crate::mle::MleIndex;
 use remainder_shared_types::FieldExt;
 
 
@@ -22,11 +13,11 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
     /// What the expression is over
     /// for prover expression, it's over DenseMleRef
     /// for verifier expression, it's over Vec<F>
-    /// for abstract expression, it's over []
+    /// for abstract expression, it's over [TBD]
     type Container: Serialize + for<'de> Deserialize<'de>;
 }
 
-/// Generic Expression
+/// Generic Expressions
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub enum Expression<F: FieldExt, E: ExpressionType<F>> {
@@ -53,94 +44,7 @@ pub enum Expression<F: FieldExt, E: ExpressionType<F>> {
 /// generic methods shared across all types of expressions
 impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
 
-    // generic, verifier
-    /// Evaluate the polynomial using the provided closures to perform the
-    /// operations.
-    #[allow(clippy::too_many_arguments)]
-    pub fn evaluate<T>(
-        &self,
-        constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&E::Container) -> T,
-        negated: &impl Fn(T) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[E::Container]) -> T,
-        scaled: &impl Fn(T, F) -> T,
-    ) -> T {
-        match self {
-            Expression::Constant(scalar) => constant(*scalar),
-            Expression::Selector(index, a, b) => selector_column(
-                index,
-                a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                ),
-                b.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                ),
-            ),
-            Expression::Mle(query) => mle_eval(query),
-            Expression::Negated(a) => {
-                let a = a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                negated(a)
-            }
-            Expression::Sum(a, b) => {
-                let a = a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                let b = b.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                sum(a, b)
-            }
-            Expression::Product(queries) => product(queries),
-            Expression::Scaled(a, f) => {
-                let a = a.evaluate(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                );
-                scaled(a, *f)
-            }
-        }
-    }
-
-    /// generic, all
+    /// traverse the expression tree, and applies the observer_fn to all child node
     pub fn traverse<D>(
         &self,
         observer_fn: &mut impl FnMut(&Expression<F, E>) -> Result<(), D>,
@@ -163,20 +67,7 @@ impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
         }
     }
 
-    // generic, all
-    ///Concatenates two expressions together
-    pub fn concat_expr(self, lhs: Expression<F, E>) -> Expression<F, E> {
-        Expression::Selector(MleIndex::Iterated, Box::new(lhs), Box::new(self))
-    }
-
-    // generic, all
-    ///Create a product Expression that multiplies many MLEs together
-    pub fn products(product_list: Vec<E::Container>) -> Self {
-        Self::Product(product_list)
-    }
-
-    // generic, all
-    ///traverse an expression mutably changing it's contents
+    /// similar to traverse, but allows mutation of self
     pub fn traverse_mut<D>(
         &mut self,
         observer_fn: &mut impl FnMut(&mut Expression<F, E>) -> Result<(), D>,
@@ -199,10 +90,20 @@ impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
             }
         }
     }
+
+    /// Concatenates two expressions together
+    pub fn concat_expr(self, lhs: Expression<F, E>) -> Expression<F, E> {
+        Expression::Selector(MleIndex::Iterated, Box::new(lhs), Box::new(self))
+    }
+
+    /// Create a product Expression that multiplies many MLEs together
+    pub fn products(product_list: Vec<E::Container>) -> Self {
+        Self::Product(product_list)
+    }
 }
 
 
-// generic, all
+// the following implements the basic arithmetic operations for the generic expression
 impl<F: FieldExt, E: ExpressionType<F>> Neg for Expression<F, E> {
     type Output = Expression<F, E>;
     fn neg(self) -> Self::Output {
@@ -232,7 +133,7 @@ impl<F: FieldExt, E: ExpressionType<F>> Mul<F> for Expression<F, E> {
 }
 
 
-// generic, all
+// defines how the Expressions are printed and displayed
 impl<F: std::fmt::Debug + FieldExt, C: Debug, E: ExpressionType<F, Container = C>> std::fmt::Debug for Expression<F, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
