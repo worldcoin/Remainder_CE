@@ -4,7 +4,7 @@ use crate::mle::MleIndex;
 
 use remainder_shared_types::FieldExt;
 
-use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionType}};
+use super::{expr_errors::ExpressionError, generic_expr::{ExpressionNode, ExpressionType}};
 
 
 /// Verifier Expression
@@ -15,7 +15,7 @@ impl<F: FieldExt> ExpressionType<F> for VerifierExpression {
     type Container = F;
 }
 
-impl<F: FieldExt> Expression<F, VerifierExpression> {
+impl<F: FieldExt> ExpressionNode<F, VerifierExpression> {
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
     #[allow(clippy::too_many_arguments)]
@@ -30,8 +30,8 @@ impl<F: FieldExt> Expression<F, VerifierExpression> {
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
-            Expression::Constant(scalar) => constant(*scalar),
-            Expression::Selector(index, a, b) => selector_column(
+            ExpressionNode::Constant(scalar) => constant(*scalar),
+            ExpressionNode::Selector(index, a, b) => selector_column(
                 index,
                 a.evaluate(
                     constant,
@@ -52,8 +52,8 @@ impl<F: FieldExt> Expression<F, VerifierExpression> {
                     scaled,
                 ),
             ),
-            Expression::Mle(query) => mle_eval(query),
-            Expression::Negated(a) => {
+            ExpressionNode::Mle(query) => mle_eval(query),
+            ExpressionNode::Negated(a) => {
                 let a = a.evaluate(
                     constant,
                     selector_column,
@@ -65,7 +65,7 @@ impl<F: FieldExt> Expression<F, VerifierExpression> {
                 );
                 negated(a)
             }
-            Expression::Sum(a, b) => {
+            ExpressionNode::Sum(a, b) => {
                 let a = a.evaluate(
                     constant,
                     selector_column,
@@ -86,8 +86,8 @@ impl<F: FieldExt> Expression<F, VerifierExpression> {
                 );
                 sum(a, b)
             }
-            Expression::Product(queries) => product(queries),
-            Expression::Scaled(a, f) => {
+            ExpressionNode::Product(queries) => product(queries),
+            ExpressionNode::Scaled(a, f) => {
                 let a = a.evaluate(
                     constant,
                     selector_column,

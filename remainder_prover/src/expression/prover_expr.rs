@@ -1,12 +1,40 @@
 use std::{
-    cmp::max,
-    fmt::Debug,
+    cmp::max, fmt::Debug, marker::PhantomData
 };
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use crate::mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef};
 use remainder_shared_types::FieldExt;
-use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionType}, verifier_expr::{VerifierExpression}};
+use super::{expr_errors::ExpressionError, generic_expr::{ExpressionNode, ExpressionType}, verifier_expr::{VerifierExpression}};
+
+/// mid-term solution for deduplication of DenseMleRefs
+/// basically a wrapper around usize, which denotes the index
+/// of the MleRef in an expression's MleRef list
+pub struct MleRefIndex<F>(usize, PhantomData<F>);
+
+impl<F: FieldExt> MleRefIndex<F> {
+
+    /// create a new MleRefIndex
+    pub fn new(index: usize) -> Self {
+        MleRefIndex(index, PhantomData)
+    }
+
+    /// return the actual mle_ref in the vec within the prover expression
+    pub fn get_mle<'a>(
+        &self,
+        mle_ref_vec: &'a Vec<DenseMleRef<F>>
+    ) -> &'a DenseMleRef<F> {
+        &mle_ref_vec[self.0]
+    }
+
+    /// return the actual mle_ref in the vec within the prover expression
+    pub fn get_mle_mut<'a>(
+        &self,
+        mle_ref_vec: &'a mut Vec<DenseMleRef<F>>
+    ) -> &'a mut DenseMleRef<F> {
+        &mut mle_ref_vec[self.0]
+    }
+}
 
 /// Prover Expression
 /// the leaf nodes of the expression tree are DenseMleRefs
@@ -19,7 +47,7 @@ impl<F: FieldExt> ExpressionType<F> for ProverExpression {
 
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
-impl<F: FieldExt> Expression<F, ProverExpression> {
+impl<F: FieldExt> ExpressionNode<F, ProverExpression> {
 
     /// transforms the expression to a verifier expression
     /// should only be called when the entire expression is fully bound
@@ -27,53 +55,53 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
     /// by grabbing their bookkeeping table's 1st and only element,
     /// if the bookkeeping table has more than 1 element, it 
     /// throws an ExpressionError::EvaluateNotFullyBoundError
-    pub fn transform_to_verifier_expression(&mut self) -> Result<Expression<F, VerifierExpression>, ExpressionError>{
+    pub fn transform_to_verifier_expression(&mut self) -> Result<ExpressionNode<F, VerifierExpression>, ExpressionError>{
 
         match self {
-            Expression::Constant(scalar) => Ok(Expression::Constant(*scalar)),
-            Expression::Selector(index, a, b) => {
+            ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
+            ExpressionNode::Selector(index, a, b) => {
                 Ok(
-                    Expression::Selector(
+                    ExpressionNode::Selector(
                         index.clone(),
                         Box::new(a.transform_to_verifier_expression()?),
                         Box::new(b.transform_to_verifier_expression()?)
                     )
                 )
             }
-            Expression::Mle(mle_ref) => {
+            ExpressionNode::Mle(mle_ref) => {
 
                 if mle_ref.bookkeeping_table().len() != 1 {
                     return Err(ExpressionError::EvaluateNotFullyBoundError);
                 }
-                Ok(Expression::Mle(mle_ref.bookkeeping_table()[0]))
+                Ok(ExpressionNode::Mle(mle_ref.bookkeeping_table()[0]))
             }
-            Expression::Negated(a) => Ok(
-                Expression::Negated(Box::new(a.transform_to_verifier_expression()?))
+            ExpressionNode::Negated(a) => Ok(
+                ExpressionNode::Negated(Box::new(a.transform_to_verifier_expression()?))
             ),
-            Expression::Sum(a, b) => {
+            ExpressionNode::Sum(a, b) => {
 
                 Ok(
-                    Expression::Sum(
+                    ExpressionNode::Sum(
                         Box::new(a.transform_to_verifier_expression()?),
                         Box::new(b.transform_to_verifier_expression()?)
                     )
                 )
             }
-            Expression::Product(mle_refs) => {
+            ExpressionNode::Product(mle_refs) => {
                 for mle_ref in mle_refs.iter() {
                     if mle_ref.bookkeeping_table().len() != 1 {
                         return Err(ExpressionError::EvaluateNotFullyBoundError);
                     }
                 }
                 Ok(
-                    Expression::Product(
+                    ExpressionNode::Product(
                         mle_refs.into_iter().map(|mle_ref| mle_ref.bookkeeping_table()[0].clone()).collect_vec()
                     )
                 )
                 
             }
-            Expression::Scaled(mle, scalar) => Ok(
-                Expression::Scaled(Box::new(mle.transform_to_verifier_expression()?), *scalar)
+            ExpressionNode::Scaled(mle, scalar) => Ok(
+                ExpressionNode::Scaled(Box::new(mle.transform_to_verifier_expression()?), *scalar)
             ),
         }
     }
@@ -81,7 +109,7 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
     /// fix the variable at a certain round index
     pub fn fix_variable(&mut self, round_index: usize, challenge: F) {
         match self {
-            Expression::Selector(index, a, b) => {
+            ExpressionNode::Selector(index, a, b) => {
                 if *index == MleIndex::IndexedBit(round_index) {
                     index.bind_index(challenge);
                 } else {
@@ -89,7 +117,7 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                     b.fix_variable(round_index, challenge);
                 }
             }
-            Expression::Mle(mle_ref) => {
+            ExpressionNode::Mle(mle_ref) => {
                 if mle_ref
                     .mle_indices()
                     .contains(&MleIndex::IndexedBit(round_index))
@@ -97,12 +125,12 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                     mle_ref.fix_variable(round_index, challenge);
                 }
             }
-            Expression::Negated(a) => a.fix_variable(round_index, challenge),
-            Expression::Sum(a, b) => {
+            ExpressionNode::Negated(a) => a.fix_variable(round_index, challenge),
+            ExpressionNode::Sum(a, b) => {
                 a.fix_variable(round_index, challenge);
                 b.fix_variable(round_index, challenge);
             }
-            Expression::Product(mle_refs) => {
+            ExpressionNode::Product(mle_refs) => {
                 for mle_ref in mle_refs {
                     if mle_ref
                         .mle_indices()
@@ -112,10 +140,10 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                     }
                 }
             }
-            Expression::Scaled(a, _) => {
+            ExpressionNode::Scaled(a, _) => {
                 a.fix_variable(round_index, challenge);
             }
-            Expression::Constant(_) => (),
+            ExpressionNode::Constant(_) => (),
         }
     }
 
@@ -130,9 +158,9 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
             });
 
         // ----- this is literally a check -----
-        let mut observer_fn = |exp: &Expression<F, ProverExpression>| -> Result<(), ExpressionError> {
+        let mut observer_fn = |exp: &ExpressionNode<F, ProverExpression>| -> Result<(), ExpressionError> {
             match exp {
-                Expression::Mle(mle_ref) => {
+                ExpressionNode::Mle(mle_ref) => {
                     let indices = mle_ref
                         .mle_indices()
                         .iter()
@@ -153,7 +181,7 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                         Err(ExpressionError::EvaluateBoundIndicesDontMatch)
                     }
                 }
-                Expression::Product(mle_refs) => mle_refs
+                ExpressionNode::Product(mle_refs) => mle_refs
                     .iter()
                     .map(|mle_ref| {
                         let indices = mle_ref
@@ -204,8 +232,8 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
         round_index: usize,
     ) -> T {
         match self {
-            Expression::Constant(scalar) => constant(*scalar, beta_mle_ref),
-            Expression::Selector(index, a, b) => {
+            ExpressionNode::Constant(scalar) => constant(*scalar, beta_mle_ref),
+            ExpressionNode::Selector(index, a, b) => {
                 // need to check whether the selector bit is the current independent variable
                 if let MleIndex::IndexedBit(idx) = index {
                     match Ord::cmp(&round_index, idx) {
@@ -293,8 +321,8 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                     )
                 }
             }
-            Expression::Mle(query) => mle_eval(query, beta_mle_ref),
-            Expression::Negated(a) => {
+            ExpressionNode::Mle(query) => mle_eval(query, beta_mle_ref),
+            ExpressionNode::Negated(a) => {
                 let a = a.evaluate_sumcheck(
                     constant,
                     selector_column,
@@ -308,7 +336,7 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                 );
                 negated(a)
             }
-            Expression::Sum(a, b) => {
+            ExpressionNode::Sum(a, b) => {
                 let a = a.evaluate_sumcheck(
                     constant,
                     selector_column,
@@ -333,8 +361,8 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                 );
                 sum(a, b)
             }
-            Expression::Product(queries) => product(queries, beta_mle_ref),
-            Expression::Scaled(a, f) => {
+            ExpressionNode::Product(queries) => product(queries, beta_mle_ref),
+            ExpressionNode::Scaled(a, f) => {
                 let a = a.evaluate_sumcheck(
                     constant,
                     selector_column,
@@ -355,38 +383,38 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
     /// Returns the max number of bits that are indexed
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         match self {
-            Expression::Selector(mle_index, a, b) => {
+            ExpressionNode::Selector(mle_index, a, b) => {
                 *mle_index = MleIndex::IndexedBit(curr_index);
                 let a_bits = a.index_mle_indices(curr_index + 1);
                 let b_bits = b.index_mle_indices(curr_index + 1);
                 max(a_bits, b_bits)
             }
-            Expression::Mle(mle_ref) => mle_ref.index_mle_indices(curr_index),
-            Expression::Sum(a, b) => {
+            ExpressionNode::Mle(mle_ref) => mle_ref.index_mle_indices(curr_index),
+            ExpressionNode::Sum(a, b) => {
                 let a_bits = a.index_mle_indices(curr_index);
                 let b_bits = b.index_mle_indices(curr_index);
                 max(a_bits, b_bits)
             }
-            Expression::Product(mle_refs) => mle_refs
+            ExpressionNode::Product(mle_refs) => mle_refs
                 .iter_mut()
                 .map(|mle_ref| mle_ref.index_mle_indices(curr_index))
                 .reduce(max)
                 .unwrap_or(curr_index),
-            Expression::Scaled(a, _) => a.index_mle_indices(curr_index),
-            Expression::Negated(a) => a.index_mle_indices(curr_index),
-            Expression::Constant(_) => curr_index,
+            ExpressionNode::Scaled(a, _) => a.index_mle_indices(curr_index),
+            ExpressionNode::Negated(a) => a.index_mle_indices(curr_index),
+            ExpressionNode::Constant(_) => curr_index,
         }
     }
 
     /// Gets the size of an expression in terms of the number of rounds of sumcheck
     pub fn get_expression_size(&self, curr_size: usize) -> usize {
         match self {
-            Expression::Selector(_mle_index, a, b) => {
+            ExpressionNode::Selector(_mle_index, a, b) => {
                 let a_bits = a.get_expression_size(curr_size + 1);
                 let b_bits = b.get_expression_size(curr_size + 1);
                 max(a_bits, b_bits)
             }
-            Expression::Mle(mle_ref) => {
+            ExpressionNode::Mle(mle_ref) => {
                 mle_ref
                     .mle_indices()
                     .iter()
@@ -402,12 +430,12 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                     .len()
                     + curr_size
             }
-            Expression::Sum(a, b) => {
+            ExpressionNode::Sum(a, b) => {
                 let a_bits = a.get_expression_size(curr_size);
                 let b_bits = b.get_expression_size(curr_size);
                 max(a_bits, b_bits)
             }
-            Expression::Product(mle_refs) => {
+            ExpressionNode::Product(mle_refs) => {
                 mle_refs
                     .iter()
                     .map(|mle_ref| {
@@ -429,38 +457,38 @@ impl<F: FieldExt> Expression<F, ProverExpression> {
                     .unwrap_or(0)
                     + curr_size
             }
-            Expression::Scaled(a, _) => a.get_expression_size(curr_size),
-            Expression::Negated(a) => a.get_expression_size(curr_size),
-            Expression::Constant(_) => curr_size,
+            ExpressionNode::Scaled(a, _) => a.get_expression_size(curr_size),
+            ExpressionNode::Negated(a) => a.get_expression_size(curr_size),
+            ExpressionNode::Constant(_) => curr_size,
         }
     }
 }
 
 
 /// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
-impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpression> {
+impl<F: std::fmt::Debug + FieldExt> ExpressionNode<F, ProverExpression> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-        struct CircuitDesc<'a, F: FieldExt>(&'a Expression<F, ProverExpression>);
+        struct CircuitDesc<'a, F: FieldExt>(&'a ExpressionNode<F, ProverExpression>);
         impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for CircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self.0 {
-                    Expression::Constant(scalar) => {
+                    ExpressionNode::Constant(scalar) => {
                         f.debug_tuple("const").field(scalar).finish()
                     }
-                    Expression::Selector(index, a, b) => f.write_fmt(format_args!("sel {index:?}; {}; {}", CircuitDesc(a), CircuitDesc(b))),
+                    ExpressionNode::Selector(index, a, b) => f.write_fmt(format_args!("sel {index:?}; {}; {}", CircuitDesc(a), CircuitDesc(b))),
                     // Skip enum variant and print query struct directly to maintain backwards compatibility.
-                    Expression::Mle(mle_ref) => {
+                    ExpressionNode::Mle(mle_ref) => {
                         f.debug_struct("mle").field("layer", &mle_ref.get_layer_id()).field("indices", &mle_ref.mle_indices()).finish()
                     }
-                    Expression::Negated(poly) => f.write_fmt(format_args!("-{}", CircuitDesc(poly))),
-                    Expression::Sum(a, b) => f.write_fmt(format_args!("+ {}; {}", CircuitDesc(a), CircuitDesc(b))),
-                    Expression::Product(a) => {
+                    ExpressionNode::Negated(poly) => f.write_fmt(format_args!("-{}", CircuitDesc(poly))),
+                    ExpressionNode::Sum(a, b) => f.write_fmt(format_args!("+ {}; {}", CircuitDesc(a), CircuitDesc(b))),
+                    ExpressionNode::Product(a) => {
                         let str = a.iter().map(|mle| {
                             format!("{:?}; {:?}", mle.get_layer_id(), mle.mle_indices())
                         }).reduce(|acc, str| acc + &str).unwrap();
                         f.write_str(&str)
                     },
-                    Expression::Scaled(poly, scalar) => {
+                    ExpressionNode::Scaled(poly, scalar) => {
                         f.write_fmt(format_args!("* {}; {:?}", CircuitDesc(poly), scalar))
                     }
                 }

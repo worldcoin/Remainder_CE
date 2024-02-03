@@ -12,7 +12,7 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
-use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpression}, layer::claims::Claim};
+use crate::{expression::{generic_expr::ExpressionNode, prover_expr::ProverExpression}, layer::claims::Claim};
 use crate::{
     layer::{batched::combine_mles, LayerId},
     zkdt::structs::combine_mle_refs,
@@ -551,8 +551,8 @@ pub struct DenseMleRef<F> {
 
 impl<F: FieldExt> DenseMleRef<F> {
     ///Convienence function for wrapping this in an Expression
-    pub fn expression(self) -> Expression<F, ProverExpression> {
-        Expression::Mle(self)
+    pub fn expression(self) -> ExpressionNode<F, ProverExpression> {
+        ExpressionNode::Mle(self)
     }
 }
 
