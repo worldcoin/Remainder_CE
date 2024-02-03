@@ -1,7 +1,7 @@
 
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 
-use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef}, layer::{LayerBuilder, LayerId}, expression::{generic_expr::Expression, prover_expr::ProverExpression}};
+use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef}, layer::{LayerBuilder, LayerId}, expression::{generic_expr::ExpressionNode, prover_expr::ProverExpression}};
 
 /// Does the building for taking two MLEs of size two and multiplying each 
 /// to itself, then adding the results into a single MLE of size 1
@@ -13,12 +13,12 @@ impl<F: FieldExt> LayerBuilder<F> for EmptyLayerBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // --- Multiply `empty_layer_src_mle`'s elements and `other_empty_layer_src_mle`'s elements and add them together ---
-    fn build_expression(&self) -> Expression<F, ProverExpression> {
+    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
         let split_mle_1 = self.empty_layer_src_mle.split(F::zero());
-        let lhs = Expression::products(vec![split_mle_1.first(), split_mle_1.second()]);
+        let lhs = ExpressionNode::products(vec![split_mle_1.first(), split_mle_1.second()]);
 
         let split_mle_2 = self.other_empty_layer_src_mle.split(F::zero());
-        let rhs = Expression::products(vec![split_mle_2.first(), split_mle_2.second()]);
+        let rhs = ExpressionNode::products(vec![split_mle_2.first(), split_mle_2.second()]);
 
         lhs + rhs
     }
@@ -52,9 +52,9 @@ impl<F: FieldExt> LayerBuilder<F> for EmptyLayerSubBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
     // --- Literally just subtract them ---
-    fn build_expression(&self) -> Expression<F, ProverExpression> {
-        let empty_layer_mle_ref = Expression::Mle(self.empty_layer_mle.mle_ref());
-        let mle_mle_ref = Expression::Mle(self.mle.mle_ref());
+    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+        let empty_layer_mle_ref = ExpressionNode::Mle(self.empty_layer_mle.mle_ref());
+        let mle_mle_ref = ExpressionNode::Mle(self.mle.mle_ref());
         mle_mle_ref - empty_layer_mle_ref
     }
     // --- Subtract them in a distributed fashion ---
@@ -89,9 +89,9 @@ impl<F: FieldExt> LayerBuilder<F> for EmptyLayerAddBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
     // --- Literally just add them ---
-    fn build_expression(&self) -> Expression<F, ProverExpression> {
-        let empty_layer_mle_ref = Expression::Mle(self.empty_layer_mle.mle_ref());
-        let mle_mle_ref = Expression::Mle(self.mle.mle_ref());
+    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+        let empty_layer_mle_ref = ExpressionNode::Mle(self.empty_layer_mle.mle_ref());
+        let mle_mle_ref = ExpressionNode::Mle(self.mle.mle_ref());
         mle_mle_ref + empty_layer_mle_ref
     }
     // --- Add them in a distributed fashion ---

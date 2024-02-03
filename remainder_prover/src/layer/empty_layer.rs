@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{generic_expr::Expression, prover_expr::ProverExpression}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
+    expression::{generic_expr::ExpressionNode, prover_expr::ProverExpression}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
 };
 use ark_std::{cfg_into_iter};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -20,7 +20,7 @@ use super::{
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct EmptyLayer<F: FieldExt, Tr> {
-    pub(crate) expr: Expression<F, ProverExpression>,
+    pub(crate) expr: ExpressionNode<F, ProverExpression>,
     id: LayerId,
     _marker: PhantomData<Tr>,
 }
@@ -69,9 +69,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |exp: &Expression<F, ProverExpression>| {
+        let mut observer_fn = |exp: &ExpressionNode<F, ProverExpression>| {
             match exp {
-                Expression::Mle(mle_ref) => {
+                ExpressionNode::Mle(mle_ref) => {
                     // --- First ensure that all the indices are fixed ---
                     let mle_indices = mle_ref.mle_indices();
 
@@ -103,7 +103,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                     // --- Also push the layer_id ---
                     claims.push(claim);
                 }
-                Expression::Product(mle_refs) => {
+                ExpressionNode::Product(mle_refs) => {
                     for mle_ref in mle_refs {
                         // --- First ensure that all the indices are fixed ---
                         let mle_indices = mle_ref.mle_indices();
@@ -180,11 +180,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
 impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
     ///Gets this layer's underlying expression
-    pub fn expression(&self) -> &Expression<F, ProverExpression> {
+    pub fn expression(&self) -> &ExpressionNode<F, ProverExpression> {
         &self.expr
     }
 
-    pub(crate) fn new_raw(id: LayerId, expr: Expression<F, ProverExpression>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expr: ExpressionNode<F, ProverExpression>) -> Self {
         Self {
             id,
             expr,
