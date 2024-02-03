@@ -9,7 +9,9 @@ use super::{expr_errors::ExpressionError, generic_expr::{ExpressionNode, Express
 
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
-/// of the MleRef in an expression's MleRef list
+/// of the MleRef in an expression's MleRef list/// Generic Expressions
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(bound = "F: FieldExt")]
 pub struct MleRefIndex<F>(usize, PhantomData<F>);
 
 impl<F: FieldExt> MleRefIndex<F> {
@@ -42,6 +44,7 @@ impl<F: FieldExt> MleRefIndex<F> {
 pub struct ProverExpression;
 impl<F: FieldExt> ExpressionType<F> for ProverExpression {
     type Container = DenseMleRef<F>;
+    type MleRefs = Vec<DenseMleRef<F>>;
 }
 
 

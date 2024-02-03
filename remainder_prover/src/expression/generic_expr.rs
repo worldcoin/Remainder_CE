@@ -13,7 +13,13 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
     /// for prover expression, it's over DenseMleRef
     /// for verifier expression, it's over Vec<F>
     /// for abstract expression, it's over [TBD]
-    type Container: Serialize + for<'de> Deserialize<'de>;
+    type Container: Clone + Serialize + for<'de> Deserialize<'de>; // either index or F
+
+    /// MleRefs is the optional data array of mle_refs
+    /// that can be indexed into by the MleRefIndex defind in the ProverExpression
+    type MleRefs: Serialize + for<'de> Deserialize<'de>; // -- this is either unit type or Vec<DenseMleRef>
+    
+    // type thing: Index / F -- this is container
 }
 
 /// Generic Expressions
@@ -38,6 +44,14 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
     Product(Vec<E::Container>),
     /// scaled expression
     Scaled(Box<ExpressionNode<F, E>>, F),
+}
+
+/// Generic Expressions
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(bound = "F: FieldExt")]
+pub struct Expression<F: FieldExt, E: ExpressionType<F>> {
+    expression_node: ExpressionNode<F, E>,
+    mle_refs: E::MleRefs,
 }
 
 /// generic methods shared across all types of expressions

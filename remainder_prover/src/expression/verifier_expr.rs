@@ -13,6 +13,7 @@ use super::{expr_errors::ExpressionError, generic_expr::{ExpressionNode, Express
 pub struct VerifierExpression;
 impl<F: FieldExt> ExpressionType<F> for VerifierExpression {
     type Container = F;
+    type MleRefs = ();
 }
 
 impl<F: FieldExt> ExpressionNode<F, VerifierExpression> {

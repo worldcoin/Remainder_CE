@@ -11,4 +11,5 @@ use super::generic_expr::ExpressionType;
 pub struct AbstractExpression;
 impl<F: FieldExt> ExpressionType<F> for AbstractExpression {
     type Container = Vec<F>;
+    type MleRefs = ();
 }
