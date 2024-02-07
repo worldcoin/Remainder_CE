@@ -1,13 +1,13 @@
+use std::ops::Rem;
+
 use crate::adapter::{convert_lcpc_to_halo, LigeroClaim, LigeroProof};
 use crate::ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point};
 use crate::ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof};
 use crate::utils::get_ligero_matrix_dims;
 use crate::{verify, LcProofAuxiliaryInfo, LcRoot};
 use ark_std::log2;
-use remainder_shared_types::{
-    transcript::{Transcript as RemainderTranscript, TranscriptError},
-    FieldExt,
-};
+use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
+use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
 use tracing::instrument;
 
 use super::poseidon_ligero::PoseidonSpongeHasher;
@@ -112,25 +112,22 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
 /// ```
 /// // TODO!(ryancao)
 /// ```
-pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
+pub fn poseidon_ml_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
     coeffs: &Vec<F>,
     rho_inv: u8,
     log_num_rows: usize,
     log_orig_num_cols: usize,
     challenge_coord: &Vec<F>,
-    transcript: &mut T,
+    transcript: &mut TranscriptWriter<F, T>,
     _maybe_ligero_proof_filename: Option<&str>,
     _maybe_ligero_aux_data_filename: Option<&str>,
     _maybe_ligero_claim_filename: Option<&str>,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
     root: LcRoot<LigeroEncoding<F>, F>,
-) -> Result<
-    (
-        F,
-        LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-    ),
-    TranscriptError,
-> {
+) -> (
+    F,
+    LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+) {
     // --- Auxiliaries ---
     let rho = 1. / (rho_inv as f64);
     let num_rows = 1 << log_num_rows;
@@ -144,7 +141,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
 
     // --- Generate the transcript and write to it ---
     // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
-    transcript.append_field_element("polycommit", root.root)?;
+    transcript.append("polycommit", root.root);
 
     // Tl;dr this gives us the random vectors to check well-formedness from
     // As well as the actual columns we're opening at, plus proofs that those
@@ -196,7 +193,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
     // --- Return the evaluation point value ---
     // TODO!(ryancao): Do we need this?
     let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, challenge_coord);
-    Ok((eval, pf))
+    (eval, pf)
 }
 
 /// API for Remainder's Ligero commitment. Note that this function automatically
@@ -257,10 +254,10 @@ pub fn remainder_ligero_commit_prove<F: FieldExt>(
 /// ## Returns
 /// * `h2_ligero_proof` - Halo2-compatible Ligero proof for the evaluation of the original
 ///     polynomial (as given in `comm`) at `challenge_coord`
-pub fn remainder_ligero_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
+pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
     input_layer_bookkeeping_table: &Vec<F>,
     challenge_coord: &Vec<F>,
-    transcript: &mut T,
+    transcript: &mut TranscriptWriter<F, T>,
     aux: LcProofAuxiliaryInfo,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
     root: LcRoot<LigeroEncoding<F>, F>,
@@ -285,40 +282,35 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: RemainderTranscript<F>>(
         None,
         comm,
         root.clone(),
-    )
-    .unwrap();
+    );
 
     convert_lcpc_to_halo(aux, root, proof)
 }
 
 /// Function for verification of Ligero proof
-pub fn remainder_ligero_verify<F: FieldExt>(
+pub fn remainder_ligero_verify<F: FieldExt, T: TranscriptSponge<F>>(
     root: &LcRoot<LigeroEncoding<F>, F>,
     proof: &LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
     aux: LcProofAuxiliaryInfo,
-    tr: &mut impl RemainderTranscript<F>,
+    tr: &mut TranscriptReader<F, T>,
     challenge_coord: &Vec<F>,
     claimed_value: F,
-) where
-    F: FieldExt,
-{
+) {
     // --- Sanitycheck ---
-    assert_eq!(
-        aux.num_rows * aux.orig_num_cols,
-        1 << challenge_coord.len()
-    );
+    assert_eq!(aux.num_rows * aux.orig_num_cols, 1 << challenge_coord.len());
 
     // --- Grab the inner/outer tensors from the challenge point ---
     let (inner_tensor, outer_tensor) =
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
-    // --- Add the root to the transcript ---
-    let _ = tr.append_field_element("root", root.root);
+    // --- Consume the root from the trascript ---
+    let root = tr.consume_element("root").unwrap();
 
     // --- Reconstruct the encoding (TODO!(ryancao): Deprecate the encoding!) and verify ---
-    let enc = LigeroEncoding::<F>::new_from_dims(proof.get_orig_num_cols(), proof.get_encoded_num_cols());
-    let result = verify(&root.root, &outer_tensor[..], &inner_tensor[..], proof, &enc, tr).unwrap();
-    
+    let enc =
+        LigeroEncoding::<F>::new_from_dims(proof.get_orig_num_cols(), proof.get_encoded_num_cols());
+    let result = verify(&root, &outer_tensor[..], &inner_tensor[..], proof, &enc, tr).unwrap();
+
     assert_eq!(result, claimed_value);
 }
 
@@ -332,12 +324,11 @@ pub mod tests {
         verify,
     };
     use ark_std::test_rng;
-    use remainder_shared_types::Fr;
     use itertools::Itertools;
     use rand::Rng;
-    use remainder_shared_types::transcript::{
-        poseidon_transcript::PoseidonTranscript, Transcript as RemainderTranscript,
-    };
+    use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+    use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
+    use remainder_shared_types::Fr;
     use std::iter::repeat_with;
 
     use super::{
@@ -361,27 +352,31 @@ pub mod tests {
             .take(ml_num_vars)
             .collect_vec();
         let claimed_value = naive_eval_mle_at_challenge_point(&ml_coeffs, &challenge_coord);
-        let mut poseidon_transcript = PoseidonTranscript::new("Test transcript");
+        // let mut poseidon_transcript = PoseidonTranscript::new("Test transcript");
+        let mut transcript_writer =
+            TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("Test transcript");
 
         // --- Commit, prove, convert ---
         let (_, comm, root, aux) = remainder_ligero_commit_prove(&ml_coeffs, rho_inv, ratio);
         let h2_ligero_proof: crate::adapter::LigeroProof<Fr> = remainder_ligero_eval_prove(
             &ml_coeffs,
             &challenge_coord,
-            &mut poseidon_transcript,
+            &mut transcript_writer,
             aux.clone(),
             comm,
             root.clone(),
         );
         let (_, ligero_eval_proof, _) = convert_halo_to_lcpc(aux.clone(), h2_ligero_proof);
 
+        let transcript = transcript_writer.get_transcript();
+
         // --- Grab new Poseidon transcript + verify ---
-        let mut verifier_poseidon_transcript = PoseidonTranscript::new("Test transcript");
-        remainder_ligero_verify::<Fr>(
+        let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
+        remainder_ligero_verify::<Fr, PoseidonSponge<Fr>>(
             &root,
             &ligero_eval_proof,
             aux,
-            &mut verifier_poseidon_transcript,
+            &mut transcript_reader,
             &challenge_coord,
             claimed_value,
         );
@@ -423,25 +418,27 @@ pub mod tests {
 
         // --- Eval phase ---
         // --- Initialize transcript (note that this would come from GKR) ---
-        let mut poseidon_transcript = PoseidonTranscript::new("Test transcript");
+        let mut poseidon_writer =
+            TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("Test transcript");
         let (_eval, proof) = poseidon_ml_eval_prove(
             &ml_coeffs,
             rho_inv,
             log_num_rows,
             log_orig_num_cols,
             &challenge_coord,
-            &mut poseidon_transcript,
+            &mut poseidon_writer,
             Some(ligero_proof_filename),
             Some(ligero_aux_data_filename),
             Some(ligero_claim_filename),
             comm,
             root.clone(),
-        )
-        .unwrap();
+        );
 
         // --- Verify phase ---
-        let mut poseidon_transcript_verifier = PoseidonTranscript::new("Test transcript");
-        let _ = poseidon_transcript_verifier.append_field_element("root", root.root);
+        let transcript = poseidon_writer.get_transcript();
+        let mut poseidon_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
+        let prover_root = poseidon_reader.consume_element("root").unwrap();
+        assert_eq!(prover_root, root.root);
         let (inner_tensor, outer_tensor) =
             get_ml_inner_outer_tensors(&challenge_coord, num_rows, orig_num_cols);
         let result = verify(
@@ -450,7 +447,7 @@ pub mod tests {
             &inner_tensor,
             &proof,
             &enc,
-            &mut poseidon_transcript_verifier,
+            &mut poseidon_reader,
         )
         .unwrap();
 

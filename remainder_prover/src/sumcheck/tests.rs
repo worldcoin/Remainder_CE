@@ -20,9 +20,9 @@ use crate::{
 use ark_std::test_rng;
 
 use ark_std::{One, Zero};
-use remainder_shared_types::Fr;
 use rand::Rng;
-use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
+use remainder_shared_types::transcript::{poseidon_transcript::PoseidonSponge, Transcript};
+use remainder_shared_types::Fr;
 
 /// Does a dummy version of sumcheck with a testing RNG
 pub fn dummy_sumcheck<F: FieldExt>(
