@@ -2,13 +2,15 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
-use std::fmt::Debug;
+use std::{fmt::Debug, cmp::max};
 
-use crate::{layer::Layer, mle::beta::BetaTable, sumcheck::*};
-use remainder_shared_types::{transcript::Transcript, FieldExt};
+use crate::{mle::beta::BetaTable, sumcheck::*};
+use remainder_shared_types::FieldExt;
 
 use crate::mle::{dense::DenseMleRef, MleIndex, MleRef};
 use thiserror::Error;
+
+use super::gate::BinaryOperation;
 
 /// Error handling for gate mle construction
 #[derive(Error, Debug, Clone)]
@@ -17,14 +19,8 @@ pub enum GateError {
     Phase1InitError,
     #[error("phase 2 not initialized")]
     Phase2InitError,
-    #[error("copy phase init error")]
-    CopyPhaseInitError,
     #[error("mle not fully bound")]
     MleNotFullyBoundError,
-    #[error("failed to bind variables during sumcheck")]
-    SumcheckProverError,
-    #[error("last round sumcheck fail")]
-    SumcheckFinalFail,
     #[error("empty list for lhs or rhs")]
     EmptyMleList,
     #[error("bound indices fail to match challenge")]
@@ -46,7 +42,7 @@ pub enum GateError {
 /// * `mle_refs` - MLEs pointing to the actual bookkeeping tables for the above
 /// * `independent_variable` - whether the `x` from above resides within at least one of the `mle_refs`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus one!)
-fn evaluate_mle_ref_product_gate<F: FieldExt>(
+fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
     mle_refs: &[impl MleRef<F = F>],
     independent_variable: bool,
     degree: usize,
@@ -59,7 +55,9 @@ fn evaluate_mle_ref_product_gate<F: FieldExt>(
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| {
+            mle_ref.num_vars()
+        })
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -125,7 +123,7 @@ fn evaluate_mle_ref_product_gate<F: FieldExt>(
         Ok(Evals(evals))
     } else {
         // There is no independent variable and we can sum over everything
-        let sum = cfg_into_iter!((0..1 << (max_num_vars))).fold(
+        let sum = cfg_into_iter!((0..(1 << max_num_vars))).fold(
             #[cfg(feature = "parallel")]
             || F::zero(),
             #[cfg(not(feature = "parallel"))]
@@ -226,106 +224,37 @@ pub fn fix_var_gate<F: FieldExt>(
     })
 }
 
-/// compute sumcheck message without a beta table!!!!!!!!!!!!!!
-pub fn compute_sumcheck_message_add_gate<F: FieldExt>(
-    lhs: &[impl MleRef<F = F>],
-    rhs: &[impl MleRef<F = F>],
-    round_index: usize,
-) -> Result<Vec<F>, GateError> {
-    // for gate mles, degree always 2 for left and right side because on each side we are taking the product of two bookkkeping tables
-    let degree = 2;
-
-    // --- Go through all of the MLEs being multiplied together on the LHS and see if any of them contain an IV ---
-    // TODO!(ryancao): Should this not always be true...?
-    let independent_variable_lhs = lhs
-        .iter()
-        .map(|mle_ref| {
-            mle_ref
-                .mle_indices()
-                .contains(&MleIndex::IndexedBit(round_index))
-        })
-        .reduce(|acc, item| acc | item)
-        .ok_or(GateError::EmptyMleList)?;
-    let eval_lhs = evaluate_mle_ref_product_gate(lhs, independent_variable_lhs, degree).unwrap();
-
-    // --- Similarly, but for the RHS ---
-    let independent_variable_rhs = rhs
-        .iter()
-        .map(|mle_ref| {
-            mle_ref
-                .mle_indices()
-                .contains(&MleIndex::IndexedBit(round_index))
-        })
-        .reduce(|acc, item| acc | item)
-        .ok_or(GateError::EmptyMleList)?;
-    let eval_rhs = evaluate_mle_ref_product_gate(rhs, independent_variable_rhs, degree).unwrap();
-
-    // --- The evaluations of g_i(x) (i.e. the univariate sumcheck message) are simply the sum of those of the two sides ---
-    let eval = eval_lhs + eval_rhs;
-
-    let Evals(evaluations) = eval;
-
-    Ok(evaluations)
-}
-
 /// Computes a round of the sumcheck protocol on this Layer
-pub fn prove_round_add<F: FieldExt>(
+pub fn prove_round_gate<F: FieldExt>(
     round_index: usize,
     challenge: F,
-    lhs: &mut [impl MleRef<F = F>],
-    rhs: &mut [impl MleRef<F = F>],
-) -> Result<Vec<F>, GateError> {
-    fix_var_gate(lhs, round_index - 1, challenge);
-    fix_var_gate(rhs, round_index - 1, challenge);
-    compute_sumcheck_message_add_gate(lhs, rhs, round_index)
-}
+    mle_refs: &mut Vec<Vec<DenseMleRef<F>>>,
+) -> Vec<F> {
+    mle_refs.iter_mut().for_each(
+        |mle_ref_vec| {
+            mle_ref_vec.iter_mut().for_each(
+                |mle_ref| {
+                    mle_ref.fix_variable(round_index - 1, challenge);
+        })
+    });
+    let max_deg = mle_refs.iter().fold(
+        0, |acc, elem| {
+            max(acc, elem.len())
+        }
+    );
+    let evals_vec = mle_refs.iter_mut().map(
+        |mle_vec| {
+            compute_sumcheck_message_no_beta_table(mle_vec, round_index, max_deg).unwrap()
+        }
+    ).collect_vec();
 
-/// computes the sumcheck message for batched gate mle
-pub fn compute_sumcheck_message_copy_add<F: FieldExt>(
-    beta: &mut BetaTable<F>,
-    lhs: &mut DenseMleRef<F>,
-    rhs: &mut DenseMleRef<F>,
-    round_index: usize,
-) -> Result<Vec<F>, GateError> {
-    // degree is 2 because we use a beta table
-    let degree = 2;
-    let independent_lhs = lhs
-        .mle_indices()
-        .contains(&MleIndex::IndexedBit(round_index));
-    let independent_rhs = rhs
-        .mle_indices()
-        .contains(&MleIndex::IndexedBit(round_index));
-
-    let evals_lhs =
-        evaluate_mle_ref_product(&[lhs.clone()], independent_lhs, degree, beta.clone().table)
-            .unwrap();
-    let evals_rhs =
-        evaluate_mle_ref_product(&[rhs.clone()], independent_rhs, degree, beta.clone().table)
-            .unwrap();
-
-    let eval = evals_lhs + evals_rhs;
-    let Evals(evaluations) = eval;
-
-    Ok(evaluations)
-}
-
-/// does all the necessary updates when proving a round for batched gate mles
-pub fn prove_round_copy<F: FieldExt>(
-    phase_lhs: &mut DenseMleRef<F>,
-    phase_rhs: &mut DenseMleRef<F>,
-    lhs: &mut DenseMleRef<F>,
-    rhs: &mut DenseMleRef<F>,
-    beta: &mut BetaTable<F>,
-    round_index: usize,
-    challenge: F,
-) -> Result<Vec<F>, GateError> {
-    phase_lhs.fix_variable(round_index - 1, challenge);
-    phase_rhs.fix_variable(round_index - 1, challenge);
-    beta.beta_update(round_index - 1, challenge).unwrap();
-    // need to separately update these because the phase_lhs and phase_rhs has no version of them
-    lhs.fix_variable(round_index - 1, challenge);
-    rhs.fix_variable(round_index - 1, challenge);
-    compute_sumcheck_message_copy_add(beta, phase_lhs, phase_rhs, round_index)
+    let final_evals = evals_vec.clone().into_iter().skip(1).fold(
+        Evals(evals_vec[0].clone()), |acc, elem| {
+            acc + Evals(elem)
+        }
+    );
+    let Evals(final_vec_evals) = final_evals;
+    final_vec_evals
 }
 
 /// fully evaluates a gate expression (for both the batched and non-batched case, add and mul gates)
@@ -364,7 +293,6 @@ pub fn compute_full_gate<F: FieldExt>(
                     .unwrap_or(&F::zero());
                 let ux = lhs.bookkeeping_table().get(x_ind).unwrap_or(&zero);
                 let vy = rhs.bookkeeping_table().get(y_ind).unwrap_or(&zero);
-                dbg!(&gz, ux, vy);
                 acc + gz * (*ux + *vy)
             })
     } else {
@@ -395,7 +323,6 @@ pub fn compute_full_gate<F: FieldExt>(
                             .bookkeeping_table()
                             .get(idx + (y_ind * num_copy_idx))
                             .unwrap_or(&zero);
-                        dbg!(&gz, ux, vy);
                         acc + gz * (*ux + *vy)
                     },
                 );
@@ -405,23 +332,12 @@ pub fn compute_full_gate<F: FieldExt>(
     }
 }
 
-/// Computes a round of the sumcheck protocol on this Layer
-pub fn prove_round_mul<F: FieldExt>(
-    round_index: usize,
-    challenge: F,
-    mles: &mut [impl MleRef<F = F>],
-) -> Result<Vec<F>, GateError> {
-    fix_var_gate(mles, round_index - 1, challenge);
-    compute_sumcheck_message_mul_gate(mles, round_index)
-}
-
 /// compute sumcheck message without a beta table!!!!!!!!!!!!!!
-pub fn compute_sumcheck_message_mul_gate<F: FieldExt>(
+pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
     mles: &[impl MleRef<F = F>],
     round_index: usize,
+    degree: usize,
 ) -> Result<Vec<F>, GateError> {
-    // for gate mles, degree always 2 for left and right side because on each side we are taking the product of two bookkkeping tables
-    let degree = 2;
 
     // --- Go through all of the MLEs being multiplied together on the LHS and see if any of them contain an IV ---
     // TODO!(ryancao): Should this not always be true...?
@@ -434,7 +350,7 @@ pub fn compute_sumcheck_message_mul_gate<F: FieldExt>(
         })
         .reduce(|acc, item| acc | item)
         .ok_or(GateError::EmptyMleList)?;
-    let eval = evaluate_mle_ref_product_gate(mles, independent_variable, degree).unwrap();
+    let eval = evaluate_mle_ref_product_no_beta_table(mles, independent_variable, degree).unwrap();
 
     let Evals(evaluations) = eval;
 
@@ -442,9 +358,7 @@ pub fn compute_sumcheck_message_mul_gate<F: FieldExt>(
 }
 
 /// does all the necessary updates when proving a round for batched gate mles
-pub fn prove_round_copy_mul<F: FieldExt>(
-    // phase_lhs: &mut DenseMleRef<F>,
-    // phase_rhs: &mut DenseMleRef<F>,
+pub fn prove_round_dataparallel_phase<F: FieldExt>(
     lhs: &mut DenseMleRef<F>,
     rhs: &mut DenseMleRef<F>,
     beta_g1: &BetaTable<F>,
@@ -453,19 +367,18 @@ pub fn prove_round_copy_mul<F: FieldExt>(
     challenge: F,
     nonzero_gates: &Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
+    operation: BinaryOperation,
 ) -> Result<Vec<F>, GateError> {
-    // phase_lhs.fix_variable(round_index - 1, challenge);
-    // phase_rhs.fix_variable(round_index - 1, challenge);
     beta_g2.beta_update(round_index - 1, challenge).unwrap();
     // need to separately update these because the phase_lhs and phase_rhs has no version of them
     lhs.fix_variable(round_index - 1, challenge);
     rhs.fix_variable(round_index - 1, challenge);
-    // compute_sumcheck_message_copy_phase_mul(&[phase_lhs.clone(), phase_rhs.clone()], beta, round_index)
     libra_giraffe(
         lhs,
         rhs,
         &beta_g2.table,
         &beta_g1.table,
+        operation,
         nonzero_gates,
         num_dataparallel_bits,
     )
@@ -477,13 +390,19 @@ pub fn libra_giraffe<F: FieldExt>(
     f3_p2_y: &DenseMleRef<F>,
     beta_g2: &DenseMleRef<F>,
     beta_g1: &DenseMleRef<F>,
+    operation: BinaryOperation,
     nonzero_gates: &Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
 ) -> Result<Vec<F>, GateError> {
-    // always always ALWAYS 3!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // because we have a beta(g2, p2), f2(p2, x), and f3(p2, y)
-
-    let degree = 3;
+    
+    // when we have an add gate, we can distribute the beta table over the dataparallel challenges
+    // so we only multiply to the function with the x variables or y variables one at a time
+    // when we have a mul gate, we have to multiply the beta table over the dataparallel challenges
+    // with the function on the x variables and the function on the y variables
+    let degree = match operation {
+        BinaryOperation::Add => 2,
+        BinaryOperation::Mul => 3
+    };
 
     if !beta_g2.indexed() {
         return Err(GateError::BetaTableNotIndexed);
@@ -570,8 +489,8 @@ pub fn libra_giraffe<F: FieldExt>(
                     // --- The evals we want are simply the element-wise product of the accessed evals ---
                     let g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y = g1_z_successors
                         .zip(all_f2_evals_p2_x.zip(all_f3_evals_p2_y))
-                        .map(|(g1_z_eval, (f2_eval, f3_eval))| g1_z_eval * f2_eval * f3_eval);
-
+                        .map(|(g1_z_eval, (f2_eval, f3_eval))| g1_z_eval * operation.perform_operation(f2_eval, f3_eval));
+    
                     let evals_iter: Box<dyn Iterator<Item = F>> =
                         Box::new(g1_z_times_f2_evals_p2_x_times_f3_evals_p2_y);
 

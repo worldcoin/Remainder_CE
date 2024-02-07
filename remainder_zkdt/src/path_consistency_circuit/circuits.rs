@@ -2,10 +2,10 @@ use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use remainder::{mle::{dense::DenseMle, Mle, MleRef, MleIndex, mle_enum::MleEnum}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, empty_layer::EmptyLayer, batched::{BatchedLayer, unbatch_mles, unflatten_mle, combine_zero_mle_ref}}};
-use crate::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, builders::{ConcatBuilder, ZeroBuilder}};
+use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex, mle_enum::MleEnum}, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, builders::{ConcatBuilder, ZeroBuilder}}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, empty_layer::EmptyLayer, batched::{BatchedLayer, unbatch_mles, unflatten_mle, combine_zero_mle_ref}}};
 
 use super::circuit_builders::{OneMinusSignBit, SignBit, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, SignBitProductBuilder, DumbBuilder};
+
 
 /// Helper!
 pub fn create_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {

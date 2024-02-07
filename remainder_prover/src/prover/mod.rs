@@ -11,10 +11,7 @@ pub(crate) mod tests;
 use std::collections::HashMap;
 
 use crate::{
-    gate::{
-        addgate::AddGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched,
-        mulgate::MulGate,
-    },
+    gate::gate::{Gate, BinaryOperation},
     layer::{
         claims::{aggregate_claims, get_num_wlx_evaluations},
         claims::{Claim, ClaimGroup},
@@ -77,90 +74,8 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
         self.add::<_, GKRLayer<_, Tr>>(new_layer)
     }
 
-    /// Add an Add Gate layer to a list of layers (unbatched version)
-    ///
-    /// # Arguments
-    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where
-    /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
-    /// * `lhs`: the mle representing the left side of the sum
-    /// * `rhs`: the mle representing the right side of the sum
-    ///
-    /// # Returns
-    /// A `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
-    pub fn add_add_gate(
-        &mut self,
-        nonzero_gates: Vec<(usize, usize, usize)>,
-        lhs: DenseMleRef<F>,
-        rhs: DenseMleRef<F>,
-    ) -> DenseMle<F, F> {
-        let id = LayerId::Layer(self.0.len());
-        // use the add gate constructor in order to initialize a new add gate mle
-        let gate: AddGate<F, Tr> =
-            AddGate::new(id, nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
-
-        // we want to return an mle representing the evaluations of this over all the points in the boolean hypercube
-        // the size of this mle is dependent on the max gate label given in the z coordinate of the tuples (as defined above)
-        let max_gate_val = nonzero_gates
-            .clone()
-            .into_iter()
-            .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
-        self.0.push(gate.get_enum());
-
-        // we use the nonzero add gates in order to evaluate the values at the next layer
-        let mut sum_table = vec![F::zero(); max_gate_val + 1];
-        nonzero_gates.into_iter().for_each(|(z, x, y)| {
-            let sum_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero())
-                + *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
-            sum_table[z] = sum_val;
-        });
-
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
-        res_mle
-    }
-
-    /// Add a Mul Gate layer to a list of layers (unbatched version)
-    ///
-    /// # Arguments
-    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where
-    /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
-    /// * `lhs`: the mle representing the left side of the multiplication
-    /// * `rhs`: the mle representing the right side of the multiplication
-    ///
-    /// # Returns
-    /// A `DenseMle` that represents the evaluations of the mul gate wiring on `lhs` and `rhs` over the boolean hypercube
-    pub fn add_mul_gate(
-        &mut self,
-        nonzero_gates: Vec<(usize, usize, usize)>,
-        lhs: DenseMleRef<F>,
-        rhs: DenseMleRef<F>,
-    ) -> DenseMle<F, F> {
-        let id = LayerId::Layer(self.0.len());
-        // use the mul gate constructor in order to initialize a new add gate mle
-        let gate: MulGate<F, Tr> =
-            MulGate::new(id, nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
-
-        // we want to return an mle representing the evaluations of this over all the points in the boolean hypercube
-        // the size of this mle is dependent on the max gate label given in the z coordinate of the tuples (as defined above)
-        let max_gate_val = nonzero_gates
-            .clone()
-            .into_iter()
-            .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
-        self.0.push(gate.get_enum());
-
-        // we use the nonzero mul gates in order to evaluate the values at the next layer
-        let mut mul_table = vec![F::zero(); max_gate_val + 1];
-        nonzero_gates.into_iter().for_each(|(z, x, y)| {
-            let mul_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero())
-                * *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
-            mul_table[z] = mul_val;
-        });
-
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(mul_table, id, None);
-        res_mle
-    }
-
-    /// Add a batched Add Gate layer to a list of layers
-    /// In the batched case, consider a vector of mles corresponding to an mle for each "batch" or "copy".
+    /// Add a Gate layer to a list of layers
+    /// In the batched case (`num_dataparallel_bits` > 0), consider a vector of mles corresponding to an mle for each "batch" or "copy".
     /// Then we refer to the mle that represents the concatenation of these mles by interleaving as the
     /// flattened mle and each individual mle as a batched mle.
     ///
@@ -170,86 +85,26 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     /// * `lhs`: the flattened mle representing the left side of the summation
     /// * `rhs`: the flattened mle representing the right side of the summation
     /// * `num_dataparallel_bits`: the number of bits representing the circuit copy we are looking at
+    /// * `gate_operation`: which operation the gate is performing. right now, can either be an 'add' or 'mul' gate
     ///
     /// # Returns
     /// A flattened `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
-    pub fn add_add_gate_batched(
+    pub fn add_gate(
         &mut self,
         nonzero_gates: Vec<(usize, usize, usize)>,
         lhs: DenseMleRef<F>,
         rhs: DenseMleRef<F>,
-        num_dataparallel_bits: usize,
-    ) -> DenseMle<F, F> {
-        let id = LayerId::Layer(self.0.len());
-        // constructor for batched add gate struct
-        let gate: AddGateBatched<F, Tr> = AddGateBatched::new(
-            num_dataparallel_bits,
-            nonzero_gates.clone(),
-            lhs.clone(),
-            rhs.clone(),
-            id,
-        );
-        let max_gate_val = nonzero_gates
-            .clone()
-            .into_iter()
-            .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
-
-        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
-        // evaluating over all values in the boolean hypercube which includes dataparallel bits
-        let num_dataparallel_vals = 1 << num_dataparallel_bits;
-        let sum_table_num_entries = (max_gate_val + 1) * num_dataparallel_vals;
-        self.0.push(gate.get_enum());
-
-        // iterate through each of the indices and compute the sum
-        let mut sum_table = vec![F::zero(); sum_table_num_entries];
-        (0..num_dataparallel_vals).for_each(|idx| {
-            nonzero_gates
-                .clone()
-                .into_iter()
-                .for_each(|(z_ind, x_ind, y_ind)| {
-                    let f2_val = *lhs
-                        .bookkeeping_table()
-                        .get(idx + (x_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::zero());
-                    let f3_val = *rhs
-                        .bookkeeping_table()
-                        .get(idx + (y_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::zero());
-                    sum_table[idx + (z_ind * num_dataparallel_vals)] = f2_val + f3_val;
-                });
-        });
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
-        res_mle
-    }
-
-    /// Add a batched Mul Gate layer to a list of layers
-    /// In the batched case, consider a vector of mles corresponding to an mle for each "batch" or "copy".
-    /// Then we refer to the mle that represents the concatenation of these mles by interleaving as the
-    /// flattened mle and each individual mle as a batched mle.
-    ///
-    /// # Arguments
-    /// * `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
-    /// x is the label on the batched mle `lhs`, y is the label on the batched mle `rhs`, and z is the label on the next layer, batched
-    /// * `lhs`: the flattened mle representing the left side of the summation
-    /// * `rhs`: the flattened mle representing the right side of the summation
-    /// * `num_dataparallel_bits`: the number of bits representing the circuit copy we are looking at
-    ///
-    /// # Returns
-    /// A flattened `DenseMle` that represents the evaluations of the mul gate wiring on `lhs` and `rhs` over the boolean hypercube
-    pub fn add_mul_gate_batched(
-        &mut self,
-        nonzero_gates: Vec<(usize, usize, usize)>,
-        lhs: DenseMleRef<F>,
-        rhs: DenseMleRef<F>,
-        num_dataparallel_bits: usize,
+        num_dataparallel_bits: Option<usize>,
+        gate_operation: BinaryOperation,
     ) -> DenseMle<F, F> {
         let id = LayerId::Layer(self.0.len());
         // constructor for batched mul gate struct
-        let gate: MulGateBatched<F, Tr> = MulGateBatched::new(
+        let gate: Gate<F, Tr> = Gate::new(
             num_dataparallel_bits,
             nonzero_gates.clone(),
             lhs.clone(),
             rhs.clone(),
+            gate_operation,
             id,
         );
         let max_gate_val = nonzero_gates
@@ -259,12 +114,12 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
 
         // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
         // evaluating over all values in the boolean hypercube which includes dataparallel bits
-        let num_dataparallel_vals = 1 << num_dataparallel_bits;
-        let sum_table_num_entries = (max_gate_val + 1) * num_dataparallel_vals;
+        let num_dataparallel_vals = 1 << (num_dataparallel_bits.unwrap_or(0));
+        let res_table_num_entries = (max_gate_val + 1) * num_dataparallel_vals;
         self.0.push(gate.get_enum());
 
-        // iterate through each of the indices and compute the product
-        let mut mul_table = vec![F::zero(); sum_table_num_entries];
+        // iterate through each of the indices and perform the binary operation specified
+        let mut res_table = vec![F::zero(); res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
             nonzero_gates
                 .clone()
@@ -278,11 +133,11 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
                         .bookkeeping_table()
                         .get(idx + (y_ind * num_dataparallel_vals))
                         .unwrap_or(&F::zero());
-                    mul_table[idx + (z_ind * num_dataparallel_vals)] = f2_val * f3_val;
+                    res_table[idx + (z_ind * num_dataparallel_vals)] = gate_operation.perform_operation(f2_val, f3_val);
                 });
         });
 
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(mul_table, id, None);
+        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(res_table, id, None);
 
         res_mle
     }

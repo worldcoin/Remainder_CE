@@ -1,9 +1,9 @@
+
 use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use remainder::{mle::{dense::DenseMle, Mle, MleRef, MleIndex, mle_enum::MleEnum}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, batched::{BatchedLayer, unbatch_mles}}};
-use crate::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, builders::{ZeroBuilder}};
+use crate::{mle::{dense::DenseMle, Mle, MleRef, MleIndex, mle_enum::MleEnum}, zkdt::{structs::{DecisionNode, LeafNode, BinDecomp16Bit}, builders::{ZeroBuilder}}, prover::{GKRCircuit, Witness, Layers, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, enum_input_layer::InputLayerEnum, InputLayer}}, layer::{LayerId, batched::{BatchedLayer, unbatch_mles}}};
 
 use super::{circuit_builders::{OneMinusSignBit, SignBit, PrevNodeLeftBuilderDecision, PrevNodeRightBuilderDecision, CurrNodeBuilderDecision, CurrNodeBuilderLeaf, TwoTimesBuilder, SubtractBuilder}, circuits::{decision_add_wiring_from_size, leaf_add_wiring_from_size}};
 

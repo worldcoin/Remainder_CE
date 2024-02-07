@@ -1,11 +1,11 @@
 #[cfg(test)]
+
 mod tests {
     use std::{time::Instant, path::Path};
 
     use remainder_shared_types::Fr;
 
-    use remainder::prover::GKRCircuit;
-    use crate::{path_consistency_circuit::circuits::{PathCheckCircuit, PathCheckCircuitBatched, PathCheckCircuitBatchedMul, PathMulCheckCircuit}, input_data_to_circuit_adapter::BatchedZKDTCircuitMles, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
+    use crate::{zkdt::{path_consistency_circuit::circuits::{PathCheckCircuit, PathCheckCircuitBatched, PathCheckCircuitBatchedMul, PathMulCheckCircuit}, input_data_to_circuit_adapter::BatchedZKDTCircuitMles, cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree}, prover::GKRCircuit};
     use remainder_shared_types::transcript::{Transcript, poseidon_transcript::PoseidonTranscript};
     
 

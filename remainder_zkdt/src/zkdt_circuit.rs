@@ -37,7 +37,7 @@ use crate::builders::{AttributeConsistencyBuilderZeroRef, BitExponentiationBuild
 
 use super::bits_are_binary_circuit::dataparallel_circuits::BinDecomp8BitIsBinaryCircuitBatched;
 use super::input_data_to_circuit_adapter::BatchedZKDTCircuitMles;
-use super::path_consistency_circuit::dataparallel_circuits::PathCheckCircuitBatchedNoMul;
+use super::path_consistency_circuit::dataparallel_circuits::PathCheckCircuitBatched;
 use super::structs::BinDecomp8Bit;
 use super::{
     attribute_consistency_circuit::dataparallel_circuits::AttributeConsistencyCircuit,
@@ -50,7 +50,6 @@ use super::{
     },
     input_multiset_circuit::dataparallel_circuits::InputMultiSetCircuit,
     multiset_circuit::circuits::FSMultiSetCircuit,
-    path_consistency_circuit::circuits::PathCheckCircuitBatchedMul,
     structs::{BinDecomp16Bit, BinDecomp4Bit, DecisionNode, InputAttribute, LeafNode},
 };
 
@@ -184,7 +183,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             FSMultiSetCircuit<F>,
             InputMultiSetCircuit<F>,
             BinaryRecompCircuitBatched<F>,
-            PathCheckCircuitBatchedNoMul<F>,
+            PathCheckCircuitBatched<F>,
             BinDecomp8BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
@@ -498,7 +497,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             binary_decomp_diffs_mle_vec.clone(),
         );
 
-        let path_consistency_circuit_batched = PathCheckCircuitBatchedNoMul::new(
+        let path_consistency_circuit_batched = PathCheckCircuitBatched::new(
             decision_node_paths_mle_vec,
             leaf_node_paths_mle_vec,
             binary_decomp_diffs_mle_vec.clone(),
