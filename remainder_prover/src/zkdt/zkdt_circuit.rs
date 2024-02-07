@@ -1,5 +1,5 @@
-use ark_std::{log2, start_timer, end_timer};
 use ark_serialize::Read;
+use ark_std::{end_timer, log2, start_timer};
 use itertools::{repeat_n, Itertools};
 use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
@@ -31,7 +31,7 @@ use crate::{
     zkdt::builders::{AttributeConsistencyBuilderZeroRef, BitExponentiationBuilderCatBoost},
 };
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
+    transcript::{poseidon_transcript::PoseidonSponge, Transcript},
     FieldExt,
 };
 
@@ -71,7 +71,7 @@ pub struct ZKDTCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     // Uncomment this to turn on the circuit hash. Just make sure the hash you use is accurate to your batch size.
     // This one is for a batch size of 2^9
@@ -176,7 +176,7 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTCircuit<F> {
 impl<F: FieldExt> ZKDTCircuit<F> {
     fn create_sub_circuits(
         &mut self,
-        transcript: &mut PoseidonTranscript<F>,
+        transcript: &mut PoseidonSponge<F>,
     ) -> Result<
         (
             AttributeConsistencyCircuit<F>,
@@ -188,8 +188,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             BinDecomp16BitIsBinaryCircuitBatched<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
             BinDecomp16BitIsBinaryCircuit<F>,
-            Vec<InputLayerEnum<F, PoseidonTranscript<F>>>, // input layers, including random layers
-            Vec<CommitmentEnum<F>>,                        // input layers' commitments
+            Vec<InputLayerEnum<F, PoseidonSponge<F>>>, // input layers, including random layers
+            Vec<CommitmentEnum<F>>,                    // input layers' commitments
         ),
         GKRError,
     > {
@@ -316,7 +316,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             file.read_to_end(&mut bufreader).unwrap();
             serde_json::de::from_slice(&bufreader[..]).unwrap()
         };
-        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonSponge<F>> =
             tree_mle_input_layer_builder.to_input_layer_with_precommit(
                 tree_ligero_commit,
                 tree_ligero_aux,
@@ -352,7 +352,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             // let res = from_reader(&mut bufreader).unwrap();
             res
         };
-        let input_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+        let input_mles_input_layer: LigeroInputLayer<F, PoseidonSponge<F>> =
             input_mles_input_layer_builder.to_input_layer_with_precommit(
                 sample_minibatch_ligero_commit,
                 sample_minibatch_ligero_aux,
@@ -360,12 +360,9 @@ impl<F: FieldExt> ZKDTCircuit<F> {
                 false,
             );
 
-        let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
-            aux_mles_input_layer_builder.to_input_layer_with_rho_inv(
-                self.rho_inv,
-                self.ratio,
-            );
-        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
+        let aux_mles_input_layer: LigeroInputLayer<F, PoseidonSponge<F>> =
+            aux_mles_input_layer_builder.to_input_layer_with_rho_inv(self.rho_inv, self.ratio);
+        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonSponge<F>> =
             public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
         let mut input_mles_input_layer = input_mles_input_layer.to_enum();
@@ -379,7 +376,6 @@ impl<F: FieldExt> ZKDTCircuit<F> {
             decision_node_paths_mle
                 .set_prefix_bits(decision_node_paths_mle_vec_combined.get_prefix_bits())
         }
-
 
         for leaf_node_paths_mle in leaf_node_paths_mle_vec.iter_mut() {
             leaf_node_paths_mle.set_prefix_bits(leaf_node_paths_mle_vec_combined.get_prefix_bits())
@@ -507,7 +503,7 @@ impl<F: FieldExt> ZKDTCircuit<F> {
         let bits_binary_16_bit_batched =
             BinDecomp16BitIsBinaryCircuitBatched::new(binary_decomp_diffs_mle_vec);
 
-        let bits_binary_8_bit_batched = 
+        let bits_binary_8_bit_batched =
             BinDecomp8BitIsBinaryCircuitBatched::new(multiplicities_bin_decomp_mle_input_vec);
 
         let bits_are_binary_multiset_decision_circuit =
@@ -552,8 +548,8 @@ impl<F: FieldExt> ZKDTCircuit<F> {
 mod tests {
     use super::ZKDTCircuit;
     use crate::prover::helpers::test_circuit;
-    use crate::{zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree};
-    use ark_std::{start_timer, end_timer};
+    use crate::zkdt::cache_upshot_catboost_inputs_for_testing::generate_mles_batch_catboost_single_tree;
+    use ark_std::{end_timer, start_timer};
     use remainder_shared_types::Fr;
     use std::path::Path;
 

@@ -1,9 +1,9 @@
+use crate::{gate::gate::BinaryOperation, prover::helpers::test_circuit};
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
-use crate::{prover::helpers::test_circuit, gate::gate::BinaryOperation};
 
 use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 
@@ -26,7 +26,7 @@ use crate::{
     zkdt::builders::{EqualityCheck, ZeroBuilder},
 };
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
+    transcript::{poseidon_transcript::PoseidonSponge, Transcript},
     FieldExt, Fr,
 };
 
@@ -49,7 +49,7 @@ struct SimpleCircuit<F: FieldExt> {
     size: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -120,7 +120,7 @@ struct SimplestCircuit<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     // const CIRCUIT_HASH: Option<[u8; 32]> = Some([
     //     201,181,0,14,124,41,18,30,207,198,237,142,57,140,114,224,28,140,62,0,109,36,200,27,208,218,32,166,8,35,115,46,
@@ -181,7 +181,7 @@ struct SimplestBatchedCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- Grab combined
@@ -263,7 +263,7 @@ struct RandomCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         unimplemented!()
@@ -346,7 +346,7 @@ struct MultiInputLayerCircuit<F: FieldExt> {
     input_layer_2_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         unimplemented!()
@@ -528,7 +528,7 @@ struct TestCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
@@ -637,7 +637,7 @@ struct SimplestGateCircuit<F: FieldExt> {
     negmle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -657,8 +657,13 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let first_layer_output =
-            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), None, BinaryOperation::Add);
+        let first_layer_output = layers.add_gate(
+            nonzero_gates,
+            self.mle.mle_ref(),
+            self.negmle.mle_ref(),
+            None,
+            BinaryOperation::Add,
+        );
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
@@ -678,7 +683,7 @@ struct SimplestGateCircuitUneven<F: FieldExt> {
     negmle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -691,10 +696,15 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
         // --- Create Layers to be added to ---
         let mut layers = Layers::new();
 
-        let mut nonzero_gates = vec![(0,0,0)];
+        let mut nonzero_gates = vec![(0, 0, 0)];
 
-        let first_layer_output =
-            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), None, BinaryOperation::Add);
+        let first_layer_output = layers.add_gate(
+            nonzero_gates,
+            self.mle.mle_ref(),
+            self.negmle.mle_ref(),
+            None,
+            BinaryOperation::Add,
+        );
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
@@ -715,7 +725,7 @@ struct MulAddSimplestGateCircuit<F: FieldExt> {
     neg_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -742,7 +752,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.mle_2.mle_ref(),
-            None, 
+            None,
             BinaryOperation::Mul,
         );
 
@@ -750,7 +760,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.neg_mle_2.mle_ref(),
-            None, 
+            None,
             BinaryOperation::Mul,
         );
 
@@ -782,7 +792,7 @@ struct SimplestAddMulBatchedGateCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -848,7 +858,7 @@ struct SimplestGateCircuitCombined<F: FieldExt> {
     negmle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitCombined<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -868,8 +878,13 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitCombined<F> {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let first_layer_output =
-            layers.add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref(), None, BinaryOperation::Add);
+        let first_layer_output = layers.add_gate(
+            nonzero_gates,
+            self.mle.mle_ref(),
+            self.negmle.mle_ref(),
+            None,
+            BinaryOperation::Add,
+        );
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
@@ -890,7 +905,7 @@ struct SimplestBatchedGateCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedGateCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -945,7 +960,7 @@ struct SimplePrecommitCircuit<F: FieldExt> {
     mle2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- The precommitted input layer MLE is just the first MLE ---
@@ -1043,7 +1058,7 @@ struct EmptyLayerTestCircuit<F: FieldExt> {
     other_empty_layer_src_mle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         // --- We're not testing commitments here; just use PublicInputLayer ---
@@ -1092,7 +1107,7 @@ struct CombineCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let test_witness = self.test_circuit.synthesize();
@@ -1111,7 +1126,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
         } = simple_witness;
 
         // for input vv
-        let input_layers: Vec<InputLayerEnum<F, PoseidonTranscript<F>>> = test_inputs
+        let input_layers: Vec<InputLayerEnum<F, PoseidonSponge<F>>> = test_inputs
             .into_iter()
             .chain(simple_inputs.into_iter().map(|mut input| {
                 let new_layer_id = match input.layer_id() {
@@ -1292,7 +1307,10 @@ fn test_gkr_circuit_with_precommit() {
 
     let circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
 
-    test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gkr_proof_with_precommit_optimized.json")),
+    );
 }
 
 // ------------------------------------ INPUT LAYER TESTING CIRCUITS ------------------------------------
@@ -1458,7 +1476,10 @@ fn test_gkr_gate_batched_simplest_circuit() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof2_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof2_optimized.json")),
+    );
 }
 
 #[test]
@@ -1494,9 +1515,11 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof_uneven_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof_uneven_optimized.json")),
+    );
 }
-
 
 #[test]
 fn test_gkr_add_mul_gate_batched_simplest_circuit() {
@@ -1549,7 +1572,10 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
         batch_bits: 1,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof1_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof1_optimized.json")),
+    );
 
     // panic!();
 }
@@ -1580,14 +1606,17 @@ fn test_gkr_add_mul_gate_simplest_circuit() {
         LayerId::Input(0),
         None,
     );
-    
+
     let circuit: MulAddSimplestGateCircuit<Fr> = MulAddSimplestGateCircuit {
         mle_1,
         mle_2,
         neg_mle_2,
     };
 
-    test_circuit(circuit, Some(Path::new("./mul_gate_simple_proof_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./mul_gate_simple_proof_optimized.json")),
+    );
 
     // panic!();
 }
@@ -1672,7 +1701,7 @@ struct BatchedTestCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let new_bits = log2(self.mle.len()) as usize;
@@ -1892,7 +1921,7 @@ struct Combine3Circuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
         let test_witness = self.test_circuit.synthesize();
@@ -1918,7 +1947,7 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
         } = batch_witness;
 
         // for input vv
-        let input_layers: Vec<InputLayerEnum<F, PoseidonTranscript<F>>> = test_inputs
+        let input_layers: Vec<InputLayerEnum<F, PoseidonSponge<F>>> = test_inputs
             .into_iter()
             .chain(simple_inputs.into_iter().map(|mut input| {
                 let new_layer_id = match input.layer_id() {

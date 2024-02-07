@@ -7,7 +7,7 @@ use itertools::{Itertools, repeat_n};
 use remainder::{zkdt::{data_pipeline::dt2zkdt::{RawSamples, load_raw_samples, Samples}, structs::InputAttribute, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_sample_minibatch_commitment_filepath_for_batch_size_tree_batch}}, mle::{dense::DenseMle, Mle}, layer::LayerId, prover::input_layer::{combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer}};
 use clap::Parser;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
-use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
+use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonSponge};
 use thiserror::Error;
 use tracing::debug;
 use tracing_subscriber::{FmtSubscriber, fmt::format::FmtSpan};
@@ -134,7 +134,7 @@ pub fn generate_ligero_sample_minibatch_commitments<F: FieldExt>(
                         Box::new(&mut minibatch_converted_samples_mle_combined),
                     ];
                     let minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer_builder = InputLayerBuilder::new(minibatch_converted_samples_mle_combined_dummy_input_layer_mles, None, LayerId::Input(0));
-                    let minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer_builder.to_input_layer();
+                    let minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer: LigeroInputLayer<F, PoseidonSponge<F>> = minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer_builder.to_input_layer();
 
                     // --- Create commitment to the combined MLEs via the input layer ---
                     let rho_inv = 4;
@@ -238,7 +238,7 @@ pub fn generate_ligero_sample_minibatch_commitments_batched<F: FieldExt>(
                         Box::new(&mut minibatch_converted_samples_mle_combined),
                     ];
                     let minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer_builder = InputLayerBuilder::new(minibatch_converted_samples_mle_combined_dummy_input_layer_mles, None, LayerId::Input(0));
-                    let minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> = minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer_builder.to_input_layer();
+                    let minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer: LigeroInputLayer<F, PoseidonSponge<F>> = minibatch_converted_samples_mle_combined_dummy_input_layer_mles_input_layer_builder.to_input_layer();
 
                     // --- Create commitment to the combined MLEs via the input layer ---
                     let rho_inv = 4;

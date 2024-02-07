@@ -1,13 +1,13 @@
-use ark_std::{test_rng};
+use ark_std::test_rng;
 use rand::Rng;
 use remainder::{
     prover::GKRCircuit,
     zkdt::{
-        permutation_circuit::circuits::PermutationCircuit,
         data_pipeline::dummy_data_generator::{generate_dummy_mles_batch, BatchedDummyMles},
+        permutation_circuit::circuits::PermutationCircuit,
     },
 };
-use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
+use remainder_shared_types::transcript::{poseidon_transcript::PoseidonSponge, Transcript};
 use std::time::Instant;
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
         Fr::from(rng.gen::<u64>()),
     );
 
-    let mut transcript = PoseidonTranscript::new("Permutation Circuit Prover Transcript");
+    let mut transcript = PoseidonSponge::new("Permutation Circuit Prover Transcript");
 
     let now = Instant::now();
 
@@ -40,7 +40,7 @@ fn main() {
 
     match proof {
         Ok(proof) => {
-            let mut transcript = PoseidonTranscript::new("Permutation Circuit Verifier Transcript");
+            let mut transcript = PoseidonSponge::new("Permutation Circuit Verifier Transcript");
             let result = circuit.verify(&mut transcript, proof);
             if let Err(err) = result {
                 println!("{}", err);

@@ -30,7 +30,7 @@ use crate::{
     zkdt::builders::{AttributeConsistencyBuilderZeroRef, BitExponentiationBuilderCatBoost},
 };
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
+    transcript::{poseidon_transcript::PoseidonSponge, Transcript},
     FieldExt,
 };
 
@@ -80,7 +80,7 @@ pub struct ZKDTMultiTreeCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     // Uncomment this to turn on the circuit hash. Just make sure the hash you use is accurate to your batch size.
     // This one is for a batch size of 2^9
@@ -186,7 +186,7 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
 impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
     fn create_sub_circuits(
         &mut self,
-        transcript: &mut PoseidonTranscript<F>,
+        transcript: &mut PoseidonSponge<F>,
     ) -> Result<
         (
             AttributeConsistencyCircuitMultiTree<F>,
@@ -198,8 +198,8 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F>,
             BinDecomp16BitIsBinaryCircuitMultiTree<F>,
             BinDecomp16BitIsBinaryCircuitMultiTree<F>,
-            Vec<InputLayerEnum<F, PoseidonTranscript<F>>>, // input layers, including random layers
-            Vec<CommitmentEnum<F>>,                        // input layers' commitments
+            Vec<InputLayerEnum<F, PoseidonSponge<F>>>, // input layers, including random layers
+            Vec<CommitmentEnum<F>>,                    // input layers' commitments
         ),
         GKRError,
     > {
@@ -397,7 +397,7 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
             file.read_to_end(&mut bufreader).unwrap();
             serde_json::de::from_slice(&bufreader[..]).unwrap()
         };
-        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+        let tree_mle_input_layer: LigeroInputLayer<F, PoseidonSponge<F>> =
             tree_mle_input_layer_builder.to_input_layer_with_precommit(
                 tree_ligero_commit,
                 tree_ligero_aux,
@@ -405,9 +405,9 @@ impl<F: FieldExt> ZKDTMultiTreeCircuit<F> {
                 true,
             );
 
-        let aux_mles_input_layer: LigeroInputLayer<F, PoseidonTranscript<F>> =
+        let aux_mles_input_layer: LigeroInputLayer<F, PoseidonSponge<F>> =
             aux_mles_input_layer_builder.to_input_layer_with_rho_inv(self.rho_inv, self.ratio);
-        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonTranscript<F>> =
+        let public_path_leaf_node_mles_input_layer: PublicInputLayer<F, PoseidonSponge<F>> =
             public_path_leaf_node_mles_input_layer_builder.to_input_layer();
         let mut tree_mle_input_layer = tree_mle_input_layer.to_enum();
         // let mut input_mles_input_layer = input_mles_input_layer.to_enum();

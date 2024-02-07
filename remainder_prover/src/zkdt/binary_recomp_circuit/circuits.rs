@@ -1,12 +1,21 @@
+use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt};
 
+use crate::{
+    layer::LayerId,
+    mle::{dense::DenseMle, Mle, MleRef},
+    prover::{
+        input_layer::{
+            combine_input_layers::InputLayerBuilder, ligero_input_layer::LigeroInputLayer,
+            public_input_layer::PublicInputLayer, InputLayer,
+        },
+        GKRCircuit, Layers, Witness,
+    },
+    zkdt::structs::{BinDecomp16Bit, DecisionNode, InputAttribute},
+};
 
-
-
-use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
-
-use crate::{mle::{dense::DenseMle, Mle, MleRef}, zkdt::structs::{DecisionNode, InputAttribute, BinDecomp16Bit}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, ligero_input_layer::LigeroInputLayer, InputLayer}, Layers}, layer::{LayerId}};
-
-use super::circuit_builders::{BinaryRecompBuilder, NodePathDiffBuilder, BinaryRecompCheckerBuilder, PartialBitsCheckerBuilder};
+use super::circuit_builders::{
+    BinaryRecompBuilder, BinaryRecompCheckerBuilder, NodePathDiffBuilder, PartialBitsCheckerBuilder,
+};
 
 /// Checks that the binary recomposition of the differences
 /// \bar{x}.val - path_x.thr are computed correctly.
@@ -16,12 +25,15 @@ pub struct BinaryRecompCircuit<F: FieldExt> {
     diff_signed_bin_decomp: DenseMle<F, BinDecomp16Bit<F>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-
         // --- Inputs to the circuit are just these three MLEs ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.decision_node_path_mle), Box::new(&mut self.permuted_inputs_mle), Box::new(&mut self.diff_signed_bin_decomp)];
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            Box::new(&mut self.decision_node_path_mle),
+            Box::new(&mut self.permuted_inputs_mle),
+            Box::new(&mut self.diff_signed_bin_decomp),
+        ];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
 
         // --- Create `Layers` struct to add layers to ---
@@ -35,7 +47,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
         // TODO!(ryancao): Combine this and the above layer!!!
         let diff_builder = NodePathDiffBuilder::new(
             self.decision_node_path_mle.clone(),
-            self.permuted_inputs_mle.clone()
+            self.permuted_inputs_mle.clone(),
         );
         let raw_diff_mle = layers.add_gkr(diff_builder);
 
@@ -48,9 +60,14 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
         let recomp_checker_mle = layers.add_gkr(recomp_checker_builder);
 
         // --- Create input layers ---
-        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
+            input_layer_builder.to_input_layer();
 
-        Witness { layers, output_layers: vec![recomp_checker_mle.get_enum()], input_layers: vec![live_committed_input_layer.to_enum()] }
+        Witness {
+            layers,
+            output_layers: vec![recomp_checker_mle.get_enum()],
+            input_layers: vec![live_committed_input_layer.to_enum()],
+        }
     }
 }
 impl<F: FieldExt> BinaryRecompCircuit<F> {
@@ -76,19 +93,31 @@ pub struct PartialBitsCheckerCircuit<F: FieldExt> {
     num_vars_to_grab: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for PartialBitsCheckerCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type Transcript = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.permuted_inputs_mle), Box::new(&mut self.decision_node_paths_mle)];
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            Box::new(&mut self.permuted_inputs_mle),
+            Box::new(&mut self.decision_node_paths_mle),
+        ];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
 
         let mut layers = Layers::new();
-        let builder = PartialBitsCheckerBuilder::new(self.permuted_inputs_mle.clone(), self.decision_node_paths_mle.clone(), self.num_vars_to_grab);
+        let builder = PartialBitsCheckerBuilder::new(
+            self.permuted_inputs_mle.clone(),
+            self.decision_node_paths_mle.clone(),
+            self.num_vars_to_grab,
+        );
         let result = layers.add_gkr(builder);
 
-        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer_builder.to_input_layer();
+        let input_layer: PublicInputLayer<F, Self::Transcript> =
+            input_layer_builder.to_input_layer();
 
-        Witness { layers, output_layers: vec![result.get_enum()], input_layers: vec![input_layer.to_enum()] }
+        Witness {
+            layers,
+            output_layers: vec![result.get_enum()],
+            input_layers: vec![input_layer.to_enum()],
+        }
     }
 }
 impl<F: FieldExt> PartialBitsCheckerCircuit<F> {

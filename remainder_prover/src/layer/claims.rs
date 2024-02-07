@@ -7,10 +7,10 @@ use remainder_shared_types::FieldExt;
 use tracing::instrument;
 
 use crate::layer::combine_mle_refs::get_og_mle_refs;
-use crate::mle::zero::ZeroMleRef;
-use crate::mle::{MleRef, MleIndex};
+use crate::mle::dense::{DenseMle, DenseMleRef};
 use crate::mle::mle_enum::MleEnum;
-use crate::mle::dense::{DenseMleRef, DenseMle};
+use crate::mle::zero::ZeroMleRef;
+use crate::mle::{MleIndex, MleRef};
 use crate::prover::input_layer::enum_input_layer::InputLayerEnum;
 use crate::prover::input_layer::InputLayer;
 use crate::prover::{GKRError, ENABLE_OPTIMIZATION};
@@ -212,7 +212,6 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
             .into_iter()
             .all(|claim| claim.get_num_vars() == num_vars)
         {
-            
             return Err(ClaimError::NumVarsMismatch);
         }
 
@@ -330,9 +329,11 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
     /// of all claims within a single ClaimGroup and grabs the associated
     /// MleRefs from there.
     pub fn get_claim_mle_refs(&self) -> Vec<MleEnum<F>> {
-        self.claims.clone().into_iter().map(|claim| {
-            claim.mle_ref.unwrap()
-        }).collect_vec()
+        self.claims
+            .clone()
+            .into_iter()
+            .map(|claim| claim.mle_ref.unwrap())
+            .collect_vec()
     }
 }
 
@@ -362,8 +363,12 @@ impl<F: Copy + Clone + std::fmt::Debug> ClaimGroup<F> {
 /// implementation.
 pub fn aggregate_claims<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    
-    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>, usize, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>,
+
+    compute_wlx_fn: &mut impl FnMut(
+        &ClaimGroup<F>,
+        usize,
+        Option<&Vec<MleEnum<F>>>,
+    ) -> Result<Vec<F>, GKRError>,
     transcript: &mut impl transcript::Transcript<F>,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
     let num_claims = claims.get_num_claims();
@@ -371,7 +376,7 @@ pub fn aggregate_claims<F: FieldExt>(
     info!("High-level claim aggregation on {num_claims} claims.");
 
     let claim_preproc_timer = start_timer!(|| format!("Claim preprocessing"));
-    
+
     let layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
 
     // Holds a sequence of relevant wlx evaluations, one for each claim
@@ -380,7 +385,7 @@ pub fn aggregate_claims<F: FieldExt>(
 
     let claims = preprocess_claims(claims.get_claim_vector().clone());
     let claim_groups = form_claim_groups(&claims);
-    
+
     let num_claim_groups = claim_groups.len();
 
     debug!("Grouped claims for aggregation: ");
@@ -397,9 +402,16 @@ pub fn aggregate_claims<F: FieldExt>(
     // TODO(Makis): Parallelize
     let intermediate_results: Result<Vec<(Claim<F>, Vec<Vec<F>>)>, GKRError> = claim_groups
         .into_iter()
-        
         .enumerate()
-        .map(|(idx, claim_group)| aggregate_claims_in_one_round(&claim_group, &layer_mle_refs, compute_wlx_fn, idx, transcript))
+        .map(|(idx, claim_group)| {
+            aggregate_claims_in_one_round(
+                &claim_group,
+                &layer_mle_refs,
+                compute_wlx_fn,
+                idx,
+                transcript,
+            )
+        })
         .collect();
     let intermediate_results = intermediate_results?;
 
@@ -426,7 +438,6 @@ pub fn aggregate_claims<F: FieldExt>(
         &ClaimGroup::new(intermediate_claims).unwrap(),
         &layer_mle_refs,
         compute_wlx_fn,
-        
         num_claim_groups, // Should be the final prover-supplied V_i(l(x)) evaluations
         transcript,
     )?;
@@ -478,7 +489,6 @@ pub fn compute_aggregated_challenges<F: FieldExt>(
 
     Ok(r)
 }
-
 
 /// Part of the claim aggregation process. It returns a vector of evaluations
 /// [W(l(0)), W(l(1)), ..., W(l(k))] where W : F^n -> F is the layer MLE stored
@@ -613,8 +623,12 @@ pub fn form_claim_groups<F: FieldExt>(claims: &[Claim<F>]) -> Vec<ClaimGroup<F>>
 pub fn aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer_mle_refs: &Vec<MleEnum<F>>,
-    
-    compute_wlx_fn: &mut impl FnMut(&ClaimGroup<F>, usize, Option<&Vec<MleEnum<F>>>) -> Result<Vec<F>, GKRError>,
+
+    compute_wlx_fn: &mut impl FnMut(
+        &ClaimGroup<F>,
+        usize,
+        Option<&Vec<MleEnum<F>>>,
+    ) -> Result<Vec<F>, GKRError>,
     prover_supplied_wlx_group_idx: usize,
     transcript: &mut impl transcript::Transcript<F>,
 ) -> Result<(Claim<F>, Vec<Vec<F>>), GKRError> {
@@ -638,8 +652,9 @@ pub fn aggregate_claims_in_one_round<F: FieldExt>(
 
     // Aggregate claims by performing the claim aggregation protocol.
     // First compute V_i(l(x)).
-    
-    let wlx_evaluations = compute_wlx_fn(claims, prover_supplied_wlx_group_idx, Some(layer_mle_refs))?;
+
+    let wlx_evaluations =
+        compute_wlx_fn(claims, prover_supplied_wlx_group_idx, Some(layer_mle_refs))?;
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
     // Append evaluations to the transcript before sampling a challenge.
@@ -686,7 +701,9 @@ pub fn aggregate_claims_in_one_round<F: FieldExt>(
 /// claim_vecs.len()`.
 /// # Panics
 ///  if `claim_vecs` is empty.
-pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &Vec<Vec<F>>) -> (usize, Option<Vec<usize>>) {
+pub fn get_num_wlx_evaluations<F: FieldExt>(
+    claim_vecs: &Vec<Vec<F>>,
+) -> (usize, Option<Vec<usize>>) {
     let num_claims = claim_vecs.len();
     let num_vars = claim_vecs[0].len();
 
@@ -782,7 +799,7 @@ pub(crate) mod tests {
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
-    use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript, Transcript};
+    use remainder_shared_types::transcript::{poseidon_transcript::PoseidonSponge, Transcript};
 
     use super::*;
     use ark_std::test_rng;
@@ -828,7 +845,7 @@ pub(crate) mod tests {
 
     /// Builds GKR layer whose MLE is the function whose evaluations
     /// on the boolean hypercube are given by `mle_evals`.
-    fn layer_from_evals(mle_evals: Vec<Fr>) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
+    fn layer_from_evals(mle_evals: Vec<Fr>) -> GKRLayer<Fr, PoseidonSponge<Fr>> {
         let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0), None);
 
         let layer = from_mle(
@@ -837,14 +854,13 @@ pub(crate) mod tests {
             |_, _, _| unimplemented!(),
         );
 
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
-
+        let layer: GKRLayer<_, PoseidonSponge<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         layer
     }
 
     /// Returns a random MLE expression with an associated GKR layer.
-    fn build_random_mle_layer(num_vars: usize) -> GKRLayer<Fr, PoseidonTranscript<Fr>> {
+    fn build_random_mle_layer(num_vars: usize) -> GKRLayer<Fr, PoseidonSponge<Fr>> {
         let mut rng = test_rng();
         let mle_evals: Vec<Fr> = (0..num_vars).map(|_| Fr::from(rng.gen::<u64>())).collect();
         layer_from_evals(mle_evals)
@@ -857,7 +873,6 @@ pub(crate) mod tests {
         let results = claims.get_results();
         let points_matrix = claims.get_claim_points_matrix();
 
-        
         debug_assert_eq!(points_matrix.len(), num_claims);
         debug_assert_eq!(points_matrix[0].len(), num_vars);
 
@@ -886,7 +901,6 @@ pub(crate) mod tests {
     fn compute_l_star(claims: &ClaimGroup<Fr>, r_star: &Fr) -> Vec<Fr> {
         let num_vars = claims.get_num_vars();
 
-        
         (0..num_vars)
             .map(|i| {
                 let evals: &Vec<Fr> = claims.get_points_column(i);
@@ -901,20 +915,18 @@ pub(crate) mod tests {
         layer: &impl Layer<Fr>,
         claims: &ClaimGroup<Fr>,
     ) -> (Claim<Fr>, Vec<Vec<Fr>>) {
-        let mut transcript = PoseidonTranscript::<Fr>::new("Dummy transcript for testing");
+        let mut transcript = PoseidonSponge::<Fr>::new("Dummy transcript for testing");
         aggregate_claims(
             claims,
-            
             &mut |claim, _, mle_refs| Ok(compute_claim_wlx(claims, layer)),
             &mut transcript,
         )
         .unwrap()
     }
 
-    
     // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
     fn compute_expected_claim(
-        layer: &GKRLayer<Fr, PoseidonTranscript<Fr>>,
+        layer: &GKRLayer<Fr, PoseidonSponge<Fr>>,
         l_star: &Vec<Fr>,
     ) -> Claim<Fr> {
         let mut expr = layer.expression().clone();
@@ -923,7 +935,6 @@ pub(crate) mod tests {
         Claim::new_raw(l_star.clone(), result)
     }
 
-    
     // ----------------------------------------------------------
 
     /// Test claim aggregation small MLE on 2 variables
@@ -937,9 +948,6 @@ pub(crate) mod tests {
         ];
         let r_star = Fr::from(10);
 
-
-
-        
         // ---------------
 
         let layer = layer_from_evals(mle_evals);
@@ -959,11 +967,10 @@ pub(crate) mod tests {
         // assert_eq!(aggregated_claim, expected_claim);
     }
 
-    
     /// Test claim aggregation on another small MLE on 2 variables
     /// with 3 claims.
     #[test]
-    
+
     fn test_aggro_claim_2() {
         let mle_evals = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
         let points = vec![
@@ -971,24 +978,16 @@ pub(crate) mod tests {
             vec![Fr::from(2), Fr::from(3)],
             vec![Fr::from(3), Fr::from(1)],
         ];
-        
+
         let r_star = Fr::from(2).neg();
 
-        
         // ---------------
 
-
-
-        
         let layer = layer_from_evals(mle_evals);
         let claims = claims_from_expr_and_points(layer.expression(), &points);
 
-
-
-        
         let l_star = compute_l_star(&claims, &r_star);
 
-        
         // TODO: Assert l_star was computed correctly.
 
         let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
@@ -1049,7 +1048,7 @@ pub(crate) mod tests {
             |mle| ExpressionStandard::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]),
             |_, _, _| unimplemented!(),
         );
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
+        let layer: GKRLayer<_, PoseidonSponge<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -1114,7 +1113,7 @@ pub(crate) mod tests {
             |mle| mle.mle_ref().expression(),
             |_, _, _| unimplemented!(),
         );
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
+        let layer: GKRLayer<_, PoseidonSponge<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -1179,7 +1178,7 @@ pub(crate) mod tests {
             |mle| mle.mle_ref().expression(),
             |_, _, _| unimplemented!(),
         );
-        let layer: GKRLayer<_, PoseidonTranscript<_>> = GKRLayer::new(layer, LayerId::Input(0));
+        let layer: GKRLayer<_, PoseidonSponge<_>> = GKRLayer::new(layer, LayerId::Input(0));
 
         let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
         let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
@@ -1215,12 +1214,11 @@ pub(crate) mod tests {
         expr_copy.index_mle_indices(0);
 
         let eval_fixed_vars = expr_copy.evaluate_expr(fix_vars.clone()).unwrap();
-        
+
         let claim_fixed_vars: Claim<Fr> = Claim::new_raw(fix_vars, eval_fixed_vars);
         assert_ne!(res.get_result(), claim_fixed_vars.get_result());
     }
 
-    
     #[test]
     fn test_aggro_claim_common_suffix1() {
         // MLE on 3 variables (2^3 = 8 evals)

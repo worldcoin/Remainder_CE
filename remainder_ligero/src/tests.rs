@@ -12,21 +12,24 @@ use crate::{
     collapse_columns,
     ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point},
     ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof},
-    poseidon_ligero::PoseidonSpongeHasher,
+    poseidon_ligero::{PoseidonParams, PoseidonSpongeHasher},
     utils::{get_random_coeffs_for_multilinear_poly, halo2_ifft},
 };
 
 // --- For serialization/deserialization of the various structs ---
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
-use halo2_proofs::poly::EvaluationDomain;
+use halo2_proofs::{poly::EvaluationDomain, transcript};
 // --- For BN-254 ---
 use itertools::{iterate, Itertools};
-use remainder_shared_types::Poseidon;
 use rand::Rng;
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonTranscript, Transcript as RemainderTranscript},
+    transcript::{poseidon_transcript::PoseidonSponge, Transcript as RemainderTranscript},
     FieldExt,
+};
+use remainder_shared_types::{
+    transcript::{TranscriptReader, TranscriptWriter},
+    Poseidon,
 };
 use std::{iter::repeat_with, marker::PhantomData};
 
@@ -373,10 +376,11 @@ fn poseidon_end_to_end_test() {
 
     // compute an evaluation proof
     // --- Replacing the old transcript with the Remainder one ---
-    let mut tr1 = PoseidonTranscript::new("test transcript");
+    let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("test transcript");
 
     // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
-    let _ = tr1.append_field_element("polycommit", root.root);
+    transcript_writer.append("polycommit", root.root);
+
     // TODO!(ryancao): Uhhhhhhh figure out how to add the rate to the transcript...
     // tr1.append_field_element("rate", rho);
     // let _ = tr1.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
@@ -386,7 +390,7 @@ fn poseidon_end_to_end_test() {
     // As well as the actual columns we're opening at, plus proofs that those
     // columns are consistent against the Merkle root
     let pf: LigeroEvalProof<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr> =
-        prove(&comm, &outer_tensor[..], &enc, &mut tr1).unwrap();
+        prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
 
     // ------------------- SERIALIZATION -------------------
     // --- Serializing the auxiliaries ---
@@ -421,8 +425,10 @@ fn poseidon_end_to_end_test() {
     // Q: Why do we have a second transcript???
     // Answer: I guess it's because we're simulating the verifier receiving the transcript
     // ...Perhaps there's also some state reset stuff that needs to be done?
-    let mut tr2 = PoseidonTranscript::new("test transcript 2");
-    let _ = tr2.append_field_element("polycommit", root.root);
+    let transcript = transcript_writer.get_transcript();
+    let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
+    let prover_root = transcript_reader.consume_element("polycommit").unwrap();
+    assert_eq!(prover_root, root.root);
     // TODO!(ryancao): Uhhhhhhh figure out how to add the rate to the transcript...
     // tr2.append_field_element("rate", rho);
     // let _ = tr2.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
@@ -446,7 +452,7 @@ fn poseidon_end_to_end_test() {
         &inner_tensor[..],
         &pf,
         &enc2,
-        &mut tr2,
+        &mut transcript_reader,
     )
     .unwrap();
 
@@ -625,10 +631,10 @@ fn poseidon_ml_end_to_end_test() {
     // ------------ The above is all the same as the `commit` test functionality ------------
 
     // --- Replacing the old transcript with the Remainder one ---
-    let mut tr1 = PoseidonTranscript::new("test transcript");
+    let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("test transcript");
 
     // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
-    let _ = tr1.append_field_element("polycommit", root.root);
+    transcript_writer.append("polycommit", root.root);
     // let _ = tr1.append_field_element("rate", Fr::from(rho_inv));
     // let _ = tr1.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
 
@@ -637,7 +643,7 @@ fn poseidon_ml_end_to_end_test() {
     // As well as the actual columns we're opening at, plus proofs that those
     // columns are consistent against the Merkle root
     let pf: LigeroEvalProof<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr> =
-        prove(&comm, &outer_tensor[..], &enc, &mut tr1).unwrap();
+        prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
 
     // ------------------- SERIALIZATION -------------------
     // --- Serializing the auxiliaries ---
@@ -672,8 +678,10 @@ fn poseidon_ml_end_to_end_test() {
     // Q: Why do we have a second transcript???
     // Answer: I guess it's because we're simulating the verifier receiving the transcript
     // ...Perhaps there's also some state reset stuff that needs to be done?
-    let mut tr2 = PoseidonTranscript::new("test transcript 2");
-    let _ = tr2.append_field_element("polycommit", root.root);
+    let transcript = transcript_writer.get_transcript();
+    let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
+    let prover_root = transcript_reader.consume_element("polycommit").unwrap();
+    assert_eq!(prover_root, root.root);
     // let _ = tr2.append_field_element("rate", Fr::from(rho_inv));
     // let _ = tr2.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
 
@@ -696,7 +704,7 @@ fn poseidon_ml_end_to_end_test() {
         &inner_tensor[..],
         &pf,
         &enc2,
-        &mut tr2,
+        &mut transcript_reader,
     )
     .unwrap();
 
