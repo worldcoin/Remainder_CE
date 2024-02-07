@@ -1385,7 +1385,7 @@ fn test_gkr_gate_simplest_circuit_uneven() {
     );
 
     let negmle = DenseMle::new_from_raw(
-        vec![mle.mle_ref().bookkeeping_table[0].neg()],
+        vec![mle.mle_ref().bookkeeping_table()[0].neg()],
         LayerId::Input(0),
         None,
     );
@@ -1413,7 +1413,7 @@ fn test_gkr_gate_simplest_circuit_combined() {
 
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
-            .bookkeeping_table
+            .bookkeeping_table()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1542,7 +1542,7 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
     let neg_mle_2 = DenseMle::new_from_iter(
         mle_2
             .mle_ref()
-            .bookkeeping_table
+            .bookkeeping_table()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1586,102 +1586,7 @@ fn test_gkr_add_mul_gate_simplest_circuit() {
     let neg_mle_2 = DenseMle::new_from_iter(
         mle_2
             .mle_ref()
-            .bookkeeping_table
-            .into_iter()
-            .map(|elem| -elem),
-        LayerId::Input(0),
-        None,
-    );
-    
-    let circuit: MulAddSimplestGateCircuit<Fr> = MulAddSimplestGateCircuit {
-        mle_1,
-        mle_2,
-        neg_mle_2,
-    };
-
-    test_circuit(circuit, Some(Path::new("./mul_gate_simple_proof_optimized.json")));
-
-    // panic!();
-}
-
-
-#[test]
-fn test_gkr_add_mul_gate_batched_simplest_circuit() {
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-
-    let _rng = test_rng();
-    let size = 1 << 2;
-
-    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            // let num = Fr::from(rng.gen::<u64>());
-
-            Fr::one()
-        }),
-        LayerId::Input(0),
-        None,
-    );
-
-    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            // let num = Fr::from(rng.gen::<u64>());
-
-            Fr::one()
-        }),
-        LayerId::Input(0),
-        None,
-    );
-
-    let neg_mle_2 = DenseMle::new_from_iter(
-        mle_2
-            .mle_ref()
-            .bookkeeping_table
-            .into_iter()
-            .map(|elem| -elem),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input,
-    //     None,
-    // );
-
-    let circuit: SimplestAddMulBatchedGateCircuit<Fr> = SimplestAddMulBatchedGateCircuit {
-        mle_1,
-        mle_2,
-        neg_mle_2,
-        batch_bits: 1,
-    };
-
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof1_optimized.json")));
-
-    // panic!();
-}
-
-#[test]
-fn test_gkr_add_mul_gate_simplest_circuit() {
-    let mut rng = test_rng();
-    let size = 1 << 4;
-
-    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
-        LayerId::Input(0),
-        None,
-    );
-
-    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
-        LayerId::Input(0),
-        None,
-    );
-
-    let neg_mle_2 = DenseMle::new_from_iter(
-        mle_2
-            .mle_ref()
-            .bookkeeping_table
+            .bookkeeping_table()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),

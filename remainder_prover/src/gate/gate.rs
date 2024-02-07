@@ -719,7 +719,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         self.rhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.table.bookkeeping_table.len() == 1 {
+        if beta_g2.table.bookkeeping_table().len() == 1 {
             let beta_g2_fully_bound = beta_g2.table.bookkeeping_table()[0];
             Ok((sumcheck_rounds, beta_g2_fully_bound))
         } else {
@@ -793,8 +793,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
 
         let f_2 = phase_1_mles[0][1].clone();
 
-        if f_2.bookkeeping_table.len() == 1 {
-            let f2_at_u = f_2.bookkeeping_table[0];
+        if f_2.bookkeeping_table().len() == 1 {
+            let f2_at_u = f_2.bookkeeping_table()[0];
             Ok((sumcheck_rounds, f2_at_u, challenges))
         }
         else {
