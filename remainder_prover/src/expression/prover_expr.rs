@@ -10,7 +10,7 @@ use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionN
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
 /// of the MleRef in an expression's MleRef list/// Generic Expressions
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct MleVecIndex<F>(usize, PhantomData<F>);
 
@@ -19,6 +19,11 @@ impl<F: FieldExt> MleVecIndex<F> {
     /// create a new MleRefIndex
     pub fn new(index: usize) -> Self {
         MleVecIndex(index, PhantomData)
+    }
+
+    /// returns the index
+    pub fn index(&self) -> usize {
+        self.0
     }
 
     /// add the index with an increment amount
@@ -40,6 +45,20 @@ impl<F: FieldExt> MleVecIndex<F> {
         mle_ref_vec: &'a mut Vec<DenseMleRef<F>>
     ) -> &'a mut DenseMleRef<F> {
         &mut mle_ref_vec[self.0]
+    }
+}
+
+/// this also needs to be prover / verifier / abstract specific
+// defines how the Expressions are printed and displayed
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for MleVecIndex<F> {
+    /// needs to change ^above^ to be Expression
+    /// and then change how to display ExpressionNode::Mle by indexing using MleIndex
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+        f.debug_tuple("MleVecIndex")
+        .field(&self.0)
+        .finish()
+
     }
 }
 
@@ -133,6 +152,77 @@ impl<F: FieldExt> Expression<F, ProverExpressionMleVec> {
         
     }
 
+    /// (not generic)
+    /// Create a product Expression that contains one MLE
+    pub fn mle(mle: DenseMleRef<F>) -> Self {
+
+        let mle_node = ExpressionNode::Mle(MleVecIndex::new(0));
+        
+        Expression::new(mle_node, [mle].to_vec())
+        
+    }
+
+    /// (not generic)
+    /// Create a product Expression that contains one MLE
+    pub fn constant(constant: F) -> Self {
+
+        let mle_node = ExpressionNode::Constant(constant);
+        
+        Expression::new(mle_node, [].to_vec())
+        
+    }
+
+    /// (not generic)
+    /// Create a negated Expression that contains one MLE
+    pub fn negated(expression: Box<Expression<F, ProverExpressionMleVec>>) -> Self {
+
+        let (node, mle_vec) = expression.deconstruct();
+
+        let mle_node = ExpressionNode::Negated(Box::new(node));
+        
+        Expression::new(mle_node, mle_vec)
+        
+    }
+
+    /// (not generic)
+    /// Create a Sum Expression that contains one MLE
+    pub fn sum(
+        mut lhs: Box<Expression<F, ProverExpressionMleVec>>,
+        mut rhs: Box<Expression<F, ProverExpressionMleVec>>
+    ) -> Self {
+
+        let offset = lhs.num_mle_ref(); 
+        rhs.increment_mle_vec_indices(offset);
+
+        let (lhs_node, lhs_mle_vec) = lhs.deconstruct();
+        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
+
+        let sum_node = ExpressionNode::Sum(Box::new(lhs_node), Box::new(rhs_node));
+        let sum_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec.into_iter()).collect_vec();
+
+        Expression::new(sum_node, sum_mle_vec)
+        
+    }
+
+    /// (not generic)
+    /// Create a negated Expression that contains one MLE
+    pub fn scaled(expression: Box<Expression<F, ProverExpressionMleVec>>, scale: F) -> Self {
+
+        let (node, mle_vec) = expression.deconstruct();
+
+        Expression::new(ExpressionNode::Scaled(Box::new(node), scale), mle_vec)
+        
+    }
+    
+    /// add a selector constructor
+    /// 
+    /// 
+    /// 
+    /// 
+    /// 
+    /// 
+    /// 
+
     /// mutable but ok
     /// transforms the expression to a verifier expression
     /// should only be called when the entire expression is fully bound
@@ -167,7 +257,7 @@ impl<F: FieldExt> Expression<F, ProverExpressionMleVec> {
 
     /// mutates, but ok, bc children functions are ok
     /// evaluates an expression on the given challenges points, by fixing the variables
-    pub fn evaluate_expr(mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
+    pub fn evaluate_expr(&mut self, challenges: Vec<F>) -> Result<F, ExpressionError> {
         // --- It's as simple as fixing all variables ---
         challenges
             .iter()
@@ -242,7 +332,7 @@ impl<F: FieldExt> Expression<F, ProverExpressionMleVec> {
         // ----- this is literally a check ends -----
 
         // --- Traverse the expression and pick up all the evals ---
-        self.transform_to_verifier_expression().unwrap().gather_combine_all_evals()
+        self.clone().transform_to_verifier_expression().unwrap().gather_combine_all_evals()
     }
 
 
@@ -709,6 +799,49 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpressionMleVec> {
             ExpressionNode::Scaled(a, _) => a.get_expression_size_node(curr_size, mle_vec),
             ExpressionNode::Negated(a) => a.get_expression_size_node(curr_size, mle_vec),
             ExpressionNode::Constant(_) => curr_size,
+        }
+    }
+
+    /// immutable
+    /// really should be the index of the last MleVecIndex in the expression
+    /// Gets the size of an expression in terms of the number of rounds of sumcheck
+    pub fn get_mle_vec_len(
+        &self,
+    ) -> usize {
+        let mut mle_exists = false;
+        let largest_mle_vec_idx = match self {
+            ExpressionNode::Selector(_mle_index, a, b) => {
+                let a_bits = a.get_mle_vec_len();
+                let b_bits = b.get_mle_vec_len();
+                max(a_bits, b_bits)
+            }
+            ExpressionNode::Mle(mle_vec_idx) => {
+                mle_exists = true;
+                mle_vec_idx.0
+            }
+            ExpressionNode::Sum(a, b) => {
+                let a_bits = a.get_mle_vec_len();
+                let b_bits = b.get_mle_vec_len();
+                max(a_bits, b_bits)
+            }
+            ExpressionNode::Product(mle_vec_indices) => {
+                mle_exists = true;
+                mle_vec_indices.into_iter().map(
+                    |mle_vec_index|
+                        mle_vec_index.0
+                ).max()
+                .unwrap_or(0)
+
+            }
+            ExpressionNode::Scaled(a, _) => a.get_mle_vec_len(),
+            ExpressionNode::Negated(a) => a.get_mle_vec_len(),
+            ExpressionNode::Constant(_) => 0,
+        };
+
+        if mle_exists {
+            largest_mle_vec_idx + 1
+        } else {
+            0
         }
     }
 }
@@ -1231,15 +1364,25 @@ impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpressionMleVec> {
 /// ----------------------------old stuff above------------------------------------
 
 
+impl<F: FieldExt> Neg for Expression<F, ProverExpressionMleVec> {
+    type Output = Expression<F, ProverExpressionMleVec>;
+    fn neg(self) -> Self::Output {
+        let (node, mle_vec) = self.deconstruct();
+
+        Expression::new(ExpressionNode::Negated(Box::new(node)), mle_vec)
+    }
+}
+
+
 /// what if the rhs introduces only the same expression,
 /// understanding is rn, we just duplicate
 /// changed here self to mut self noteeee
 impl<F: FieldExt> Add for Expression<F, ProverExpressionMleVec> {
     type Output = Expression<F, ProverExpressionMleVec>;
-    fn add(mut self, rhs: Expression<F, ProverExpressionMleVec>) -> Expression<F, ProverExpressionMleVec> {
+    fn add(mut self, mut rhs: Expression<F, ProverExpressionMleVec>) -> Expression<F, ProverExpressionMleVec> {
 
-        let offset = rhs.num_mle_ref(); 
-        self.increment_mle_vec_indices(offset);
+        let offset = self.num_mle_ref(); 
+        rhs.increment_mle_vec_indices(offset);
 
         let (lhs_node, lhs_mle_vec) = self.deconstruct();
         let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
@@ -1253,10 +1396,10 @@ impl<F: FieldExt> Add for Expression<F, ProverExpressionMleVec> {
 
 impl<F: FieldExt> Sub for Expression<F, ProverExpressionMleVec> {
     type Output = Expression<F, ProverExpressionMleVec>;
-    fn sub(mut self, rhs: Expression<F, ProverExpressionMleVec>) -> Expression<F, ProverExpressionMleVec> {
+    fn sub(mut self, mut rhs: Expression<F, ProverExpressionMleVec>) -> Expression<F, ProverExpressionMleVec> {
 
-        let offset = rhs.num_mle_ref(); 
-        self.increment_mle_vec_indices(offset);
+        let offset = self.num_mle_ref(); 
+        rhs.increment_mle_vec_indices(offset);
 
         let (lhs_node, lhs_mle_vec) = self.deconstruct();
         let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
@@ -1269,15 +1412,25 @@ impl<F: FieldExt> Sub for Expression<F, ProverExpressionMleVec> {
     }
 }
 
+impl<F: FieldExt> Mul<F> for Expression<F, ProverExpressionMleVec> {
+    type Output = Expression<F, ProverExpressionMleVec>;
+    fn mul(self, rhs: F) -> Self::Output {
+
+        let (node, mle_vec) = self.deconstruct();
+
+        Expression::new(ExpressionNode::Scaled(Box::new(node), rhs), mle_vec)
+
+    }
+}
 
 /// this also needs to be prover / verifier / abstract specific
 // defines how the Expressions are printed and displayed
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpressionMleVec> {
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, ProverExpressionMleVec> {
     /// needs to change ^above^ to be Expression
     /// and then change how to display ExpressionNode::Mle by indexing using MleIndex
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 
-        let expression_node_fmt = match self.expression_node() {
+        match self {
             ExpressionNode::Constant(scalar) => {
                 f.debug_tuple("Constant").field(scalar).finish()
             }
@@ -1297,11 +1450,21 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpr
             ExpressionNode::Scaled(poly, scalar) => {
                 f.debug_tuple("Scaled").field(poly).field(scalar).finish()
             }
-        };
+        }
+
+    }
+}
+
+/// this also needs to be prover / verifier / abstract specific
+// defines how the Expressions are printed and displayed
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpressionMleVec> {
+    /// needs to change ^above^ to be Expression
+    /// and then change how to display ExpressionNode::Mle by indexing using MleIndex
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 
         f.debug_struct("Expression")
-        .field("Expression Node", &expression_node_fmt)
-        .field("MleRef Vec", &self.mle_vec())
+        .field("Expression_Node", &self.expression_node())
+        .field("MleRef_Vec", &self.mle_vec())
         .finish()
 
     }
