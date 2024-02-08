@@ -1,7 +1,7 @@
 
 use remainder_shared_types::{FieldExt, transcript::Transcript};
 
-use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef}, layer::{LayerBuilder, LayerId}, expression::{generic_expr::Expression, prover_expr::ProverExpressionMleVec}};
+use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef}, layer::{LayerBuilder, LayerId}, expression::{generic_expr::Expression, prover_expr::ProverExpressionMle}};
 
 /// Does the building for taking two MLEs of size two and multiplying each 
 /// to itself, then adding the results into a single MLE of size 1
@@ -13,7 +13,7 @@ impl<F: FieldExt> LayerBuilder<F> for EmptyLayerBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // --- Multiply `empty_layer_src_mle`'s elements and `other_empty_layer_src_mle`'s elements and add them together ---
-    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
         let split_mle_1 = self.empty_layer_src_mle.split(F::zero());
         let lhs = Expression::products(vec![split_mle_1.first(), split_mle_1.second()]);
 
@@ -52,7 +52,7 @@ impl<F: FieldExt> LayerBuilder<F> for EmptyLayerSubBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
     // --- Literally just subtract them ---
-    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
         let empty_layer_mle_ref = Expression::mle(self.empty_layer_mle.mle_ref());
         let mle_mle_ref = Expression::mle(self.mle.mle_ref());
         mle_mle_ref - empty_layer_mle_ref
@@ -89,7 +89,7 @@ impl<F: FieldExt> LayerBuilder<F> for EmptyLayerAddBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
     // --- Literally just add them ---
-    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
         let empty_layer_mle_ref = Expression::mle(self.empty_layer_mle.mle_ref());
         let mle_mle_ref = Expression::mle(self.mle.mle_ref());
         mle_mle_ref + empty_layer_mle_ref

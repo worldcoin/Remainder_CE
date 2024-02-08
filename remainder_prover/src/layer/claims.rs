@@ -779,7 +779,7 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 // from "sumcheck/tests.rs".
 pub(crate) mod tests {
     use crate::expression::generic_expr::Expression;
-    use crate::expression::prover_expr::ProverExpressionMleVec;
+    use crate::expression::prover_expr::ProverExpressionMle;
     use crate::layer::{from_mle, GKRLayer, LayerId};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
@@ -792,7 +792,7 @@ pub(crate) mod tests {
     #[test]
     fn test_get_claim() {
         // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
-        let expression1: Expression<Fr, ProverExpressionMleVec> = Expression::constant(Fr::one());
+        let expression1: Expression<Fr, ProverExpressionMle> = Expression::constant(Fr::one());
         let mle = DenseMle::<_, Fr>::new_from_raw(
             vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
             LayerId::Input(0),
@@ -813,7 +813,7 @@ pub(crate) mod tests {
     /// Builds `ClaimGroup<Fr>` by evaluation an expression `expr` on
     /// each point in `points`.
     fn claims_from_expr_and_points(
-        expr: &Expression<Fr, ProverExpressionMleVec>,
+        expr: &Expression<Fr, ProverExpressionMle>,
         points: &Vec<Vec<Fr>>,
     ) -> ClaimGroup<Fr> {
         let claims_vector: Vec<Claim<Fr>> = cfg_into_iter!(points)

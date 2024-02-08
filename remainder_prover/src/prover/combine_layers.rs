@@ -8,7 +8,7 @@ use remainder_shared_types::{transcript::Transcript, FieldExt};
 use thiserror::Error;
 
 use crate::{
-    expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpressionMleVec},
+    expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpressionMle},
     layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
@@ -184,8 +184,8 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
         }?;
 
         let mut closure = for<'a, 'b> |
-            expr: &'a mut ExpressionNode<F, ProverExpressionMleVec>,
-            mle_vec: &'b mut <ProverExpressionMleVec as ExpressionType<F>>::MleVec
+            expr: &'a mut ExpressionNode<F, ProverExpressionMle>,
+            mle_vec: &'b mut <ProverExpressionMle as ExpressionType<F>>::MleVec
         | -> Result<(), ()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_idx) => {
@@ -272,8 +272,8 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
 
 ///Combine expression w/ padding using selectors
 fn combine_expressions<F: FieldExt>(
-    mut exprs: Vec<Expression<F, ProverExpressionMleVec>>,
-) -> Expression<F, ProverExpressionMleVec> {
+    mut exprs: Vec<Expression<F, ProverExpressionMle>>,
+) -> Expression<F, ProverExpressionMle> {
     let _floor_size = exprs
         .iter()
         .map(|expr| expr.get_expression_size(0))
@@ -321,9 +321,9 @@ fn combine_expressions<F: FieldExt>(
 ///
 /// Basically turns V(b_1) = \[1, 2\] to V(b_1, b_2) = \[1, 2, 0, 0\] but with expressions
 fn add_padding<F: FieldExt>(
-    mut expr: Expression<F, ProverExpressionMleVec>,
+    mut expr: Expression<F, ProverExpressionMle>,
     num_padding: usize,
-) -> Expression<F, ProverExpressionMleVec> {
+) -> Expression<F, ProverExpressionMle> {
     for _ in 0..num_padding {
         expr = Expression::constant(F::zero()).concat_expr(expr);
     }

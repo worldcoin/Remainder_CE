@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{generic_expr::{Expression, ExpressionNode}, prover_expr::ProverExpressionMleVec}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
+    expression::{generic_expr::{Expression, ExpressionNode}, prover_expr::ProverExpressionMle}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
 };
 use ark_std::{cfg_into_iter};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -20,7 +20,7 @@ use super::{
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct EmptyLayer<F: FieldExt, Tr> {
-    pub(crate) expr: Expression<F, ProverExpressionMleVec>,
+    pub(crate) expr: Expression<F, ProverExpressionMle>,
     id: LayerId,
     _marker: PhantomData<Tr>,
 }
@@ -70,7 +70,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         let mut claims: Vec<Claim<F>> = Vec::new();
 
         let mut observer_fn = |
-            exp_node: &ExpressionNode<F, ProverExpressionMleVec>,
+            exp_node: &ExpressionNode<F, ProverExpressionMle>,
             mle_vec: &Vec<DenseMleRef<F>>,
         | {
             match exp_node {
@@ -188,11 +188,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
 impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
     ///Gets this layer's underlying expression
-    pub fn expression(&self) -> &Expression<F, ProverExpressionMleVec> {
+    pub fn expression(&self) -> &Expression<F, ProverExpressionMle> {
         &self.expr
     }
 
-    pub(crate) fn new_raw(id: LayerId, expr: Expression<F, ProverExpressionMleVec>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expr: Expression<F, ProverExpressionMle>) -> Self {
         Self {
             id,
             expr,
