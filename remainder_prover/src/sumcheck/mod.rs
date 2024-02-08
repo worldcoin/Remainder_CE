@@ -14,7 +14,7 @@ use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
 
 use crate::{
-    expression::{expr_errors::ExpressionError, generic_expr::ExpressionNode, prover_expr::ProverExpression},
+    expression::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpressionMleVec},
     mle::{beta::BetaTable, dense::{DenseMleRef, DenseMle}, MleIndex, MleRef},
 };
 use remainder_shared_types::FieldExt;
@@ -152,7 +152,7 @@ impl<F: FieldExt> Mul<&F> for Evals<F> {
 pub(crate) fn compute_sumcheck_message<
     F: FieldExt,
 >(
-    expr: &ExpressionNode<F, ProverExpression>,
+    expr: &Expression<F, ProverExpressionMleVec>,
     round_index: usize,
     max_degree: usize,
     beta_table: &BetaTable<F>,
@@ -249,7 +249,7 @@ pub(crate) fn compute_sumcheck_message<
                  -> Result<Evals<F>, ExpressionError> {
         // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---
         evaluate_mle_ref_product_with_beta(
-            &[mle_ref.clone()],
+            &[&mle_ref.clone()],
             round_index,
             max_degree,
             beta_mle_ref.clone(),
@@ -271,7 +271,7 @@ pub(crate) fn compute_sumcheck_message<
     // --- First see whether there are any iterated variables we should go over ---
     // --- Then just call the `evaluate_mle_ref_product` function ---
     let product =
-        for<'a, 'b> |mle_refs: &'a [DenseMleRef<F>], beta_mle_ref: &'b DenseMleRef<F>| -> Result<Evals<F>, ExpressionError> {
+        for<'a, 'b, 'c> |mle_refs: &'a [&'b DenseMleRef<F>], beta_mle_ref: &'c DenseMleRef<F>| -> Result<Evals<F>, ExpressionError> {
             // have to include the beta table and evaluate as a product
             evaluate_mle_ref_product_with_beta(mle_refs, round_index, max_degree, beta_mle_ref.clone())
                 .map_err(ExpressionError::MleError)
@@ -302,7 +302,7 @@ pub(crate) fn compute_sumcheck_message<
 /// with x_1, ..., x_n over the boolean hypercube
 /// the evaluation will be one single field element
 pub fn evaluate_mle_ref_product_no_inde_var<F: FieldExt>(
-    mle_refs: &[impl MleRef<F = F>],
+    mle_refs: &[&impl MleRef<F = F>],
 ) -> Result<F, MleError> {
 
     // --- Gets the total number of iterated variables across all MLEs within this product ---
@@ -372,7 +372,7 @@ pub fn evaluate_mle_ref_product_no_inde_var<F: FieldExt>(
 /// evaluated at X = 0, 1, ..., degree
 /// note that when one of the mle_refs have less variables, there's a wrap around: % max
 pub fn evaluate_mle_ref_product<F: FieldExt>(
-    mle_refs: &[impl MleRef<F = F>],
+    mle_refs: &[&impl MleRef<F = F>],
     degree: usize,
 ) -> Result<Evals<F>, MleError> {
 
@@ -454,7 +454,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
 /// - MleError::EmptyMleList -- when there are zero MLEs within the list
 /// - MleError::NotIndexedError -- when any MLE within the list is not indexed
 pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
-    mle_refs: &[DenseMleRef<F>],
+    mle_refs: &[&DenseMleRef<F>],
     round_index: usize,
     degree: usize,
     beta_ref: DenseMleRef<F>,
@@ -480,7 +480,7 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
 
     if mles_have_independent_variable {
         let mut mle_refs = mle_refs.to_vec();
-        mle_refs.push(beta_ref);
+        mle_refs.push(&beta_ref);
         evaluate_mle_ref_product(&mle_refs, degree)
     } else {
 
@@ -496,7 +496,7 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
         ).mle_ref();
 
         let mut mle_ref_first_half = mle_refs.to_vec().clone();
-        mle_ref_first_half.push(beta_first_half);
+        mle_ref_first_half.push(&beta_first_half);
         let beta_at_0 = evaluate_mle_ref_product_no_inde_var(&mle_ref_first_half)?;
 
 
@@ -510,7 +510,7 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
         ).mle_ref();
 
         let mut mle_ref_second_half = mle_refs.to_vec().clone();
-        mle_ref_second_half.push(beta_second_half);
+        mle_ref_second_half.push(&beta_second_half);
         let beta_at_1 = evaluate_mle_ref_product_no_inde_var(&mle_ref_second_half)?;
 
 
@@ -535,19 +535,24 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
 /// Returns the maximum degree of b_{curr_round} within an expression
 /// (and therefore the number of prover messages we need to send)
 pub(crate) fn get_round_degree<F: FieldExt>(
-    expr: &ExpressionNode<F, ProverExpression>,
+    expr: &Expression<F, ProverExpressionMleVec>,
     curr_round: usize,
 ) -> usize {
     // --- By default, all rounds have degree at least 2 (beta table included) ---
     let mut round_degree = 1;
 
-    let mut traverse = for<'a> |expr: &'a ExpressionNode<F, ProverExpression>| -> Result<(), ()> {
+    let mut get_degree_closure = for<'a, 'b> |
+        expr: &'a ExpressionNode<F, ProverExpressionMleVec>,
+        mle_vec: &'b <ProverExpressionMleVec as ExpressionType<F>>::MleVec
+    | -> Result<(), ()> {
         let round_degree = &mut round_degree;
 
         // --- The only exception is within a product of MLEs ---
-        if let ExpressionNode::Product(mle_refs) = expr {
+        if let ExpressionNode::Product(mle_vec_indices) = expr {
             let mut product_round_degree: usize = 0;
-            for mle_ref in mle_refs {
+            for mle_vec_index in mle_vec_indices {
+                let mle_ref = mle_vec_index.get_mle(mle_vec);
+
                 let mle_indices = mle_ref.mle_indices();
                 for mle_index in mle_indices {
                     if *mle_index == MleIndex::IndexedBit(curr_round) {
@@ -563,7 +568,7 @@ pub(crate) fn get_round_degree<F: FieldExt>(
         Ok(())
     };
 
-    expr.traverse(&mut traverse).unwrap();
+    expr.traverse(&mut get_degree_closure).unwrap();
     // add 1 cuz beta table but idk if we would ever use this without a beta table
     round_degree + 1
 }

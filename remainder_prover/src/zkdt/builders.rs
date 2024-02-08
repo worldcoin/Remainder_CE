@@ -4,8 +4,8 @@ use std::cmp::max;
 use ark_std::log2;
 use itertools::Itertools;
 
-use crate::expression::generic_expr::ExpressionNode;
-use crate::expression::prover_expr::ProverExpression;
+use crate::expression::generic_expr::Expression;
+use crate::expression::prover_expr::ProverExpressionMleVec;
 use crate::layer::batched::BatchedLayer;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
@@ -23,8 +23,8 @@ struct ProductTreeBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for ProductTreeBuilder<F> {
     type Successor = DenseMle<F, F>;
     //a function that multiplies the parts of the tuple pair-wise
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::products(vec![self.mle.first(), self.mle.second()])
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::products(vec![self.mle.first(), self.mle.second()])
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -50,9 +50,9 @@ pub struct EqualityCheck<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
     type Successor = ZeroMleRef<F>;
     // the difference between two mles, should be zero valued
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.mle_1.mle_ref()) - 
-        ExpressionNode::Mle(self.mle_2.mle_ref())
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.mle_1.mle_ref()) - 
+        Expression::mle(self.mle_2.mle_ref())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -90,8 +90,8 @@ pub struct DumbProduct<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for DumbProduct<F> {
     type Successor = DenseMle<F, F>;
     // the difference between two mles, should be zero valued
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::products(self.mles.iter().map(|mle| mle.mle_ref()).collect_vec())
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::products(self.mles.iter().map(|mle| mle.mle_ref()).collect_vec())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -129,8 +129,8 @@ pub struct DumbBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for DumbBuilder<F> {
     type Successor = ZeroMleRef<F>;
     // the difference between two mles, should be zero valued
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.mle_1.mle_ref()) - ExpressionNode::Mle(self.mle_1.mle_ref())
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.mle_1.mle_ref()) - Expression::mle(self.mle_1.mle_ref())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -161,9 +161,9 @@ pub struct AttributeConsistencyBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.mle_input.attr_id(Some(log2(self.tree_height) as usize))) -
-        ExpressionNode::Mle(self.mle_path.attr_id())
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.mle_input.attr_id(Some(log2(self.tree_height) as usize))) -
+        Expression::mle(self.mle_path.attr_id())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -200,9 +200,9 @@ pub struct AttributeConsistencyBuilderZeroRef<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for AttributeConsistencyBuilderZeroRef<F> {
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.mle_input.attr_id(Some(log2(self.tree_height-1) as usize))) - 
-        ExpressionNode::Mle(self.mle_path.attr_id())
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.mle_input.attr_id(Some(log2(self.tree_height-1) as usize))) - 
+        Expression::mle(self.mle_path.attr_id())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -235,8 +235,8 @@ pub struct SplitProductBuilderTupleTree<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilderTupleTree<F> {
     type Successor = DenseMle<F, F>;
     //a function that multiplies the parts of the tuple pair-wise
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::products(vec![self.mle_first.clone(), self.mle_second.clone()])
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::products(vec![self.mle_first.clone(), self.mle_second.clone()])
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -273,12 +273,12 @@ pub struct SplitProductBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for SplitProductBuilder<F> {
     type Successor = DenseMle<F, F>;
     //a function that multiplies the parts of the tuple pair-wise
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
 
         // TODO!(ende): remove the optional padding of 1!!!
         let split_mle = self.mle.split(F::one());
 
-        ExpressionNode::products(vec![split_mle.first(), split_mle.second()])
+        Expression::products(vec![split_mle.first(), split_mle.second()])
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -309,8 +309,8 @@ pub struct IdentityBuilder<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for IdentityBuilder<F> {
     type Successor = DenseMle<F, F>;
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.mle_1.mle_ref())
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.mle_1.mle_ref())
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         DenseMle::new_from_iter(self.mle_1
@@ -337,10 +337,10 @@ pub struct ConcatBuilder<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for ConcatBuilder<F> {
     type Successor = DenseMle<F, F>;
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Selector(MleIndex::Iterated,
-                                     Box::new(ExpressionNode::Mle(self.mle_1.mle_ref())),
-                                     Box::new(ExpressionNode::Mle(self.mle_2.mle_ref())))
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.mle_1.mle_ref()).concat_expr(
+            Expression::mle(self.mle_2.mle_ref())
+        )
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let max_num_var = std::cmp::max(self.mle_1.num_iterated_vars(), self.mle_2.num_iterated_vars());
@@ -398,8 +398,8 @@ pub struct FSRMinusXBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for FSRMinusXBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.r_mle.mle_ref()) - (ExpressionNode::Mle(self.packed_x.mle_ref()))
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.r_mle.mle_ref()) - (Expression::mle(self.packed_x.mle_ref()))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -432,8 +432,8 @@ pub struct RMinusXBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for RMinusXBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Constant(self.r) - (ExpressionNode::Mle(self.packed_x.mle_ref()))
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::constant(self.r) - (Expression::mle(self.packed_x.mle_ref()))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -463,8 +463,8 @@ pub struct SquaringBuilder<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for SquaringBuilder<F> {
     type Successor = DenseMle<F, F>;
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::products(vec![self.mle.mle_ref(), self.mle.mle_ref()])
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::products(vec![self.mle.mle_ref(), self.mle.mle_ref()])
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         DenseMle::new_from_iter(self.mle
@@ -492,8 +492,8 @@ pub struct ZeroBuilder<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
     type Successor = ZeroMleRef<F>;
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.mle.mle_ref())
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.mle.mle_ref())
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
 
@@ -522,10 +522,10 @@ pub struct BitExponentiationBuilder<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilder<F> {
     type Successor = DenseMle<F, F>;
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
         let b_ij = self.bin_decomp.mle_bit_refs()[15-self.bit_index].clone();
-        ExpressionNode::Sum(Box::new(ExpressionNode::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
-                                Box::new(ExpressionNode::Constant(F::one()) - ExpressionNode::Mle(b_ij)))
+        Expression::sum(Box::new(Expression::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
+                                Box::new(Expression::constant(F::one()) - Expression::mle(b_ij)))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         //TODO!(fix this so it uses bin_decomp.into_iter)
@@ -561,10 +561,10 @@ pub struct BitExponentiationBuilderCatBoost<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderCatBoost<F> {
     type Successor = DenseMle<F, F>;
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
         let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
-        ExpressionNode::Sum(Box::new(ExpressionNode::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
-                                Box::new(ExpressionNode::Constant(F::one()) - ExpressionNode::Mle(b_ij)))
+        Expression::sum(Box::new(Expression::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
+                                Box::new(Expression::constant(F::one()) - Expression::mle(b_ij)))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         //TODO!(fix this so it uses bin_decomp.into_iter)
@@ -600,11 +600,11 @@ pub struct BitExponentiationBuilderInput<F: FieldExt> {
 
 impl<F: FieldExt> LayerBuilder<F> for BitExponentiationBuilderInput<F> {
     type Successor = DenseMle<F, F>;
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
         let b_ij = self.bin_decomp.mle_bit_refs()[self.bit_index].clone();
 
-        ExpressionNode::Sum(Box::new(ExpressionNode::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
-                                Box::new(ExpressionNode::Constant(F::one()) - ExpressionNode::Mle(b_ij)))
+        Expression::sum(Box::new(Expression::products(vec![self.r_minus_x_power.mle_ref(), b_ij.clone()])),
+                                Box::new(Expression::constant(F::one()) - Expression::mle(b_ij)))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         //TODO!(fix this so it uses bin_decomp.into_iter)
@@ -641,8 +641,8 @@ pub struct ProductBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for ProductBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::products(vec![self.multiplier.mle_ref(), self.prev_prod.mle_ref()])
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::products(vec![self.multiplier.mle_ref(), self.prev_prod.mle_ref()])
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -679,9 +679,9 @@ impl<F: FieldExt> LayerBuilder<F> for LeafPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // expressions = r - (x.node_id + r_packing * x.node_val)
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Constant(self.r) - (ExpressionNode::Mle(self.mle.node_id()) +
-        ExpressionNode::Scaled(Box::new(ExpressionNode::Mle(self.mle.node_val())), self.r_packing))
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::constant(self.r) - (Expression::mle(self.mle.node_id()) +
+        Expression::scaled(Box::new(Expression::mle(self.mle.node_val())), self.r_packing))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -716,9 +716,9 @@ impl<F: FieldExt> LayerBuilder<F> for FSLeafPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // expressions = r - (x.node_id + r_packing * x.node_val)
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.r_mle.mle_ref()) - (ExpressionNode::Mle(self.mle.node_id()) +
-        ExpressionNode::products(vec![self.mle.node_val(), self.r_packing_mle.mle_ref()]))
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.r_mle.mle_ref()) - (Expression::mle(self.mle.node_id()) +
+        Expression::products(vec![self.mle.node_val(), self.r_packing_mle.mle_ref()]))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -755,10 +755,10 @@ pub struct DecisionPackingBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for DecisionPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Constant(self.r) - (ExpressionNode::Mle(self.mle.node_id()) +
-        ExpressionNode::Scaled(Box::new(ExpressionNode::Mle(self.mle.attr_id())), self.r_packings.0) +
-        ExpressionNode::Scaled(Box::new(ExpressionNode::Mle(self.mle.threshold())), self.r_packings.1))
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::constant(self.r) - (Expression::mle(self.mle.node_id()) +
+        Expression::scaled(Box::new(Expression::mle(self.mle.attr_id())), self.r_packings.0) +
+        Expression::scaled(Box::new(Expression::mle(self.mle.threshold())), self.r_packings.1))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -794,10 +794,10 @@ impl<F: FieldExt> LayerBuilder<F> for FSDecisionPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // expressions = r - (x.node_id + r_packing[0] * x.attr_id + r_packing[1] * x.threshold)
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Mle(self.r_mle.mle_ref()) - (ExpressionNode::Mle(self.mle.node_id()) +
-        ExpressionNode::products(vec![self.mle.attr_id(), self.r_packing_mle.mle_ref()]) +
-        ExpressionNode::products(vec![self.mle.threshold(), self.r_packing_another_mle.mle_ref()]))
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::mle(self.r_mle.mle_ref()) - (Expression::mle(self.mle.node_id()) +
+        Expression::products(vec![self.mle.attr_id(), self.r_packing_mle.mle_ref()]) +
+        Expression::products(vec![self.mle.threshold(), self.r_packing_another_mle.mle_ref()]))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -837,9 +837,9 @@ impl<F: FieldExt> LayerBuilder<F> for FSInputPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // expressions = r - (x.attr_id + r_packing * x.attr_val)
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        let res = ExpressionNode::Mle(self.r_mle.mle_ref()) - (ExpressionNode::Mle(self.mle.attr_id(None)) +
-        ExpressionNode::products(vec![self.mle.attr_val(None), self.r_packing_mle.mle_ref()]));
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        let res = Expression::mle(self.r_mle.mle_ref()) - (Expression::mle(self.mle.attr_id(None)) +
+        Expression::products(vec![self.mle.attr_val(None), self.r_packing_mle.mle_ref()]));
         // dbg!(&res);
         res
     }
@@ -876,9 +876,9 @@ impl<F: FieldExt> LayerBuilder<F> for InputPackingBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     // expressions = r - (x.attr_id + r_packing * x.attr_val)
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
-        ExpressionNode::Constant(self.r) - (ExpressionNode::Mle(self.mle.attr_id(None)) +
-        ExpressionNode::Scaled(Box::new(ExpressionNode::Mle(self.mle.attr_val(None))), self.r_packing))
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
+        Expression::constant(self.r) - (Expression::mle(self.mle.attr_id(None)) +
+        Expression::scaled(Box::new(Expression::mle(self.mle.attr_val(None))), self.r_packing))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -907,18 +907,18 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
     // Returns an expression that checks if the bits are binary.
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
         let decomp_bit_mle = self.mle.mle_bit_refs();
         let expressions = decomp_bit_mle
             .into_iter()
             .map(|bit| {
-                let b = ExpressionNode::Mle(bit.clone());
-                let b_squared = ExpressionNode::Product(vec![bit.clone(), bit]);
+                let b = Expression::mle(bit.clone());
+                let b_squared = Expression::products(vec![bit.clone(), bit]);
                 b - b_squared
             })
             .collect_vec();
 
-        let chunk_and_concat = |expr: &[ExpressionNode<F, ProverExpression>]| {
+        let chunk_and_concat = |expr: &[Expression<F, ProverExpressionMleVec>]| {
             let chunks = expr.chunks(2);
             chunks
                 .map(|chunk| chunk[0].clone().concat_expr(chunk[1].clone()))
@@ -978,13 +978,13 @@ mod tests {
 
         let first_bin_decomp_bit_mle = dummy_binary_decomp_diffs_mle.mle_bit_refs();
         let _first_bin_decomp_bit_expr =
-            ExpressionNode::<Fr, ProverExpression>::Mle(first_bin_decomp_bit_mle[0].clone());
+            Expression::<Fr, ProverExpressionMleVec>::mle(first_bin_decomp_bit_mle[0].clone());
 
         let binary_decomp_builder = BinaryDecompBuilder {
             mle: dummy_binary_decomp_diffs_mle,
         };
 
-        let _binary_decomp_expr: ExpressionNode<Fr, ProverExpression>= binary_decomp_builder.build_expression();
+        let _binary_decomp_expr: Expression<Fr, ProverExpressionMleVec>= binary_decomp_builder.build_expression();
         assert_eq!(1, 1)
     }
 

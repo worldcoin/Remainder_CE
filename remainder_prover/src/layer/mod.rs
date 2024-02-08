@@ -17,7 +17,7 @@ use thiserror::Error;
 use tracing::Value;
 
 use crate::{
-    expression::{expr_errors::ExpressionError, generic_expr::ExpressionNode, prover_expr::ProverExpression}, mle::{
+    expression::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpressionMleVec}, mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
         dense::DenseMleRef,
         mle_enum::MleEnum,
@@ -176,7 +176,7 @@ pub trait Layer<F: FieldExt> {
 #[serde(bound = "F: FieldExt")]
 pub struct GKRLayer<F: FieldExt, Tr> {
     id: LayerId,
-    pub(crate) expression: ExpressionNode<F, ProverExpression>,
+    pub(crate) expression: Expression<F, ProverExpressionMleVec>,
     beta: Option<BetaTable<F>>,
     #[serde(skip)]
     _marker: PhantomData<Tr>,
@@ -239,7 +239,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
     fn mut_expression_and_beta(
         &mut self,
-    ) -> (&mut ExpressionNode<F, ProverExpression>, &mut Option<BetaTable<F>>) {
+    ) -> (&mut Expression<F, ProverExpressionMleVec>, &mut Option<BetaTable<F>>) {
         (&mut self.expression, &mut self.beta)
     }
 
@@ -248,11 +248,11 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
     }
 
     ///Gets the expression that this layer is proving
-    pub fn expression(&self) -> &ExpressionNode<F, ProverExpression> {
+    pub fn expression(&self) -> &Expression<F, ProverExpressionMleVec> {
         &self.expression
     }
 
-    pub(crate) fn new_raw(id: LayerId, expression: ExpressionNode<F, ProverExpression>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, ProverExpressionMleVec>) -> Self {
         GKRLayer {
             id,
             expression,
@@ -394,7 +394,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- This automatically asserts that the expression is fully bound and simply ---
         // --- attempts to combine/collect the expression evaluated at the (already bound) challenge coords ---
-        let expr_evaluated_at_challenge_coord = self.expression.transform_to_verifier_expression().unwrap().gather_combine_all_evals().unwrap();
+        let expr_evaluated_at_challenge_coord = self.expression.clone().transform_to_verifier_expression().unwrap().gather_combine_all_evals().unwrap();
 
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---
@@ -431,9 +431,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionNode<F, ProverExpression>| {
+        let mut observer_fn = |
+            exp: &ExpressionNode<F, ProverExpressionMleVec>,
+            mle_vec: &<ProverExpressionMleVec as ExpressionType<F>>::MleVec
+        | {
             match exp {
-                ExpressionNode::Mle(mle_ref) => {
+                ExpressionNode::Mle(mle_vec_idx) => {
+
+                    let mle_ref = mle_vec_idx.get_mle(mle_vec);
+
                     // --- First ensure that all the indices are fixed ---
                     let mle_indices = mle_ref.mle_indices();
 
@@ -473,8 +479,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                     // --- Push it into the list of claims ---
                     claims.push(claim);
                 }
-                ExpressionNode::Product(mle_refs) => {
-                    for mle_ref in mle_refs {
+                ExpressionNode::Product(mle_vec_indices) => {
+                    for mle_vec_index in mle_vec_indices {
+
+                        let mle_ref = mle_vec_index.get_mle(mle_vec);
+                        
                         // --- First ensure that all the indices are fixed ---
                         let mle_indices = mle_ref.mle_indices();
 
@@ -624,7 +633,7 @@ pub trait LayerBuilder<F: FieldExt> {
     type Successor;
 
     /// Build the expression that will be sumchecked
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression>;
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec>;
 
     /// Generate the next layer
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor;
@@ -664,7 +673,7 @@ pub trait LayerBuilder<F: FieldExt> {
 pub fn from_mle<
     F: FieldExt,
     M,
-    EFn: Fn(&M) -> ExpressionNode<F, ProverExpression>,
+    EFn: Fn(&M) -> Expression<F, ProverExpressionMleVec>,
     S,
     LFn: Fn(&M, LayerId, Option<Vec<MleIndex<F>>>) -> S,
 >(
@@ -696,13 +705,13 @@ pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
 impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for ConcatLayer<F, A, B> {
     type Successor = (A::Successor, B::Successor);
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
         let first = self.first.build_expression();
         let second = self.second.build_expression();
 
         // return first.concat_expr(second);
 
-        let zero_expression: ExpressionNode<F, ProverExpression> = ExpressionNode::Constant(F::zero());
+        let zero_expression: Expression<F, ProverExpressionMleVec> = Expression::constant(F::zero());
 
         let first_padded = if let Padding::Left(padding) = self.padding {
             let mut left = first;
@@ -777,14 +786,14 @@ pub struct SimpleLayer<M, EFn, LFn> {
 impl<
         F: FieldExt,
         M,
-        EFn: Fn(&M) -> ExpressionNode<F, ProverExpression>,
+        EFn: Fn(&M) -> Expression<F, ProverExpressionMleVec>,
         S,
         LFn: Fn(&M, LayerId, Option<Vec<MleIndex<F>>>) -> S,
     > LayerBuilder<F> for SimpleLayer<M, EFn, LFn>
 {
     type Successor = S;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
         (self.expression_builder)(&self.mle)
     }
 
@@ -807,7 +816,7 @@ mod tests {
     //     let builder = from_mle(
     //         (mle1, mle2),
     //         |(mle1, mle2)| {
-    //             Expression::Mle(mle1.mle_ref()) + Expression::Mle(mle2.mle_ref())
+    //             Expression::mle(mle1.mle_ref()) + Expression::mle(mle2.mle_ref())
     //         },
     //         |(mle1, mle2), _, _: Option<Vec<MleIndex<Fr>>>| {
     //             mle1.clone()

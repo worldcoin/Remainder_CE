@@ -8,7 +8,7 @@ use remainder_shared_types::{transcript::Transcript, FieldExt};
 use thiserror::Error;
 
 use crate::{
-    expression::{generic_expr::ExpressionNode, prover_expr::ProverExpression},
+    expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpressionMleVec},
     layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
@@ -183,34 +183,42 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
             _ => Err(CombineError),
         }?;
 
-        let mut closure = for<'a> |expr: &'a mut ExpressionNode<F, ProverExpression>| -> Result<(), ()> {
+        let mut closure = for<'a, 'b> |
+            expr: &'a mut ExpressionNode<F, ProverExpressionMleVec>,
+            mle_vec: &'b mut <ProverExpressionMleVec as ExpressionType<F>>::MleVec
+        | -> Result<(), ()> {
             match expr {
-                ExpressionNode::Mle(mle) => {
-                    if mle.layer_id == effected_layer {
-                        mle.mle_indices = new_bits
+                ExpressionNode::Mle(mle_vec_idx) => {
+                    let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                    if mle_ref.layer_id == effected_layer {
+                        mle_ref.mle_indices = new_bits
                             .iter()
-                            .chain(mle.mle_indices.iter())
+                            .chain(mle_ref.mle_indices.iter())
                             .cloned()
                             .collect();
-                        mle.original_mle_indices = new_bits
+                        mle_ref.original_mle_indices = new_bits
                             .iter()
-                            .chain(mle.original_mle_indices.iter())
+                            .chain(mle_ref.original_mle_indices.iter())
                             .cloned()
                             .collect();
                     }
                     Ok(())
                 }
-                ExpressionNode::Product(mles) => {
-                    for mle in mles {
-                        if mle.layer_id == effected_layer {
-                            mle.mle_indices = new_bits
+                ExpressionNode::Product(mle_vec_indices) => {
+                    for mle_vec_index in mle_vec_indices {
+
+                        let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                        if mle_ref.layer_id == effected_layer {
+                            mle_ref.mle_indices = new_bits
                                 .iter()
-                                .chain(mle.mle_indices.iter())
+                                .chain(mle_ref.mle_indices.iter())
                                 .cloned()
                                 .collect();
-                            mle.original_mle_indices = new_bits
+                            mle_ref.original_mle_indices = new_bits
                                 .iter()
-                                .chain(mle.original_mle_indices.iter())
+                                .chain(mle_ref.original_mle_indices.iter())
                                 .cloned()
                                 .collect();
                         }
@@ -264,8 +272,8 @@ fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
 
 ///Combine expression w/ padding using selectors
 fn combine_expressions<F: FieldExt>(
-    mut exprs: Vec<ExpressionNode<F, ProverExpression>>,
-) -> ExpressionNode<F, ProverExpression> {
+    mut exprs: Vec<Expression<F, ProverExpressionMleVec>>,
+) -> Expression<F, ProverExpressionMleVec> {
     let _floor_size = exprs
         .iter()
         .map(|expr| expr.get_expression_size(0))
@@ -313,11 +321,11 @@ fn combine_expressions<F: FieldExt>(
 ///
 /// Basically turns V(b_1) = \[1, 2\] to V(b_1, b_2) = \[1, 2, 0, 0\] but with expressions
 fn add_padding<F: FieldExt>(
-    mut expr: ExpressionNode<F, ProverExpression>,
+    mut expr: Expression<F, ProverExpressionMleVec>,
     num_padding: usize,
-) -> ExpressionNode<F, ProverExpression> {
+) -> Expression<F, ProverExpressionMleVec> {
     for _ in 0..num_padding {
-        expr = ExpressionNode::Constant(F::zero()).concat_expr(expr);
+        expr = Expression::constant(F::zero()).concat_expr(expr);
     }
     expr
 }

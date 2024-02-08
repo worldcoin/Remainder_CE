@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{generic_expr::ExpressionNode, prover_expr::ProverExpression}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
+    expression::{generic_expr::{Expression, ExpressionNode}, prover_expr::ProverExpressionMleVec}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
 };
 use ark_std::{cfg_into_iter};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -20,7 +20,7 @@ use super::{
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct EmptyLayer<F: FieldExt, Tr> {
-    pub(crate) expr: ExpressionNode<F, ProverExpression>,
+    pub(crate) expr: Expression<F, ProverExpressionMleVec>,
     id: LayerId,
     _marker: PhantomData<Tr>,
 }
@@ -33,7 +33,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         _: Claim<F>,
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-        let eval = self.expr.transform_to_verifier_expression().unwrap().gather_combine_all_evals().map_err(LayerError::ExpressionError)?;
+        let eval = self.expr.clone().transform_to_verifier_expression().unwrap().gather_combine_all_evals().map_err(LayerError::ExpressionError)?;
 
         Ok(vec![vec![eval]].into())
     }
@@ -69,9 +69,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionNode<F, ProverExpression>| {
-            match exp {
-                ExpressionNode::Mle(mle_ref) => {
+        let mut observer_fn = |
+            exp_node: &ExpressionNode<F, ProverExpressionMleVec>,
+            mle_vec: &Vec<DenseMleRef<F>>,
+        | {
+            match exp_node {
+                ExpressionNode::Mle(mle_vec_idx) => {
+
+                    let mle_ref = mle_vec_idx.get_mle(mle_vec);
+
                     // --- First ensure that all the indices are fixed ---
                     let mle_indices = mle_ref.mle_indices();
 
@@ -103,9 +109,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
                     // --- Also push the layer_id ---
                     claims.push(claim);
                 }
-                ExpressionNode::Product(mle_refs) => {
-                    for mle_ref in mle_refs {
+                ExpressionNode::Product(mle_vec_indices) => {
+                    for mle_vec_index in mle_vec_indices {
                         // --- First ensure that all the indices are fixed ---
+                        let mle_ref = mle_vec_index.get_mle(mle_vec);
+
                         let mle_indices = mle_ref.mle_indices();
 
                         // --- This is super jank ---
@@ -180,11 +188,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
 impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
     ///Gets this layer's underlying expression
-    pub fn expression(&self) -> &ExpressionNode<F, ProverExpression> {
+    pub fn expression(&self) -> &Expression<F, ProverExpressionMleVec> {
         &self.expr
     }
 
-    pub(crate) fn new_raw(id: LayerId, expr: ExpressionNode<F, ProverExpression>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expr: Expression<F, ProverExpressionMleVec>) -> Self {
         Self {
             id,
             expr,

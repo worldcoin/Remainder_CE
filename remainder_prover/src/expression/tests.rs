@@ -7,7 +7,7 @@ use tests::{generic_expr::ExpressionNode, prover_expr::ProverExpression};
 
 // #[test]
 // fn test_expression_operators() {
-//     let expression1: Expression<Fr, ProverExpression> = Expression::Constant(Fr::one());
+//     let expression1: Expression<Fr, ProverExpression> = Expression::constant(Fr::one());
 
 //     let mle = DenseMle::new_from_raw(
 //         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
@@ -16,7 +16,7 @@ use tests::{generic_expr::ExpressionNode, prover_expr::ProverExpression};
 //     )
 //     .mle_ref();
 
-//     let expression3 = Expression::Mle(mle.clone());
+//     let expression3 = Expression::mle(mle.clone());
 
 //     let expression = expression1.clone() + expression3.clone();
 
@@ -326,7 +326,7 @@ fn test_mle_different_length_prod() {
 //     ])
 //     .mle_ref();
 
-//     let mut expression = Expression::Mle(mle);
+//     let mut expression = Expression::mle(mle);
 //     let _ = expression.index_mle_indices(3);
 
 //     let challenge = vec![Fr::from(-2), Fr::from(3), Fr::from(5)];

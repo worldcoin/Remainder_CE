@@ -2,7 +2,7 @@ use ark_std::log2;
 use itertools::{Itertools, repeat_n};
 use remainder_shared_types::{FieldExt, transcript::poseidon_transcript::PoseidonTranscript};
 
-use crate::{expression::generic_expr::ExpressionNode, layer::{LayerId, batched::{BatchedLayer, combine_zero_mle_ref}, from_mle}, mle::{dense::DenseMle, Mle, MleRef, zero::ZeroMleRef, MleIndex}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}, Layers}, zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, BinDecomp8Bit}};
+use crate::{expression::generic_expr::Expression, layer::{LayerId, batched::{BatchedLayer, combine_zero_mle_ref}, from_mle}, mle::{dense::DenseMle, Mle, MleRef, zero::ZeroMleRef, MleIndex}, prover::{GKRCircuit, Witness, input_layer::{combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer, InputLayer}, Layers}, zkdt::structs::{BinDecomp16Bit, BinDecomp4Bit, BinDecomp8Bit}};
 
 /// Checks that all of the bits within a `BinDecomp16Bit` are indeed binary
 /// via b_i^2 - b_i = 0 (but it's batched)
@@ -43,7 +43,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitBatched<F> {
                 diff_signed_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
-                    ExpressionNode::Product(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - ExpressionNode::Mle(combined_bin_decomp_mle_ref)
+                    Expression::products(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - Expression::mle(combined_bin_decomp_mle_ref)
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)
@@ -91,7 +91,7 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitBatched<F> {
                 diff_signed_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
-                    ExpressionNode::Product(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - ExpressionNode::Mle(combined_bin_decomp_mle_ref)
+                    Expression::products(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - Expression::mle(combined_bin_decomp_mle_ref)
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)
@@ -144,7 +144,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuitBatched<F> {
                 multiplicities_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
-                    ExpressionNode::Product(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - ExpressionNode::Mle(combined_bin_decomp_mle_ref)
+                    Expression::products(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - Expression::mle(combined_bin_decomp_mle_ref)
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)
@@ -192,7 +192,7 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatched<F> {
                 multiplicities_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
-                    ExpressionNode::Product(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - ExpressionNode::Mle(combined_bin_decomp_mle_ref)
+                    Expression::products(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - Expression::mle(combined_bin_decomp_mle_ref)
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)
@@ -258,7 +258,7 @@ impl<F: FieldExt> BinDecomp8BitIsBinaryCircuitBatched<F> {
                 multiplicities_bin_decomp_mle, 
                 |diff_signed_bin_decomp_mle| {
                     let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
-                    ExpressionNode::Product(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - ExpressionNode::Mle(combined_bin_decomp_mle_ref)
+                    Expression::products(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - Expression::mle(combined_bin_decomp_mle_ref)
                 }, 
                 |mle, id, prefix_bits| {
                     ZeroMleRef::new(mle.num_iterated_vars(), prefix_bits, id)

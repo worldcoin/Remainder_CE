@@ -23,7 +23,7 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
 }
 
 /// Generic Expressions
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
     /// constant

@@ -647,7 +647,7 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
 mod tests {
     use super::*;
     use crate::{
-        expression::{generic_expr::ExpressionNode, prover_expr::ProverExpression}, layer::{LayerId, claims::Claim}, mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef}, sumcheck::{
+        expression::{generic_expr::Expression, prover_expr::ProverExpressionMleVec}, layer::{LayerId, claims::Claim}, mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef}, sumcheck::{
             compute_sumcheck_message, get_round_degree,
             tests::{dummy_sumcheck, get_dummy_expression_eval, verify_sumcheck_messages},
             Evals,
@@ -722,10 +722,10 @@ mod tests {
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> =
             dummy_binary_decomp_diffs_mle.mle_bit_refs();
         let first_bin_decomp_bit_expr =
-            ExpressionNode::Mle(first_bin_decomp_bit_mle[0].clone());
+            Expression::mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
-        let b_squared = ExpressionNode::Product(vec![
+        let b_squared = Expression::products(vec![
             first_bin_decomp_bit_mle[0].clone(),
             first_bin_decomp_bit_mle[0].clone(),
         ]);
@@ -781,10 +781,10 @@ mod tests {
         let first_bin_decomp_bit_mle: Vec<DenseMleRef<Fr>> =
             dummy_multiplicities_bin_decomp_mle.mle_bit_refs();
         let first_bin_decomp_bit_expr =
-            ExpressionNode::Mle(first_bin_decomp_bit_mle[0].clone());
+            Expression::mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
-        let b_squared = ExpressionNode::Product(vec![
+        let b_squared = Expression::products(vec![
             first_bin_decomp_bit_mle[0].clone(),
             first_bin_decomp_bit_mle[0].clone(),
         ]);
@@ -794,7 +794,7 @@ mod tests {
         let all_zeros: Vec<Fr> = vec![Fr::zero()]
             .repeat(2_u64.pow(first_bin_decomp_bit_mle[0].num_vars() as u32) as usize);
         let all_zeros_mle = DenseMle::<Fr, _>::new_from_raw(all_zeros, LayerId::Input(0), None);
-        let _all_zeros_mle_expr = ExpressionNode::<Fr, ProverExpression>::Mle(all_zeros_mle.mle_ref());
+        let _all_zeros_mle_expr = Expression::<Fr, ProverExpressionMleVec>::mle(all_zeros_mle.mle_ref());
 
         // --- Evaluating at V(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) --> 0 ---
         let _dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
@@ -938,10 +938,10 @@ mod tests {
 
         // --- Grab the things necessary to compute the diff (the permuted input and thresholds) ---
         let threshold_mle: DenseMleRef<Fr> = dummy_decision_node_paths_mle.threshold();
-        let threshold_mle_expr = ExpressionNode::Mle(threshold_mle.clone());
+        let threshold_mle_expr = Expression::mle(threshold_mle.clone());
         let permuted_input_values_mle: DenseMleRef<Fr> =
             dummy_permuted_input_data_mle.attr_val(Some(threshold_mle.num_vars()));
-        let permuted_input_values_mle_expr = ExpressionNode::Mle(permuted_input_values_mle);
+        let permuted_input_values_mle_expr = Expression::mle(permuted_input_values_mle);
 
         // --- For debugging ---
         // let threshold_mle_expr_eval = evaluate_expr(&mut threshold_mle_expr.clone(), 1, 2);
@@ -959,7 +959,7 @@ mod tests {
         // dbg!(threshold_mle_expr_eval);
 
         // --- We need `abs_recomp` and `b_s * abs_recomp` ---
-        let b_s_initial_acc = ExpressionNode::Constant(Fr::zero());
+        let b_s_initial_acc = Expression::constant(Fr::zero());
         let sign_bit_mle = bin_decomp_mles[0].clone();
         let bin_decomp_mles_clone = bin_decomp_mles.clone();
 
@@ -969,17 +969,17 @@ mod tests {
             |acc_expr, (bit_idx, bin_decomp_mle)| {
                 // --- First compute b_s * coeff ---
                 let b_s_times_coeff =
-                    ExpressionNode::Product(vec![bin_decomp_mle, sign_bit_mle.clone()]);
+                    Expression::products(vec![bin_decomp_mle, sign_bit_mle.clone()]);
 
                 let b_s_times_coeff_ptr = Box::new(b_s_times_coeff);
 
                 // --- Then compute (b_s * coeff) * 2^{bit_idx} ---
                 let base = Fr::from(2_u64.pow((16 - (bit_idx + 1)) as u32));
                 let b_s_times_coeff_times_base =
-                    ExpressionNode::Scaled(b_s_times_coeff_ptr, base);
+                    Expression::scaled(b_s_times_coeff_ptr, base);
 
                 // Debugging
-                // let b_i_expr = Expression::Mle(bin_decomp_mle.clone());
+                // let b_i_expr = Expression::mle(bin_decomp_mle.clone());
                 // let b_i_expr_eval = evaluate_expr(&mut b_i_expr.clone(), 1, 1);
                 // let b_s_times_coeff_times_base_eval = evaluate_expr(&mut b_s_times_coeff_times_base.clone(), 1, 2);
                 // dbg!(bit_idx);
@@ -991,15 +991,15 @@ mod tests {
             },
         );
 
-        let abs_recomp_initial_acc = ExpressionNode::Constant(Fr::zero());
+        let abs_recomp_initial_acc = Expression::constant(Fr::zero());
         let abs_recomp_expr = bin_decomp_mles_clone.into_iter().enumerate().skip(1).fold(
             abs_recomp_initial_acc,
             |acc_expr, (bit_idx, bin_decomp_mle)| {
                 // --- Compute just coeff * 2^{bit_idx} ---
                 let base = Fr::from(2_u64.pow((16 - (bit_idx + 1)) as u32));
-                let coeff_expr = ExpressionNode::Mle(bin_decomp_mle);
+                let coeff_expr = Expression::mle(bin_decomp_mle);
                 let coeff_expr_ptr = Box::new(coeff_expr);
-                let coeff_times_base = ExpressionNode::Scaled(coeff_expr_ptr, base);
+                let coeff_times_base = Expression::scaled(coeff_expr_ptr, base);
 
                 // Debugging
                 let _coeff_times_base_eval =
@@ -1062,9 +1062,9 @@ mod tests {
 
         // --- Multiply to do packing ---
         let dummy_attribute_id_mleref = dummy_input_data_mle.attr_id(None);
-        let _dummy_attribute_id_mleref_expr = ExpressionNode::<Fr, ProverExpression>::Mle(dummy_attribute_id_mleref);
+        let _dummy_attribute_id_mleref_expr = Expression::<Fr, ProverExpressionMleVec>::mle(dummy_attribute_id_mleref);
         let dummy_attribute_val_mleref = dummy_input_data_mle.attr_val(None);
-        let _dummy_attribute_val_mleref_expr = ExpressionNode::<Fr, ProverExpression>::Mle(dummy_attribute_val_mleref);
+        let _dummy_attribute_val_mleref_expr = Expression::<Fr, ProverExpressionMleVec>::mle(dummy_attribute_val_mleref);
 
         // ---
     }

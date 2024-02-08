@@ -1,7 +1,7 @@
 //!The LayerBuilders that build the ZKDT Circuit
 
-use crate::expression::generic_expr::ExpressionNode;
-use crate::expression::prover_expr::ProverExpression;
+use crate::expression::generic_expr::Expression;
+use crate::expression::prover_expr::ProverExpressionMleVec;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle};
@@ -22,24 +22,24 @@ pub struct BinaryRecompBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for BinaryRecompBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
         let bit_mle_refs = self.diff_signed_bin_decomp.mle_bit_refs();
 
         // --- Let's just do a linear accumulator for now ---
         // TODO!(ryancao): Rewrite this expression but as a tree
-        let b_s_initial_acc = ExpressionNode::Constant(F::zero());
+        let b_s_initial_acc = Expression::constant(F::zero());
 
         bit_mle_refs.into_iter().rev().enumerate().skip(1).fold(
             b_s_initial_acc,
             |acc_expr, (bit_idx, bin_decomp_mle)| {
 
                 // --- Coeff MLE ref (i.e. b_i) ---
-                let b_i_mle_expression_ptr = Box::new(ExpressionNode::Mle(bin_decomp_mle));
+                let b_i_mle_expression_ptr = Box::new(Expression::mle(bin_decomp_mle));
 
                 // --- Compute (coeff) * 2^{15 - bit_idx} ---
                 let base = F::from(2_u64.pow((16 - (bit_idx + 1)) as u32));
                 let b_s_times_coeff_times_base =
-                    ExpressionNode::Scaled(b_i_mle_expression_ptr, base);
+                    Expression::scaled(b_i_mle_expression_ptr, base);
 
                 acc_expr + b_s_times_coeff_times_base
             },
@@ -82,11 +82,11 @@ pub struct NodePathDiffBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for NodePathDiffBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
         let decision_node_thr_mle_ref = self.decision_node_path_mle.threshold();
         let permuted_inputs_val_mle_ref = self.permuted_inputs_mle.attr_val(Some(decision_node_thr_mle_ref.num_vars()));
 
-        ExpressionNode::Mle(permuted_inputs_val_mle_ref) - ExpressionNode::Mle(decision_node_thr_mle_ref)
+        Expression::mle(permuted_inputs_val_mle_ref) - Expression::mle(decision_node_thr_mle_ref)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -130,7 +130,7 @@ pub struct BinaryRecompCheckerBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for BinaryRecompCheckerBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
 
         // --- Grab MLE refs ---
         let positive_recomp_mle_ref = self.positive_recomp_mle.mle_ref();
@@ -138,11 +138,11 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryRecompCheckerBuilder<F> {
         let diff_mle_ref = self.input_path_diff_mle.mle_ref();
 
         // --- LHS of addition ---
-        let pos_recomp_minus_diff = ExpressionNode::Mle(positive_recomp_mle_ref) - ExpressionNode::Mle(diff_mle_ref.clone());
+        let pos_recomp_minus_diff = Expression::mle(positive_recomp_mle_ref) - Expression::mle(diff_mle_ref.clone());
 
         // --- RHS of addition ---
-        let sign_bit_times_diff_ptr = Box::new(ExpressionNode::Product(vec![signed_bit_mle_ref, diff_mle_ref]));
-        let two_times_sign_bit_times_diff = ExpressionNode::Scaled(sign_bit_times_diff_ptr, F::from(2));
+        let sign_bit_times_diff_ptr = Box::new(Expression::products(vec![signed_bit_mle_ref, diff_mle_ref]));
+        let two_times_sign_bit_times_diff = Expression::scaled(sign_bit_times_diff_ptr, F::from(2));
 
         pos_recomp_minus_diff + two_times_sign_bit_times_diff
     }
@@ -196,15 +196,15 @@ pub struct PartialBitsCheckerBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for PartialBitsCheckerBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> ExpressionNode<F, ProverExpression> {
+    fn build_expression(&self) -> Expression<F, ProverExpressionMleVec> {
 
         // --- Grab MLE refs ---
         let permuted_inputs_mle_ref = self.permuted_inputs_mle.attr_id(Some(self.num_vars_to_grab));
         let decision_node_paths_mle_ref = self.decision_node_paths_mle.threshold();
 
         // --- Actual expression is just subtracting from itself ---
-        ExpressionNode::Mle(permuted_inputs_mle_ref.clone()) - ExpressionNode::Mle(permuted_inputs_mle_ref) + 
-        ExpressionNode::Mle(decision_node_paths_mle_ref.clone()) - ExpressionNode::Mle(decision_node_paths_mle_ref)
+        Expression::mle(permuted_inputs_mle_ref.clone()) - Expression::mle(permuted_inputs_mle_ref) + 
+        Expression::mle(decision_node_paths_mle_ref.clone()) - Expression::mle(decision_node_paths_mle_ref)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
