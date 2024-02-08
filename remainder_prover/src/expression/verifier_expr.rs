@@ -81,7 +81,6 @@ impl<F: FieldExt> Expression<F, VerifierExpression> {
     }
 }
 
-/// -----------------below is the old stuff-----------------
 
 impl<F: FieldExt> ExpressionNode<F, VerifierExpression> {
     /// Evaluate the polynomial using the provided closures to perform the
@@ -168,44 +167,5 @@ impl<F: FieldExt> ExpressionNode<F, VerifierExpression> {
                 scaled(a, *f)
             }
         }
-    }
-
-    /// used by `evaluate_expr` to traverse the expression and simply
-    /// gather all of the evaluations, combining them as appropriate.
-    pub fn gather_combine_all_evals(
-        &self,
-    ) -> Result<F, ExpressionError> {
-        let constant = |c| Ok(c);
-        let selector_column =
-            |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
-                // --- Selector bit must be bound ---
-                if let MleIndex::Bound(val, _) = idx {
-                    return Ok(*val * rhs? + (F::one() - val) * lhs?);
-                }
-                Err(ExpressionError::SelectorBitNotBoundError)
-            };
-        let mle_eval = for<'a> |mle_ref: &'a <VerifierExpression as ExpressionType<F>>::Container| -> Result<F, ExpressionError> {
-            Ok(mle_ref.clone())
-        };
-        let negated = |a: Result<F, ExpressionError>| match a {
-            Err(e) => Err(e),
-            Ok(val) => Ok(val.neg()),
-        };
-        let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
-        let product = for<'a, 'b> |mle_refs: &'a [<VerifierExpression as ExpressionType<F>>::Container]| -> Result<F, ExpressionError> {
-            mle_refs.iter().try_fold(F::one(), |acc, new_mle_ref| {
-                Ok(acc * new_mle_ref.clone())
-            })
-        };
-        let scaled = |a: Result<F, ExpressionError>, scalar: F| Ok(a? * scalar);
-        self.evaluate(
-            &constant,
-            &selector_column,
-            &mle_eval,
-            &negated,
-            &sum,
-            &product,
-            &scaled,
-        )
     }
 }
