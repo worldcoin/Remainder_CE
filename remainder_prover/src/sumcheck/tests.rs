@@ -24,7 +24,7 @@ use remainder_shared_types::transcript::{poseidon_transcript::PoseidonTranscript
 
 /// Does a dummy version of sumcheck with a testing RNG
 pub fn dummy_sumcheck<F: FieldExt>(
-    expr: &mut Expression<F, ProverExpressionMle>,
+    expr: &mut Expression<F, ProverExpr>,
     rng: &mut impl Rng,
     layer_claim: Claim<F>,
 ) -> Vec<(Vec<F>, Option<F>)> {
@@ -78,7 +78,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
 /// TODO!(ryancao): Change this to take in the expression as well and do the final sumcheck check
 pub fn verify_sumcheck_messages<F: FieldExt>(
     messages: Vec<(Vec<F>, Option<F>)>,
-    mut expression: Expression<F, ProverExpressionMle>,
+    mut expression: Expression<F, ProverExpr>,
     layer_claim: Claim<F>,
     rng: &mut impl Rng,
 ) -> Result<F, VerifyError> {
@@ -152,10 +152,13 @@ pub fn get_dummy_claim<F: FieldExt>(
             .collect_vec()
     };
     let eval = expression.evaluate_expr(challenges).unwrap();
-    let claim = match expression.expression_node() {
+
+    let (expression_node, mle_vec) = expression.deconstruct_mut();
+
+    let claim = match expression_node {
         ExpressionNode::Mle(mle_vec_index) => {
             mle_vec_index.
-            get_mle(expression.mle_vec())
+            get_mle(mle_vec)
             .mle_indices
             .iter()
             .map(|index: &MleIndex<F>| index.val().unwrap())
@@ -167,7 +170,7 @@ pub fn get_dummy_claim<F: FieldExt>(
 }
 
 pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
-    expression: &Expression<F, ProverExpressionMle>,
+    expression: &Expression<F, ProverExpr>,
     rng: &mut impl Rng,
 ) -> Claim<F> {
     let mut expression = expression.clone();
@@ -190,7 +193,7 @@ fn eval_expr_nums() {
     let layer_claim_point = vec![Fr::from(2), Fr::from(3)];
     let mut beta_table = BetaTable::new(layer_claim_point).unwrap();
     beta_table.table.index_mle_indices(0);
-    let mut expression1: Expression<Fr, ProverExpressionMle> = Expression::constant(Fr::from(6));
+    let mut expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::from(6));
     let res = compute_sumcheck_message(&mut expression1, 0, 1, &mut beta_table);
     let exp = Evals(vec![Fr::from(6).neg(), Fr::from(12)]);
     assert_eq!(res.unwrap(), exp);
