@@ -3,7 +3,7 @@ use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
-use crate::{expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpressionMle}, gate::gate::BinaryOperation, prover::helpers::test_circuit};
+use crate::{expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr}, gate::gate::BinaryOperation, prover::helpers::test_circuit};
 
 use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 
@@ -1132,8 +1132,8 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
             };
 
             let mut closure = for<'a, 'b> |
-                expr: &'a mut ExpressionNode<F, ProverExpressionMle>,
-                mle_vec: &'b mut <ProverExpressionMle as ExpressionType<F>>::MleVec
+                expr: &'a mut ExpressionNode<F, ProverExpr>,
+                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
             | -> Result<(), ()> {
                 match expr {
                     ExpressionNode::Mle(mle_vec_idx) => {
@@ -1956,8 +1956,8 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
             };
 
             let mut closure = for<'a, 'b> |
-                expr: &'a mut ExpressionNode<F, ProverExpressionMle>,
-                mle_vec: &'b mut <ProverExpressionMle as ExpressionType<F>>::MleVec
+                expr: &'a mut ExpressionNode<F, ProverExpr>,
+                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
             | -> Result<(), ()> {
                 match expr {
                     ExpressionNode::Mle(mle_vec_idx) => {
@@ -1999,8 +1999,8 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
             };
 
             let mut closure = for<'a, 'b> |
-                expr: &'a mut ExpressionNode<F, ProverExpressionMle>,
-                mle_vec: &'b mut <ProverExpressionMle as ExpressionType<F>>::MleVec
+                expr: &'a mut ExpressionNode<F, ProverExpr>,
+                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
             | -> Result<(), ()> {
                 match expr {
                     ExpressionNode::Mle(mle_vec_idx) => {

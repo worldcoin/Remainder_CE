@@ -647,7 +647,7 @@ pub(crate) fn generate_dummy_mles<F: FieldExt>() -> DummyMles<F> {
 mod tests {
     use super::*;
     use crate::{
-        expression::{generic_expr::Expression, prover_expr::ProverExpressionMle}, layer::{LayerId, claims::Claim}, mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef}, sumcheck::{
+        expression::{generic_expr::Expression, prover_expr::ProverExpr}, layer::{LayerId, claims::Claim}, mle::{beta::BetaTable, dense::DenseMle, dense::DenseMleRef, MleRef}, sumcheck::{
             compute_sumcheck_message, get_round_degree,
             tests::{dummy_sumcheck, get_dummy_expression_eval, verify_sumcheck_messages},
             Evals,
@@ -794,7 +794,7 @@ mod tests {
         let all_zeros: Vec<Fr> = vec![Fr::zero()]
             .repeat(2_u64.pow(first_bin_decomp_bit_mle[0].num_vars() as u32) as usize);
         let all_zeros_mle = DenseMle::<Fr, _>::new_from_raw(all_zeros, LayerId::Input(0), None);
-        let _all_zeros_mle_expr = Expression::<Fr, ProverExpressionMle>::mle(all_zeros_mle.mle_ref());
+        let _all_zeros_mle_expr = Expression::<Fr, ProverExpr>::mle(all_zeros_mle.mle_ref());
 
         // --- Evaluating at V(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) --> 0 ---
         let _dummy_claim = (vec![Fr::one(); 3 + 9], Fr::zero());
@@ -1062,9 +1062,9 @@ mod tests {
 
         // --- Multiply to do packing ---
         let dummy_attribute_id_mleref = dummy_input_data_mle.attr_id(None);
-        let _dummy_attribute_id_mleref_expr = Expression::<Fr, ProverExpressionMle>::mle(dummy_attribute_id_mleref);
+        let _dummy_attribute_id_mleref_expr = Expression::<Fr, ProverExpr>::mle(dummy_attribute_id_mleref);
         let dummy_attribute_val_mleref = dummy_input_data_mle.attr_val(None);
-        let _dummy_attribute_val_mleref_expr = Expression::<Fr, ProverExpressionMle>::mle(dummy_attribute_val_mleref);
+        let _dummy_attribute_val_mleref_expr = Expression::<Fr, ProverExpr>::mle(dummy_attribute_val_mleref);
 
         // ---
     }

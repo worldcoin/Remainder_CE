@@ -5,20 +5,19 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use crate::mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef};
 use remainder_shared_types::FieldExt;
-use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionNode, ExpressionType}, verifier_expr::{VerifierExpression}};
+use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionNode, ExpressionType}, verifier_expr::{VerifierExpr}};
 
 /// mid-term solution for deduplication of DenseMleRefs
 /// basically a wrapper around usize, which denotes the index
 /// of the MleRef in an expression's MleRef list/// Generic Expressions
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub struct MleVecIndex<F>(usize, PhantomData<F>);
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MleVecIndex(usize);
 
-impl<F: FieldExt> MleVecIndex<F> {
+impl MleVecIndex {
 
     /// create a new MleRefIndex
     pub fn new(index: usize) -> Self {
-        MleVecIndex(index, PhantomData)
+        MleVecIndex(index)
     }
 
     /// returns the index
@@ -32,7 +31,7 @@ impl<F: FieldExt> MleVecIndex<F> {
     }
 
     /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle<'a>(
+    pub fn get_mle<'a, F: FieldExt>(
         &self,
         mle_ref_vec: &'a Vec<DenseMleRef<F>>
     ) -> &'a DenseMleRef<F> {
@@ -40,43 +39,30 @@ impl<F: FieldExt> MleVecIndex<F> {
     }
 
     /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle_mut<'a>(
+    pub fn get_mle_mut<'a, F: FieldExt>(
         &self,
         mle_ref_vec: &'a mut Vec<DenseMleRef<F>>
     ) -> &'a mut DenseMleRef<F> {
         &mut mle_ref_vec[self.0]
     }
-}
-
-/// this also needs to be prover / verifier / abstract specific
-// defines how the Expressions are printed and displayed
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for MleVecIndex<F> {
-    /// needs to change ^above^ to be Expression
-    /// and then change how to display ExpressionNode::Mle by indexing using MleIndex
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-
-        f.debug_tuple("MleVecIndex")
-        .field(&self.0)
-        .finish()
-
-    }
+    
 }
 
 /// Prover Expression
 /// the leaf nodes of the expression tree are DenseMleRefs
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ProverExpressionMle;
-impl<F: FieldExt> ExpressionType<F> for ProverExpressionMle {
-    type Container = MleVecIndex<F>; /// this also needs to change, perhaps duplicate a struct, rename, and then change
+pub struct ProverExpr;
+impl<F: FieldExt> ExpressionType<F> for ProverExpr {
+    type Container = MleVecIndex;
     type MleVec = Vec<DenseMleRef<F>>;
 }
 
 /// this is what the prover manipulates to prove the correctness of the computation.
 /// Methods here include ones to fix bits, evaluate sumcheck messages, etc.
-impl<F: FieldExt> Expression<F, ProverExpressionMle> {
+impl<F: FieldExt> Expression<F, ProverExpr> {
 
     /// Concatenates two expressions together
-    pub fn concat_expr(mut self, lhs: Expression<F, ProverExpressionMle>) -> Self {
+    pub fn concat_expr(mut self, lhs: Expression<F, ProverExpr>) -> Self {
 
         let offset = lhs.num_mle_ref(); 
         self.increment_mle_vec_indices(offset);
@@ -91,7 +77,7 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
     }
 
     /// Create a product Expression that multiplies many MLEs together
-    pub fn products(product_list: <ProverExpressionMle as ExpressionType<F>>::MleVec) -> Self {
+    pub fn products(product_list: <ProverExpr as ExpressionType<F>>::MleVec) -> Self {
 
         let mle_vec_indices = (0..product_list.len()).map(
             |index| MleVecIndex::new(index)
@@ -121,8 +107,9 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
         
     }
 
+    /// not tested
     /// negates an Expression
-    pub fn negated(expression: Box<Expression<F, ProverExpressionMle>>) -> Self {
+    pub fn negated(expression: Box<Expression<F, ProverExpr>>) -> Self {
 
         let (node, mle_vec) = expression.deconstruct();
 
@@ -132,10 +119,11 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
         
     }
 
+    /// not tested
     /// Create a Sum Expression that contains two MLEs
     pub fn sum(
-        lhs: Box<Expression<F, ProverExpressionMle>>,
-        mut rhs: Box<Expression<F, ProverExpressionMle>>
+        lhs: Box<Expression<F, ProverExpr>>,
+        mut rhs: Box<Expression<F, ProverExpr>>
     ) -> Self {
 
         let offset = lhs.num_mle_ref(); 
@@ -151,8 +139,9 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
         
     }
 
+    /// not tested
     /// scales an Expression by a field element
-    pub fn scaled(expression: Box<Expression<F, ProverExpressionMle>>, scale: F) -> Self {
+    pub fn scaled(expression: Box<Expression<F, ProverExpr>>, scale: F) -> Self {
 
         let (node, mle_vec) = expression.deconstruct();
 
@@ -162,14 +151,14 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
 
     /// returns the number of MleRefs in the expression
     pub fn num_mle_ref(&self) -> usize {
-        self.mle_vec().len()
+        self.mle_vec.len()
     }
 
     /// which increments all the MleVecIndex in the expression by *param* amount
     pub fn increment_mle_vec_indices(&mut self, offset: usize) {
         // define a closure that increments the MleVecIndex by the given amount
         // use traverse_mut
-        let mut increment_closure = for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpressionMle>, _mle_vec: &'b mut Vec<DenseMleRef<F>>| -> Result<(), ()> {
+        let mut increment_closure = for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>, _mle_vec: &'b mut Vec<DenseMleRef<F>>| -> Result<(), ()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
                     mle_vec_index.increment(offset);
@@ -199,7 +188,7 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
     /// by grabbing their bookkeeping table's 1st and only element,
     /// if the bookkeeping table has more than 1 element, it 
     /// throws an ExpressionError::EvaluateNotFullyBoundError
-    pub fn transform_to_verifier_expression(self) -> Result<Expression<F, VerifierExpression>, ExpressionError>{
+    pub fn transform_to_verifier_expression(self) -> Result<Expression<F, VerifierExpr>, ExpressionError>{
         let (
             mut expression_node,
             mle_vec
@@ -236,7 +225,7 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
             });
 
         // ----- this is literally a check -----
-        let mut observer_fn = |exp: &ExpressionNode<F, ProverExpressionMle>, mle_vec: &<ProverExpressionMle as ExpressionType<F>>::MleVec| -> Result<(), ExpressionError> {
+        let mut observer_fn = |exp: &ExpressionNode<F, ProverExpr>, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec| -> Result<(), ExpressionError> {
             match exp {
                 ExpressionNode::Mle(mle_vec_idx) => {
 
@@ -320,7 +309,7 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
         beta_mle_ref: &DenseMleRef<F>,
         round_index: usize,
     ) -> T {
-        self.expression_node().evaluate_sumcheck_node(
+        self.expression_node.evaluate_sumcheck_node(
             constant,
             selector_column,
             mle_eval,
@@ -330,7 +319,7 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
             scaled,
             beta_mle_ref,
             round_index,
-            self.mle_vec()
+            &self.mle_vec
         )
     }
 
@@ -347,14 +336,15 @@ impl<F: FieldExt> Expression<F, ProverExpressionMle> {
     }
 
 
+    /// not tested
     /// Gets the size of an expression in terms of the number of rounds of sumcheck
     pub fn get_expression_size(&self, curr_size: usize) -> usize {
-        self.expression_node().get_expression_size_node(curr_size, self.mle_vec())
+        self.expression_node.get_expression_size_node(curr_size, &self.mle_vec)
     }
 
 }
 
-impl<F: FieldExt> ExpressionNode<F, ProverExpressionMle> {
+impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
 
     /// transforms the expression to a verifier expression
     /// should only be called when the entire expression is fully bound
@@ -364,8 +354,8 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpressionMle> {
     /// throws an ExpressionError::EvaluateNotFullyBoundError
     pub fn transform_to_verifier_expression_node(
         &mut self,
-        mle_vec: &<ProverExpressionMle as ExpressionType<F>>::MleVec
-    ) -> Result<ExpressionNode<F, VerifierExpression>, ExpressionError>{
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec
+    ) -> Result<ExpressionNode<F, VerifierExpr>, ExpressionError>{
 
         match self {
             ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
@@ -429,7 +419,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpressionMle> {
         &mut self,
         round_index: usize,
         challenge: F,
-        mle_vec: &mut <ProverExpressionMle as ExpressionType<F>>::MleVec
+        mle_vec: &mut <ProverExpr as ExpressionType<F>>::MleVec // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
     ) {
         match self {
             ExpressionNode::Selector(index, a, b) => {
@@ -489,7 +479,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpressionMle> {
         scaled: &impl Fn(T, F) -> T,
         beta_mle_ref: &DenseMleRef<F>,
         round_index: usize,
-        mle_vec: &<ProverExpressionMle as ExpressionType<F>>::MleVec
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec
     ) -> T {
         match self {
             ExpressionNode::Constant(scalar) => constant(*scalar, beta_mle_ref),
@@ -666,7 +656,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpressionMle> {
     pub fn index_mle_indices_node(
         &mut self,
         curr_index: usize,
-        mle_vec: &mut <ProverExpressionMle as ExpressionType<F>>::MleVec
+        mle_vec: &mut <ProverExpr as ExpressionType<F>>::MleVec
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
@@ -706,7 +696,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpressionMle> {
     pub fn get_expression_size_node(
         &self,
         curr_size: usize,
-        mle_vec: &<ProverExpressionMle as ExpressionType<F>>::MleVec
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec
     ) -> usize {
         match self {
             ExpressionNode::Selector(_mle_index, a, b) => {
@@ -771,56 +761,12 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpressionMle> {
             ExpressionNode::Constant(_) => curr_size,
         }
     }
-
-
-    /// get the number of MleVecIndexs in the expression
-    /// assumes that it starts with 0
-    pub fn get_mle_vec_len(
-        &self,
-    ) -> usize {
-        let mut mle_exists = false;
-        let largest_mle_vec_idx = match self {
-            ExpressionNode::Selector(_mle_index, a, b) => {
-                let a_bits = a.get_mle_vec_len();
-                let b_bits = b.get_mle_vec_len();
-                max(a_bits, b_bits)
-            }
-            ExpressionNode::Mle(mle_vec_idx) => {
-                mle_exists = true;
-                mle_vec_idx.0
-            }
-            ExpressionNode::Sum(a, b) => {
-                let a_bits = a.get_mle_vec_len();
-                let b_bits = b.get_mle_vec_len();
-                max(a_bits, b_bits)
-            }
-            ExpressionNode::Product(mle_vec_indices) => {
-                mle_exists = true;
-                mle_vec_indices.into_iter().map(
-                    |mle_vec_index|
-                        mle_vec_index.0
-                ).max()
-                .unwrap_or(0)
-
-            }
-            ExpressionNode::Scaled(a, _) => a.get_mle_vec_len(),
-            ExpressionNode::Negated(a) => a.get_mle_vec_len(),
-            ExpressionNode::Constant(_) => 0,
-        };
-
-        
-        if mle_exists {
-            largest_mle_vec_idx + 1
-
-        // if there isn't any mle, then the expression's mle_vec's length is 0
-        } else {0}
-    }
 }
 
 
 
-impl<F: FieldExt> Neg for Expression<F, ProverExpressionMle> {
-    type Output = Expression<F, ProverExpressionMle>;
+impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
+    type Output = Expression<F, ProverExpr>;
     fn neg(self) -> Self::Output {
 
         let (node, mle_vec) = self.deconstruct();
@@ -830,9 +776,9 @@ impl<F: FieldExt> Neg for Expression<F, ProverExpressionMle> {
 
 
 /// implement the Add, Sub, and Mul traits for the Expression
-impl<F: FieldExt> Add for Expression<F, ProverExpressionMle> {
-    type Output = Expression<F, ProverExpressionMle>;
-    fn add(self, mut rhs: Expression<F, ProverExpressionMle>) -> Expression<F, ProverExpressionMle> {
+impl<F: FieldExt> Add for Expression<F, ProverExpr> {
+    type Output = Expression<F, ProverExpr>;
+    fn add(self, mut rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
 
         let offset = self.num_mle_ref(); 
         rhs.increment_mle_vec_indices(offset);
@@ -847,16 +793,16 @@ impl<F: FieldExt> Add for Expression<F, ProverExpressionMle> {
     }
 }
 
-impl<F: FieldExt> Sub for Expression<F, ProverExpressionMle> {
-    type Output = Expression<F, ProverExpressionMle>;
-    fn sub(self, rhs: Expression<F, ProverExpressionMle>) -> Expression<F, ProverExpressionMle> {
+impl<F: FieldExt> Sub for Expression<F, ProverExpr> {
+    type Output = Expression<F, ProverExpr>;
+    fn sub(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
 
         self.add(rhs.neg())
     }
 }
 
-impl<F: FieldExt> Mul<F> for Expression<F, ProverExpressionMle> {
-    type Output = Expression<F, ProverExpressionMle>;
+impl<F: FieldExt> Mul<F> for Expression<F, ProverExpr> {
+    type Output = Expression<F, ProverExpr>;
     fn mul(self, rhs: F) -> Self::Output {
 
         let (node, mle_vec) = self.deconstruct();
@@ -865,19 +811,19 @@ impl<F: FieldExt> Mul<F> for Expression<F, ProverExpressionMle> {
 }
 
 // defines how the Expressions are printed and displayed
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpressionMle> {
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, ProverExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 
         f.debug_struct("Expression")
-        .field("Expression_Node", &self.expression_node())
-        .field("MleRef_Vec", &self.mle_vec())
+        .field("Expression_Node", &self.expression_node)
+        .field("MleRef_Vec", &self.mle_vec)
         .finish()
 
     }
 }
 
 // defines how the ExpressionNodes are printed and displayed
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, ProverExpressionMle> {
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, ProverExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 
         match self {
@@ -906,10 +852,10 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, Prover
 }
 
 /// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
-impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpressionMle> {
+impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpr> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
 
-        struct CircuitDesc<'a, F: FieldExt>(&'a ExpressionNode<F, ProverExpressionMle>, &'a <ProverExpressionMle as ExpressionType<F>>::MleVec);
+        struct CircuitDesc<'a, F: FieldExt>(&'a ExpressionNode<F, ProverExpr>, &'a <ProverExpr as ExpressionType<F>>::MleVec);
         
         impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for CircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -944,6 +890,6 @@ impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpressionMle> {
             }
         }
 
-        CircuitDesc(self.expression_node(), self.mle_vec())
+        CircuitDesc(&self.expression_node, &self.mle_vec)
     }
 }

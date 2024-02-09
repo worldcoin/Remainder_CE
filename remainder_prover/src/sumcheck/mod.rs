@@ -14,7 +14,7 @@ use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use thiserror::Error;
 
 use crate::{
-    expression::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpressionMle},
+    expression::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr},
     mle::{beta::BetaTable, dense::{DenseMleRef, DenseMle}, MleIndex, MleRef},
 };
 use remainder_shared_types::FieldExt;
@@ -152,7 +152,7 @@ impl<F: FieldExt> Mul<&F> for Evals<F> {
 pub(crate) fn compute_sumcheck_message<
     F: FieldExt,
 >(
-    expr: &Expression<F, ProverExpressionMle>,
+    expr: &Expression<F, ProverExpr>,
     round_index: usize,
     max_degree: usize,
     beta_table: &BetaTable<F>,
@@ -535,15 +535,15 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
 /// Returns the maximum degree of b_{curr_round} within an expression
 /// (and therefore the number of prover messages we need to send)
 pub(crate) fn get_round_degree<F: FieldExt>(
-    expr: &Expression<F, ProverExpressionMle>,
+    expr: &Expression<F, ProverExpr>,
     curr_round: usize,
 ) -> usize {
     // --- By default, all rounds have degree at least 2 (beta table included) ---
     let mut round_degree = 1;
 
     let mut get_degree_closure = for<'a, 'b> |
-        expr: &'a ExpressionNode<F, ProverExpressionMle>,
-        mle_vec: &'b <ProverExpressionMle as ExpressionType<F>>::MleVec
+        expr: &'a ExpressionNode<F, ProverExpr>,
+        mle_vec: &'b <ProverExpr as ExpressionType<F>>::MleVec
     | -> Result<(), ()> {
         let round_degree = &mut round_degree;
 

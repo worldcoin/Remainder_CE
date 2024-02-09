@@ -16,10 +16,11 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
     type Container: Clone + Serialize + for<'de> Deserialize<'de>; // either index or F
 
     /// MleRefs is the optional data array of mle_refs
-    /// that can be indexed into by the MleRefIndex defind in the ProverExpression
-    type MleVec: Serialize + for<'de> Deserialize<'de>; // -- this is either unit type or Vec<DenseMleRef>
-    
-    // type thing: Index / F -- this is container
+    /// that can be indexed into by the MleRefIndex defind in the ProverExpr
+    /// -- this is either unit type for VerifierExpr or 
+    /// -- Vec<DenseMleRef> for ProverExpr
+    type MleVec: Serialize + for<'de> Deserialize<'de>; 
+
 }
 
 /// Generic Expressions
@@ -50,8 +51,8 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct Expression<F: FieldExt, E: ExpressionType<F>> {
-    expression_node: ExpressionNode<F, E>,
-    mle_vec: E::MleVec,
+    pub(super) expression_node: ExpressionNode<F, E>,
+    pub(super) mle_vec: E::MleVec,
 }
 
 /// generic methods shared across all types of expressions
@@ -64,27 +65,7 @@ impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
             mle_vec,
         }
     }
-
-    /// get the expression node
-    pub fn expression_node(&self) -> &ExpressionNode<F, E> {
-        &self.expression_node
-    }
-
-    /// get the expression node, mutable
-    pub fn expression_node_mut(&mut self) -> &mut ExpressionNode<F, E> {
-        &mut self.expression_node
-    }
-
-    /// get the mle_vec
-    pub fn mle_vec(&self) -> &E::MleVec {
-        &self.mle_vec
-    }
-
-    /// get the mle_vec, mutable
-    pub fn mle_vec_mut(&mut self) -> &mut E::MleVec {
-        &mut self.mle_vec
-    }
-
+    
     /// get the expression node and mle_vec, mutable
     pub fn deconstruct_mut(&mut self) -> (&mut ExpressionNode<F, E>, &mut E::MleVec) {
         (&mut self.expression_node, &mut self.mle_vec)

@@ -1,6 +1,6 @@
 //! Extra builders for debugging/circuit testing
 use crate::expression::generic_expr::Expression;
-use crate::expression::prover_expr::ProverExpressionMle;
+use crate::expression::prover_expr::ProverExpr;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle};
@@ -18,7 +18,7 @@ pub struct FSRandomBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for FSRandomBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         Expression::mle(self.mle.mle_ref()) - Expression::mle(self.val_mle.mle_ref())
     }
 
@@ -50,7 +50,7 @@ pub struct SelfMinusSelfBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for SelfMinusSelfBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         Expression::mle(self.mle.mle_ref()) - Expression::mle(self.mle.mle_ref())
     }
 

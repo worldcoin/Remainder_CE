@@ -3,13 +3,15 @@ use crate::{layer::LayerId, mle::dense::DenseMle};
 use super::*;
 use ark_std::One;
 use remainder_shared_types::Fr;
-use tests::{generic_expr::Expression, prover_expr::ProverExpressionMle};
+use tests::{generic_expr::Expression, prover_expr::ProverExpr};
+
+// todo need to make sure all functions implemented in prover_expr, etc. are properly tested here or elsewhere
 
 #[test]
 fn test_constants_eval() {
-    let expression1: Expression<Fr, ProverExpressionMle> = Expression::constant(Fr::one());
+    let expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::one());
 
-    let expression2: Expression<Fr, ProverExpressionMle> = Expression::constant(Fr::from(2));
+    let expression2: Expression<Fr, ProverExpr> = Expression::constant(Fr::from(2));
 
     let expression3 = expression1.clone() + expression2.clone();
 
@@ -306,7 +308,7 @@ fn test_mle_different_length_prod() {
 
 #[test]
 fn big_test_eval() {
-    let expression1: Expression<Fr, ProverExpressionMle> = Expression::constant(Fr::one());
+    let expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::one());
 
     let mle = DenseMle::new_from_raw(
         vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::one()],

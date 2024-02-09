@@ -1,7 +1,7 @@
 //!The LayerBuilders that build the ZKDT Circuit
 
 use crate::expression::generic_expr::Expression;
-use crate::expression::prover_expr::ProverExpressionMle;
+use crate::expression::prover_expr::ProverExpr;
 use crate::layer::{LayerBuilder, LayerId};
 use crate::mle::MleRef;
 use crate::mle::dense::{DenseMle};
@@ -22,7 +22,7 @@ pub struct BinaryRecompBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for BinaryRecompBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         let bit_mle_refs = self.diff_signed_bin_decomp.mle_bit_refs();
 
         // --- Let's just do a linear accumulator for now ---
@@ -82,7 +82,7 @@ pub struct NodePathDiffBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for NodePathDiffBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         let decision_node_thr_mle_ref = self.decision_node_path_mle.threshold();
         let permuted_inputs_val_mle_ref = self.permuted_inputs_mle.attr_val(Some(decision_node_thr_mle_ref.num_vars()));
 
@@ -130,7 +130,7 @@ pub struct BinaryRecompCheckerBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for BinaryRecompCheckerBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
 
         // --- Grab MLE refs ---
         let positive_recomp_mle_ref = self.positive_recomp_mle.mle_ref();
@@ -196,7 +196,7 @@ pub struct PartialBitsCheckerBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for PartialBitsCheckerBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
 
         // --- Grab MLE refs ---
         let permuted_inputs_mle_ref = self.permuted_inputs_mle.attr_id(Some(self.num_vars_to_grab));

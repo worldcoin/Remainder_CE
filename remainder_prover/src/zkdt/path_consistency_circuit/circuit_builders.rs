@@ -1,6 +1,6 @@
 use remainder_shared_types::FieldExt;
 
-use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef, Mle}, zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode}, layer::{LayerBuilder, LayerId}, expression::{generic_expr::Expression, prover_expr::ProverExpressionMle}};
+use crate::{mle::{dense::DenseMle, MleIndex, zero::ZeroMleRef, Mle}, zkdt::structs::{BinDecomp16Bit, DecisionNode, LeafNode}, layer::{LayerBuilder, LayerId}, expression::{generic_expr::Expression, prover_expr::ProverExpr}};
 
 
 pub struct SubtractBuilder<F: FieldExt> {
@@ -11,7 +11,7 @@ pub struct SubtractBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for SubtractBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         
         Expression::negated(Box::new(Expression::mle(self.mle_one.mle_ref()) + Expression::mle(self.mle_two.mle_ref()) + Expression::constant(F::one())))
     }
@@ -46,7 +46,7 @@ pub struct TwoTimesBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for TwoTimesBuilder<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         
         Expression::scaled(Box::new(Expression::mle(self.mle_path_decision.node_id())), F::from(2_u64))
     }
@@ -81,7 +81,7 @@ pub struct SignBit<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for SignBit<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         
         self.bit_decomp_diff_mle.mle_bit_refs()[15].clone().expression()
     }
@@ -114,7 +114,7 @@ pub struct OneMinusSignBit<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for OneMinusSignBit<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         
         Expression::constant(F::one()) - Expression::mle(self.bit_decomp_diff_mle.mle_bit_refs()[15].clone())
     }
@@ -153,7 +153,7 @@ impl<F: FieldExt> LayerBuilder<F> for SignBitProductBuilder<F> {
 
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         
         // dbg!(&yes);
         Expression::products(vec![self.pos_bit_mle.mle_ref(), self.pos_bit_sum.mle_ref()]) + 
@@ -198,7 +198,7 @@ pub struct PrevNodeLeftBuilderDecision<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for PrevNodeLeftBuilderDecision<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         
         Expression::negated(Box::new(Expression::scaled(Box::new(Expression::mle(self.mle_path_decision.node_id())), F::from(2_u64)) + 
         Expression::constant(F::one())))
@@ -231,7 +231,7 @@ pub struct PrevNodeRightBuilderDecision<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for PrevNodeRightBuilderDecision<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         Expression::negated(Box::new(Expression::scaled(Box::new(Expression::mle(self.mle_path_decision.node_id())), F::from(2_u64)) + 
         Expression::constant(F::from(2_u64))))
     }
@@ -263,7 +263,7 @@ pub struct CurrNodeBuilderDecision<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for CurrNodeBuilderDecision<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         Expression::mle(self.mle_path_decision.node_id())
     }
 
@@ -294,7 +294,7 @@ pub struct CurrNodeBuilderLeaf<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for CurrNodeBuilderLeaf<F> {
     type Successor = DenseMle<F, F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         Expression::mle(self.mle_path_leaf.node_id())
     }
 
@@ -326,7 +326,7 @@ pub struct DumbBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for DumbBuilder<F> {
     type Successor = ZeroMleRef<F>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         
         Expression::mle(self.mle.mle_ref()) + Expression::negated(Box::new(Expression::mle(self.mle.mle_ref())))
     }

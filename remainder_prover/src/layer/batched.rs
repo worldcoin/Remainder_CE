@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use thiserror::Error;
 
 use crate::{
-    expression::{self, generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpressionMle}, mle::{
+    expression::{self, generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr}, mle::{
         dense::{DenseMle, DenseMleRef},
         zero::ZeroMleRef,
         Mle, MleAble, MleIndex, MleRef,
@@ -36,7 +36,7 @@ impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
 impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
     type Successor = Vec<A::Successor>;
 
-    fn build_expression(&self) -> Expression<F, ProverExpressionMle> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         let exprs = self
             .layers
             .iter()
@@ -164,15 +164,15 @@ pub fn unflatten_mle<F: FieldExt>(
 ///Helper function for batchedlayer that takes in m expressions of size n, and
 ///turns it into a single expression o size n*m
 fn combine_expressions<F: FieldExt>(
-    exprs: Vec<Expression<F, ProverExpressionMle>>,
-) -> Result<Expression<F, ProverExpressionMle>, CombineExpressionError> {
+    exprs: Vec<Expression<F, ProverExpr>>,
+) -> Result<Expression<F, ProverExpr>, CombineExpressionError> {
     let new_bits = log2(exprs.len());
 
-    let mut new_mle_vec: Vec<Option<DenseMleRef<F>>> = vec![None; exprs[0].mle_vec().len()];
+    let mut new_mle_vec: Vec<Option<DenseMleRef<F>>> = vec![None; exprs[0].num_mle_ref()];
     let (
         expression_nodes,
         mle_vecs
-    ): (Vec<ExpressionNode<F, ProverExpressionMle>>, Vec<<ProverExpressionMle as ExpressionType<F>>::MleVec>) = exprs.into_iter().map(
+    ): (Vec<ExpressionNode<F, ProverExpr>>, Vec<<ProverExpr as ExpressionType<F>>::MleVec>) = exprs.into_iter().map(
         |expr| {
             expr.deconstruct()
         }
@@ -195,8 +195,8 @@ fn combine_expressions<F: FieldExt>(
 }
 
 fn combine_expressions_helper<F: FieldExt>(
-    expression_nodes: Vec<ExpressionNode<F, ProverExpressionMle>>,
-    mle_vecs: &Vec<<ProverExpressionMle as ExpressionType<F>>::MleVec>,
+    expression_nodes: Vec<ExpressionNode<F, ProverExpr>>,
+    mle_vecs: &Vec<<ProverExpr as ExpressionType<F>>::MleVec>,
     new_mle_vec: &mut Vec<Option<DenseMleRef<F>>>,
     new_bits: usize,
 ) {
@@ -207,7 +207,7 @@ fn combine_expressions_helper<F: FieldExt>(
     match &expression_nodes[0] {
         ExpressionNode::Selector(_index, _, _) => {
 
-            let out: Vec<(ExpressionNode<F, ProverExpressionMle>, ExpressionNode<F, ProverExpressionMle>)> = expression_nodes
+            let out: Vec<(ExpressionNode<F, ProverExpr>, ExpressionNode<F, ProverExpr>)> = expression_nodes
                 .into_iter()
                 .map(|expr| {
                     if let ExpressionNode::Selector(_, first, second) = expr {
@@ -243,7 +243,7 @@ fn combine_expressions_helper<F: FieldExt>(
             new_mle_vec[mle_vec_index] = Some(new_mle);
         }
         ExpressionNode::Sum(_, _) => {
-            let out: Vec<(ExpressionNode<F, ProverExpressionMle>, ExpressionNode<F, ProverExpressionMle>)> = expression_nodes
+            let out: Vec<(ExpressionNode<F, ProverExpr>, ExpressionNode<F, ProverExpr>)> = expression_nodes
                 .into_iter()
                 .map(|expr| {
                     if let ExpressionNode::Sum(first, second) = expr {
@@ -379,7 +379,7 @@ mod tests {
     use itertools::Itertools;
 
     use crate::{
-        expression::{generic_expr::Expression, prover_expr::ProverExpressionMle},
+        expression::{generic_expr::Expression, prover_expr::ProverExpr},
         layer::{from_mle, LayerBuilder, LayerId},
         mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
@@ -391,7 +391,7 @@ mod tests {
     fn test_batched_layer() {
         let mut rng = test_rng();
         let expression_builder =
-            |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| -> Expression<Fr, ProverExpressionMle> {
+            |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| -> Expression<Fr, ProverExpr> {
                 mle1.mle_ref().expression() + mle2.mle_ref().expression()
             };
         let layer_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>),
