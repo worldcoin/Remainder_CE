@@ -1,6 +1,7 @@
 use std::{
     cmp::max, fmt::Debug, marker::PhantomData, ops::{Add, Mul, Neg, Sub}
 };
+use ark_crypto_primitives::crh::sha256::digest::typenum::Exp;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use crate::mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef};
@@ -769,8 +770,7 @@ impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn neg(self) -> Self::Output {
 
-        let (node, mle_vec) = self.deconstruct();
-        Expression::new(ExpressionNode::Negated(Box::new(node)), mle_vec)
+        Expression::negated(Box::new(self))
     }
 }
 
@@ -778,18 +778,9 @@ impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
 /// implement the Add, Sub, and Mul traits for the Expression
 impl<F: FieldExt> Add for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
-    fn add(self, mut rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
+    fn add(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
 
-        let offset = self.num_mle_ref(); 
-        rhs.increment_mle_vec_indices(offset);
-
-        let (lhs_node, lhs_mle_vec) = self.deconstruct();
-        let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
-
-        let sum_node = ExpressionNode::Sum(Box::new(lhs_node), Box::new(rhs_node));
-        let sum_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec.into_iter()).collect_vec();
-
-        Expression::new(sum_node, sum_mle_vec)
+        Expression::sum(Box::new(self), Box::new(rhs))
     }
 }
 
@@ -805,8 +796,7 @@ impl<F: FieldExt> Mul<F> for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn mul(self, rhs: F) -> Self::Output {
 
-        let (node, mle_vec) = self.deconstruct();
-        Expression::new(ExpressionNode::Scaled(Box::new(node), rhs), mle_vec)
+        Expression::scaled(Box::new(self), rhs)
     }
 }
 
