@@ -35,13 +35,13 @@ impl<F: FieldExt, Tr: Transcript<F>> fmt::Debug for LayerEnum<F, Tr> {
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
-    type Transcript = Tr;
+    type Sponge = Tr;
 
     #[instrument(skip_all, level = "debug", err)]
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Self::Sponge,
     ) -> Result<crate::prover::SumcheckProof<F>, super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.prove_rounds(claim, transcript),
@@ -55,7 +55,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Self::Sponge,
     ) -> Result<(), super::LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
@@ -88,7 +88,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         LayerEnum::Gkr(GKRLayer::new(builder, id))
     }
 
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
+    fn get_enum(self) -> LayerEnum<F, Self::Sponge> {
         self
     }
 

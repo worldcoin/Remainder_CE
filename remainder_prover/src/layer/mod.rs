@@ -133,13 +133,13 @@ impl std::fmt::Display for LayerId {
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
     /// The transcript that this layer uses
-    type Transcript: Transcript<F>;
+    type Sponge: Transcript<F>;
 
     /// Creates a sumcheck proof for this Layer
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Self::Sponge,
     ) -> Result<SumcheckProof<F>, LayerError>;
 
     ///  Verifies the sumcheck protocol
@@ -147,7 +147,7 @@ pub trait Layer<F: FieldExt> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Self::Sponge,
     ) -> Result<(), LayerError>;
 
     /// Get the claims that this layer makes on other layers
@@ -171,7 +171,7 @@ pub trait Layer<F: FieldExt> {
     where
         Self: Sized;
 
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript>;
+    fn get_enum(self) -> LayerEnum<F, Self::Sponge>;
 }
 
 /// Default Layer abstraction
@@ -265,7 +265,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 }
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
-    type Transcript = Tr;
+    type Sponge = Tr;
     fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
         Self {
             id,
@@ -278,7 +278,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Self::Sponge,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let val = claim.get_result().clone();
 
@@ -343,7 +343,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_prover_messages: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Self::Sponge,
     ) -> Result<(), LayerError> {
         // --- Keeps track of challenges u_1, ..., u_n to be bound ---
         let mut challenges = vec![];
@@ -615,7 +615,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         Ok(wlx_evals)
     }
 
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
+    fn get_enum(self) -> LayerEnum<F, Self::Sponge> {
         LayerEnum::Gkr(self)
     }
 }
