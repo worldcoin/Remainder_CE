@@ -91,7 +91,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         // The input layer is ready at this point!
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer_with_rho_inv(4, 1.);
         let input_layers = vec![input_layer.to_enum()];
 
         // --- Subtract the computed circuit output from the advice circuit output ---
@@ -165,7 +165,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         let first_layer_output = layers.add_gkr(diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer_with_rho_inv(4, 1.);
 
         Witness {
             layers,
@@ -273,10 +273,10 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         &mut self,
         transcript: &mut Self::Transcript,
     ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
-        let mut input =
+        let input_layer:  LigeroInputLayer<F, _> =
             InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
-                .to_input_layer::<LigeroInputLayer<F, _>>()
-                .to_enum();
+                .to_input_layer_with_rho_inv(4, 1.);
+        let mut input = input_layer.to_enum();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript).unwrap();
@@ -1012,7 +1012,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
                 true,
             );
         let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
-            live_committed_input_layer_builder.to_input_layer();
+            live_committed_input_layer_builder.to_input_layer_with_rho_inv(4, 1.);
 
         Witness {
             layers,
