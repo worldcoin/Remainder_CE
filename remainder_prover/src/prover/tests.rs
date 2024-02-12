@@ -698,7 +698,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
-        let output_layer_mle = layers.add_gkr(output_layer_builder);
+        let output_layer_mle = layers.add::<_, EmptyLayer<F, Self::Transcript>>(output_layer_builder);
 
         Witness {
             layers,
