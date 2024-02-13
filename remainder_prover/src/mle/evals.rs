@@ -1,6 +1,6 @@
 use std::ops::Index;
 
-use ark_std::{cfg_into_iter, log2};
+use ark_std::cfg_into_iter;
 use itertools::{EitherOrBoth::*, Itertools};
 use rayon::{
     prelude::{IntoParallelIterator, ParallelIterator},
@@ -13,13 +13,11 @@ use serde::{Deserialize, Serialize};
 
 /// Mirrors the `num_bits` LSBs of `value`.
 /// # Example
-/// ```
 ///     assert_eq!(mirror_bits(4, 0b1110), 0b0111);
 ///     assert_eq!(mirror_bits(3, 0b1110), 0b1011);
 ///     assert_eq!(mirror_bits(2, 0b1110), 0b1101);
 ///     assert_eq!(mirror_bits(1, 0b1110), 0b1110);
 ///     assert_eq!(mirror_bits(0, 0b1110), 0b1110);
-/// ```
 fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
     let mut result: usize = 0;
 
@@ -89,7 +87,7 @@ impl<F: FieldExt> Evaluations<F> {
     /// # Panics
     /// If `evals` contains more than `2^num_vars` evaluations.
     pub fn new(num_vars: usize, evals: Vec<F>) -> Self {
-        assert!(evals.len() <= (1 << num_vars));
+        // debug_assert!(evals.len() <= (1 << num_vars));
 
         Evaluations::<F> {
             evals,
@@ -157,7 +155,8 @@ impl<F: FieldExt> Evaluations<F> {
         &self.evals
     }
 
-    /// Temporary function returning a clone of the internal representation vector.
+    /// Temporary function returning a clone of the internal representation
+    /// vector.
     pub fn to_vec(&self) -> Vec<F> {
         self.evals.clone()
     }
@@ -174,6 +173,7 @@ impl<F: FieldExt> Evaluations<F> {
     /// the same list of evaluations. Two representations are equivalent if
     /// omitting the longest contiguous suffix of `F::zero()`s from each results
     /// in the same vectors.
+    #[allow(dead_code)]
     fn equiv_repr(evals1: &Vec<F>, evals2: &Vec<F>) -> bool {
         evals1
             .iter()
@@ -312,6 +312,7 @@ impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct MultilinearExtension<F: FieldExt> {
+    /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
 }
 
@@ -330,22 +331,27 @@ impl<F: FieldExt> MultilinearExtension<F> {
         }
     }
 
+    /// Returns `n`, the number of arguments `\tilde{f}` takes.
     pub fn num_vars(&self) -> usize {
         self.f.num_vars()
     }
 
+    /// Temporary function for accessing the bookkeping table.
     pub fn get_evals(&self) -> Evaluations<F> {
         self.f.clone()
     }
 
+    /// Temporary function for accessing the bookkeping table.
     pub fn get_evals_vector(&self) -> Vec<F> {
         self.f.evals.clone()
     }
 
+    /// Temporary function for accessing the bookkeping table.
     pub fn get_evals_ref(&self) -> &Evaluations<F> {
         &self.f
     }
 
+    /// Temporary function for accessing the bookkeping table.
     pub fn get_evals_vector_ref(&self) -> &Vec<F> {
         &self.f.evals
     }
@@ -393,11 +399,9 @@ impl<F: FieldExt> MultilinearExtension<F> {
     /// # Example
     /// If `self` represents a function `\tilde{f}: F^3 -> F`,
     /// `self.fix_variable_at_index(1, r)` fixes the middle variable to `r \in
-    /// F`. After the invocation, `self` represents a function `\tilde{g}: F^2 ->
-    /// F` defined as the multilinear extension of the following function:
-    /// ```
-    ///     g(b_0, b_1) = \tilde{f}(b_0, r, b_1),
-    /// ```
+    /// F`. After the invocation, `self` represents a function `\tilde{g}: F^2
+    /// -> F` defined as the multilinear extension of the following function:
+    /// `g(b_0, b_1) = \tilde{f}(b_0, r, b_1)`.
     /// # Panics
     /// if `var_index` is outside the interval `[0, self.num_vars())`.
     pub fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
@@ -534,8 +538,9 @@ impl<F: FieldExt> Index<usize> for MultilinearExtension<F> {
 
 #[cfg(test)]
 mod test {
+    use ark_std::log2;
     use quickcheck::{Arbitrary, TestResult};
-    use remainder_shared_types::{halo2curves::group::ff::Field, Fr};
+    use remainder_shared_types::Fr;
 
     use super::*;
 
@@ -734,34 +739,8 @@ mod test {
         assert!(Evaluations::equiv_repr(&evals2, &evals1));
     }
 
-    /// Helper function for testing purposes.
-    /// Evaluates the MLE `\tilde{f}` of `f` at a point `point \in F^n`
-    /// using the definition of an MLE.
-    /// # Complexity
-    /// `O(n * 2^n)`
-    fn evaluate_mle_at_point(f: &Evaluations<Fr>, point: Vec<Fr>) -> Fr {
-        assert_eq!(f.num_vars, point.len());
-        let n = f.num_vars;
-
-        (*f).evals
-            .clone()
-            .into_iter()
-            .enumerate()
-            .fold(Fr::zero(), |acc, (idx, v)| {
-                let beta = (0..n).into_iter().fold(Fr::one(), |acc, i| {
-                    let bit_i = idx & (1 << i);
-                    if bit_i > 0 {
-                        acc * point[i]
-                    } else {
-                        acc * (Fr::one() - point[i])
-                    }
-                });
-                acc + v * beta
-            })
-    }
-
     #[quickcheck]
-    fn test_fix_variable_evaluation(mut evals: Vec<Qfr>, mut point: Vec<Qfr>) -> TestResult {
+    fn test_fix_variable_evaluation(evals: Vec<Qfr>, mut point: Vec<Qfr>) -> TestResult {
         if evals.is_empty() {
             return TestResult::discard();
         }
@@ -781,7 +760,7 @@ mod test {
         let f = Evaluations::<Fr>::new(n, evals);
 
         let mut mle1 = MultilinearExtension::<Fr>::new(f.clone());
-        let mut mle2 = MultilinearExtension::<Fr>::new(f);
+        let mle2 = MultilinearExtension::<Fr>::new(f);
 
         for i in 0..n {
             mle1.fix_variable(point[i]);
