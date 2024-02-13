@@ -73,7 +73,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
             MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
                 current_mle: dense_mle_ref.current_mle.clone(),
                 original_mle: MultilinearExtension::new(Evaluations::<F>::new(
-                    dense_mle_ref.num_vars(),
+                    dense_mle_ref.original_num_vars() - 1,
                     dense_mle_ref
                         .original_mle
                         .get_evals_vector()
@@ -99,7 +99,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
             MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
                 current_mle: dense_mle_ref.current_mle.clone(),
                 original_mle: MultilinearExtension::new(Evaluations::<F>::new(
-                    dense_mle_ref.num_vars(),
+                    dense_mle_ref.original_num_vars() - 1,
                     dense_mle_ref
                         .original_mle
                         .get_evals_vector()
