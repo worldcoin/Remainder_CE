@@ -538,8 +538,10 @@ pub struct DenseMleRef<F: FieldExt> {
 
     /// The original MLE (that does not get destructively modified
     /// when fixing a variable).
-    #[serde(skip)]
-    #[serde(default = "MultilinearExtension::new_zero")]
+    // TODO(Makis): Need to find a way to skip only the `evals` field inside the
+    // original MLE.
+    // #[serde(skip)]
+    // #[serde(default = "MultilinearExtension::new_zero")]
     pub original_mle: MultilinearExtension<F>,
     /// The original mle indices (not modified during fix var)
     pub original_mle_indices: Vec<MleIndex<F>>,
