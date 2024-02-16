@@ -25,18 +25,18 @@ pub struct BatchedFSRandomCircuit<F: FieldExt> {
     val_mle_size: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for BatchedFSRandomCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Self::Sponge,
     ) -> Result<
         (
-            Witness<F, Self::Transcript>,
+            Witness<F, Self::Sponge>,
             Vec<crate::prover::input_layer::enum_input_layer::CommitmentEnum<F>>,
         ),
         crate::prover::GKRError,
@@ -51,7 +51,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedFSRandomCircuit<F> {
             vec![Box::new(&mut combined_batched_mle)];
         let public_input_layer_builder =
             InputLayerBuilder::new(public_input_mles, None, LayerId::Input(0));
-        let public_input_layer: PublicInputLayer<F, Self::Transcript> =
+        let public_input_layer: PublicInputLayer<F, Self::Sponge> =
             public_input_layer_builder.to_input_layer();
         let mut public_input_layer_enum = public_input_layer.to_enum();
         let input_commit = public_input_layer_enum
@@ -73,7 +73,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedFSRandomCircuit<F> {
         let num_dataparallel_bits = log2(num_subcircuit_copies) as usize;
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         // --- Create single batched layer ---
         let random_sub_layer_builders = self

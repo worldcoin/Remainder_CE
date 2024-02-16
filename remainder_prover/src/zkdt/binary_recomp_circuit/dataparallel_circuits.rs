@@ -29,9 +29,9 @@ pub struct BinaryRecompCircuitBatched<F: FieldExt> {
     batched_diff_signed_bin_decomp_mle: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         // --- For the input layer, we need to first merge all of the input MLEs FIRST by mle_idx, then by dataparallel index ---
         // --- This assures that (going left-to-right in terms of the bits) we have [input_prefix_bits], [dataparallel_bits], [mle_idx], [iterated_bits] ---
         let mut combined_batched_decision_node_path_mle =
@@ -68,7 +68,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
         );
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         // --- First we create the positive binary recomp builder ---
         let pos_bin_recomp_builders = self
@@ -169,7 +169,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitBatched<F> {
             combine_zero_mle_ref(batched_recomp_checker_result_mle);
 
         // --- Create input layers ---
-        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Sponge> =
             input_layer_builder.to_input_layer_with_rho_inv(4_u8, 1_f64);
 
         Witness {
@@ -198,7 +198,7 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
     /// to synthesizing its own input layer.
     pub fn yield_sub_circuit(
         &mut self,
-    ) -> Witness<F, <BinaryRecompCircuitBatched<F> as GKRCircuit<F>>::Transcript> {
+    ) -> Witness<F, <BinaryRecompCircuitBatched<F> as GKRCircuit<F>>::Sponge> {
         // --- NOTE: There is no input layer creation, since this gets handled in the large circuit ---
 
         // --- Dataparallel/batching stuff + sanitychecks ---
@@ -214,7 +214,7 @@ impl<F: FieldExt> BinaryRecompCircuitBatched<F> {
         );
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinaryRecompCircuitBatched<F> as GKRCircuit<F>>::Transcript> =
+        let mut layers: Layers<F, <BinaryRecompCircuitBatched<F> as GKRCircuit<F>>::Sponge> =
             Layers::new();
 
         let batched_diff_signed_bin_decomp_mle_prefix_bits =

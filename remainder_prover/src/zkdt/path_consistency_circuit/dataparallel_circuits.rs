@@ -97,12 +97,12 @@ pub struct PathCheckCircuitBatched<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         let num_dataparallel_circuits = self.batched_decision_node_paths_mle.len();
         let num_dataparallel_bits = log2(num_dataparallel_circuits) as usize;
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         let mut combined_decision = DenseMle::<F, DecisionNode<F>>::combine_mle_batch(
             self.batched_decision_node_paths_mle.clone(),
@@ -119,7 +119,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
             Box::new(&mut combined_bit),
         ];
         let input_layer_builder = InputLayerBuilder::<F>::new(input_mles, None, LayerId::Input(0));
-        let input_layer: InputLayerEnum<F, Self::Transcript> = input_layer_builder
+        let input_layer: InputLayerEnum<F, Self::Sponge> = input_layer_builder
             .to_input_layer::<PublicInputLayer<F, _>>()
             .to_enum();
 
@@ -243,7 +243,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatched<F> {
         let res_dec_zero_mle = layers.add_gkr(res_dec_zero);
         let res_leaf_zero_mle = layers.add_gkr(res_leaf_zero);
 
-        let witness: Witness<F, Self::Transcript> = Witness {
+        let witness: Witness<F, Self::Sponge> = Witness {
             layers,
             output_layers: vec![res_dec_zero_mle.get_enum(), res_leaf_zero_mle.get_enum()],
             input_layers: vec![input_layer],

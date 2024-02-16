@@ -10,6 +10,7 @@ use thiserror::Error;
 use tracing::{trace, warn};
 
 use crate::FieldExt;
+
 pub mod poseidon_transcript;
 
 // ///An error representing the things that can go wrong when working with a Transcript

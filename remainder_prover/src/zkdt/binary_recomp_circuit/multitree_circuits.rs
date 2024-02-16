@@ -29,9 +29,9 @@ pub struct BinaryRecompCircuitMultiTree<F: FieldExt> {
     batched_diff_signed_bin_decomp_tree_mle: Vec<Vec<DenseMle<F, BinDecomp16Bit<F>>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitMultiTree<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         // --- For the input layer, we need to first merge all of the input MLEs FIRST by mle_idx, then by dataparallel index ---
         // --- This assures that (going left-to-right in terms of the bits) we have [input_prefix_bits], [dataparallel_bits], [mle_idx], [iterated_bits] ---
         let combined_batched_decision_node_path_mle_vec = self
@@ -80,7 +80,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitMultiTree<F> {
 
         // --- NOTE: There is no input layer creation, since this gets handled in the large circuit ---
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinaryRecompCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> =
+        let mut layers: Layers<F, <BinaryRecompCircuitMultiTree<F> as GKRCircuit<F>>::Sponge> =
             Layers::new();
 
         let num_tree_bits = log2(self.batched_decision_node_path_tree_mle.len()) as usize;
@@ -246,7 +246,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuitMultiTree<F> {
                 .collect_vec(),
         );
 
-        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Sponge> =
             input_layer_builder.to_input_layer_with_rho_inv(4_u8, 1_f64);
 
         Witness {
@@ -275,10 +275,10 @@ impl<F: FieldExt> BinaryRecompCircuitMultiTree<F> {
     /// to synthesizing its own input layer.
     pub fn yield_sub_circuit(
         &mut self,
-    ) -> Witness<F, <BinaryRecompCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> {
+    ) -> Witness<F, <BinaryRecompCircuitMultiTree<F> as GKRCircuit<F>>::Sponge> {
         // --- NOTE: There is no input layer creation, since this gets handled in the large circuit ---
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinaryRecompCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> =
+        let mut layers: Layers<F, <BinaryRecompCircuitMultiTree<F> as GKRCircuit<F>>::Sponge> =
             Layers::new();
 
         let num_tree_bits = log2(self.batched_decision_node_path_tree_mle.len()) as usize;

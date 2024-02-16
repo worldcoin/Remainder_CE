@@ -64,10 +64,10 @@ pub struct PathCheckCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.decision_node_paths_mle),
@@ -97,7 +97,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
         let curr_node_leaf_builder = CurrNodeBuilderLeaf::new(self.leaf_node_paths_mle.clone());
 
         let curr_decision = layers.add_gkr(curr_node_decision_builder);
-        let curr_leaf = layers.add::<_, EmptyLayer<F, Self::Transcript>>(curr_node_leaf_builder);
+        let curr_leaf = layers.add::<_, EmptyLayer<F, Self::Sponge>>(curr_node_leaf_builder);
 
         let curr_node_decision_leaf_builder = ConcatBuilder::new(curr_decision, curr_leaf);
         let curr_node_decision_leaf_mle_ref =
@@ -127,7 +127,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuit<F> {
             SignBitProductBuilder::new(pos_sign_bits, neg_sign_bits, res_positive, res_negative);
         let final_res = layers.add_gkr(sign_bit_sum_builder);
 
-        let witness: Witness<F, Self::Transcript> = Witness {
+        let witness: Witness<F, Self::Sponge> = Witness {
             layers,
             output_layers: vec![final_res.get_enum()],
             input_layers: vec![input_layer],
@@ -163,10 +163,10 @@ pub struct PathMulCheckCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PathMulCheckCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.decision_node_paths_mle),
@@ -197,7 +197,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathMulCheckCircuit<F> {
 
         let curr_decision_mle_ref = layers.add_gkr(curr_node_decision_builder).mle_ref();
         let curr_leaf_mle_ref = layers
-            .add::<_, EmptyLayer<F, Self::Transcript>>(curr_node_leaf_builder)
+            .add::<_, EmptyLayer<F, Self::Sponge>>(curr_node_leaf_builder)
             .mle_ref();
         let prev_node_right_mle_ref = layers.add_gkr(prev_node_right_builder).mle_ref();
         let prev_node_left_mle_ref = layers.add_gkr(prev_node_left_builder).mle_ref();
@@ -271,7 +271,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathMulCheckCircuit<F> {
             BinaryOperation::Mul,
         );
 
-        let witness: Witness<F, Self::Transcript> = Witness {
+        let witness: Witness<F, Self::Sponge> = Witness {
             layers,
             output_layers: vec![
                 dec_pos_prod.mle_ref().get_enum(),

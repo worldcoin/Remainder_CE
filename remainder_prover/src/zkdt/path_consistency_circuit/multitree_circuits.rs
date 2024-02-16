@@ -38,10 +38,10 @@ pub struct PathCheckCircuitBatchedNoMulMultiTree<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedNoMulMultiTree<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+        let mut layers: Layers<_, Self::Sponge> = Layers::new();
 
         let num_tree_bits = log2(self.batched_decision_node_paths_mle_vec.len()) as usize;
         let num_dataparallel_circuits = self.batched_decision_node_paths_mle_vec[0].len();
@@ -88,7 +88,7 @@ impl<F: FieldExt> GKRCircuit<F> for PathCheckCircuitBatchedNoMulMultiTree<F> {
             Box::new(&mut bin_decomp_diffs_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_layer: LigeroInputLayer<F, Self::Transcript> =
+        let input_layer: LigeroInputLayer<F, Self::Sponge> =
             input_layer.to_input_layer_with_rho_inv(4, 1_f64);
 
         self.batched_decision_node_paths_mle_vec

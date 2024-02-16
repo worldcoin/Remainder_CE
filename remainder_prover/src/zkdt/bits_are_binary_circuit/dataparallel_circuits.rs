@@ -25,9 +25,9 @@ pub struct BinDecomp16BitIsBinaryCircuitBatched<F: FieldExt> {
     batched_diff_signed_bin_decomp_mle: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitBatched<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         // --- Input to the circuit is just the one (combined) MLE ---
         let mut combined_batched_diff_signed_bin_decomp_mle =
             DenseMle::<F, BinDecomp16Bit<F>>::combine_mle_batch(
@@ -36,11 +36,11 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitBatched<F> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut combined_batched_diff_signed_bin_decomp_mle)];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> =
+        let live_committed_input_layer: PublicInputLayer<F, Self::Sponge> =
             input_layer_builder.to_input_layer();
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---
         let num_subcircuit_copies = self.batched_diff_signed_bin_decomp_mle.len();
@@ -108,11 +108,11 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitBatched<F> {
     /// to synthesizing its own input layer.
     pub fn yield_sub_circuit(
         &mut self,
-    ) -> Witness<F, <BinDecomp16BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Transcript> {
+    ) -> Witness<F, <BinDecomp16BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Sponge> {
         // --- Create `Layers` struct to add layers to ---
         let mut layers: Layers<
             F,
-            <BinDecomp16BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Transcript,
+            <BinDecomp16BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Sponge,
         > = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---
@@ -171,9 +171,9 @@ pub struct BinDecomp4BitIsBinaryCircuitBatched<F: FieldExt> {
     multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuitBatched<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         // --- Input to the circuit is just the one (combined) MLE ---
         let mut combined_batched_multiplicities_bin_decomp_mle =
             DenseMle::<F, BinDecomp4Bit<F>>::combine_mle_batch(
@@ -183,11 +183,11 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuitBatched<F> {
             &mut combined_batched_multiplicities_bin_decomp_mle,
         )];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> =
+        let live_committed_input_layer: PublicInputLayer<F, Self::Sponge> =
             input_layer_builder.to_input_layer();
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---
         let num_subcircuit_copies = self.multiplicities_bin_decomp_mle_input_vec.len();
@@ -257,11 +257,11 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatched<F> {
     /// to synthesizing its own input layer.
     pub fn yield_sub_circuit(
         &mut self,
-    ) -> Witness<F, <BinDecomp4BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Transcript> {
+    ) -> Witness<F, <BinDecomp4BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Sponge> {
         // --- Create `Layers` struct to add layers to ---
         let mut layers: Layers<
             F,
-            <BinDecomp4BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Transcript,
+            <BinDecomp4BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Sponge,
         > = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---
@@ -321,9 +321,9 @@ pub struct BinDecomp8BitIsBinaryCircuitBatched<F: FieldExt> {
     multiplicities_bin_decomp_mle_input_vec: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinDecomp8BitIsBinaryCircuitBatched<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 }
@@ -343,11 +343,11 @@ impl<F: FieldExt> BinDecomp8BitIsBinaryCircuitBatched<F> {
     /// to synthesizing its own input layer.
     pub fn yield_sub_circuit(
         &mut self,
-    ) -> Witness<F, <BinDecomp8BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Transcript> {
+    ) -> Witness<F, <BinDecomp8BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Sponge> {
         // --- Create `Layers` struct to add layers to ---
         let mut layers: Layers<
             F,
-            <BinDecomp4BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Transcript,
+            <BinDecomp4BitIsBinaryCircuitBatched<F> as GKRCircuit<F>>::Sponge,
         > = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---

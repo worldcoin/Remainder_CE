@@ -10,7 +10,10 @@ use crate::{
 };
 use ark_std::cfg_into_iter;
 use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
-use remainder_shared_types::{transcript::Transcript, FieldExt};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptSponge},
+    FieldExt,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -28,7 +31,7 @@ pub struct EmptyLayer<F, Tr> {
     _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for EmptyLayer<F, Tr> {
     type Sponge = Tr;
 
     fn prove_rounds(
@@ -181,7 +184,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> EmptyLayer<F, Tr> {
     ///Gets this layer's underlying expression
     pub fn expression(&self) -> &ExpressionStandard<F> {
         &self.expr

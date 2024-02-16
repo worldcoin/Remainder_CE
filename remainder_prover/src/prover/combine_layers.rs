@@ -4,7 +4,7 @@ use std::cmp::min;
 
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::{transcript::Transcript, FieldExt};
+use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
 use thiserror::Error;
 
 use crate::{
@@ -22,7 +22,7 @@ pub struct CombineError;
 
 ///Utility for combining sub-circuits into a single circuit
 /// DOES NOT WORK FOR GATE MLE
-pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
+pub fn combine_layers<F: FieldExt, Tr: TranscriptSponge<F>>(
     mut layers: Vec<Layers<F, Tr>>,
     mut output_layers: Vec<Vec<MleEnum<F>>>,
 ) -> Result<(Layers<F, Tr>, Vec<MleEnum<F>>), CombineError> {
@@ -170,7 +170,7 @@ pub fn combine_layers<F: FieldExt, Tr: Transcript<F>>(
 
 ///Add all the extra bits that represent selectors between the sub-circuits to
 ///the future DenseMleRefs that refer to the modified layer
-fn add_bits_to_layer_refs<F: FieldExt, Tr: Transcript<F>>(
+fn add_bits_to_layer_refs<F: FieldExt, Tr: TranscriptSponge<F>>(
     layers: &mut [LayerEnum<F, Tr>],
     output_layers: &mut Vec<MleEnum<F>>,
     new_bits: Vec<MleIndex<F>>,

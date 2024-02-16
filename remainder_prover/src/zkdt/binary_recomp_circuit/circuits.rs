@@ -25,9 +25,9 @@ pub struct BinaryRecompCircuit<F: FieldExt> {
     diff_signed_bin_decomp: DenseMle<F, BinDecomp16Bit<F>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         // --- Inputs to the circuit are just these three MLEs ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.decision_node_path_mle),
@@ -37,7 +37,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         // --- First we create the positive binary recomp ---
         let pos_bin_recomp_builder = BinaryRecompBuilder::new(self.diff_signed_bin_decomp.clone());
@@ -60,7 +60,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinaryRecompCircuit<F> {
         let recomp_checker_mle = layers.add_gkr(recomp_checker_builder);
 
         // --- Create input layers ---
-        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Sponge> =
             input_layer_builder.to_input_layer();
 
         Witness {
@@ -93,9 +93,9 @@ pub struct PartialBitsCheckerCircuit<F: FieldExt> {
     num_vars_to_grab: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for PartialBitsCheckerCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.permuted_inputs_mle),
             Box::new(&mut self.decision_node_paths_mle),
@@ -110,8 +110,7 @@ impl<F: FieldExt> GKRCircuit<F> for PartialBitsCheckerCircuit<F> {
         );
         let result = layers.add_gkr(builder);
 
-        let input_layer: PublicInputLayer<F, Self::Transcript> =
-            input_layer_builder.to_input_layer();
+        let input_layer: PublicInputLayer<F, Self::Sponge> = input_layer_builder.to_input_layer();
 
         Witness {
             layers,

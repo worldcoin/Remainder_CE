@@ -4,7 +4,7 @@ use ark_std::{cfg_into_iter, cfg_iter};
 
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 use thiserror::Error;
@@ -38,25 +38,34 @@ pub enum InputLayerError {
     PublicInputVerificationFailed,
     #[error("failed to verify random input layer")]
     RandomInputVerificationFailed,
+    #[error("Error during interaction with the transcript.")]
+    TranscriptError(TranscriptReaderError),
+    #[error("Challenge or consumed element did not match the expected value.")]
+    TranscriptMatchError,
 }
 
 use log::{debug, info, trace, warn};
 ///Trait for dealing with the InputLayer
 pub trait InputLayer<F: FieldExt> {
-    type Transcript: Transcript<F>;
+    type Sponge: TranscriptSponge<F>;
     type Commitment;
     type OpeningProof;
 
     fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
 
-    fn append_commitment_to_transcript(
+    fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(), TranscriptError>;
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    );
+
+    fn verifier_append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+    ) -> Result<(), InputLayerError>;
 
     fn open(
         &self,
-        transcript: &mut Self::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
         claim: Claim<F>,
     ) -> Result<Self::OpeningProof, InputLayerError>;
 
@@ -64,7 +73,7 @@ pub trait InputLayer<F: FieldExt> {
         commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), InputLayerError>;
 
     fn layer_id(&self) -> &LayerId;
@@ -166,7 +175,7 @@ pub trait InputLayer<F: FieldExt> {
         Ok(r)
     }
 
-    fn to_enum(self) -> InputLayerEnum<F, Self::Transcript>;
+    fn to_enum(self) -> InputLayerEnum<F, Self::Sponge>;
 }
 
 ///Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs

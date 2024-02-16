@@ -80,7 +80,7 @@ pub struct ZKDTMultiTreeCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
     // Uncomment this to turn on the circuit hash. Just make sure the hash you use is accurate to your batch size.
     // This one is for a batch size of 2^9
@@ -89,16 +89,16 @@ impl<F: FieldExt> GKRCircuit<F> for ZKDTMultiTreeCircuit<F> {
     //     31, 16, 66, 9, 54, 240, 75, 246, 68, 30, 31, 209, 242, 106, 147, 41,
     // ]);
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Transcript,
+        transcript: &mut Self::Sponge,
     ) -> Result<
         (
-            Witness<F, Self::Transcript>,
+            Witness<F, Self::Sponge>,
             Vec<input_layer::enum_input_layer::CommitmentEnum<F>>,
         ),
         crate::prover::GKRError,

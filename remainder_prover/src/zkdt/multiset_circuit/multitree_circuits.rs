@@ -87,16 +87,16 @@ impl<F: FieldExt> FSMultiSetCircuitMultiTree<F> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for FSMultiSetCircuitMultiTree<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
+        transcript: &mut Self::Sponge,
+    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
         unimplemented!()
     }
 }

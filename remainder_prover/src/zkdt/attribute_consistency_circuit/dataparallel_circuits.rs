@@ -30,8 +30,8 @@ pub(crate) struct AttributeConsistencyCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    type Sponge = PoseidonSponge<F>;
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
 
         // --- Input layer combination shenanigans ---
@@ -50,9 +50,9 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuit<F> {
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
         let _input_prefix_bits = input_layer.fetch_prefix_bits();
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F, Self::Sponge> = input_layer.to_input_layer();
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<_, Self::Sponge> = Layers::new();
 
         // --- Number of dataparallel circuit copies ---
         let batch_bits = log2(self.permuted_input_data_mle_vec.len()) as usize;

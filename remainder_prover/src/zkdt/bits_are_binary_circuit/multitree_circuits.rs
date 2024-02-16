@@ -23,9 +23,9 @@ pub struct BinDecomp16BitIsBinaryCircuitMultiTree<F: FieldExt> {
     bin_decomp_16_bit_mle_tree: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitMultiTree<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 }
@@ -40,11 +40,11 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitMultiTree<F> {
     /// Creates a `Witness` for the combined circuit without worrying about input layers
     pub fn yield_sub_circuit(
         &mut self,
-    ) -> Witness<F, <BinDecomp16BitIsBinaryCircuitMultiTree<F> as GKRCircuit<F>>::Transcript> {
+    ) -> Witness<F, <BinDecomp16BitIsBinaryCircuitMultiTree<F> as GKRCircuit<F>>::Sponge> {
         // --- Create `Layers` struct to add layers to ---
         let mut layers: Layers<
             F,
-            <BinDecomp16BitIsBinaryCircuitMultiTree<F> as GKRCircuit<F>>::Transcript,
+            <BinDecomp16BitIsBinaryCircuitMultiTree<F> as GKRCircuit<F>>::Sponge,
         > = Layers::new();
         let num_tree_bits = log2(self.bin_decomp_16_bit_mle_tree.len()) as usize;
 
@@ -105,9 +105,9 @@ pub struct BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F: FieldExt> {
     batched_diff_signed_bin_decomp_tree_mle: Vec<Vec<DenseMle<F, BinDecomp16Bit<F>>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 }
@@ -127,12 +127,12 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F> {
     /// to synthesizing its own input layer.
     pub fn yield_sub_circuit(
         &mut self,
-    ) -> Witness<F, <BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Transcript>
+    ) -> Witness<F, <BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Sponge>
     {
         // --- Create `Layers` struct to add layers to ---
         let mut layers: Layers<
             F,
-            <BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Transcript,
+            <BinDecomp16BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Sponge,
         > = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---
@@ -214,9 +214,9 @@ pub struct BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F: FieldExt> {
     multiplicities_bin_decomp_mle_input_tree_vec: Vec<Vec<DenseMle<F, BinDecomp4Bit<F>>>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 }
@@ -236,12 +236,12 @@ impl<F: FieldExt> BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> {
     /// to synthesizing its own input layer.
     pub fn yield_sub_circuit(
         &mut self,
-    ) -> Witness<F, <BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Transcript>
+    ) -> Witness<F, <BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Sponge>
     {
         // --- Create `Layers` struct to add layers to ---
         let mut layers: Layers<
             F,
-            <BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Transcript,
+            <BinDecomp4BitIsBinaryCircuitBatchedMultiTree<F> as GKRCircuit<F>>::Sponge,
         > = Layers::new();
 
         // --- Dataparallel/batching stuff + sanitychecks ---

@@ -30,8 +30,8 @@ pub(crate) struct AttributeConsistencyCircuitMultiTree<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuitMultiTree<F> {
-    type Transcript = PoseidonSponge<F>;
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    type Sponge = PoseidonSponge<F>;
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         // input stuff
         let permuted_mle_combined_per_tree_vec = self
             .permuted_input_data_mle_trees_vec
@@ -64,10 +64,10 @@ impl<F: FieldExt> GKRCircuit<F> for AttributeConsistencyCircuitMultiTree<F> {
             Box::new(&mut decision_tree_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_layer: LigeroInputLayer<F, Self::Transcript> =
+        let input_layer: LigeroInputLayer<F, Self::Sponge> =
             input_layer.to_input_layer_with_rho_inv(4, 1_f64);
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<_, Self::Sponge> = Layers::new();
 
         // rest of the stuff
 

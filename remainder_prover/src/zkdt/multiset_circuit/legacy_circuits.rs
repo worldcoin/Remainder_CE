@@ -81,9 +81,9 @@ impl<F: FieldExt> MultiSetCircuit<F> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         let tree_height = (1 << (self.decision_node_paths_mle_vec[0].num_iterated_vars() - 2)) + 1;
 
         // --- Grab raw combined versions of the dataparallel MLEs and merge them for the input layer ---
@@ -103,9 +103,9 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
             Box::new(&mut dummy_leaf_node_paths_mle_vec_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F, Self::Sponge> = input_layer.to_input_layer();
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<_, Self::Sponge> = Layers::new();
 
         // --- Layer 0: Compute the "packed" version of the decision and leaf tree nodes ---
         // Note that this also "evaluates" each packed entry at the random characteristic polynomial
@@ -302,8 +302,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         // --- This is our final answer \prod_{i = 0}^n (\prod_{j = 0}^{15} [(r - x)^(2^j) * b_ij + (1 - b_ij)]) for the exponentiated characteristic polynomial
         // evaluated at a random challenge point ---
-        let exponentiated_nodes =
-            layers.add::<_, EmptyLayer<F, Self::Transcript>>(prod_builder_nodes);
+        let exponentiated_nodes = layers.add::<_, EmptyLayer<F, Self::Sponge>>(prod_builder_nodes);
 
         // **** above is nodes exponentiated ****
         // **** below is all decision nodes on the path multiplied ****
@@ -393,11 +392,11 @@ impl<F: FieldExt> GKRCircuit<F> for MultiSetCircuit<F> {
 
         // --- This is our final answer \prod_{i = 0}^n (r - x_i) for the path node characteristic polynomial
         // evaluated at the same random challenge point ---
-        let path_product = layers.add::<_, EmptyLayer<F, Self::Transcript>>(path_product_builder);
+        let path_product = layers.add::<_, EmptyLayer<F, Self::Sponge>>(path_product_builder);
 
         let difference_builder = EqualityCheck::new(exponentiated_nodes, path_product);
 
-        let circuit_output = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
+        let circuit_output = layers.add::<_, EmptyLayer<F, Self::Sponge>>(difference_builder);
 
         println!(
             "Multiset circuit finished, number of layers {:?}",

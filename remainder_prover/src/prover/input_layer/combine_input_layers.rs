@@ -1,12 +1,13 @@
-
-
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
     LcProofAuxiliaryInfo, LcRoot,
 };
-use remainder_shared_types::{transcript::Transcript, FieldExt};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptSponge},
+    FieldExt,
+};
 
 use crate::{
     layer::LayerId,
@@ -74,27 +75,34 @@ pub struct InputLayerBuilder<F> {
 }
 
 impl<F: FieldExt> InputLayerBuilder<F> {
-
     /// Fetches the prefix bits of mles for Layer::layer(0)
     /// These prefix bits need to be added before the batching bits
     pub fn fetch_prefix_bits(&self) -> Vec<Vec<MleIndex<F>>> {
-        self.mles.clone().into_iter().map(
-            |x| {
-                x.get_prefix_bits().unwrap()
-            }
-        ).collect_vec()
+        self.mles
+            .clone()
+            .into_iter()
+            .map(|x| x.get_prefix_bits().unwrap())
+            .collect_vec()
     }
 
     /// Creates a new InputLayerBuilder that will yield an InputLayer from many MLEs
-    /// 
-    /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this 
+    ///
+    /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this
     /// input_layer, but haven't yet generated the data for
-    /// 
+    ///
     /// TODO!(ryancao): Assert or enforce that the `layer_id` of each of the `input_mles` matches
     /// the `layer_id` which is passed in here!
-    pub fn new(mut input_mles: Vec<Box<&mut (dyn Mle<F> + 'static)>>, extra_mle_num_vars: Option<Vec<usize>>, layer_id: LayerId) -> Self {
-        let extra_mle_indices = InputLayerBuilder::index_input_mles(&mut input_mles, extra_mle_num_vars);
-        let input_mles = input_mles.into_iter().map(|mle| dyn_clone::clone_box(*mle)).collect_vec();
+    pub fn new(
+        mut input_mles: Vec<Box<&mut (dyn Mle<F> + 'static)>>,
+        extra_mle_num_vars: Option<Vec<usize>>,
+        layer_id: LayerId,
+    ) -> Self {
+        let extra_mle_indices =
+            InputLayerBuilder::index_input_mles(&mut input_mles, extra_mle_num_vars);
+        let input_mles = input_mles
+            .into_iter()
+            .map(|mle| dyn_clone::clone_box(*mle))
+            .collect_vec();
         Self {
             mles: input_mles,
             extra_mle_indices,
@@ -133,36 +141,33 @@ impl<F: FieldExt> InputLayerBuilder<F> {
 
         // --- Go through individual MLEs and add prefix bits ---
         let mut current_padded_usage: u32 = 0;
-        mle_combine_indices
-            
-            .into_iter()
-            .for_each(|input_mle_idx| {
-                // --- Only add prefix bits to the non-input-output MLEs ---
-                if input_mle_idx < input_mles.len() {
-                    let input_mle = &mut input_mles[input_mle_idx];
+        mle_combine_indices.into_iter().for_each(|input_mle_idx| {
+            // --- Only add prefix bits to the non-input-output MLEs ---
+            if input_mle_idx < input_mles.len() {
+                let input_mle = &mut input_mles[input_mle_idx];
 
-                    // --- Grab the prefix bits and add them to the individual MLEs ---
-                    let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
-                        current_padded_usage,
-                        total_num_vars,
-                        input_mle.num_iterated_vars(),
-                    );
-                    input_mle.set_prefix_bits(Some(prefix_bits));
-                    current_padded_usage += 2_u32.pow(input_mle.num_iterated_vars() as u32);
-                } else {
-                    let extra_mle_index = input_mles.len() - input_mle_idx;
+                // --- Grab the prefix bits and add them to the individual MLEs ---
+                let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
+                    current_padded_usage,
+                    total_num_vars,
+                    input_mle.num_iterated_vars(),
+                );
+                input_mle.set_prefix_bits(Some(prefix_bits));
+                current_padded_usage += 2_u32.pow(input_mle.num_iterated_vars() as u32);
+            } else {
+                let extra_mle_index = input_mles.len() - input_mle_idx;
 
-                    // --- Grab the prefix bits for the dummy padded MLE (this should ONLY happen if we have a dummy padded MLE) ---
-                    let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
-                        current_padded_usage,
-                        total_num_vars,
-                        extra_mle_num_vars.as_ref().unwrap()[extra_mle_index],
-                    );
-                    extra_mle_indices.push(prefix_bits);
-                    current_padded_usage +=
-                        2_u32.pow(extra_mle_num_vars.as_ref().unwrap()[extra_mle_index] as u32);
-                }
-            });
+                // --- Grab the prefix bits for the dummy padded MLE (this should ONLY happen if we have a dummy padded MLE) ---
+                let prefix_bits: Vec<MleIndex<F>> = get_prefix_bits_from_capacity(
+                    current_padded_usage,
+                    total_num_vars,
+                    extra_mle_num_vars.as_ref().unwrap()[extra_mle_index],
+                );
+                extra_mle_indices.push(prefix_bits);
+                current_padded_usage +=
+                    2_u32.pow(extra_mle_num_vars.as_ref().unwrap()[extra_mle_index] as u32);
+            }
+        });
 
         if !extra_mle_indices.is_empty() {
             Some(extra_mle_indices)
@@ -202,14 +207,15 @@ impl<F: FieldExt> InputLayerBuilder<F> {
 
                 // dbg!(input_mle.get_padded_evaluations());
 
-            // --- Basically, everything is stored in big-endian (including bookkeeping tables ---
-            // --- and indices), BUT the indexing functions all happen as if we're interpreting ---
-            // --- the indices as little-endian. Therefore we need to merge the input MLEs via ---
-            // --- interleaving, or alternatively by converting everything to "big-endian", ---
-            // --- merging the usual big-endian way, and re-converting the merged version back to ---
-            // --- "little-endian" ---
-            //TODO!(Please get rid of this stupid thing)
-            let inverted_input_mle = invert_mle_bookkeeping_table(input_mle.get_padded_evaluations());
+                // --- Basically, everything is stored in big-endian (including bookkeeping tables ---
+                // --- and indices), BUT the indexing functions all happen as if we're interpreting ---
+                // --- the indices as little-endian. Therefore we need to merge the input MLEs via ---
+                // --- interleaving, or alternatively by converting everything to "big-endian", ---
+                // --- merging the usual big-endian way, and re-converting the merged version back to ---
+                // --- "little-endian" ---
+                //TODO!(Please get rid of this stupid thing)
+                let inverted_input_mle =
+                    invert_mle_bookkeeping_table(input_mle.get_padded_evaluations());
 
                 // --- Fold the new (padded) bookkeeping table with the old ones ---
                 // let padded_bookkeeping_table = input_mle.get_padded_evaluations();
@@ -233,7 +239,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     }
 
     /// Turn the builder into an input layer WITH a pre-commitment
-    pub fn to_input_layer_with_precommit<Tr: Transcript<F>>(
+    pub fn to_input_layer_with_precommit<Tr: TranscriptSponge<F>>(
         self,
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
         ligero_aux: LcProofAuxiliaryInfo,
@@ -251,18 +257,13 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         )
     }
 
-    /// Turn the builder into input layer with rho inv specified 
-    pub fn to_input_layer_with_rho_inv<Tr: Transcript<F>>(
+    /// Turn the builder into input layer with rho inv specified
+    pub fn to_input_layer_with_rho_inv<Tr: TranscriptSponge<F>>(
         self,
         rho_inv: u8,
         ratio: f64,
     ) -> LigeroInputLayer<F, Tr> {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
-        LigeroInputLayer::<F, Tr>::new_with_rho_inv_ratio(
-            final_mle,
-            self.layer_id,
-            rho_inv,
-            ratio
-        )
+        LigeroInputLayer::<F, Tr>::new_with_rho_inv_ratio(final_mle, self.layer_id, rho_inv, ratio)
     }
 }

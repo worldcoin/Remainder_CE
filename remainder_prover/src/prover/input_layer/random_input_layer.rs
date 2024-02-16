@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
@@ -20,8 +20,8 @@ pub struct RandomInputLayer<F: FieldExt, Tr> {
     _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
+    type Sponge = Tr;
 
     type Commitment = Vec<F>;
 
@@ -31,22 +31,31 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
         Ok(self.mle.clone())
     }
 
-    fn append_commitment_to_transcript(
+    fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(), TranscriptError> {
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+    ) -> Result<(), InputLayerError> {
         for challenge in commitment {
-            let real_chal = transcript.get_challenge("Getting RandomInput")?;
+            let real_chal = transcript_reader
+                .get_challenge("Getting RandomInput")
+                .map_err(|e| InputLayerError::TranscriptError(e));
             if *challenge != real_chal {
-                return Err(TranscriptError::TranscriptMatchError);
+                return Err(InputLayerError::TranscriptError);
             }
         }
         Ok(())
     }
 
+    fn prover_append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    ) {
+        unimplemented!()
+    }
+
     fn open(
         &self,
-        _transcript: &mut Self::Transcript,
+        _transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
         _claim: Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
@@ -56,7 +65,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut Self::Transcript,
+        _transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), super::InputLayerError> {
         // println!("3, calling verify");
         let mut mle_ref =
@@ -91,12 +100,12 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
         DenseMle::new_from_raw(self.mle.clone(), self.layer_id, None)
     }
 
-    fn to_enum(self) -> InputLayerEnum<F, Self::Transcript> {
+    fn to_enum(self) -> InputLayerEnum<F, Self::Sponge> {
         InputLayerEnum::RandomInputLayer(self)
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> RandomInputLayer<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> RandomInputLayer<F, Tr> {
     ///Generates a random MLE of size `size` that is generated from the FS Transcript
     pub fn new(transcript: &mut Tr, size: usize, layer_id: LayerId) -> Self {
         let mle = transcript

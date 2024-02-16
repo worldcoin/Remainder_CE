@@ -1,11 +1,23 @@
 //! Executable for Remainder ZKDT prover!
 
 use ark_serialize::Read;
-use remainder_shared_types::Fr;
-use remainder::{prover::{GKRError, GKRCircuit}, zkdt::{zkdt_circuit::ZKDTCircuit, constants::{get_sample_minibatch_commitment_filepath_for_batch_size, get_tree_commitment_filepath_for_tree_number}, input_data_to_circuit_adapter::{MinibatchData, load_upshot_data_single_tree_batch, convert_zkdt_circuit_data_into_mles}}};
 use clap::Parser;
-use remainder_shared_types::FieldExt;
+use remainder::{
+    prover::{GKRCircuit, GKRError},
+    zkdt::{
+        constants::{
+            get_sample_minibatch_commitment_filepath_for_batch_size,
+            get_tree_commitment_filepath_for_tree_number,
+        },
+        input_data_to_circuit_adapter::{
+            convert_zkdt_circuit_data_into_mles, load_upshot_data_single_tree_batch, MinibatchData,
+        },
+        zkdt_circuit::ZKDTCircuit,
+    },
+};
 use remainder_shared_types::transcript::Transcript;
+use remainder_shared_types::FieldExt;
+use remainder_shared_types::Fr;
 use serde_json::{from_reader, to_writer};
 use std::{
     fs,
@@ -113,8 +125,8 @@ struct Args {
 
     /// Whether we want info tracing subscriber logs or not.
     /// By default, we use `INFO` as the subscriber level.
-    /// 
-    /// Note that if `debug_tracing_subscriber` is also `true`, 
+    ///
+    /// Note that if `debug_tracing_subscriber` is also `true`,
     /// we will set the tracing subscriber to `DEBUG` (always
     /// use the more detailed of the two).
     #[arg(long, default_value_t = false)]
@@ -128,7 +140,6 @@ struct Args {
     /// to achieve the ratio as close as possible
     #[arg(long, default_value_t = 1_f64)]
     matrix_ratio: f64,
-
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
     // flags after a refactor
@@ -162,11 +173,11 @@ pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
     mut circuit: C,
     maybe_filepath_to_proof: Option<PathBuf>,
     verify_proof: bool,
-) -> Result<(), ZKDTBinaryError> 
+) -> Result<(), ZKDTBinaryError>
 where
-    <C as GKRCircuit<F>>::Transcript: Sync,
+    <C as GKRCircuit<F>>::Sponge: Sync,
 {
-    let mut transcript = C::Transcript::new("GKR Prover Transcript");
+    let mut transcript = C::Sponge::new("GKR Prover Transcript");
     let now = Instant::now();
 
     match circuit.prove(&mut transcript) {
@@ -191,7 +202,7 @@ where
 
                 // end_timer!(timer);
             }
-            let mut transcript = C::Transcript::new("GKR Verifier Transcript");
+            let mut transcript = C::Sponge::new("GKR Verifier Transcript");
             let now = Instant::now();
 
             // --- Verify proof if asked for ---
@@ -241,7 +252,11 @@ fn main() -> Result<(), ZKDTBinaryError> {
     if args.debug_tracing_subscriber || args.info_tracing_subscriber {
         let subscriber = FmtSubscriber::builder()
             .with_line_number(true)
-            .with_max_level(if args.debug_tracing_subscriber {tracing::Level::DEBUG} else {tracing::Level::INFO})
+            .with_max_level(if args.debug_tracing_subscriber {
+                tracing::Level::DEBUG
+            } else {
+                tracing::Level::INFO
+            })
             .with_level(true)
             .with_span_events(FmtSpan::ACTIVE)
             .finish();

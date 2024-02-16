@@ -33,7 +33,9 @@ use tracing::{debug, info, trace};
 // use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 use ark_std::{end_timer, start_timer};
-use remainder_shared_types::transcript::Transcript;
+use remainder_shared_types::transcript::{
+    Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter,
+};
 use remainder_shared_types::FieldExt;
 
 // use derive_more::From;
@@ -54,9 +56,9 @@ use tracing::warn;
 /// New type for containing the list of Layers that make up the GKR circuit
 ///
 /// Literally just a Vec of pointers to various layer types!
-pub struct Layers<F: FieldExt, Tr: Transcript<F>>(pub Vec<LayerEnum<F, Tr>>);
+pub struct Layers<F: FieldExt, Tr: TranscriptSponge<F>>(pub Vec<LayerEnum<F, Tr>>);
 
-impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F> + 'static> Layers<F, Tr> {
     /// Add a layer to a list of layers
     pub fn add<B: LayerBuilder<F>, L: Layer<F, Sponge = Tr> + 'static>(
         &mut self,
@@ -153,7 +155,7 @@ impl<F: FieldExt, Tr: Transcript<F> + 'static> Layers<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F> + 'static> Default for Layers<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F> + 'static> Default for Layers<F, Tr> {
     fn default() -> Self {
         Self::new()
     }
@@ -195,7 +197,7 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 /// The proof for an individual GKR layer
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct LayerProof<F: FieldExt, Tr: Transcript<F>> {
+pub struct LayerProof<F: FieldExt, Tr: TranscriptSponge<F>> {
     pub sumcheck_proof: SumcheckProof<F>,
     pub layer: LayerEnum<F, Tr>,
     /// When the claim aggregation optimization is on, each Layer produces many
@@ -218,7 +220,7 @@ pub struct InputLayerProof<F: FieldExt> {
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
+pub struct GKRProof<F: FieldExt, Tr: TranscriptSponge<F>> {
     /// The sumcheck proof of each GKR Layer, along with the fully bound expression.
     ///
     /// In reverse order (i.e. layer closest to the output layer is first)
@@ -232,7 +234,7 @@ pub struct GKRProof<F: FieldExt, Tr: Transcript<F>> {
     pub maybe_circuit_hash: Option<F>,
 }
 
-pub struct Witness<F: FieldExt, Tr: Transcript<F>> {
+pub struct Witness<F: FieldExt, Tr: TranscriptSponge<F>> {
     pub layers: Layers<F, Tr>,
     pub output_layers: Vec<MleEnum<F>>,
     pub input_layers: Vec<InputLayerEnum<F, Tr>>,
@@ -246,19 +248,19 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
     /// The transcript this circuit uses
-    type Transcript: Transcript<F>;
+    type Sponge: TranscriptSponge<F>;
 
     const CIRCUIT_HASH: Option<[u8; 32]> = None;
 
     /// The forward pass, defining the layer relationships and generating the layers
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript>;
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge>;
 
     /// Calls `synthesize` and also generates commitments from each of the input layers
     #[instrument(skip_all, err)]
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
         let mut witness = self.synthesize();
 
         let commitments = witness
@@ -266,7 +268,8 @@ pub trait GKRCircuit<F: FieldExt> {
             .iter_mut()
             .map(|input_layer| {
                 let commitment = input_layer.commit().map_err(GKRError::InputLayerError)?;
-                InputLayerEnum::append_commitment_to_transcript(&commitment, transcript).unwrap();
+                InputLayerEnum::append_commitment_to_transcript(&commitment, transcript_writer)
+                    .unwrap();
                 Ok(commitment)
             })
             .try_collect()?;
@@ -278,10 +281,10 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn prove(
         &mut self,
-        transcript: &mut Self::Transcript,
-    ) -> Result<GKRProof<F, Self::Transcript>, GKRError>
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    ) -> Result<GKRProof<F, Self::Sponge>, GKRError>
     where
-        <Self as GKRCircuit<F>>::Transcript: Sync,
+        <Self as GKRCircuit<F>>::Sponge: Sync,
     {
         let synthesize_commit_timer = start_timer!(|| "synthesize and commit");
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
@@ -290,9 +293,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
         // --- Add circuit hash to transcript, if exists ---
         if let Some(circuit_hash) = Self::get_circuit_hash() {
-            transcript
-                .append_field_element("Circuit Hash", circuit_hash)
-                .unwrap();
+            transcript_writer.append_element("Circuit Hash", circuit_hash);
         }
 
         let (
@@ -302,7 +303,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 layers,
             },
             commitments,
-        ) = self.synthesize_and_commit(transcript)?;
+        ) = self.synthesize_and_commit(transcript_writer)?;
         info!("Circuit synthesized and witness generated.");
         end_timer!(synthesize_commit_timer);
 
@@ -324,9 +325,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 debug!("Bookkeeping table: {:?}", output.bookkeeping_table());
                 // --- Evaluate each output MLE at a random challenge point ---
                 for bit in 0..bits {
-                    let challenge = transcript
-                        .get_challenge("Setting Output Layer Claim")
-                        .unwrap();
+                    let challenge = transcript_writer.get_challenge("Setting Output Layer Claim");
                     claim = output.fix_variable(bit, challenge);
                 }
 
@@ -398,12 +397,10 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 // --- Add the claimed values to the FS transcript ---
                 for claim in &layer_claims_vec {
-                    transcript
-                        .append_field_elements("Claimed bits to be aggregated", claim.get_point())
-                        .unwrap();
-                    transcript
-                        .append_field_element("Claimed value to be aggregated", claim.get_result())
-                        .unwrap();
+                    transcript_writer
+                        .append_elements("Claimed bits to be aggregated", claim.get_point());
+                    transcript_writer
+                        .append_element("Claimed value to be aggregated", claim.get_result());
                 }
 
                 info!("Time for claim aggregation...");
@@ -428,7 +425,7 @@ pub trait GKRCircuit<F: FieldExt> {
                         println!("Layer {:?}: +{} evaluations.", layer_id, wlx_evals.len());
                         Ok(wlx_evals)
                     },
-                    transcript,
+                    transcript_writer,
                 )
                 .unwrap();
                 info!("Done aggregating claims! New claim: {:#?}", layer_claim);
@@ -449,9 +446,10 @@ pub trait GKRCircuit<F: FieldExt> {
                 // --- Compute all sumcheck messages across this particular layer ---
                 // dbg!(&layer_claim);
                 // dbg!(&claims);
-                let prover_sumcheck_messages = layer
-                    .prove_rounds(layer_claim, transcript)
-                    .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+                let prover_sumcheck_messages =
+                    layer
+                        .prove_rounds(layer_claim, transcript_writer)
+                        .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
                 debug!("sumcheck_proof: {:#?}", prover_sumcheck_messages);
                 end_timer!(sumcheck_msg_timer);
@@ -517,15 +515,12 @@ pub trait GKRCircuit<F: FieldExt> {
 
                 // --- Add the claimed values to the FS transcript ---
                 for claim in layer_claims_vec {
-                    transcript
-                        .append_field_elements(
-                            "Claimed challenge coordinates to be aggregated",
-                            claim.get_point(),
-                        )
-                        .unwrap();
-                    transcript
-                        .append_field_element("Claimed value to be aggregated", claim.get_result())
-                        .unwrap();
+                    transcript_writer.append_elements(
+                        "Claimed challenge coordinates to be aggregated",
+                        claim.get_point(),
+                    );
+                    transcript_writer
+                        .append_element("Claimed value to be aggregated", claim.get_result());
                 }
 
                 let claim_aggr_timer = start_timer!(|| format!(
@@ -547,7 +542,7 @@ pub trait GKRCircuit<F: FieldExt> {
                         );
                         Ok(wlx_evals)
                     },
-                    transcript,
+                    transcript_writer,
                 )
                 .unwrap();
 
@@ -565,7 +560,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 ));
 
                 let opening_proof = input_layer
-                    .open(transcript, layer_claim)
+                    .open(transcript_writer, layer_claim)
                     .map_err(GKRError::InputLayerError)?;
 
                 end_timer!(opening_proof_timer);
@@ -602,8 +597,8 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn verify(
         &mut self,
-        transcript: &mut Self::Transcript,
-        gkr_proof: GKRProof<F, Self::Transcript>,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+        gkr_proof: GKRProof<F, Self::Sponge>,
     ) -> Result<(), GKRError> {
         // --- Unpacking GKR proof + adding input commitments to transcript first ---
         let GKRProof {
@@ -616,15 +611,16 @@ pub trait GKRCircuit<F: FieldExt> {
         let input_layers_timer = start_timer!(|| "append INPUT commitments to transcript");
 
         if let Some(circuit_hash) = maybe_circuit_hash {
-            transcript
-                .append_field_element("Circuit Hash", circuit_hash)
-                .unwrap();
+            let transcript_circuit_hash = transcript_reader
+                .consume_element("Circuit Hash")
+                .map_err(|err| GKRError::ErrorWhenVerifyingCircuitHash(err))?;
+            debug_assert_eq!(transcript_circuit_hash, circuit_hash);
         }
 
         for input_layer in input_layer_proofs.iter() {
-            InputLayerEnum::append_commitment_to_transcript(
+            InputLayerEnum::verifier_append_commitment_to_transcript(
                 &input_layer.input_commitment,
-                transcript,
+                transcript_reader,
             )
             .map_err(|err| {
                 GKRError::ErrorWhenVerifyingLayer(
@@ -653,9 +649,14 @@ pub trait GKRCircuit<F: FieldExt> {
                 .filter(|index| !matches!(index, &&MleIndex::Fixed(_)))
                 .enumerate()
             {
-                let challenge = transcript
+                let challenge = transcript_reader
                     .get_challenge("Setting Output Layer Claim")
-                    .unwrap();
+                    .map_err(|err| {
+                        GKRError::ErrorWhenVerifyingOutputLayer(
+                            output.get_layer_id(),
+                            LayerError::TranscriptError(err),
+                        )
+                    })?;
 
                 // We assume that all the outputs are zero-valued for now. We should be
                 // doing the initial step of evaluating V_1'(z) as specified in Thaler 13 page 14,
@@ -735,12 +736,20 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // --- Append claims to the FS transcript... TODO!(ryancao): Do we actually need to do this??? ---
             for claim in layer_claims {
-                transcript
-                    .append_field_elements("Claimed bits to be aggregated", claim.get_point())
-                    .unwrap();
-                transcript
-                    .append_field_element("Claimed value to be aggregated", claim.get_result())
-                    .unwrap();
+                let claim_point_len = claim.get_point().len();
+                let transcript_claim_point = transcript_reader
+                    .consume_elements("Claimed bits to be aggregated", claim_point_len)
+                    .map_err(|err| {
+                        GKRError::ErrorWhenProvingLayer(layer_id, LayerError::TranscriptError(err))
+                    })?;
+                debug_assert_eq!(transcript_claim_point, claim.get_point());
+
+                let transcript_claim_result = transcript_reader
+                    .consume_element("Claimed value to be aggregated")
+                    .map_err(|err| {
+                        GKRError::ErrorWhenProvingLayer(layer_id, LayerError::TranscriptError(err))
+                    })?;
+                debug_assert_eq!(transcript_claim_result, claim.get_result());
             }
 
             let claim_aggr_timer =
@@ -782,7 +791,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
                         Ok(all_wlx_evaluations)
                     },
-                    transcript,
+                    transcript_reader,
                 )?;
                 prev_claim = claim;
             }
@@ -797,7 +806,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // --- Performs the actual sumcheck verification step ---
             layer
-                .verify_rounds(prev_claim, sumcheck_proof.0, transcript)
+                .verify_rounds(prev_claim, sumcheck_proof.0, transcript_reader)
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
 
             end_timer!(sumcheck_msg_timer);
@@ -846,15 +855,29 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // --- Add the claimed values to the FS transcript ---
             for claim in input_layer_claims {
-                transcript
-                    .append_field_elements(
+                let claim_point_len = claim.get_point().len();
+                let transcript_claim_point = transcript_reader
+                    .consume_elements(
                         "Claimed challenge coordinates to be aggregated",
-                        claim.get_point(),
+                        claim_point_len,
                     )
-                    .unwrap();
-                transcript
-                    .append_field_element("Claimed value to be aggregated", claim.get_result())
-                    .unwrap();
+                    .map_err(|err| {
+                        GKRError::ErrorWhenProvingInputLayer(
+                            input_layer_id,
+                            InputLayerError::TranscriptError(err),
+                        )
+                    })?;
+                debug_assert_eq!(transcript_claim_point, claim.get_point());
+
+                let transcript_claim_result = transcript_reader
+                    .consume_element("Claimed value to be aggregated")
+                    .map_err(|err| {
+                        GKRError::ErrorWhenProvingInputLayer(
+                            input_layer_id,
+                            InputLayerError::TranscriptError(err),
+                        )
+                    })?;
+                debug_assert_eq!(transcript_claim_result, claim.get_result());
             }
 
             let claim_aggr_timer = start_timer!(|| format!(
@@ -893,7 +916,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
                         Ok(all_wlx_evaluations)
                     },
-                    transcript,
+                    transcript_reader,
                 )?;
 
                 prev_claim
@@ -913,7 +936,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 &input_layer.input_commitment,
                 &input_layer.input_opening_proof,
                 input_layer_claim,
-                transcript,
+                transcript_reader,
             )
             .map_err(GKRError::InputLayerError)?;
 
@@ -929,7 +952,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
     ///Gen the circuit hash
     fn gen_circuit_hash(&mut self) -> F {
-        let mut transcript = Self::Transcript::new("blah");
+        let mut transcript = Self::Sponge::new();
         let (Witness { layers, .. }, _) = self.synthesize_and_commit(&mut transcript).unwrap();
 
         hash_layers(&layers)

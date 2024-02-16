@@ -59,16 +59,16 @@ impl<F: FieldExt> InputMultiSetCircuit<F> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
+        transcript: &mut Self::Sponge,
+    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
         let mut input_data_mle_vec_combined =
             DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.input_data_mle_vec.clone());
         let mut permuted_input_data_mle_vec_combined =
@@ -103,7 +103,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
             ))
         }
 
-        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: PublicInputLayer<F, Self::Sponge> = input_layer.to_input_layer();
         let mut input_layer = input_layer.to_enum();
 
         let input_commit = input_layer.commit().map_err(GKRError::InputLayerError)?;
@@ -130,7 +130,7 @@ impl<F: FieldExt> GKRCircuit<F> for InputMultiSetCircuit<F> {
             .map_err(GKRError::InputLayerError)?;
         // FS
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<_, Self::Sponge> = Layers::new();
 
         let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
 

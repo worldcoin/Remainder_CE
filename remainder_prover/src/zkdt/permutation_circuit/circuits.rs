@@ -34,15 +34,15 @@ pub(crate) struct FSPermutationCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    type Sponge = PoseidonSponge<F>;
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
+        transcript: &mut Self::Sponge,
+    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
         let mut dummy_input_data_mle_combined =
             DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.input_data_mle_vec.clone());
         let mut dummy_permuted_input_data_mle_combined =
@@ -55,7 +55,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
             Box::new(&mut dummy_permuted_input_data_mle_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: PublicInputLayer<F, Self::Sponge> = input_layer.to_input_layer();
         // TODO!(ende) change back to ligero
         let mut input_layer = input_layer.to_enum();
 
@@ -76,7 +76,7 @@ impl<F: FieldExt> GKRCircuit<F> for FSPermutationCircuit<F> {
             .map_err(GKRError::InputLayerError)?;
         // FS
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<_, Self::Sponge> = Layers::new();
 
         let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
 
@@ -177,8 +177,8 @@ pub struct PermutationCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    type Sponge = PoseidonSponge<F>;
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         let mut dummy_input_data_mle_combined =
             DenseMle::<F, InputAttribute<F>>::combine_mle_batch(self.input_data_mle_vec.clone());
         let mut dummy_permuted_input_data_mle_combined =
@@ -191,10 +191,10 @@ impl<F: FieldExt> GKRCircuit<F> for PermutationCircuit<F> {
             Box::new(&mut dummy_permuted_input_data_mle_combined),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: PublicInputLayer<F, Self::Sponge> = input_layer.to_input_layer();
         // TODO!(ende) change back to ligero
 
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+        let mut layers: Layers<_, Self::Sponge> = Layers::new();
 
         let batch_bits = log2(self.input_data_mle_vec.len()) as usize;
 
@@ -298,9 +298,9 @@ pub(crate) struct NonBatchedPermutationCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for NonBatchedPermutationCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let mut layers: Layers<_, Self::Transcript> = Layers::new();
+    type Sponge = PoseidonSponge<F>;
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+        let mut layers: Layers<_, Self::Sponge> = Layers::new();
 
         // layer 0: packing
         let input_packing_builder: InputPackingBuilder<F> =
@@ -322,7 +322,7 @@ impl<F: FieldExt> GKRCircuit<F> for NonBatchedPermutationCircuit<F> {
 
         let difference_builder = EqualityCheck::new(input_packed, input_permuted_packed);
 
-        let _difference_mle = layers.add::<_, EmptyLayer<F, Self::Transcript>>(difference_builder);
+        let _difference_mle = layers.add::<_, EmptyLayer<F, Self::Sponge>>(difference_builder);
 
         todo!()
     }

@@ -20,17 +20,17 @@ pub struct BinDecomp16BitIsBinaryCircuit<F: FieldExt> {
     bin_decomp_16_bit_mle: DenseMle<F, BinDecomp16Bit<F>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         // --- Input to the circuit is just the one MLE ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.bin_decomp_16_bit_mle)];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> =
+        let live_committed_input_layer: PublicInputLayer<F, Self::Sponge> =
             input_layer_builder.to_input_layer();
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         // --- First we create the positive binary recomp ---
         let output_mle_ref = layers.add_gkr(from_mle(
@@ -70,9 +70,9 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuit<F> {
     /// Creates a `Witness` for the combined circuit without worrying about input layers
     pub fn yield_sub_circuit(
         &self,
-    ) -> Witness<F, <BinDecomp16BitIsBinaryCircuit<F> as GKRCircuit<F>>::Transcript> {
+    ) -> Witness<F, <BinDecomp16BitIsBinaryCircuit<F> as GKRCircuit<F>>::Sponge> {
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, <BinDecomp16BitIsBinaryCircuit<F> as GKRCircuit<F>>::Transcript> =
+        let mut layers: Layers<F, <BinDecomp16BitIsBinaryCircuit<F> as GKRCircuit<F>>::Sponge> =
             Layers::new();
 
         // --- First we create the positive binary recomp ---
@@ -113,18 +113,18 @@ pub struct BinDecomp4BitIsBinaryCircuit<F: FieldExt> {
     multiplicities_bin_decomp_mle_input: DenseMle<F, BinDecomp4Bit<F>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuit<F> {
-    type Transcript = PoseidonSponge<F>;
+    type Sponge = PoseidonSponge<F>;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         // --- Input to the circuit is just the one MLE ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.multiplicities_bin_decomp_mle_input)];
         let input_layer_builder = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
-        let live_committed_input_layer: PublicInputLayer<F, Self::Transcript> =
+        let live_committed_input_layer: PublicInputLayer<F, Self::Sponge> =
             input_layer_builder.to_input_layer();
 
         // --- Create `Layers` struct to add layers to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
+        let mut layers: Layers<F, Self::Sponge> = Layers::new();
 
         // --- First we create the positive binary recomp ---
         let output_mle_ref = layers.add_gkr(from_mle(

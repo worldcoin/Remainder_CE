@@ -104,7 +104,7 @@ struct Args {
     /// log_2 of the minibatch size. Note that passing in `None` here
     /// will result in the entire dataset being treated as a single
     /// minibatch.
-    /// 
+    ///
     /// Passing in something *larger* than the actual batch size will
     /// result in the batch being padded to that size!
     #[arg(long)]
@@ -113,8 +113,8 @@ struct Args {
     /// The minibatch number we are generating a proof for.
     /// Note that if `log_sample_batch_size` is `Some` then
     /// this value cannot be `None`.
-    /// 
-    /// Passing in something *larger* than the actual batch size (in 
+    ///
+    /// Passing in something *larger* than the actual batch size (in
     /// `log_sample_minibatch_size`) will result in this parameter
     /// being ignored, as the whole batch becomes a small part of
     /// the singular minibatch which is being proven.
@@ -141,8 +141,8 @@ struct Args {
 
     /// Whether we want info tracing subscriber logs or not.
     /// By default, we use `INFO` as the subscriber level.
-    /// 
-    /// Note that if `debug_tracing_subscriber` is also `true`, 
+    ///
+    /// Note that if `debug_tracing_subscriber` is also `true`,
     /// we will set the tracing subscriber to `DEBUG` (always
     /// use the more detailed of the two).
     #[arg(long, default_value_t = false)]
@@ -156,7 +156,6 @@ struct Args {
     /// to achieve the ratio as close as possible
     #[arg(long, default_value_t = 1_f64)]
     matrix_ratio: f64,
-
     // --- NOTE: The below flags are all no-ops! ---
     // TODO!(ryancao, marsenis): Tie these to the actual optimization
     // flags after a refactor
@@ -194,9 +193,9 @@ pub fn run_zkdt_circuit<F: FieldExt, C: GKRCircuit<F>>(
     tree_batch_size: usize,
 ) -> Result<(), ZKDTBinaryError>
 where
-    <C as GKRCircuit<F>>::Transcript: Sync,
+    <C as GKRCircuit<F>>::Sponge: Sync,
 {
-    let mut transcript = C::Transcript::new("GKR Prover Transcript");
+    let mut transcript = C::Sponge::new("GKR Prover Transcript");
     let now = Instant::now();
 
     match circuit.prove(&mut transcript) {
@@ -227,7 +226,7 @@ where
                 end_timer!(timer);
             }
 
-            let mut transcript = C::Transcript::new("GKR Verifier Transcript");
+            let mut transcript = C::Sponge::new("GKR Verifier Transcript");
             let now = Instant::now();
 
             // --- Verify proof if asked for ---
@@ -239,7 +238,7 @@ where
                         file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
                     let mut bufreader = Vec::with_capacity(initial_buffer_size);
                     file.read_to_end(&mut bufreader).unwrap();
-                    let zkdt_proof: ZKDTProof<F, C::Transcript> =
+                    let zkdt_proof: ZKDTProof<F, C::Sponge> =
                         serde_json::de::from_slice(&bufreader[..]).unwrap();
                     zkdt_proof.gkr_proof
                 } else {
@@ -287,7 +286,11 @@ fn main() -> Result<(), ZKDTBinaryError> {
     if args.debug_tracing_subscriber || args.info_tracing_subscriber {
         let subscriber = FmtSubscriber::builder()
             .with_line_number(true)
-            .with_max_level(if args.debug_tracing_subscriber {tracing::Level::DEBUG} else {tracing::Level::INFO})
+            .with_max_level(if args.debug_tracing_subscriber {
+                tracing::Level::DEBUG
+            } else {
+                tracing::Level::INFO
+            })
             .with_level(true)
             .with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
             .with_ansi(false)
