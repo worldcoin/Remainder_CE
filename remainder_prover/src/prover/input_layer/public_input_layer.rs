@@ -47,7 +47,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for PublicInputLayer<F,
         let transcript_commitment = transcript_reader
             .consume_elements("Public Input Commitment", num_elements)
             .map_err(|e| InputLayerError::TranscriptError(e))?;
-        debug_assert_eq!(transcript_commitment, commitment);
+        debug_assert_eq!(transcript_commitment, *commitment);
         Ok(())
     }
 

@@ -82,7 +82,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for LigeroInputLayer<F,
         commitment: &Self::Commitment,
         transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) {
-        transcript_writer.append_element("Ligero Merkle Commitment", commitment.clone().into_raw());
+        transcript_writer.append("Ligero Merkle Commitment", commitment.clone().into_raw());
     }
 
     fn verifier_append_commitment_to_transcript(
@@ -139,7 +139,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for LigeroInputLayer<F,
         let ligero_aux = &opening_proof.aux;
         let (_, ligero_eval_proof, _) =
             convert_halo_to_lcpc(opening_proof.aux.clone(), opening_proof.proof.clone());
-        remainder_ligero_verify::<F>(
+        remainder_ligero_verify::<F, Self::Sponge>(
             commitment,
             &ligero_eval_proof,
             ligero_aux.clone(),

@@ -38,9 +38,9 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for RandomInputLayer<F,
         for challenge in commitment {
             let real_chal = transcript_reader
                 .get_challenge("Getting RandomInput")
-                .map_err(|e| InputLayerError::TranscriptError(e));
+                .map_err(|e| InputLayerError::TranscriptError(e))?;
             if *challenge != real_chal {
-                return Err(InputLayerError::TranscriptError);
+                return Err(InputLayerError::TranscriptMatchError);
             }
         }
         Ok(())
@@ -107,10 +107,12 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for RandomInputLayer<F,
 
 impl<F: FieldExt, Tr: TranscriptSponge<F>> RandomInputLayer<F, Tr> {
     ///Generates a random MLE of size `size` that is generated from the FS Transcript
-    pub fn new(transcript: &mut Tr, size: usize, layer_id: LayerId) -> Self {
-        let mle = transcript
-            .get_challenges("Getting Random Challenges", size)
-            .unwrap();
+    pub fn new(
+        transcript_writer: &mut TranscriptWriter<F, Tr>,
+        size: usize,
+        layer_id: LayerId,
+    ) -> Self {
+        let mle = transcript_writer.get_challenges("Getting Random Challenges", size);
         Self {
             mle,
             layer_id,

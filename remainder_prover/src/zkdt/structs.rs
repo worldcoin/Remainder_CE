@@ -4,32 +4,35 @@ use std::{
 };
 
 use crate::{
+    layer::{batched::combine_mles, LayerId},
     mle::{
         dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
         Mle, MleAble, MleIndex, MleRef,
-    }, layer::{batched::combine_mles, LayerId}, prover::GKRProof,
+    },
+    prover::GKRProof,
 };
 use ark_crypto_primitives::crh::sha256::digest::typenum::bit;
-use remainder_shared_types::{FieldExt, transcript::Transcript};
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
-use serde::{Serialize, Deserialize};
-
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptSponge},
+    FieldExt,
+};
+use serde::{Deserialize, Serialize};
 
 // ------------------------------------ ZKDT PROOF STRUCTS ------------------------------------
 
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
-/// ZKDT specific, with information like number of trees batched (multi-tree setting) 
+/// ZKDT specific, with information like number of trees batched (multi-tree setting)
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct ZKDTProof<F: FieldExt, Tr: Transcript<F>> {
+pub struct ZKDTProof<F: FieldExt, Tr: TranscriptSponge<F>> {
     /// The GKR proof for a ZKDT circuit
     pub gkr_proof: GKRProof<F, Tr>,
 
     /// The number of trees in a ZKDT proof
     pub tree_batch_size: usize,
 }
-
 
 // ------------------------------------ ACTUAL DATA STRUCTS ------------------------------------
 
@@ -135,11 +138,15 @@ impl<F: FieldExt> MleAble<F> for DecisionNode<F> {
     }
 }
 
-
 impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
     fn from(bits: Vec<bool>) -> Self {
         BinDecomp16Bit::<F> {
-            bits: bits.iter().map(|x| F::from(*x as u64)).collect::<Vec<F>>().try_into().unwrap()
+            bits: bits
+                .iter()
+                .map(|x| F::from(*x as u64))
+                .collect::<Vec<F>>()
+                .try_into()
+                .unwrap(),
         }
     }
 }
@@ -147,7 +154,12 @@ impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
 impl<F: FieldExt> From<Vec<bool>> for BinDecomp8Bit<F> {
     fn from(bits: Vec<bool>) -> Self {
         BinDecomp8Bit::<F> {
-            bits: bits.iter().map(|x| F::from(*x as u64)).collect::<Vec<F>>().try_into().unwrap()
+            bits: bits
+                .iter()
+                .map(|x| F::from(*x as u64))
+                .collect::<Vec<F>>()
+                .try_into()
+                .unwrap(),
         }
     }
 }
@@ -156,7 +168,12 @@ impl<F: FieldExt> From<Vec<bool>> for BinDecomp8Bit<F> {
 impl<F: FieldExt> From<Vec<bool>> for BinDecomp4Bit<F> {
     fn from(bits: Vec<bool>) -> Self {
         BinDecomp4Bit::<F> {
-            bits: bits.iter().map(|x| F::from(*x as u64)).collect::<Vec<F>>().try_into().unwrap()
+            bits: bits
+                .iter()
+                .map(|x| F::from(*x as u64))
+                .collect::<Vec<F>>()
+                .try_into()
+                .unwrap(),
         }
     }
 }
@@ -167,14 +184,14 @@ impl<F: FieldExt> From<Vec<bool>> for BinDecomp4Bit<F> {
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
 pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
-
     let num_fields = items.len();
 
     // --- All the items within should be the same size ---
     let max_size = items
         .iter()
         .map(|mle_ref| mle_ref.bookkeeping_table.len())
-        .max().unwrap();
+        .max()
+        .unwrap();
 
     let part_size = 1 << log2(max_size);
     let part_count = 2_u32.pow(log2(num_fields)) as usize;
@@ -197,7 +214,6 @@ pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, 
     DenseMle::new_from_raw(result, LayerId::Input(0), None)
 }
 
-
 impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     /// MleRef grabbing just the list of node IDs
     pub(crate) fn node_id(&'_ self) -> DenseMleRef<F> {
@@ -207,17 +223,17 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         let _len = self.mle.len() / 4;
 
         let mle_indices = self
-        .prefix_bits
-        .clone()
-        .into_iter()
-        .flatten()
-        .chain(
-            // --- NOTE that prefix bits HAVE to be in little-endian ---
-            std::iter::once(MleIndex::Fixed(false))
-                .chain(std::iter::once(MleIndex::Fixed(false)))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-        )
-        .collect_vec();
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                // --- NOTE that prefix bits HAVE to be in little-endian ---
+                std::iter::once(MleIndex::Fixed(false))
+                    .chain(std::iter::once(MleIndex::Fixed(false)))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
+            )
+            .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
@@ -241,17 +257,17 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         let _len = self.mle.len() / 4;
 
         let mle_indices = self
-        .prefix_bits
-        .clone()
-        .into_iter()
-        .flatten()
-        .chain(
-            // --- NOTE that prefix bits HAVE to be in little-endian ---
-            std::iter::once(MleIndex::Fixed(true))
-                .chain(std::iter::once(MleIndex::Fixed(false)))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-        )
-        .collect_vec();
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                // --- NOTE that prefix bits HAVE to be in little-endian ---
+                std::iter::once(MleIndex::Fixed(true))
+                    .chain(std::iter::once(MleIndex::Fixed(false)))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
+            )
+            .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
@@ -275,17 +291,17 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
         // let len = self.mle.len() / 4;
 
         let mle_indices = self
-        .prefix_bits
-        .clone()
-        .into_iter()
-        .flatten()
-        .chain(
-            // --- NOTE that prefix bits HAVE to be in little-endian ---
-            std::iter::once(MleIndex::Fixed(false))
-                .chain(std::iter::once(MleIndex::Fixed(true)))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-        )
-        .collect_vec();
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                // --- NOTE that prefix bits HAVE to be in little-endian ---
+                std::iter::once(MleIndex::Fixed(false))
+                    .chain(std::iter::once(MleIndex::Fixed(true)))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
+            )
+            .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[2].to_vec(),
@@ -305,28 +321,28 @@ impl<F: FieldExt> DenseMle<F, DecisionNode<F>> {
     /// Given a batch of `DenseMle<F, InputAttribute<F>>`, creates a single combined
     /// MLE bookkeeping table which represents first interleaving by node ID, attribute ID, and threshold,
     /// then interleaving by batched MLEs (should always be a power of two!)
-    /// 
+    ///
     /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
-    pub fn combine_mle_batch(decision_mle_batch: Vec<DenseMle<F, DecisionNode<F>>>) -> DenseMle<F, F> {
-        
+    pub fn combine_mle_batch(
+        decision_mle_batch: Vec<DenseMle<F, DecisionNode<F>>>,
+    ) -> DenseMle<F, F> {
         let batched_bits = log2(decision_mle_batch.len());
 
         let decision_mle_batch_ref_combined = decision_mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    combine_mle_refs(
-                        vec![x.node_id(), x.attr_id(), x.threshold()]
-                    ).mle_ref()
-                }
-            ).collect_vec();
+            .into_iter()
+            .map(|x| combine_mle_refs(vec![x.node_id(), x.attr_id(), x.threshold()]).mle_ref())
+            .collect_vec();
 
-        let decision_mle_batch_ref_combined_ref =  combine_mles(decision_mle_batch_ref_combined, batched_bits as usize);
+        let decision_mle_batch_ref_combined_ref =
+            combine_mles(decision_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(decision_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(
+            decision_mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
-
 }
 
 // --- Leaf node ---
@@ -367,15 +383,15 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
         let _len = self.mle.len() / 2;
 
         let mle_indices = self
-        .prefix_bits
-        .clone()
-        .into_iter()
-        .flatten()
-        .chain(
-            std::iter::once(MleIndex::Fixed(false))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
-        )
-        .collect_vec();
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                std::iter::once(MleIndex::Fixed(false))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
+            )
+            .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[0].to_vec(),
@@ -395,15 +411,15 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     pub(crate) fn node_val(&'_ self) -> DenseMleRef<F> {
         let num_vars = self.num_iterated_vars();
         let mle_indices = self
-        .prefix_bits
-        .clone()
-        .into_iter()
-        .flatten()
-        .chain(
-            std::iter::once(MleIndex::Fixed(true))
-                .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
-        )
-        .collect_vec();
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                std::iter::once(MleIndex::Fixed(true))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars - 1)),
+            )
+            .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[1].to_vec(),
@@ -422,27 +438,25 @@ impl<F: FieldExt> DenseMle<F, LeafNode<F>> {
     /// Given a batch of `DenseMle<F, InputAttribute<F>>`, creates a single combined
     /// MLE bookkeeping table which represents first interleaving by node ID and val,
     /// then interleaving by batched MLEs (should always be a power of two!)
-    /// 
+    ///
     /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
     pub fn combine_mle_batch(leaf_mle_batch: Vec<DenseMle<F, LeafNode<F>>>) -> DenseMle<F, F> {
-        
         let batched_bits = log2(leaf_mle_batch.len());
 
         let leaf_mle_batch_ref_combined = leaf_mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    combine_mle_refs(
-                        vec![x.node_id(), x.node_val()]
-                    ).mle_ref()
-                }
-            ).collect_vec();
+            .into_iter()
+            .map(|x| combine_mle_refs(vec![x.node_id(), x.node_val()]).mle_ref())
+            .collect_vec();
 
-        let leaf_mle_batch_ref_combined_ref =  combine_mles(leaf_mle_batch_ref_combined, batched_bits as usize);
+        let leaf_mle_batch_ref_combined_ref =
+            combine_mles(leaf_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(leaf_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
-
+        DenseMle::new_from_raw(
+            leaf_mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 }
 
@@ -478,7 +492,6 @@ impl<F: FieldExt> MleAble<F> for InputAttribute<F> {
 impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// MleRef grabbing just the list of attribute IDs
     pub(crate) fn attr_id(&'_ self, num_vars: Option<usize>) -> DenseMleRef<F> {
-
         // --- Default to the entire (component of) the MLE ---
         let num_vars = num_vars.unwrap_or(self.num_iterated_vars() - 1);
 
@@ -490,24 +503,24 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let concrete_len = cmp::min(len, self.mle[0].to_vec().len());
 
         let mle_indices = self
-        .prefix_bits
-        .clone()
-        .into_iter()
-        .flatten()
-        .chain(
-            std::iter::once(MleIndex::Fixed(false))
-                .chain(repeat_n(MleIndex::Iterated, num_vars))
-                .chain(repeat_n(
-                    MleIndex::Fixed(false),
-                    self.num_iterated_vars() - 1 - num_vars,
-                )),
-            // repeat_n(MleIndex::Iterated, num_vars)
-            // .chain(repeat_n(
-            //             MleIndex::Fixed(false),
-            //             self.num_iterated_vars() - 1 - num_vars))
-            // .chain(std::iter::once(MleIndex::Fixed(false)))
-        )
-        .collect_vec();
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                std::iter::once(MleIndex::Fixed(false))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars))
+                    .chain(repeat_n(
+                        MleIndex::Fixed(false),
+                        self.num_iterated_vars() - 1 - num_vars,
+                    )),
+                // repeat_n(MleIndex::Iterated, num_vars)
+                // .chain(repeat_n(
+                //             MleIndex::Fixed(false),
+                //             self.num_iterated_vars() - 1 - num_vars))
+                // .chain(std::iter::once(MleIndex::Fixed(false)))
+            )
+            .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[0][0..concrete_len].to_vec(),
@@ -539,24 +552,24 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
         let concrete_len = cmp::min(len, self.mle[1].to_vec().len());
 
         let mle_indices = self
-        .prefix_bits
-        .clone()
-        .into_iter()
-        .flatten()
-        .chain(
-            std::iter::once(MleIndex::Fixed(true))
-                .chain(repeat_n(MleIndex::Iterated, num_vars))
-                .chain(repeat_n(
-                    MleIndex::Fixed(false),
-                    self.num_iterated_vars() - 1 - num_vars,
-                )),
-            // repeat_n(MleIndex::Iterated, num_vars)
-            // .chain(repeat_n(
-            //             MleIndex::Fixed(false),
-            //             self.num_iterated_vars() - 1 - num_vars))
-            // .chain(std::iter::once(MleIndex::Fixed(true)))
-        )
-        .collect_vec();
+            .prefix_bits
+            .clone()
+            .into_iter()
+            .flatten()
+            .chain(
+                std::iter::once(MleIndex::Fixed(true))
+                    .chain(repeat_n(MleIndex::Iterated, num_vars))
+                    .chain(repeat_n(
+                        MleIndex::Fixed(false),
+                        self.num_iterated_vars() - 1 - num_vars,
+                    )),
+                // repeat_n(MleIndex::Iterated, num_vars)
+                // .chain(repeat_n(
+                //             MleIndex::Fixed(false),
+                //             self.num_iterated_vars() - 1 - num_vars))
+                // .chain(std::iter::once(MleIndex::Fixed(true)))
+            )
+            .collect_vec();
 
         DenseMleRef {
             bookkeeping_table: self.mle[1][..concrete_len].to_vec(),
@@ -576,27 +589,27 @@ impl<F: FieldExt> DenseMle<F, InputAttribute<F>> {
     /// Given a batch of `DenseMle<F, InputAttribute<F>>`, creates a single combined
     /// MLE bookkeeping table which represents first interleaving by attribute ID and attribute val,
     /// then interleaving by batched MLEs (should always be a power of two!)
-    /// 
+    ///
     /// Note that we interleave rather than stack since the indices are represented in little-endian.
     /// TODO!(ende): refactor
-    pub fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, InputAttribute<F>>>) -> DenseMle<F, F> {
-        
+    pub fn combine_mle_batch(
+        input_mle_batch: Vec<DenseMle<F, InputAttribute<F>>>,
+    ) -> DenseMle<F, F> {
         let batched_bits = log2(input_mle_batch.len());
 
         let input_mle_batch_ref_combined = input_mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    combine_mle_refs(
-                        vec![x.attr_id(None), x.attr_val(None)]
-                    ).mle_ref()
-                }
-            ).collect_vec();
+            .into_iter()
+            .map(|x| combine_mle_refs(vec![x.attr_id(None), x.attr_val(None)]).mle_ref())
+            .collect_vec();
 
-        let input_mle_batch_ref_combined_ref =  combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
+        let input_mle_batch_ref_combined_ref =
+            combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(input_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
-
+        DenseMle::new_from_raw(
+            input_mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 }
 
@@ -625,18 +638,14 @@ impl<F: FieldExt> MleAble<F> for BinDecomp16Bit<F> {
     }
 
     fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
-        let elems = (0..items[0].len()).map(
-            |idx| {
-                let bits = items.iter().map(
-                    |item| {
-                        item[idx]
-                    }
-                ).collect_vec();
+        let elems = (0..items[0].len())
+            .map(|idx| {
+                let bits = items.iter().map(|item| item[idx]).collect_vec();
                 BinDecomp16Bit {
                     bits: bits.try_into().unwrap(),
                 }
-            }
-        ).collect_vec();
+            })
+            .collect_vec();
 
         elems.into_iter()
     }
@@ -664,18 +673,18 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
             let fourth_prefix = (bit_idx % 16) >= 8;
 
             let mle_indices = self
-            .prefix_bits
-            .clone()
-            .into_iter()
-            .flatten()
-            .chain(
-                std::iter::once(MleIndex::Fixed(first_prefix))
-                    .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
-                    .chain(std::iter::once(MleIndex::Fixed(third_prefix)))
-                    .chain(std::iter::once(MleIndex::Fixed(fourth_prefix)))
-                    .chain(repeat_n(MleIndex::Iterated, num_vars - 4)),
-            )
-            .collect_vec();
+                .prefix_bits
+                .clone()
+                .into_iter()
+                .flatten()
+                .chain(
+                    std::iter::once(MleIndex::Fixed(first_prefix))
+                        .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
+                        .chain(std::iter::once(MleIndex::Fixed(third_prefix)))
+                        .chain(std::iter::once(MleIndex::Fixed(fourth_prefix)))
+                        .chain(repeat_n(MleIndex::Iterated, num_vars - 4)),
+                )
+                .collect_vec();
 
             let bit_mle_ref = DenseMleRef {
                 bookkeeping_table: self.mle[bit_idx].to_vec(),
@@ -700,17 +709,25 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
         // TODO!(ryancao): This is an awful hacky fix so that we can use `combine_mles`.
         // Note that we are manually inserting the extra iterated bits as prefix bits.
         // We should stop doing this once `combine_mles` works as it should!
-        let self_mle_ref_vec = self.mle.clone().map(|mle_bookkeeping_table| {
-            DenseMle::new_from_raw(
-                mle_bookkeeping_table, 
-                self.layer_id, 
-                Some(
-                    self.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, 4)
-                    ).collect_vec()
+        let self_mle_ref_vec = self
+            .mle
+            .clone()
+            .map(|mle_bookkeeping_table| {
+                DenseMle::new_from_raw(
+                    mle_bookkeeping_table,
+                    self.layer_id,
+                    Some(
+                        self.get_prefix_bits()
+                            .iter()
+                            .flatten()
+                            .cloned()
+                            .chain(repeat_n(MleIndex::Iterated, 4))
+                            .collect_vec(),
+                    ),
                 )
-            ).mle_ref()
-        }).to_vec();
+                .mle_ref()
+            })
+            .to_vec();
         combine_mles(self_mle_ref_vec, 4)
     }
 
@@ -720,25 +737,26 @@ impl<F: FieldExt> DenseMle<F, BinDecomp16Bit<F>> {
     /// bits, followed by the appropriate MleRef indexing bits, gets us the same
     /// result as only using the same MleRef indexing bits on each MleRef from
     /// the `DenseMle<F, BinDecomp16Bit<F>>`.
-    /// 
+    ///
     /// TODO!(ende): refactor
-    pub(crate) fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, BinDecomp16Bit<F>>>) -> DenseMle<F, F> {
-        
+    pub(crate) fn combine_mle_batch(
+        input_mle_batch: Vec<DenseMle<F, BinDecomp16Bit<F>>>,
+    ) -> DenseMle<F, F> {
         let batched_bits = log2(input_mle_batch.len());
 
         let input_mle_batch_ref_combined = input_mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    combine_mle_refs(
-                        x.mle_bit_refs()
-                    ).mle_ref()
-                }
-            ).collect_vec();
+            .into_iter()
+            .map(|x| combine_mle_refs(x.mle_bit_refs()).mle_ref())
+            .collect_vec();
 
-        let input_mle_batch_ref_combined_ref = combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
+        let input_mle_batch_ref_combined_ref =
+            combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(input_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(
+            input_mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 }
 
@@ -767,18 +785,14 @@ impl<F: FieldExt> MleAble<F> for BinDecomp8Bit<F> {
     }
 
     fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
-        let elems = (0..items[0].len()).map(
-            |idx| {
-                let bits = items.iter().map(
-                    |item| {
-                        item[idx]
-                    }
-                ).collect_vec();
+        let elems = (0..items[0].len())
+            .map(|idx| {
+                let bits = items.iter().map(|item| item[idx]).collect_vec();
                 BinDecomp8Bit {
                     bits: bits.try_into().unwrap(),
                 }
-            }
-        ).collect_vec();
+            })
+            .collect_vec();
 
         elems.into_iter()
     }
@@ -813,18 +827,14 @@ impl<F: FieldExt> MleAble<F> for BinDecomp4Bit<F> {
     }
 
     fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_> {
-        let elems = (0..items[0].len()).map(
-            |idx| {
-                let bits = items.iter().map(
-                    |item| {
-                        item[idx]
-                    }
-                ).collect_vec();
+        let elems = (0..items[0].len())
+            .map(|idx| {
+                let bits = items.iter().map(|item| item[idx]).collect_vec();
                 BinDecomp4Bit {
                     bits: bits.try_into().unwrap(),
                 }
-            }
-        ).collect_vec();
+            })
+            .collect_vec();
 
         elems.into_iter()
     }
@@ -833,7 +843,6 @@ impl<F: FieldExt> MleAble<F> for BinDecomp4Bit<F> {
         log2(4 * items[0].len()) as usize
     }
 }
-
 
 impl<F: FieldExt> DenseMle<F, BinDecomp8Bit<F>> {
     /// Returns a list of MLERefs, one for each bit
@@ -851,17 +860,17 @@ impl<F: FieldExt> DenseMle<F, BinDecomp8Bit<F>> {
             let third_prefix = (bit_idx % 8) >= 4;
 
             let mle_indices = self
-            .prefix_bits
-            .clone()
-            .into_iter()
-            .flatten()
-            .chain(
-                std::iter::once(MleIndex::Fixed(first_prefix))
-                    .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
-                    .chain(std::iter::once(MleIndex::Fixed(third_prefix)))
-                    .chain(repeat_n(MleIndex::Iterated, num_vars - 3)),
-            )
-            .collect_vec();
+                .prefix_bits
+                .clone()
+                .into_iter()
+                .flatten()
+                .chain(
+                    std::iter::once(MleIndex::Fixed(first_prefix))
+                        .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
+                        .chain(std::iter::once(MleIndex::Fixed(third_prefix)))
+                        .chain(repeat_n(MleIndex::Iterated, num_vars - 3)),
+                )
+                .collect_vec();
 
             let bit_mle_ref = DenseMleRef {
                 bookkeeping_table: self.mle[bit_idx].to_vec(),
@@ -886,25 +895,26 @@ impl<F: FieldExt> DenseMle<F, BinDecomp8Bit<F>> {
     /// bits, followed by the appropriate MleRef indexing bits, gets us the same
     /// result as only using the same MleRef indexing bits on each MleRef from
     /// the `DenseMle<F, BinDecomp8Bit<F>>`.
-    /// 
+    ///
     /// TODO!(ende): refactor
-    pub(crate) fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, BinDecomp8Bit<F>>>) -> DenseMle<F, F> {
-        
+    pub(crate) fn combine_mle_batch(
+        input_mle_batch: Vec<DenseMle<F, BinDecomp8Bit<F>>>,
+    ) -> DenseMle<F, F> {
         let batched_bits = log2(input_mle_batch.len());
 
         let input_mle_batch_ref_combined = input_mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    combine_mle_refs(
-                        x.mle_bit_refs()
-                    ).mle_ref()
-                }
-            ).collect_vec();
+            .into_iter()
+            .map(|x| combine_mle_refs(x.mle_bit_refs()).mle_ref())
+            .collect_vec();
 
-        let input_mle_batch_ref_combined_ref =  combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
+        let input_mle_batch_ref_combined_ref =
+            combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(input_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(
+            input_mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 
     /// Returns the entire bin decomp MLE as a single MLE ref
@@ -913,24 +923,28 @@ impl<F: FieldExt> DenseMle<F, BinDecomp8Bit<F>> {
         // TODO!(ryancao): This is an awful hacky fix so that we can use `combine_mles`.
         // Note that we are manually inserting the extra iterated bits as prefix bits.
         // We should stop doing this once `combine_mles` works as it should!
-        let self_mle_ref_vec = self.mle.clone().map(|mle_bookkeeping_table| {
-            DenseMle::new_from_raw(
-                mle_bookkeeping_table, 
-                self.layer_id, 
-                Some(
-                    self.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, 3)
-                    ).collect_vec()
+        let self_mle_ref_vec = self
+            .mle
+            .clone()
+            .map(|mle_bookkeeping_table| {
+                DenseMle::new_from_raw(
+                    mle_bookkeeping_table,
+                    self.layer_id,
+                    Some(
+                        self.get_prefix_bits()
+                            .iter()
+                            .flatten()
+                            .cloned()
+                            .chain(repeat_n(MleIndex::Iterated, 3))
+                            .collect_vec(),
+                    ),
                 )
-            ).mle_ref()
-        }).to_vec();
+                .mle_ref()
+            })
+            .to_vec();
         combine_mles(self_mle_ref_vec, 3)
     }
 }
-
-
-
-
 
 // TODO!(ryancao): Make this stuff derivable
 impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {
@@ -948,16 +962,16 @@ impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {
             let second_prefix = (bit_idx % 4) >= 2;
 
             let mle_indices = self
-            .prefix_bits
-            .clone()
-            .into_iter()
-            .flatten()
-            .chain(
-                std::iter::once(MleIndex::Fixed(first_prefix))
-                    .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
-                    .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
-            )
-            .collect_vec();
+                .prefix_bits
+                .clone()
+                .into_iter()
+                .flatten()
+                .chain(
+                    std::iter::once(MleIndex::Fixed(first_prefix))
+                        .chain(std::iter::once(MleIndex::Fixed(second_prefix)))
+                        .chain(repeat_n(MleIndex::Iterated, num_vars - 2)),
+                )
+                .collect_vec();
 
             let bit_mle_ref = DenseMleRef {
                 bookkeeping_table: self.mle[bit_idx].to_vec(),
@@ -982,25 +996,26 @@ impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {
     /// bits, followed by the appropriate MleRef indexing bits, gets us the same
     /// result as only using the same MleRef indexing bits on each MleRef from
     /// the `DenseMle<F, BinDecomp4Bit<F>>`.
-    /// 
+    ///
     /// TODO!(ende): refactor
-    pub(crate) fn combine_mle_batch(input_mle_batch: Vec<DenseMle<F, BinDecomp4Bit<F>>>) -> DenseMle<F, F> {
-        
+    pub(crate) fn combine_mle_batch(
+        input_mle_batch: Vec<DenseMle<F, BinDecomp4Bit<F>>>,
+    ) -> DenseMle<F, F> {
         let batched_bits = log2(input_mle_batch.len());
 
         let input_mle_batch_ref_combined = input_mle_batch
-            
-            .into_iter().map(
-                |x| {
-                    combine_mle_refs(
-                        x.mle_bit_refs()
-                    ).mle_ref()
-                }
-            ).collect_vec();
+            .into_iter()
+            .map(|x| combine_mle_refs(x.mle_bit_refs()).mle_ref())
+            .collect_vec();
 
-        let input_mle_batch_ref_combined_ref =  combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
+        let input_mle_batch_ref_combined_ref =
+            combine_mles(input_mle_batch_ref_combined, batched_bits as usize);
 
-        DenseMle::new_from_raw(input_mle_batch_ref_combined_ref.bookkeeping_table, LayerId::Input(0), None)
+        DenseMle::new_from_raw(
+            input_mle_batch_ref_combined_ref.bookkeeping_table,
+            LayerId::Input(0),
+            None,
+        )
     }
 
     /// Returns the entire bin decomp MLE as a single MLE ref
@@ -1009,17 +1024,25 @@ impl<F: FieldExt> DenseMle<F, BinDecomp4Bit<F>> {
         // TODO!(ryancao): This is an awful hacky fix so that we can use `combine_mles`.
         // Note that we are manually inserting the extra iterated bits as prefix bits.
         // We should stop doing this once `combine_mles` works as it should!
-        let self_mle_ref_vec = self.mle.clone().map(|mle_bookkeeping_table| {
-            DenseMle::new_from_raw(
-                mle_bookkeeping_table, 
-                self.layer_id, 
-                Some(
-                    self.get_prefix_bits().iter().flatten().cloned().chain(
-                        repeat_n(MleIndex::Iterated, 2)
-                    ).collect_vec()
+        let self_mle_ref_vec = self
+            .mle
+            .clone()
+            .map(|mle_bookkeeping_table| {
+                DenseMle::new_from_raw(
+                    mle_bookkeeping_table,
+                    self.layer_id,
+                    Some(
+                        self.get_prefix_bits()
+                            .iter()
+                            .flatten()
+                            .cloned()
+                            .chain(repeat_n(MleIndex::Iterated, 2))
+                            .collect_vec(),
+                    ),
                 )
-            ).mle_ref()
-        }).to_vec();
+                .mle_ref()
+            })
+            .to_vec();
         combine_mles(self_mle_ref_vec, 4)
     }
 }

@@ -88,16 +88,22 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for InputLayerEnum<F, T
     ) -> Result<(), InputLayerError> {
         match commitment {
             CommitmentEnum::LigeroCommitment(commit) => {
-                LigeroInputLayer::<F, Tr>::reader_append_commitment_to_transcript(
+                LigeroInputLayer::<F, Tr>::verifier_append_commitment_to_transcript(
                     commit,
                     transcript_reader,
                 )
             }
             CommitmentEnum::PublicCommitment(commit) => {
-                PublicInputLayer::reader_append_commitment_to_transcript(commit, transcript_reader)
+                PublicInputLayer::verifier_append_commitment_to_transcript(
+                    commit,
+                    transcript_reader,
+                )
             }
             CommitmentEnum::RandomCommitment(commit) => {
-                RandomInputLayer::reader_append_commitment_to_transcript(commit, transcript_reader)
+                RandomInputLayer::verifier_append_commitment_to_transcript(
+                    commit,
+                    transcript_reader,
+                )
             }
         }
     }

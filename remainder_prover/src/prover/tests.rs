@@ -26,7 +26,7 @@ use crate::{
     zkdt::builders::{EqualityCheck, ZeroBuilder},
 };
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, Transcript},
+    transcript::{poseidon_transcript::PoseidonSponge, Transcript, TranscriptWriter},
     FieldExt, Fr,
 };
 
@@ -270,7 +270,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Sponge,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
         let mut input =
             InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
@@ -278,9 +278,9 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
                 .to_enum();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript).unwrap();
+        InputLayerEnum::prover_append_commitment_to_transcript(&input_commit, transcript_writer);
 
-        let random = RandomInputLayer::new(transcript, 1, LayerId::Input(1));
+        let random = RandomInputLayer::new(transcript_writer, 1, LayerId::Input(1));
         let random_mle = random.get_mle();
         let mut random = random.to_enum();
         let random_commit = random.commit().map_err(GKRError::InputLayerError)?;
@@ -310,7 +310,10 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
                 .to_input_layer::<PublicInputLayer<F, _>>()
                 .to_enum();
         let input_layer_2_commit = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commit, transcript).unwrap();
+        InputLayerEnum::prover_append_commitment_to_transcript(
+            &input_layer_2_commit,
+            transcript_writer,
+        );
 
         let layer_2 = EqualityCheck::new(output, output_input);
         let output = layers.add_gkr(layer_2);
@@ -353,7 +356,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Sponge,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
         // --- Publicly commit to each input layer ---
         let mut input_layer_1 = InputLayerBuilder::new(
@@ -367,8 +370,10 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         .to_input_layer::<PublicInputLayer<F, _>>()
         .to_enum();
         let input_layer_1_commitment = input_layer_1.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_layer_1_commitment, transcript)
-            .unwrap();
+        InputLayerEnum::prover_append_commitment_to_transcript(
+            &input_layer_1_commitment,
+            transcript_writer,
+        );
 
         // --- Second input layer (public) commitment ---
         let mut input_layer_2 = InputLayerBuilder::new(
@@ -382,8 +387,10 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         .to_input_layer::<PublicInputLayer<F, _>>()
         .to_enum();
         let input_layer_2_commitment = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commitment, transcript)
-            .unwrap();
+        InputLayerEnum::prover_append_commitment_to_transcript(
+            &input_layer_2_commitment,
+            transcript_writer,
+        );
 
         let mut layers = Layers::new();
 

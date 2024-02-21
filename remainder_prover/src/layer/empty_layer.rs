@@ -11,7 +11,7 @@ use crate::{
 use ark_std::cfg_into_iter;
 use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptSponge},
+    transcript::{Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for EmptyLayer<F, Tr> {
     fn prove_rounds(
         &mut self,
         _: Claim<F>,
-        _: &mut Self::Sponge,
+        _: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let eval = gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
 
@@ -48,7 +48,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for EmptyLayer<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        _: &mut Self::Sponge,
+        _: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), LayerError> {
         if sumcheck_rounds[0][0] != claim.get_result() {
             return Err(LayerError::VerificationError(
