@@ -1,4 +1,4 @@
-use remainder_shared_types::transcript::TranscriptSponge;
+use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -42,12 +42,12 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for LayerEnum<F, Tr> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Sponge,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<crate::prover::SumcheckProof<F>, super::LayerError> {
         match self {
-            LayerEnum::Gkr(layer) => layer.prove_rounds(claim, transcript),
-            LayerEnum::Gate(layer) => layer.prove_rounds(claim, transcript),
-            LayerEnum::EmptyLayer(layer) => layer.prove_rounds(claim, transcript),
+            LayerEnum::Gkr(layer) => layer.prove_rounds(claim, transcript_writer),
+            LayerEnum::Gate(layer) => layer.prove_rounds(claim, transcript_writer),
+            LayerEnum::EmptyLayer(layer) => layer.prove_rounds(claim, transcript_writer),
         }
     }
 
@@ -56,12 +56,16 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for LayerEnum<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Sponge,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), super::LayerError> {
         match self {
-            LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
-            LayerEnum::Gate(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
-            LayerEnum::EmptyLayer(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
+            LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript_reader),
+            LayerEnum::Gate(layer) => {
+                layer.verify_rounds(claim, sumcheck_rounds, transcript_reader)
+            }
+            LayerEnum::EmptyLayer(layer) => {
+                layer.verify_rounds(claim, sumcheck_rounds, transcript_reader)
+            }
         }
     }
 
