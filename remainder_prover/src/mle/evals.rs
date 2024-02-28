@@ -87,7 +87,7 @@ impl<F: FieldExt> Evaluations<F> {
     /// # Panics
     /// If `evals` contains more than `2^num_vars` evaluations.
     pub fn new(num_vars: usize, evals: Vec<F>) -> Self {
-        // debug_assert!(evals.len() <= (1 << num_vars));
+        debug_assert!(evals.len() <= (1 << num_vars));
 
         Evaluations::<F> {
             evals,
@@ -337,22 +337,12 @@ impl<F: FieldExt> MultilinearExtension<F> {
     }
 
     /// Temporary function for accessing the bookkeping table.
-    pub fn get_evals(&self) -> Evaluations<F> {
-        self.f.clone()
-    }
-
-    /// Temporary function for accessing the bookkeping table.
-    pub fn get_evals_vector(&self) -> Vec<F> {
-        self.f.evals.clone()
-    }
-
-    /// Temporary function for accessing the bookkeping table.
-    pub fn get_evals_ref(&self) -> &Evaluations<F> {
+    pub fn get_evals(&self) -> &Evaluations<F> {
         &self.f
     }
 
     /// Temporary function for accessing the bookkeping table.
-    pub fn get_evals_vector_ref(&self) -> &Vec<F> {
+    pub fn get_evals_vector(&self) -> &Vec<F> {
         &self.f.evals
     }
 
@@ -408,7 +398,6 @@ impl<F: FieldExt> MultilinearExtension<F> {
         // OLD IMPLEMENTATION: By accessing the bookkeeping table directly and
         // using parallel iterators.
         // ------------------------------------
-        /*
         // Switch to 1-based indices.
         let var_index = var_index + 1;
         assert!(1 <= var_index && var_index <= self.num_vars());
@@ -480,11 +469,11 @@ impl<F: FieldExt> MultilinearExtension<F> {
 
         // --- Note that MLE is destructively modified into the new bookkeeping table here ---
         self.f = Evaluations::<F>::new(self.num_vars() - 1, evals);
-        */
         // ------------------------------------
 
         // NEW IMPLEMENTATION: using projection iterators for succinct
         // description.
+        /*
         let n = self.num_vars();
         let new_evals: Vec<F> = self
             .f
@@ -494,6 +483,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
         debug_assert_eq!(new_evals.len(), 1 << (n - 1));
 
         self.f = Evaluations::new(n - 1, new_evals);
+        */
     }
 
     /// Optimized version of `fix_variable_at_index` for `var_index == 0`.
