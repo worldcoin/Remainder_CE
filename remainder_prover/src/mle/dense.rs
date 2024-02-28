@@ -273,7 +273,10 @@ impl<F: FieldExt> DenseMle<F, F> {
             combine_mles(mle_batch_ref_combined, batched_bits as usize);
 
         DenseMle::new_from_raw(
-            mle_batch_ref_combined_ref.current_mle.get_evals_vector(),
+            mle_batch_ref_combined_ref
+                .current_mle
+                .get_evals_vector()
+                .clone(),
             LayerId::Input(0),
             None,
         )
@@ -419,7 +422,8 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         DenseMle::new_from_raw(
             tuple2_mle_batch_ref_combined_ref
                 .current_mle
-                .get_evals_vector(),
+                .get_evals_vector()
+                .clone(),
             LayerId::Input(0),
             None,
         )
@@ -576,11 +580,11 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
     type F = F;
 
     fn bookkeeping_table(&self) -> &[F] {
-        self.current_mle.get_evals_vector_ref()
+        self.current_mle.get_evals_vector()
     }
 
     fn original_bookkeeping_table(&self) -> &[Self::F] {
-        self.original_mle.get_evals_vector_ref()
+        self.original_mle.get_evals_vector()
     }
 
     fn mle_indices(&self) -> &[MleIndex<Self::F>] {
@@ -737,7 +741,7 @@ mod tests {
         let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
     #[test]
     ///test fixing variables in an mle with three variables
@@ -760,7 +764,7 @@ mod tests {
         let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -785,7 +789,7 @@ mod tests {
         let mle_vec_exp = vec![Fr::from(6), Fr::from(11)];
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -812,7 +816,7 @@ mod tests {
         let mle_vec_exp = vec![Fr::from(26)];
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     // ======== `fix_variable_at_index` tests ========
@@ -832,7 +836,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 2nd variable to 1.
         mle_ref.fix_variable_at_index(1, Fr::from(1));
@@ -841,7 +845,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -858,7 +862,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 1st variable to 1.
         mle_ref.fix_variable_at_index(0, Fr::from(1));
@@ -867,7 +871,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -894,7 +898,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 2nd variable to 4.
         mle_ref.fix_variable_at_index(1, Fr::from(4));
@@ -903,7 +907,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 3rd variable to 5.
         mle_ref.fix_variable_at_index(2, Fr::from(5));
@@ -912,7 +916,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -939,7 +943,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 3rd variable to 5.
         mle_ref.fix_variable_at_index(2, Fr::from(5));
@@ -948,7 +952,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 2nd variable to 4.
         mle_ref.fix_variable_at_index(1, Fr::from(4));
@@ -957,7 +961,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -984,7 +988,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 1st variable to 3.
         mle_ref.fix_variable_at_index(0, Fr::from(3));
@@ -993,7 +997,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 3rd variable to 5.
         mle_ref.fix_variable_at_index(2, Fr::from(5));
@@ -1002,7 +1006,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -1029,7 +1033,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 3rd variable to 5.
         mle_ref.fix_variable_at_index(2, Fr::from(5));
@@ -1038,7 +1042,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 1st variable to 3.
         mle_ref.fix_variable_at_index(0, Fr::from(3));
@@ -1047,7 +1051,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -1074,7 +1078,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 1st variable to 3.
         mle_ref.fix_variable_at_index(0, Fr::from(3));
@@ -1083,7 +1087,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 2nd variable to 4.
         mle_ref.fix_variable_at_index(1, Fr::from(4));
@@ -1092,7 +1096,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
     #[test]
 
@@ -1119,7 +1123,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 2nd variable to 4.
         mle_ref.fix_variable_at_index(1, Fr::from(4));
@@ -1128,7 +1132,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
 
         // Fix 1st variable to 3.
         mle_ref.fix_variable_at_index(0, Fr::from(3));
@@ -1137,7 +1141,7 @@ mod tests {
         let mle_exp: DenseMle<Fr, Fr> =
             DenseMle::new_from_raw(mle_vec_exp, LayerId::Input(0), None);
 
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_exp.mle);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_exp.mle);
     }
 
     #[test]
@@ -1211,7 +1215,7 @@ mod tests {
         assert!(
             mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]
         );
-        assert_eq!(*mle_ref.current_mle.get_evals_vector_ref(), mle_vec);
+        assert_eq!(*mle_ref.current_mle.get_evals_vector(), mle_vec);
     }
 
     #[test]

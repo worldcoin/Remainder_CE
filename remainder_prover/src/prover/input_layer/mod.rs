@@ -79,7 +79,7 @@ pub trait InputLayer<F: FieldExt> {
         end_timer!(prep_timer);
         info!(
             "Wlx MLE len: {}",
-            mle_ref.current_mle.get_evals_vector_ref().len()
+            mle_ref.current_mle.get_evals_vector().len()
         );
         let num_claims = claims.get_num_claims();
         let claim_vecs = claims.get_claim_points_matrix();

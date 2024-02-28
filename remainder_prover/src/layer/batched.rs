@@ -124,7 +124,8 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
             new_bits,
         )
         .current_mle
-        .get_evals_vector(),
+        .get_evals_vector()
+        .clone(),
         old_layer_id,
         old_prefix_bits,
     )
@@ -319,7 +320,7 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
         }
     }
 
-    let out = (0..mles[0].current_mle.get_evals_vector_ref().len())
+    let out = (0..mles[0].current_mle.get_evals_vector().len())
         .flat_map(|index| {
             mles.iter()
                 .map(|mle| mle.bookkeeping_table()[index])

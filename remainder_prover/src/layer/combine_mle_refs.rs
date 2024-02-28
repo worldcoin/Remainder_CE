@@ -77,6 +77,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                     dense_mle_ref
                         .original_mle
                         .get_evals_vector()
+                        .clone()
                         .into_iter()
                         .step_by(2)
                         .collect_vec(),
@@ -103,6 +104,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                     dense_mle_ref
                         .original_mle
                         .get_evals_vector()
+                        .clone()
                         .into_iter()
                         .skip(1)
                         .step_by(2)
@@ -458,7 +460,7 @@ pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, 
     // --- All the items within should be the same size ---
     let max_size = items
         .iter()
-        .map(|mle_ref| mle_ref.current_mle.get_evals_vector_ref().len())
+        .map(|mle_ref| mle_ref.current_mle.get_evals_vector().len())
         .max()
         .unwrap();
 
