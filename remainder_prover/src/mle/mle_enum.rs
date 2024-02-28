@@ -5,7 +5,8 @@ use remainder_shared_types::FieldExt;
 use super::{dense::DenseMleRef, zero::ZeroMleRef, Mle, MleIndex, MleRef};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum MleEnum<F> {
+#[serde(bound = "F: FieldExt")]
+pub enum MleEnum<F: FieldExt> {
     Dense(DenseMleRef<F>),
     Zero(ZeroMleRef<F>),
 }
@@ -20,7 +21,7 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         }
     }
 
-    fn original_bookkeeping_table(&self) -> &Vec<Self::F> {
+    fn original_bookkeeping_table(&self) -> &[Self::F] {
         match self {
             MleEnum::Dense(item) => item.original_bookkeeping_table(),
             MleEnum::Zero(item) => item.original_bookkeeping_table(),

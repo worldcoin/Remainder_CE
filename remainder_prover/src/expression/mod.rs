@@ -100,7 +100,8 @@ pub enum ExpressionError {
 ///TODO!(Genericise this over the MleRef Trait)
 ///Expression representing the relationship between the current layer and layers claims are being made on
 #[derive(Clone, Serialize, Deserialize)]
-pub enum ExpressionStandard<F> {
+#[serde(bound = "F: FieldExt")]
+pub enum ExpressionStandard<F: FieldExt> {
     /// This is a constant polynomial
     Constant(F),
     /// This is a virtual selector
@@ -669,7 +670,7 @@ impl<F: FieldExt> ExpressionStandard<F> {
     }
 }
 
-impl<F: std::fmt::Debug> std::fmt::Debug for ExpressionStandard<F> {
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionStandard<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionStandard::Constant(scalar) => {
@@ -697,26 +698,38 @@ impl<F: std::fmt::Debug> std::fmt::Debug for ExpressionStandard<F> {
 
 impl<F: std::fmt::Debug + FieldExt> ExpressionStandard<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-        struct CircuitDesc<'a, F>(&'a ExpressionStandard<F>);
+        struct CircuitDesc<'a, F: FieldExt>(&'a ExpressionStandard<F>);
         impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for CircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self.0 {
                     ExpressionStandard::Constant(scalar) => {
                         f.debug_tuple("const").field(scalar).finish()
                     }
-                    ExpressionStandard::Selector(index, a, b) => f.write_fmt(format_args!("sel {index:?}; {}; {}", CircuitDesc(a), CircuitDesc(b))),
+                    ExpressionStandard::Selector(index, a, b) => f.write_fmt(format_args!(
+                        "sel {index:?}; {}; {}",
+                        CircuitDesc(a),
+                        CircuitDesc(b)
+                    )),
                     // Skip enum variant and print query struct directly to maintain backwards compatibility.
-                    ExpressionStandard::Mle(mle_ref) => {
-                        f.debug_struct("mle").field("layer", &mle_ref.get_layer_id()).field("indices", &mle_ref.mle_indices()).finish()
+                    ExpressionStandard::Mle(mle_ref) => f
+                        .debug_struct("mle")
+                        .field("layer", &mle_ref.get_layer_id())
+                        .field("indices", &mle_ref.mle_indices())
+                        .finish(),
+                    ExpressionStandard::Negated(poly) => {
+                        f.write_fmt(format_args!("-{}", CircuitDesc(poly)))
                     }
-                    ExpressionStandard::Negated(poly) => f.write_fmt(format_args!("-{}", CircuitDesc(poly))),
-                    ExpressionStandard::Sum(a, b) => f.write_fmt(format_args!("+ {}; {}", CircuitDesc(a), CircuitDesc(b))),
+                    ExpressionStandard::Sum(a, b) => {
+                        f.write_fmt(format_args!("+ {}; {}", CircuitDesc(a), CircuitDesc(b)))
+                    }
                     ExpressionStandard::Product(a) => {
-                        let str = a.iter().map(|mle| {
-                            format!("{:?}; {:?}", mle.get_layer_id(), mle.mle_indices())
-                        }).reduce(|acc, str| acc + &str).unwrap();
+                        let str = a
+                            .iter()
+                            .map(|mle| format!("{:?}; {:?}", mle.get_layer_id(), mle.mle_indices()))
+                            .reduce(|acc, str| acc + &str)
+                            .unwrap();
                         f.write_str(&str)
-                    },
+                    }
                     ExpressionStandard::Scaled(poly, scalar) => {
                         f.write_fmt(format_args!("* {}; {:?}", CircuitDesc(poly), scalar))
                     }
