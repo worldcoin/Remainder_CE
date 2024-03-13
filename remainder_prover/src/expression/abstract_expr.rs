@@ -10,7 +10,7 @@ use super::generic_expr::ExpressionType;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AbstractExpr;
 impl<F: FieldExt> ExpressionType<F> for AbstractExpr {
-    type Container = Vec<F>;
+    type MLENodeRepr = Vec<F>;
     type MleVec = ();
 }
 
