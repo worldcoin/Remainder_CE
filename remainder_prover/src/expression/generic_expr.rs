@@ -13,7 +13,7 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
     /// for prover expression, it's over DenseMleRef
     /// for verifier expression, it's over Vec<F>
     /// for abstract expression, it's over [TBD]
-    type Container: Clone + Serialize + for<'de> Deserialize<'de>; // either index or F
+    type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de>; // either index or F
 
     /// MleRefs is the optional data array of mle_refs
     /// that can be indexed into by the MleRefIndex defind in the ProverExpr
@@ -27,23 +27,27 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
-    /// constant
+    /// This is a constant polynomial
     Constant(F),
-    /// selector
+    /// This is a virtual selector
     Selector(
         MleIndex<F>,
         Box<ExpressionNode<F, E>>,
         Box<ExpressionNode<F, E>>,
     ),
-    /// Mle
-    Mle(E::Container),
-    /// negated expression
+    /// This is an MLE node, its repr could be 
+    /// for prover: MleVecIndex (which index into a vec of DenseMleRef), or
+    /// for verifier: a constant field element
+    Mle(E::MLENodeRepr),
+    /// This is a negated expression node
     Negated(Box<ExpressionNode<F, E>>),
-    /// sum of two expressions
+    /// This is the sum of two expression nodes
     Sum(Box<ExpressionNode<F, E>>, Box<ExpressionNode<F, E>>),
-    /// product of multiple Mles
-    Product(Vec<E::Container>),
-    /// scaled expression
+    /// This is the product of some MLE nodes, their repr could be 
+    /// for prover: a vec of MleVecIndex's (which index into a Vec of DenseMleRef), or
+    /// for verifier: a vec of constant field element
+    Product(Vec<E::MLENodeRepr>),
+    /// This is a scaled expression node
     Scaled(Box<ExpressionNode<F, E>>, F),
 }
 

@@ -54,7 +54,7 @@ impl MleVecIndex {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProverExpr;
 impl<F: FieldExt> ExpressionType<F> for ProverExpr {
-    type Container = MleVecIndex;
+    type MLENodeRepr = MleVecIndex;
     type MleVec = Vec<DenseMleRef<F>>;
 }
 

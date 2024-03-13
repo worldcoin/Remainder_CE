@@ -12,7 +12,7 @@ use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionN
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct VerifierExpr;
 impl<F: FieldExt> ExpressionType<F> for VerifierExpr {
-    type Container = F;
+    type MLENodeRepr = F;
     type MleVec = ();
 }
 
@@ -24,10 +24,10 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
         &self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::Container) -> T,
+        mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::Container]) -> T,
+        product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         self.expression_node.evaluate(
@@ -55,7 +55,7 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
                 }
                 Err(ExpressionError::SelectorBitNotBoundError)
             };
-        let mle_eval = for<'a> |mle_ref: &'a <VerifierExpr as ExpressionType<F>>::Container| -> Result<F, ExpressionError> {
+        let mle_eval = for<'a> |mle_ref: &'a <VerifierExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, ExpressionError> {
             Ok(mle_ref.clone())
         };
         let negated = |a: Result<F, ExpressionError>| match a {
@@ -63,7 +63,7 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
             Ok(val) => Ok(val.neg()),
         };
         let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
-        let product = for<'a, 'b> |mle_refs: &'a [<VerifierExpr as ExpressionType<F>>::Container]| -> Result<F, ExpressionError> {
+        let product = for<'a, 'b> |mle_refs: &'a [<VerifierExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, ExpressionError> {
             mle_refs.iter().try_fold(F::one(), |acc, new_mle_ref| {
                 Ok(acc * new_mle_ref.clone())
             })
@@ -90,10 +90,10 @@ impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
         &self,
         constant: &impl Fn(F) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::Container) -> T,
+        mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::Container]) -> T,
+        product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
         scaled: &impl Fn(T, F) -> T,
     ) -> T {
         match self {
