@@ -725,10 +725,10 @@ mod tests {
             Expression::mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
-        let b_squared = Expression::products(vec![
+        let b_squared = Expression::pow(
+            2, 
             first_bin_decomp_bit_mle[0].clone(),
-            first_bin_decomp_bit_mle[0].clone(),
-        ]);
+        );
         // dbg!(&b_squared);
         // dbg!(&first_bin_decomp_bit_mle[0]);
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
@@ -784,10 +784,10 @@ mod tests {
             Expression::mle(first_bin_decomp_bit_mle[0].clone());
 
         // --- Do b * (1 - b) = b - b^2 ---
-        let b_squared = Expression::products(vec![
+        let b_squared = Expression::pow(
+            2,
             first_bin_decomp_bit_mle[0].clone(),
-            first_bin_decomp_bit_mle[0].clone(),
-        ]);
+        );
         let mut b_minus_b_squared = first_bin_decomp_bit_expr - b_squared;
 
         // --- We should get all zeros ---x

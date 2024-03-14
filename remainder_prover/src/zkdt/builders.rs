@@ -464,7 +464,7 @@ pub struct SquaringBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for SquaringBuilder<F> {
     type Successor = DenseMle<F, F>;
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::products(vec![self.mle.mle_ref(), self.mle.mle_ref()])
+        Expression::pow(2, self.mle.mle_ref())
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         DenseMle::new_from_iter(self.mle
@@ -913,7 +913,7 @@ impl<F: FieldExt> LayerBuilder<F> for BinaryDecompBuilder<F> {
             .into_iter()
             .map(|bit| {
                 let b = Expression::mle(bit.clone());
-                let b_squared = Expression::products(vec![bit.clone(), bit]);
+                let b_squared = Expression::pow(2, bit);
                 b - b_squared
             })
             .collect_vec();

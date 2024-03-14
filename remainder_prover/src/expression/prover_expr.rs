@@ -77,6 +77,19 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         Expression::new(concat_node, concat_mle_vec)
     }
 
+    /// Create a product Expression that raises one MLE to a given power
+    pub fn pow(pow: usize, mle: DenseMleRef<F>) -> Self {
+
+        let mle_vec_indices = (0..pow).map(
+            |_index| MleVecIndex::new(0)
+        ).collect_vec();
+
+        let product_node = ExpressionNode::Product(mle_vec_indices);
+        
+        Expression::new(product_node, vec![mle])
+        
+    }
+
     /// Create a product Expression that multiplies many MLEs together
     pub fn products(product_list: <ProverExpr as ExpressionType<F>>::MleVec) -> Self {
 

@@ -26,7 +26,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp16BitIsBinaryCircuit<F> {
             |diff_signed_bin_decomp_mle| {
                 let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
                 dbg!(&combined_bin_decomp_mle_ref);
-                Expression::products(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - Expression::mle(combined_bin_decomp_mle_ref)
+                Expression::pow(2, combined_bin_decomp_mle_ref.clone()) - Expression::mle(combined_bin_decomp_mle_ref)
             }, 
             |_mle, id, prefix_bits| {
                 ZeroMleRef::new(self.bin_decomp_16_bit_mle.num_iterated_vars(), prefix_bits, id)
@@ -56,7 +56,7 @@ impl<F: FieldExt> BinDecomp16BitIsBinaryCircuit<F> {
             self.bin_decomp_16_bit_mle.clone(), 
             |bin_decomp_16_bit_mle_mle| {
                 let combined_bin_decomp_mle_ref = bin_decomp_16_bit_mle_mle.get_entire_mle_as_mle_ref();
-                Expression::products(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - Expression::mle(combined_bin_decomp_mle_ref)
+                Expression::pow(2, combined_bin_decomp_mle_ref.clone()) - Expression::mle(combined_bin_decomp_mle_ref)
             }, 
             |_mle, id, prefix_bits| {
                 ZeroMleRef::new(self.bin_decomp_16_bit_mle.num_iterated_vars(), prefix_bits, id)
@@ -92,7 +92,7 @@ impl<F: FieldExt> GKRCircuit<F> for BinDecomp4BitIsBinaryCircuit<F> {
             |diff_signed_bin_decomp_mle| {
                 let combined_bin_decomp_mle_ref = diff_signed_bin_decomp_mle.get_entire_mle_as_mle_ref();
                 dbg!(&combined_bin_decomp_mle_ref);
-                Expression::products(vec![combined_bin_decomp_mle_ref.clone(), combined_bin_decomp_mle_ref.clone()]) - Expression::mle(combined_bin_decomp_mle_ref)
+                Expression::pow(2, combined_bin_decomp_mle_ref.clone()) - Expression::mle(combined_bin_decomp_mle_ref)
             }, 
             |_mle, id, prefix_bits| {
                 ZeroMleRef::new(self.multiplicities_bin_decomp_mle_input.num_iterated_vars(), prefix_bits, id)

@@ -326,7 +326,7 @@ fn big_test_eval() {
 
     let expression = expression1.clone() + expression3.clone();
 
-    let expression_product = Expression::products(vec![mle.clone(), mle]);
+    let expression_product = Expression::pow(2, mle);
 
     let expression = expression_product + expression;
 
