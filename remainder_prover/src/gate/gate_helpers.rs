@@ -439,7 +439,7 @@ pub fn libra_giraffe<F: FieldExt>(
                 .clone()
                 .into_iter()
                 .map(|(z, x, y)| {
-                    let g1_z = *beta_g1.bookkeeping_table.get(z).unwrap();
+                    let g1_z = beta_g1.current_mle[z];
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
 
                     // --- Compute f_2((A, p_2), x) ---

@@ -1,14 +1,32 @@
-use std::{marker::PhantomData, cmp::max};
+use std::{cmp::max, marker::PhantomData};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use remainder_shared_types::{FieldExt, transcript::Transcript};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use serde::{Serialize, Deserialize};
+use remainder_shared_types::{transcript::Transcript, FieldExt};
+use serde::{Deserialize, Serialize};
 
-use crate::{mle::{dense::{DenseMleRef, DenseMle}, beta::{BetaTable, compute_beta_over_two_challenges}, mle_enum::MleEnum, MleRef}, layer::{LayerId, claims::{Claim, ClaimError, get_num_wlx_evaluations}, Layer, LayerError, LayerBuilder, layer_enum::LayerEnum, VerificationError}, prover::SumcheckProof, gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate}, sumcheck::{Evals, evaluate_at_a_point}};
+use crate::{
+    gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
+    layer::{
+        claims::{get_num_wlx_evaluations, Claim, ClaimError},
+        layer_enum::LayerEnum,
+        Layer, LayerBuilder, LayerError, LayerId, VerificationError,
+    },
+    mle::{
+        beta::{compute_beta_over_two_challenges, BetaTable},
+        dense::{DenseMle, DenseMleRef},
+        mle_enum::MleEnum,
+        MleRef,
+    },
+    prover::SumcheckProof,
+    sumcheck::{evaluate_at_a_point, Evals},
+};
 
-use super::gate_helpers::{libra_giraffe, GateError, index_mle_indices_gate, compute_sumcheck_message_no_beta_table, check_fully_bound, compute_full_gate};
+use super::gate_helpers::{
+    check_fully_bound, compute_full_gate, compute_sumcheck_message_no_beta_table,
+    index_mle_indices_gate, libra_giraffe, GateError,
+};
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
@@ -24,9 +42,10 @@ impl BinaryOperation {
     /// method to perform the respective operation
     pub fn perform_operation<F: FieldExt>(&self, a: F, b: F) -> F {
         match self {
-            BinaryOperation::Add => { a + b }
-            BinaryOperation::Mul => { a * b }
-        }}
+            BinaryOperation::Add => a + b,
+            BinaryOperation::Mul => a * b,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -52,11 +71,10 @@ pub struct Gate<F: FieldExt, Tr: Transcript<F>> {
     pub phase_1_mles: Option<Vec<Vec<DenseMleRef<F>>>>,
     /// the mles that are constructed when initializing phase 2 (binding the y variables)
     pub phase_2_mles: Option<Vec<Vec<DenseMleRef<F>>>>,
-    /// the gate operation representing the fan-in-two relationship 
+    /// the gate operation representing the fan-in-two relationship
     pub gate_operation: BinaryOperation,
     _marker: PhantomData<Tr>,
 }
-
 
 impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
     type Transcript = Tr;
@@ -66,20 +84,41 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         claim: Claim<F>,
         transcript: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-
         let mut sumcheck_rounds = vec![];
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
         let mut beta_g2_fully_bound = F::one();
-        // we perform the dataparallel initiliazation only if there is at least one variable 
+        // we perform the dataparallel initiliazation only if there is at least one variable
         // representing which copy we are in
         if self.num_dataparallel_bits > 0 {
-            let (dataparallel_rounds, beta_g2_bound) = self.perform_dataparallel_phase(claim.get_point().clone(), &mut beta_g1, &mut beta_g2, transcript).unwrap();
+            let (dataparallel_rounds, beta_g2_bound) = self
+                .perform_dataparallel_phase(
+                    claim.get_point().clone(),
+                    &mut beta_g1,
+                    &mut beta_g2,
+                    transcript,
+                )
+                .unwrap();
             beta_g2_fully_bound = beta_g2_bound;
             sumcheck_rounds.extend(dataparallel_rounds);
         }
         // we perform the rounds binding "x" variables (phase 1) and the rounds binding "y" variables (phase 2) in sequence
-        let (phase_1_rounds, f2_at_u, u_challenges) = self.perform_phase_1(claim.get_point()[self.num_dataparallel_bits..].to_vec(), &beta_g1, beta_g2_fully_bound, transcript).unwrap();
-        let phase_2_rounds = self.perform_phase_2(f2_at_u, u_challenges, beta_g1, beta_g2_fully_bound, transcript).unwrap();
+        let (phase_1_rounds, f2_at_u, u_challenges) = self
+            .perform_phase_1(
+                claim.get_point()[self.num_dataparallel_bits..].to_vec(),
+                &beta_g1,
+                beta_g2_fully_bound,
+                transcript,
+            )
+            .unwrap();
+        let phase_2_rounds = self
+            .perform_phase_2(
+                f2_at_u,
+                u_challenges,
+                beta_g1,
+                beta_g2_fully_bound,
+                transcript,
+            )
+            .unwrap();
         sumcheck_rounds.extend(phase_1_rounds);
         sumcheck_rounds.extend(phase_2_rounds);
 
@@ -93,7 +132,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         sumcheck_rounds: Vec<Vec<F>>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), LayerError> {
-        
         let mut prev_evals = &sumcheck_rounds[0];
         let mut challenges = vec![];
         let mut first_u_challenges = vec![];
@@ -223,7 +261,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
                     acc + gz * ux * vy
                 });
 
-        // check that the original mles have been bound correctly -- this is what we get from the reduced gate
+        // check that the original mles have been bound correctly -- this is
+        // what we get from the reduced gate
         check_fully_bound(&mut [lhs_reduced.clone()], lhs_challenges).unwrap();
         check_fully_bound(&mut [rhs_reduced.clone()], rhs_challenges).unwrap();
         let f2_bound = lhs_reduced.bookkeeping_table()[0];
@@ -231,7 +270,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         let beta_bound = compute_beta_over_two_challenges(&g2_challenges, &first_copy_challenges);
 
         // compute the final result of the bound expression
-        let final_result = beta_bound * (f_1_uv * self.gate_operation.perform_operation(f2_bound, f3_bound));
+        let final_result =
+            beta_bound * (f_1_uv * self.gate_operation.perform_operation(f2_bound, f3_bound));
 
         let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
 
@@ -243,7 +283,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         }
 
         Ok(())
-
     }
 
     /// Get the claims that this layer makes on other layers
@@ -299,7 +338,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         &self.layer_id
     }
 
-    /// Create new ConcreteLayer from a LayerBuilder -- not necessary for a gate layer because we 
+    /// Create new ConcreteLayer from a LayerBuilder -- not necessary for a gate layer because we
     /// don't use layer builders in order to construct gate layers (as they don't operate on expressions,
     /// just mles)
     fn new<L: LayerBuilder<F>>(_builder: L, _id: LayerId) -> Self {
@@ -314,45 +353,44 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
-         // get the number of evaluations
-         let (num_evals, _,) = get_num_wlx_evaluations(claim_vecs);
- 
-         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
-         let next_evals: Vec<F> = (num_claims..num_evals)
-             .map(|idx| {
-                 // get the challenge l(idx)
-                 let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
-                     .map(|claim_idx| {
-                         let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
-                             .map(|claim| claim[claim_idx])
-                             .collect();
-                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
-                     })
-                     .collect();
- 
-                 compute_full_gate(
-                     new_chal,
-                     &mut self.lhs.clone(),
-                     &mut self.rhs.clone(),
-                     &self.nonzero_gates,
-                     self.num_dataparallel_bits,
-                 )
-             })
-             .collect();
- 
-         // concat this with the first k evaluations from the claims to get num_evals evaluations
-         let mut claimed_vals = claimed_vals.clone();
- 
-         claimed_vals.extend(&next_evals);
-         let wlx_evals = claimed_vals;
-         Ok(wlx_evals)
+        // get the number of evaluations
+        let (num_evals, _) = get_num_wlx_evaluations(claim_vecs);
+
+        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+        let next_evals: Vec<F> = (num_claims..num_evals)
+            .map(|idx| {
+                // get the challenge l(idx)
+                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                    .map(|claim_idx| {
+                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                            .map(|claim| claim[claim_idx])
+                            .collect();
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                    })
+                    .collect();
+
+                compute_full_gate(
+                    new_chal,
+                    &mut self.lhs.clone(),
+                    &mut self.rhs.clone(),
+                    &self.nonzero_gates,
+                    self.num_dataparallel_bits,
+                )
+            })
+            .collect();
+
+        // concat this with the first k evaluations from the claims to get num_evals evaluations
+        let mut claimed_vals = claimed_vals.clone();
+
+        claimed_vals.extend(&next_evals);
+        let wlx_evals = claimed_vals;
+        Ok(wlx_evals)
     }
 
     fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
         LayerEnum::Gate(self)
     }
 }
-
 
 impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
     /// Construct a new gate layer
@@ -393,7 +431,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
     fn compute_beta_tables(&mut self, challenges: &Vec<F>) -> (BetaTable<F>, BetaTable<F>) {
         let mut g2_challenges = vec![];
         let mut g1_challenges = vec![];
-        
+
         challenges
             .iter()
             .enumerate()
@@ -480,8 +518,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         first_sumcheck_message
     }
 
-
-    /// initialize phase 1, or the necessary mles in order to bind the variables in the `lhs` of the 
+    /// initialize phase 1, or the necessary mles in order to bind the variables in the `lhs` of the
     /// expression. once this phase is initialized, the sumcheck rounds binding the "x" variables can
     /// be performed
     fn init_phase_1(&mut self, challenges: Vec<F>) -> Result<Vec<F>, GateError> {
@@ -502,7 +539,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         // 2^(number of x variables)
         let mut a_hg_rhs = vec![F::zero(); 1 << num_x];
         let mut a_hg_lhs = vec![F::zero(); 1 << num_x];
- 
+
         // over here, we are looping through the nonzero gates using the Libra trick. this takes advantage
         // of the sparsity of the gate function. if we have the following expression:
         // f1(z, x, y)(f2(x) + f3(y)) then because we are only binding the "x" variables, we can simply
@@ -529,57 +566,59 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
 
         let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0), None).mle_ref();
 
-        // the actual mles defer based on whether we are doing a add gate or a mul gate, because 
+        // the actual mles defer based on whether we are doing a add gate or a mul gate, because
         // in the case of an add gate, we distribute the gate function whereas in the case of the
         // mul gate, we simply take the product over all three mles.
         let mut phase_1_mles = match self.gate_operation {
             BinaryOperation::Add => {
-                vec![vec![
-                    DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0), None).mle_ref(),
-                    self.lhs.clone(),
-                ], vec![a_hg_rhs_mle_ref]]
+                vec![
+                    vec![
+                        DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0), None).mle_ref(),
+                        self.lhs.clone(),
+                    ],
+                    vec![a_hg_rhs_mle_ref],
+                ]
             }
             BinaryOperation::Mul => {
-                vec![vec![
-                    a_hg_rhs_mle_ref,
-                    self.lhs.clone(),
-                ]]
+                vec![vec![a_hg_rhs_mle_ref, self.lhs.clone()]]
             }
         };
 
-        phase_1_mles.iter_mut().for_each(
-            |mle_vec| {
-                index_mle_indices_gate(mle_vec, self.num_dataparallel_bits);
-            }
-        );
+        phase_1_mles.iter_mut().for_each(|mle_vec| {
+            index_mle_indices_gate(mle_vec, self.num_dataparallel_bits);
+        });
 
         self.phase_1_mles = Some(phase_1_mles.clone());
 
-        let max_deg = phase_1_mles.iter().fold(
-            0, |acc, elem| {
-                max(acc, elem.len())
-            }
-        );
+        let max_deg = phase_1_mles
+            .iter()
+            .fold(0, |acc, elem| max(acc, elem.len()));
 
-        let evals_vec = phase_1_mles.iter_mut().map(
-            |mle_vec| {
-                compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg).unwrap()
-            }
-        ).collect_vec();
-        let final_evals = evals_vec.clone().into_iter().skip(1).fold(
-            Evals(evals_vec[0].clone()), |acc, elem| {
-                acc + Evals(elem)
-            }
-        );
+        let evals_vec = phase_1_mles
+            .iter_mut()
+            .map(|mle_vec| {
+                compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg)
+                    .unwrap()
+            })
+            .collect_vec();
+        let final_evals = evals_vec
+            .clone()
+            .into_iter()
+            .skip(1)
+            .fold(Evals(evals_vec[0].clone()), |acc, elem| acc + Evals(elem));
         let Evals(final_vec_evals) = final_evals;
-        Ok(final_vec_evals) 
+        Ok(final_vec_evals)
     }
 
-    /// initialize phase 2, or the necessary mles in order to bind the variables in the `rhs` of the 
+    /// initialize phase 2, or the necessary mles in order to bind the variables in the `rhs` of the
     /// expression. once this phase is initialized, the sumcheck rounds binding the "y" variables can
     /// be performed
-    fn init_phase_2(&mut self, u_claim: Vec<F>, f_at_u: F, beta_g1: &BetaTable<F>) -> Result<Vec<F>, GateError> {
-
+    fn init_phase_2(
+        &mut self,
+        u_claim: Vec<F>,
+        f_at_u: F,
+        beta_g1: &BetaTable<F>,
+    ) -> Result<Vec<F>, GateError> {
         // create a beta table according to the challenges used to bind the x variables
         let beta_u = BetaTable::new(u_claim).unwrap();
         let num_y = self.rhs.num_vars();
@@ -617,63 +656,61 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         // --- We need to multiply h_g(x) by f_2(x) ---
         let mut phase_2_mles = match self.gate_operation {
             BinaryOperation::Add => {
-                vec![vec![
-                    DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0), None).mle_ref(),
-                    self.rhs.clone(),
+                vec![
+                    vec![
+                        DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0), None).mle_ref(),
+                        self.rhs.clone(),
                     ],
-                vec![a_f1_lhs_mle_ref], ]
+                    vec![a_f1_lhs_mle_ref],
+                ]
             }
             BinaryOperation::Mul => {
-                vec![vec![
-                    a_f1_lhs_mle_ref,
-                    self.rhs.clone(),
-                ]]
-        }};
-
-        phase_2_mles.iter_mut().for_each(
-            |mle_vec| {
-                index_mle_indices_gate(mle_vec, self.num_dataparallel_bits);
+                vec![vec![a_f1_lhs_mle_ref, self.rhs.clone()]]
             }
-        );
+        };
+
+        phase_2_mles.iter_mut().for_each(|mle_vec| {
+            index_mle_indices_gate(mle_vec, self.num_dataparallel_bits);
+        });
         self.phase_2_mles = Some(phase_2_mles.clone());
 
         // return the first sumcheck message of this phase
-        let max_deg = phase_2_mles.iter().fold(
-            0, |acc, elem| {
-                max(acc, elem.len())
-            }
-        );
+        let max_deg = phase_2_mles
+            .iter()
+            .fold(0, |acc, elem| max(acc, elem.len()));
 
-        let evals_vec = phase_2_mles.iter_mut().map(
-            |mle_vec| {
-                compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg).unwrap()
-            }
-        ).collect_vec();
-        let final_evals = evals_vec.clone().into_iter().skip(1).fold(
-            Evals(evals_vec[0].clone()), |acc, elem| {
-                acc + Evals(elem)
-            }
-        );
+        let evals_vec = phase_2_mles
+            .iter_mut()
+            .map(|mle_vec| {
+                compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg)
+                    .unwrap()
+            })
+            .collect_vec();
+        let final_evals = evals_vec
+            .clone()
+            .into_iter()
+            .skip(1)
+            .fold(Evals(evals_vec[0].clone()), |acc, elem| acc + Evals(elem));
         let Evals(final_vec_evals) = final_evals;
-        Ok(final_vec_evals) 
+        Ok(final_vec_evals)
     }
 
     // once the initialization of the dataparallel phase is done, we can perform the dataparallel phase.
     // this means that we are binding all bits that represent which copy of the circuit we are in.
-    fn perform_dataparallel_phase(&mut self,
+    fn perform_dataparallel_phase(
+        &mut self,
         claim: Vec<F>,
         beta_g1: &mut BetaTable<F>,
         beta_g2: &mut BetaTable<F>,
-        transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript) -> 
-        Result<(Vec<Vec<F>>, F), LayerError> {
-        
+        transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
+    ) -> Result<(Vec<Vec<F>>, F), LayerError> {
         // initialization, first message comes from here
         let mut challenges: Vec<F> = vec![];
-        
-        let first_message = self
-        .init_dataparallel_phase(claim)
-        .expect("could not evaluate original lhs and rhs in order to get first sumcheck message");
-        
+
+        let first_message = self.init_dataparallel_phase(claim).expect(
+            "could not evaluate original lhs and rhs in order to get first sumcheck message",
+        );
+
         let (lhs, rhs) = (&mut self.lhs, &mut self.rhs);
 
         transcript
@@ -719,7 +756,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         self.rhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.table.bookkeeping_table.len() == 1 {
+        if beta_g2.table.bookkeeping_table().len() == 1 {
             let beta_g2_fully_bound = beta_g2.table.bookkeeping_table()[0];
             Ok((sumcheck_rounds, beta_g2_fully_bound))
         } else {
@@ -732,11 +769,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
     fn perform_phase_1(
         &mut self,
         challenge: Vec<F>,
-        beta_g1: &BetaTable<F>, 
+        beta_g1: &BetaTable<F>,
         beta_g2_fully_bound: F,
         transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
     ) -> Result<(Vec<Vec<F>>, F, Vec<F>), LayerError> {
-
         let first_message = self
             .init_phase_1(challenge)
             .expect("could not evaluate original lhs and rhs")
@@ -749,7 +785,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             .as_mut()
             .ok_or(GateError::Phase1InitError)
             .unwrap();
-    
+
         let mut challenges: Vec<F> = vec![];
         transcript
             .append_field_elements("Initial Sumcheck evaluations", &first_message)
@@ -762,14 +798,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
                 let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
                 challenges.push(challenge);
                 // if there are dataparallel bits, we want to start at that index
-                let eval = prove_round_gate(
-                    round + self.num_dataparallel_bits,
-                    challenge,
-                    phase_1_mles,
-                )
-                .into_iter()
-                .map(|eval| eval * beta_g2_fully_bound)
-                .collect_vec();
+                let eval =
+                    prove_round_gate(round + self.num_dataparallel_bits, challenge, phase_1_mles)
+                        .into_iter()
+                        .map(|eval| eval * beta_g2_fully_bound)
+                        .collect_vec();
                 transcript
                     .append_field_elements("Sumcheck evaluations", &eval)
                     .unwrap();
@@ -783,21 +816,21 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             .unwrap();
         challenges.push(final_chal_u);
 
-        phase_1_mles.iter_mut().for_each(
-            |mle_ref_vec| {
-                mle_ref_vec.iter_mut().for_each(
-                    |mle_ref| {
-                        mle_ref.fix_variable(num_rounds_phase1 - 1 + self.num_dataparallel_bits, final_chal_u);
+        phase_1_mles.iter_mut().for_each(|mle_ref_vec| {
+            mle_ref_vec.iter_mut().for_each(|mle_ref| {
+                mle_ref.fix_variable(
+                    num_rounds_phase1 - 1 + self.num_dataparallel_bits,
+                    final_chal_u,
+                );
             })
         });
 
         let f_2 = phase_1_mles[0][1].clone();
 
-        if f_2.bookkeeping_table.len() == 1 {
-            let f2_at_u = f_2.bookkeeping_table[0];
+        if f_2.bookkeeping_table().len() == 1 {
+            let f2_at_u = f_2.bookkeeping_table()[0];
             Ok((sumcheck_rounds, f2_at_u, challenges))
-        }
-        else {
+        } else {
             Err(LayerError::LayerNotReady)
         }
     }
@@ -808,18 +841,17 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         &mut self,
         f_at_u: F,
         phase_1_challenges: Vec<F>,
-        beta_g1: BetaTable<F>, 
+        beta_g1: BetaTable<F>,
         beta_g2_fully_bound: F,
         transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
     ) -> Result<Vec<Vec<F>>, LayerError> {
-
         let first_message = self
-                .init_phase_2(phase_1_challenges.clone(), f_at_u, &beta_g1)
-                .unwrap()
-                .into_iter()
-                .map(|eval| eval * beta_g2_fully_bound)
-                .collect_vec();
-        
+            .init_phase_2(phase_1_challenges.clone(), f_at_u, &beta_g1)
+            .unwrap()
+            .into_iter()
+            .map(|eval| eval * beta_g2_fully_bound)
+            .collect_vec();
+
         let mut challenges: Vec<F> = vec![];
 
         if self.rhs.num_vars() > 0 {
@@ -860,18 +892,18 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
                 .get_challenge("Final Sumcheck challenge")
                 .unwrap();
             challenges.push(final_chal);
-            
-            phase_2_mles.iter_mut().for_each(
-                |mle_ref_vec| {
-                    mle_ref_vec.iter_mut().for_each(
-                        |mle_ref| {
-                            mle_ref.fix_variable(num_rounds_phase2 - 1 + self.num_dataparallel_bits, final_chal);
+
+            phase_2_mles.iter_mut().for_each(|mle_ref_vec| {
+                mle_ref_vec.iter_mut().for_each(|mle_ref| {
+                    mle_ref.fix_variable(
+                        num_rounds_phase2 - 1 + self.num_dataparallel_bits,
+                        final_chal,
+                    );
                 })
             });
 
             Ok(sumcheck_rounds_y)
-        }
-        else {
+        } else {
             Ok(vec![])
         }
     }
@@ -880,12 +912,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(&'a Gate<F, Tr>);
+        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(
+            &'a Gate<F, Tr>,
+        );
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display for GateCircuitDesc<'a, F, Tr> {
+        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display
+            for GateCircuitDesc<'a, F, Tr>
+        {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())

@@ -5,8 +5,7 @@ use std::{
     ops::{Add, Mul, Neg},
 };
 
-#[cfg(test)]
-pub(crate) mod tests;
+pub mod tests;
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -62,7 +61,7 @@ pub enum InterpError {
 /// in our case always sends evaluations g_i(0), ..., g_i(d) to the verifier,
 /// and thus the struct is called `Evals`.
 #[derive(PartialEq, Debug, Clone)]
-pub struct Evals<F: FieldExt>(pub(crate) Vec<F>);
+pub struct Evals<F: FieldExt>(pub Vec<F>);
 
 impl<F: FieldExt> Neg for Evals<F> {
     type Output = Self;
@@ -149,7 +148,7 @@ impl<F: FieldExt> Mul<&F> for Evals<F> {
 /// - Error::BetaError when the beta table has not been initialized
 /// - TODO!(ryancao || vishady) -- Error::NotIndexedError when ANY MLE is not
 ///     fully indexed.
-pub(crate) fn compute_sumcheck_message<
+pub fn compute_sumcheck_message<
     F: FieldExt,
 >(
     expr: &Expression<F, ProverExpr>,

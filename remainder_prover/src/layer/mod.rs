@@ -5,6 +5,7 @@ pub mod claims;
 pub mod combine_mle_refs;
 pub mod empty_layer;
 pub mod layer_enum;
+pub mod simple_builders;
 // mod gkr_layer;
 
 use std::marker::PhantomData;
@@ -460,7 +461,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
                     // --- Grab the actual value that the claim is supposed to evaluate to ---
                     if mle_ref.bookkeeping_table().len() != 1 {
-                        dbg!(&mle_ref.bookkeeping_table);
+                        dbg!(&mle_ref.current_mle);
                         return Err(ClaimError::MleRefMleError);
                     }
                     let claimed_value = mle_ref.bookkeeping_table()[0];

@@ -77,7 +77,10 @@ pub trait InputLayer<F: FieldExt> {
         let prep_timer = start_timer!(|| "Claim wlx prep");
         let mut mle_ref = self.get_padded_mle().clone().mle_ref();
         end_timer!(prep_timer);
-        info!("Wlx MLE len: {}", mle_ref.bookkeeping_table.len());
+        info!(
+            "Wlx MLE len: {}",
+            mle_ref.current_mle.get_evals_vector().len()
+        );
         let num_claims = claims.get_num_claims();
         let claim_vecs = claims.get_claim_points_matrix();
         let claimed_vals = claims.get_results();
@@ -127,7 +130,7 @@ pub trait InputLayer<F: FieldExt> {
                             fix_mle.fix_variable(idx_num, chal);
                         }
                     });
-                    fix_mle.bookkeeping_table[0]
+                    fix_mle.current_mle[0]
                 }
             })
             .collect();
