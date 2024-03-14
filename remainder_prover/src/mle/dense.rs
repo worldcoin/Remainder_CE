@@ -11,13 +11,12 @@ use rand::seq::index;
 use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
-use super::{
-    evals::{Evaluations, MultilinearExtension},
-    mle_enum::MleEnum,
-    Mle, MleAble, MleIndex, MleRef,
+use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
+use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpr}, layer::{claims::Claim, combine_mle_refs::combine_mle_refs}};
+use crate::{
+    layer::{batched::combine_mles, LayerId},
+    mle::evals::{Evaluations, MultilinearExtension},
 };
-use crate::layer::{batched::combine_mles, combine_mle_refs::combine_mle_refs, LayerId};
-use crate::{expression::ExpressionStandard, layer::claims::Claim};
 use remainder_shared_types::FieldExt;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -563,8 +562,8 @@ pub struct DenseMleRef<F: FieldExt> {
 
 impl<F: FieldExt> DenseMleRef<F> {
     ///Convienence function for wrapping this in an Expression
-    pub fn expression(self) -> ExpressionStandard<F> {
-        ExpressionStandard::Mle(self)
+    pub fn expression(self) -> Expression<F, ProverExpr> {
+        Expression::mle(self)
     }
 
     pub fn num_vars(&self) -> usize {

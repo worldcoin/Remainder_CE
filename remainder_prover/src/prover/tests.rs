@@ -4,11 +4,11 @@ use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
+use crate::{expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr}};
 
 use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 
 use crate::{
-    expression::ExpressionStandard,
     layer::{
         batched::{combine_mles, combine_zero_mle_ref, BatchedLayer},
         empty_layer::EmptyLayer,
@@ -65,7 +65,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
         let mult_builder = from_mle(
             mle_clone,
             // --- The expression is a simple product between the first and second halves ---
-            |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
+            |mle| Expression::products(vec![mle.first(), mle.second()]),
             // --- The witness generation simply zips the two halves and multiplies them ---
             |mle, layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
@@ -142,10 +142,10 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
             mle_clone,
             // --- The expression is a simple diff between the first and second halves ---
             |mle| {
-                let first_half = Box::new(ExpressionStandard::Mle(mle.first()));
-                let second_half = Box::new(ExpressionStandard::Mle(mle.second()));
-                let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
-                ExpressionStandard::Sum(first_half, negated_second_half)
+                let first_half = Box::new(Expression::mle(mle.first()));
+                let second_half = Box::new(Expression::mle(mle.second()));
+                let negated_second_half = Box::new(Expression::negated(second_half));
+                Expression::sum(first_half, negated_second_half)
             },
             // --- The witness generation simply zips the two halves and subtracts them ---
             |mle, layer_id, prefix_bits| {
@@ -219,8 +219,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
                     mle,
                     // --- The expression is a simple diff between the first and second halves ---
                     |mle| {
-                        let first_half = ExpressionStandard::Mle(mle.first());
-                        let second_half = ExpressionStandard::Mle(mle.second());
+                        let first_half = Expression::mle(mle.first());
+                        let second_half = Expression::mle(mle.second());
                         first_half - second_half
                     },
                     // --- The witness generation simply zips the two halves and subtracts them ---
@@ -292,7 +292,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
         let layer_1 = from_mle(
             (self.mle.clone(), random_mle),
-            |(mle, random)| ExpressionStandard::products(vec![mle.mle_ref(), random.mle_ref()]),
+            |(mle, random)| Expression::products(vec![mle.mle_ref(), random.mle_ref()]),
             |(mle, random), layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
                     mle.into_iter()
@@ -399,10 +399,10 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             ),
             |(input_layer_1_mle_1, input_layer_1_mle_2)| {
                 let input_layer_1_mle_1_expr_ptr =
-                    Box::new(ExpressionStandard::Mle(input_layer_1_mle_1.mle_ref()));
+                    Box::new(Expression::mle(input_layer_1_mle_1.mle_ref()));
                 let input_layer_1_mle_2_expr_ptr =
-                    Box::new(ExpressionStandard::Mle(input_layer_1_mle_2.mle_ref()));
-                ExpressionStandard::Sum(input_layer_1_mle_1_expr_ptr, input_layer_1_mle_2_expr_ptr)
+                    Box::new(Expression::mle(input_layer_1_mle_2.mle_ref()));
+                Expression::sum(input_layer_1_mle_1_expr_ptr, input_layer_1_mle_2_expr_ptr)
             },
             |(input_layer_1_mle_1, input_layer_1_mle_2), layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
@@ -427,12 +427,12 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             ),
             |(input_layer_2_mle_1, input_layer_2_mle_2)| {
                 let input_layer_2_mle_1_expr_ptr =
-                    Box::new(ExpressionStandard::Mle(input_layer_2_mle_1.mle_ref()));
+                    Box::new(Expression::mle(input_layer_2_mle_1.mle_ref()));
                 let input_layer_2_mle_2_expr_ptr =
-                    Box::new(ExpressionStandard::Mle(input_layer_2_mle_2.mle_ref()));
+                    Box::new(Expression::mle(input_layer_2_mle_2.mle_ref()));
                 dbg!(input_layer_2_mle_1.layer_id);
                 dbg!(input_layer_2_mle_2.layer_id);
-                ExpressionStandard::Sum(input_layer_2_mle_1_expr_ptr, input_layer_2_mle_2_expr_ptr)
+                Expression::sum(input_layer_2_mle_1_expr_ptr, input_layer_2_mle_2_expr_ptr)
             },
             |(input_layer_2_mle_1, input_layer_2_mle_2), layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
@@ -456,13 +456,13 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             // Lol this hack though
             (first_layer_output, second_layer_output),
             |(first_layer_output_mle_param, second_layer_output_mle_param)| {
-                let first_layer_output_mle_param_expr_ptr = Box::new(ExpressionStandard::Mle(
+                let first_layer_output_mle_param_expr_ptr = Box::new(Expression::mle(
                     first_layer_output_mle_param.mle_ref(),
                 ));
-                let second_layer_output_mle_param_expr_ptr = Box::new(ExpressionStandard::Mle(
+                let second_layer_output_mle_param_expr_ptr = Box::new(Expression::mle(
                     second_layer_output_mle_param.mle_ref(),
                 ));
-                ExpressionStandard::Sum(
+                Expression::sum(
                     first_layer_output_mle_param_expr_ptr,
                     second_layer_output_mle_param_expr_ptr,
                 )
@@ -552,7 +552,7 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         let builder = from_mle(
             mle_clone,
             // --- The expression is a simple product between the first and second halves ---
-            |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
+            |mle| Expression::products(vec![mle.first(), mle.second()]),
             // --- The witness generation simply zips the two halves and multiplies them ---
             |mle, layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
@@ -987,8 +987,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
             mle_clone.clone(),
             // --- The expression is a simple diff between the first and second halves ---
             |_mle| {
-                let first_half = ExpressionStandard::Mle(_mle.mle_ref());
-                let second_half = ExpressionStandard::Mle(_mle.mle_ref());
+                let first_half = Expression::mle(_mle.mle_ref());
+                let second_half = Expression::mle(_mle.mle_ref());
                 first_half - second_half
             },
             // --- The output SHOULD be all zeros ---
@@ -1002,8 +1002,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
             mle2_clone.clone(),
             // --- The expression is a simple diff between the first and second halves ---
             |_mle| {
-                let first_half = ExpressionStandard::Mle(_mle.mle_ref());
-                let second_half = ExpressionStandard::Mle(_mle.mle_ref());
+                let first_half = Expression::mle(_mle.mle_ref());
+                let second_half = Expression::mle(_mle.mle_ref());
                 first_half - second_half
             },
             // --- The output SHOULD be all zeros ---
@@ -1150,27 +1150,34 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
+            let mut closure = for<'a, 'b> |
+                expr: &'a mut ExpressionNode<F, ProverExpr>,
+                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
+            | -> Result<(), ()> {
                 match expr {
-                    ExpressionStandard::Mle(mle) => {
-                        if mle.layer_id == LayerId::Input(0) {
-                            mle.layer_id = LayerId::Input(1)
+                    ExpressionNode::Mle(mle_vec_idx) => {
+                        let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                        if mle_ref.layer_id == LayerId::Input(0) {
+                            mle_ref.layer_id = LayerId::Input(1)
                         }
                         Ok(())
                     }
-                    ExpressionStandard::Product(mles) => {
-                        for mle in mles {
-                            if mle.layer_id == LayerId::Input(0) {
-                                mle.layer_id = LayerId::Input(1)
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                            if mle_ref.layer_id == LayerId::Input(0) {
+                                mle_ref.layer_id = LayerId::Input(1)
                             }
                         }
                         Ok(())
                     }
-                    ExpressionStandard::Constant(_)
-                    | ExpressionStandard::Scaled(_, _)
-                    | ExpressionStandard::Sum(_, _)
-                    | ExpressionStandard::Negated(_)
-                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
+                    ExpressionNode::Constant(_)
+                    | ExpressionNode::Scaled(_, _)
+                    | ExpressionNode::Sum(_, _)
+                    | ExpressionNode::Negated(_)
+                    | ExpressionNode::Selector(_, _, _) => Ok(()),
                 }
             };
 
@@ -1744,7 +1751,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
                     from_mle(
                         mle,
                         // --- The expression is a simple product between the first and second halves ---
-                        |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
+                        |mle| Expression::products(vec![mle.first(), mle.second()]),
                         // --- The witness generation simply zips the two halves and multiplies them ---
                         |mle, layer_id, prefix_bits| {
                             DenseMle::new_from_iter(
@@ -1988,27 +1995,34 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
+            let mut closure = for<'a, 'b> |
+                expr: &'a mut ExpressionNode<F, ProverExpr>,
+                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
+            | -> Result<(), ()> {
                 match expr {
-                    ExpressionStandard::Mle(mle) => {
-                        if mle.layer_id == LayerId::Input(0) {
-                            mle.layer_id = LayerId::Input(1)
+                    ExpressionNode::Mle(mle_vec_idx) => {
+                        let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                        if mle_ref.layer_id == LayerId::Input(0) {
+                            mle_ref.layer_id = LayerId::Input(1)
                         }
                         Ok(())
                     }
-                    ExpressionStandard::Product(mles) => {
-                        for mle in mles {
-                            if mle.layer_id == LayerId::Input(0) {
-                                mle.layer_id = LayerId::Input(1)
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                            if mle_ref.layer_id == LayerId::Input(0) {
+                                mle_ref.layer_id = LayerId::Input(1)
                             }
                         }
                         Ok(())
                     }
-                    ExpressionStandard::Constant(_)
-                    | ExpressionStandard::Scaled(_, _)
-                    | ExpressionStandard::Sum(_, _)
-                    | ExpressionStandard::Negated(_)
-                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
+                    ExpressionNode::Constant(_)
+                    | ExpressionNode::Scaled(_, _)
+                    | ExpressionNode::Sum(_, _)
+                    | ExpressionNode::Negated(_)
+                    | ExpressionNode::Selector(_, _, _) => Ok(()),
                 }
             };
 
@@ -2024,27 +2038,34 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
+            let mut closure = for<'a, 'b> |
+                expr: &'a mut ExpressionNode<F, ProverExpr>,
+                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
+            | -> Result<(), ()> {
                 match expr {
-                    ExpressionStandard::Mle(mle) => {
-                        if mle.layer_id == LayerId::Input(0) {
-                            mle.layer_id = LayerId::Input(2)
+                    ExpressionNode::Mle(mle_vec_idx) => {
+                        let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                        if mle_ref.layer_id == LayerId::Input(0) {
+                            mle_ref.layer_id = LayerId::Input(2)
                         }
                         Ok(())
                     }
-                    ExpressionStandard::Product(mles) => {
-                        for mle in mles {
-                            if mle.layer_id == LayerId::Input(0) {
-                                mle.layer_id = LayerId::Input(2)
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                            if mle_ref.layer_id == LayerId::Input(0) {
+                                mle_ref.layer_id = LayerId::Input(2)
                             }
                         }
                         Ok(())
                     }
-                    ExpressionStandard::Constant(_)
-                    | ExpressionStandard::Scaled(_, _)
-                    | ExpressionStandard::Sum(_, _)
-                    | ExpressionStandard::Negated(_)
-                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
+                    ExpressionNode::Constant(_)
+                    | ExpressionNode::Scaled(_, _)
+                    | ExpressionNode::Sum(_, _)
+                    | ExpressionNode::Negated(_)
+                    | ExpressionNode::Selector(_, _, _) => Ok(()),
                 }
             };
 
