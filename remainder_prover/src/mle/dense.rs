@@ -12,10 +12,10 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
-use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpr}, layer::claims::Claim};
+use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpr}, layer::{claims::Claim, combine_mle_refs::combine_mle_refs}};
 use crate::{
     layer::{batched::combine_mles, LayerId},
-    zkdt::structs::combine_mle_refs,
+    mle::evals::{Evaluations, MultilinearExtension},
 };
 use remainder_shared_types::FieldExt;
 
@@ -564,14 +564,6 @@ impl<F: FieldExt> DenseMleRef<F> {
     ///Convienence function for wrapping this in an Expression
     pub fn expression(self) -> Expression<F, ProverExpr> {
         Expression::mle(self)
-    }
-
-    pub fn num_vars(&self) -> usize {
-        self.current_mle.num_vars()
-    }
-
-    pub fn original_num_vars(&self) -> usize {
-        self.original_mle.num_vars()
     }
 
     pub fn num_vars(&self) -> usize {
