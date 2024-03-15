@@ -62,7 +62,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         &self.original_mle_indices
     }
 
-    fn original_bookkeeping_table(&self) -> &Vec<Self::F> {
+    fn original_bookkeeping_table(&self) -> &[Self::F] {
         &self.original_bookkeeping_table()
     }
 

@@ -271,7 +271,8 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
                     acc + gz * ux * vy
                 });
 
-        // check that the original mles have been bound correctly -- this is what we get from the reduced gate
+        // check that the original mles have been bound correctly -- this is
+        // what we get from the reduced gate
         check_fully_bound(&mut [lhs_reduced.clone()], lhs_challenges).unwrap();
         check_fully_bound(&mut [rhs_reduced.clone()], rhs_challenges).unwrap();
         let f2_bound = lhs_reduced.bookkeeping_table()[0];
@@ -759,7 +760,7 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
         self.rhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.table.bookkeeping_table.len() == 1 {
+        if beta_g2.table.bookkeeping_table().len() == 1 {
             let beta_g2_fully_bound = beta_g2.table.bookkeeping_table()[0];
             Ok((sumcheck_rounds, beta_g2_fully_bound))
         } else {
@@ -825,8 +826,8 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
 
         let f_2 = phase_1_mles[0][1].clone();
 
-        if f_2.bookkeeping_table.len() == 1 {
-            let f2_at_u = f_2.bookkeeping_table[0];
+        if f_2.bookkeeping_table().len() == 1 {
+            let f2_at_u = f_2.bookkeeping_table()[0];
             Ok((sumcheck_rounds, f2_at_u, challenges))
         } else {
             Err(LayerError::LayerNotReady)
