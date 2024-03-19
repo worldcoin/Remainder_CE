@@ -43,7 +43,6 @@ pub struct BetaTable<F: FieldExt> {
     ///The bookkeeping table for the beta table
     /// TODO(Get rid of BetaTable's reliance on the DenseMleRef type; Create a shared subtype for the shared behavior)
     pub table: DenseMleRef<F>,
-    pub relevant_indices: Vec<usize>,
 }
 
 /// Error handling for beta table construction
@@ -101,25 +100,21 @@ pub(crate) fn compute_new_beta_table<F: FieldExt>(
     let curr_beta = beta_table.table.bookkeeping_table();
 
     // --- This should always be true now, no? ---
-    if beta_table.relevant_indices.contains(&round_index) {
-        let layer_claim = beta_table.layer_claim_vars[round_index];
-        let layer_claim_inv = layer_claim.invert();
-        if layer_claim_inv.is_none().into() {
-            return Err(BetaError::NoInverse);
-        }
-        // --- The below should be safe since we check for `is_none()` above ---
-        let mult_factor = layer_claim_inv.unwrap()
-            * (challenge * layer_claim + (F::one() - challenge) * (F::one() - layer_claim));
-
-        let new_beta: Vec<F> = cfg_into_iter!(curr_beta)
-            .skip(1)
-            .step_by(2)
-            .map(|curr_eval| *curr_eval * mult_factor)
-            .collect();
-        return Ok(new_beta);
+    let layer_claim = beta_table.layer_claim_vars[round_index];
+    let layer_claim_inv = layer_claim.invert();
+    if layer_claim_inv.is_none().into() {
+        return Err(BetaError::NoInverse);
     }
+    // --- The below should be safe since we check for `is_none()` above ---
+    let mult_factor = layer_claim_inv.unwrap()
+        * (challenge * layer_claim + (F::one() - challenge) * (F::one() - layer_claim));
 
-    Err(BetaError::IndexedBitNotFoundError)
+    let new_beta: Vec<F> = cfg_into_iter!(curr_beta)
+        .skip(1)
+        .step_by(2)
+        .map(|curr_eval| *curr_eval * mult_factor)
+        .collect();
+    return Ok(new_beta);
 }
 
 /// Splits the beta table by the second most significant bit when we have nested selectors
@@ -180,13 +175,11 @@ impl<F: FieldExt> BetaTable<F> {
             Ok(BetaTable {
                 layer_claim_vars,
                 table: cur_table_mle_ref,
-                relevant_indices: iterated_bit_indices,
             })
         } else {
             Ok(BetaTable {
                 layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-                relevant_indices: vec![],
             })
         }
     }

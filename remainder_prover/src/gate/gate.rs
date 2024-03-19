@@ -223,7 +223,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
             BetaTable {
                 layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-                relevant_indices: vec![],
             }
         };
         // beta table representing all "z" label challenges
@@ -233,7 +232,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
             BetaTable {
                 layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-                relevant_indices: vec![],
             }
         };
         // multiply the corresponding entries of the beta tables to get the full value of the gate function
@@ -450,7 +448,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             BetaTable {
                 layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-                relevant_indices: vec![],
             }
         };
         beta_g2.table.index_mle_indices(0);
@@ -460,7 +457,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             BetaTable {
                 layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-                relevant_indices: vec![],
             }
         };
 
@@ -496,7 +492,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             BetaTable {
                 layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-                relevant_indices: vec![],
             }
         };
 
@@ -528,7 +523,6 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             BetaTable {
                 layer_claim_vars: vec![],
                 table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-                relevant_indices: vec![],
             }
         };
 
