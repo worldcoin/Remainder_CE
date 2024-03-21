@@ -18,14 +18,21 @@ use thiserror::Error;
 use tracing::Value;
 
 use crate::{
-    expression::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr}, mle::{
+    expression::{
+        expr_errors::ExpressionError,
+        generic_expr::{Expression, ExpressionNode, ExpressionType},
+        prover_expr::ProverExpr,
+    },
+    mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
         dense::DenseMleRef,
         mle_enum::MleEnum,
         MleIndex, MleRef,
-    }, prover::{SumcheckProof, ENABLE_OPTIMIZATION}, sumcheck::{
+    },
+    prover::{SumcheckProof, ENABLE_OPTIMIZATION},
+    sumcheck::{
         compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
-    }
+    },
 };
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
@@ -365,6 +372,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
         // TODO(Makis): Retrieve `evals.len()`s directly from the transcript.
         for num_curr_evals in sumcheck_prover_messages
             .into_iter()
+            .skip(1)
             .map(|evals| evals.len())
         {
             let challenge = transcript_reader
@@ -397,7 +405,13 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- This automatically asserts that the expression is fully bound and simply ---
         // --- attempts to combine/collect the expression evaluated at the (already bound) challenge coords ---
-        let expr_evaluated_at_challenge_coord = self.expression.clone().transform_to_verifier_expression().unwrap().gather_combine_all_evals().unwrap();
+        let expr_evaluated_at_challenge_coord = self
+            .expression
+            .clone()
+            .transform_to_verifier_expression()
+            .unwrap()
+            .gather_combine_all_evals()
+            .unwrap();
 
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---
@@ -434,65 +448,25 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |
-            exp: &ExpressionNode<F, ProverExpr>,
-            mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec
-        | {
-            match exp {
-                ExpressionNode::Mle(mle_vec_idx) => {
+        let mut observer_fn =
+            |exp: &ExpressionNode<F, ProverExpr>,
+             mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec| {
+                match exp {
+                    ExpressionNode::Mle(mle_vec_idx) => {
+                        let mle_ref = mle_vec_idx.get_mle(mle_vec);
 
-                    let mle_ref = mle_vec_idx.get_mle(mle_vec);
-
-                    // --- First ensure that all the indices are fixed ---
-                    let mle_indices = mle_ref.mle_indices();
-
-                    // --- This is super jank ---
-                    let mut fixed_mle_indices: Vec<F> = vec![];
-                    for mle_idx in mle_indices {
-                        if mle_idx.val().is_none() {
-                            dbg!("We got a nothing");
-                            dbg!(&mle_idx);
-                            dbg!(&mle_indices);
-                            dbg!(&mle_ref);
-                        }
-                        fixed_mle_indices.push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
-                    }
-
-                    // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
-                    let mle_layer_id = mle_ref.get_layer_id();
-
-                    // --- Grab the actual value that the claim is supposed to evaluate to ---
-                    if mle_ref.bookkeeping_table().len() != 1 {
-                        dbg!(&mle_ref.current_mle);
-                        return Err(ClaimError::MleRefMleError);
-                    }
-                    let claimed_value = mle_ref.bookkeeping_table()[0];
-
-                    // --- Construct the claim ---
-                    // println!("========\n I'm making a GKR layer claim for an MLE!!\n==========");
-                    // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
-                    let claim: Claim<F> = Claim::new(
-                        fixed_mle_indices,
-                        claimed_value,
-                        Some(self.id().clone()),
-                        Some(mle_layer_id),
-                        Some(MleEnum::Dense(mle_ref.clone())),
-                    );
-
-                    // --- Push it into the list of claims ---
-                    claims.push(claim);
-                }
-                ExpressionNode::Product(mle_vec_indices) => {
-                    for mle_vec_index in mle_vec_indices {
-
-                        let mle_ref = mle_vec_index.get_mle(mle_vec);
-                        
                         // --- First ensure that all the indices are fixed ---
                         let mle_indices = mle_ref.mle_indices();
 
                         // --- This is super jank ---
                         let mut fixed_mle_indices: Vec<F> = vec![];
                         for mle_idx in mle_indices {
+                            if mle_idx.val().is_none() {
+                                dbg!("We got a nothing");
+                                dbg!(&mle_idx);
+                                dbg!(&mle_indices);
+                                dbg!(&mle_ref);
+                            }
                             fixed_mle_indices
                                 .push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
                         }
@@ -501,15 +475,15 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
                         let mle_layer_id = mle_ref.get_layer_id();
 
                         // --- Grab the actual value that the claim is supposed to evaluate to ---
-
                         if mle_ref.bookkeeping_table().len() != 1 {
-                            dbg!(&mle_ref);
+                            dbg!(&mle_ref.current_mle);
                             return Err(ClaimError::MleRefMleError);
                         }
                         let claimed_value = mle_ref.bookkeeping_table()[0];
 
                         // --- Construct the claim ---
-                        // need to populate the claim with the mle ref we are grabbing the claim from
+                        // println!("========\n I'm making a GKR layer claim for an MLE!!\n==========");
+                        // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
                         let claim: Claim<F> = Claim::new(
                             fixed_mle_indices,
                             claimed_value,
@@ -521,11 +495,49 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
                         // --- Push it into the list of claims ---
                         claims.push(claim);
                     }
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle_ref = mle_vec_index.get_mle(mle_vec);
+
+                            // --- First ensure that all the indices are fixed ---
+                            let mle_indices = mle_ref.mle_indices();
+
+                            // --- This is super jank ---
+                            let mut fixed_mle_indices: Vec<F> = vec![];
+                            for mle_idx in mle_indices {
+                                fixed_mle_indices
+                                    .push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
+                            }
+
+                            // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                            let mle_layer_id = mle_ref.get_layer_id();
+
+                            // --- Grab the actual value that the claim is supposed to evaluate to ---
+
+                            if mle_ref.bookkeeping_table().len() != 1 {
+                                dbg!(&mle_ref);
+                                return Err(ClaimError::MleRefMleError);
+                            }
+                            let claimed_value = mle_ref.bookkeeping_table()[0];
+
+                            // --- Construct the claim ---
+                            // need to populate the claim with the mle ref we are grabbing the claim from
+                            let claim: Claim<F> = Claim::new(
+                                fixed_mle_indices,
+                                claimed_value,
+                                Some(self.id().clone()),
+                                Some(mle_layer_id),
+                                Some(MleEnum::Dense(mle_ref.clone())),
+                            );
+
+                            // --- Push it into the list of claims ---
+                            claims.push(claim);
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
-            Ok(())
-        };
+                Ok(())
+            };
 
         // --- Apply the observer function from above onto the expression ---
         layerwise_expr

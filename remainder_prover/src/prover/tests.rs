@@ -94,7 +94,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         // The input layer is ready at this point!
-        let input_layer: LigeroInputLayer<F, Self::Sponge> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F, Self::Sponge> =
+            input_layer.to_input_layer_with_rho_inv(4, 1.);
         let input_layers = vec![input_layer.to_enum()];
 
         // --- Subtract the computed circuit output from the advice circuit output ---
@@ -168,7 +169,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         let first_layer_output = layers.add_gkr(diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: LigeroInputLayer<F, Self::Sponge> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F, Self::Sponge> =
+            input_layer.to_input_layer_with_rho_inv(4, 1.);
 
         Witness {
             layers,
@@ -1035,7 +1037,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
                 true,
             );
         let live_committed_input_layer: LigeroInputLayer<F, Self::Sponge> =
-            live_committed_input_layer_builder.to_input_layer();
+            live_committed_input_layer_builder.to_input_layer_with_rho_inv(4, 1.);
 
         Witness {
             layers,

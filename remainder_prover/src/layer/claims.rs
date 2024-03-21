@@ -783,10 +783,19 @@ pub fn verifier_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<
     // Aggregate claims by performing the claim aggregation protocol.
     // First retrieve V_i(l(x)).
     let (num_wlx_evaluations, _) = get_num_wlx_evaluations(claims.get_claim_points_matrix());
-    let wlx_evaluations = transcript_reader
-        .consume_elements("Claim Aggregation Wlx_evaluations", num_wlx_evaluations)
+    let num_relevant_wlx_evaluations = num_wlx_evaluations - num_claims;
+    let relevant_wlx_evaluations = transcript_reader
+        .consume_elements(
+            "Claim Aggregation Wlx_evaluations",
+            num_relevant_wlx_evaluations,
+        )
         .map_err(|err| GKRError::TranscriptError(err))?;
-    let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
+    let wlx_evaluations = claims
+        .get_results()
+        .clone()
+        .into_iter()
+        .chain(relevant_wlx_evaluations.clone().into_iter())
+        .collect();
 
     // Next, sample `r^\star` from the transcript.
     let agg_chal = transcript_reader
