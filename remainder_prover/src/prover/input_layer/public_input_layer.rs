@@ -15,15 +15,12 @@ use crate::{
 use super::{enum_input_layer::InputLayerEnum, InputLayer, InputLayerError, MleInputLayer};
 
 ///An Input Layer that is send to the verifier in the clear
-pub struct PublicInputLayer<F: FieldExt, Tr> {
+pub struct PublicInputLayer<F: FieldExt> {
     mle: DenseMle<F, F>,
     pub(crate) layer_id: LayerId,
-    _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
-    type Transcript = Tr;
-
+impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     type Commitment = Vec<F>;
 
     type OpeningProof = ();
@@ -34,14 +31,14 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
 
     fn append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), TranscriptError> {
         transcript.append_field_elements("Public Input Commitment", commitment)
     }
 
     fn open(
         &self,
-        _: &mut Self::Transcript,
+        _: &mut impl Transcript<F>,
         _: crate::layer::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
@@ -51,7 +48,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut Self::Transcript,
+        _transcript: &mut impl Transcript<F>,
     ) -> Result<(), super::InputLayerError> {
         // println!("3, calling verify");
         let mut mle_ref =
@@ -87,18 +84,13 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
     fn get_padded_mle(&self) -> DenseMle<F, F> {
         self.mle.clone()
     }
-
-    fn to_enum(self) -> InputLayerEnum<F, Self::Transcript> {
-        InputLayerEnum::PublicInputLayer(self)
-    }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for PublicInputLayer<F, Tr> {
+impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
     fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
         Self {
             mle,
             layer_id,
-            _marker: PhantomData,
         }
     }
 }

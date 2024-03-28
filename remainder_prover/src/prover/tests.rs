@@ -1,9 +1,9 @@
+use crate::prover::helpers::test_circuit;
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
-use crate::prover::helpers::test_circuit;
 
 use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 
@@ -21,7 +21,8 @@ use crate::{
         zero::ZeroMleRef,
         Mle, MleIndex, MleRef,
     },
-    prover::input_layer::enum_input_layer::CommitmentEnum,
+    prover::input_layer::enum_input_layer::InputLayerEnumCommitment,
+    prover::ProofSystem,
     utils::get_random_mle,
     zkdt::builders::{EqualityCheck, ZeroBuilder},
 };
@@ -41,6 +42,16 @@ use super::{
     GKRCircuit, GKRError, Layers, Witness,
 };
 
+struct TestProofSystem;
+
+impl<F: FieldExt> ProofSystem<F> for TestProofSystem {
+    type Layer = LayerEnum<F>;
+
+    type InputLayer = InputLayerEnum<F>;
+
+    type Transcript = PoseidonTranscript<F>;
+}
+
 /// This circuit is a 4 --> 2 circuit, such that
 /// [x_1, x_2, x_3, x_4, (y_1, y_2)] --> [x_1 * x_3, x_2 * x_4] --> [x_1 * x_3 - y_1, x_2 * x_4 - y_2]
 /// Note that we also have the difference thingy (of size 2)
@@ -49,9 +60,9 @@ struct SimpleCircuit<F: FieldExt> {
     size: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
         let mut input_layer =
@@ -91,8 +102,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         // The input layer is ready at this point!
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
-        let input_layers = vec![input_layer.to_enum()];
+        let input_layer: LigeroInputLayer<F> = input_layer.to_input_layer();
+        let input_layers = vec![input_layer.into()];
 
         // --- Subtract the computed circuit output from the advice circuit output ---
         let output_diff_builder = from_mle(
@@ -120,21 +131,21 @@ struct SimplestCircuit<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
     // const CIRCUIT_HASH: Option<[u8; 32]> = Some([
     //     201,181,0,14,124,41,18,30,207,198,237,142,57,140,114,224,28,140,62,0,109,36,200,27,208,218,32,166,8,35,115,46,
     // ]);
     const CIRCUIT_HASH: Option<[u8; 32]> = None;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0));
         let mle_clone = self.mle.clone();
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F> = Layers::new();
+        let mut layers: Layers<F, _> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let diff_builder = from_mle(
@@ -165,12 +176,12 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         let first_layer_output = layers.add_gkr(diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: LigeroInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F> = input_layer.to_input_layer();
 
         Witness {
             layers,
             output_layers: vec![first_layer_output.get_enum()],
-            input_layers: vec![input_layer.to_enum()],
+            input_layers: vec![input_layer.into()],
         }
     }
 }
@@ -181,9 +192,9 @@ struct SimplestBatchedCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- Grab combined
         let mut combined_batched_first_second_mle =
             DenseMle::<F, Tuple2<F>>::combine_mle_batch(self.batched_first_second_mle.clone());
@@ -195,7 +206,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
         let num_dataparallel_bits = log2(num_dataparallel_circuit_copies) as usize;
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F> = Layers::new();
+        let mut layers = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let diff_builders = self
@@ -244,13 +255,13 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
         let batched_zero = combine_zero_mle_ref(batched_result);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: PublicInputLayer<F, Self::Transcript> =
+        let input_layer: PublicInputLayer<F> =
             input_layer_builder.to_input_layer();
 
         Witness {
             layers,
             output_layers: vec![batched_zero.get_enum()],
-            input_layers: vec![input_layer.to_enum()],
+            input_layers: vec![input_layer.into()],
         }
     }
 }
@@ -263,27 +274,27 @@ struct RandomCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
-        let mut input =
+        transcript: &mut PoseidonTranscript<F>,
+    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<InputLayerEnumCommitment<F>>), GKRError> {
+        let mut input: InputLayerEnum<F> =
             InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
-                .to_input_layer::<LigeroInputLayer<F, _>>()
-                .to_enum();
+                .to_input_layer::<LigeroInputLayer<F>>()
+                .into();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript).unwrap();
 
         let random = RandomInputLayer::new(transcript, 1, LayerId::Input(1));
         let random_mle = random.get_mle();
-        let mut random = random.to_enum();
+        let mut random: InputLayerEnum<F> = random.into();
         let random_commit = random.commit().map_err(GKRError::InputLayerError)?;
 
         let mut layers = Layers::new();
@@ -306,10 +317,10 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
         let mut output_input = output.clone();
         output_input.layer_id = LayerId::Input(2);
-        let mut input_layer_2 =
+        let mut input_layer_2: InputLayerEnum<F> =
             InputLayerBuilder::new(vec![Box::new(&mut output_input)], None, LayerId::Input(2))
-                .to_input_layer::<PublicInputLayer<F, _>>()
-                .to_enum();
+                .to_input_layer::<PublicInputLayer<F>>()
+                .into();
         let input_layer_2_commit = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commit, transcript).unwrap();
 
@@ -346,18 +357,18 @@ struct MultiInputLayerCircuit<F: FieldExt> {
     input_layer_2_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(Witness<F, Self::Transcript>, Vec<CommitmentEnum<F>>), GKRError> {
+        transcript: &mut PoseidonTranscript<F>,
+    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<InputLayerEnumCommitment<F>>), GKRError> {
         // --- Publicly commit to each input layer ---
-        let mut input_layer_1 = InputLayerBuilder::new(
+        let mut input_layer_1: InputLayerEnum<_> = InputLayerBuilder::new(
             vec![
                 Box::new(&mut self.input_layer_1_mle_1),
                 Box::new(&mut self.input_layer_1_mle_2),
@@ -365,14 +376,14 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             None,
             LayerId::Input(0),
         )
-        .to_input_layer::<PublicInputLayer<F, _>>()
-        .to_enum();
+        .to_input_layer::<PublicInputLayer<F>>()
+        .into();
         let input_layer_1_commitment = input_layer_1.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&input_layer_1_commitment, transcript)
             .unwrap();
 
         // --- Second input layer (public) commitment ---
-        let mut input_layer_2 = InputLayerBuilder::new(
+        let mut input_layer_2: InputLayerEnum<_> = InputLayerBuilder::new(
             vec![
                 Box::new(&mut self.input_layer_2_mle_1),
                 Box::new(&mut self.input_layer_2_mle_2),
@@ -380,8 +391,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             None,
             LayerId::Input(1),
         )
-        .to_input_layer::<PublicInputLayer<F, _>>()
-        .to_enum();
+        .to_input_layer::<PublicInputLayer<F>>()
+        .into();
         let input_layer_2_commitment = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commitment, transcript)
             .unwrap();
@@ -528,9 +539,9 @@ struct TestCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
         // let mut self_mle_clone = self.mle.clone();
         // let mut self_mle_2_clone = self.mle_2.clone();
@@ -544,7 +555,7 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         // --- Create Layers to be added to ---
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F> = Layers::new();
+        let mut layers: Layers<F, _> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let builder = from_mle(
@@ -608,7 +619,7 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
 
         // --- Input layer should be finalized at this point ---
         let _ = input_layer.add_extra_mle(Box::new(&mut output_input));
-        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layer: PublicInputLayer<F> = input_layer.to_input_layer();
 
         // --- Subtract the computed circuit output from the advice circuit output ---
         let builder5 = from_mle(
@@ -626,7 +637,7 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         Witness {
             layers,
             output_layers: vec![circuit_circuit_output.get_enum()],
-            input_layers: vec![input_layer.to_enum()],
+            input_layers: vec![input_layer.into()],
         }
     }
 }
@@ -637,15 +648,15 @@ struct SimplestGateCircuit<F: FieldExt> {
     negmle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         // --- Create Layers to be added to ---
         let mut layers = Layers::new();
@@ -679,9 +690,9 @@ struct MulAddSimplestGateCircuit<F: FieldExt> {
     neg_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.mle_1),
@@ -689,8 +700,8 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
             Box::new(&mut self.neg_mle_2),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         // --- Create Layers to be added to ---
         let mut layers = Layers::new();
@@ -741,9 +752,9 @@ struct SimplestAddMulBatchedGateCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.mle_1),
@@ -751,8 +762,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
             Box::new(&mut self.neg_mle_2),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         // --- Create Layers to be added to ---
         let mut layers = Layers::new();
@@ -851,7 +862,10 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
         batch_bits: 1,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof1_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof1_optimized.json")),
+    );
 
     // panic!();
 }
@@ -894,7 +908,10 @@ fn test_gkr_mul_add_gate_simplest_circuit() {
         neg_mle_2,
     };
 
-    test_circuit(circuit, Some(Path::new("./mul_gate_simple_proof_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./mul_gate_simple_proof_optimized.json")),
+    );
 
     // panic!();
 }
@@ -906,15 +923,15 @@ struct SimplestBatchedGateCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedGateCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         // --- Create Layers to be added to ---
         let mut layers = Layers::new();
@@ -960,9 +977,9 @@ struct SimplePrecommitCircuit<F: FieldExt> {
     mle2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The precommitted input layer MLE is just the first MLE ---
         let precommitted_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
         let precommitted_input_layer_builder =
@@ -977,7 +994,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         let mle2_clone = self.mle2.clone();
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F> = Layers::new();
+        let mut layers: Layers<F, _> = Layers::new();
 
         // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let diff_builder = from_mle(
@@ -1019,14 +1036,14 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         let ratio = 1_f64;
         let (_, ligero_comm, ligero_root, ligero_aux) =
             remainder_ligero_commit_prove(&self.mle.mle, rho_inv, ratio);
-        let precommitted_input_layer: LigeroInputLayer<F, Self::Transcript> =
+        let precommitted_input_layer: LigeroInputLayer<F> =
             precommitted_input_layer_builder.to_input_layer_with_precommit(
                 ligero_comm,
                 ligero_aux,
                 ligero_root,
                 true,
             );
-        let live_committed_input_layer: LigeroInputLayer<F, Self::Transcript> =
+        let live_committed_input_layer: LigeroInputLayer<F> =
             live_committed_input_layer_builder.to_input_layer();
 
         Witness {
@@ -1036,8 +1053,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
                 first_layer_output_2.get_enum(),
             ],
             input_layers: vec![
-                precommitted_input_layer.to_enum(),
-                live_committed_input_layer.to_enum(),
+                precommitted_input_layer.into(),
+                live_committed_input_layer.into(),
             ],
         }
     }
@@ -1058,9 +1075,9 @@ struct EmptyLayerTestCircuit<F: FieldExt> {
     other_empty_layer_src_mle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- We're not testing commitments here; just use PublicInputLayer ---
         let input_layer = InputLayerBuilder::new(
             vec![
@@ -1072,18 +1089,17 @@ impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
             None,
             LayerId::Input(0),
         )
-        .to_input_layer::<PublicInputLayer<F, _>>();
+        .to_input_layer::<PublicInputLayer<F>>();
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F> = Layers::new();
+        let mut layers: Layers<F, _> = Layers::new();
 
         // --- Creates empty layer and adds to circuit ---
         let empty_layer_builder = EmptyLayerBuilder::new(
             self.empty_layer_src_mle.clone(),
             self.other_empty_layer_src_mle.clone(),
         );
-        let empty_layer_result =
-            layers.add_empty(empty_layer_builder);
+        let empty_layer_result = layers.add_empty(empty_layer_builder);
 
         // --- Subtracts from `self.mle` ---
         let sub_builder = EmptyLayerSubBuilder::new(empty_layer_result.clone(), self.mle.clone());
@@ -1096,7 +1112,7 @@ impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
         Witness {
             layers,
             output_layers: vec![sub_result.get_enum(), add_result.get_enum()],
-            input_layers: vec![input_layer.to_enum()],
+            input_layers: vec![input_layer.into()],
         }
     }
 }
@@ -1107,9 +1123,9 @@ struct CombineCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let test_witness = self.test_circuit.synthesize();
         let simple_witness = self.simple_circuit.synthesize();
 
@@ -1126,7 +1142,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
         } = simple_witness;
 
         // for input vv
-        let input_layers: Vec<InputLayerEnum<F, PoseidonTranscript<F>>> = test_inputs
+        let input_layers: Vec<InputLayerEnum<F>> = test_inputs
             .into_iter()
             .chain(simple_inputs.into_iter().map(|mut input| {
                 let new_layer_id = match input.layer_id() {
@@ -1140,7 +1156,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
             }))
             .collect();
 
-        for layer in simple_layers.0.iter_mut() {
+        for layer in simple_layers.layers.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
                 LayerEnum::EmptyLayer(layer) => &mut layer.expr,
@@ -1307,7 +1323,10 @@ fn test_gkr_circuit_with_precommit() {
 
     let circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit { mle, mle2 };
 
-    test_circuit(circuit, Some(Path::new("./gkr_proof_with_precommit_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gkr_proof_with_precommit_optimized.json")),
+    );
 }
 
 // ------------------------------------ INPUT LAYER TESTING CIRCUITS ------------------------------------
@@ -1416,7 +1435,10 @@ fn test_gkr_gate_batched_simplest_circuit() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof2_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof2_optimized.json")),
+    );
 }
 
 #[test]
@@ -1452,7 +1474,10 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
         batch_bits: 2,
     };
 
-    test_circuit(circuit, Some(Path::new("./gate_batch_proof_uneven_optimized.json")));
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof_uneven_optimized.json")),
+    );
 }
 
 // ------------------------------------ EMPTY LAYER CIRCUITS ------------------------------------
@@ -1535,9 +1560,9 @@ struct BatchedTestCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let new_bits = log2(self.mle.len()) as usize;
         let mut mle_combined = DenseMle::<_, Tuple2<_>>::combine_mle_batch(self.mle.clone());
         let mut mle_2_combined = DenseMle::<_, Tuple2<_>>::combine_mle_batch(self.mle_2.clone());
@@ -1551,7 +1576,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
         );
 
         // --- Create Layers to be added to ---
-        let mut layers: Layers<F> = Layers::new();
+        let mut layers: Layers<F, LayerEnum<F>> = Layers::new();
 
         // // --- Create a SimpleLayer from the first `mle` within the circuit ---
         let builder = BatchedLayer::new(
@@ -1697,13 +1722,13 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
         // let input_mles: Vec<Box<&mut dyn Mle<F>>> =
         //     vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
 
-        // let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        // let input_layer: PublicInputLayer<F, Self::ProofSystem> = input_layer.to_input_layer();
 
         // // (layers, vec![circuit_circuit_output.get_enum()], input_layer)
         // Witness {
         //     layers,
         //     output_layers: vec![circuit_circuit_output.get_enum()],
-        //     input_layers: vec![input_layer.to_enum()],
+        //     input_layers: vec![input_layer.into()],
         // }
 
         todo!()
@@ -1755,9 +1780,9 @@ struct Combine3Circuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
-    type Transcript = PoseidonTranscript<F>;
+    type ProofSystem = TestProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let test_witness = self.test_circuit.synthesize();
         let simple_witness = self.simple_circuit.synthesize();
         let batch_witness = self.batch_circuit.synthesize();
@@ -1781,7 +1806,7 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
         } = batch_witness;
 
         // for input vv
-        let input_layers: Vec<InputLayerEnum<F, PoseidonTranscript<F>>> = test_inputs
+        let input_layers: Vec<InputLayerEnum<F>> = test_inputs
             .into_iter()
             .chain(simple_inputs.into_iter().map(|mut input| {
                 let new_layer_id = match input.layer_id() {
@@ -1805,7 +1830,7 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
             }))
             .collect();
 
-        for layer in simple_layers.0.iter_mut() {
+        for layer in simple_layers.layers.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
                 LayerEnum::EmptyLayer(layer) => &mut layer.expr,
@@ -1841,7 +1866,7 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
 
         // for input ^^
 
-        for layer in batch_layers.0.iter_mut() {
+        for layer in batch_layers.layers.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
                 LayerEnum::EmptyLayer(layer) => &mut layer.expr,

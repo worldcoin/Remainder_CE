@@ -27,15 +27,8 @@ use crate::mle::{
 };
 use thiserror::Error;
 
-impl<F: FieldExt> Into<LayerEnum<F>> for AddGate<F> {
-    fn into(self) -> LayerEnum<F> {
-        LayerEnum::AddGate(self)
-    }
-}
-
 /// implement the layer trait for addgate struct
 impl<F: FieldExt> Layer<F> for AddGate<F> {
-
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
@@ -440,7 +433,6 @@ pub struct AddGate<F: FieldExt> {
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt> AddGate<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
         struct AddGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a AddGate<F>);

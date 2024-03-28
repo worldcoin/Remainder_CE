@@ -28,15 +28,8 @@ use super::gate_helpers::{
     index_mle_indices_gate, prove_round_mul, GateError,
 };
 
-impl<F: FieldExt> Into<LayerEnum<F>> for MulGate<F> {
-    fn into(self) -> LayerEnum<F> {
-        LayerEnum::MulGate(self)
-    }
-}
-
 /// implement the layer trait for addgate struct
 impl<F: FieldExt> Layer<F> for MulGate<F> {
-
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
@@ -360,7 +353,7 @@ impl<F: FieldExt> Layer<F> for MulGate<F> {
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
         let num_vars = std::cmp::max(self.lhs.num_vars(), self.rhs.num_vars());
-        let (num_evals, _,) = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, _) = get_num_wlx_evaluations(claim_vecs);
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
@@ -426,7 +419,6 @@ pub struct MulGate<F: FieldExt> {
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt> MulGate<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
         struct MulGateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a MulGate<F>);

@@ -1,3 +1,4 @@
+use crate::prover::proof_system::ProofSystem;
 use crate::prover::GKRCircuit;
 use ark_std::{end_timer, start_timer};
 use remainder_shared_types::transcript::Transcript;
@@ -11,9 +12,10 @@ use std::path::Path;
 // binaries, where this function is often needed.
 pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>)
 where
-    <C as GKRCircuit<F>>::Transcript: Sync,
+    <C::ProofSystem as ProofSystem<F>>::Transcript: Sync,
 {
-    let mut transcript = C::Transcript::new("GKR Prover Transcript");
+    let mut transcript =
+        <C::ProofSystem as ProofSystem<F>>::Transcript::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
     match circuit.prove(&mut transcript) {
@@ -26,7 +28,8 @@ where
                 serde_json::to_writer(writer, &proof).unwrap();
                 end_timer!(write_out_timer);
             }
-            let mut transcript = C::Transcript::new("GKR Verifier Transcript");
+            let mut transcript =
+                <C::ProofSystem as ProofSystem<F>>::Transcript::new("GKR Verifier Transcript");
             let verifier_timer = start_timer!(|| "Proof verification");
 
             let proof = if let Some(path) = path {

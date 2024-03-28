@@ -14,15 +14,12 @@ use crate::{
 
 use super::{enum_input_layer::InputLayerEnum, InputLayer, InputLayerError};
 
-pub struct RandomInputLayer<F: FieldExt, Tr> {
+pub struct RandomInputLayer<F: FieldExt> {
     mle: Vec<F>,
     pub(crate) layer_id: LayerId,
-    _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
-    type Transcript = Tr;
-
+impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     type Commitment = Vec<F>;
 
     type OpeningProof = ();
@@ -33,7 +30,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
 
     fn append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), TranscriptError> {
         for challenge in commitment {
             let real_chal = transcript.get_challenge("Getting RandomInput")?;
@@ -46,7 +43,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
 
     fn open(
         &self,
-        _transcript: &mut Self::Transcript,
+        _transcript: &mut impl Transcript<F>,
         _claim: Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
@@ -56,7 +53,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut Self::Transcript,
+        _transcript: &mut impl Transcript<F>,
     ) -> Result<(), super::InputLayerError> {
         // println!("3, calling verify");
         let mut mle_ref =
@@ -90,22 +87,17 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for RandomInputLayer<F, Tr> {
     fn get_padded_mle(&self) -> DenseMle<F, F> {
         DenseMle::new_from_raw(self.mle.clone(), self.layer_id, None)
     }
-
-    fn to_enum(self) -> InputLayerEnum<F, Self::Transcript> {
-        InputLayerEnum::RandomInputLayer(self)
-    }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> RandomInputLayer<F, Tr> {
+impl<F: FieldExt> RandomInputLayer<F> {
     ///Generates a random MLE of size `size` that is generated from the FS Transcript
-    pub fn new(transcript: &mut Tr, size: usize, layer_id: LayerId) -> Self {
+    pub fn new(transcript: &mut impl Transcript<F>, size: usize, layer_id: LayerId) -> Self {
         let mle = transcript
             .get_challenges("Getting Random Challenges", size)
             .unwrap();
         Self {
             mle,
             layer_id,
-            _marker: PhantomData,
         }
     }
 

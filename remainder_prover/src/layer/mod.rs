@@ -257,17 +257,9 @@ impl<F: FieldExt> GKRLayer<F> {
             beta: None,
         }
     }
-
-}
-
-impl<F: FieldExt> Into<LayerEnum<F>> for GKRLayer<F> {
-    fn into(self) -> LayerEnum<F> {
-        LayerEnum::Gkr(self)
-    }
 }
 
 impl<F: FieldExt> Layer<F> for GKRLayer<F> {
-
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,

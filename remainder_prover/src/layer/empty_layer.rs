@@ -4,13 +4,14 @@ use std::marker::PhantomData;
 
 use crate::{
     expression::{gather_combine_all_evals, Expression, ExpressionStandard},
-    mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable},
-    prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals},
+    mle::{beta::BetaTable, dense::DenseMleRef, mle_enum::MleEnum, MleRef},
+    prover::SumcheckProof,
+    sumcheck::{compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals},
 };
-use ark_std::{cfg_into_iter};
+use ark_std::cfg_into_iter;
+use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use serde::{Deserialize, Serialize};
-use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
 
 use super::{
     claims::{Claim, ClaimError},
@@ -24,12 +25,6 @@ use super::{
 pub struct EmptyLayer<F> {
     pub(crate) expr: ExpressionStandard<F>,
     id: LayerId,
-}
-
-impl<F: FieldExt> Into<LayerEnum<F>> for EmptyLayer<F> {
-    fn into(self) -> LayerEnum<F> {
-        LayerEnum::EmptyLayer(self)
-    }
 }
 
 impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
@@ -97,7 +92,7 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
                         claimed_value,
                         Some(self.id().clone()),
                         Some(mle_layer_id),
-                        Some(MleEnum::Dense(mle_ref.clone()))
+                        Some(MleEnum::Dense(mle_ref.clone())),
                     );
 
                     // --- Push it into the list of claims ---
@@ -131,7 +126,7 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
                             claimed_value,
                             Some(self.id().clone()),
                             Some(mle_layer_id),
-                            Some(MleEnum::Dense(mle_ref.clone()))
+                            Some(MleEnum::Dense(mle_ref.clone())),
                         );
 
                         // --- Push it into the list of claims ---
@@ -175,10 +170,7 @@ impl<F: FieldExt> EmptyLayer<F> {
     }
 
     pub(crate) fn new_raw(id: LayerId, expr: ExpressionStandard<F>) -> Self {
-        Self {
-            id,
-            expr,
-        }
+        Self { id, expr }
     }
 
     pub(crate) fn new<L: super::LayerBuilder<F>>(builder: L, id: LayerId) -> Self

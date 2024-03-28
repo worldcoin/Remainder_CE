@@ -14,7 +14,8 @@ use crate::{
     },
     mle::{
         beta::{compute_beta_over_two_challenges, BetaTable},
-        dense::DenseMle, mle_enum::MleEnum,
+        dense::DenseMle,
+        mle_enum::MleEnum,
     },
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::evaluate_at_a_point,
@@ -28,12 +29,6 @@ use super::{
 };
 use crate::mle::{dense::DenseMleRef, MleRef};
 use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
-
-impl<F: FieldExt> Into<LayerEnum<F>> for MulGateBatched<F> {
-    fn into(self) -> LayerEnum<F> {
-        LayerEnum::MulGateBatched(self)
-    }
-}
 
 impl<F: FieldExt> Layer<F> for MulGateBatched<F> {
     fn prove_rounds(
@@ -378,7 +373,7 @@ impl<F: FieldExt> Layer<F> for MulGateBatched<F> {
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
         let num_vars = std::cmp::max(self.lhs.num_vars(), self.rhs.num_vars());
-        let (num_evals, _,) = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, _) = get_num_wlx_evaluations(claim_vecs);
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
@@ -445,7 +440,6 @@ pub struct MulGateBatched<F: FieldExt> {
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt> MulGateBatched<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
         struct MulGateBatchedCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a MulGateBatched<F>);

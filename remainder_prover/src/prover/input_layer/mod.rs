@@ -43,7 +43,6 @@ pub enum InputLayerError {
 use log::{debug, info, trace, warn};
 ///Trait for dealing with the InputLayer
 pub trait InputLayer<F: FieldExt> {
-    type Transcript: Transcript<F>;
     type Commitment;
     type OpeningProof;
 
@@ -51,12 +50,12 @@ pub trait InputLayer<F: FieldExt> {
 
     fn append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), TranscriptError>;
 
     fn open(
         &self,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
         claim: Claim<F>,
     ) -> Result<Self::OpeningProof, InputLayerError>;
 
@@ -64,7 +63,7 @@ pub trait InputLayer<F: FieldExt> {
         commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), InputLayerError>;
 
     fn layer_id(&self) -> &LayerId;
@@ -165,8 +164,6 @@ pub trait InputLayer<F: FieldExt> {
 
         Ok(r)
     }
-
-    fn to_enum(self) -> InputLayerEnum<F, Self::Transcript>;
 }
 
 ///Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs

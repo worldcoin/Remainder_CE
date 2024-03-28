@@ -36,7 +36,8 @@ use std::fmt;
 //     EmptyLayer(EmptyLayer<F>),
 // }
 
-layer_enum!(LayerEnum, 
+layer_enum!(
+    LayerEnum,
     (Gkr: GKRLayer<F>),
     (MulGate: MulGate<F>),
     (AddGate: AddGate<F>),

@@ -17,19 +17,16 @@ use remainder_shared_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    layer::LayerId, mle::dense::DenseMle, prover::input_layer::InputLayerError,
-};
+use crate::{layer::LayerId, mle::dense::DenseMle, prover::input_layer::InputLayerError};
 
 use super::{enum_input_layer::InputLayerEnum, InputLayer, MleInputLayer};
 
-pub struct LigeroInputLayer<F: FieldExt, Tr> {
+pub struct LigeroInputLayer<F: FieldExt> {
     pub mle: DenseMle<F, F>,
     pub(crate) layer_id: LayerId,
     comm: Option<LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>>,
     aux: Option<LcProofAuxiliaryInfo>,
     root: Option<LcRoot<LigeroEncoding<F>, F>>,
-    _marker: PhantomData<Tr>,
     is_precommit: bool,
     rho_inv: Option<u8>,
     ratio: Option<f64>,
@@ -50,9 +47,7 @@ const RHO_INV: u8 = 4;
 /// The *actual* Ligero commitment the prover needs to send to the verifier
 pub type LigeroCommitment<F> = LcRoot<LigeroEncoding<F>, F>;
 
-impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
-    type Transcript = Tr;
-
+impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     type Commitment = LigeroCommitment<F>;
 
     type OpeningProof = LigeroInputProof<F>;
@@ -67,7 +62,11 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
             _ => {}
         }
 
-        let (_, comm, root, aux) = remainder_ligero_commit_prove(&self.mle.mle, self.rho_inv.unwrap(), self.ratio.unwrap());
+        let (_, comm, root, aux) = remainder_ligero_commit_prove(
+            &self.mle.mle,
+            self.rho_inv.unwrap(),
+            self.ratio.unwrap(),
+        );
 
         self.comm = Some(comm);
         self.aux = Some(aux);
@@ -78,14 +77,14 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
 
     fn append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), TranscriptError> {
         transcript.append_field_element("Ligero Merkle Commitment", commitment.clone().into_raw())
     }
 
     fn open(
         &self,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
         claim: crate::layer::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, InputLayerError> {
         let aux = self
@@ -110,7 +109,6 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
             root,
         );
 
-
         Ok(LigeroInputProof {
             proof: ligero_eval_proof,
             aux,
@@ -122,7 +120,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
         commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
         claim: crate::layer::claims::Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript: &mut impl Transcript<F>,
     ) -> Result<(), super::InputLayerError> {
         let ligero_aux = &opening_proof.aux;
         let (_, ligero_eval_proof, _) =
@@ -145,13 +143,9 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for LigeroInputLayer<F, Tr> {
     fn get_padded_mle(&self) -> DenseMle<F, F> {
         self.mle.clone()
     }
-
-    fn to_enum(self) -> InputLayerEnum<F, Self::Transcript> {
-        InputLayerEnum::LigeroInputLayer(self)
-    }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for LigeroInputLayer<F, Tr> {
+impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
     fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
         Self {
             mle,
@@ -159,7 +153,6 @@ impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for LigeroInputLayer<F, Tr
             comm: None,
             aux: None,
             root: None,
-            _marker: PhantomData,
             is_precommit: false,
             rho_inv: None,
             ratio: None,
@@ -167,7 +160,7 @@ impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for LigeroInputLayer<F, Tr
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
+impl<F: FieldExt> LigeroInputLayer<F> {
     /// Creates new Ligero input layer WITH a precomputed Ligero commitment
     pub fn new_with_ligero_commitment(
         mle: DenseMle<F, F>,
@@ -183,7 +176,6 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
             comm: Some(ligero_comm),
             aux: Some(ligero_aux),
             root: Some(ligero_root),
-            _marker: PhantomData,
             is_precommit: verifier_is_precommit,
             rho_inv: None,
             ratio: None,
@@ -203,7 +195,6 @@ impl<F: FieldExt, Tr: Transcript<F>> LigeroInputLayer<F, Tr> {
             comm: None,
             aux: None,
             root: None,
-            _marker: PhantomData,
             is_precommit: false,
             rho_inv: Some(rho_inv),
             ratio: Some(ratio),
