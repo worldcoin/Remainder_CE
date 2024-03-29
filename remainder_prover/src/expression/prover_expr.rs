@@ -210,11 +210,18 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         ))
     }
 
-    /// fix the variable at a certain round index
+    /// fix the variable at a certain round index, always MSB index
     pub fn fix_variable(&mut self, round_index: usize, challenge: F) {
         let (expression_node, mle_vec) = self.deconstruct_mut();
 
         expression_node.fix_variable_node(round_index, challenge, mle_vec)
+    }
+
+    /// fix the variable at a certain round index, arbitrary index
+    pub fn fix_variable_at_index(&mut self, round_index: usize, challenge: F) {
+        let (expression_node, mle_vec) = self.deconstruct_mut();
+
+        expression_node.fix_variable_at_index_node(round_index, challenge, mle_vec)
     }
 
     /// evaluates an expression on the given challenges points, by fixing the variables
@@ -413,7 +420,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         }
     }
 
-    /// fix the variable at a certain round index
+    /// fix the variable at a certain round index, always the most significant index.
     pub fn fix_variable_node(
         &mut self,
         round_index: usize,
@@ -461,6 +468,61 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Scaled(a, _) => {
                 a.fix_variable_node(round_index, challenge, mle_vec);
+            }
+            ExpressionNode::Constant(_) => (),
+        }
+    }
+
+    /// fix the variable at a certain round index, can be arbitrary indices.
+    pub fn fix_variable_at_index_node(
+        &mut self,
+        round_index: usize,
+        challenge: F,
+        mle_vec: &mut <ProverExpr as ExpressionType<F>>::MleVec, // remove all other cases other than selector, call mle.fix_variable on all mle_vec contents
+    ) {
+        match self {
+            ExpressionNode::Selector(index, a, b) => {
+                if *index == MleIndex::IndexedBit(round_index) {
+                    index.bind_index(challenge);
+                } else {
+                    a.fix_variable_at_index_node(round_index, challenge, mle_vec);
+                    b.fix_variable_at_index_node(round_index, challenge, mle_vec);
+                }
+            }
+            ExpressionNode::Mle(mle_vec_idx) => {
+                let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                if mle_ref
+                    .mle_indices()
+                    .contains(&MleIndex::IndexedBit(round_index))
+                {
+                    mle_ref.fix_variable_at_index(round_index, challenge);
+                }
+            }
+            ExpressionNode::Negated(a) => {
+                a.fix_variable_at_index_node(round_index, challenge, mle_vec)
+            }
+            ExpressionNode::Sum(a, b) => {
+                a.fix_variable_at_index_node(round_index, challenge, mle_vec);
+                b.fix_variable_at_index_node(round_index, challenge, mle_vec);
+            }
+            ExpressionNode::Product(mle_vec_indices) => {
+                mle_vec_indices
+                    .into_iter()
+                    .map(|mle_vec_index| {
+                        let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                        if mle_ref
+                            .mle_indices()
+                            .contains(&MleIndex::IndexedBit(round_index))
+                        {
+                            mle_ref.fix_variable_at_index(round_index, challenge);
+                        }
+                    })
+                    .collect_vec();
+            }
+            ExpressionNode::Scaled(a, _) => {
+                a.fix_variable_at_index_node(round_index, challenge, mle_vec);
             }
             ExpressionNode::Constant(_) => (),
         }
