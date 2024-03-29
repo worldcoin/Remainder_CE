@@ -3,7 +3,13 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{generic_expr::{Expression, ExpressionNode}, prover_expr::ProverExpr}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
+    expression::{
+        generic_expr::{Expression, ExpressionNode},
+        prover_expr::ProverExpr,
+    },
+    mle::{beta::BetaTable, dense::DenseMleRef, mle_enum::MleEnum, MleRef},
+    prover::SumcheckProof,
+    sumcheck::{compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals},
 };
 use ark_std::cfg_into_iter;
 use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
@@ -33,24 +39,34 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         _: Claim<F>,
         _: &mut Self::Transcript,
     ) -> Result<SumcheckProof<F>, LayerError> {
-        let eval = self.expr.clone().transform_to_verifier_expression().unwrap().gather_combine_all_evals().map_err(LayerError::ExpressionError)?;
+        let eval = self
+            .expr
+            .clone()
+            .transform_to_verifier_expression()
+            .unwrap()
+            .gather_combine_all_evals()
+            .map_err(LayerError::ExpressionError)?;
 
-        Ok(vec![vec![eval]].into())
+        Ok(Some(vec![vec![eval]]).into())
     }
 
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Vec<Vec<F>>,
+        sumcheck_rounds: Option<Vec<Vec<F>>>,
         _: &mut Self::Transcript,
     ) -> Result<(), LayerError> {
-        if sumcheck_rounds[0][0] != claim.get_result() {
-            return Err(LayerError::VerificationError(
-                super::VerificationError::GKRClaimCheckFailed,
-            ));
+        if sumcheck_rounds.is_none() {
+            Ok(())
+        } else {
+            let sumcheck_rounds = sumcheck_rounds.unwrap();
+            if sumcheck_rounds[0][0] != claim.get_result() {
+                return Err(LayerError::VerificationError(
+                    super::VerificationError::GKRClaimCheckFailed,
+                ));
+            }
+            Ok(())
         }
-
-        Ok(())
     }
 
     fn get_enum(self) -> LayerEnum<F, Tr> {
@@ -69,13 +85,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |
-            exp_node: &ExpressionNode<F, ProverExpr>,
-            mle_vec: &Vec<DenseMleRef<F>>,
-        | {
+        let mut observer_fn = |exp_node: &ExpressionNode<F, ProverExpr>,
+                               mle_vec: &Vec<DenseMleRef<F>>| {
             match exp_node {
                 ExpressionNode::Mle(mle_vec_idx) => {
-
                     let mle_ref = mle_vec_idx.get_mle(mle_vec);
 
                     // --- First ensure that all the indices are fixed ---

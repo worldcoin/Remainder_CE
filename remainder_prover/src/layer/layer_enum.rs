@@ -54,7 +54,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Vec<Vec<F>>,
+        sumcheck_rounds: Option<Vec<Vec<F>>>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), super::LayerError> {
         match self {

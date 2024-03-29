@@ -1,10 +1,13 @@
+use crate::expression::{
+    generic_expr::{Expression, ExpressionNode, ExpressionType},
+    prover_expr::ProverExpr,
+};
 use crate::{gate::gate::BinaryOperation, prover::helpers::test_circuit};
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
 use serde_json::{from_reader, to_writer};
-use crate::{expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr}};
 
 use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 
@@ -456,12 +459,10 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             // Lol this hack though
             (first_layer_output, second_layer_output),
             |(first_layer_output_mle_param, second_layer_output_mle_param)| {
-                let first_layer_output_mle_param_expr_ptr = Box::new(Expression::mle(
-                    first_layer_output_mle_param.mle_ref(),
-                ));
-                let second_layer_output_mle_param_expr_ptr = Box::new(Expression::mle(
-                    second_layer_output_mle_param.mle_ref(),
-                ));
+                let first_layer_output_mle_param_expr_ptr =
+                    Box::new(Expression::mle(first_layer_output_mle_param.mle_ref()));
+                let second_layer_output_mle_param_expr_ptr =
+                    Box::new(Expression::mle(second_layer_output_mle_param.mle_ref()));
                 Expression::sum(
                     first_layer_output_mle_param_expr_ptr,
                     second_layer_output_mle_param_expr_ptr,
@@ -1150,36 +1151,36 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a, 'b> |
-                expr: &'a mut ExpressionNode<F, ProverExpr>,
-                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
-            | -> Result<(), ()> {
-                match expr {
-                    ExpressionNode::Mle(mle_vec_idx) => {
-                        let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
-
-                        if mle_ref.layer_id == LayerId::Input(0) {
-                            mle_ref.layer_id = LayerId::Input(1)
-                        }
-                        Ok(())
-                    }
-                    ExpressionNode::Product(mle_vec_indices) => {
-                        for mle_vec_index in mle_vec_indices {
-                            let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+            let mut closure =
+                for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
+                             mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec|
+                             -> Result<(), ()> {
+                    match expr {
+                        ExpressionNode::Mle(mle_vec_idx) => {
+                            let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
 
                             if mle_ref.layer_id == LayerId::Input(0) {
                                 mle_ref.layer_id = LayerId::Input(1)
                             }
+                            Ok(())
                         }
-                        Ok(())
+                        ExpressionNode::Product(mle_vec_indices) => {
+                            for mle_vec_index in mle_vec_indices {
+                                let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                                if mle_ref.layer_id == LayerId::Input(0) {
+                                    mle_ref.layer_id = LayerId::Input(1)
+                                }
+                            }
+                            Ok(())
+                        }
+                        ExpressionNode::Constant(_)
+                        | ExpressionNode::Scaled(_, _)
+                        | ExpressionNode::Sum(_, _)
+                        | ExpressionNode::Negated(_)
+                        | ExpressionNode::Selector(_, _, _) => Ok(()),
                     }
-                    ExpressionNode::Constant(_)
-                    | ExpressionNode::Scaled(_, _)
-                    | ExpressionNode::Sum(_, _)
-                    | ExpressionNode::Negated(_)
-                    | ExpressionNode::Selector(_, _, _) => Ok(()),
-                }
-            };
+                };
 
             expression.traverse_mut(&mut closure).unwrap();
         }
@@ -1995,36 +1996,36 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a, 'b> |
-                expr: &'a mut ExpressionNode<F, ProverExpr>,
-                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
-            | -> Result<(), ()> {
-                match expr {
-                    ExpressionNode::Mle(mle_vec_idx) => {
-                        let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
-
-                        if mle_ref.layer_id == LayerId::Input(0) {
-                            mle_ref.layer_id = LayerId::Input(1)
-                        }
-                        Ok(())
-                    }
-                    ExpressionNode::Product(mle_vec_indices) => {
-                        for mle_vec_index in mle_vec_indices {
-                            let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+            let mut closure =
+                for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
+                             mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec|
+                             -> Result<(), ()> {
+                    match expr {
+                        ExpressionNode::Mle(mle_vec_idx) => {
+                            let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
 
                             if mle_ref.layer_id == LayerId::Input(0) {
                                 mle_ref.layer_id = LayerId::Input(1)
                             }
+                            Ok(())
                         }
-                        Ok(())
+                        ExpressionNode::Product(mle_vec_indices) => {
+                            for mle_vec_index in mle_vec_indices {
+                                let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                                if mle_ref.layer_id == LayerId::Input(0) {
+                                    mle_ref.layer_id = LayerId::Input(1)
+                                }
+                            }
+                            Ok(())
+                        }
+                        ExpressionNode::Constant(_)
+                        | ExpressionNode::Scaled(_, _)
+                        | ExpressionNode::Sum(_, _)
+                        | ExpressionNode::Negated(_)
+                        | ExpressionNode::Selector(_, _, _) => Ok(()),
                     }
-                    ExpressionNode::Constant(_)
-                    | ExpressionNode::Scaled(_, _)
-                    | ExpressionNode::Sum(_, _)
-                    | ExpressionNode::Negated(_)
-                    | ExpressionNode::Selector(_, _, _) => Ok(()),
-                }
-            };
+                };
 
             expression.traverse_mut(&mut closure).unwrap();
         }
@@ -2038,36 +2039,36 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a, 'b> |
-                expr: &'a mut ExpressionNode<F, ProverExpr>,
-                mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
-            | -> Result<(), ()> {
-                match expr {
-                    ExpressionNode::Mle(mle_vec_idx) => {
-                        let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
-
-                        if mle_ref.layer_id == LayerId::Input(0) {
-                            mle_ref.layer_id = LayerId::Input(2)
-                        }
-                        Ok(())
-                    }
-                    ExpressionNode::Product(mle_vec_indices) => {
-                        for mle_vec_index in mle_vec_indices {
-                            let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+            let mut closure =
+                for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
+                             mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec|
+                             -> Result<(), ()> {
+                    match expr {
+                        ExpressionNode::Mle(mle_vec_idx) => {
+                            let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
 
                             if mle_ref.layer_id == LayerId::Input(0) {
                                 mle_ref.layer_id = LayerId::Input(2)
                             }
+                            Ok(())
                         }
-                        Ok(())
+                        ExpressionNode::Product(mle_vec_indices) => {
+                            for mle_vec_index in mle_vec_indices {
+                                let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                                if mle_ref.layer_id == LayerId::Input(0) {
+                                    mle_ref.layer_id = LayerId::Input(2)
+                                }
+                            }
+                            Ok(())
+                        }
+                        ExpressionNode::Constant(_)
+                        | ExpressionNode::Scaled(_, _)
+                        | ExpressionNode::Sum(_, _)
+                        | ExpressionNode::Negated(_)
+                        | ExpressionNode::Selector(_, _, _) => Ok(()),
                     }
-                    ExpressionNode::Constant(_)
-                    | ExpressionNode::Scaled(_, _)
-                    | ExpressionNode::Sum(_, _)
-                    | ExpressionNode::Negated(_)
-                    | ExpressionNode::Selector(_, _, _) => Ok(()),
-                }
-            };
+                };
 
             expression.traverse_mut(&mut closure).unwrap();
         }

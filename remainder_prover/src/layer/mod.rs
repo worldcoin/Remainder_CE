@@ -151,7 +151,7 @@ pub trait Layer<F: FieldExt> {
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Vec<Vec<F>>,
+        sumcheck_rounds: Option<Vec<Vec<F>>>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), LayerError>;
 
@@ -194,34 +194,39 @@ pub struct GKRLayer<F: FieldExt, Tr> {
 impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
     /// Ingest a claim, initialize beta tables, and do any other
     /// bookkeeping that needs to be done before the sumcheck starts
-    fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<(Vec<F>, usize, usize), LayerError> {
+    fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<Vec<F>, LayerError> {
         // --- `max_round` is total number of rounds of sumcheck which need to be performed ---
         // --- `beta` is the beta table itself, initialized with the challenge coordinate held within `claim` ---
-        let (max_round, beta, first_nonlinear_round) = {
+        let (beta, first_nonlinear_round) = {
             let (expression, _) = self.mut_expression_and_beta();
-            let expression_num_indices = expression.index_mle_indices(0);
-            let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
+            let _expression_num_indices = expression.index_mle_indices(0);
+            let mut expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
+            expression_nonlinear_indices.sort();
+
+            let mut expression_linear_indices = expression.get_all_linear_rounds();
+            expression_linear_indices.sort();
+
+            let claim_point = claim.get_point();
+
+            expression_linear_indices
+                .iter()
+                .sorted()
+                .for_each(|round_idx| {
+                    expression.fix_variable_at_index(*round_idx, claim_point[*round_idx]);
+                });
 
             self.set_nonlinear_rounds(expression_nonlinear_indices.clone());
-            let claim_point = claim.get_point();
             let claim_chals_nonlinear = expression_nonlinear_indices
                 .iter()
                 .map(|idx| claim_point[*idx])
                 .collect_vec();
 
-            dbg!(&claim_chals_nonlinear);
-            dbg!(&expression_nonlinear_indices);
+            if expression_nonlinear_indices.len() == 0 {
+                return Ok(vec![]);
+            }
             let mut beta = BetaTable::new(claim_chals_nonlinear).map_err(LayerError::BetaError)?;
-            let beta_table_num_indices = beta.table.index_mle_indices(0);
-
-            // --- This should always be equivalent to the number of indices within the beta table ---
-            let max_round = std::cmp::max(expression_num_indices, beta_table_num_indices);
-            let first_nonlinear_round = expression_nonlinear_indices
-                .clone()
-                .into_iter()
-                .min()
-                .unwrap_or(max_round);
-            (max_round, beta, first_nonlinear_round)
+            beta.table.index_mle_indices(0);
+            (beta, expression_nonlinear_indices[0])
         };
 
         // --- Sets the beta table for the current layer we are sumchecking over ---
@@ -230,17 +235,15 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         // --- Grabs the expression/beta table/variable degree for the first round and executes the sumcheck prover for the first round ---
         let (expression, beta) = self.mut_expression_and_beta();
         let beta = beta.as_ref().unwrap();
-        let degree = get_round_degree(expression, 0);
-        (0..first_nonlinear_round).for_each(|idx| {
-            expression.fix_variable(idx, claim.get_point()[idx]);
-        });
+        let degree = get_round_degree(expression, first_nonlinear_round);
+
         let first_round_sumcheck_message =
             compute_sumcheck_message(expression, first_nonlinear_round, degree, beta)
                 .map_err(LayerError::ExpressionError)?;
 
         let Evals(out) = first_round_sumcheck_message;
 
-        Ok((out, max_round, first_nonlinear_round))
+        Ok(out)
     }
 
     /// Computes a round of the sumcheck protocol on this Layer
@@ -248,13 +251,14 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         &mut self,
         round_index: usize,
         challenge: F,
+        challenge_idx: usize,
     ) -> Result<Vec<F>, LayerError> {
         // --- Grabs the expression/beta table and updates them with the new challenge ---
         let (expression, beta) = self.mut_expression_and_beta();
         let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
         //dbg!(&expression);
         expression.fix_variable(round_index - 1, challenge);
-        beta.beta_update(round_index - 1, challenge)
+        beta.beta_update(challenge_idx - 1, challenge)
             .map_err(LayerError::BetaError)?;
 
         // --- Grabs the degree of univariate polynomial we are sending over ---
@@ -265,15 +269,6 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
                 .map_err(LayerError::ExpressionError)?;
 
         Ok(prover_sumcheck_message.0)
-    }
-
-    fn update_linear_round(&mut self, round_index: usize, update_point: F, prev_chal: F) {
-        let (expression, beta) = self.mut_expression_and_beta();
-        let beta = beta.as_mut().ok_or(LayerError::LayerNotReady).unwrap();
-        expression.fix_variable(round_index - 1, prev_chal);
-        beta.beta_update(round_index - 1, prev_chal)
-            .map_err(LayerError::BetaError);
-        expression.fix_variable(round_index, update_point);
     }
 
     fn mut_expression_and_beta(
@@ -326,18 +321,17 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let val = claim.get_result().clone();
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
-        let claim_point = claim.clone();
-        let (first_sumcheck_message, num_sumcheck_rounds, first_nonlinear_round) =
-            self.start_sumcheck(claim)?;
-        if val != first_sumcheck_message[0] + first_sumcheck_message[1] {
-            dbg!(&val);
-            dbg!(first_sumcheck_message[0] + first_sumcheck_message[1]);
-            dbg!(&self.expression);
-            dbg!(&self.expression.get_all_nonlinear_rounds());
+        let first_sumcheck_message = self.start_sumcheck(claim)?;
+
+        let nonlinear_rounds = self.nonlinear_rounds.clone().unwrap();
+        if nonlinear_rounds.len() == 0 {
+            return Ok(None.into());
         }
 
         info!("Proving GKR Layer");
         if first_sumcheck_message[0] + first_sumcheck_message[1] != val {
+            dbg!(&val);
+            dbg!(first_sumcheck_message[0] + first_sumcheck_message[1]);
             debug!("HUGE PROBLEM");
         }
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
@@ -357,40 +351,25 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         // (i.e. all of the g_i's) are added to the transcript each time.
 
         let all_prover_sumcheck_messages: Vec<Vec<F>> = std::iter::once(Ok(first_sumcheck_message))
-            .chain(
-                ((first_nonlinear_round + 1)..num_sumcheck_rounds).filter_map(|round_index| {
+            .chain((nonlinear_rounds.iter().enumerate().skip(1)).map(
+                |(idx_of_vec, round_index)| {
                     // --- Verifier samples a random challenge \in \mathbb{F} to send to prover ---
                     let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
 
                     // --- Prover uses that random challenge to compute the next sumcheck message ---
                     // --- We then add the prover message to FS transcript ---
-                    let prover_sumcheck_message = if self
-                        .nonlinear_rounds
-                        .as_ref()
-                        .unwrap()
-                        .contains(&(round_index - 1))
-                    {
-                        let prover_sumcheck_message =
-                            self.prove_nonlinear_round(round_index, challenge);
-                        transcript
-                            .append_field_elements(
-                                "Sumcheck evaluations",
-                                &prover_sumcheck_message.clone().unwrap(),
-                            )
-                            .unwrap();
-                        Some(prover_sumcheck_message)
-                    } else {
-                        self.update_linear_round(
-                            round_index,
-                            claim_point.get_point()[round_index],
-                            challenge,
-                        );
-                        None
-                    };
+                    let prover_sumcheck_message =
+                        self.prove_nonlinear_round(*round_index, challenge, idx_of_vec);
+                    transcript
+                        .append_field_elements(
+                            "Sumcheck evaluations",
+                            &prover_sumcheck_message.clone().unwrap(),
+                        )
+                        .unwrap();
 
                     prover_sumcheck_message
-                }),
-            )
+                },
+            ))
             .collect::<Result<_, _>>()?;
 
         // --- For the final round, we need to check that g(r_1, ..., r_n) = g_n(r_n) ---
@@ -399,28 +378,25 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
 
-        self.expression
-            .fix_variable(num_sumcheck_rounds - 1, final_chal);
-        if self
-            .nonlinear_rounds
-            .as_ref()
-            .unwrap()
-            .contains(&(num_sumcheck_rounds - 1))
-        {
-            self.beta
-                .as_mut()
-                .map(|beta| beta.beta_update(num_sumcheck_rounds - 1, final_chal));
-        }
+        let last_idx = nonlinear_rounds[nonlinear_rounds.len() - 1];
 
-        Ok(all_prover_sumcheck_messages.into())
+        self.expression.fix_variable(last_idx, final_chal);
+        self.beta
+            .as_mut()
+            .map(|beta| beta.beta_update(nonlinear_rounds.len() - 1, final_chal));
+        Ok(Some(all_prover_sumcheck_messages).into())
     }
 
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_prover_messages: Vec<Vec<F>>,
+        sumcheck_prover_messages: Option<Vec<Vec<F>>>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), LayerError> {
+        if sumcheck_prover_messages.is_none() {
+            return Ok(());
+        }
+        let sumcheck_prover_messages = sumcheck_prover_messages.unwrap();
         // --- Keeps track of challenges u_1, ..., u_n to be bound ---
         let mut challenges = vec![];
 
@@ -482,8 +458,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---
+        let expr_nonlinear_indices = self.nonlinear_rounds.as_ref().unwrap();
+        let claim_nonlinear_vals: Vec<F> = expr_nonlinear_indices
+            .iter()
+            .map(|idx| (claim.get_point()[*idx]))
+            .collect();
         let beta_fn_evaluated_at_challenge_point =
-            compute_beta_over_two_challenges(claim.get_point(), &challenges);
+            compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges);
 
         // --- The actual value should just be the product of the two ---
         let mle_evaluated_at_challenge_coord =

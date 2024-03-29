@@ -20,7 +20,7 @@ use crate::{
         MleRef,
     },
     prover::SumcheckProof,
-    sumcheck::{evaluate_at_a_point, Evals},
+    sumcheck::{self, evaluate_at_a_point, Evals},
 };
 
 use super::gate_helpers::{
@@ -123,15 +123,16 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         sumcheck_rounds.extend(phase_2_rounds);
 
         // the concatenation of all of these rounds is the proof resulting from a gate layer
-        Ok(sumcheck_rounds.into())
+        Ok(Some(sumcheck_rounds).into())
     }
 
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Vec<Vec<F>>,
+        sumcheck_rounds: Option<Vec<Vec<F>>>,
         transcript: &mut Self::Transcript,
     ) -> Result<(), LayerError> {
+        let sumcheck_rounds = sumcheck_rounds.unwrap();
         let mut prev_evals = &sumcheck_rounds[0];
         let mut challenges = vec![];
         let mut first_u_challenges = vec![];
