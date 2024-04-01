@@ -29,15 +29,27 @@ macro_rules! layer_enum {
             )*
         }
 
+        paste::paste! {
+            #[derive(serde::Serialize, serde::Deserialize, Debug)]
+            #[serde(bound = "F: FieldExt")]    
+            pub enum [<$type_name Proof>]<F: FieldExt> {
+                $(
+                    #[doc = "Remainder generated Proof variant"]
+                    $var_name(<$variant as Layer<F>>::Proof),
+                )*
+            }
+        }
+
         impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
+            paste::paste! { type Proof = [<$type_name Proof>]<F>;}
             fn prove_rounds(
                 &mut self,
                 claim: $crate::layer::claims::Claim<F>,
                 transcript: &mut impl remainder_shared_types::transcript::Transcript<F>,
-            ) -> Result<$crate::prover::SumcheckProof<F>, super::LayerError> {
+            ) -> Result<Self::Proof, super::LayerError> {
                 match self {
                     $(
-                        Self::$var_name(layer) => layer.prove_rounds(claim, transcript),
+                        Self::$var_name(layer) => Ok(Self::Proof::$var_name(layer.prove_rounds(claim, transcript)?)),
                     )*
                 }
             }
@@ -45,12 +57,18 @@ macro_rules! layer_enum {
             fn verify_rounds(
                 &mut self,
                 claim: $crate::layer::claims::Claim<F>,
-                sumcheck_rounds: Vec<Vec<F>>,
+                proof: Self::Proof,
                 transcript: &mut impl remainder_shared_types::transcript::Transcript<F>,
             ) -> Result<(), super::LayerError> {
                 match self {
                     $(
-                        Self::$var_name(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
+                        Self::$var_name(layer) => {
+                            let proof = match proof {
+                                Self::Proof::$var_name(proof) => proof,
+                                _ => unreachable!()
+                            };
+                            layer.verify_rounds(claim, proof, transcript)
+                        },
                     )*
                 }
             }
@@ -178,7 +196,7 @@ macro_rules! input_layer_enum {
                             if let Self::OpeningProof::$var_name(opening_proof) = opening_proof {
                                 <$variant as InputLayer<F>>::verify(commitment, opening_proof, claim, transcript)
                             } else {
-                                panic!()
+                                unreachable!()
                             }
                         },
                     )*

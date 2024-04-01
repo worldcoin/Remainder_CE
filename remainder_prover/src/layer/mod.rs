@@ -7,7 +7,7 @@ pub mod empty_layer;
 pub mod layer_enum;
 // mod gkr_layer;
 
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
 
 use ark_std::cfg_into_iter;
 use itertools::repeat_n;
@@ -132,18 +132,20 @@ impl std::fmt::Display for LayerId {
 
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
+    type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
+
     /// Creates a sumcheck proof for this Layer
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
         transcript: &mut impl Transcript<F>,
-    ) -> Result<SumcheckProof<F>, LayerError>;
+    ) -> Result<Self::Proof, LayerError>;
 
     ///  Verifies the sumcheck protocol
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Vec<Vec<F>>,
+        proof: Self::Proof,
         transcript: &mut impl Transcript<F>,
     ) -> Result<(), LayerError>;
 
@@ -260,6 +262,8 @@ impl<F: FieldExt> GKRLayer<F> {
 }
 
 impl<F: FieldExt> Layer<F> for GKRLayer<F> {
+    type Proof = SumcheckProof<F>;
+
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
@@ -327,11 +331,12 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_prover_messages: Vec<Vec<F>>,
+        sumcheck_prover_messages: Self::Proof,
         transcript: &mut impl Transcript<F>,
     ) -> Result<(), LayerError> {
         // --- Keeps track of challenges u_1, ..., u_n to be bound ---
         let mut challenges = vec![];
+        let sumcheck_prover_messages: Vec<Vec<F>> = sumcheck_prover_messages.0;
 
         // --- First verify that g_1(0) + g_1(1) = \sum_{b_1, ..., b_n} g(b_1, ..., b_n) ---
         // (i.e. the first verification step of sumcheck)

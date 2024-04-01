@@ -32,6 +32,8 @@ use super::{
 };
 
 impl<F: FieldExt> Layer<F> for AddGateBatched<F> {
+    type Proof = SumcheckProof<F>;
+
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
@@ -121,9 +123,10 @@ impl<F: FieldExt> Layer<F> for AddGateBatched<F> {
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Vec<Vec<F>>,
+        sumcheck_rounds: Self::Proof,
         transcript: &mut impl Transcript<F>,
     ) -> Result<(), LayerError> {
+        let sumcheck_rounds = sumcheck_rounds.0;
         let mut prev_evals = &sumcheck_rounds[0];
         let mut challenges = vec![];
         let mut first_u_challenges = vec![];

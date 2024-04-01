@@ -4,10 +4,10 @@ use std::{
 };
 
 use crate::{
-    mle::{
+    layer::{batched::combine_mles, LayerId}, mle::{
         dense::{get_padded_evaluations_for_list, DenseMle, DenseMleRef},
         Mle, MleAble, MleIndex, MleRef,
-    }, layer::{batched::combine_mles, LayerId}, prover::GKRProof,
+    }, prover::{proof_system::ProofSystem, GKRProof}
 };
 use ark_crypto_primitives::crh::sha256::digest::typenum::bit;
 use remainder_shared_types::{FieldExt, transcript::Transcript};
@@ -22,9 +22,9 @@ use serde::{Serialize, Deserialize};
 /// ZKDT specific, with information like number of trees batched (multi-tree setting) 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct ZKDTProof<F: FieldExt> {
+pub struct ZKDTProof<F: FieldExt, Pf: ProofSystem<F>> {
     /// The GKR proof for a ZKDT circuit
-    pub gkr_proof: GKRProof<F>,
+    pub gkr_proof: GKRProof<F, Pf>,
 
     /// The number of trees in a ZKDT proof
     pub tree_batch_size: usize,

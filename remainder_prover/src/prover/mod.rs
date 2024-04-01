@@ -49,15 +49,10 @@ use tracing::{event, instrument, span, Level};
 
 use self::{
     input_layer::{
-        enum_input_layer::{InputLayerEnumCommitment, InputLayerEnum, InputLayerEnumOpeningProof},
         InputLayer, InputLayerError,
     },
     proof_system::ProofSystem,
 };
-
-use core::cmp::Ordering;
-
-use tracing::warn;
 
 /// New type for containing the list of Layers that make up the GKR circuit
 ///
@@ -371,7 +366,7 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct LayerProof<F: FieldExt, Pf: ProofSystem<F>> {
-    pub sumcheck_proof: SumcheckProof<F>,
+    pub sumcheck_proof: <Pf::Layer as Layer<F>>::Proof,
     pub layer: Pf::Layer,
     /// When the claim aggregation optimization is on, each Layer produces many
     /// wlx evaluations.
@@ -381,13 +376,13 @@ pub struct LayerProof<F: FieldExt, Pf: ProofSystem<F>> {
 /// Proof for circuit input layer
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-pub struct InputLayerProof<F: FieldExt> {
+pub struct InputLayerProof<F: FieldExt, Pf: ProofSystem<F>> {
     pub layer_id: LayerId,
     /// When the claim aggregation optimization is on, each Layer produces many
     /// wlx evaluations.
     pub input_layer_wlx_evaluations: Vec<Vec<F>>,
-    pub input_commitment: InputLayerEnumCommitment<F>,
-    pub input_opening_proof: InputLayerEnumOpeningProof<F>,
+    pub input_commitment: <Pf::InputLayer as InputLayer<F>>::Commitment,
+    pub input_opening_proof: <Pf::InputLayer as InputLayer<F>>::OpeningProof,
 }
 
 /// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
@@ -401,7 +396,7 @@ pub struct GKRProof<F: FieldExt, Pf: ProofSystem<F>> {
     /// All the output layers that this circuit yields
     pub output_layers: Vec<MleEnum<F>>,
     /// Proofs for each input layer (e.g. `LigeroInputLayer` or `PublicInputLayer`).
-    pub input_layer_proofs: Vec<InputLayerProof<F>>,
+    pub input_layer_proofs: Vec<InputLayerProof<F, Pf>>,
     /// Hash of the entire circuit description, to be used in the FS transcript!
     /// TODO!(%Labs): Actually make this secure!
     pub maybe_circuit_hash: Option<F>,
@@ -410,7 +405,7 @@ pub struct GKRProof<F: FieldExt, Pf: ProofSystem<F>> {
 pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
     pub layers: Layers<F, Pf::Layer>,
     pub output_layers: Vec<MleEnum<F>>,
-    pub input_layers: Vec<InputLayerEnum<F>>,
+    pub input_layers: Vec<Pf::InputLayer>,
 }
 
 /// Controls claim aggregation behavior.
@@ -433,7 +428,7 @@ pub trait GKRCircuit<F: FieldExt> {
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut <Self::ProofSystem as ProofSystem<F>>::Transcript,
-    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<InputLayerEnumCommitment<F>>), GKRError> {
+    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<<<Self::ProofSystem as ProofSystem<F>>::InputLayer as InputLayer<F>>::Commitment>), GKRError> {
         let mut witness = self.synthesize();
 
         let commitments = witness
@@ -441,7 +436,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .iter_mut()
             .map(|input_layer| {
                 let commitment = input_layer.commit().map_err(GKRError::InputLayerError)?;
-                InputLayerEnum::append_commitment_to_transcript(&commitment, transcript).unwrap();
+                <Self::ProofSystem as ProofSystem<F>>::InputLayer::append_commitment_to_transcript(&commitment, transcript).unwrap();
                 Ok(commitment)
             })
             .try_collect()?;
@@ -797,7 +792,7 @@ pub trait GKRCircuit<F: FieldExt> {
         }
 
         for input_layer in input_layer_proofs.iter() {
-            InputLayerEnum::append_commitment_to_transcript(
+            <Self::ProofSystem as ProofSystem<F>>::InputLayer::append_commitment_to_transcript(
                 &input_layer.input_commitment,
                 transcript,
             )
@@ -972,7 +967,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // --- Performs the actual sumcheck verification step ---
             layer
-                .verify_rounds(prev_claim, sumcheck_proof.0, transcript)
+                .verify_rounds(prev_claim, sumcheck_proof, transcript)
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
 
             end_timer!(sumcheck_msg_timer);
@@ -1084,7 +1079,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 input_layer.layer_id
             ));
 
-            InputLayerEnum::verify(
+            <Self::ProofSystem as ProofSystem<F>>::InputLayer::verify(
                 &input_layer.input_commitment,
                 &input_layer.input_opening_proof,
                 input_layer_claim,

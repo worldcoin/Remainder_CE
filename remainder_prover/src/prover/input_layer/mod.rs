@@ -7,6 +7,7 @@ use remainder_shared_types::{
     transcript::{Transcript, TranscriptError},
     FieldExt,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::instrument;
 pub mod combine_input_layers;
@@ -43,8 +44,8 @@ pub enum InputLayerError {
 use log::{debug, info, trace, warn};
 ///Trait for dealing with the InputLayer
 pub trait InputLayer<F: FieldExt> {
-    type Commitment;
-    type OpeningProof;
+    type Commitment: Serialize + for<'a> Deserialize<'a>;
+    type OpeningProof: Serialize + for<'a> Deserialize<'a>;
 
     fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
 

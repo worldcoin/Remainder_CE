@@ -28,23 +28,25 @@ pub struct EmptyLayer<F> {
 }
 
 impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
+    type Proof = F;
+
     fn prove_rounds(
         &mut self,
         _: Claim<F>,
         _: &mut impl Transcript<F>,
-    ) -> Result<SumcheckProof<F>, LayerError> {
+    ) -> Result<F, LayerError> {
         let eval = gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
 
-        Ok(vec![vec![eval]].into())
+        Ok(eval)
     }
 
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Vec<Vec<F>>,
+        claimed_eval: Self::Proof,
         _: &mut impl Transcript<F>,
     ) -> Result<(), LayerError> {
-        if sumcheck_rounds[0][0] != claim.get_result() {
+        if claimed_eval != claim.get_result() {
             return Err(LayerError::VerificationError(
                 super::VerificationError::GKRClaimCheckFailed,
             ));
