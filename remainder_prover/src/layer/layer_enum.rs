@@ -1,4 +1,4 @@
-use rayon::iter::empty;
+use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -50,10 +50,7 @@ impl<F: FieldExt> fmt::Debug for LayerEnum<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             LayerEnum::Gkr(_) => write!(f, "GKR Layer"),
-            LayerEnum::MulGate(_) => write!(f, "MulGate"),
-            LayerEnum::AddGate(_) => write!(f, "AddGate"),
-            LayerEnum::AddGateBatched(_) => write!(f, "AddGateBatched"),
-            LayerEnum::MulGateBatched(_) => write!(f, "MulGateBatched"),
+            LayerEnum::Gate(_) => write!(f, "Gate"),
             LayerEnum::EmptyLayer(_) => write!(f, "EmptyLayer"),
         }
     }
@@ -65,10 +62,7 @@ impl<F: FieldExt> LayerEnum<F> {
         let expression = match self {
             LayerEnum::Gkr(layer) => &layer.expression,
             LayerEnum::EmptyLayer(layer) => &layer.expr,
-            LayerEnum::AddGate(_)
-            | LayerEnum::AddGateBatched(_)
-            | LayerEnum::MulGate(_)
-            | LayerEnum::MulGateBatched(_) => unimplemented!(),
+            LayerEnum::Gate(_) => unimplemented!(),
         };
 
         expression.get_expression_size(0)
@@ -77,14 +71,7 @@ impl<F: FieldExt> LayerEnum<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> Box<dyn std::fmt::Display + 'a> {
         match self {
             LayerEnum::Gkr(layer) => Box::new(layer.expression().circuit_description_fmt()),
-            LayerEnum::MulGate(mulgate_layer) => Box::new(mulgate_layer.circuit_description_fmt()),
-            LayerEnum::AddGate(addgate_layer) => Box::new(addgate_layer.circuit_description_fmt()),
-            LayerEnum::AddGateBatched(addgate_layer_batched) => {
-                Box::new(addgate_layer_batched.circuit_description_fmt())
-            }
-            LayerEnum::MulGateBatched(mulgate_layer_batched) => {
-                Box::new(mulgate_layer_batched.circuit_description_fmt())
-            }
+            LayerEnum::Gate(gate_layer) => Box::new(gate_layer.circuit_description_fmt()),
             LayerEnum::EmptyLayer(empty_layer) => {
                 Box::new(empty_layer.expression().circuit_description_fmt())
             }
