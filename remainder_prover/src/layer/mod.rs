@@ -5,6 +5,7 @@ pub mod claims;
 pub mod combine_mle_refs;
 pub mod empty_layer;
 pub mod layer_enum;
+pub mod simple_builders;
 // mod gkr_layer;
 
 use std::{fmt::Debug, marker::PhantomData};
@@ -17,7 +18,11 @@ use thiserror::Error;
 use tracing::Value;
 
 use crate::{
-    expression::{gather_combine_all_evals, Expression, ExpressionError, ExpressionStandard},
+    expression::{
+        expr_errors::ExpressionError,
+        generic_expr::{Expression, ExpressionNode, ExpressionType},
+        prover_expr::ProverExpr,
+    },
     mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
         dense::DenseMleRef,
@@ -30,7 +35,7 @@ use crate::{
     },
 };
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
@@ -70,7 +75,7 @@ pub enum LayerError {
     InterpError(InterpError),
     #[error("Transcript Error: {0}")]
     /// Transcript Error
-    TranscriptError(TranscriptError),
+    TranscriptError(TranscriptReaderError),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -170,7 +175,7 @@ pub trait Layer<F: FieldExt> {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GKRLayer<F> {
     id: LayerId,
-    pub(crate) expression: ExpressionStandard<F>,
+    pub(crate) expression: Expression<F, ProverExpr>,
     beta: Option<BetaTable<F>>,
 }
 
@@ -231,7 +236,7 @@ impl<F: FieldExt> GKRLayer<F> {
 
     fn mut_expression_and_beta(
         &mut self,
-    ) -> (&mut ExpressionStandard<F>, &mut Option<BetaTable<F>>) {
+    ) -> (&mut Expression<F, ProverExpr>, &mut Option<BetaTable<F>>) {
         (&mut self.expression, &mut self.beta)
     }
 
@@ -240,11 +245,11 @@ impl<F: FieldExt> GKRLayer<F> {
     }
 
     ///Gets the expression that this layer is proving
-    pub fn expression(&self) -> &ExpressionStandard<F> {
+    pub fn expression(&self) -> &Expression<F, ProverExpr> {
         &self.expression
     }
 
-    pub(crate) fn new_raw(id: LayerId, expression: ExpressionStandard<F>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, ProverExpr>) -> Self {
         GKRLayer {
             id,
             expression,
@@ -286,9 +291,7 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
 
         // --- Add prover message to the FS transcript ---
-        transcript
-            .append_field_elements("Initial Sumcheck evaluations", &first_sumcheck_message)
-            .unwrap();
+        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_sumcheck_message);
 
         // Grabs all of the sumcheck messages from all of the rounds within this layer.
         //
@@ -301,23 +304,19 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
         let all_prover_sumcheck_messages: Vec<Vec<F>> = std::iter::once(Ok(first_sumcheck_message))
             .chain((1..num_sumcheck_rounds).map(|round_index| {
                 // --- Verifier samples a random challenge \in \mathbb{F} to send to prover ---
-                let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
 
                 // --- Prover uses that random challenge to compute the next sumcheck message ---
                 // --- We then add the prover message to FS transcript ---
                 let prover_sumcheck_message = self.prove_round(round_index, challenge)?;
-                transcript
-                    .append_field_elements("Sumcheck evaluations", &prover_sumcheck_message)
-                    .unwrap();
+                transcript_writer.append_elements("Sumcheck evaluations", &prover_sumcheck_message);
                 Ok::<_, LayerError>(prover_sumcheck_message)
             }))
             .collect::<Result<_, _>>()?;
 
         // --- For the final round, we need to check that g(r_1, ..., r_n) = g_n(r_n) ---
         // --- Thus we sample r_n and bind b_n to it (via `fix_variable` below) ---
-        let final_chal = transcript
-            .get_challenge("Final Sumcheck challenge")
-            .unwrap();
+        let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge");
 
         self.expression
             .fix_variable(num_sumcheck_rounds - 1, final_chal);
@@ -340,7 +339,12 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
 
         // --- First verify that g_1(0) + g_1(1) = \sum_{b_1, ..., b_n} g(b_1, ..., b_n) ---
         // (i.e. the first verification step of sumcheck)
-        let mut prev_evals = &sumcheck_prover_messages[0];
+
+        // TODO(Makis): Retrieve `num_prev_evals` directly from the transcript.
+        let num_prev_evals = sumcheck_prover_messages[0].len();
+        let mut prev_evals = transcript_reader
+            .consume_elements("Initial Sumcheck evaluations", num_prev_evals)
+            .map_err(|e| LayerError::TranscriptError(e))?;
 
         if prev_evals[0] + prev_evals[1] != claim.get_result() {
             debug!("I'm the PROBLEM");
@@ -351,17 +355,24 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
             ));
         }
 
-        transcript
-            .append_field_elements("Initial Sumcheck evaluations", &sumcheck_prover_messages[0])
-            .unwrap();
-
         // --- For round 1 < i < n, perform the check ---
         // g_{i - 1}(r_i) = g_i(0) + g_i(1)
-        for curr_evals in sumcheck_prover_messages.iter().skip(1) {
-            let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+        // TODO(Makis): Retrieve `evals.len()`s directly from the transcript.
+        for num_curr_evals in sumcheck_prover_messages
+            .into_iter()
+            .skip(1)
+            .map(|evals| evals.len())
+        {
+            let challenge = transcript_reader
+                .get_challenge("Sumcheck challenge")
+                .map_err(|e| LayerError::TranscriptError(e))?;
 
             let prev_at_r =
-                evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
+                evaluate_at_a_point(&prev_evals, challenge).map_err(LayerError::InterpError)?;
+
+            let curr_evals = transcript_reader
+                .consume_elements("Sumcheck evaluations", num_curr_evals)
+                .map_err(|e| LayerError::TranscriptError(e))?;
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 return Err(LayerError::VerificationError(
@@ -369,24 +380,26 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
                 ));
             };
 
-            transcript
-                .append_field_elements("Sumcheck evaluations", curr_evals)
-                .unwrap();
-
             prev_evals = curr_evals;
             challenges.push(challenge);
         }
 
         // --- In the final round, we check that g(r_1, ..., r_n) = g_n(r_n) ---
         // Here, we first sample r_n.
-        let final_chal = transcript
+        let final_chal = transcript_reader
             .get_challenge("Final Sumcheck challenge")
-            .unwrap();
+            .map_err(|e| LayerError::TranscriptError(e))?;
         challenges.push(final_chal);
 
         // --- This automatically asserts that the expression is fully bound and simply ---
         // --- attempts to combine/collect the expression evaluated at the (already bound) challenge coords ---
-        let expr_evaluated_at_challenge_coord = gather_combine_all_evals(&self.expression).unwrap();
+        let expr_evaluated_at_challenge_coord = self
+            .expression
+            .clone()
+            .transform_to_verifier_expression()
+            .unwrap()
+            .gather_combine_all_evals()
+            .unwrap();
 
         // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
         // --- bound challenges (u_1, ..., u_n) ---
@@ -399,7 +412,7 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
 
         // --- Computing g_n(r_n) ---
         let g_n_evaluated_at_r_n =
-            evaluate_at_a_point(prev_evals, final_chal).map_err(LayerError::InterpError)?;
+            evaluate_at_a_point(&prev_evals, final_chal).map_err(LayerError::InterpError)?;
 
         // --- Checking the two against one another ---
         if mle_evaluated_at_challenge_coord != g_n_evaluated_at_r_n {
@@ -423,56 +436,25 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionStandard<F>| {
-            match exp {
-                ExpressionStandard::Mle(mle_ref) => {
-                    // --- First ensure that all the indices are fixed ---
-                    let mle_indices = mle_ref.mle_indices();
+        let mut observer_fn =
+            |exp: &ExpressionNode<F, ProverExpr>,
+             mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec| {
+                match exp {
+                    ExpressionNode::Mle(mle_vec_idx) => {
+                        let mle_ref = mle_vec_idx.get_mle(mle_vec);
 
-                    // --- This is super jank ---
-                    let mut fixed_mle_indices: Vec<F> = vec![];
-                    for mle_idx in mle_indices {
-                        if mle_idx.val().is_none() {
-                            dbg!("We got a nothing");
-                            dbg!(&mle_idx);
-                            dbg!(&mle_indices);
-                            dbg!(&mle_ref);
-                        }
-                        fixed_mle_indices.push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
-                    }
-
-                    // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
-                    let mle_layer_id = mle_ref.get_layer_id();
-
-                    // --- Grab the actual value that the claim is supposed to evaluate to ---
-                    if mle_ref.bookkeeping_table().len() != 1 {
-                        dbg!(&mle_ref.bookkeeping_table);
-                        return Err(ClaimError::MleRefMleError);
-                    }
-                    let claimed_value = mle_ref.bookkeeping_table()[0];
-
-                    // --- Construct the claim ---
-                    // println!("========\n I'm making a GKR layer claim for an MLE!!\n==========");
-                    // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
-                    let claim: Claim<F> = Claim::new(
-                        fixed_mle_indices,
-                        claimed_value,
-                        Some(self.id().clone()),
-                        Some(mle_layer_id),
-                        Some(MleEnum::Dense(mle_ref.clone())),
-                    );
-
-                    // --- Push it into the list of claims ---
-                    claims.push(claim);
-                }
-                ExpressionStandard::Product(mle_refs) => {
-                    for mle_ref in mle_refs {
                         // --- First ensure that all the indices are fixed ---
                         let mle_indices = mle_ref.mle_indices();
 
                         // --- This is super jank ---
                         let mut fixed_mle_indices: Vec<F> = vec![];
                         for mle_idx in mle_indices {
+                            if mle_idx.val().is_none() {
+                                dbg!("We got a nothing");
+                                dbg!(&mle_idx);
+                                dbg!(&mle_indices);
+                                dbg!(&mle_ref);
+                            }
                             fixed_mle_indices
                                 .push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
                         }
@@ -481,15 +463,15 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
                         let mle_layer_id = mle_ref.get_layer_id();
 
                         // --- Grab the actual value that the claim is supposed to evaluate to ---
-
                         if mle_ref.bookkeeping_table().len() != 1 {
-                            dbg!(&mle_ref);
+                            dbg!(&mle_ref.current_mle);
                             return Err(ClaimError::MleRefMleError);
                         }
                         let claimed_value = mle_ref.bookkeeping_table()[0];
 
                         // --- Construct the claim ---
-                        // need to populate the claim with the mle ref we are grabbing the claim from
+                        // println!("========\n I'm making a GKR layer claim for an MLE!!\n==========");
+                        // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
                         let claim: Claim<F> = Claim::new(
                             fixed_mle_indices,
                             claimed_value,
@@ -501,11 +483,49 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
                         // --- Push it into the list of claims ---
                         claims.push(claim);
                     }
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle_ref = mle_vec_index.get_mle(mle_vec);
+
+                            // --- First ensure that all the indices are fixed ---
+                            let mle_indices = mle_ref.mle_indices();
+
+                            // --- This is super jank ---
+                            let mut fixed_mle_indices: Vec<F> = vec![];
+                            for mle_idx in mle_indices {
+                                fixed_mle_indices
+                                    .push(mle_idx.val().ok_or(ClaimError::MleRefMleError)?);
+                            }
+
+                            // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
+                            let mle_layer_id = mle_ref.get_layer_id();
+
+                            // --- Grab the actual value that the claim is supposed to evaluate to ---
+
+                            if mle_ref.bookkeeping_table().len() != 1 {
+                                dbg!(&mle_ref);
+                                return Err(ClaimError::MleRefMleError);
+                            }
+                            let claimed_value = mle_ref.bookkeeping_table()[0];
+
+                            // --- Construct the claim ---
+                            // need to populate the claim with the mle ref we are grabbing the claim from
+                            let claim: Claim<F> = Claim::new(
+                                fixed_mle_indices,
+                                claimed_value,
+                                Some(self.id().clone()),
+                                Some(mle_layer_id),
+                                Some(MleEnum::Dense(mle_ref.clone())),
+                            );
+
+                            // --- Push it into the list of claims ---
+                            claims.push(claim);
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
-            Ok(())
-        };
+                Ok(())
+            };
 
         // --- Apply the observer function from above onto the expression ---
         layerwise_expr
@@ -612,7 +632,7 @@ pub trait LayerBuilder<F: FieldExt> {
     type Successor;
 
     /// Build the expression that will be sumchecked
-    fn build_expression(&self) -> ExpressionStandard<F>;
+    fn build_expression(&self) -> Expression<F, ProverExpr>;
 
     /// Generate the next layer
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor;
@@ -652,7 +672,7 @@ pub trait LayerBuilder<F: FieldExt> {
 pub fn from_mle<
     F: FieldExt,
     M,
-    EFn: Fn(&M) -> ExpressionStandard<F>,
+    EFn: Fn(&M) -> Expression<F, ProverExpr>,
     S,
     LFn: Fn(&M, LayerId, Option<Vec<MleIndex<F>>>) -> S,
 >(
@@ -684,13 +704,13 @@ pub struct ConcatLayer<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> {
 impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for ConcatLayer<F, A, B> {
     type Successor = (A::Successor, B::Successor);
 
-    fn build_expression(&self) -> ExpressionStandard<F> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         let first = self.first.build_expression();
         let second = self.second.build_expression();
 
         // return first.concat_expr(second);
 
-        let zero_expression: ExpressionStandard<F> = ExpressionStandard::Constant(F::zero());
+        let zero_expression: Expression<F, ProverExpr> = Expression::constant(F::zero());
 
         let first_padded = if let Padding::Left(padding) = self.padding {
             let mut left = first;
@@ -713,7 +733,7 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         };
 
         first_padded.concat_expr(second_padded)
-        // ExpressionStandard::Selector(MleIndex::Iterated, Box::new(first_padded), Box::new(second_padded))
+        // Expression::Selector(MleIndex::Iterated, Box::new(first_padded), Box::new(second_padded))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
@@ -765,14 +785,14 @@ pub struct SimpleLayer<M, EFn, LFn> {
 impl<
         F: FieldExt,
         M,
-        EFn: Fn(&M) -> ExpressionStandard<F>,
+        EFn: Fn(&M) -> Expression<F, ProverExpr>,
         S,
         LFn: Fn(&M, LayerId, Option<Vec<MleIndex<F>>>) -> S,
     > LayerBuilder<F> for SimpleLayer<M, EFn, LFn>
 {
     type Successor = S;
 
-    fn build_expression(&self) -> ExpressionStandard<F> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         (self.expression_builder)(&self.mle)
     }
 
@@ -795,7 +815,7 @@ mod tests {
     //     let builder = from_mle(
     //         (mle1, mle2),
     //         |(mle1, mle2)| {
-    //             ExpressionStandard::Mle(mle1.mle_ref()) + ExpressionStandard::Mle(mle2.mle_ref())
+    //             Expression::mle(mle1.mle_ref()) + Expression::mle(mle2.mle_ref())
     //         },
     //         |(mle1, mle2), _, _: Option<Vec<MleIndex<Fr>>>| {
     //             mle1.clone()

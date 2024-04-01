@@ -1,15 +1,15 @@
 use ark_std::log2;
-use itertools::{repeat_n, Itertools};
+use itertools::{repeat_n, Itertools, MultiPeek};
 use std::marker::PhantomData;
 use thiserror::Error;
 
 use crate::{
-    expression::ExpressionStandard,
-    mle::{
+    expression::{self, generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr}, mle::{
         dense::{DenseMle, DenseMleRef},
+        evals::{Evaluations, MultilinearExtension},
         zero::ZeroMleRef,
         Mle, MleAble, MleIndex, MleRef,
-    }, zkdt::structs::InputAttribute,
+    },
 };
 use remainder_shared_types::FieldExt;
 
@@ -37,7 +37,7 @@ impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
 impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
     type Successor = Vec<A::Successor>;
 
-    fn build_expression(&self) -> ExpressionStandard<F> {
+    fn build_expression(&self) -> Expression<F, ProverExpr> {
         let exprs = self
             .layers
             .iter()
@@ -46,7 +46,6 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
 
         // dbg!(&exprs);
 
-        
         combine_expressions(exprs)
             .expect("Expressions fed into BatchedLayer don't have the same structure!")
     }
@@ -87,7 +86,6 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
 }
 
-
 // pub fn fake_unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>, num_dataparallel_bits: usize) -> DenseMle<F, F> {
 //     let old_layer_id = mles[0].layer_id;
 //     let new_bits = log2(mles.len()) as usize;
@@ -124,7 +122,9 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
             mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(),
             new_bits,
         )
-        .bookkeeping_table,
+        .current_mle
+        .get_evals_vector()
+        .clone(),
         old_layer_id,
         old_prefix_bits,
     )
@@ -137,161 +137,205 @@ pub fn unflatten_mle<F: FieldExt>(
 ) -> Vec<DenseMle<F, F>> {
     let num_copies = 1 << num_dataparallel_bits;
     let individual_mle_len = 1 << (flattened_mle.num_iterated_vars() - num_dataparallel_bits);
-    
-    (0..num_copies).map(
-        |idx| {
+
+    (0..num_copies)
+        .map(|idx| {
             let zero = &F::zero();
             let copy_idx = idx;
-            let individual_mle_table = (0..individual_mle_len).map(
-                |mle_idx| {
+            let individual_mle_table = (0..individual_mle_len)
+                .map(|mle_idx| {
                     let flat_mle_ref = flattened_mle.mle_ref();
-                    let val = flat_mle_ref
-                        .bookkeeping_table
-                        .get(copy_idx + (mle_idx * num_copies))
-                        .unwrap_or(zero);
-                    *val
+                    let val = flat_mle_ref.current_mle.f[copy_idx + (mle_idx * num_copies)];
+                    val
                 })
                 .collect_vec();
             let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(
                 individual_mle_table,
                 flattened_mle.layer_id,
-                Some(flattened_mle.get_prefix_bits().unwrap().into_iter().chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits)).collect_vec()),
+                Some(
+                    flattened_mle
+                        .get_prefix_bits()
+                        .unwrap()
+                        .into_iter()
+                        .chain(repeat_n(MleIndex::Iterated, num_dataparallel_bits))
+                        .collect_vec(),
+                ),
             );
             individual_mle
-        }
-    ).collect_vec()
+        })
+        .collect_vec()
 }
 
 ///Helper function for batchedlayer that takes in m expressions of size n, and
 ///turns it into a single expression o size n*m
 fn combine_expressions<F: FieldExt>(
-    exprs: Vec<ExpressionStandard<F>>,
-) -> Result<ExpressionStandard<F>, CombineExpressionError> {
+    exprs: Vec<Expression<F, ProverExpr>>,
+) -> Result<Expression<F, ProverExpr>, CombineExpressionError> {
     let new_bits = log2(exprs.len());
 
-    combine_expressions_helper(exprs, new_bits as usize)
+    let mut new_mle_vec: Vec<Option<DenseMleRef<F>>> = vec![None; exprs[0].num_mle_ref()];
+    let (
+        expression_nodes,
+        mle_vecs
+    ): (Vec<ExpressionNode<F, ProverExpr>>, Vec<<ProverExpr as ExpressionType<F>>::MleVec>) = exprs.into_iter().map(
+        |expr| {
+            expr.deconstruct()
+        }
+    ).unzip();
+
+    let out_expression_node = expression_nodes[0].clone();
+
+    combine_expressions_helper(expression_nodes, &mle_vecs, &mut new_mle_vec, new_bits as usize);
+
+    let out_mle_vec = new_mle_vec.into_iter().map(
+        |mle| {
+            mle.unwrap()
+        }
+    ).collect_vec();
+
+    Ok(Expression::new(
+        out_expression_node,
+        out_mle_vec,
+    ))
 }
 
 fn combine_expressions_helper<F: FieldExt>(
-    exprs: Vec<ExpressionStandard<F>>,
+    expression_nodes: Vec<ExpressionNode<F, ProverExpr>>,
+    mle_vecs: &Vec<<ProverExpr as ExpressionType<F>>::MleVec>,
+    new_mle_vec: &mut Vec<Option<DenseMleRef<F>>>,
     new_bits: usize,
-) -> Result<ExpressionStandard<F>, CombineExpressionError> {
+) {
     //Check if all expressions have the same structure, and if they do, combine
-    //their parts. 
+    //their parts.
     //Combination is done through either recursion or simple methods, except for
     //Mle and Products; which use a helper function `combine_mles`
-    match &exprs[0] {
-        ExpressionStandard::Selector(index, _, _) => {
-            let index = index.clone();
-            let out: Vec<(ExpressionStandard<F>, ExpressionStandard<F>)> = exprs
+    match &expression_nodes[0] {
+        ExpressionNode::Selector(_index, _, _) => {
+
+            let out: Vec<(ExpressionNode<F, ProverExpr>, ExpressionNode<F, ProverExpr>)> = expression_nodes
                 .into_iter()
                 .map(|expr| {
-                    if let ExpressionStandard::Selector(_, first, second) = expr {
+                    if let ExpressionNode::Selector(_, first, second) = expr {
                         Ok((*first, *second))
                     } else {
                         Err(CombineExpressionError())
                     }
                 })
-                .try_collect()?;
+                .try_collect().unwrap();
 
             let (first, second): (Vec<_>, Vec<_>) = out.into_iter().unzip();
 
-            Ok(ExpressionStandard::Selector(
-                index,
-                Box::new(combine_expressions_helper(first, new_bits)?),
-                Box::new(combine_expressions_helper(second, new_bits)?),
-            ))
+            combine_expressions_helper(first, mle_vecs, new_mle_vec, new_bits);
+            combine_expressions_helper(second, mle_vecs, new_mle_vec, new_bits);
         }
-        ExpressionStandard::Mle(_) => {
-            let mles: Vec<DenseMleRef<F>> = exprs
+        ExpressionNode::Mle(_) => {
+            let mut mle_vec_index = 0;
+            let mles: Vec<DenseMleRef<F>> = expression_nodes
                 .into_iter()
-                .map(|expr| {
-                    if let ExpressionStandard::Mle(mle) = expr {
-                        Ok(mle)
+                .enumerate()
+                .map(|(idx, expr)| {
+                    if let ExpressionNode::Mle(mle_vec_idx) = expr {
+                        mle_vec_index = mle_vec_idx.index();
+                        let mle_ref = mle_vec_idx.get_mle(&mle_vecs[idx]);
+                        Ok(mle_ref.clone())
                     } else {
                         Err(CombineExpressionError())
                     }
                 })
-                .try_collect()?;
+                .try_collect().unwrap();
 
-            Ok(ExpressionStandard::Mle(combine_mles(mles, new_bits)))
+            let new_mle = combine_mles(mles, new_bits);
+            new_mle_vec[mle_vec_index] = Some(new_mle);
         }
-        ExpressionStandard::Sum(_, _) => {
-            let out: Vec<(ExpressionStandard<F>, ExpressionStandard<F>)> = exprs
+        ExpressionNode::Sum(_, _) => {
+            let out: Vec<(ExpressionNode<F, ProverExpr>, ExpressionNode<F, ProverExpr>)> = expression_nodes
                 .into_iter()
                 .map(|expr| {
-                    if let ExpressionStandard::Sum(first, second) = expr {
+                    if let ExpressionNode::Sum(first, second) = expr {
                         Ok((*first, *second))
                     } else {
                         Err(CombineExpressionError())
                     }
                 })
-                .try_collect()?;
+                .try_collect().unwrap();
 
             let (first, second): (Vec<_>, Vec<_>) = out.into_iter().unzip();
 
-            Ok(ExpressionStandard::Sum(
-                Box::new(combine_expressions_helper(first, new_bits)?),
-                Box::new(combine_expressions_helper(second, new_bits)?),
-            ))
+            combine_expressions_helper(first, mle_vecs, new_mle_vec, new_bits);
+            combine_expressions_helper(second, mle_vecs, new_mle_vec, new_bits);
         }
-        ExpressionStandard::Product(_) => {
-            let mles: Vec<Vec<DenseMleRef<F>>> = exprs
+        ExpressionNode::Product(_) => {
+            let mut mle_vec_index = vec![];
+            let mles: Vec<Vec<DenseMleRef<F>>> = expression_nodes
                 .into_iter()
-                .map(|expr| {
-                    if let ExpressionStandard::Product(mles) = expr {
-                        Ok(mles)
+                .enumerate()
+                .map(|(idx, expr)| {
+                    if let ExpressionNode::Product(mle_vec_indices) = expr {
+                        
+                        if mle_vec_index.len() == 0 {
+                            mle_vec_index = mle_vec_indices.iter().map(|mle_vec_index| mle_vec_index.index()).collect_vec();
+                        }
+                        
+                        // get the mle_refs
+                        let mle_refs = mle_vec_indices.into_iter().map(
+                            |mle_vec_index|
+                                mle_vec_index.get_mle(&mle_vecs[idx]).clone()
+                        ).collect_vec();
+
+
+                        Ok(mle_refs)
                     } else {
                         Err(CombineExpressionError())
                     }
                 })
-                .try_collect()?;
+                .try_collect().unwrap();
 
             let out = (0..mles[0].len())
                 .map(|index| mles.iter().map(|mle| mle[index].clone()).collect_vec())
                 .collect_vec();
 
-            Ok(ExpressionStandard::Product(
-                out.into_iter()
-                    .map(|mles| combine_mles(mles, new_bits))
-                    .collect_vec(),
-            ))
+            let out = out.into_iter()
+                .map(|mles| {
+                    combine_mles(mles, new_bits)
+                })
+                .collect_vec();
+
+            mle_vec_index.into_iter().zip(out).for_each(
+                |(idx, mle)| {
+                new_mle_vec[idx] = Some(mle);
+            });
+
         }
-        ExpressionStandard::Scaled(_, coeff) => {
-            let coeff = *coeff;
-            let out: Vec<_> = exprs
+        ExpressionNode::Scaled(_, _coeff) => {
+
+            let out: Vec<_> = expression_nodes
                 .into_iter()
                 .map(|expr| {
-                    if let ExpressionStandard::Scaled(expr, _) = expr {
+                    if let ExpressionNode::Scaled(expr, _) = expr {
                         Ok(*expr)
                     } else {
                         Err(CombineExpressionError())
                     }
                 })
-                .try_collect()?;
+                .try_collect().unwrap();
 
-            Ok(ExpressionStandard::Scaled(
-                Box::new(combine_expressions_helper(out, new_bits)?),
-                coeff,
-            ))
+            combine_expressions_helper(out, mle_vecs, new_mle_vec, new_bits);
         }
-        ExpressionStandard::Negated(_) => {
-            let out: Vec<_> = exprs
+        ExpressionNode::Negated(_) => {
+            let out: Vec<_> = expression_nodes
                 .into_iter()
                 .map(|expr| {
-                    if let ExpressionStandard::Negated(expr) = expr {
+                    if let ExpressionNode::Negated(expr) = expr {
                         Ok(*expr)
                     } else {
                         Err(CombineExpressionError())
                     }
                 })
-                .try_collect()?;
+                .try_collect().unwrap();
 
-            Ok(ExpressionStandard::Negated(Box::new(
-                combine_expressions_helper(out, new_bits)?,
-            )))
+            combine_expressions_helper(out, mle_vecs, new_mle_vec, new_bits);
         }
-        ExpressionStandard::Constant(_) => Ok(exprs[0].clone()),
+        ExpressionNode::Constant(_) => (),
     }
 }
 
@@ -305,13 +349,17 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
     // --- TODO!(ryancao): SUPER hacky fix for the random packing constants ---
     // --- Basically if all the MLEs are exactly the same, we don't combine at all ---
     if matches!(layer_id, LayerId::RandomInput(_)) && old_num_vars == 0 {
-        let all_same = (0..mles[0].bookkeeping_table().len()).all(|idx| mles.iter().skip(1).all(|mle| (mles[0].bookkeeping_table()[idx] == mle.bookkeeping_table()[idx])));
+        let all_same = (0..mles[0].bookkeeping_table().len()).all(|idx| {
+            mles.iter()
+                .skip(1)
+                .all(|mle| (mles[0].bookkeeping_table()[idx] == mle.bookkeeping_table()[idx]))
+        });
         if all_same {
             return mles[0].clone();
         }
     }
 
-    let out = (0..mles[0].bookkeeping_table.len())
+    let out = (0..mles[0].current_mle.get_evals_vector().len())
         .flat_map(|index| {
             mles.iter()
                 .map(|mle| mle.bookkeeping_table()[index])
@@ -319,28 +367,26 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
         })
         .collect_vec();
 
+    let mle = MultilinearExtension::new(Evaluations::new(old_num_vars + new_bits, out));
+
     DenseMleRef {
-        bookkeeping_table: out.clone(),
-        original_bookkeeping_table: out,
+        current_mle: mle.clone(),
+        original_mle: mle,
         mle_indices: old_indices.to_vec(),
         original_mle_indices: old_indices.to_vec(),
-        num_vars: old_num_vars + new_bits,
-        original_num_vars: old_num_vars + new_bits,
         layer_id,
         indexed: false,
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use ark_std::test_rng;
-    use remainder_shared_types::Fr;
     use itertools::Itertools;
+    use remainder_shared_types::Fr;
 
     use crate::{
-        expression::ExpressionStandard,
+        expression::{generic_expr::Expression, prover_expr::ProverExpr},
         layer::{from_mle, LayerBuilder, LayerId},
         mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
@@ -352,7 +398,7 @@ mod tests {
     fn test_batched_layer() {
         let mut rng = test_rng();
         let expression_builder =
-            |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| -> ExpressionStandard<Fr> {
+            |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| -> Expression<Fr, ProverExpr> {
                 mle1.mle_ref().expression() + mle2.mle_ref().expression()
             };
         let layer_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>),

@@ -1,7 +1,7 @@
 use crate::prover::proof_system::ProofSystem;
 use crate::prover::GKRCircuit;
 use ark_std::{end_timer, start_timer};
-use remainder_shared_types::transcript::Transcript;
+use remainder_shared_types::transcript::{Transcript, TranscriptReader, TranscriptWriter};
 use remainder_shared_types::FieldExt;
 use serde_json;
 use std::fs::File;
@@ -18,7 +18,7 @@ where
         <C::ProofSystem as ProofSystem<F>>::Transcript::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
-    match circuit.prove(&mut transcript) {
+    match circuit.prove(&mut transcript_writer) {
         Ok(proof) => {
             end_timer!(prover_timer);
             if let Some(path) = path {
@@ -44,7 +44,7 @@ where
             };
 
             // Makis: Ignore verify for now.
-            match circuit.verify(&mut transcript, proof) {
+            match circuit.verify(&mut transcript_reader, proof) {
                 Ok(_) => {
                     end_timer!(verifier_timer);
                 }

@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
@@ -29,11 +29,26 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         Ok(self.mle.mle.clone())
     }
 
-    fn append_commitment_to_transcript(
+    fn prover_append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    ) {
+        transcript_writer.append_elements("Public Input Commitment", commitment);
+    }
+
+    fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
         transcript: &mut impl Transcript<F>,
     ) -> Result<(), TranscriptError> {
         transcript.append_field_elements("Public Input Commitment", commitment)
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+    ) -> Result<(), InputLayerError> {
+        let num_elements = commitment.len();
+        let transcript_commitment = transcript_reader
+            .consume_elements("Public Input Commitment", num_elements)
+            .map_err(|e| InputLayerError::TranscriptError(e))?;
+        debug_assert_eq!(transcript_commitment, *commitment);
+        Ok(())
     }
 
     fn open(
@@ -55,7 +70,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
             DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_vars != 0 {
+        let eval = if mle_ref.num_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -66,7 +81,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
             // dbg!(&claim);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            Claim::new_raw(vec![], mle_ref.bookkeeping_table[0])
+            Claim::new_raw(vec![], mle_ref.current_mle[0])
         };
 
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {

@@ -3,22 +3,6 @@ name = "remainder"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "run_remainder_zkdt"
-path = "src/bin/run_remainder_zkdt.rs"
-
-[[bin]]
-name = "run_remainder_multitree"
-path = "src/bin/run_remainder_multitree.rs"
-
-[[bin]]
-name = "generate_ligero_tree_commitments"
-path = "src/bin/generate_ligero_tree_commitments.rs"
-
-[[bin]]
-name = "generate_sample_minibatch_commitments"
-path = "src/bin/generate_sample_minibatch_commitments.rs"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -60,6 +44,8 @@ num-bigint = "0.4.4"
 num-traits = "0.2.17"
 hex = "0.4"
 paste = "1.0.14"
+quickcheck = "1.0.3"
+quickcheck_macros = "1.0.0"
 
 [dev-dependencies]
 

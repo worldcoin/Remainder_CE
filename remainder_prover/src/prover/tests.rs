@@ -1,4 +1,8 @@
-use crate::prover::helpers::test_circuit;
+use crate::expression::{
+    generic_expr::{Expression, ExpressionNode, ExpressionType},
+    prover_expr::ProverExpr,
+};
+use crate::{gate::gate::BinaryOperation, prover::helpers::test_circuit};
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
@@ -8,12 +12,12 @@ use serde_json::{from_reader, to_writer};
 use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 
 use crate::{
-    expression::ExpressionStandard,
     layer::{
         batched::{combine_mles, combine_zero_mle_ref, BatchedLayer},
         empty_layer::EmptyLayer,
         from_mle,
         layer_enum::LayerEnum,
+        simple_builders::{EqualityCheck, ZeroBuilder},
         LayerBuilder, LayerId,
     },
     mle::{
@@ -24,10 +28,9 @@ use crate::{
     prover::input_layer::enum_input_layer::InputLayerEnumCommitment,
     prover::ProofSystem,
     utils::get_random_mle,
-    zkdt::builders::{EqualityCheck, ZeroBuilder},
 };
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
+    transcript::{poseidon_transcript::PoseidonSponge, Transcript, TranscriptWriter},
     FieldExt, Fr,
 };
 
@@ -76,7 +79,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
         let mult_builder = from_mle(
             mle_clone,
             // --- The expression is a simple product between the first and second halves ---
-            |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
+            |mle| Expression::products(vec![mle.first(), mle.second()]),
             // --- The witness generation simply zips the two halves and multiplies them ---
             |mle, layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
@@ -102,8 +105,9 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         // The input layer is ready at this point!
-        let input_layer: LigeroInputLayer<F> = input_layer.to_input_layer();
-        let input_layers = vec![input_layer.into()];
+        let input_layer: LigeroInputLayer<F, Self::Sponge> =
+            input_layer.to_input_layer_with_rho_inv(4, 1.);
+        let input_layers = vec![input_layer.to_enum()];
 
         // --- Subtract the computed circuit output from the advice circuit output ---
         let output_diff_builder = from_mle(
@@ -152,10 +156,10 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
             mle_clone,
             // --- The expression is a simple diff between the first and second halves ---
             |mle| {
-                let first_half = Box::new(ExpressionStandard::Mle(mle.first()));
-                let second_half = Box::new(ExpressionStandard::Mle(mle.second()));
-                let negated_second_half = Box::new(ExpressionStandard::Negated(second_half));
-                ExpressionStandard::Sum(first_half, negated_second_half)
+                let first_half = Box::new(Expression::mle(mle.first()));
+                let second_half = Box::new(Expression::mle(mle.second()));
+                let negated_second_half = Box::new(Expression::negated(second_half));
+                Expression::sum(first_half, negated_second_half)
             },
             // --- The witness generation simply zips the two halves and subtracts them ---
             |mle, layer_id, prefix_bits| {
@@ -176,7 +180,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         let first_layer_output = layers.add_gkr(diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: LigeroInputLayer<F> = input_layer.to_input_layer();
+        let input_layer: LigeroInputLayer<F, Self::Sponge> =
+            input_layer.to_input_layer_with_rho_inv(4, 1.);
 
         Witness {
             layers,
@@ -228,8 +233,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
                     mle,
                     // --- The expression is a simple diff between the first and second halves ---
                     |mle| {
-                        let first_half = ExpressionStandard::Mle(mle.first());
-                        let second_half = ExpressionStandard::Mle(mle.second());
+                        let first_half = Expression::mle(mle.first());
+                        let second_half = Expression::mle(mle.second());
                         first_half - second_half
                     },
                     // --- The witness generation simply zips the two halves and subtracts them ---
@@ -282,17 +287,17 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut PoseidonTranscript<F>,
-    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<InputLayerEnumCommitment<F>>), GKRError> {
-        let mut input: InputLayerEnum<F> =
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
+        let mut input =
             InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
-                .to_input_layer::<LigeroInputLayer<F>>()
-                .into();
+                .to_input_layer_with_rho_inv(4, 1.);
+        let mut input = input.to_enum();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript).unwrap();
+        InputLayerEnum::prover_append_commitment_to_transcript(&input_commit, transcript_writer);
 
-        let random = RandomInputLayer::new(transcript, 1, LayerId::Input(1));
+        let random = RandomInputLayer::new(transcript_writer, 1, LayerId::Input(1));
         let random_mle = random.get_mle();
         let mut random: InputLayerEnum<F> = random.into();
         let random_commit = random.commit().map_err(GKRError::InputLayerError)?;
@@ -301,7 +306,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
         let layer_1 = from_mle(
             (self.mle.clone(), random_mle),
-            |(mle, random)| ExpressionStandard::products(vec![mle.mle_ref(), random.mle_ref()]),
+            |(mle, random)| Expression::products(vec![mle.mle_ref(), random.mle_ref()]),
             |(mle, random), layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
                     mle.into_iter()
@@ -322,7 +327,10 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
                 .to_input_layer::<PublicInputLayer<F>>()
                 .into();
         let input_layer_2_commit = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commit, transcript).unwrap();
+        InputLayerEnum::prover_append_commitment_to_transcript(
+            &input_layer_2_commit,
+            transcript_writer,
+        );
 
         let layer_2 = EqualityCheck::new(output, output_input);
         let output = layers.add_gkr(layer_2);
@@ -365,8 +373,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
 
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut PoseidonTranscript<F>,
-    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<InputLayerEnumCommitment<F>>), GKRError> {
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
         // --- Publicly commit to each input layer ---
         let mut input_layer_1: InputLayerEnum<_> = InputLayerBuilder::new(
             vec![
@@ -379,8 +387,10 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         .to_input_layer::<PublicInputLayer<F>>()
         .into();
         let input_layer_1_commitment = input_layer_1.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_layer_1_commitment, transcript)
-            .unwrap();
+        InputLayerEnum::prover_append_commitment_to_transcript(
+            &input_layer_1_commitment,
+            transcript_writer,
+        );
 
         // --- Second input layer (public) commitment ---
         let mut input_layer_2: InputLayerEnum<_> = InputLayerBuilder::new(
@@ -394,8 +404,10 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         .to_input_layer::<PublicInputLayer<F>>()
         .into();
         let input_layer_2_commitment = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commitment, transcript)
-            .unwrap();
+        InputLayerEnum::prover_append_commitment_to_transcript(
+            &input_layer_2_commitment,
+            transcript_writer,
+        );
 
         let mut layers = Layers::new();
 
@@ -408,10 +420,10 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             ),
             |(input_layer_1_mle_1, input_layer_1_mle_2)| {
                 let input_layer_1_mle_1_expr_ptr =
-                    Box::new(ExpressionStandard::Mle(input_layer_1_mle_1.mle_ref()));
+                    Box::new(Expression::mle(input_layer_1_mle_1.mle_ref()));
                 let input_layer_1_mle_2_expr_ptr =
-                    Box::new(ExpressionStandard::Mle(input_layer_1_mle_2.mle_ref()));
-                ExpressionStandard::Sum(input_layer_1_mle_1_expr_ptr, input_layer_1_mle_2_expr_ptr)
+                    Box::new(Expression::mle(input_layer_1_mle_2.mle_ref()));
+                Expression::sum(input_layer_1_mle_1_expr_ptr, input_layer_1_mle_2_expr_ptr)
             },
             |(input_layer_1_mle_1, input_layer_1_mle_2), layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
@@ -436,12 +448,12 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             ),
             |(input_layer_2_mle_1, input_layer_2_mle_2)| {
                 let input_layer_2_mle_1_expr_ptr =
-                    Box::new(ExpressionStandard::Mle(input_layer_2_mle_1.mle_ref()));
+                    Box::new(Expression::mle(input_layer_2_mle_1.mle_ref()));
                 let input_layer_2_mle_2_expr_ptr =
-                    Box::new(ExpressionStandard::Mle(input_layer_2_mle_2.mle_ref()));
+                    Box::new(Expression::mle(input_layer_2_mle_2.mle_ref()));
                 dbg!(input_layer_2_mle_1.layer_id);
                 dbg!(input_layer_2_mle_2.layer_id);
-                ExpressionStandard::Sum(input_layer_2_mle_1_expr_ptr, input_layer_2_mle_2_expr_ptr)
+                Expression::sum(input_layer_2_mle_1_expr_ptr, input_layer_2_mle_2_expr_ptr)
             },
             |(input_layer_2_mle_1, input_layer_2_mle_2), layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
@@ -465,13 +477,11 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             // Lol this hack though
             (first_layer_output, second_layer_output),
             |(first_layer_output_mle_param, second_layer_output_mle_param)| {
-                let first_layer_output_mle_param_expr_ptr = Box::new(ExpressionStandard::Mle(
-                    first_layer_output_mle_param.mle_ref(),
-                ));
-                let second_layer_output_mle_param_expr_ptr = Box::new(ExpressionStandard::Mle(
-                    second_layer_output_mle_param.mle_ref(),
-                ));
-                ExpressionStandard::Sum(
+                let first_layer_output_mle_param_expr_ptr =
+                    Box::new(Expression::mle(first_layer_output_mle_param.mle_ref()));
+                let second_layer_output_mle_param_expr_ptr =
+                    Box::new(Expression::mle(second_layer_output_mle_param.mle_ref()));
+                Expression::sum(
                     first_layer_output_mle_param_expr_ptr,
                     second_layer_output_mle_param_expr_ptr,
                 )
@@ -561,7 +571,7 @@ impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
         let builder = from_mle(
             mle_clone,
             // --- The expression is a simple product between the first and second halves ---
-            |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
+            |mle| Expression::products(vec![mle.first(), mle.second()]),
             // --- The witness generation simply zips the two halves and multiplies them ---
             |mle, layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
@@ -668,12 +678,59 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let first_layer_output =
-            layers.add_add_gate(nonzero_gates, self.mle.mle_ref(), self.negmle.mle_ref());
+        let first_layer_output = layers.add_gate(
+            nonzero_gates,
+            self.mle.mle_ref(),
+            self.negmle.mle_ref(),
+            None,
+            BinaryOperation::Add,
+        );
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
+
+        Witness {
+            layers,
+            output_layers: vec![output_layer_mle.get_enum()],
+            input_layers: vec![input_layer],
+        }
+    }
+}
+
+/// Circuit which just subtracts its two halves with gate mle
+struct SimplestGateCircuitUneven<F: FieldExt> {
+    mle: DenseMle<F, F>,
+    negmle: DenseMle<F, F>,
+}
+impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
+    type Sponge = PoseidonSponge<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
+            vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
+            .to_input_layer::<PublicInputLayer<F, _>>()
+            .to_enum();
+
+        // --- Create Layers to be added to ---
+        let mut layers = Layers::new();
+
+        let mut nonzero_gates = vec![(0, 0, 0)];
+
+        let first_layer_output = layers.add_gate(
+            nonzero_gates,
+            self.mle.mle_ref(),
+            self.negmle.mle_ref(),
+            None,
+            BinaryOperation::Add,
+        );
+
+        let output_layer_builder = ZeroBuilder::new(first_layer_output);
+
+        let output_layer_mle =
+            layers.add::<_, EmptyLayer<F, PoseidonSponge<F>>>(output_layer_builder);
 
         Witness {
             layers,
@@ -713,22 +770,28 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let pos_mul_output = layers.add_mul_gate(
+        let pos_mul_output = layers.add_gate(
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.mle_2.mle_ref(),
+            None,
+            BinaryOperation::Mul,
         );
 
-        let neg_mul_output = layers.add_mul_gate(
+        let neg_mul_output = layers.add_gate(
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.neg_mle_2.mle_ref(),
+            None,
+            BinaryOperation::Mul,
         );
 
-        let add_gate_layer_output = layers.add_add_gate(
+        let add_gate_layer_output = layers.add_gate(
             nonzero_gates,
             pos_mul_output.mle_ref(),
             neg_mul_output.mle_ref(),
+            None,
+            BinaryOperation::Add,
         );
 
         let output_layer_builder = ZeroBuilder::new(add_gate_layer_output);
@@ -744,7 +807,6 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
     }
 }
 
-/// Circuit which just subtracts its two halves with batched gate mle
 struct SimplestAddMulBatchedGateCircuit<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -775,27 +837,28 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        dbg!(&nonzero_gates);
-
-        let neg_mul_output = layers.add_mul_gate_batched(
+        let neg_mul_output = layers.add_gate(
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.neg_mle_2.mle_ref(),
-            self.batch_bits,
+            Some(self.batch_bits),
+            BinaryOperation::Mul,
         );
 
-        let pos_mul_output = layers.add_mul_gate_batched(
+        let pos_mul_output = layers.add_gate(
             nonzero_gates.clone(),
             self.mle_1.mle_ref(),
             self.mle_2.mle_ref(),
-            self.batch_bits,
+            Some(self.batch_bits),
+            BinaryOperation::Mul,
         );
 
-        let add_gate_layer_output = layers.add_add_gate_batched(
+        let add_gate_layer_output = layers.add_gate(
             nonzero_gates,
             pos_mul_output.mle_ref(),
             neg_mul_output.mle_ref(),
-            self.batch_bits,
+            Some(self.batch_bits),
+            BinaryOperation::Add,
         );
 
         let output_layer_builder = ZeroBuilder::new(add_gate_layer_output);
@@ -811,109 +874,50 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
     }
 }
 
-#[test]
-fn test_gkr_add_mul_gate_batched_simplest_circuit() {
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-
-    let _rng = test_rng();
-    let size = 1 << 2;
-
-    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            // let num = Fr::from(rng.gen::<u64>());
-
-            Fr::one()
-        }),
-        LayerId::Input(0),
-        None,
-    );
-
-    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| {
-            // let num = Fr::from(rng.gen::<u64>());
-
-            Fr::one()
-        }),
-        LayerId::Input(0),
-        None,
-    );
-
-    let neg_mle_2 = DenseMle::new_from_iter(
-        mle_2
-            .mle_ref()
-            .bookkeeping_table
-            .into_iter()
-            .map(|elem| -elem),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input,
-    //     None,
-    // );
-
-    let circuit: SimplestAddMulBatchedGateCircuit<Fr> = SimplestAddMulBatchedGateCircuit {
-        mle_1,
-        mle_2,
-        neg_mle_2,
-        batch_bits: 1,
-    };
-
-    test_circuit(
-        circuit,
-        Some(Path::new("./gate_batch_proof1_optimized.json")),
-    );
-
-    // panic!();
+/// Circuit which just subtracts its two halves with gate mle
+struct SimplestGateCircuitCombined<F: FieldExt> {
+    mle: DenseMle<F, F>,
+    negmle: DenseMle<F, F>,
 }
+impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitCombined<F> {
+    type Sponge = PoseidonSponge<F>;
 
-#[test]
-fn test_gkr_mul_add_gate_simplest_circuit() {
-    let mut rng = test_rng();
-    let size = 1 << 4;
+    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
+            vec![Box::new(&mut self.mle), Box::new(&mut self.negmle)];
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
+            .to_input_layer::<PublicInputLayer<F, _>>()
+            .to_enum();
 
-    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
-        LayerId::Input(0),
-        None,
-    );
+        // --- Create Layers to be added to ---
+        let mut layers = Layers::new();
 
-    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
-        LayerId::Input(0),
-        None,
-    );
+        let mut nonzero_gates = vec![];
+        let num_vars = 1 << self.mle.mle_ref().num_vars();
 
-    let neg_mle_2 = DenseMle::new_from_iter(
-        mle_2
-            .mle_ref()
-            .bookkeeping_table
-            .into_iter()
-            .map(|elem| -elem),
-        LayerId::Input(0),
-        None,
-    );
-    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
-    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
-    //     LayerId::Input,
-    //     None,
-    // );
+        (0..num_vars).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
+        });
 
-    let circuit: MulAddSimplestGateCircuit<Fr> = MulAddSimplestGateCircuit {
-        mle_1,
-        mle_2,
-        neg_mle_2,
-    };
+        let first_layer_output = layers.add_gate(
+            nonzero_gates,
+            self.mle.mle_ref(),
+            self.negmle.mle_ref(),
+            None,
+            BinaryOperation::Add,
+        );
 
-    test_circuit(
-        circuit,
-        Some(Path::new("./mul_gate_simple_proof_optimized.json")),
-    );
+        let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
-    // panic!();
+        let output_layer_mle = layers.add_gkr(output_layer_builder);
+
+        Witness {
+            layers,
+            output_layers: vec![output_layer_mle.get_enum()],
+            input_layers: vec![input_layer],
+        }
+    }
 }
 
 /// Circuit which just subtracts its two halves with batched gate mle
@@ -943,11 +947,12 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedGateCircuit<F> {
             nonzero_gates.push((idx, idx, idx));
         });
 
-        let first_layer_output = layers.add_add_gate_batched(
+        let first_layer_output = layers.add_gate(
             nonzero_gates,
             self.mle.mle_ref(),
             self.negmle.mle_ref(),
-            self.batch_bits,
+            Some(self.batch_bits),
+            BinaryOperation::Add,
         );
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
@@ -1001,8 +1006,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
             mle_clone.clone(),
             // --- The expression is a simple diff between the first and second halves ---
             |_mle| {
-                let first_half = ExpressionStandard::Mle(_mle.mle_ref());
-                let second_half = ExpressionStandard::Mle(_mle.mle_ref());
+                let first_half = Expression::mle(_mle.mle_ref());
+                let second_half = Expression::mle(_mle.mle_ref());
                 first_half - second_half
             },
             // --- The output SHOULD be all zeros ---
@@ -1016,8 +1021,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
             mle2_clone.clone(),
             // --- The expression is a simple diff between the first and second halves ---
             |_mle| {
-                let first_half = ExpressionStandard::Mle(_mle.mle_ref());
-                let second_half = ExpressionStandard::Mle(_mle.mle_ref());
+                let first_half = Expression::mle(_mle.mle_ref());
+                let second_half = Expression::mle(_mle.mle_ref());
                 first_half - second_half
             },
             // --- The output SHOULD be all zeros ---
@@ -1043,8 +1048,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
                 ligero_root,
                 true,
             );
-        let live_committed_input_layer: LigeroInputLayer<F> =
-            live_committed_input_layer_builder.to_input_layer();
+        let live_committed_input_layer: LigeroInputLayer<F, Self::Sponge> =
+            live_committed_input_layer_builder.to_input_layer_with_rho_inv(4, 1.);
 
         Witness {
             layers,
@@ -1163,29 +1168,36 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
-                match expr {
-                    ExpressionStandard::Mle(mle) => {
-                        if mle.layer_id == LayerId::Input(0) {
-                            mle.layer_id = LayerId::Input(1)
-                        }
-                        Ok(())
-                    }
-                    ExpressionStandard::Product(mles) => {
-                        for mle in mles {
-                            if mle.layer_id == LayerId::Input(0) {
-                                mle.layer_id = LayerId::Input(1)
+            let mut closure =
+                for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
+                             mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec|
+                             -> Result<(), ()> {
+                    match expr {
+                        ExpressionNode::Mle(mle_vec_idx) => {
+                            let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                            if mle_ref.layer_id == LayerId::Input(0) {
+                                mle_ref.layer_id = LayerId::Input(1)
                             }
+                            Ok(())
                         }
-                        Ok(())
+                        ExpressionNode::Product(mle_vec_indices) => {
+                            for mle_vec_index in mle_vec_indices {
+                                let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                                if mle_ref.layer_id == LayerId::Input(0) {
+                                    mle_ref.layer_id = LayerId::Input(1)
+                                }
+                            }
+                            Ok(())
+                        }
+                        ExpressionNode::Constant(_)
+                        | ExpressionNode::Scaled(_, _)
+                        | ExpressionNode::Sum(_, _)
+                        | ExpressionNode::Negated(_)
+                        | ExpressionNode::Selector(_, _, _) => Ok(()),
                     }
-                    ExpressionStandard::Constant(_)
-                    | ExpressionStandard::Scaled(_, _)
-                    | ExpressionStandard::Sum(_, _)
-                    | ExpressionStandard::Negated(_)
-                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
-                }
-            };
+                };
 
             expression.traverse_mut(&mut closure).unwrap();
         }
@@ -1388,7 +1400,9 @@ fn test_gkr_gate_simplest_circuit() {
 
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
-            .bookkeeping_table
+            .current_mle
+            .get_evals_vector()
+            .clone()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1398,6 +1412,63 @@ fn test_gkr_gate_simplest_circuit() {
     let circuit: SimplestGateCircuit<Fr> = SimplestGateCircuit { mle, negmle };
 
     test_circuit(circuit, Some(Path::new("./gate_proof_optimized.json")));
+
+    // panic!();
+}
+
+#[test]
+fn test_gkr_gate_simplest_circuit_uneven() {
+    let mut rng = test_rng();
+    let size = 1 << 4;
+
+    // --- This should be 2^2 ---
+    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+        None,
+    );
+
+    let negmle = DenseMle::new_from_raw(
+        vec![mle.mle_ref().bookkeeping_table()[0].neg()],
+        LayerId::Input(0),
+        None,
+    );
+
+    let circuit: SimplestGateCircuitUneven<Fr> = SimplestGateCircuitUneven { mle, negmle };
+
+    test_circuit(circuit, Some(Path::new("./gate_proof_testing_uneven.json")));
+
+    // panic!();
+}
+
+#[test]
+fn test_gkr_gate_simplest_circuit_combined() {
+    let mut rng = test_rng();
+    let size = 1 << 4;
+
+    // --- This should be 2^2 ---
+    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+        None,
+    );
+
+    dbg!("hello");
+
+    let negmle = DenseMle::new_from_iter(
+        mle.mle_ref()
+            .bookkeeping_table()
+            .into_iter()
+            .map(|elem| -elem),
+        LayerId::Input(0),
+        None,
+    );
+
+    dbg!("hfboooo");
+
+    let circuit: SimplestGateCircuitCombined<Fr> = SimplestGateCircuitCombined { mle, negmle };
+
+    test_circuit(circuit, None);
 
     // panic!();
 }
@@ -1421,7 +1492,9 @@ fn test_gkr_gate_batched_simplest_circuit() {
 
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
-            .bookkeeping_table
+            .current_mle
+            .get_evals_vector()
+            .clone()
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1460,7 +1533,7 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
     );
 
     let negmle = DenseMle::new_from_iter(
-        mle.mle_ref().bookkeeping_table[0..size2]
+        mle.mle_ref().current_mle.get_evals_vector()[0..size2]
             .iter()
             .map(|elem| -elem),
         LayerId::Input(0),
@@ -1478,6 +1551,106 @@ fn test_gkr_gate_batched_simplest_circuit_uneven() {
         circuit,
         Some(Path::new("./gate_batch_proof_uneven_optimized.json")),
     );
+}
+
+#[test]
+fn test_gkr_add_mul_gate_batched_simplest_circuit() {
+    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
+    // tracing::subscriber::set_global_default(subscriber)
+    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+
+    let _rng = test_rng();
+    let size = 1 << 2;
+
+    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| {
+            // let num = Fr::from(rng.gen::<u64>());
+
+            Fr::one()
+        }),
+        LayerId::Input(0),
+        None,
+    );
+
+    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| {
+            // let num = Fr::from(rng.gen::<u64>());
+
+            Fr::one()
+        }),
+        LayerId::Input(0),
+        None,
+    );
+
+    let neg_mle_2 = DenseMle::new_from_iter(
+        mle_2
+            .mle_ref()
+            .bookkeeping_table()
+            .into_iter()
+            .map(|elem| -elem),
+        LayerId::Input(0),
+        None,
+    );
+    // let mle: DenseMle<Fr, Tuple2<Fr>> = DenseMle::new_from_iter(
+    //     (0..size).map(|idx| (Fr::from(idx + 1), Fr::from(idx + 1)).into()),
+    //     LayerId::Input,
+    //     None,
+    // );
+
+    let circuit: SimplestAddMulBatchedGateCircuit<Fr> = SimplestAddMulBatchedGateCircuit {
+        mle_1,
+        mle_2,
+        neg_mle_2,
+        batch_bits: 1,
+    };
+
+    test_circuit(
+        circuit,
+        Some(Path::new("./gate_batch_proof1_optimized.json")),
+    );
+
+    // panic!();
+}
+
+#[test]
+fn test_gkr_add_mul_gate_simplest_circuit() {
+    let mut rng = test_rng();
+    let size = 1 << 4;
+
+    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+        None,
+    );
+
+    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+        None,
+    );
+
+    let neg_mle_2 = DenseMle::new_from_iter(
+        mle_2
+            .mle_ref()
+            .bookkeeping_table()
+            .into_iter()
+            .map(|elem| -elem),
+        LayerId::Input(0),
+        None,
+    );
+
+    let circuit: MulAddSimplestGateCircuit<Fr> = MulAddSimplestGateCircuit {
+        mle_1,
+        mle_2,
+        neg_mle_2,
+    };
+
+    test_circuit(
+        circuit,
+        Some(Path::new("./mul_gate_simple_proof_optimized.json")),
+    );
+
+    // panic!();
 }
 
 // ------------------------------------ EMPTY LAYER CIRCUITS ------------------------------------
@@ -1596,7 +1769,7 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
                     from_mle(
                         mle,
                         // --- The expression is a simple product between the first and second halves ---
-                        |mle| ExpressionStandard::products(vec![mle.first(), mle.second()]),
+                        |mle| Expression::products(vec![mle.first(), mle.second()]),
                         // --- The witness generation simply zips the two halves and multiplies them ---
                         |mle, layer_id, prefix_bits| {
                             DenseMle::new_from_iter(
@@ -1682,8 +1855,11 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
             output_input_vec.iter().map(|mle| mle.mle_ref()).collect(),
             new_bits,
         );
-        let mut output_input_full: DenseMle<F, F> =
-            DenseMle::new_from_raw(output_input.bookkeeping_table, LayerId::Input(0), None);
+        let mut output_input_full: DenseMle<F, F> = DenseMle::new_from_raw(
+            output_input.current_mle.get_evals_vector().clone(),
+            LayerId::Input(0),
+            None,
+        );
         input_layer
             .add_extra_mle(Box::new(&mut output_input_full))
             .unwrap();
@@ -1837,29 +2013,36 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
-                match expr {
-                    ExpressionStandard::Mle(mle) => {
-                        if mle.layer_id == LayerId::Input(0) {
-                            mle.layer_id = LayerId::Input(1)
-                        }
-                        Ok(())
-                    }
-                    ExpressionStandard::Product(mles) => {
-                        for mle in mles {
-                            if mle.layer_id == LayerId::Input(0) {
-                                mle.layer_id = LayerId::Input(1)
+            let mut closure =
+                for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
+                             mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec|
+                             -> Result<(), ()> {
+                    match expr {
+                        ExpressionNode::Mle(mle_vec_idx) => {
+                            let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                            if mle_ref.layer_id == LayerId::Input(0) {
+                                mle_ref.layer_id = LayerId::Input(1)
                             }
+                            Ok(())
                         }
-                        Ok(())
+                        ExpressionNode::Product(mle_vec_indices) => {
+                            for mle_vec_index in mle_vec_indices {
+                                let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                                if mle_ref.layer_id == LayerId::Input(0) {
+                                    mle_ref.layer_id = LayerId::Input(1)
+                                }
+                            }
+                            Ok(())
+                        }
+                        ExpressionNode::Constant(_)
+                        | ExpressionNode::Scaled(_, _)
+                        | ExpressionNode::Sum(_, _)
+                        | ExpressionNode::Negated(_)
+                        | ExpressionNode::Selector(_, _, _) => Ok(()),
                     }
-                    ExpressionStandard::Constant(_)
-                    | ExpressionStandard::Scaled(_, _)
-                    | ExpressionStandard::Sum(_, _)
-                    | ExpressionStandard::Negated(_)
-                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
-                }
-            };
+                };
 
             expression.traverse_mut(&mut closure).unwrap();
         }
@@ -1873,29 +2056,36 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
                 _ => panic!(),
             };
 
-            let mut closure = for<'a> |expr: &'a mut ExpressionStandard<F>| -> Result<(), ()> {
-                match expr {
-                    ExpressionStandard::Mle(mle) => {
-                        if mle.layer_id == LayerId::Input(0) {
-                            mle.layer_id = LayerId::Input(2)
-                        }
-                        Ok(())
-                    }
-                    ExpressionStandard::Product(mles) => {
-                        for mle in mles {
-                            if mle.layer_id == LayerId::Input(0) {
-                                mle.layer_id = LayerId::Input(2)
+            let mut closure =
+                for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
+                             mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec|
+                             -> Result<(), ()> {
+                    match expr {
+                        ExpressionNode::Mle(mle_vec_idx) => {
+                            let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                            if mle_ref.layer_id == LayerId::Input(0) {
+                                mle_ref.layer_id = LayerId::Input(2)
                             }
+                            Ok(())
                         }
-                        Ok(())
+                        ExpressionNode::Product(mle_vec_indices) => {
+                            for mle_vec_index in mle_vec_indices {
+                                let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                                if mle_ref.layer_id == LayerId::Input(0) {
+                                    mle_ref.layer_id = LayerId::Input(2)
+                                }
+                            }
+                            Ok(())
+                        }
+                        ExpressionNode::Constant(_)
+                        | ExpressionNode::Scaled(_, _)
+                        | ExpressionNode::Sum(_, _)
+                        | ExpressionNode::Negated(_)
+                        | ExpressionNode::Selector(_, _, _) => Ok(()),
                     }
-                    ExpressionStandard::Constant(_)
-                    | ExpressionStandard::Scaled(_, _)
-                    | ExpressionStandard::Sum(_, _)
-                    | ExpressionStandard::Negated(_)
-                    | ExpressionStandard::Selector(_, _, _) => Ok(()),
-                }
-            };
+                };
 
             expression.traverse_mut(&mut closure).unwrap();
         }

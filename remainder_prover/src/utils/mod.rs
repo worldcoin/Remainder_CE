@@ -3,10 +3,13 @@ use std::{fs, iter::repeat_with};
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::{prelude::Distribution, Rng};
-use remainder_shared_types::{transcript::Transcript, FieldExt, Fr, Poseidon};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptSponge},
+    FieldExt, Fr, Poseidon,
+};
 
 use crate::{
-    layer::{layer_enum::LayerEnum, LayerId},
+    layer::LayerId,
     mle::{dense::DenseMle, MleIndex},
     prover::Layers,
 };

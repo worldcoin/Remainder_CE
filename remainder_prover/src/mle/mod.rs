@@ -18,6 +18,8 @@ pub mod dense;
 pub mod mle_enum;
 pub mod zero;
 
+pub mod evals;
+
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)
 ///The trait that defines how a semantic Type (T) and a MultiLinearEvaluation containing field elements (F) interact.
 /// T should always be a composite type containing Fs. For example (F, F) or a struct containing Fs.
@@ -42,7 +44,7 @@ where
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
-pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
+pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     ///The Field Element this MleRef refers to
     type F: FieldExt;
 
@@ -54,7 +56,7 @@ pub trait MleRef: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de> {
 
     fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>>;
 
-    fn original_bookkeeping_table(&self) -> &Vec<Self::F>;
+    fn original_bookkeeping_table(&self) -> &[Self::F];
 
     // ///Moves the claim by adding the new_claims to the left of the originals
     // fn relabel_mle_indices(&mut self, new_claims: &[MleIndex<Self::F>]);

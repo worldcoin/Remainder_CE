@@ -4,7 +4,7 @@ use ark_std::{cfg_into_iter, cfg_iter};
 
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -39,6 +39,10 @@ pub enum InputLayerError {
     PublicInputVerificationFailed,
     #[error("failed to verify random input layer")]
     RandomInputVerificationFailed,
+    #[error("Error during interaction with the transcript.")]
+    TranscriptError(TranscriptReaderError),
+    #[error("Challenge or consumed element did not match the expected value.")]
+    TranscriptMatchError,
 }
 
 use log::{debug, info, trace, warn};
@@ -49,7 +53,12 @@ pub trait InputLayer<F: FieldExt> {
 
     fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
 
-    fn append_commitment_to_transcript(
+    fn prover_append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    );
+
+    fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
         transcript: &mut impl Transcript<F>,
     ) -> Result<(), TranscriptError>;
@@ -77,7 +86,10 @@ pub trait InputLayer<F: FieldExt> {
         let prep_timer = start_timer!(|| "Claim wlx prep");
         let mut mle_ref = self.get_padded_mle().clone().mle_ref();
         end_timer!(prep_timer);
-        info!("Wlx MLE len: {}", mle_ref.bookkeeping_table.len());
+        info!(
+            "Wlx MLE len: {}",
+            mle_ref.current_mle.get_evals_vector().len()
+        );
         let num_claims = claims.get_num_claims();
         let claim_vecs = claims.get_claim_points_matrix();
         let claimed_vals = claims.get_results();
@@ -127,7 +139,7 @@ pub trait InputLayer<F: FieldExt> {
                             fix_mle.fix_variable(idx_num, chal);
                         }
                     });
-                    fix_mle.bookkeeping_table[0]
+                    fix_mle.current_mle[0]
                 }
             })
             .collect();

@@ -3,14 +3,20 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{gather_combine_all_evals, Expression, ExpressionStandard},
+    expression::{
+        generic_expr::{Expression, ExpressionNode},
+        prover_expr::ProverExpr,
+    },
     mle::{beta::BetaTable, dense::DenseMleRef, mle_enum::MleEnum, MleRef},
     prover::SumcheckProof,
     sumcheck::{compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals},
 };
 use ark_std::cfg_into_iter;
 use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
-use remainder_shared_types::{transcript::Transcript, FieldExt};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -22,8 +28,8 @@ use super::{
 ///A Layer with 0 num_vars
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct EmptyLayer<F> {
-    pub(crate) expr: ExpressionStandard<F>,
+pub struct EmptyLayer<F: FieldExt, Tr> {
+    pub(crate) expr: Expression<F, ProverExpr>,
     id: LayerId,
 }
 
@@ -33,9 +39,15 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
     fn prove_rounds(
         &mut self,
         _: Claim<F>,
-        _: &mut impl Transcript<F>,
-    ) -> Result<F, LayerError> {
-        let eval = gather_combine_all_evals(&self.expr).map_err(LayerError::ExpressionError)?;
+        _: &mut TranscriptWriter<F, Self::Sponge>,
+    ) -> Result<SumcheckProof<F>, LayerError> {
+        let eval = self
+            .expr
+            .clone()
+            .transform_to_verifier_expression()
+            .unwrap()
+            .gather_combine_all_evals()
+            .map_err(LayerError::ExpressionError)?;
 
         Ok(eval)
     }
@@ -43,8 +55,8 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        claimed_eval: Self::Proof,
-        _: &mut impl Transcript<F>,
+        sumcheck_rounds: Vec<Vec<F>>,
+        _: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), LayerError> {
         if claimed_eval != claim.get_result() {
             return Err(LayerError::VerificationError(
@@ -67,9 +79,12 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |exp: &ExpressionStandard<F>| {
-            match exp {
-                ExpressionStandard::Mle(mle_ref) => {
+        let mut observer_fn = |exp_node: &ExpressionNode<F, ProverExpr>,
+                               mle_vec: &Vec<DenseMleRef<F>>| {
+            match exp_node {
+                ExpressionNode::Mle(mle_vec_idx) => {
+                    let mle_ref = mle_vec_idx.get_mle(mle_vec);
+
                     // --- First ensure that all the indices are fixed ---
                     let mle_indices = mle_ref.mle_indices();
 
@@ -101,9 +116,11 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
                     // --- Also push the layer_id ---
                     claims.push(claim);
                 }
-                ExpressionStandard::Product(mle_refs) => {
-                    for mle_ref in mle_refs {
+                ExpressionNode::Product(mle_vec_indices) => {
+                    for mle_vec_index in mle_vec_indices {
                         // --- First ensure that all the indices are fixed ---
+                        let mle_ref = mle_vec_index.get_mle(mle_vec);
+
                         let mle_indices = mle_ref.mle_indices();
 
                         // --- This is super jank ---
@@ -167,7 +184,7 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
 
 impl<F: FieldExt> EmptyLayer<F> {
     ///Gets this layer's underlying expression
-    pub fn expression(&self) -> &ExpressionStandard<F> {
+    pub fn expression(&self) -> &Expression<F, ProverExpr> {
         &self.expr
     }
 

@@ -1,7 +1,7 @@
 //! A wrapper type that makes working with variants of InputLayer easier
 
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use super::{
     ligero_input_layer::{LigeroCommitment, LigeroInputLayer, LigeroInputProof},
     public_input_layer::PublicInputLayer,
     random_input_layer::RandomInputLayer,
-    InputLayer,
+    InputLayer, InputLayerError,
 };
 
 // ///A wrapper type that makes working with variants of InputLayer easier

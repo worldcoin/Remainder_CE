@@ -4,7 +4,10 @@ use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
     LcProofAuxiliaryInfo, LcRoot,
 };
-use remainder_shared_types::{transcript::Transcript, FieldExt};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptSponge},
+    FieldExt,
+};
 
 use crate::{
     layer::LayerId,
