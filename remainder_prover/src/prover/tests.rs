@@ -119,6 +119,97 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
     }
 }
 
+struct CircuitNoLinearIndex<F: FieldExt> {
+    mle_1: DenseMle<F, F>,
+    mle_2: DenseMle<F, F>,
+    neg_mle_2: DenseMle<F, F>,
+    size: usize,
+}
+impl<F: FieldExt> GKRCircuit<F> for CircuitNoLinearIndex<F> {
+    type Transcript = PoseidonTranscript<F>;
+
+    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
+        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            Box::new(&mut self.mle_1),
+            Box::new(&mut self.mle_2),
+            Box::new(&mut self.neg_mle_2),
+        ];
+        let mut input_layer =
+            InputLayerBuilder::new(input_mles, Some(vec![self.size]), LayerId::Input(0));
+
+        // --- Create Layers to be added to ---
+        let mut layers = Layers::new();
+
+        // --- Create a SimpleLayer from the first `mle` within the circuit ---
+        let mult_builder = from_mle(
+            (self.mle_1.clone(), self.mle_2.clone()),
+            // --- The expression is a simple product between the first and second halves ---
+            |(mle_1, mle_2)| Expression::products(vec![mle_1.mle_ref(), mle_2.mle_ref()]),
+            // --- The witness generation simply zips the two halves and multiplies them ---
+            |(mle_1, mle_2), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    mle_1
+                        .mle_ref()
+                        .bookkeeping_table()
+                        .into_iter()
+                        .zip(mle_2.mle_ref().bookkeeping_table())
+                        .map(|(first, second)| *first * second),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+
+        // --- Create a SimpleLayer from the first `mle` within the circuit ---
+        let mult_builder_neg = from_mle(
+            (self.mle_1.clone(), self.neg_mle_2.clone()),
+            // --- The expression is a simple product between the first and second halves ---
+            |(mle_1, mle_2)| Expression::products(vec![mle_1.mle_ref(), mle_2.mle_ref()]),
+            // --- The witness generation simply zips the two halves and multiplies them ---
+            |(mle_1, mle_2), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    mle_1
+                        .mle_ref()
+                        .bookkeeping_table()
+                        .into_iter()
+                        .zip(mle_2.mle_ref().bookkeeping_table())
+                        .map(|(first, second)| *first * second),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+
+        // --- Stacks the two aforementioned layers together into a single layer ---
+        // --- Then adds them to the overall circuit ---
+        let first_layer_output = layers.add_gkr(mult_builder);
+        let second_layer_output = layers.add_gkr(mult_builder_neg);
+
+        let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
+        let input_layers = vec![input_layer.to_enum()];
+
+        // --- Subtract the computed circuit output from the advice circuit output ---
+        let output_diff_builder = from_mle(
+            (first_layer_output, second_layer_output.clone()),
+            |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
+            |(mle1, mle2), layer_id, prefix_bits| {
+                let num_vars = max(mle1.num_iterated_vars(), mle2.num_iterated_vars());
+                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+            },
+        );
+
+        // --- Add this final layer to the circuit ---
+        let circuit_output = layers.add_gkr(output_diff_builder);
+
+        Witness {
+            layers,
+            output_layers: vec![circuit_output.get_enum()],
+            input_layers,
+        }
+    }
+}
+
 /// Circuit which just subtracts its two halves! No input-output layer needed.
 struct SimplestCircuit<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
@@ -1218,6 +1309,42 @@ fn test_gkr_simple_circuit() {
 }
 
 #[test]
+fn test_gkr_nonlinear_circuit() {
+    let mut rng = test_rng();
+    let size = 2;
+
+    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..1 << size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+        None,
+    );
+
+    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..1 << size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+        None,
+    );
+
+    let neg_mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        mle_2
+            .mle_ref()
+            .bookkeeping_table()
+            .iter()
+            .map(|elem| elem.neg()),
+        LayerId::Input(0),
+        None,
+    );
+
+    let circuit: CircuitNoLinearIndex<Fr> = CircuitNoLinearIndex {
+        mle_1,
+        mle_2,
+        neg_mle_2,
+        size,
+    };
+    test_circuit(circuit, Some(Path::new("simple_circuit_optimized.json")));
+}
+
+#[test]
 fn test_gkr_simplest_circuit() {
     let mut rng = test_rng();
     let size = 1 << 4;
@@ -1703,231 +1830,6 @@ fn test_combine_circuit() {
         test_circuit: test_circuit_1,
         simple_circuit,
     };
-
-    test_circuit(circuit, None);
-}
-
-/// This circuit is a 4k --> k circuit, such that
-/// [x_1, x_2, x_3, x_4] --> [x_1 * x_3, x_2 + x_4] --> [(x_1 * x_3) - (x_2 + x_4)]
-struct BatchedTestCircuit<F: FieldExt> {
-    mle: Vec<DenseMle<F, Tuple2<F>>>,
-    mle_2: Vec<DenseMle<F, Tuple2<F>>>,
-    size: usize,
-}
-
-impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
-    type Transcript = PoseidonTranscript<F>;
-
-    fn synthesize(&mut self) -> Witness<F, Self::Transcript> {
-        let new_bits = log2(self.mle.len()) as usize;
-        let mut mle_combined = DenseMle::<_, Tuple2<_>>::combine_mle_batch(self.mle.clone());
-        let mut mle_2_combined = DenseMle::<_, Tuple2<_>>::combine_mle_batch(self.mle_2.clone());
-        // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut mle_combined), Box::new(&mut mle_2_combined)];
-        let mut input_layer = InputLayerBuilder::new(
-            input_mles,
-            Some(vec![self.size * self.mle.len()]),
-            LayerId::Input(0),
-        );
-
-        // --- Create Layers to be added to ---
-        let mut layers: Layers<F, Self::Transcript> = Layers::new();
-
-        // // --- Create a SimpleLayer from the first `mle` within the circuit ---
-        let builder = BatchedLayer::new(
-            self.mle
-                .iter()
-                .cloned()
-                .map(|mut mle| {
-                    mle.set_prefix_bits(Some(
-                        mle_combined
-                            .prefix_bits
-                            .iter()
-                            .flatten()
-                            .cloned()
-                            .chain(repeat_n(MleIndex::Iterated, new_bits))
-                            .collect(),
-                    ));
-                    from_mle(
-                        mle,
-                        // --- The expression is a simple product between the first and second halves ---
-                        |mle| Expression::products(vec![mle.first(), mle.second()]),
-                        // --- The witness generation simply zips the two halves and multiplies them ---
-                        |mle, layer_id, prefix_bits| {
-                            DenseMle::new_from_iter(
-                                mle.into_iter()
-                                    .map(|Tuple2((first, second))| first * second),
-                                layer_id,
-                                prefix_bits,
-                            )
-                        },
-                    )
-                })
-                .collect(),
-        );
-
-        // --- Similarly here, but with addition between the two halves ---
-        // --- Note that EACH of `mle` and `mle_2` are parts of the input layer ---
-        let builder2 = BatchedLayer::new(
-            self.mle_2
-                .iter()
-                .cloned()
-                .map(|mut mle| {
-                    mle.set_prefix_bits(Some(
-                        mle_2_combined
-                            .prefix_bits
-                            .iter()
-                            .flatten()
-                            .cloned()
-                            .chain(repeat_n(MleIndex::Iterated, new_bits))
-                            .collect(),
-                    ));
-                    from_mle(
-                        mle,
-                        |mle| mle.first().expression() + mle.second().expression(),
-                        |mle, layer_id, prefix_bits| {
-                            DenseMle::new_from_iter(
-                                mle.into_iter()
-                                    .map(|Tuple2((first, second))| first + second),
-                                layer_id,
-                                prefix_bits,
-                            )
-                        },
-                    )
-                })
-                .collect(),
-        );
-
-        // --- Stacks the two aforementioned layers together into a single layer ---
-        // --- Then adds them to the overall circuit ---
-        let builder3 = builder.concat(builder2);
-        let (output_left, output_right) = layers.add_gkr(builder3);
-
-        // --- Creates a single layer which takes [x_1, ..., x_n, y_1, ..., y_n] and returns [x_1 - y_1, ..., x_n - y_n] ---
-        let builder4 = BatchedLayer::new(
-            output_left
-                .into_iter()
-                .zip(output_right.into_iter())
-                .map(|output| {
-                    from_mle(
-                        output,
-                        |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
-                        |(mle1, mle2), layer_id, prefix_bits| {
-                            DenseMle::new_from_iter(
-                                mle1.clone()
-                                    .into_iter()
-                                    .zip(mle2.clone().into_iter())
-                                    .map(|(first, second)| first - second),
-                                layer_id,
-                                prefix_bits,
-                            )
-                        },
-                    )
-                })
-                .collect(),
-        );
-
-        // --- Appends this to the circuit ---
-        let computed_output = layers.add_gkr(builder4);
-        let output_input_vec = computed_output.clone();
-
-        // --- Ahh. So we're doing the thing where we add the "real" circuit output as a circuit input, ---
-        // --- then check if the difference between the two is zero ---
-        let output_input = combine_mles(
-            output_input_vec.iter().map(|mle| mle.mle_ref()).collect(),
-            new_bits,
-        );
-        let mut output_input_full: DenseMle<F, F> = DenseMle::new_from_raw(
-            output_input.current_mle.get_evals_vector().clone(),
-            LayerId::Input(0),
-            None,
-        );
-        input_layer
-            .add_extra_mle(Box::new(&mut output_input_full))
-            .unwrap();
-
-        // --- Subtract the computed circuit output from the advice circuit output ---
-        let builder5 = BatchedLayer::new(
-            computed_output
-                .into_iter()
-                .zip(output_input_vec.into_iter())
-                .map(|(computed_output, mut output_input)| {
-                    output_input.set_prefix_bits(Some(
-                        output_input_full
-                            .prefix_bits
-                            .iter()
-                            .flatten()
-                            .cloned()
-                            .chain(repeat_n(MleIndex::Iterated, new_bits))
-                            .collect(),
-                    ));
-                    from_mle(
-                        (computed_output, output_input),
-                        |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
-                        |(mle1, mle2), layer_id, prefix_bits| {
-                            let num_vars = max(mle1.num_iterated_vars(), mle2.num_iterated_vars());
-                            ZeroMleRef::new(num_vars, prefix_bits, layer_id)
-                        },
-                    )
-                })
-                .collect(),
-        );
-
-        // --- Add this final layer to the circuit ---
-        let _circuit_circuit_output = layers.add_gkr(builder5);
-
-        // // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
-        // let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-        //     vec![Box::new(&mut self.mle), Box::new(&mut self.mle_2)];
-
-        // let input_layer: PublicInputLayer<F, Self::Transcript> = input_layer.to_input_layer();
-
-        // // (layers, vec![circuit_circuit_output.get_enum()], input_layer)
-        // Witness {
-        //     layers,
-        //     output_layers: vec![circuit_circuit_output.get_enum()],
-        //     input_layers: vec![input_layer.to_enum()],
-        // }
-
-        todo!()
-    }
-}
-
-#[test]
-fn test_complex_batch_gkr() {
-    let mut rng = test_rng();
-    let size = 4;
-    let size_expanded = 1 << size;
-    let batch_size = 4;
-    // let subscriber = tracing_subscriber::fmt().with_max_level(Level::TRACE).finish();
-    // tracing::subscriber::set_global_default(subscriber)
-    //     .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-
-    // --- This should be 2^2 ---
-    let mle = (0..batch_size)
-        .map(|_| {
-            DenseMle::new_from_iter(
-                (0..size_expanded)
-                    .map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect();
-    // --- This should be 2^2 ---
-    let mle_2 = (0..batch_size)
-        .map(|_| {
-            DenseMle::new_from_iter(
-                (0..size_expanded)
-                    .map(|_| (Fr::from(rng.gen::<u64>()), Fr::from(rng.gen::<u64>())).into()),
-                LayerId::Input(0),
-                None,
-            )
-        })
-        .collect();
-
-    let circuit = BatchedTestCircuit { mle, mle_2, size };
 
     test_circuit(circuit, None);
 }

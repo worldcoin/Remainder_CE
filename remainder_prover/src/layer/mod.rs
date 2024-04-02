@@ -27,11 +27,13 @@ use crate::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
         dense::DenseMleRef,
         mle_enum::MleEnum,
+        newbeta::NewBeta,
         MleIndex, MleRef,
     },
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::{
-        compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals, InterpError,
+        compute_sumcheck_message, compute_sumcheck_message_beta_cascade, evaluate_at_a_point,
+        get_round_degree, Evals, InterpError,
     },
 };
 use remainder_shared_types::{
@@ -187,6 +189,7 @@ pub struct GKRLayer<F: FieldExt, Tr> {
     pub(crate) expression: Expression<F, ProverExpr>,
     nonlinear_rounds: Option<Vec<usize>>,
     beta: Option<BetaTable<F>>,
+    pub beta_vals: Option<NewBeta<F>>,
     #[serde(skip)]
     _marker: PhantomData<Tr>,
 }
@@ -198,7 +201,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         // --- `max_round` is total number of rounds of sumcheck which need to be performed ---
         // --- `beta` is the beta table itself, initialized with the challenge coordinate held within `claim` ---
         let (beta, first_nonlinear_round) = {
-            let (expression, _) = self.mut_expression_and_beta();
+            let (expression, _, _) = self.mut_expression_and_beta();
             let _expression_num_indices = expression.index_mle_indices(0);
             let mut expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
             expression_nonlinear_indices.sort();
@@ -220,6 +223,12 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
                 .iter()
                 .map(|idx| claim_point[*idx])
                 .collect_vec();
+            let betavec = expression_nonlinear_indices
+                .iter()
+                .map(|idx| (*idx, claim_point[*idx]))
+                .collect_vec();
+            let newbeta = NewBeta::new(betavec);
+            self.beta_vals = Some(newbeta);
 
             if expression_nonlinear_indices.len() == 0 {
                 return Ok(vec![]);
@@ -233,13 +242,25 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         self.set_beta(beta);
 
         // --- Grabs the expression/beta table/variable degree for the first round and executes the sumcheck prover for the first round ---
-        let (expression, beta) = self.mut_expression_and_beta();
+        let (expression, beta, new_beta) = self.mut_expression_and_beta();
         let beta = beta.as_ref().unwrap();
         let degree = get_round_degree(expression, first_nonlinear_round);
 
         let first_round_sumcheck_message =
             compute_sumcheck_message(expression, first_nonlinear_round, degree, beta)
                 .map_err(LayerError::ExpressionError)?;
+
+        let first_round_haha = compute_sumcheck_message_beta_cascade(
+            expression,
+            first_nonlinear_round,
+            degree,
+            new_beta.as_ref().unwrap(),
+        );
+
+        dbg!(&first_round_sumcheck_message);
+        dbg!(&(first_round_sumcheck_message.clone() * F::from(2_u64)));
+
+        dbg!(&first_round_haha);
 
         let Evals(out) = first_round_sumcheck_message;
 
@@ -254,12 +275,16 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         challenge_idx: usize,
     ) -> Result<Vec<F>, LayerError> {
         // --- Grabs the expression/beta table and updates them with the new challenge ---
-        let (expression, beta) = self.mut_expression_and_beta();
+        let (expression, beta, newbeta) = self.mut_expression_and_beta();
         let beta = beta.as_mut().ok_or(LayerError::LayerNotReady)?;
         //dbg!(&expression);
         expression.fix_variable(round_index - 1, challenge);
         beta.beta_update(challenge_idx - 1, challenge)
             .map_err(LayerError::BetaError)?;
+        newbeta
+            .as_mut()
+            .unwrap()
+            .beta_update(round_index - 1, challenge);
 
         // --- Grabs the degree of univariate polynomial we are sending over ---
         let degree = get_round_degree(expression, round_index);
@@ -273,8 +298,12 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
     fn mut_expression_and_beta(
         &mut self,
-    ) -> (&mut Expression<F, ProverExpr>, &mut Option<BetaTable<F>>) {
-        (&mut self.expression, &mut self.beta)
+    ) -> (
+        &mut Expression<F, ProverExpr>,
+        &mut Option<BetaTable<F>>,
+        &mut Option<NewBeta<F>>,
+    ) {
+        (&mut self.expression, &mut self.beta, &mut self.beta_vals)
     }
 
     fn set_beta(&mut self, beta: BetaTable<F>) {
@@ -296,6 +325,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
             expression,
             nonlinear_rounds: None,
             beta: None,
+            beta_vals: None,
             _marker: PhantomData,
         }
     }
@@ -309,6 +339,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             expression: builder.build_expression(),
             nonlinear_rounds: None,
             beta: None,
+            beta_vals: None,
             _marker: PhantomData,
         }
     }

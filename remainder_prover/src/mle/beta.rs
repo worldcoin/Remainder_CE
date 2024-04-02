@@ -79,7 +79,7 @@ pub fn compute_beta_over_two_challenges<F: FieldExt>(
     challenge_one: &Vec<F>,
     challenge_two: &Vec<F>,
 ) -> F {
-    //assert_eq!(challenge_one.len(), challenge_two.len());
+    assert_eq!(challenge_one.len(), challenge_two.len());
 
     // --- Formula is just \prod_i (x_i * y_i) + (1 - x_i) * (1 - y_i) ---
     let one = F::one();
@@ -169,7 +169,6 @@ impl<F: FieldExt> BetaTable<F> {
                 cur_table = firsthalf;
             }
 
-            let iterated_bit_indices = (0..layer_claim_vars.len()).collect_vec();
             let cur_table_mle_ref: DenseMleRef<F> =
                 DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
             Ok(BetaTable {
