@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use tracing::instrument;
 
-use crate::gate::{
-    addgate::AddGate, batched_addgate::AddGateBatched, batched_mulgate::MulGateBatched,
-    mulgate::MulGate,
-};
+use crate::gate::gate::Gate;
 use crate::layer_enum;
 use crate::mle::dense::DenseMleRef;
 use crate::mle::mle_enum::MleEnum;
@@ -39,10 +36,7 @@ use std::fmt;
 layer_enum!(
     LayerEnum,
     (Gkr: GKRLayer<F>),
-    (MulGate: MulGate<F>),
-    (AddGate: AddGate<F>),
-    (AddGateBatched: AddGateBatched<F>),
-    (MulGateBatched: MulGateBatched<F>),
+    (Gate: Gate<F>),
     (EmptyLayer: EmptyLayer<F>)
 );
 

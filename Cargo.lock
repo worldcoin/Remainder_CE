@@ -1670,6 +1670,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "once_cell",
+ "paste",
  "pretty_env_logger",
  "quickcheck",
  "quickcheck_macros",
