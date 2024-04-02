@@ -3,7 +3,10 @@ use super::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     verifier_expr::VerifierExpr,
 };
-use crate::mle::{beta::*, dense::DenseMleRef, MleIndex, MleRef};
+use crate::{
+    mle::{beta::*, dense::DenseMleRef, newbeta::NewBeta, MleIndex, MleRef},
+    sumcheck::get_relevant_beta_unbound_and_bound,
+};
 use ark_crypto_primitives::crh::sha256::digest::typenum::Exp;
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
@@ -330,6 +333,33 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
             product,
             scaled,
             beta_mle_ref,
+            round_index,
+            &self.mle_vec,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_sumcheck_beta_cascade<T>(
+        &self,
+        constant: &impl Fn(F) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T, &NewBeta<F>) -> T,
+        mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
+        negated: &impl Fn(T) -> T,
+        sum: &impl Fn(T, T) -> T,
+        product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T, // changed signature here, note to modify caller's calling code
+        scaled: &impl Fn(T, F) -> T,
+        beta: &NewBeta<F>,
+        round_index: usize,
+    ) -> T {
+        self.expression_node.evaluate_sumcheck_node_beta_cascade(
+            constant,
+            selector_column,
+            mle_eval,
+            negated,
+            sum,
+            product,
+            scaled,
+            beta,
             round_index,
             &self.mle_vec,
         )
@@ -703,6 +733,136 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     product,
                     scaled,
                     beta_mle_ref,
+                    round_index,
+                    mle_vec,
+                );
+                scaled(a, *f)
+            }
+        }
+    }
+
+    /// computes the sumcheck message for the given round index, and beta mle
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_sumcheck_node_beta_cascade<T>(
+        &self,
+        constant: &impl Fn(F) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T, &NewBeta<F>) -> T,
+        mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
+        negated: &impl Fn(T) -> T,
+        sum: &impl Fn(T, T) -> T,
+        product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T,
+        scaled: &impl Fn(T, F) -> T,
+        beta: &NewBeta<F>,
+        round_index: usize,
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+    ) -> T {
+        match self {
+            ExpressionNode::Constant(scalar) => constant(*scalar),
+            ExpressionNode::Selector(index, a, b) => selector_column(
+                index,
+                a.evaluate_sumcheck_node_beta_cascade(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta,
+                    round_index,
+                    mle_vec,
+                ),
+                b.evaluate_sumcheck_node_beta_cascade(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta,
+                    round_index,
+                    mle_vec,
+                ),
+                beta,
+            ),
+            ExpressionNode::Mle(mle_vec_idx) => {
+                let mle_ref = mle_vec_idx.get_mle(mle_vec);
+                let (unbound_beta_vec, bound_beta_vec) =
+                    get_relevant_beta_unbound_and_bound(mle_ref.mle_indices(), beta);
+                mle_eval(mle_ref, &unbound_beta_vec, &bound_beta_vec)
+            }
+            ExpressionNode::Negated(a) => {
+                let a = a.evaluate_sumcheck_node_beta_cascade(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta,
+                    round_index,
+                    mle_vec,
+                );
+                negated(a)
+            }
+            ExpressionNode::Sum(a, b) => {
+                let a = a.evaluate_sumcheck_node_beta_cascade(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta,
+                    round_index,
+                    mle_vec,
+                );
+                let b = b.evaluate_sumcheck_node_beta_cascade(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta,
+                    round_index,
+                    mle_vec,
+                );
+                sum(a, b)
+            }
+            ExpressionNode::Product(mle_vec_indices) => {
+                let mle_refs = mle_vec_indices
+                    .into_iter()
+                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
+                    .collect_vec();
+
+                let mut unique_mle_indices = HashSet::new();
+
+                let mle_ref_indices_vec = mle_refs
+                    .iter()
+                    .flat_map(|mle_ref| mle_ref.mle_indices.clone())
+                    .filter(move |mle_index| unique_mle_indices.insert(mle_index.clone()))
+                    .collect_vec();
+
+                let (unbound_beta_vec, bound_beta_vec) =
+                    get_relevant_beta_unbound_and_bound(&mle_ref_indices_vec, beta);
+
+                product(&mle_refs, &unbound_beta_vec, &bound_beta_vec)
+            }
+            ExpressionNode::Scaled(a, f) => {
+                let a = a.evaluate_sumcheck_node_beta_cascade(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                    beta,
                     round_index,
                     mle_vec,
                 );
