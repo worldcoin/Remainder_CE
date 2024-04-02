@@ -402,14 +402,6 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
                                        bound_beta_vals: &'d [F]|
                          -> Result<Evals<F>, ExpressionError> {
         // have to include the beta table and evaluate as a product
-        let hello = beta_cascade(
-            mle_refs,
-            max_degree,
-            round_index,
-            unbound_beta_vals,
-            bound_beta_vals,
-        );
-        dbg!(&hello);
         Ok(beta_cascade(
             mle_refs,
             max_degree,
@@ -543,6 +535,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
     mle_refs: &[&impl MleRef<F = F>],
     degree: usize,
 ) -> Result<Evals<F>, MleError> {
+    dbg!(degree);
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
@@ -584,6 +577,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                     let successors =
                         std::iter::successors(Some(second), move |item| Some(*item + step));
                     //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
+
                     std::iter::once(first).chain(successors)
                 })
                 .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
@@ -616,6 +610,7 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
     mle_refs: &[&impl MleRef<F = F>],
     degree: usize,
 ) -> Result<Vec<F>, MleError> {
+    dbg!(degree);
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
@@ -651,6 +646,7 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
                 let step = second - first;
                 let successors =
                     std::iter::successors(Some(second), move |item| Some(*item + step));
+
                 //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
                 std::iter::once(first).chain(successors)
             })
@@ -659,7 +655,6 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
             .unwrap();
 
         let eval_elements = successors_product.take(eval_count).collect_vec();
-
         eval_elements
     });
 
@@ -734,16 +729,16 @@ pub fn beta_cascade<F: FieldExt>(
 
     if mles_have_independent_variable {
         beta_vals.iter().skip(1).rev().for_each(|val| {
+            dbg!(val);
             mle_successor_vec = beta_cascade_step(&mut mle_successor_vec, *val);
         });
         let evals = if beta_vals.len() >= 1 {
+            dbg!(beta_vals[0]);
             let second_beta_successor = beta_vals[0];
             let first_beta_successor = F::one() - second_beta_successor;
             let step = second_beta_successor - first_beta_successor;
             let beta_successors =
                 std::iter::successors(Some(first_beta_successor), move |item| Some(*item + step));
-            dbg!(mle_successor_vec.len());
-            dbg!(degree);
             beta_successors
                 .zip(mle_successor_vec)
                 .map(|(beta_succ, mle_succ)| beta_succ * mle_succ)
@@ -771,6 +766,7 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
     degree: usize,
     beta_ref: DenseMleRef<F>,
 ) -> Result<Evals<F>, MleError> {
+    dbg!(&beta_ref.bookkeeping_table());
     for mle_ref in mle_refs {
         if !mle_ref.indexed() {
             return Err(MleError::NotIndexedError);

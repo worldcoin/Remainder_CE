@@ -233,6 +233,8 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
             if expression_nonlinear_indices.len() == 0 {
                 return Ok(vec![]);
             }
+            dbg!(&claim_chals_nonlinear);
+
             let mut beta = BetaTable::new(claim_chals_nonlinear).map_err(LayerError::BetaError)?;
             beta.table.index_mle_indices(0);
             (beta, expression_nonlinear_indices[0])
@@ -258,8 +260,6 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
         );
 
         dbg!(&first_round_sumcheck_message);
-        dbg!(&(first_round_sumcheck_message.clone() * F::from(2_u64)));
-
         dbg!(&first_round_haha);
 
         let Evals(out) = first_round_sumcheck_message;

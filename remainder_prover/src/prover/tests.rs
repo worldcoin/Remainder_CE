@@ -1314,13 +1314,19 @@ fn test_gkr_nonlinear_circuit() {
     let size = 2;
 
     let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..1 << size).map(|_| Fr::from(rng.gen::<u64>())),
+        (0..1 << size).map(|_| 
+            //Fr::from(rng.gen::<u64>())
+            Fr::one()
+    ),
         LayerId::Input(0),
         None,
     );
 
     let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..1 << size).map(|_| Fr::from(rng.gen::<u64>())),
+        (0..1 << size).map(|_| 
+            //Fr::from(rng.gen::<u64>())
+            Fr::one()
+    ),
         LayerId::Input(0),
         None,
     );
