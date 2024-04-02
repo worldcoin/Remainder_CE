@@ -59,7 +59,7 @@ pub struct Transcript<F: FieldExt> {
 
     /// The content of the transcript represented as a sequence of operations
     /// used to generate it.
-    appended_elements: Vec<Operation<F>>,
+    transcript_operations: Vec<Operation<F>>,
 }
 
 impl<F: FieldExt> Transcript<F> {
@@ -67,7 +67,7 @@ impl<F: FieldExt> Transcript<F> {
     pub fn new(label: &str) -> Self {
         Self {
             label: String::from(label),
-            appended_elements: vec![],
+            transcript_operations: vec![],
         }
     }
 
@@ -75,7 +75,7 @@ impl<F: FieldExt> Transcript<F> {
     /// `label` is an identifier for this operation that can be used for sanity
     /// checking by the verifier.
     pub fn append_elements(&mut self, label: &str, elements: &[F]) {
-        self.appended_elements
+        self.transcript_operations
             .push(Operation::Append(String::from(label), elements.to_vec()));
     }
 
@@ -83,7 +83,7 @@ impl<F: FieldExt> Transcript<F> {
     /// `label` is an identifier for this operation that can be used for sanity
     /// checking by the verifier.
     pub fn squeeze_elements(&mut self, label: &str, num_elements: usize) {
-        self.appended_elements
+        self.transcript_operations
             .push(Operation::Squeeze(String::from(label), num_elements));
     }
 }
@@ -217,7 +217,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     fn advance_indices(&mut self) -> Result<(), TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.appended_elements.get(operation_idx) {
+        match self.transcript.transcript_operations.get(operation_idx) {
             None => Err(TranscriptReaderError::InternalIndicesError),
             Some(Operation::Append(_, v)) => {
                 if element_idx + 1 >= v.len() {
@@ -255,7 +255,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     pub fn consume_element(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.appended_elements.get(operation_idx) {
+        match self.transcript.transcript_operations.get(operation_idx) {
             None => Err(TranscriptReaderError::ConsumeError),
             Some(Operation::Squeeze(_, _)) => Err(TranscriptReaderError::ConsumeError),
             Some(Operation::Append(expected_label, v)) => {
@@ -324,7 +324,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     pub fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
-        match self.transcript.appended_elements.get(operation_idx) {
+        match self.transcript.transcript_operations.get(operation_idx) {
             None => Err(TranscriptReaderError::SqueezeError),
             Some(Operation::Append(_, _)) => Err(TranscriptReaderError::SqueezeError),
             Some(Operation::Squeeze(expected_label, num_elements)) => {
@@ -420,7 +420,7 @@ mod tests {
 
         let expected_transcript = Transcript::<Fr> {
             label: String::from("New tw"),
-            appended_elements,
+            transcript_operations: appended_elements,
         };
 
         assert_eq!(transcript, expected_transcript);
