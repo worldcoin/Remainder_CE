@@ -143,7 +143,7 @@ pub trait Layer<F: FieldExt> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut impl Transcript<F>,
+        transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<Self::Proof, LayerError>;
 
     ///  Verifies the sumcheck protocol
@@ -151,7 +151,7 @@ pub trait Layer<F: FieldExt> {
         &mut self,
         claim: Claim<F>,
         proof: Self::Proof,
-        transcript: &mut impl Transcript<F>,
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError>;
 
     /// Get the claims that this layer makes on other layers
@@ -173,7 +173,8 @@ pub trait Layer<F: FieldExt> {
 
 /// Default Layer abstraction
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct GKRLayer<F> {
+#[serde(bound = "F: FieldExt")] 
+pub struct GKRLayer<F: FieldExt> {
     id: LayerId,
     pub(crate) expression: Expression<F, ProverExpr>,
     beta: Option<BetaTable<F>>,
@@ -272,7 +273,7 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut impl Transcript<F>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let val = claim.get_result().clone();
 
@@ -331,7 +332,7 @@ impl<F: FieldExt> Layer<F> for GKRLayer<F> {
         &mut self,
         claim: Claim<F>,
         sumcheck_prover_messages: Self::Proof,
-        transcript: &mut impl Transcript<F>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError> {
         // --- Keeps track of challenges u_1, ..., u_n to be bound ---
         let mut challenges = vec![];

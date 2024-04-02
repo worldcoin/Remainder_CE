@@ -18,9 +18,7 @@ pub mod random_input_layer;
 
 use crate::{
     layer::{
-        claims::{get_num_wlx_evaluations, Claim, ClaimError, ClaimGroup, ENABLE_PRE_FIX},
-        combine_mle_refs::pre_fix_mle_refs,
-        LayerId,
+        claims::{get_num_wlx_evaluations, Claim, ClaimError, ClaimGroup, ENABLE_PRE_FIX}, combine_mle_refs::pre_fix_mle_refs, LayerError, LayerId
     },
     mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
     prover::ENABLE_OPTIMIZATION,
@@ -55,17 +53,17 @@ pub trait InputLayer<F: FieldExt> {
 
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     );
 
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut impl Transcript<F>,
-    ) -> Result<(), TranscriptError>;
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), InputLayerError>;
 
     fn open(
         &self,
-        transcript: &mut impl Transcript<F>,
+        transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
         claim: Claim<F>,
     ) -> Result<Self::OpeningProof, InputLayerError>;
 
@@ -73,7 +71,7 @@ pub trait InputLayer<F: FieldExt> {
         commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        transcript: &mut impl Transcript<F>,
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError>;
 
     fn layer_id(&self) -> &LayerId;

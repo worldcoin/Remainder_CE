@@ -2,7 +2,6 @@
 
 pub mod combine_layers;
 pub mod helpers;
-pub mod helpers;
 /// For the input layer to the GKR circuit
 pub mod input_layer;
 pub mod proof_system;
@@ -92,94 +91,6 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         successor
     }
 
-    /// Add an Add Gate layer to a list of layers (unbatched version)
-    ///
-    /// # Arguments
-    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where
-    /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
-    /// * `lhs`: the mle representing the left side of the sum
-    /// * `rhs`: the mle representing the right side of the sum
-    ///
-    /// # Returns
-    /// A `DenseMle` that represents the evaluations of the add gate wiring on `lhs` and `rhs` over the boolean hypercube
-    pub fn add_add_gate(
-        &mut self,
-        nonzero_gates: Vec<(usize, usize, usize)>,
-        lhs: DenseMleRef<F>,
-        rhs: DenseMleRef<F>,
-    ) -> DenseMle<F, F> 
-    where
-        T: From<AddGate<F>>,
-    {
-        let id = LayerId::Layer(self.layers.len());
-        // use the add gate constructor in order to initialize a new add gate mle
-        let gate: AddGate<F> =
-            AddGate::new(id, nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
-
-        // we want to return an mle representing the evaluations of this over all the points in the boolean hypercube
-        // the size of this mle is dependent on the max gate label given in the z coordinate of the tuples (as defined above)
-        let max_gate_val = nonzero_gates
-            .clone()
-            .into_iter()
-            .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
-        self.layers.push(gate.into());
-
-        // we use the nonzero add gates in order to evaluate the values at the next layer
-        let mut sum_table = vec![F::zero(); max_gate_val + 1];
-        nonzero_gates.into_iter().for_each(|(z, x, y)| {
-            let sum_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero())
-                + *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
-            sum_table[z] = sum_val;
-        });
-
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(sum_table, id, None);
-        res_mle
-    }
-
-    /// Add a Mul Gate layer to a list of layers (unbatched version)
-    ///
-    /// # Arguments
-    /// * `nonzero_gates`: the gate wiring between `lhs` and `rhs` represented as tuples (z, x, y) where
-    /// x is the label on the `lhs`, y is the label on the `rhs`, and z is the label on the next layer
-    /// * `lhs`: the mle representing the left side of the multiplication
-    /// * `rhs`: the mle representing the right side of the multiplication
-    ///
-    /// # Returns
-    /// A `DenseMle` that represents the evaluations of the mul gate wiring on `lhs` and `rhs` over the boolean hypercube
-    pub fn add_mul_gate(
-        &mut self,
-        nonzero_gates: Vec<(usize, usize, usize)>,
-        lhs: DenseMleRef<F>,
-        rhs: DenseMleRef<F>,
-    ) -> DenseMle<F, F> 
-    where
-        T: From<MulGate<F>>,
-    {
-        let id = LayerId::Layer(self.layers.len());
-        // use the mul gate constructor in order to initialize a new add gate mle
-        let gate: MulGate<F> =
-            MulGate::new(id, nonzero_gates.clone(), lhs.clone(), rhs.clone(), 0, None);
-
-        // we want to return an mle representing the evaluations of this over all the points in the boolean hypercube
-        // the size of this mle is dependent on the max gate label given in the z coordinate of the tuples (as defined above)
-        let max_gate_val = nonzero_gates
-            .clone()
-            .into_iter()
-            .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
-        self.layers.push(gate.into());
-
-        // we use the nonzero mul gates in order to evaluate the values at the next layer
-        let mut mul_table = vec![F::zero(); max_gate_val + 1];
-        nonzero_gates.into_iter().for_each(|(z, x, y)| {
-            let mul_val = *lhs.bookkeeping_table().get(x).unwrap_or(&F::zero())
-                * *rhs.bookkeeping_table().get(y).unwrap_or(&F::zero());
-            mul_table[z] = mul_val;
-        });
-
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(mul_table, id, None);
-        res_mle
-    }
-
     /// Add a batched Add Gate layer to a list of layers
     /// In the batched case, consider a vector of mles corresponding to an mle for each "batch" or "copy".
     /// Add a Gate layer to a list of layers
@@ -204,10 +115,12 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         rhs: DenseMleRef<F>,
         num_dataparallel_bits: Option<usize>,
         gate_operation: BinaryOperation,
-    ) -> DenseMle<F, F> {
-        let id = LayerId::Layer(self.0.len());
+    ) -> DenseMle<F, F>
+        where T: From<Gate<F>>
+    {
+        let id = LayerId::Layer(self.layers.len());
         // constructor for batched mul gate struct
-        let gate: Gate<F, Tr> = Gate::new(
+        let gate: Gate<F> = Gate::new(
             num_dataparallel_bits,
             nonzero_gates.clone(),
             lhs.clone(),
@@ -224,7 +137,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         // evaluating over all values in the boolean hypercube which includes dataparallel bits
         let num_dataparallel_vals = 1 << (num_dataparallel_bits.unwrap_or(0));
         let res_table_num_entries = (max_gate_val + 1) * num_dataparallel_vals;
-        self.0.push(gate.get_enum());
+        self.layers.push(gate.into());
 
         // iterate through each of the indices and perform the binary operation specified
         let mut res_table = vec![F::zero(); res_table_num_entries];
@@ -359,11 +272,21 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
-/// Controls
+#[allow(type_alias_bounds)]
+/// A helper type for easier reference to a circuits Transcript
+pub type CircuitTranscript<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::Transcript;
+
+#[allow(type_alias_bounds)]
+/// A helper type alias for easier reference to a circuits Layer
+pub type CircuitLayer<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::Layer;
+
+#[allow(type_alias_bounds)]
+/// A helper type alias for easier reference to a circuits InputLayer
+pub type CircuitInputLayer<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::InputLayer;
 
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
-    /// The transcript this circuit uses
+    /// The ProofSystem that describes the allowed cryptographic operations this Circuit uses
     type ProofSystem: ProofSystem<F>;
 
     const CIRCUIT_HASH: Option<[u8; 32]> = None;
@@ -375,8 +298,8 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut <Self::ProofSystem as ProofSystem<F>>::Transcript,
-    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<<<Self::ProofSystem as ProofSystem<F>>::InputLayer as InputLayer<F>>::Commitment>), GKRError> {
+        transcript: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
+    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>), GKRError> {
         let mut witness = self.synthesize();
 
         let commitments = witness
@@ -384,11 +307,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .iter_mut()
             .map(|input_layer| {
                 let commitment = input_layer.commit().map_err(GKRError::InputLayerError)?;
-                <Self::ProofSystem as ProofSystem<F>>::InputLayer::append_commitment_to_transcript(&commitment, transcript).unwrap();
-                InputLayerEnum::prover_append_commitment_to_transcript(
-                    &commitment,
-                    transcript_writer,
-                );
+                CircuitInputLayer::<F, Self>::prover_append_commitment_to_transcript(&commitment, transcript);
                 Ok(commitment)
             })
             .try_collect()?;
@@ -400,10 +319,10 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn prove(
         &mut self,
-        transcript: &mut <Self::ProofSystem as ProofSystem<F>>::Transcript,
+        transcript_writer : &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
     ) -> Result<GKRProof<F, Self::ProofSystem>, GKRError>
     where
-        <Self::ProofSystem as ProofSystem<F>>::Transcript: Sync,
+        CircuitTranscript<F, Self>: Sync,
     {
         let synthesize_commit_timer = start_timer!(|| "synthesize and commit");
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
@@ -714,7 +633,7 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn verify(
         &mut self,
-        transcript: &mut <Self::ProofSystem as ProofSystem<F>>::Transcript,
+        transcript_reader: &mut TranscriptReader<F, CircuitTranscript<F, Self>>,
         gkr_proof: GKRProof<F, Self::ProofSystem>,
     ) -> Result<(), GKRError> {
         // --- Unpacking GKR proof + adding input commitments to transcript first ---
@@ -735,7 +654,7 @@ pub trait GKRCircuit<F: FieldExt> {
         }
 
         for input_layer in input_layer_proofs.iter() {
-            InputLayerEnum::verifier_append_commitment_to_transcript(
+            CircuitInputLayer::<F, Self>::verifier_append_commitment_to_transcript(
                 &input_layer.input_commitment,
                 transcript_reader,
             )
@@ -885,7 +804,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // --- Performs the actual sumcheck verification step ---
             layer
-                .verify_rounds(prev_claim, sumcheck_proof.0, transcript_reader)
+                .verify_rounds(prev_claim, sumcheck_proof, transcript_reader)
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
 
             end_timer!(sumcheck_msg_timer);
@@ -981,7 +900,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 input_layer.layer_id
             ));
 
-            <Self::ProofSystem as ProofSystem<F>>::InputLayer::verify(
+            CircuitInputLayer::<F, Self>::verify(
                 &input_layer.input_commitment,
                 &input_layer.input_opening_proof,
                 input_layer_claim,
@@ -1000,8 +919,10 @@ pub trait GKRCircuit<F: FieldExt> {
     }
 
     ///Gen the circuit hash
-    fn gen_circuit_hash(&mut self) -> F {
-        let mut transcript_writer = TranscriptWriter::<F, Self::Sponge>::new("Circuit Hash");
+    fn gen_circuit_hash(&mut self) -> F
+        where Self::ProofSystem: ProofSystem<F, Layer = LayerEnum<F>>
+    {
+        let mut transcript_writer = TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
         let (Witness { layers, .. }, _) =
             self.synthesize_and_commit(&mut transcript_writer).unwrap();
 

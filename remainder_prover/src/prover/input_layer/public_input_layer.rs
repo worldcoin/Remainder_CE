@@ -8,7 +8,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    layer::{claims::Claim, LayerId},
+    layer::{claims::Claim, LayerError, LayerId},
     mle::{dense::DenseMle, MleRef},
 };
 
@@ -31,17 +31,14 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
 
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
         transcript_writer.append_elements("Public Input Commitment", commitment);
     }
 
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut impl Transcript<F>,
-    ) -> Result<(), TranscriptError> {
-        transcript.append_field_elements("Public Input Commitment", commitment)
-        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError> {
         let num_elements = commitment.len();
         let transcript_commitment = transcript_reader
@@ -53,7 +50,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
 
     fn open(
         &self,
-        _: &mut impl Transcript<F>,
+        _: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
         _: crate::layer::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
@@ -63,7 +60,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut impl Transcript<F>,
+        _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
         // println!("3, calling verify");
         let mut mle_ref =

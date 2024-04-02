@@ -28,7 +28,7 @@ use super::{
 ///A Layer with 0 num_vars
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct EmptyLayer<F: FieldExt, Tr> {
+pub struct EmptyLayer<F: FieldExt> {
     pub(crate) expr: Expression<F, ProverExpr>,
     id: LayerId,
 }
@@ -39,8 +39,8 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
     fn prove_rounds(
         &mut self,
         _: Claim<F>,
-        _: &mut TranscriptWriter<F, Self::Sponge>,
-    ) -> Result<SumcheckProof<F>, LayerError> {
+        _: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<F, LayerError> {
         let eval = self
             .expr
             .clone()
@@ -55,8 +55,8 @@ impl<F: FieldExt> Layer<F> for EmptyLayer<F> {
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Vec<Vec<F>>,
-        _: &mut TranscriptReader<F, Self::Sponge>,
+        claimed_eval: F,
+        _: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError> {
         if claimed_eval != claim.get_result() {
             return Err(LayerError::VerificationError(
@@ -188,7 +188,7 @@ impl<F: FieldExt> EmptyLayer<F> {
         &self.expr
     }
 
-    pub(crate) fn new_raw(id: LayerId, expr: ExpressionStandard<F>) -> Self {
+    pub(crate) fn new_raw(id: LayerId, expr: Expression<F, ProverExpr>) -> Self {
         Self { id, expr }
     }
 

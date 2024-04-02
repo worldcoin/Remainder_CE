@@ -9,7 +9,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    layer::LayerId,
+    layer::{layer_enum::LayerEnum, LayerId},
     mle::{dense::DenseMle, MleIndex},
     prover::Layers,
 };

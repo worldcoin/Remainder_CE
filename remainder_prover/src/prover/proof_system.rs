@@ -1,5 +1,5 @@
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonTranscript, Transcript},
+    transcript::{Transcript, TranscriptSponge},
     FieldExt,
 };
 
@@ -31,7 +31,8 @@ macro_rules! layer_enum {
 
         paste::paste! {
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]    
+            #[serde(bound = "F: FieldExt")]  
+            #[doc = r"Remainder generated Proof enum"]  
             pub enum [<$type_name Proof>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Proof variant"]
@@ -45,7 +46,7 @@ macro_rules! layer_enum {
             fn prove_rounds(
                 &mut self,
                 claim: $crate::layer::claims::Claim<F>,
-                transcript: &mut impl remainder_shared_types::transcript::Transcript<F>,
+                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
             ) -> Result<Self::Proof, super::LayerError> {
                 match self {
                     $(
@@ -58,7 +59,7 @@ macro_rules! layer_enum {
                 &mut self,
                 claim: $crate::layer::claims::Claim<F>,
                 proof: Self::Proof,
-                transcript: &mut impl remainder_shared_types::transcript::Transcript<F>,
+                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
             ) -> Result<(), super::LayerError> {
                 match self {
                     $(
@@ -161,20 +162,31 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn append_commitment_to_transcript(
+            fn prover_append_commitment_to_transcript(
                 commitment: &Self::Commitment,
-                transcript: &mut impl Transcript<F>,
-            ) -> Result<(), remainder_shared_types::transcript::TranscriptError> {
+                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+            ) {
                 match commitment {
                     $(
-                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::append_commitment_to_transcript(commitment, transcript),
+                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::prover_append_commitment_to_transcript(commitment, transcript),
+                    )*
+                }
+            }
+
+            fn verifier_append_commitment_to_transcript(
+                commitment: &Self::Commitment,
+                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>> 
+            ) -> Result<(), $crate::prover::InputLayerError> {
+                match commitment {
+                    $(
+                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::verifier_append_commitment_to_transcript(commitment, transcript),
                     )*
                 }
             }
 
             fn open(
                 &self,
-                transcript: &mut impl Transcript<F>,
+                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
                 claim: $crate::prover::Claim<F>,
             ) -> Result<Self::OpeningProof, $crate::prover::InputLayerError> {
                 match self {
@@ -188,7 +200,7 @@ macro_rules! input_layer_enum {
                 commitment: &Self::Commitment,
                 opening_proof: &Self::OpeningProof,
                 claim: $crate::prover::Claim<F>,
-                transcript: &mut impl Transcript<F>,
+                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
             ) -> Result<(), $crate::prover::InputLayerError> {
                 match commitment {
                     $(
@@ -240,5 +252,5 @@ pub trait ProofSystem<F: FieldExt> {
     type InputLayer: InputLayer<F>;
 
     ///The Transcript this proofsystem uses for F-S
-    type Transcript: Transcript<F>;
+    type Transcript: TranscriptSponge<F>;
 }

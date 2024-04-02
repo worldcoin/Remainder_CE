@@ -8,7 +8,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    layer::{claims::Claim, LayerId},
+    layer::{claims::Claim, LayerError, LayerId},
     mle::{dense::DenseMle, MleRef},
 };
 
@@ -30,8 +30,8 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
 
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut impl Transcript<F>,
-    ) -> Result<(), TranscriptError> {
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), InputLayerError> {
         for challenge in commitment {
             let real_chal = transcript_reader
                 .get_challenge("Getting RandomInput")
@@ -45,14 +45,14 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
 
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
         unimplemented!()
     }
 
     fn open(
         &self,
-        _transcript: &mut impl Transcript<F>,
+        _transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
         _claim: Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
@@ -62,7 +62,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut impl Transcript<F>,
+        _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
         // println!("3, calling verify");
         let mut mle_ref =
@@ -100,10 +100,9 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
 
 impl<F: FieldExt> RandomInputLayer<F> {
     ///Generates a random MLE of size `size` that is generated from the FS Transcript
-    pub fn new(transcript: &mut impl Transcript<F>, size: usize, layer_id: LayerId) -> Self {
+    pub fn new(transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>, size: usize, layer_id: LayerId) -> Self {
         let mle = transcript
-            .get_challenges("Getting Random Challenges", size)
-            .unwrap();
+            .get_challenges("Getting Random Challenges", size);
         Self {
             mle,
             layer_id,
