@@ -25,9 +25,9 @@ use crate::{
     },
     mle::{
         beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
+        betavalues::BetaValues,
         dense::DenseMleRef,
         mle_enum::MleEnum,
-        newbeta::NewBeta,
         MleIndex, MleRef,
     },
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
@@ -188,7 +188,7 @@ pub struct GKRLayer<F: FieldExt, Tr> {
     id: LayerId,
     pub(crate) expression: Expression<F, ProverExpr>,
     nonlinear_rounds: Option<Vec<usize>>,
-    pub beta_vals: Option<NewBeta<F>>,
+    pub beta_vals: Option<BetaValues<F>>,
     #[serde(skip)]
     _marker: PhantomData<Tr>,
 }
@@ -219,7 +219,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
                 .iter()
                 .map(|idx| (*idx, claim_point[*idx]))
                 .collect_vec();
-            let newbeta = NewBeta::new(betavec);
+            let newbeta = BetaValues::new(betavec);
             self.beta_vals = Some(newbeta);
 
             if expression_nonlinear_indices.len() == 0 {
@@ -275,7 +275,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
 
     fn mut_expression_and_beta(
         &mut self,
-    ) -> (&mut Expression<F, ProverExpr>, &mut Option<NewBeta<F>>) {
+    ) -> (&mut Expression<F, ProverExpr>, &mut Option<BetaValues<F>>) {
         (&mut self.expression, &mut self.beta_vals)
     }
 
@@ -641,7 +641,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                         .iter()
                         .map(|idx| (*idx, new_chal[*idx]))
                         .collect_vec();
-                    let newbeta = NewBeta::new(betavec);
+                    let newbeta = BetaValues::new(betavec);
                     let eval =
                         compute_sumcheck_message_beta_cascade(&expr, 0, degree, &newbeta).unwrap();
                     let Evals(evals) = eval;

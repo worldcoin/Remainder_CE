@@ -3,11 +3,11 @@
 use std::fmt::Debug;
 
 use ark_std::cfg_into_iter;
-use itertools::Itertools;
+
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{claims::Claim, LayerId};
+use crate::layer::LayerId;
 use remainder_shared_types::FieldExt;
 
 use super::{

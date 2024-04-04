@@ -1,0 +1,103 @@
+//!Module for dealing with the Beta equality function
+
+use std::{collections::HashMap, fmt::Debug};
+
+use itertools::Itertools;
+use remainder_shared_types::FieldExt;
+use serde::{Deserialize, Serialize};
+
+use super::MleIndex;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
+/// a struct that holds the claim and the relevant bound values for the beta equality MLE.
+/// Rather than storing the entire beta table, we simply store the points in the claim
+/// that are still "unbound", and the points that have been bound using the Tha13 definition
+/// of a beta table.
+///
+/// beta tables are used to "linearize" an expression that we wish to evaluate over a claimed
+/// point (g_0, ..., g_n). therefore we create an MLE that evaluates to 1 at this point and 0
+/// at every other point, which is a beta table. this would be a table of size 2^n.
+///
+/// instead we choose to store just the individual values in a hash map as we don't need the
+/// entire representation in order to perform the computations with beta tables.
+pub struct BetaValues<F: FieldExt> {
+    /// the challenges in the claim that have not yet been "bound" in the sumcheck protocol.
+    /// keys are the "round" of sumcheck and values are which challenge in the claim that corresponds to.
+    /// every key in unbound values should be >= the current round index in sumcheck.
+    pub unbound_values: HashMap<usize, F>,
+    /// the challenges that have already been bound in the sumcheck protocol. keys are round it corresponds
+    /// to, and values are (1 - r_i)(1 - g_i) + r_i*g_i where i is the key, g_i is the claim challenge
+    /// point, and r_i is the current challenge point.
+    /// every key here should be < the current round index in sumcheck.
+    pub updated_values: HashMap<usize, F>,
+}
+
+impl<F: FieldExt> BetaValues<F> {
+    /// construct a new beta table using a vector of the challenge points in a claim along with
+    /// it's corresponding round index as a tuple.
+    pub fn new(layer_claim_vars_and_index: Vec<(usize, F)>) -> Self {
+        let mut beta_elems_map = HashMap::<usize, F>::new();
+        layer_claim_vars_and_index.iter().for_each(|(idx, elem)| {
+            beta_elems_map.insert(*idx, *elem);
+        });
+        BetaValues {
+            unbound_values: beta_elems_map,
+            updated_values: HashMap::<usize, F>::new(),
+        }
+    }
+
+    /// update the given value of beta using a new challenge point. simply (1 - r_i)*(1 - g_i)
+    /// + (r_i * g_i) for an index i, previous claim challenge point g_i and current challenge
+    /// r_i. we remove it from the unbound hashmap and add it to the bound hashmap.
+    pub(crate) fn beta_update(&mut self, round_index: usize, challenge: F) {
+        let val_to_update = self.unbound_values.remove(&round_index).unwrap();
+        let updated_val =
+            ((F::one() - val_to_update) * (F::one() - challenge)) + (val_to_update * challenge);
+        self.updated_values.insert(round_index, updated_val);
+    }
+
+    /// given a vector of mle indices, we get the relevant beta bound and unbound values we need.
+    /// if the index is indexed(usize) then we grab the *unbound* value and if it is bound(usize, chal)
+    /// we grab the *bound* value.
+    pub fn get_relevant_beta_unbound_and_bound(
+        &self,
+        mle_indices: &[MleIndex<F>],
+    ) -> (Vec<F>, Vec<F>) {
+        let bound_betas = mle_indices
+            .iter()
+            .filter_map(|index| match index {
+                MleIndex::Bound(_, round_idx) => {
+                    self.updated_values.get(round_idx).map(|&item| item.clone())
+                }
+                _ => None,
+            })
+            .collect_vec();
+
+        let unbound_betas = mle_indices
+            .iter()
+            .filter_map(|index| match index {
+                MleIndex::IndexedBit(round_idx) => {
+                    self.unbound_values.get(round_idx).map(|&item| item.clone())
+                }
+                _ => None,
+            })
+            .collect_vec();
+
+        (unbound_betas, bound_betas)
+    }
+
+    /// this function takes two challenge points and computes the fully bound beta equality value.
+    pub fn compute_beta_over_two_challenges(challenge_one: &Vec<F>, challenge_two: &Vec<F>) -> F {
+        assert_eq!(challenge_one.len(), challenge_two.len());
+
+        // --- Formula is just \prod_i (x_i * y_i) + (1 - x_i) * (1 - y_i) ---
+        let one = F::one();
+        challenge_one
+            .iter()
+            .zip(challenge_two.iter())
+            .fold(F::one(), |acc, (x_i, y_i)| {
+                acc * ((*x_i * y_i) + (one - x_i) * (one - y_i))
+            })
+    }
+}

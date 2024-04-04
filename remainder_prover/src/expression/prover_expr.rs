@@ -3,10 +3,7 @@ use super::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     verifier_expr::VerifierExpr,
 };
-use crate::{
-    mle::{beta::*, dense::DenseMleRef, newbeta::NewBeta, MleIndex, MleRef},
-    sumcheck::get_relevant_beta_unbound_and_bound,
-};
+use crate::mle::{beta::*, betavalues::BetaValues, dense::DenseMleRef, MleIndex, MleRef};
 use ark_crypto_primitives::crh::sha256::digest::typenum::Exp;
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
@@ -314,13 +311,13 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     pub fn evaluate_sumcheck_beta_cascade<T>(
         &self,
         constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T, &NewBeta<F>) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
         mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T, // changed signature here, note to modify caller's calling code
         scaled: &impl Fn(T, F) -> T,
-        beta: &NewBeta<F>,
+        beta: &BetaValues<F>,
         round_index: usize,
     ) -> T {
         self.expression_node.evaluate_sumcheck_node_beta_cascade(
@@ -536,199 +533,16 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
 
     /// computes the sumcheck message for the given round index, and beta mle
     #[allow(clippy::too_many_arguments)]
-    pub fn evaluate_sumcheck_node<T>(
-        &self,
-        constant: &impl Fn(F, &DenseMleRef<F>) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, &DenseMleRef<F>) -> T,
-        negated: &impl Fn(T) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMleRef<F>], &DenseMleRef<F>) -> T, // changed the signature here, note to change the caller of this function to match this
-        scaled: &impl Fn(T, F) -> T,
-        beta_mle_ref: &DenseMleRef<F>,
-        round_index: usize,
-        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
-    ) -> T {
-        match self {
-            ExpressionNode::Constant(scalar) => constant(*scalar, beta_mle_ref),
-            ExpressionNode::Selector(index, a, b) => {
-                // need to check whether the selector bit is the current independent variable
-                if let MleIndex::IndexedBit(idx) = index {
-                    match Ord::cmp(&round_index, idx) {
-                        // if not, need to split the beta table according to the beta_split function
-                        std::cmp::Ordering::Less => {
-                            let (beta_mle_first, beta_mle_second) = beta_split(beta_mle_ref);
-                            selector_column(
-                                index,
-                                a.evaluate_sumcheck_node(
-                                    constant,
-                                    selector_column,
-                                    mle_eval,
-                                    negated,
-                                    sum,
-                                    product,
-                                    scaled,
-                                    &beta_mle_first,
-                                    round_index,
-                                    mle_vec,
-                                ),
-                                b.evaluate_sumcheck_node(
-                                    constant,
-                                    selector_column,
-                                    mle_eval,
-                                    negated,
-                                    sum,
-                                    product,
-                                    scaled,
-                                    &beta_mle_second,
-                                    round_index,
-                                    mle_vec,
-                                ),
-                            )
-                        }
-                        // otherwise, proceed normally
-                        std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => selector_column(
-                            index,
-                            a.evaluate_sumcheck_node(
-                                constant,
-                                selector_column,
-                                mle_eval,
-                                negated,
-                                sum,
-                                product,
-                                scaled,
-                                beta_mle_ref,
-                                round_index,
-                                mle_vec,
-                            ),
-                            b.evaluate_sumcheck_node(
-                                constant,
-                                selector_column,
-                                mle_eval,
-                                negated,
-                                sum,
-                                product,
-                                scaled,
-                                beta_mle_ref,
-                                round_index,
-                                mle_vec,
-                            ),
-                        ),
-                    }
-                } else {
-                    selector_column(
-                        index,
-                        a.evaluate_sumcheck_node(
-                            constant,
-                            selector_column,
-                            mle_eval,
-                            negated,
-                            sum,
-                            product,
-                            scaled,
-                            beta_mle_ref,
-                            round_index,
-                            mle_vec,
-                        ),
-                        b.evaluate_sumcheck_node(
-                            constant,
-                            selector_column,
-                            mle_eval,
-                            negated,
-                            sum,
-                            product,
-                            scaled,
-                            beta_mle_ref,
-                            round_index,
-                            mle_vec,
-                        ),
-                    )
-                }
-            }
-            ExpressionNode::Mle(mle_vec_idx) => {
-                let mle_ref = mle_vec_idx.get_mle(mle_vec);
-                mle_eval(mle_ref, beta_mle_ref)
-            }
-            ExpressionNode::Negated(a) => {
-                let a = a.evaluate_sumcheck_node(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_mle_ref,
-                    round_index,
-                    mle_vec,
-                );
-                negated(a)
-            }
-            ExpressionNode::Sum(a, b) => {
-                let a = a.evaluate_sumcheck_node(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_mle_ref,
-                    round_index,
-                    mle_vec,
-                );
-                let b = b.evaluate_sumcheck_node(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_mle_ref,
-                    round_index,
-                    mle_vec,
-                );
-                sum(a, b)
-            }
-            ExpressionNode::Product(mle_vec_indices) => {
-                let mle_refs = mle_vec_indices
-                    .into_iter()
-                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
-                    .collect_vec();
-
-                product(&mle_refs, beta_mle_ref)
-            }
-            ExpressionNode::Scaled(a, f) => {
-                let a = a.evaluate_sumcheck_node(
-                    constant,
-                    selector_column,
-                    mle_eval,
-                    negated,
-                    sum,
-                    product,
-                    scaled,
-                    beta_mle_ref,
-                    round_index,
-                    mle_vec,
-                );
-                scaled(a, *f)
-            }
-        }
-    }
-
-    /// computes the sumcheck message for the given round index, and beta mle
-    #[allow(clippy::too_many_arguments)]
     pub fn evaluate_sumcheck_node_beta_cascade<T>(
         &self,
         constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T, &NewBeta<F>) -> T,
+        selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
         mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
         product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T,
         scaled: &impl Fn(T, F) -> T,
-        beta: &NewBeta<F>,
+        beta: &BetaValues<F>,
         round_index: usize,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> T {
@@ -765,7 +579,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle_ref = mle_vec_idx.get_mle(mle_vec);
                 let (unbound_beta_vec, bound_beta_vec) =
-                    get_relevant_beta_unbound_and_bound(mle_ref.mle_indices(), beta);
+                    beta.get_relevant_beta_unbound_and_bound(mle_ref.mle_indices());
                 mle_eval(mle_ref, &unbound_beta_vec, &bound_beta_vec)
             }
             ExpressionNode::Negated(a) => {
@@ -825,7 +639,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     .collect_vec();
 
                 let (unbound_beta_vec, bound_beta_vec) =
-                    get_relevant_beta_unbound_and_bound(&mle_ref_indices_vec, beta);
+                    beta.get_relevant_beta_unbound_and_bound(&mle_ref_indices_vec);
 
                 product(&mle_refs, &unbound_beta_vec, &bound_beta_vec)
             }
@@ -892,7 +706,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         }
     }
 
-    pub fn get_all_rounds(
+    pub(crate) fn get_all_rounds(
         &self,
         curr_indices: &mut Vec<usize>,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
