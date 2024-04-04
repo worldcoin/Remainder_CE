@@ -215,6 +215,7 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
                 });
 
             self.set_nonlinear_rounds(expression_nonlinear_indices.clone());
+            dbg!(&self.nonlinear_rounds);
             let betavec = expression_nonlinear_indices
                 .iter()
                 .map(|idx| (*idx, claim_point[*idx]))
@@ -621,7 +622,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             degree = get_round_degree(&expr, 0);
         }
 
-        let nonlinear_rounds = self.nonlinear_rounds.as_ref().unwrap();
+        let nonlinear_rounds = self.expression.clone().get_all_nonlinear_rounds();
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
