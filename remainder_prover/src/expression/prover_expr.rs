@@ -310,34 +310,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
             .gather_combine_all_evals()
     }
 
-    /// computes the sumcheck message for the given round index, and beta mle
-    #[allow(clippy::too_many_arguments)]
-    pub fn evaluate_sumcheck<T>(
-        &self,
-        constant: &impl Fn(F, &DenseMleRef<F>) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, &DenseMleRef<F>) -> T,
-        negated: &impl Fn(T) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMleRef<F>], &DenseMleRef<F>) -> T, // changed signature here, note to modify caller's calling code
-        scaled: &impl Fn(T, F) -> T,
-        beta_mle_ref: &DenseMleRef<F>,
-        round_index: usize,
-    ) -> T {
-        self.expression_node.evaluate_sumcheck_node(
-            constant,
-            selector_column,
-            mle_eval,
-            negated,
-            sum,
-            product,
-            scaled,
-            beta_mle_ref,
-            round_index,
-            &self.mle_vec,
-        )
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate_sumcheck_beta_cascade<T>(
         &self,
@@ -368,19 +340,23 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     pub fn get_all_nonlinear_rounds(&mut self) -> Vec<usize> {
         let (expression_node, mle_vec) = self.deconstruct_mut();
         let mut curr_nonlinear_indices: Vec<usize> = Vec::new();
-        expression_node.get_all_nonlinear_rounds(&mut curr_nonlinear_indices, mle_vec)
+        let mut nonlinear_rounds =
+            expression_node.get_all_nonlinear_rounds(&mut curr_nonlinear_indices, mle_vec);
+        nonlinear_rounds.sort();
+        nonlinear_rounds
     }
 
     pub fn get_all_linear_rounds(&mut self) -> Vec<usize> {
         let (expression_node, mle_vec) = self.deconstruct_mut();
-        expression_node.get_all_linear_rounds(mle_vec)
+        let mut linear_rounds = expression_node.get_all_linear_rounds(mle_vec);
+        linear_rounds.sort();
+        linear_rounds
     }
 
     /// Mutate the MleIndices that are Iterated in the expression and turn them into IndexedBit
     /// Returns the max number of bits that are indexed
     pub fn index_mle_indices(&mut self, curr_index: usize) -> usize {
         let (expression_node, mle_vec) = self.deconstruct_mut();
-
         expression_node.index_mle_indices_node(curr_index, mle_vec)
     }
 
