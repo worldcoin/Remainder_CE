@@ -4,7 +4,6 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 use crate::mle::{betavalues::BetaValues, dense::DenseMleRef, MleIndex, MleRef};
-use ark_crypto_primitives::crh::sha256::digest::typenum::Exp;
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
@@ -12,7 +11,6 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
-    marker::PhantomData,
     ops::{Add, Mul, Neg, Sub},
 };
 
@@ -308,6 +306,8 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// this evaluates a sumcheck message using the beta cascade algorithm by calling it on the root
+    /// node of the expression tree.
     pub fn evaluate_sumcheck_beta_cascade<T>(
         &self,
         constant: &impl Fn(F) -> T,
@@ -334,6 +334,8 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         )
     }
 
+    /// this traverses the expression tree to get all of the nonlinear rounds. can only be used after indexing the expression.
+    /// returns the indices sorted.
     pub fn get_all_nonlinear_rounds(&mut self) -> Vec<usize> {
         let (expression_node, mle_vec) = self.deconstruct_mut();
         let mut curr_nonlinear_indices: Vec<usize> = Vec::new();
@@ -343,6 +345,8 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         nonlinear_rounds
     }
 
+    /// this traverses the expression tree to get all of the linear rounds. can only be used after indexing the expression.
+    /// returns the indices sorted.
     pub fn get_all_linear_rounds(&mut self) -> Vec<usize> {
         let (expression_node, mle_vec) = self.deconstruct_mut();
         let mut linear_rounds = expression_node.get_all_linear_rounds(mle_vec);
@@ -706,6 +710,8 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         }
     }
 
+    /// this traverses the expression to get all of the rounds, in total. requires going through each of the nodes
+    /// and collecting the leaf node indices.
     pub(crate) fn get_all_rounds(
         &self,
         curr_indices: &mut Vec<usize>,
@@ -713,6 +719,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
     ) -> Vec<usize> {
         let indices_in_node = {
             match self {
+                // in a product, we need the union of all the indices in each of the individual mle refs.
                 ExpressionNode::Product(mle_vec_indices) => {
                     let mle_refs = mle_vec_indices
                         .into_iter()
@@ -731,6 +738,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     });
                     product_indices
                 }
+                // in an mle, we need all of the mle indices in the mle.
                 ExpressionNode::Mle(mle_vec_idx) => {
                     let mle_ref = mle_vec_idx.get_mle(mle_vec);
                     mle_ref
@@ -743,6 +751,8 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                         })
                         .collect()
                 }
+                // in a selector, we traverse each parts of the selector while adding the selector index
+                // itself to the total set of all indices in an expression.
                 ExpressionNode::Selector(sel_index, a, b) => {
                     let mut sel_indices: HashSet<usize> = HashSet::new();
                     match sel_index {
@@ -762,6 +772,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     );
                     sel_indices
                 }
+                // we add the indices in each of the parts of the sum.
                 ExpressionNode::Sum(a, b) => {
                     let mut sum_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_rounds(curr_indices, mle_vec);
@@ -774,6 +785,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     );
                     sum_indices
                 }
+                // for scaled and negated, we can add all of the indices found in the expression being negated or scaled.
                 ExpressionNode::Scaled(a, _) => a
                     .get_all_rounds(curr_indices, mle_vec)
                     .into_iter()
@@ -782,9 +794,11 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     .get_all_rounds(curr_indices, mle_vec)
                     .into_iter()
                     .collect(),
+                // for a constant there are no new indices.
                 ExpressionNode::Constant(_) => HashSet::new(),
             }
         };
+        // once all of them have been collected, we can take the union of all of them to grab all of the rounds in an expression.
         indices_in_node.into_iter().for_each(|index| {
             if !curr_indices.contains(&index) {
                 curr_indices.push(index.clone());
@@ -793,6 +807,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         curr_indices.clone()
     }
 
+    /// traverse an expression tree in order to get all of the nonlinear rounds in an expression.
     pub fn get_all_nonlinear_rounds(
         &self,
         curr_nonlinear_indices: &mut Vec<usize>,
@@ -800,6 +815,9 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
     ) -> Vec<usize> {
         let nonlinear_indices_in_node = {
             match self {
+                // the only case where an index is nonlinear is if it is present in multiple mle refs
+                // that are part of a product. we iterate through all the indices in the product nodes
+                // to look for repeated indices within a single node.
                 ExpressionNode::Product(mle_vec_indices) => {
                     let mle_refs = mle_vec_indices
                         .into_iter()
@@ -833,6 +851,8 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                         });
                     product_nonlinear_indices
                 }
+                // for the rest of the types of expressions, we simply traverse through the expression node to look
+                // for more leaves which are specifically product nodes.
                 ExpressionNode::Selector(_sel_index, a, b) => {
                     let mut sel_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
@@ -868,6 +888,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 ExpressionNode::Constant(_) | ExpressionNode::Mle(_) => HashSet::new(),
             }
         };
+        // we grab all of the indices and take the union of all of them to return all nonlinear rounds in an expression tree.
         nonlinear_indices_in_node.into_iter().for_each(|index| {
             if !curr_nonlinear_indices.contains(&index) {
                 curr_nonlinear_indices.push(index.clone());
@@ -876,16 +897,20 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         curr_nonlinear_indices.clone()
     }
 
+    /// get all of the linear rounds from an expression tree
     pub fn get_all_linear_rounds(
         &self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
         let mut curr_indices: Vec<usize> = Vec::new();
         let mut curr_nonlinear_indices: Vec<usize> = Vec::new();
+        // first we get all the rounds of the expression
         let all_indices = &self.get_all_rounds(&mut curr_indices, mle_vec);
+        // then we get all of the nonlinear rounds
         let all_nonlinear_indices =
             &self.get_all_nonlinear_rounds(&mut curr_nonlinear_indices, mle_vec);
         let mut all_linear_indices: Vec<usize> = Vec::new();
+        // all of the rounds that are in all rounds but not in the nonlinear rounds must be linear rounds.
         all_indices.iter().for_each(|mle_idx| {
             if !all_nonlinear_indices.contains(mle_idx) {
                 all_linear_indices.push(*mle_idx);
