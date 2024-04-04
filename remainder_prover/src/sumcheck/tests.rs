@@ -12,7 +12,6 @@ use crate::{
         LayerId,
     },
     mle::{
-        beta::compute_beta_over_two_challenges,
         dense::{DenseMle, Tuple2},
         Mle,
     },
@@ -137,7 +136,8 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
 
     // uses the expression to make one single oracle query
     let mle_bound = expression.evaluate_expr(challenges.clone()).unwrap();
-    let beta_bound = compute_beta_over_two_challenges(layer_claim.get_point(), &challenges);
+    let beta_bound =
+        BetaValues::compute_beta_over_two_challenges(layer_claim.get_point(), &challenges);
     let oracle_query = mle_bound * beta_bound;
 
     let prev_at_r =
@@ -272,7 +272,7 @@ fn test_linear_sum() {
     mleexpr.fix_variable_at_index(0, Fr::from(2));
     mleexpr.fix_variable_at_index(1, Fr::from(4));
 
-    let res = compute_sumcheck_message_beta_cascade(&mut mleexpr, 1, 2, &newbeta);
+    let res = compute_sumcheck_message_beta_cascade(&mut mleexpr, 1, 0, &newbeta);
     let exp = Evals(vec![Fr::from(29)]);
     assert_eq!(res.unwrap(), exp);
 }
