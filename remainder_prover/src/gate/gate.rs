@@ -3,7 +3,10 @@ use std::{cmp::max, marker::PhantomData};
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use remainder_shared_types::{transcript::Transcript, FieldExt};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -54,7 +57,7 @@ impl BinaryOperation {
 /// the `gate_operation` parameter. additionally, the number of dataparallel variables
 /// is specified by `num_dataparallel_bits` in order to account for batched and un-batched
 /// gates.
-pub struct Gate<F: FieldExt, Tr: Transcript<F>> {
+pub struct Gate<F: FieldExt, Sp: TranscriptSponge<F>> {
     /// the layer id associated with this gate layer
     pub layer_id: LayerId,
     /// the number of bits representing the number of "dataparallel" copies of the circuit
@@ -73,16 +76,16 @@ pub struct Gate<F: FieldExt, Tr: Transcript<F>> {
     pub phase_2_mles: Option<Vec<Vec<DenseMleRef<F>>>>,
     /// the gate operation representing the fan-in-two relationship
     pub gate_operation: BinaryOperation,
-    _marker: PhantomData<Tr>,
+    _marker: PhantomData<Sp>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
+    type Sponge = Sp;
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let mut sumcheck_rounds = vec![];
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
@@ -95,7 +98,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
                     claim.get_point().clone(),
                     &mut beta_g1,
                     &mut beta_g2,
-                    transcript,
+                    transcript_writer,
                 )
                 .unwrap();
             beta_g2_fully_bound = beta_g2_bound;
@@ -107,7 +110,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
                 claim.get_point()[self.num_dataparallel_bits..].to_vec(),
                 &beta_g1,
                 beta_g2_fully_bound,
-                transcript,
+                transcript_writer,
             )
             .unwrap();
         let phase_2_rounds = self
@@ -116,7 +119,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
                 u_challenges,
                 beta_g1,
                 beta_g2_fully_bound,
-                transcript,
+                transcript_writer,
             )
             .unwrap();
         sumcheck_rounds.extend(phase_1_rounds);
@@ -130,7 +133,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), LayerError> {
         let mut prev_evals = &sumcheck_rounds[0];
         let mut challenges = vec![];
@@ -147,15 +150,19 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
             ));
         }
 
-        transcript
-            .append_field_elements("Initial Sumcheck evaluations", &sumcheck_rounds[0])
-            .unwrap();
+        let num_elements = sumcheck_rounds[0].len();
+        let transcript_sumcheck_round_zero = transcript_reader
+            .consume_elements("Initial Sumcheck evaluations", num_elements)
+            .map_err(|err| LayerError::TranscriptError(err))?;
+        debug_assert_eq!(transcript_sumcheck_round_zero, sumcheck_rounds[0]);
 
         // check each of the messages -- note that here the verifier doesn't actually see the difference
         // between dataparallel rounds, phase 1 rounds, and phase 2 rounds--the prover's proof reads
         // as a single continuous proof.
         for (i, curr_evals) in sumcheck_rounds.iter().enumerate().skip(1) {
-            let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+            let challenge = transcript_reader
+                .get_challenge("Sumcheck challenge")
+                .unwrap();
             let prev_at_r =
                 evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
 
@@ -164,9 +171,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
                     VerificationError::SumcheckFailed,
                 ));
             };
-            transcript
-                .append_field_elements("Sumcheck evaluations", curr_evals)
-                .unwrap();
+
+            let num_curr_evals = curr_evals.len();
+            let transcript_curr_evals = transcript_reader
+                .consume_elements("Sumcheck evaluations", num_curr_evals)
+                .map_err(|err| LayerError::TranscriptError(err))?;
+            debug_assert_eq!(transcript_curr_evals, *curr_evals);
             prev_evals = curr_evals;
             challenges.push(challenge);
 
@@ -182,9 +192,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         }
 
         // final round of sumcheck
-        let final_chal = transcript
+        let final_chal = transcript_reader
             .get_challenge("Final Sumcheck challenge")
-            .unwrap();
+            .map_err(|err| LayerError::TranscriptError(err))?;
         challenges.push(final_chal);
 
         // this belongs in the last challenge bound to y
@@ -387,12 +397,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         Ok(wlx_evals)
     }
 
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
+    fn get_enum(self) -> LayerEnum<F, Self::Sponge> {
         LayerEnum::Gate(self)
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
+impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
     /// Construct a new gate layer
     ///
     /// # Arguments
@@ -702,7 +712,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         claim: Vec<F>,
         beta_g1: &mut BetaTable<F>,
         beta_g2: &mut BetaTable<F>,
-        transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, <Gate<F, Sp> as Layer<F>>::Sponge>,
     ) -> Result<(Vec<Vec<F>>, F), LayerError> {
         // initialization, first message comes from here
         let mut challenges: Vec<F> = vec![];
@@ -713,15 +723,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
 
         let (lhs, rhs) = (&mut self.lhs, &mut self.rhs);
 
-        transcript
-            .append_field_elements("Initial Sumcheck evaluations", &first_message)
-            .unwrap();
+        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
         let num_rounds_copy_phase = self.num_dataparallel_bits;
 
         // do the first dataparallel bits number sumcheck rounds using libra giraffe
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds_copy_phase).map(|round| {
-                let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                 challenges.push(challenge);
                 let eval = prove_round_dataparallel_phase(
                     lhs,
@@ -735,17 +743,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
                     self.gate_operation.clone(),
                 )
                 .unwrap();
-                transcript
-                    .append_field_elements("Sumcheck evaluations", &eval)
-                    .unwrap();
+                transcript_writer.append_elements("Sumcheck evaluations", &eval);
                 Ok::<_, LayerError>(eval)
             }))
             .try_collect()?;
 
         // bind the final challenge, update the final beta table
-        let final_chal_copy = transcript
-            .get_challenge("Final Sumcheck challenge")
-            .unwrap();
+        let final_chal_copy = transcript_writer.get_challenge("Final Sumcheck challenge");
         // fix the variable and everything as you would in the last round of sumcheck
         // the evaluations from this is what you return from the first round of sumcheck in the next phase!
         beta_g2
@@ -771,7 +775,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         challenge: Vec<F>,
         beta_g1: &BetaTable<F>,
         beta_g2_fully_bound: F,
-        transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, <Gate<F, Sp> as Layer<F>>::Sponge>,
     ) -> Result<(Vec<Vec<F>>, F, Vec<F>), LayerError> {
         let first_message = self
             .init_phase_1(challenge)
@@ -787,15 +791,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             .unwrap();
 
         let mut challenges: Vec<F> = vec![];
-        transcript
-            .append_field_elements("Initial Sumcheck evaluations", &first_message)
-            .unwrap();
+        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
         let num_rounds_phase1 = self.lhs.num_vars();
 
         // sumcheck rounds (binding x)
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds_phase1).map(|round| {
-                let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                 challenges.push(challenge);
                 // if there are dataparallel bits, we want to start at that index
                 let eval =
@@ -803,17 +805,14 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
                         .into_iter()
                         .map(|eval| eval * beta_g2_fully_bound)
                         .collect_vec();
-                transcript
-                    .append_field_elements("Sumcheck evaluations", &eval)
-                    .unwrap();
+                transcript_writer.append_elements("Sumcheck evaluations", &eval);
                 Ok::<_, LayerError>(eval)
             }))
             .try_collect()?;
 
         // final challenge after binding x (left side of the sum)
-        let final_chal_u = transcript
-            .get_challenge("Final Sumcheck challenge for binding x")
-            .unwrap();
+        let final_chal_u =
+            transcript_writer.get_challenge("Final Sumcheck challenge for binding x");
         challenges.push(final_chal_u);
 
         phase_1_mles.iter_mut().for_each(|mle_ref_vec| {
@@ -843,7 +842,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         phase_1_challenges: Vec<F>,
         beta_g1: BetaTable<F>,
         beta_g2_fully_bound: F,
-        transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, <Gate<F, Sp> as Layer<F>>::Sponge>,
     ) -> Result<Vec<Vec<F>>, LayerError> {
         let first_message = self
             .init_phase_2(phase_1_challenges.clone(), f_at_u, &beta_g1)
@@ -861,16 +860,14 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
                 .ok_or(GateError::Phase2InitError)
                 .unwrap();
 
-            transcript
-                .append_field_elements("Initial Sumcheck evaluations", &first_message)
-                .unwrap();
+            transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
 
             let num_rounds_phase2 = self.rhs.num_vars();
 
             // bind y, the right side of the sum
             let sumcheck_rounds_y: Vec<Vec<F>> = std::iter::once(Ok(first_message))
                 .chain((1..num_rounds_phase2).map(|round| {
-                    let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+                    let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                     challenges.push(challenge);
                     let eval = prove_round_gate(
                         round + self.num_dataparallel_bits,
@@ -880,17 +877,13 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
                     .into_iter()
                     .map(|eval| eval * beta_g2_fully_bound)
                     .collect_vec();
-                    transcript
-                        .append_field_elements("Sumcheck evaluations", &eval)
-                        .unwrap();
+                    transcript_writer.append_elements("Sumcheck evaluations", &eval);
                     Ok::<_, LayerError>(eval)
                 }))
                 .try_collect()?;
 
             // final round of sumcheck
-            let final_chal = transcript
-                .get_challenge("Final Sumcheck challenge")
-                .unwrap();
+            let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge");
             challenges.push(final_chal);
 
             phase_2_mles.iter_mut().for_each(|mle_ref_vec| {
@@ -910,16 +903,16 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
 }
 
 /// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
+impl<F: std::fmt::Debug + FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(
-            &'a Gate<F, Tr>,
+        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Sp: TranscriptSponge<F>>(
+            &'a Gate<F, Sp>,
         );
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display
-            for GateCircuitDesc<'a, F, Tr>
+        impl<'a, F: std::fmt::Debug + FieldExt, Sp: TranscriptSponge<F>> std::fmt::Display
+            for GateCircuitDesc<'a, F, Sp>
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")

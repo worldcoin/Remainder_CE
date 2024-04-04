@@ -1,3 +1,4 @@
+use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -15,7 +16,7 @@ use std::fmt;
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 ///An enum representing all the possible kinds of Layers
-pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
+pub enum LayerEnum<F: FieldExt, Tr: TranscriptSponge<F>> {
     ///A standard `GKRLayer`
     Gkr(GKRLayer<F, Tr>),
     /// Gate Generic
@@ -24,7 +25,7 @@ pub enum LayerEnum<F: FieldExt, Tr: Transcript<F>> {
     EmptyLayer(EmptyLayer<F, Tr>),
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> fmt::Debug for LayerEnum<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> fmt::Debug for LayerEnum<F, Tr> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             LayerEnum::Gkr(_) => write!(f, "GKR Layer"),
@@ -34,19 +35,19 @@ impl<F: FieldExt, Tr: Transcript<F>> fmt::Debug for LayerEnum<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for LayerEnum<F, Tr> {
+    type Sponge = Tr;
 
     #[instrument(skip_all, level = "debug", err)]
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<crate::prover::SumcheckProof<F>, super::LayerError> {
         match self {
-            LayerEnum::Gkr(layer) => layer.prove_rounds(claim, transcript),
-            LayerEnum::Gate(layer) => layer.prove_rounds(claim, transcript),
-            LayerEnum::EmptyLayer(layer) => layer.prove_rounds(claim, transcript),
+            LayerEnum::Gkr(layer) => layer.prove_rounds(claim, transcript_writer),
+            LayerEnum::Gate(layer) => layer.prove_rounds(claim, transcript_writer),
+            LayerEnum::EmptyLayer(layer) => layer.prove_rounds(claim, transcript_writer),
         }
     }
 
@@ -55,12 +56,16 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        transcript: &mut Self::Transcript,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), super::LayerError> {
         match self {
-            LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
-            LayerEnum::Gate(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
-            LayerEnum::EmptyLayer(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript),
+            LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript_reader),
+            LayerEnum::Gate(layer) => {
+                layer.verify_rounds(claim, sumcheck_rounds, transcript_reader)
+            }
+            LayerEnum::EmptyLayer(layer) => {
+                layer.verify_rounds(claim, sumcheck_rounds, transcript_reader)
+            }
         }
     }
 
@@ -88,7 +93,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
         LayerEnum::Gkr(GKRLayer::new(builder, id))
     }
 
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
+    fn get_enum(self) -> LayerEnum<F, Self::Sponge> {
         self
     }
 
@@ -129,7 +134,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for LayerEnum<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> LayerEnum<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> LayerEnum<F, Tr> {
     ///Gets the size of the Layer as a whole in terms of number of bits
     pub(crate) fn layer_size(&self) -> usize {
         let expression = match self {

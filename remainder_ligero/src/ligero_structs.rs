@@ -1,12 +1,10 @@
 use itertools::Itertools;
-use serde::{Serialize, Deserialize};
+use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 use crate::utils::halo2_fft;
-use crate::{
-    def_labels, LcCommit, LcEncoding,
-    LcEvalProof,
-};
+use crate::{def_labels, LcCommit, LcEncoding, LcEvalProof};
 use fffft::FFTError;
 use remainder_shared_types::FieldExt;
 
@@ -37,14 +35,14 @@ where
 
         // compute #cols, which must be a power of 2 because of FFT
         // computes the encoded num cols that will get closest to the ratio for original num cols : num rows
-        let encoded_num_cols = (((len as f64 * ratio).sqrt() / rho).ceil() as usize)
-            .checked_next_power_of_two()?;
+        let encoded_num_cols =
+            (((len as f64 * ratio).sqrt() / rho).ceil() as usize).checked_next_power_of_two()?;
 
         // minimize nr subject to #cols and rho
         // --- Not sure what the above is talking about, but basically computes ---
         // --- the other dimensions with respect to `encoded_num_cols` ---
         let orig_num_cols = (((encoded_num_cols as f64) * rho).floor()) as usize;
-        let num_rows = (len + orig_num_cols - 1) / orig_num_cols; 
+        let num_rows = (len + orig_num_cols - 1) / orig_num_cols;
 
         // --- Sanitycheck that we aren't going overboard or underboard ---
         assert!(orig_num_cols * num_rows >= len);

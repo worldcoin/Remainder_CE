@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
@@ -21,8 +21,8 @@ pub struct PublicInputLayer<F: FieldExt, Tr> {
     _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
+    type Sponge = Tr;
 
     type Commitment = Vec<F>;
 
@@ -32,16 +32,28 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         Ok(self.mle.mle.clone())
     }
 
-    fn append_commitment_to_transcript(
+    fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(), TranscriptError> {
-        transcript.append_field_elements("Public Input Commitment", commitment)
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    ) {
+        transcript_writer.append_elements("Public Input Commitment", commitment);
+    }
+
+    fn verifier_append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+    ) -> Result<(), InputLayerError> {
+        let num_elements = commitment.len();
+        let transcript_commitment = transcript_reader
+            .consume_elements("Public Input Commitment", num_elements)
+            .map_err(|e| InputLayerError::TranscriptError(e))?;
+        debug_assert_eq!(transcript_commitment, *commitment);
+        Ok(())
     }
 
     fn open(
         &self,
-        _: &mut Self::Transcript,
+        _: &mut TranscriptWriter<F, Self::Sponge>,
         _: crate::layer::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
@@ -51,7 +63,7 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut Self::Transcript,
+        _transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), super::InputLayerError> {
         // println!("3, calling verify");
         let mut mle_ref =
@@ -88,12 +100,12 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
         self.mle.clone()
     }
 
-    fn to_enum(self) -> InputLayerEnum<F, Self::Transcript> {
+    fn to_enum(self) -> InputLayerEnum<F, Self::Sponge> {
         InputLayerEnum::PublicInputLayer(self)
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> MleInputLayer<F> for PublicInputLayer<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> MleInputLayer<F> for PublicInputLayer<F, Tr> {
     fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
         Self {
             mle,

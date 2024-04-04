@@ -1,13 +1,17 @@
-use std::{iter::repeat_with, fs};
+use std::{fs, iter::repeat_with};
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::{prelude::Distribution, Rng};
-use remainder_shared_types::{FieldExt, Poseidon, transcript::Transcript, Fr};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptSponge},
+    FieldExt, Fr, Poseidon,
+};
 
 use crate::{
     layer::LayerId,
-    mle::{dense::DenseMle, MleIndex}, prover::Layers,
+    mle::{dense::DenseMle, MleIndex},
+    prover::Layers,
 };
 
 /// Returns a zero-padded version of `coeffs` with length padded
@@ -112,13 +116,18 @@ pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Ve
 }
 
 /// Returns the specific bit decomp for a given index,
-/// using `num_bits` bits. Note that this returns the 
+/// using `num_bits` bits. Note that this returns the
 /// decomposition in BIG ENDIAN!
 pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
-    (0..(num_bits)).rev().into_iter().map(|cur_num_bits| {
-        let is_one = (idx % 2_usize.pow(cur_num_bits as u32 + 1)) >= 2_usize.pow(cur_num_bits as u32);
-        MleIndex::Fixed(is_one)
-    }).collect_vec()
+    (0..(num_bits))
+        .rev()
+        .into_iter()
+        .map(|cur_num_bits| {
+            let is_one =
+                (idx % 2_usize.pow(cur_num_bits as u32 + 1)) >= 2_usize.pow(cur_num_bits as u32);
+            MleIndex::Fixed(is_one)
+        })
+        .collect_vec()
 }
 
 #[test]
@@ -131,34 +140,42 @@ fn test_get_mle_idx_decomp_for_idx() {
 }
 
 /// Returns whether a particular file exists in the filesystem
-/// 
+///
 /// TODO!(ryancao): Shucks does this check a relative path...?
 pub fn file_exists(file_path: &String) -> bool {
     match fs::metadata(file_path) {
-        Ok(file_metadata) => {
-            file_metadata.is_file()
-        },
+        Ok(file_metadata) => file_metadata.is_file(),
         Err(_) => false,
     }
 }
 
-pub fn hash_layers<F: FieldExt, Tr: Transcript<F>>(layers: &Layers<F, Tr>) -> F {
+pub fn hash_layers<F: FieldExt, Tr: TranscriptSponge<F>>(layers: &Layers<F, Tr>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 
     layers.0.iter().for_each(|layer| {
         let item = format!("{}", layer.circuit_description_fmt());
         let bytes = item.as_bytes();
-        let elements: Vec<F> = bytes.chunks(62).map(|bytes| {
-            let base = F::from(8);
-            let first = bytes[0];
-            bytes.iter().skip(1).fold((F::from(first as u64), base.clone()), |(accum, power), byte| {
-                let accum = accum + (F::from(byte.clone() as u64) * power);
-                let power = power * base;
-                (accum, power)
-            }).0
-        }).collect_vec();
-    
-        sponge.update(&elements);    
+        let elements: Vec<F> = bytes
+            .chunks(62)
+            .map(|bytes| {
+                let base = F::from(8);
+                let first = bytes[0];
+                bytes
+                    .iter()
+                    .skip(1)
+                    .fold(
+                        (F::from(first as u64), base.clone()),
+                        |(accum, power), byte| {
+                            let accum = accum + (F::from(byte.clone() as u64) * power);
+                            let power = power * base;
+                            (accum, power)
+                        },
+                    )
+                    .0
+            })
+            .collect_vec();
+
+        sponge.update(&elements);
     });
 
     sponge.squeeze()

@@ -1,6 +1,6 @@
 use crate::prover::GKRCircuit;
 use ark_std::{end_timer, start_timer};
-use remainder_shared_types::transcript::Transcript;
+use remainder_shared_types::transcript::{Transcript, TranscriptReader, TranscriptWriter};
 use remainder_shared_types::FieldExt;
 use serde_json;
 use std::fs::File;
@@ -11,12 +11,12 @@ use std::path::Path;
 // binaries, where this function is often needed.
 pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>)
 where
-    <C as GKRCircuit<F>>::Transcript: Sync,
+    <C as GKRCircuit<F>>::Sponge: Sync,
 {
-    let mut transcript = C::Transcript::new("GKR Prover Transcript");
+    let mut transcript_writer = TranscriptWriter::<F, C::Sponge>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
-    match circuit.prove(&mut transcript) {
+    match circuit.prove(&mut transcript_writer) {
         Ok(proof) => {
             end_timer!(prover_timer);
             if let Some(path) = path {
@@ -26,7 +26,8 @@ where
                 serde_json::to_writer(writer, &proof).unwrap();
                 end_timer!(write_out_timer);
             }
-            let mut transcript = C::Transcript::new("GKR Verifier Transcript");
+            let transcript = transcript_writer.get_transcript();
+            let mut transcript_reader = TranscriptReader::<F, C::Sponge>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
             let proof = if let Some(path) = path {
@@ -41,7 +42,7 @@ where
             };
 
             // Makis: Ignore verify for now.
-            match circuit.verify(&mut transcript, proof) {
+            match circuit.verify(&mut transcript_reader, proof) {
                 Ok(_) => {
                     end_timer!(verifier_timer);
                 }

@@ -19,21 +19,23 @@ to the codebase.
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
 use ark_ff::biginteger::BigInteger;
-use ark_std::{start_timer, end_timer};
+use ark_std::{end_timer, start_timer};
 use err_derive::Error;
 use itertools::Itertools;
-use remainder_shared_types::Poseidon;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
+use remainder_shared_types::{
+    transcript::{
+        poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptSponge, TranscriptWriter,
+    },
+    Poseidon,
+};
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Rem};
 
 // --- Actual field trait + transcript stuff ---
-use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonTranscript, Transcript as RemainderTranscript},
-    FieldExt,
-};
+use remainder_shared_types::FieldExt;
 
 mod macros;
 
@@ -61,8 +63,8 @@ pub trait PoseidonFieldHash: FieldExt {
     }
 
     /// Update the [remainder::transcript::Transcript] with label `l` and element `self`
-    fn transcript_update(&self, t: &mut impl RemainderTranscript<Self>, l: &'static str) {
-        let _ = t.append_field_element(l, *self);
+    fn transcript_update(&self, t: &mut impl TranscriptSponge<Self>, l: &'static str) {
+        let _ = t.absorb(*self);
     }
 }
 
@@ -72,8 +74,8 @@ impl<F: FieldExt> PoseidonFieldHash for F {
         d.update(&[*self])
     }
 
-    fn transcript_update(&self, t: &mut impl RemainderTranscript<F>, l: &'static str) {
-        let _ = t.append_field_element(l, *self);
+    fn transcript_update(&self, t: &mut impl TranscriptSponge<F>, l: &'static str) {
+        let _ = t.absorb(*self);
     }
 }
 
@@ -190,9 +192,7 @@ pub type VerifierResult<T, ErrT> = Result<T, VerifierError<ErrT>>;
 
 /// a commitment
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LcCommit<D, E, F>
-where
-{
+pub struct LcCommit<D, E, F> {
     // --- Flattened version of M' (encoded) matrix ---
     comm: Vec<F>,
     // --- Flattened version of M (non-encoded) matrix ---
@@ -242,11 +242,11 @@ where
     }
 
     /// Generate an evaluation of a committed polynomial
-    pub fn prove(
+    pub fn prove<T: TranscriptSponge<F>>(
         &self,
         outer_tensor: &[F],
         enc: &E,
-        tr: &mut PoseidonTranscript<F>,
+        tr: &mut TranscriptWriter<F, T>,
     ) -> ProverResult<LcEvalProof<D, E, F>, ErrT<E, F>> {
         prove(self, outer_tensor, enc, tr)
     }
@@ -333,15 +333,15 @@ where
     }
 
     /// Verify an evaluation proof and return the resulting evaluation
-    pub fn verify(
+    pub fn verify<T: TranscriptSponge<F>>(
         &self,
         root: &F,
         outer_tensor: &[F],
         inner_tensor: &[F],
         enc: &E,
-        tr: &mut PoseidonTranscript<F>,
+        tr: &mut TranscriptReader<F, T>,
     ) -> VerifierResult<F, ErrT<E, F>> {
-        verify::<D, E, F>(root, outer_tensor, inner_tensor, self, enc, tr)
+        verify::<D, E, F, T>(root, outer_tensor, inner_tensor, self, enc, tr)
     }
 }
 
@@ -695,17 +695,18 @@ const fn log2(v: usize) -> usize {
 }
 
 /// Verify the evaluation of a committed polynomial and return the result
-fn verify<D, E, F>(
+fn verify<D, E, F, T>(
     root: &F,
     outer_tensor: &[F], // b^T
     inner_tensor: &[F], // a
     proof: &LcEvalProof<D, E, F>,
     // This is not real. Well, really it just gives you the setup for being able to compute an FFT
     enc: &E,
-    tr: &mut impl RemainderTranscript<F>,
+    tr: &mut TranscriptReader<F, T>,
 ) -> VerifierResult<F, ErrT<E, F>>
 where
     F: FieldExt,
+    T: TranscriptSponge<F>,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -774,15 +775,15 @@ where
     // }
 
     // ...and p_eval into the transcript
-    proof
-        .p_eval
-        .iter()
-        .for_each(|coeff| coeff.transcript_update(tr, "LABEL_PE"));
+    // Retrieve length of `p_eval` vector and request that number of elements
+    // from the trascript reader.
+    let num_p_evals = proof.p_eval.len();
+    let p_eval = tr.consume_elements("LABEL_PE", num_p_evals).unwrap();
 
     // step 1d: extract columns to open
     // --- The verifier does this independently as well ---
     let cols_to_open: Vec<usize> = {
-        tr.get_challenges("column_indices", n_col_opens)
+        tr.get_challenges("Column openings", n_col_opens)
             .unwrap()
             .into_iter()
             .map(|challenge| compute_col_idx_from_transcript_challenge(challenge, encoded_num_cols))
@@ -793,7 +794,7 @@ where
     // --- Takes the prover claimed value for b^T M and computes enc(b^T M) = b^T M' ---
     let p_eval_fft = {
         let mut tmp = Vec::with_capacity(encoded_num_cols);
-        tmp.extend_from_slice(&proof.p_eval[..]);
+        tmp.extend_from_slice(&p_eval[..]);
         tmp.resize(encoded_num_cols, F::from(0));
         enc.encode(&mut tmp)?;
         tmp
@@ -845,7 +846,7 @@ where
     // --- Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M) ---
     Ok(inner_tensor
         .par_iter()
-        .zip(&proof.p_eval[..])
+        .zip(&p_eval[..])
         .fold(|| F::zero(), |a, (t, e)| a + *t * e)
         .reduce(|| F::zero(), |a, v| a + v))
 }
@@ -940,14 +941,15 @@ fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
 
 /// Evaluate the committed polynomial using the supplied "outer" tensor
 /// and generate a proof of (1) low-degreeness and (2) correct evaluation.
-fn prove<D, E, F, T: RemainderTranscript<F>>(
+fn prove<D, E, F, T>(
     comm: &LcCommit<D, E, F>,
     outer_tensor: &[F],
     enc: &E,
-    tr: &mut T,
+    tr: &mut TranscriptWriter<F, T>,
 ) -> ProverResult<LcEvalProof<D, E, F>, ErrT<E, F>>
 where
     F: FieldExt,
+    T: TranscriptSponge<F>,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -1008,15 +1010,14 @@ where
     // add p_eval to the transcript
     p_eval
         .iter()
-        .for_each(|coeff| coeff.transcript_update(tr, "LABEL_PE"));
+        .for_each(|coeff| tr.append("LABEL_PE", *coeff));
 
     // now extract the column numbers to open
     let n_col_opens = enc.get_n_col_opens();
     let columns: Vec<LcColumn<E, F>> = {
         // --- I think we need to do a mod operation here... ---
         let cols_to_open: Vec<usize> = tr
-            .get_challenges("column_indices", n_col_opens)
-            .unwrap()
+            .get_challenges("Columns", n_col_opens)
             .into_iter()
             .enumerate()
             .map(|(_i, challenge)| {

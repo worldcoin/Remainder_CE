@@ -1,7 +1,7 @@
 //! A wrapper type that makes working with variants of InputLayer easier
 
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use super::{
     ligero_input_layer::{LigeroCommitment, LigeroInputLayer, LigeroInputProof},
     public_input_layer::PublicInputLayer,
     random_input_layer::RandomInputLayer,
-    InputLayer,
+    InputLayer, InputLayerError,
 };
 
 ///A wrapper type that makes working with variants of InputLayer easier
@@ -41,8 +41,8 @@ pub enum OpeningEnum<F: FieldExt> {
     RandomProof(()),
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
+    type Sponge = Tr;
 
     type Commitment = CommitmentEnum<F>;
 
@@ -62,38 +62,67 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
         }
     }
 
-    fn append_commitment_to_transcript(
+    fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut Self::Transcript,
-    ) -> Result<(), TranscriptError> {
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+    ) {
         match commitment {
             CommitmentEnum::LigeroCommitment(commit) => {
-                LigeroInputLayer::<F, Tr>::append_commitment_to_transcript(commit, transcript)
+                LigeroInputLayer::<F, Tr>::prover_append_commitment_to_transcript(
+                    commit,
+                    transcript_writer,
+                );
             }
             CommitmentEnum::PublicCommitment(commit) => {
-                PublicInputLayer::append_commitment_to_transcript(commit, transcript)
+                PublicInputLayer::prover_append_commitment_to_transcript(commit, transcript_writer);
             }
             CommitmentEnum::RandomCommitment(commit) => {
-                RandomInputLayer::append_commitment_to_transcript(commit, transcript)
+                RandomInputLayer::prover_append_commitment_to_transcript(commit, transcript_writer);
+            }
+        }
+    }
+
+    fn verifier_append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+    ) -> Result<(), InputLayerError> {
+        match commitment {
+            CommitmentEnum::LigeroCommitment(commit) => {
+                LigeroInputLayer::<F, Tr>::verifier_append_commitment_to_transcript(
+                    commit,
+                    transcript_reader,
+                )
+            }
+            CommitmentEnum::PublicCommitment(commit) => {
+                PublicInputLayer::verifier_append_commitment_to_transcript(
+                    commit,
+                    transcript_reader,
+                )
+            }
+            CommitmentEnum::RandomCommitment(commit) => {
+                RandomInputLayer::verifier_append_commitment_to_transcript(
+                    commit,
+                    transcript_reader,
+                )
             }
         }
     }
 
     fn open(
         &self,
-        transcript: &mut Self::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
         claim: crate::layer::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         match self {
-            InputLayerEnum::LigeroInputLayer(layer) => {
-                Ok(OpeningEnum::LigeroProof(layer.open(transcript, claim)?))
-            }
-            InputLayerEnum::PublicInputLayer(layer) => {
-                Ok(OpeningEnum::PublicProof(layer.open(transcript, claim)?))
-            }
-            InputLayerEnum::RandomInputLayer(layer) => {
-                Ok(OpeningEnum::RandomProof(layer.open(transcript, claim)?))
-            }
+            InputLayerEnum::LigeroInputLayer(layer) => Ok(OpeningEnum::LigeroProof(
+                layer.open(transcript_writer, claim)?,
+            )),
+            InputLayerEnum::PublicInputLayer(layer) => Ok(OpeningEnum::PublicProof(
+                layer.open(transcript_writer, claim)?,
+            )),
+            InputLayerEnum::RandomInputLayer(layer) => Ok(OpeningEnum::RandomProof(
+                layer.open(transcript_writer, claim)?,
+            )),
         }
     }
 
@@ -101,26 +130,31 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
         commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), super::InputLayerError> {
         match commitment {
             CommitmentEnum::LigeroCommitment(commit) => {
                 if let OpeningEnum::LigeroProof(opening_proof) = opening_proof {
-                    LigeroInputLayer::<F, Tr>::verify(commit, opening_proof, claim, transcript)
+                    LigeroInputLayer::<F, Tr>::verify(
+                        commit,
+                        opening_proof,
+                        claim,
+                        transcript_reader,
+                    )
                 } else {
                     panic!()
                 }
             }
             CommitmentEnum::PublicCommitment(commit) => {
                 if let OpeningEnum::PublicProof(opening_proof) = opening_proof {
-                    PublicInputLayer::verify(commit, opening_proof, claim, transcript)
+                    PublicInputLayer::verify(commit, opening_proof, claim, transcript_reader)
                 } else {
                     panic!()
                 }
             }
             CommitmentEnum::RandomCommitment(commit) => {
                 if let OpeningEnum::RandomProof(opening_proof) = opening_proof {
-                    RandomInputLayer::verify(commit, opening_proof, claim, transcript)
+                    RandomInputLayer::verify(commit, opening_proof, claim, transcript_reader)
                 } else {
                     panic!()
                 }
@@ -144,12 +178,12 @@ impl<F: FieldExt, Tr: Transcript<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
         }
     }
 
-    fn to_enum(self) -> InputLayerEnum<F, Self::Transcript> {
+    fn to_enum(self) -> InputLayerEnum<F, Self::Sponge> {
         self
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> InputLayerEnum<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayerEnum<F, Tr> {
     pub fn set_layer_id(&mut self, layer_id: LayerId) {
         match self {
             InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,

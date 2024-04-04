@@ -3,11 +3,20 @@
 use std::marker::PhantomData;
 
 use crate::{
-    expression::{generic_expr::{Expression, ExpressionNode}, prover_expr::ProverExpr}, mle::{MleRef, dense::DenseMleRef, mle_enum::MleEnum, beta::BetaTable}, prover::SumcheckProof, sumcheck::{get_round_degree, evaluate_at_a_point, compute_sumcheck_message, Evals}
+    expression::{
+        generic_expr::{Expression, ExpressionNode},
+        prover_expr::ProverExpr,
+    },
+    mle::{beta::BetaTable, dense::DenseMleRef, mle_enum::MleEnum, MleRef},
+    prover::SumcheckProof,
+    sumcheck::{compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals},
 };
 use ark_std::cfg_into_iter;
 use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};
-use remainder_shared_types::{transcript::Transcript, FieldExt};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -25,15 +34,21 @@ pub struct EmptyLayer<F: FieldExt, Tr> {
     _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for EmptyLayer<F, Tr> {
+    type Sponge = Tr;
 
     fn prove_rounds(
         &mut self,
         _: Claim<F>,
-        _: &mut Self::Transcript,
+        _: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<SumcheckProof<F>, LayerError> {
-        let eval = self.expr.clone().transform_to_verifier_expression().unwrap().gather_combine_all_evals().map_err(LayerError::ExpressionError)?;
+        let eval = self
+            .expr
+            .clone()
+            .transform_to_verifier_expression()
+            .unwrap()
+            .gather_combine_all_evals()
+            .map_err(LayerError::ExpressionError)?;
 
         Ok(vec![vec![eval]].into())
     }
@@ -42,7 +57,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Vec<Vec<F>>,
-        _: &mut Self::Transcript,
+        _: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), LayerError> {
         if sumcheck_rounds[0][0] != claim.get_result() {
             return Err(LayerError::VerificationError(
@@ -69,13 +84,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
 
         let mut claims: Vec<Claim<F>> = Vec::new();
 
-        let mut observer_fn = |
-            exp_node: &ExpressionNode<F, ProverExpr>,
-            mle_vec: &Vec<DenseMleRef<F>>,
-        | {
+        let mut observer_fn = |exp_node: &ExpressionNode<F, ProverExpr>,
+                               mle_vec: &Vec<DenseMleRef<F>>| {
             match exp_node {
                 ExpressionNode::Mle(mle_vec_idx) => {
-
                     let mle_ref = mle_vec_idx.get_mle(mle_vec);
 
                     // --- First ensure that all the indices are fixed ---
@@ -186,7 +198,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for EmptyLayer<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> EmptyLayer<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> EmptyLayer<F, Tr> {
     ///Gets this layer's underlying expression
     pub fn expression(&self) -> &Expression<F, ProverExpr> {
         &self.expr
