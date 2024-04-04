@@ -10,8 +10,6 @@ use remainder_shared_types::FieldExt;
 
 use self::mle_enum::MleEnum;
 use dyn_clonable::*;
-
-pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
 

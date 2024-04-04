@@ -14,7 +14,7 @@ use crate::{
         Layer, LayerBuilder, LayerError, LayerId, VerificationError,
     },
     mle::{
-        beta::{compute_beta_over_two_challenges, BetaTable},
+        betavalues::BetaValues,
         dense::{DenseMle, DenseMleRef},
         mle_enum::MleEnum,
         MleRef,
@@ -216,25 +216,11 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
 
         // compute the gate function bound at those variables
         // beta table corresponding to the equality of binding the x variables to u
-        let beta_u = BetaTable::new(first_u_challenges.clone()).unwrap();
+        let beta_u = BetaValues::new_beta_equality_mle(first_u_challenges.clone());
         // beta table corresponding to the equality of binding the y variables to v
-        let beta_v = if !last_v_challenges.is_empty() {
-            BetaTable::new(last_v_challenges.clone()).unwrap()
-        } else {
-            BetaTable {
-                layer_claim_vars: vec![],
-                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-            }
-        };
+        let beta_v = BetaValues::new_beta_equality_mle(last_v_challenges.clone());
         // beta table representing all "z" label challenges
-        let beta_g = if !g1_challenges.is_empty() {
-            BetaTable::new(g1_challenges).unwrap()
-        } else {
-            BetaTable {
-                layer_claim_vars: vec![],
-                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-            }
-        };
+        let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
         // multiply the corresponding entries of the beta tables to get the full value of the gate function
         // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v)
         let f_1_uv =
@@ -242,21 +228,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
                 .clone()
                 .into_iter()
                 .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g
-                        .table
-                        .bookkeeping_table()
-                        .get(z_ind)
-                        .unwrap_or(&F::zero());
-                    let ux = *beta_u
-                        .table
-                        .bookkeeping_table()
-                        .get(x_ind)
-                        .unwrap_or(&F::zero());
-                    let vy = *beta_v
-                        .table
-                        .bookkeeping_table()
-                        .get(y_ind)
-                        .unwrap_or(&F::zero());
+                    let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
+                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::zero());
+                    let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::zero());
                     acc + gz * ux * vy
                 });
 
@@ -266,7 +240,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for Gate<F, Tr> {
         check_fully_bound(&mut [rhs_reduced.clone()], rhs_challenges).unwrap();
         let f2_bound = lhs_reduced.bookkeeping_table()[0];
         let f3_bound = rhs_reduced.bookkeeping_table()[0];
-        let beta_bound = compute_beta_over_two_challenges(&g2_challenges, &first_copy_challenges);
+        let beta_bound =
+            BetaValues::compute_beta_over_two_challenges(&g2_challenges, &first_copy_challenges);
 
         // compute the final result of the bound expression
         let final_result =
@@ -427,7 +402,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         }
     }
 
-    fn compute_beta_tables(&mut self, challenges: &Vec<F>) -> (BetaTable<F>, BetaTable<F>) {
+    fn compute_beta_tables(&mut self, challenges: &Vec<F>) -> (DenseMleRef<F>, DenseMleRef<F>) {
         let mut g2_challenges = vec![];
         let mut g1_challenges = vec![];
 
@@ -443,23 +418,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             });
 
         // create two separate beta tables for each, as they are handled differently
-        let mut beta_g2 = if !g2_challenges.is_empty() {
-            BetaTable::new(g2_challenges.clone()).unwrap()
-        } else {
-            BetaTable {
-                layer_claim_vars: vec![],
-                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-            }
-        };
-        beta_g2.table.index_mle_indices(0);
-        let beta_g1 = if !g1_challenges.is_empty() {
-            BetaTable::new(g1_challenges.clone()).unwrap()
-        } else {
-            BetaTable {
-                layer_claim_vars: vec![],
-                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-            }
-        };
+        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges.clone());
+        beta_g2.index_mle_indices(0);
+        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges.clone());
 
         (beta_g1, beta_g2)
     }
@@ -485,16 +446,9 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             });
 
         // create two separate beta tables for each, as they are handled differently
-        let mut beta_g2 = BetaTable::new(g2_challenges.clone()).unwrap();
-        beta_g2.table.index_mle_indices(0);
-        let beta_g1 = if !g1_challenges.is_empty() {
-            BetaTable::new(g1_challenges.clone()).unwrap()
-        } else {
-            BetaTable {
-                layer_claim_vars: vec![],
-                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-            }
-        };
+        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges.clone());
+        beta_g2.index_mle_indices(0);
+        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges.clone());
 
         // index original bookkeeping tables to send over to the non-batched mul gate after the copy phase
         self.lhs.index_mle_indices(0);
@@ -504,8 +458,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         let first_sumcheck_message = libra_giraffe(
             &self.lhs,
             &self.rhs,
-            &beta_g2.table,
-            &beta_g1.table,
+            &beta_g2,
+            &beta_g1,
             self.gate_operation.clone(),
             &self.nonzero_gates,
             self.num_dataparallel_bits,
@@ -518,14 +472,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
     /// expression. once this phase is initialized, the sumcheck rounds binding the "x" variables can
     /// be performed
     fn init_phase_1(&mut self, challenges: Vec<F>) -> Result<Vec<F>, GateError> {
-        let beta_g1 = if !challenges.is_empty() {
-            BetaTable::new(challenges).unwrap()
-        } else {
-            BetaTable {
-                layer_claim_vars: vec![],
-                table: DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref(),
-            }
-        };
+        let beta_g1 = BetaValues::new_beta_equality_mle(challenges);
 
         self.lhs.index_mle_indices(self.num_dataparallel_bits);
         let num_x = self.lhs.num_vars();
@@ -543,11 +490,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind, y_ind)| {
-                let beta_g_at_z = *beta_g1
-                    .table
-                    .bookkeeping_table()
-                    .get(z_ind)
-                    .unwrap_or(&F::zero());
+                let beta_g_at_z = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
                 let f_3_at_y = *self
                     .rhs
                     .bookkeeping_table()
@@ -612,10 +555,10 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         &mut self,
         u_claim: Vec<F>,
         f_at_u: F,
-        beta_g1: &BetaTable<F>,
+        beta_g1: &DenseMleRef<F>,
     ) -> Result<Vec<F>, GateError> {
         // create a beta table according to the challenges used to bind the x variables
-        let beta_u = BetaTable::new(u_claim).unwrap();
+        let beta_u = BetaValues::new_beta_equality_mle(u_claim);
         let num_y = self.rhs.num_vars();
 
         // because we are binding the "y" variables, the size of the bookkeeping tables after this init
@@ -630,16 +573,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind, y_ind)| {
-                let gz = *beta_g1
-                    .table
-                    .bookkeeping_table()
-                    .get(z_ind)
-                    .unwrap_or(&F::zero());
-                let ux = *beta_u
-                    .table
-                    .bookkeeping_table()
-                    .get(x_ind)
-                    .unwrap_or(&F::zero());
+                let gz = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
+                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::zero());
                 let adder = gz * ux;
                 a_f1_lhs[y_ind] += adder * f_at_u;
                 if self.gate_operation == BinaryOperation::Add {
@@ -695,8 +630,8 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
     fn perform_dataparallel_phase(
         &mut self,
         claim: Vec<F>,
-        beta_g1: &mut BetaTable<F>,
-        beta_g2: &mut BetaTable<F>,
+        beta_g1: &mut DenseMleRef<F>,
+        beta_g2: &mut DenseMleRef<F>,
         transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
     ) -> Result<(Vec<Vec<F>>, F), LayerError> {
         // initialization, first message comes from here
@@ -743,16 +678,14 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
             .unwrap();
         // fix the variable and everything as you would in the last round of sumcheck
         // the evaluations from this is what you return from the first round of sumcheck in the next phase!
-        beta_g2
-            .beta_update(num_rounds_copy_phase - 1, final_chal_copy)
-            .unwrap();
+        beta_g2.fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
         self.lhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
         self.rhs
             .fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
 
-        if beta_g2.table.bookkeeping_table().len() == 1 {
-            let beta_g2_fully_bound = beta_g2.table.bookkeeping_table()[0];
+        if beta_g2.bookkeeping_table().len() == 1 {
+            let beta_g2_fully_bound = beta_g2.bookkeeping_table()[0];
             Ok((sumcheck_rounds, beta_g2_fully_bound))
         } else {
             Err(LayerError::LayerNotReady)
@@ -764,7 +697,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
     fn perform_phase_1(
         &mut self,
         challenge: Vec<F>,
-        beta_g1: &BetaTable<F>,
+        beta_g1: &DenseMleRef<F>,
         beta_g2_fully_bound: F,
         transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
     ) -> Result<(Vec<Vec<F>>, F, Vec<F>), LayerError> {
@@ -836,7 +769,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Gate<F, Tr> {
         &mut self,
         f_at_u: F,
         phase_1_challenges: Vec<F>,
-        beta_g1: BetaTable<F>,
+        beta_g1: DenseMleRef<F>,
         beta_g2_fully_bound: F,
         transcript: &mut <Gate<F, Tr> as Layer<F>>::Transcript,
     ) -> Result<Vec<Vec<F>>, LayerError> {

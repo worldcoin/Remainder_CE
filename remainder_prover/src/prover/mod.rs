@@ -183,6 +183,7 @@ pub enum GKRError {
 }
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
+/// this inner vec is none if there is no sumcheck proof -- this means that 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SumcheckProof<F>(pub Option<Vec<Vec<F>>>);
 

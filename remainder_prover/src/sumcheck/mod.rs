@@ -1,7 +1,7 @@
 //! Contains cryptographic algorithms for going through the sumcheck protocol
 
 use std::{
-    iter::{repeat, Successors},
+    iter::repeat,
     ops::{Add, Mul, Neg},
 };
 
@@ -19,12 +19,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    mle::{
-        beta::BetaTable,
-        betavalues::BetaValues,
-        dense::{DenseMle, DenseMleRef},
-        MleIndex, MleRef,
-    },
+    mle::{betavalues::BetaValues, dense::DenseMleRef, MleIndex, MleRef},
 };
 use remainder_shared_types::FieldExt;
 

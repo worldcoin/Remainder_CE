@@ -3,7 +3,6 @@
 pub mod batched;
 pub mod claims;
 pub mod combine_mle_refs;
-pub mod empty_layer;
 pub mod layer_enum;
 pub mod simple_builders;
 // mod gkr_layer;
@@ -23,13 +22,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    mle::{
-        beta::{compute_beta_over_two_challenges, BetaError, BetaTable},
-        betavalues::BetaValues,
-        dense::DenseMleRef,
-        mle_enum::MleEnum,
-        MleIndex, MleRef,
-    },
+    mle::{betavalues::BetaValues, dense::DenseMleRef, mle_enum::MleEnum, MleIndex, MleRef},
     prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::{
         compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
@@ -69,9 +62,6 @@ pub enum LayerError {
     #[error("Error with verifying layer: {0}")]
     /// Error with verifying layer
     VerificationError(VerificationError),
-    #[error("Beta Error: {0}")]
-    /// Beta Error
-    BetaError(BetaError),
     #[error("InterpError: {0}")]
     /// InterpError
     InterpError(InterpError),
@@ -460,7 +450,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             .map(|idx| (claim.get_point()[*idx]))
             .collect();
         let beta_fn_evaluated_at_challenge_point =
-            compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges);
+            BetaValues::compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges);
 
         // --- The actual value should just be the product of the two ---
         let mle_evaluated_at_challenge_coord =

@@ -3,7 +3,7 @@ use super::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     verifier_expr::VerifierExpr,
 };
-use crate::mle::{beta::*, betavalues::BetaValues, dense::DenseMleRef, MleIndex, MleRef};
+use crate::mle::{betavalues::BetaValues, dense::DenseMleRef, MleIndex, MleRef};
 use ark_crypto_primitives::crh::sha256::digest::typenum::Exp;
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;

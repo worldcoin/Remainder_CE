@@ -14,7 +14,6 @@ use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 use crate::{
     layer::{
         batched::{combine_mles, combine_zero_mle_ref, BatchedLayer},
-        empty_layer::EmptyLayer,
         from_mle,
         layer_enum::LayerEnum,
         simple_builders::{EqualityCheck, ZeroBuilder},
@@ -802,8 +801,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
-        let output_layer_mle =
-            layers.add::<_, EmptyLayer<F, Self::Transcript>>(output_layer_builder);
+        let output_layer_mle = layers.add_gkr(output_layer_builder);
 
         Witness {
             layers,
@@ -1177,8 +1175,7 @@ impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
             self.empty_layer_src_mle.clone(),
             self.other_empty_layer_src_mle.clone(),
         );
-        let empty_layer_result =
-            layers.add::<_, EmptyLayer<F, Self::Transcript>>(empty_layer_builder);
+        let empty_layer_result = layers.add_gkr(empty_layer_builder);
 
         // --- Subtracts from `self.mle` ---
         let sub_builder = EmptyLayerSubBuilder::new(empty_layer_result.clone(), self.mle.clone());
@@ -1238,7 +1235,6 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
         for layer in simple_layers.0.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
-                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
                 _ => panic!(),
             };
 
@@ -1908,7 +1904,6 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
         for layer in simple_layers.0.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
-                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
                 _ => panic!(),
             };
 
@@ -1951,7 +1946,6 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
         for layer in batch_layers.0.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
-                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
                 _ => panic!(),
             };
 

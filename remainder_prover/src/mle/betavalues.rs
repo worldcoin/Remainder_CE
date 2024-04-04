@@ -2,11 +2,18 @@
 
 use std::{collections::HashMap, fmt::Debug};
 
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 
-use super::MleIndex;
+use crate::layer::LayerId;
+
+use super::{
+    dense::{DenseMle, DenseMleRef},
+    MleIndex, MleRef,
+};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
@@ -99,5 +106,36 @@ impl<F: FieldExt> BetaValues<F> {
             .fold(F::one(), |acc, (x_i, y_i)| {
                 acc * ((*x_i * y_i) + (one - x_i) * (one - y_i))
             })
+    }
+
+    /// this function returns the full beta equality table as defined in thaler 13, so over
+    /// n challenge points it returns a table of size 2^n. this is when we do still need the
+    /// entire beta table.
+    pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMleRef<F> {
+        if layer_claim_vars.len() > 0 {
+            // dynamic programming algorithm where we start from the most significant bit, which
+            // is alternating in (1 - r) or (r) as the base case
+            let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
+            let mut cur_table = vec![one_minus_r, r];
+
+            // TODO!(vishruti) make this parallelizable
+            // we iterate until we get to the least significant bit of the challenge point by
+            // multiplying by (1 - r_i) and r_i appropriately as in thaler 13.
+            for claim in layer_claim_vars.iter().skip(1) {
+                let (one_minus_r, r) = (F::one() - claim, claim);
+                let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone())
+                    .map(|eval| eval * one_minus_r)
+                    .collect();
+                let secondhalf: Vec<F> = cfg_into_iter!(cur_table).map(|eval| eval * r).collect();
+                firsthalf.extend(secondhalf.iter());
+                cur_table = firsthalf;
+            }
+
+            let cur_table_mle_ref: DenseMleRef<F> =
+                DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
+            cur_table_mle_ref
+        } else {
+            DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref()
+        }
     }
 }
