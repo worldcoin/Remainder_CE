@@ -1,8 +1,8 @@
 //! A transcript that uses the Poseidon hash function; Useful for recursive proving
-use std::marker::PhantomData;
+use std::{iter::repeat_with, marker::PhantomData};
 
-use itertools::Itertools;
 use crate::Poseidon;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
@@ -22,7 +22,7 @@ pub struct PoseidonTranscript<F: FieldExt> {
     #[serde(default = "default_sponge")]
     sponge: Poseidon<F, 3, 2>,
     counter: usize,
-    _marker: PhantomData<F>
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
@@ -35,7 +35,7 @@ impl<F: FieldExt> Transcript<F> for PoseidonTranscript<F> {
         Self {
             sponge: default_sponge(),
             counter: 1,
-            _marker: PhantomData
+            _marker: PhantomData,
         }
     }
 

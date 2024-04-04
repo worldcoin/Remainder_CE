@@ -9,7 +9,7 @@ use crate::{
     },
     mle::{beta::BetaTable, dense::DenseMleRef, mle_enum::MleEnum, MleRef},
     prover::SumcheckProof,
-    sumcheck::{compute_sumcheck_message, evaluate_at_a_point, get_round_degree, Evals},
+    sumcheck::{evaluate_at_a_point, get_round_degree, Evals},
 };
 use ark_std::cfg_into_iter;
 use rayon::{iter::IntoParallelIterator, prelude::ParallelIterator};

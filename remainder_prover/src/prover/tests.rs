@@ -1314,19 +1314,27 @@ fn test_gkr_nonlinear_circuit() {
     let size = 2;
 
     let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..1 << size).map(|_| 
-            //Fr::from(rng.gen::<u64>())
-            Fr::one()
-    ),
+        (0..1 << size).map(
+            |_| Fr::from(rng.gen::<u64>()), // Fr::from(20_u64)
+        ),
         LayerId::Input(0),
         None,
     );
 
+    // let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+    //     vec![
+    //         Fr::from(1_u64),
+    //         Fr::from(1_u64),
+    //         Fr::from(1_u64),
+    //         Fr::from(1_u64),
+    //     ],
+    //     LayerId::Input(0),
+    //     None,
+    // );
+
     let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
-        (0..1 << size).map(|_| 
-            //Fr::from(rng.gen::<u64>())
-            Fr::one()
-    ),
+        (0..1 << size).map(|_| Fr::from(rng.gen::<u64>())),
+        // Fr::from(1_u64)),
         LayerId::Input(0),
         None,
     );
@@ -1503,7 +1511,7 @@ fn test_random_layer_circuit() {
 // ------------------------------------ GATE CIRCUITS ------------------------------------
 
 #[test]
-fn test_gkr_gate_simplest_circuit() {
+fn ca() {
     let mut rng = test_rng();
     let size = 1 << 4;
 

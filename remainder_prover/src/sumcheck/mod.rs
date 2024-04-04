@@ -120,165 +120,6 @@ impl<F: FieldExt> Mul<&F> for Evals<F> {
     }
 }
 
-/// Gives us an evaluation for an entire expression. Returns either a single
-/// value (e.g. if all variables are bound and/or the expression is just over
-/// a constant), or a vector of evals at 0, ..., deg - 1 for an expression
-/// where there are iterated variables.
-///
-/// # Arguments
-/// * `expr` - The actual expression to evaluate
-/// * `round_index` - The sumcheck round index, I think??
-/// * `max_degree` - The maximum degree of the `round_index`th variable
-///
-/// # Errors
-/// - Error::BetaError when the beta table has not been initialized
-/// - TODO!(ryancao || vishady) -- Error::NotIndexedError when ANY MLE is not
-///     fully indexed.
-pub fn compute_sumcheck_message<F: FieldExt>(
-    expr: &Expression<F, ProverExpr>,
-    round_index: usize,
-    max_degree: usize,
-    beta_table: &BetaTable<F>,
-) -> Result<Evals<F>, ExpressionError> {
-    // --- TODO!(ende): REMEMBER TO REMOVE ALL THE PRINTLN STATEMENTS ---
-
-    // --- TODO!(ryancao): (From Zhenfei): So we can probably cache this beta table evaluation somehow
-    // and then use those evals many times and not have to do this over and over again
-    // Zhenfei's idea: Just memoize
-
-    // --- Constant evaluation is just Sum(k) ---
-    let constant = |constant, beta_mle_ref: &DenseMleRef<F>| {
-        // need to actually treat this like a 'scaled' because there is a beta table
-        let beta_bt = beta_mle_ref.bookkeeping_table();
-        // just scale the beta table by the constant
-        let first = beta_bt
-            .iter()
-            .step_by(2)
-            .fold(F::zero(), |elem, acc| elem + acc);
-        let second = beta_bt
-            .iter()
-            .skip(1)
-            .step_by(2)
-            .fold(F::zero(), |elem, acc| elem + acc);
-        let evals =
-            (1..max_degree + 1).map(|index| first + (second - first) * F::from(index as u64));
-        let beta_eval = Evals(std::iter::once(first).chain(evals).collect_vec());
-        Ok(beta_eval * constant)
-    };
-
-    // V_i(b_1, ..., b_n) = ((1 - b1) * (V_{i + 1}(0, 0, b2, ..., bn) + V_{i + 1}(0, 0, b2, ..., bn))) +
-    // b1 * (V_{i + 1}(0, 0, b2, ..., bn) * V_{i + 1}(0, 0, b2, ..., bn)))
-    let selector = |index: &MleIndex<F>, a, b| match index {
-        MleIndex::IndexedBit(indexed_bit) => {
-            match Ord::cmp(&round_index, indexed_bit) {
-                // --- We haven't gotten to the indexed bit yet: just "combine" the two MLEs ---
-                std::cmp::Ordering::Less => {
-                    let a = a?;
-                    let b = b?;
-                    Ok(a + b)
-                }
-                // --- We are exactly looking at the indexed bit: the two MLEs we're summing ---
-                // --- over should just be values. The result is that if you plug in 0, you get ---
-                // --- the first value, and if you plug in 1 you get the second ---
-                std::cmp::Ordering::Equal => {
-                    let first = a?;
-                    let second: Evals<F> = b?;
-
-                    let (Evals(first_evals), Evals(second_evals)) = (first, second);
-                    if first_evals.len() == second_evals.len() {
-                        // we need to combine the evals by doing (1-x) * first eval + x * second eval
-                        let first_evals = Evals(
-                            first_evals
-                                .into_iter()
-                                .enumerate()
-                                .map(|(idx, first_eval)| {
-                                    first_eval * (F::one() - F::from(idx as u64))
-                                })
-                                .collect(),
-                        );
-
-                        let second_evals = Evals(
-                            second_evals
-                                .into_iter()
-                                .enumerate()
-                                .map(|(idx, second_eval)| second_eval * F::from(idx as u64))
-                                .collect(),
-                        );
-
-                        Ok(first_evals + second_evals)
-                    } else {
-                        Err(ExpressionError::EvaluationError("Expression returns two evals that do not have length 3 on a selector bit"))
-                    }
-                }
-                // --- If we're past the evaluation round, we should not have an unbound selector ---
-                std::cmp::Ordering::Greater => Err(ExpressionError::InvalidMleIndex),
-            }
-        }
-        MleIndex::Bound(coeff, _) => {
-            let coeff_neg = F::one() - coeff;
-            let a: Evals<F> = a?;
-            let b: Evals<F> = b?;
-
-            // --- Just r * V[2i + 1] + (1 - r) * V[2i] ---
-            // --- (I.e. the selector formulation after the selector bit is bound to `r` above) ---
-            Ok((b * coeff) + (a * coeff_neg))
-        }
-        _ => Err(ExpressionError::InvalidMleIndex),
-    };
-
-    let mle_eval = for<'a, 'b> |mle_ref: &'a DenseMleRef<F>,
-                                beta_mle_ref: &'b DenseMleRef<F>|
-                 -> Result<Evals<F>, ExpressionError> {
-        // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---
-        evaluate_mle_ref_product_with_beta(
-            &[&mle_ref.clone()],
-            round_index,
-            max_degree,
-            beta_mle_ref.clone(),
-        )
-        .map_err(ExpressionError::MleError)
-    };
-
-    // --- Just invert ---
-    let negated = |a: Result<_, _>| a.map(|a: Evals<F>| a.neg());
-
-    // --- Use the distributed/element-wise addition impl from earlier ---
-    let sum = |a, b| {
-        let a: Evals<F> = a?;
-        let b: Evals<F> = b?;
-
-        Ok(a + b)
-    };
-
-    // --- First see whether there are any iterated variables we should go over ---
-    // --- Then just call the `evaluate_mle_ref_product` function ---
-    let product = for<'a, 'b, 'c> |mle_refs: &'a [&'b DenseMleRef<F>],
-                                   beta_mle_ref: &'c DenseMleRef<F>|
-                     -> Result<Evals<F>, ExpressionError> {
-        // have to include the beta table and evaluate as a product
-        evaluate_mle_ref_product_with_beta(mle_refs, round_index, max_degree, beta_mle_ref.clone())
-            .map_err(ExpressionError::MleError)
-    };
-
-    // --- Scalar is just distributed mult as defined earlier ---
-    let scaled = |a, scalar| {
-        let a = a?;
-        Ok(a * scalar)
-    };
-
-    expr.evaluate_sumcheck(
-        &constant,
-        &selector,
-        &mle_eval,
-        &negated,
-        &sum,
-        &product,
-        &scaled,
-        &beta_table.table,
-        round_index,
-    )
-}
-
 pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
     expr: &Expression<F, ProverExpr>,
     round_index: usize,
@@ -286,7 +127,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
     beta_table: &NewBeta<F>,
 ) -> Result<Evals<F>, ExpressionError> {
     // --- Constant evaluation is just Sum(k) ---
-    let constant = |constant| Ok(Evals((1..max_degree + 1).map(|_| constant).collect_vec()));
+    let constant = |constant| Ok(Evals((0..max_degree + 1).map(|_| constant).collect_vec()));
 
     // V_i(b_1, ..., b_n) = ((1 - b1) * (V_{i + 1}(0, 0, b2, ..., bn) + V_{i + 1}(0, 0, b2, ..., bn))) +
     // b1 * (V_{i + 1}(0, 0, b2, ..., bn) * V_{i + 1}(0, 0, b2, ..., bn)))
@@ -374,14 +215,15 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
                                     unbound_beta_vals: &'b [F],
                                     bound_beta_vals: &'c [F]|
                      -> Result<Evals<F>, ExpressionError> {
-        // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---
-        Ok(beta_cascade(
+        let hello = beta_cascade(
             &[&mle_ref.clone()],
             max_degree,
             round_index,
             unbound_beta_vals,
             bound_beta_vals,
-        ))
+        );
+        // --- Just take the "independent variable" thing into account when we're evaluating the MLE reference as a product ---
+        Ok(hello)
     };
 
     // --- Just invert ---
@@ -391,7 +233,6 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
     let sum = |a, b| {
         let a: Evals<F> = a?;
         let b: Evals<F> = b?;
-
         Ok(a + b)
     };
 
@@ -401,7 +242,6 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
                                        unbound_beta_vals: &'c [F],
                                        bound_beta_vals: &'d [F]|
                          -> Result<Evals<F>, ExpressionError> {
-        // have to include the beta table and evaluate as a product
         Ok(beta_cascade(
             mle_refs,
             max_degree,
@@ -448,10 +288,10 @@ pub fn get_relevant_beta_unbound_and_bound<F: FieldExt>(
     let unbound_betas = mle_indices
         .iter()
         .filter_map(|index| match index {
-            MleIndex::IndexedBit(round_idx) => {
-                let item = newbeta.unbound_values[round_idx];
-                Some(item)
-            }
+            MleIndex::IndexedBit(round_idx) => newbeta
+                .unbound_values
+                .get(round_idx)
+                .map(|&item| item.clone()),
             _ => None,
         })
         .collect_vec();
@@ -535,7 +375,6 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
     mle_refs: &[&impl MleRef<F = F>],
     degree: usize,
 ) -> Result<Evals<F>, MleError> {
-    dbg!(degree);
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
@@ -610,7 +449,6 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
     mle_refs: &[&impl MleRef<F = F>],
     degree: usize,
 ) -> Result<Vec<F>, MleError> {
-    dbg!(degree);
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
@@ -663,11 +501,53 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
     Ok(evals_vec)
 }
 
+pub fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
+    mle_refs: &[&impl MleRef<F = F>],
+) -> Result<Vec<F>, MleError> {
+    // --- Gets the total number of iterated variables across all MLEs within this product ---
+    let max_num_vars = mle_refs
+        .iter()
+        .map(|mle_ref| mle_ref.num_vars())
+        .max()
+        .ok_or(MleError::EmptyMleList)?;
+
+    let evals_vec = if max_num_vars > 0 {
+        let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).map(|index| {
+            //get the product of all evaluations over 0/1/..degree
+            let successors_product = mle_refs
+                .iter()
+                .map(|mle_ref| {
+                    let zero = F::zero();
+                    let index = if mle_ref.num_vars() < max_num_vars {
+                        let max = 1 << mle_ref.num_vars();
+                        (index * 2) % max
+                    } else {
+                        index * 2
+                    };
+                    *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero)
+                })
+                .reduce(|acc, eval| acc * eval)
+                .unwrap();
+            successors_product
+        });
+        evals.collect()
+    } else {
+        let val = mle_refs.into_iter().fold(F::one(), |acc, mle_ref| {
+            assert_eq!(mle_ref.bookkeeping_table().len(), 1);
+            acc * mle_ref.bookkeeping_table()[0]
+        });
+        vec![val]
+    };
+
+    Ok(evals_vec)
+}
+
 pub fn beta_cascade_step<F: FieldExt>(mle_successor_vec: &mut Vec<F>, beta_val: F) -> Vec<F> {
     let (one_minus_beta_val, beta_val) = (F::one() - beta_val, beta_val);
     let half_vec_len = mle_successor_vec.len() / 2;
     let new_successor = cfg_into_iter!((0..half_vec_len)).map(|idx| {
-        (mle_successor_vec[idx] * one_minus_beta_val) + (mle_successor_vec[2 * idx] * beta_val)
+        (mle_successor_vec[idx] * one_minus_beta_val)
+            + (mle_successor_vec[idx + half_vec_len] * beta_val)
     });
     let new_successor_vec = new_successor.collect();
     new_successor_vec
@@ -680,7 +560,7 @@ pub fn apply_updated_beta_values_to_evals<F: FieldExt>(
     let beta_total_updated_product = beta_updated_vals
         .iter()
         .fold(F::one(), |acc, elem| acc * elem);
-    evals
+    let evals = evals
         .iter()
         .map(|elem| beta_total_updated_product * elem)
         .collect_vec();
@@ -690,18 +570,19 @@ pub fn apply_updated_beta_values_to_evals<F: FieldExt>(
 
 pub fn beta_cascade_no_independent_variable<F: FieldExt>(
     mle_refs: &[&impl MleRef<F = F>],
-    degree: usize,
     beta_vals: &[F],
     beta_updated_vals: &[F],
 ) -> Evals<F> {
-    let mut mle_successor_vec = successors_from_mle_ref_product(mle_refs, degree).unwrap();
-    beta_vals.iter().for_each(|beta_val| {
-        let (one_minus_beta_val, beta_val) = (F::one() - beta_val, beta_val);
-        let mle_successor_vec_iter = mle_successor_vec
-            .par_chunks(2)
-            .map(|bits| bits[0] * one_minus_beta_val + bits[1] * beta_val);
-        mle_successor_vec = mle_successor_vec_iter.collect();
-    });
+    let mut mle_successor_vec = successors_from_mle_ref_product_no_ind_var(mle_refs).unwrap();
+    if mle_successor_vec.len() > 1 {
+        beta_vals.iter().for_each(|beta_val| {
+            let (one_minus_beta_val, beta_val) = (F::one() - beta_val, beta_val);
+            let mle_successor_vec_iter = mle_successor_vec
+                .par_chunks(2)
+                .map(|bits| bits[0] * one_minus_beta_val + bits[1] * beta_val);
+            mle_successor_vec = mle_successor_vec_iter.collect();
+        });
+    }
 
     assert_eq!(mle_successor_vec.len(), 1);
 
@@ -715,8 +596,6 @@ pub fn beta_cascade<F: FieldExt>(
     beta_vals: &[F],
     beta_updated_vals: &[F],
 ) -> Evals<F> {
-    let mut mle_successor_vec = successors_from_mle_ref_product(mle_refs, degree).unwrap();
-
     let mles_have_independent_variable = mle_refs
         .iter()
         .map(|mle_ref| {
@@ -728,12 +607,11 @@ pub fn beta_cascade<F: FieldExt>(
         .unwrap();
 
     if mles_have_independent_variable {
+        let mut mle_successor_vec = successors_from_mle_ref_product(mle_refs, degree).unwrap();
         beta_vals.iter().skip(1).rev().for_each(|val| {
-            dbg!(val);
             mle_successor_vec = beta_cascade_step(&mut mle_successor_vec, *val);
         });
         let evals = if beta_vals.len() >= 1 {
-            dbg!(beta_vals[0]);
             let second_beta_successor = beta_vals[0];
             let first_beta_successor = F::one() - second_beta_successor;
             let step = second_beta_successor - first_beta_successor;
@@ -748,7 +626,7 @@ pub fn beta_cascade<F: FieldExt>(
         };
         apply_updated_beta_values_to_evals(evals, beta_updated_vals)
     } else {
-        beta_cascade_no_independent_variable(mle_refs, degree, beta_vals, beta_updated_vals)
+        beta_cascade_no_independent_variable(mle_refs, beta_vals, beta_updated_vals)
     }
 }
 
@@ -766,7 +644,6 @@ pub fn evaluate_mle_ref_product_with_beta<F: FieldExt>(
     degree: usize,
     beta_ref: DenseMleRef<F>,
 ) -> Result<Evals<F>, MleError> {
-    dbg!(&beta_ref.bookkeeping_table());
     for mle_ref in mle_refs {
         if !mle_ref.indexed() {
             return Err(MleError::NotIndexedError);
