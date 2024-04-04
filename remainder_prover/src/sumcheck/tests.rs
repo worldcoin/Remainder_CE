@@ -43,7 +43,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
         .iter()
         .map(|idx| (*idx, claim_point[*idx]))
         .collect_vec();
-    let mut newbeta = NewBeta::new(betavec);
+    let mut newbeta = BetaValues::new(betavec);
 
     // --- Does the bit indexing ---
 
@@ -201,7 +201,7 @@ pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
         .iter()
         .for_each(|round| expression.fix_variable_at_index(*round, challenges[*round]));
 
-    let beta = NewBeta::new(challenges_enumerate.clone());
+    let beta = BetaValues::new(challenges_enumerate.clone());
     let eval = compute_sumcheck_message_beta_cascade(&expression, 0, 2, &beta).unwrap();
     let Evals(evals) = eval;
     let result = if evals.len() > 1 {
@@ -216,7 +216,7 @@ pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
 /// Test regular numerical evaluation, last round type beat
 #[test]
 fn eval_expr_nums() {
-    let new_beta = NewBeta::new(vec![]);
+    let new_beta = BetaValues::new(vec![]);
     let mut expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::from(6));
     let res = compute_sumcheck_message_beta_cascade(&mut expression1, 0, 0, &new_beta);
     let exp = Evals(vec![Fr::from(6)]);
@@ -263,7 +263,7 @@ fn eval_at_point_more_than_degree() {
 /// Test whether evaluate_mle_ref correctly computes the evaluations for a single MLE
 #[test]
 fn test_linear_sum() {
-    let newbeta = NewBeta::new(vec![]);
+    let newbeta = BetaValues::new(vec![]);
 
     let mle_v1 = vec![Fr::from(3), Fr::from(2), Fr::from(2), Fr::from(5)];
     let mle1: DenseMleRef<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None).mle_ref();
@@ -280,7 +280,7 @@ fn test_linear_sum() {
 /// Test whether evaluate_mle_ref correctly computes the evaluations for a product of MLEs
 #[test]
 fn test_quadratic_sum() {
-    let new_beta = NewBeta::new(vec![(0, Fr::from(2)), (1, Fr::from(4))]);
+    let new_beta = BetaValues::new(vec![(0, Fr::from(2)), (1, Fr::from(4))]);
 
     let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
     let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
@@ -305,7 +305,7 @@ fn test_quadratic_sum() {
 /// where one of the MLEs is a log size step smaller than the other (e.g. V(b_1, b_2)*V(b_1))
 #[test]
 fn test_quadratic_sum_differently_sized_mles2() {
-    let new_beta = NewBeta::new(vec![(0, Fr::from(2)), (1, Fr::from(4))]);
+    let new_beta = BetaValues::new(vec![(0, Fr::from(2)), (1, Fr::from(4))]);
 
     let mle_v1 = vec![
         Fr::from(0),
