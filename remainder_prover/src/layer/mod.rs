@@ -21,15 +21,15 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    mle::{betavalues::BetaValues, mle_enum::MleEnum, MleIndex, MleRef},
-    prover::SumcheckProof,
+    mle::{betavalues::BetaValues, dense::DenseMleRef, mle_enum::MleEnum, MleIndex, MleRef},
+    prover::{SumcheckProof, ENABLE_OPTIMIZATION},
     sumcheck::{
         compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
         InterpError,
     },
 };
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptError},
+    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
@@ -66,7 +66,7 @@ pub enum LayerError {
     InterpError(InterpError),
     #[error("Transcript Error: {0}")]
     /// Transcript Error
-    TranscriptError(TranscriptError),
+    TranscriptError(TranscriptReaderError),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -129,13 +129,13 @@ impl std::fmt::Display for LayerId {
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
     /// The transcript that this layer uses
-    type Transcript: Transcript<F>;
+    type Sponge: TranscriptSponge<F>;
 
     /// Creates a sumcheck proof for this Layer
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<SumcheckProof<F>, LayerError>;
 
     ///  Verifies the sumcheck protocol
@@ -143,7 +143,7 @@ pub trait Layer<F: FieldExt> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Option<Vec<Vec<F>>>,
-        transcript: &mut Self::Transcript,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), LayerError>;
 
     /// Get the claims that this layer makes on other layers
@@ -167,7 +167,7 @@ pub trait Layer<F: FieldExt> {
     where
         Self: Sized;
 
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript>;
+    fn get_enum(self) -> LayerEnum<F, Self::Sponge>;
 }
 
 /// Default Layer abstraction
@@ -184,7 +184,7 @@ pub struct GKRLayer<F: FieldExt, Tr> {
     _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
+impl<F: FieldExt, Tr: TranscriptSponge<F>> GKRLayer<F, Tr> {
     /// initialize all necessary information in order to start sumcheck within a layer of GKR. this includes
     /// pre-fixing all of the rounds within the layer which are linear,
     /// and then appropriately initializing the necessary beta values over the nonlinear rounds.
@@ -308,8 +308,9 @@ impl<F: FieldExt, Tr: Transcript<F>> GKRLayer<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
-    type Transcript = Tr;
+impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
+    type Sponge = Tr;
+
     fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
         Self {
             id,
@@ -323,7 +324,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut Self::Transcript,
+        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let val = claim.get_result().clone();
 
@@ -344,9 +345,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
 
         // --- Add prover message to the FS transcript ---
-        transcript
-            .append_field_elements("Initial Sumcheck evaluations", &first_sumcheck_message)
-            .unwrap();
+        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_sumcheck_message);
 
         // Grabs all of the sumcheck messages from all of the rounds within this layer.
         //
@@ -362,27 +361,20 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         let all_prover_sumcheck_messages: Vec<Vec<F>> = std::iter::once(Ok(first_sumcheck_message))
             .chain((nonlinear_rounds.iter().skip(1)).map(|round_index| {
                 // --- Verifier samples a random challenge \in \mathbb{F} to send to prover ---
-                let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
 
                 // --- Prover uses that random challenge to compute the next sumcheck message ---
                 // --- We then add the prover message to FS transcript ---
-                let prover_sumcheck_message = self.prove_nonlinear_round(*round_index, challenge);
-                transcript
-                    .append_field_elements(
-                        "Sumcheck evaluations",
-                        &prover_sumcheck_message.clone().unwrap(),
-                    )
-                    .unwrap();
-
-                prover_sumcheck_message
+                let prover_sumcheck_message =
+                    self.prove_nonlinear_round(*round_index, challenge)?;
+                transcript_writer.append_elements("Sumcheck evaluations", &prover_sumcheck_message);
+                Ok::<_, LayerError>(prover_sumcheck_message)
             }))
             .collect::<Result<_, _>>()?;
 
         // --- For the final round, we need to check that g(r_1, ..., r_n) = g_n(r_n) ---
         // --- Thus we sample r_n and bind b_n to it (via `fix_variable` below) ---
-        let final_chal = transcript
-            .get_challenge("Final Sumcheck challenge")
-            .unwrap();
+        let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge");
 
         let last_idx = nonlinear_rounds[nonlinear_rounds.len() - 1];
 
@@ -397,7 +389,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         &mut self,
         claim: Claim<F>,
         sumcheck_prover_messages: Option<Vec<Vec<F>>>,
-        transcript: &mut Self::Transcript,
+        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
     ) -> Result<(), LayerError> {
         // if there are no sumcheck prover messages, this means this was an entirely linear layer. therefore
         // we can skip the verification for this layer.
@@ -410,7 +402,12 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- First verify that g_1(0) + g_1(1) = \sum_{b_1, ..., b_n} g(b_1, ..., b_n) ---
         // (i.e. the first verification step of sumcheck)
-        let mut prev_evals = &sumcheck_prover_messages[0];
+
+        // TODO(Makis): Retrieve `num_prev_evals` directly from the transcript.
+        let num_prev_evals = sumcheck_prover_messages[0].len();
+        let mut prev_evals = transcript_reader
+            .consume_elements("Initial Sumcheck evaluations", num_prev_evals)
+            .map_err(|e| LayerError::TranscriptError(e))?;
 
         if prev_evals[0] + prev_evals[1] != claim.get_result() {
             debug!("I'm the PROBLEM");
@@ -421,17 +418,24 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
             ));
         }
 
-        transcript
-            .append_field_elements("Initial Sumcheck evaluations", &sumcheck_prover_messages[0])
-            .unwrap();
-
         // --- For round 1 < i < n, perform the check ---
         // g_{i - 1}(r_i) = g_i(0) + g_i(1)
-        for curr_evals in sumcheck_prover_messages.iter().skip(1) {
-            let challenge = transcript.get_challenge("Sumcheck challenge").unwrap();
+        // TODO(Makis): Retrieve `evals.len()`s directly from the transcript.
+        for num_curr_evals in sumcheck_prover_messages
+            .into_iter()
+            .skip(1)
+            .map(|evals| evals.len())
+        {
+            let challenge = transcript_reader
+                .get_challenge("Sumcheck challenge")
+                .map_err(|e| LayerError::TranscriptError(e))?;
 
             let prev_at_r =
-                evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
+                evaluate_at_a_point(&prev_evals, challenge).map_err(LayerError::InterpError)?;
+
+            let curr_evals = transcript_reader
+                .consume_elements("Sumcheck evaluations", num_curr_evals)
+                .map_err(|e| LayerError::TranscriptError(e))?;
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 return Err(LayerError::VerificationError(
@@ -439,19 +443,15 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
                 ));
             };
 
-            transcript
-                .append_field_elements("Sumcheck evaluations", curr_evals)
-                .unwrap();
-
             prev_evals = curr_evals;
             challenges.push(challenge);
         }
 
         // --- In the final round, we check that g(r_1, ..., r_n) = g_n(r_n) ---
         // Here, we first sample r_n.
-        let final_chal = transcript
+        let final_chal = transcript_reader
             .get_challenge("Final Sumcheck challenge")
-            .unwrap();
+            .map_err(|e| LayerError::TranscriptError(e))?;
         challenges.push(final_chal);
 
         // --- This automatically asserts that the expression is fully bound and simply ---
@@ -480,7 +480,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
 
         // --- Computing g_n(r_n) ---
         let g_n_evaluated_at_r_n =
-            evaluate_at_a_point(prev_evals, final_chal).map_err(LayerError::InterpError)?;
+            evaluate_at_a_point(&prev_evals, final_chal).map_err(LayerError::InterpError)?;
 
         // --- Checking the two against one another ---
         if mle_evaluated_at_challenge_coord != g_n_evaluated_at_r_n {
@@ -674,7 +674,7 @@ impl<F: FieldExt, Tr: Transcript<F>> Layer<F> for GKRLayer<F, Tr> {
         Ok(wlx_evals)
     }
 
-    fn get_enum(self) -> LayerEnum<F, Self::Transcript> {
+    fn get_enum(self) -> LayerEnum<F, Self::Sponge> {
         LayerEnum::Gkr(self)
     }
 }

@@ -3,7 +3,10 @@ use std::{fs, iter::repeat_with};
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::{prelude::Distribution, Rng};
-use remainder_shared_types::{transcript::Transcript, FieldExt, Fr, Poseidon};
+use remainder_shared_types::{
+    transcript::{Transcript, TranscriptSponge},
+    FieldExt, Fr, Poseidon,
+};
 
 use crate::{
     layer::LayerId,
@@ -112,6 +115,30 @@ pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Ve
     )
 }
 
+/// Returns the specific bit decomp for a given index,
+/// using `num_bits` bits. Note that this returns the
+/// decomposition in BIG ENDIAN!
+pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
+    (0..(num_bits))
+        .rev()
+        .into_iter()
+        .map(|cur_num_bits| {
+            let is_one =
+                (idx % 2_usize.pow(cur_num_bits as u32 + 1)) >= 2_usize.pow(cur_num_bits as u32);
+            MleIndex::Fixed(is_one)
+        })
+        .collect_vec()
+}
+
+#[test]
+fn test_get_mle_idx_decomp_for_idx() {
+    let idx = 7;
+    let num_bits = 4;
+    let hi = get_mle_idx_decomp_for_idx::<Fr>(idx, num_bits);
+    dbg!(hi);
+    panic!();
+}
+
 /// Returns whether a particular file exists in the filesystem
 ///
 /// TODO!(ryancao): Shucks does this check a relative path...?
@@ -122,7 +149,7 @@ pub fn file_exists(file_path: &String) -> bool {
     }
 }
 
-pub fn hash_layers<F: FieldExt, Tr: Transcript<F>>(layers: &Layers<F, Tr>) -> F {
+pub fn hash_layers<F: FieldExt, Tr: TranscriptSponge<F>>(layers: &Layers<F, Tr>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 
     layers.0.iter().for_each(|layer| {
