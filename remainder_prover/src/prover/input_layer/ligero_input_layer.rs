@@ -2,6 +2,7 @@
 
 use std::marker::PhantomData;
 
+use ark_std::{cfg_into_iter, end_timer, start_timer};
 use remainder_ligero::{
     adapter::{convert_halo_to_lcpc, LigeroProof},
     ligero_commit::{
@@ -16,8 +17,10 @@ use remainder_shared_types::{
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info};
+use rayon::prelude::{ParallelIterator, IntoParallelIterator};
 
-use crate::{layer::LayerId, mle::dense::DenseMle, prover::input_layer::InputLayerError};
+use crate::{claims::wlx_eval::{get_num_wlx_evaluations, YieldWLXEvals, ENABLE_PRE_FIX}, layer::LayerId, mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef}, prover::input_layer::InputLayerError, sumcheck::evaluate_at_a_point};
 
 use super::{enum_input_layer::InputLayerEnum, InputLayer, MleInputLayer};
 
@@ -101,7 +104,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     fn open(
         &self,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-        claim: crate::layer::claims::Claim<F>,
+        claim: crate::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, InputLayerError> {
         let aux = self
             .aux
@@ -135,7 +138,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     fn verify(
         commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
-        claim: crate::layer::claims::Claim<F>,
+        claim: crate::claims::Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
         let ligero_aux = &opening_proof.aux;
@@ -215,5 +218,82 @@ impl<F: FieldExt> LigeroInputLayer<F> {
             rho_inv: Some(rho_inv),
             ratio: Some(ratio),
         }
+    }
+}
+
+impl<F: FieldExt> YieldWLXEvals<F> for LigeroInputLayer<F> {
+        
+    /// Computes the V_d(l(x)) evaluations for the input layer V_d.
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, crate::claims::ClaimError> {
+        let prep_timer = start_timer!(|| "Claim wlx prep");
+        let mut mle_ref = self.get_padded_mle().clone().mle_ref();
+        end_timer!(prep_timer);
+        info!(
+            "Wlx MLE len: {}",
+            mle_ref.current_mle.get_evals_vector().len()
+        );
+
+        //fix variable hella times
+        //evaluate expr on the mutated expr
+
+        // get the number of evaluations
+        mle_ref.index_mle_indices(0);
+        let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
+        let chal_point = &claim_vecs[0];
+
+        if ENABLE_PRE_FIX {
+            if common_idx.is_some() {
+                let common_idx = common_idx.unwrap();
+                common_idx.iter().for_each(|chal_idx| {
+                    if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
+                        mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+                    }
+                });
+            }
+        }
+
+        debug!("Evaluating {num_evals} times.");
+
+        // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+        let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+            // let next_evals: Vec<F> = (num_claims..num_evals).into_iter()
+            .map(|idx| {
+                // get the challenge l(idx)
+                let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                    // let new_chal: Vec<F> = (0..num_idx).into_iter()
+                    .map(|claim_idx| {
+                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                            // let evals: Vec<F> = (&claim_vecs).into_iter()
+                            .map(|claim| claim[claim_idx])
+                            .collect();
+                        evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                    })
+                    .collect();
+
+                let mut fix_mle = mle_ref.clone();
+                {
+                    new_chal.into_iter().enumerate().for_each(|(idx, chal)| {
+                        if let MleIndex::IndexedBit(idx_num) = fix_mle.mle_indices()[idx] {
+                            fix_mle.fix_variable(idx_num, chal);
+                        }
+                    });
+                    fix_mle.current_mle[0]
+                }
+            })
+            .collect();
+
+        // concat this with the first k evaluations from the claims to get num_evals evaluations
+        let mut wlx_evals = claimed_vals.clone();
+        wlx_evals.extend(&next_evals);
+        debug!("Returning evals:\n{:#?} ", wlx_evals);
+        Ok(wlx_evals)
+
     }
 }

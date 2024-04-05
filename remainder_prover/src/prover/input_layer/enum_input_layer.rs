@@ -7,8 +7,7 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    layer::{claims::Claim, LayerId},
-    mle::dense::DenseMle, input_layer_enum,
+    claims::{wlx_eval::YieldWLXEvals, Claim}, input_layer_enum, layer::LayerId, mle::dense::DenseMle
 };
 
 use super::{
@@ -80,7 +79,7 @@ use super::{
 //     fn open(
 //         &self,
 //         transcript: &mut impl Transcript<F>,
-//         claim: crate::layer::claims::Claim<F>,
+//         claim: crate::claims::Claim<F>,
 //     ) -> Result<Self::OpeningProof, super::InputLayerError> {
 //         match self {
 //             InputLayerEnum::LigeroInputLayer(layer) => {
@@ -151,6 +150,23 @@ impl<F: FieldExt> InputLayerEnum<F> {
             InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,
             InputLayerEnum::PublicInputLayer(layer) => layer.layer_id = layer_id,
             InputLayerEnum::RandomInputLayer(layer) => layer.layer_id = layer_id,
+        }
+    }
+}
+
+impl<F: FieldExt> YieldWLXEvals<F> for InputLayerEnum<F> {
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
+        claimed_mles: Vec<crate::mle::mle_enum::MleEnum<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, crate::claims::ClaimError> {
+        match self {
+            InputLayerEnum::LigeroInputLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+            InputLayerEnum::PublicInputLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+            InputLayerEnum::RandomInputLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
         }
     }
 }

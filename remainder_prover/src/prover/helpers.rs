@@ -1,6 +1,7 @@
 use crate::prover::proof_system::ProofSystem;
 use crate::prover::GKRCircuit;
 use ark_std::{end_timer, start_timer};
+use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::{Transcript, TranscriptReader, TranscriptWriter};
 use remainder_shared_types::FieldExt;
 use serde_json;

@@ -4,14 +4,16 @@ use serde::{Deserialize, Serialize};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use tracing::instrument;
 
-use crate::gate::gate::Gate;
+use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
+use crate::{claims::wlx_eval::WLXAggregator, gate::gate::Gate};
 use crate::layer_enum;
 use crate::mle::dense::DenseMleRef;
 use crate::mle::mle_enum::MleEnum;
 
+use super::LayerError;
 use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
 
-use super::claims::Claim;
+use crate::claims::{Claim, YieldClaim};
 
 use std::fmt;
 
@@ -69,6 +71,33 @@ impl<F: FieldExt> LayerEnum<F> {
             LayerEnum::EmptyLayer(empty_layer) => {
                 Box::new(empty_layer.expression().circuit_description_fmt())
             }
+        }
+    }
+}
+
+impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, crate::claims::ClaimError> {
+        match self {
+            LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+            LayerEnum::Gate(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+            LayerEnum::EmptyLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+        }
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        match self {
+            LayerEnum::Gkr(layer) => layer.get_claims(),
+            LayerEnum::Gate(layer) => layer.get_claims(),
+            LayerEnum::EmptyLayer(layer) => layer.get_claims(),
         }
     }
 }

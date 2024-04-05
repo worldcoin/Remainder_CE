@@ -7,8 +7,9 @@ use itertools::Itertools;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{claims::Claim, LayerId};
+use crate::layer::{LayerId};
 use remainder_shared_types::FieldExt;
+use crate::claims::Claim;
 
 use super::{
     dense::{DenseMle, DenseMleRef},

@@ -1,7 +1,7 @@
-use crate::expression::{
+use crate::{claims::wlx_eval::WLXAggregator, expression::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     prover_expr::ProverExpr,
-};
+}, mle::mle_enum::MleEnum};
 use crate::{gate::gate::BinaryOperation, prover::helpers::test_circuit};
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use itertools::{repeat_n, Itertools};
@@ -50,6 +50,10 @@ impl<F: FieldExt> ProofSystem<F> for TestProofSystem {
     type InputLayer = InputLayerEnum<F>;
 
     type Transcript = PoseidonSponge<F>;
+
+    type OutputLayer = MleEnum<F>;
+
+    type ClaimAggregator = WLXAggregator<F, Self::Layer, Self::InputLayer>;
 }
 
 /// This circuit is a 4 --> 2 circuit, such that

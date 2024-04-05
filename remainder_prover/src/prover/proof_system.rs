@@ -1,12 +1,12 @@
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptSponge},
+    transcript::{Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
 use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{GKRLayer, Layer};
+use crate::{claims::{Claim, ClaimAggregator, YieldClaim}, layer::{GKRLayer, Layer}, mle::{mle_enum::MleEnum, MleRef}};
 
 use super::input_layer::{InputLayer, ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer};
 
@@ -45,7 +45,7 @@ macro_rules! layer_enum {
             paste::paste! { type Proof = [<$type_name Proof>]<F>;}
             fn prove_rounds(
                 &mut self,
-                claim: $crate::layer::claims::Claim<F>,
+                claim: $crate::claims::Claim<F>,
                 transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
             ) -> Result<Self::Proof, super::LayerError> {
                 match self {
@@ -57,7 +57,7 @@ macro_rules! layer_enum {
 
             fn verify_rounds(
                 &mut self,
-                claim: $crate::layer::claims::Claim<F>,
+                claim: $crate::claims::Claim<F>,
                 proof: Self::Proof,
                 transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
             ) -> Result<(), super::LayerError> {
@@ -74,14 +74,6 @@ macro_rules! layer_enum {
                 }
             }
 
-            fn get_claims(&self) -> Result<Vec<$crate::layer::claims::Claim<F>>, super::LayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.get_claims(),
-                    )*
-                }
-            }
-
             fn id(&self) -> &super::LayerId {
                 match self {
                     $(
@@ -89,22 +81,6 @@ macro_rules! layer_enum {
                     )*
                 }
             }
-
-            fn get_wlx_evaluations(
-                &self,
-                claim_vecs: &Vec<Vec<F>>,
-                claimed_vals: &Vec<F>,
-                claimed_mles: Vec<$crate::mle::mle_enum::MleEnum<F>>,
-                num_claims: usize,
-                num_idx: usize,
-            ) -> Result<Vec<F>, $crate::layer::claims::ClaimError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
-                    )*
-                }
-            }
-
         }
 
         $(
@@ -246,11 +222,18 @@ macro_rules! input_layer_enum {
 ///A trait for bundling a group of types that define the interfaces that go into a GKR Prover
 pub trait ProofSystem<F: FieldExt> {
     ///A trait that defines the allowed Layer for this ProofSystem
-    type Layer: Layer<F> + Serialize + for<'a> Deserialize<'a> + Debug;
+    type Layer: Layer<F> + Serialize + for<'a> Deserialize<'a> + Debug + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
     
     ///A trait that defines the allowed InputLayer for this ProofSystem
     type InputLayer: InputLayer<F>;
 
     ///The Transcript this proofsystem uses for F-S
     type Transcript: TranscriptSponge<F>;
+
+    ///The MleRef type that serves as the output layer representation
+    type OutputLayer: MleRef<F = F> + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
+
+    ///The logic that handles how to aggregate claims
+    type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>;
 }
+

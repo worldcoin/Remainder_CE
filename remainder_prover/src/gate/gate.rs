@@ -10,20 +10,15 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
-    layer::{
-        claims::{get_num_wlx_evaluations, Claim, ClaimError},
+    claims::{wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals}, Claim, ClaimError, YieldClaim}, gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate}, layer::{
         layer_enum::LayerEnum,
         Layer, LayerBuilder, LayerError, LayerId, VerificationError,
-    },
-    mle::{
+    }, mle::{
         beta::{compute_beta_over_two_challenges, BetaTable},
         dense::{DenseMle, DenseMleRef},
         mle_enum::MleEnum,
         MleRef,
-    },
-    prover::SumcheckProof,
-    sumcheck::{evaluate_at_a_point, Evals},
+    }, prover::SumcheckProof, sumcheck::{evaluate_at_a_point, Evals}
 };
 
 use super::gate_helpers::{
@@ -295,8 +290,15 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         Ok(())
     }
 
-    /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    /// Gets this layer's id
+    fn id(&self) -> &LayerId {
+        &self.layer_id
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
+        /// Get the claims that this layer makes on other layers
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
         let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
 
@@ -312,7 +314,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
             );
         }
         let val = lhs_reduced.bookkeeping_table()[0];
-        let claim: Claim<F> = Claim::new(
+        let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_u,
             val,
             Some(self.id().clone()),
@@ -331,7 +333,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
             );
         }
         let val = rhs_reduced.bookkeeping_table()[0];
-        let claim: Claim<F> = Claim::new(
+        let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_v,
             val,
             Some(self.id().clone()),
@@ -341,13 +343,10 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         claims.push(claim);
 
         Ok(claims)
-    }
+    }    
+}
 
-    /// Gets this layer's id
-    fn id(&self) -> &LayerId {
-        &self.layer_id
-    }
-
+impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
