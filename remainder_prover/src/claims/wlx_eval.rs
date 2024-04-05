@@ -47,6 +47,16 @@ pub const ENABLE_RAW_MLE: bool = true;
 /// Controls pre-fixing variables for shared columns, should only be true if above is true
 pub const ENABLE_PRE_FIX: bool = true;
 
+///The basic ClaimAggregator
+/// 
+/// Keeps tracks of claims using a hashmap with
+/// the layerid as the key
+/// 
+/// Aggregates claims using univariate polynomial interpolation
+/// 
+/// Collects additional information in the `ClaimMle` struct
+/// to make computation of evaluations easier, most importantly 
+/// the 'original_bookkeeping_table'
 pub struct WLXAggregator<F: FieldExt, L, LI> {
     claims: HashMap<LayerId, Vec<ClaimMle<F>>>,
     _marker: std::marker::PhantomData<(L, LI)>,

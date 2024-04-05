@@ -136,6 +136,7 @@ impl std::fmt::Display for LayerId {
 
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
+    /// The struct that contains the proof this `Layer` generates
     type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
 
     /// Creates a sumcheck proof for this Layer

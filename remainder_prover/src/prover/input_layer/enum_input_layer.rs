@@ -1,7 +1,6 @@
 //! A wrapper type that makes working with variants of InputLayer easier
 
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
