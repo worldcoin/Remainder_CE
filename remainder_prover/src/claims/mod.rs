@@ -7,7 +7,7 @@ use remainder_shared_types::{transcript::{TranscriptReader, TranscriptReaderErro
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{layer::{combine_mle_refs::CombineMleRefError, LayerError, LayerId}, prover::GKRError};
+use crate::{layer::{combine_mle_refs::CombineMleRefError, Layer, LayerError, LayerId}, prover::{input_layer::InputLayer, GKRError}};
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims
@@ -87,16 +87,16 @@ pub trait ClaimAggregator<F: FieldExt> {
     type AggregationProof: std::fmt::Debug + Clone + Serialize + for<'a> Deserialize<'a>;
 
     ///The Layer this claim aggregator takes claims from, and aggregates claims for
-    type Layer;
+    type Layer: Layer<F>;
 
     ///The InputLayer this claim aggregator aggregates claims for
-    type InputLayer;
+    type InputLayer: InputLayer<F>;
 
     ///Creates an empty ClaimAggregator, ready to track claims
     fn new() -> Self;
 
     ///Takes in claims to track and later aggregate
-    fn add_claims(&mut self, claims: Vec<Self::Claim>);
+    fn add_claims(&mut self, layer: & impl YieldClaim<F, Self::Claim>) -> Result<(), LayerError>;
     
     ///Retrieves claims for aggregation
     fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]>;
@@ -106,17 +106,17 @@ pub trait ClaimAggregator<F: FieldExt> {
     /// Extracts additional information from the `Layer` the claims are made on if neccessary.
     /// 
     /// Adds any communication to the F-S Transcript
-    fn prover_aggregate_claims(claims: &[Self::Claim], layer: &Self::Layer, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
+    fn prover_aggregate_claims(&self, layer: &Self::Layer, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
 
     ///Takes in some claims from the prover and aggregates them into one claim
     /// 
     /// Extracts additional information from the `InputLayer` the claims are made on if neccessary.
     /// 
     /// Adds any communication to the F-S Transcript
-    fn prover_aggregate_claims_input(claims: &[Self::Claim], layer: &Self::InputLayer, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
+    fn prover_aggregate_claims_input(&self, layer: &Self::InputLayer, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
 
     ///Reads an AggregationProof from the Transcript and uses it to verify the aggregation of some claims.
-    fn verifier_aggregate_claims(claims: &[Self::Claim], transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>) -> Result<Claim<F>, TranscriptReaderError>;
+    fn verifier_aggregate_claims(&self, layer_id: LayerId, transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>) -> Result<Claim<F>, GKRError>;
 }
 
 ///A trait that allows the type to yield some claims to be added
