@@ -2,8 +2,6 @@ use super::*;
 use crate::{
     expression::generic_expr::ExpressionNode, layer::{
         // claims::tests::claim_aggregation_testing_wrapper,
-        claims::Claim,
-        claims::ClaimGroup,
         from_mle,
         GKRLayer,
         Layer,
@@ -13,7 +11,9 @@ use crate::{
         beta::compute_beta_over_two_challenges,
         dense::{DenseMle, Tuple2},
         Mle,
-    }
+    },
+    claims::Claim,
+    claims::wlx_eval::ClaimGroup,
 };
 use ark_std::test_rng;
 
@@ -166,7 +166,7 @@ pub fn get_dummy_claim<F: FieldExt>(
         },
         _ => panic!(),
     };
-    Claim::new_raw(claim, eval)
+    Claim::new(claim, eval)
 }
 
 pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
@@ -184,7 +184,7 @@ pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
     let eval = compute_sumcheck_message(&expression, 0, 2, &beta).unwrap();
     let Evals(evals) = eval;
 
-    Claim::new_raw(challenges, evals[0] + evals[1])
+    Claim::new(challenges, evals[0] + evals[1])
 }
 
 /// Test regular numerical evaluation, last round type beat
