@@ -5,6 +5,7 @@ use std::{
     ops::{Add, Mul, Neg},
 };
 
+/// tests for sumcheck with various expressions
 pub mod tests;
 
 use ark_std::cfg_into_iter;

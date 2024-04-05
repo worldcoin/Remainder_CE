@@ -4,7 +4,7 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ use crate::{
         MleRef,
     },
     prover::SumcheckProof,
-    sumcheck::{self, evaluate_at_a_point, Evals},
+    sumcheck::{evaluate_at_a_point, Evals},
 };
 
 use super::gate_helpers::{
@@ -108,7 +108,6 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
         let (phase_1_rounds, f2_at_u, u_challenges) = self
             .perform_phase_1(
                 claim.get_point()[self.num_dataparallel_bits..].to_vec(),
-                &beta_g1,
                 beta_g2_fully_bound,
                 transcript_writer,
             )
@@ -701,7 +700,6 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
     fn perform_phase_1(
         &mut self,
         challenge: Vec<F>,
-        beta_g1: &DenseMleRef<F>,
         beta_g2_fully_bound: F,
         transcript_writer: &mut TranscriptWriter<F, <Gate<F, Sp> as Layer<F>>::Sponge>,
     ) -> Result<(Vec<Vec<F>>, F, Vec<F>), LayerError> {

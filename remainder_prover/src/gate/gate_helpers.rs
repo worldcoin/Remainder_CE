@@ -16,16 +16,23 @@ use super::gate::BinaryOperation;
 #[derive(Error, Debug, Clone)]
 pub enum GateError {
     #[error("phase 1 not initialized")]
+    /// error when initializing the first phase, which is when we bind the "x" bits
     Phase1InitError,
     #[error("phase 2 not initialized")]
+    /// error when initializing the second phase, which is when we bind the "y" bits
     Phase2InitError,
     #[error("mle not fully bound")]
+    /// we are on the last round of sumcheck and want to grab claims, but the MLE is not fully bound
+    /// which should not be the case for the last round of sumcheck.
     MleNotFullyBoundError,
     #[error("empty list for lhs or rhs")]
+    /// we are initializing a gate on something that does not have either a left or right side of the expression
     EmptyMleList,
     #[error("bound indices fail to match challenge")]
+    /// when checking the last round of sumcheck, the challenges don't match what is bound to the MLE.
     EvaluateBoundIndicesDontMatch,
     #[error("beta table associated is not indexed")]
+    /// the beta table we are working with doesn't have numbered indices but we need labeled bits!
     BetaTableNotIndexed,
 }
 
