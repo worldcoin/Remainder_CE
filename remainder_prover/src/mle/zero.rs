@@ -65,7 +65,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
     }
 
     fn original_bookkeeping_table(&self) -> &[Self::F] {
-        &self.original_bookkeeping_table()
+        &self.zero
     }
 
     fn num_vars(&self) -> usize {

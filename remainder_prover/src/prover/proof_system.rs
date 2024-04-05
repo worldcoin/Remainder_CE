@@ -94,6 +94,12 @@ macro_rules! layer_enum {
 }
 
 #[macro_export]
+///This macro generates an inputlayer enum that represents all the possible layers
+/// Every layer variant of the enum needs to implement InputLayer, and the enum will also implement InputLayer and pass methods to it's variants
+///
+/// Usage:
+///
+/// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType))
 macro_rules! input_layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[doc = r"Remainder generated trait enum"]
@@ -106,7 +112,8 @@ macro_rules! input_layer_enum {
 
         paste::paste! {
             #[derive(serde::Serialize, serde::Deserialize)]
-            #[serde(bound = "F: FieldExt")]    
+            #[serde(bound = "F: FieldExt")]
+            #[doc = r"Remainder generated commitment enum"]
             pub enum [<$type_name Commitment>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Commitment variant"]
@@ -115,7 +122,8 @@ macro_rules! input_layer_enum {
             }
 
             #[derive(serde::Serialize, serde::Deserialize)]
-            #[serde(bound = "F: FieldExt")]    
+            #[serde(bound = "F: FieldExt")]   
+            #[doc = r"Remainder generated opening proof enum"] 
             pub enum [<$type_name OpeningProof>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Commitment variant"]
@@ -234,6 +242,8 @@ pub trait ProofSystem<F: FieldExt> {
     type OutputLayer: MleRef<F = F> + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
 
     ///The logic that handles how to aggregate claims
+    /// As this trait defines the 'bridge' between layers, some helper traits may be neccessary to implement
+    /// on the other layer types
     type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>;
 }
 
