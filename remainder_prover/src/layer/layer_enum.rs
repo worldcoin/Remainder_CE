@@ -17,24 +17,6 @@ use crate::claims::{Claim, YieldClaim};
 
 use std::fmt;
 
-// #[derive(Serialize, Deserialize, Clone)]
-// #[serde(bound = "F: FieldExt")]
-// ///An enum representing all the possible kinds of Layers
-// pub enum LayerEnum<F: FieldExt> {
-//     ///A standard `GKRLayer`
-//     Gkr(GKRLayer<F>),
-//     /// A Mulgate
-//     MulGate(MulGate<F>),
-//     /// An Addition Gate
-//     AddGate(AddGate<F>),
-//     /// Batched AddGate
-//     AddGateBatched(AddGateBatched<F>),
-//     /// Batched MulGate
-//     MulGateBatched(MulGateBatched<F>),
-//     /// Layer with zero variables within it
-//     EmptyLayer(EmptyLayer<F>),
-// }
-
 layer_enum!(
     LayerEnum,
     (Gkr: GKRLayer<F>),
