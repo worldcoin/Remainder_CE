@@ -56,3 +56,11 @@ parallel = [
   "ark-std/parallel",
   "ark-crypto-primitives/parallel",
 ]
+
+[[bench]]
+name = "beta_cascade"
+harness = false
+
+[[bench]]
+name = "evaluate_mle_ref_product"
+harness = false
