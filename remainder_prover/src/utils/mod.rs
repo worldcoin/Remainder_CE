@@ -130,15 +130,6 @@ pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> V
         .collect_vec()
 }
 
-#[test]
-fn test_get_mle_idx_decomp_for_idx() {
-    let idx = 7;
-    let num_bits = 4;
-    let hi = get_mle_idx_decomp_for_idx::<Fr>(idx, num_bits);
-    dbg!(hi);
-    panic!();
-}
-
 /// Returns whether a particular file exists in the filesystem
 ///
 /// TODO!(ryancao): Shucks does this check a relative path...?
