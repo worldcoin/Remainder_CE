@@ -16,6 +16,9 @@ use remainder::{
 };
 use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt, Fr};
 
+use crate::utils::get_dummy_random_mle;
+mod utils;
+
 /// selector is a nonlinear bit -- no nested selector!
 
 struct NonlinearSelectorBuilder<F: FieldExt> {
@@ -132,27 +135,13 @@ impl<F: FieldExt> GKRCircuit<F> for NonlinearSelectorCircuit<F> {
 
 #[test]
 fn test_nonlinear_sel_circuit_test() {
-    let mut rng = test_rng();
     const VARS_PRODUCT_SIDE: usize = 3;
     const VARS_SEL_SIDE: usize = VARS_PRODUCT_SIDE - 1;
 
-    let left_sel_mle_vec = (0..(1 << VARS_SEL_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-    let right_sel_mle_vec = (0..(1 << VARS_SEL_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-    let right_sum_mle_1_vec = (0..(1 << VARS_PRODUCT_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-    let right_sum_mle_2_vec = (0..(1 << VARS_PRODUCT_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-
-    let left_sel_mle = DenseMle::new_from_raw(left_sel_mle_vec, LayerId::Input(0), None);
-    let right_sel_mle = DenseMle::new_from_raw(right_sel_mle_vec, LayerId::Input(0), None);
-    let right_sum_mle_1 = DenseMle::new_from_raw(right_sum_mle_1_vec, LayerId::Input(0), None);
-    let right_sum_mle_2 = DenseMle::new_from_raw(right_sum_mle_2_vec, LayerId::Input(0), None);
+    let left_sel_mle = get_dummy_random_mle(VARS_SEL_SIDE);
+    let right_sel_mle = get_dummy_random_mle(VARS_SEL_SIDE);
+    let right_sum_mle_1 = get_dummy_random_mle(VARS_PRODUCT_SIDE);
+    let right_sum_mle_2 = get_dummy_random_mle(VARS_PRODUCT_SIDE);
 
     let non_linear_sel_circuit: NonlinearSelectorCircuit<Fr> = NonlinearSelectorCircuit {
         left_sel_mle,

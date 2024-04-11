@@ -16,6 +16,8 @@ use remainder::{
 };
 use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt, Fr};
 
+use crate::utils::get_dummy_random_mle;
+mod utils;
 struct NonlinearNestedSelectorBuilder<F: FieldExt> {
     left_inner_sel_mle: DenseMle<F, F>,
     right_inner_sel_mle: DenseMle<F, F>,
@@ -146,35 +148,15 @@ impl<F: FieldExt> GKRCircuit<F> for NonlinearNestedSelectorCircuit<F> {
 
 #[test]
 fn test_nonlinear_sel_circuit_test() {
-    let mut rng = test_rng();
     const VARS_PRODUCT_SIDE: usize = 5;
     const VARS_OUTER_SEL_SIDE: usize = VARS_PRODUCT_SIDE - 1;
     const VARS_INNER_SEL_SIDE: usize = VARS_OUTER_SEL_SIDE - 1;
 
-    let left_inner_sel_mle_vec = (0..(1 << VARS_INNER_SEL_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-    let right_inner_sel_mle_vec = (0..(1 << VARS_INNER_SEL_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-    let right_outer_sel_mle_vec = (0..(1 << VARS_OUTER_SEL_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-    let right_sum_mle_1_vec = (0..(1 << VARS_PRODUCT_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-    let right_sum_mle_2_vec = (0..(1 << VARS_PRODUCT_SIDE))
-        .map(|_| Fr::from(rng.gen::<u64>()))
-        .collect_vec();
-
-    let left_inner_sel_mle =
-        DenseMle::new_from_raw(left_inner_sel_mle_vec, LayerId::Input(0), None);
-    let right_inner_sel_mle =
-        DenseMle::new_from_raw(right_inner_sel_mle_vec, LayerId::Input(0), None);
-    let right_outer_sel_mle =
-        DenseMle::new_from_raw(right_outer_sel_mle_vec, LayerId::Input(0), None);
-    let right_sum_mle_1 = DenseMle::new_from_raw(right_sum_mle_1_vec, LayerId::Input(0), None);
-    let right_sum_mle_2 = DenseMle::new_from_raw(right_sum_mle_2_vec, LayerId::Input(0), None);
+    let left_inner_sel_mle = get_dummy_random_mle(VARS_INNER_SEL_SIDE);
+    let right_inner_sel_mle = get_dummy_random_mle(VARS_INNER_SEL_SIDE);
+    let right_outer_sel_mle = get_dummy_random_mle(VARS_OUTER_SEL_SIDE);
+    let right_sum_mle_1 = get_dummy_random_mle(VARS_PRODUCT_SIDE);
+    let right_sum_mle_2 = get_dummy_random_mle(VARS_PRODUCT_SIDE);
 
     let non_linear_sel_circuit: NonlinearNestedSelectorCircuit<Fr> =
         NonlinearNestedSelectorCircuit {
