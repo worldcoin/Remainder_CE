@@ -8,8 +8,11 @@ use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
 use thiserror::Error;
 
 use crate::{
-    expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr},
-    layer::{layer_enum::LayerEnum, RegularLayer, Layer, LayerId},
+    expression::{
+        generic_expr::{Expression, ExpressionNode, ExpressionType},
+        prover_expr::ProverExpr,
+    },
+    layer::{layer_enum::LayerEnum, Layer, LayerId, RegularLayer},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };

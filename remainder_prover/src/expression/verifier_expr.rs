@@ -1,11 +1,13 @@
-use std::fmt::Debug;
-use serde::{Deserialize, Serialize};
 use crate::mle::MleIndex;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 use remainder_shared_types::FieldExt;
 
-use super::{expr_errors::ExpressionError, generic_expr::{Expression, ExpressionNode, ExpressionType}};
-
+use super::{
+    expr_errors::ExpressionError,
+    generic_expr::{Expression, ExpressionNode, ExpressionType},
+};
 
 /// Verifier Expression
 /// the leaf nodes of the expression tree are F (because they are already fixed/evaluated)
@@ -43,18 +45,17 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
 
     /// used by `evaluate_expr` to traverse the expression and simply
     /// gather all of the evaluations, combining them as appropriate.
-    pub fn gather_combine_all_evals(
-        &self,
-    ) -> Result<F, ExpressionError> {
+    pub fn gather_combine_all_evals(&self) -> Result<F, ExpressionError> {
         let constant = |c| Ok(c);
-        let selector_column =
-            |idx: &MleIndex<F>, lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| {
-                // --- Selector bit must be bound ---
-                if let MleIndex::Bound(val, _) = idx {
-                    return Ok(*val * rhs? + (F::one() - val) * lhs?);
-                }
-                Err(ExpressionError::SelectorBitNotBoundError)
-            };
+        let selector_column = |idx: &MleIndex<F>,
+                               lhs: Result<F, ExpressionError>,
+                               rhs: Result<F, ExpressionError>| {
+            // --- Selector bit must be bound ---
+            if let MleIndex::Bound(val, _) = idx {
+                return Ok(*val * rhs? + (F::one() - val) * lhs?);
+            }
+            Err(ExpressionError::SelectorBitNotBoundError)
+        };
         let mle_eval = for<'a> |mle_ref: &'a <VerifierExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, ExpressionError> {
             Ok(mle_ref.clone())
         };
@@ -62,7 +63,8 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
             Err(e) => Err(e),
             Ok(val) => Ok(val.neg()),
         };
-        let sum = |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
+        let sum =
+            |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
         let product = for<'a, 'b> |mle_refs: &'a [<VerifierExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, ExpressionError> {
             mle_refs.iter().try_fold(F::one(), |acc, new_mle_ref| {
                 Ok(acc * new_mle_ref.clone())
@@ -80,7 +82,6 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
         )
     }
 }
-
 
 impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
     /// Evaluate the polynomial using the provided closures to perform the

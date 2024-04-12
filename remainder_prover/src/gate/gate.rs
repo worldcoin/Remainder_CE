@@ -10,16 +10,20 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals}, Claim, ClaimError, YieldClaim}, gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate}, layer::{
-        layer_enum::LayerEnum,
-        Layer, LayerBuilder, LayerError, LayerId, VerificationError,
+    claims::{
+        wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
+        Claim, ClaimError, YieldClaim,
     },
+    gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
+    layer::{layer_enum::LayerEnum, Layer, LayerBuilder, LayerError, LayerId, VerificationError},
     mle::{
         betavalues::BetaValues,
         dense::{DenseMle, DenseMleRef},
         mle_enum::MleEnum,
         MleRef,
-    }, prover::SumcheckProof, sumcheck::{evaluate_at_a_point, Evals}
+    },
+    prover::SumcheckProof,
+    sumcheck::{evaluate_at_a_point, Evals},
 };
 
 use super::gate_helpers::{
@@ -270,7 +274,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
 }
 
 impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
-        /// Get the claims that this layer makes on other layers
+    /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
         let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
@@ -316,7 +320,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
         claims.push(claim);
 
         Ok(claims)
-    }    
+    }
 }
 
 impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
@@ -820,13 +824,9 @@ impl<F: std::fmt::Debug + FieldExt> Gate<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(
-            &'a Gate<F>,
-        );
+        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a Gate<F>);
 
-        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display
-            for GateCircuitDesc<'a, F>
-        {
+        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for GateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")
                     .field("lhs_mle_ref_layer_id", &self.0.lhs.get_layer_id())

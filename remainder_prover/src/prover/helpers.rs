@@ -17,7 +17,8 @@ pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<
 where
     CircuitTranscript<F, C>: Sync,
 {
-    let mut transcript_writer = TranscriptWriter::<_, CircuitTranscript<F, C>>::new("GKR Prover Transcript");
+    let mut transcript_writer =
+        TranscriptWriter::<_, CircuitTranscript<F, C>>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
     match circuit.prove(&mut transcript_writer) {

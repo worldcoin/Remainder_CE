@@ -3,11 +3,17 @@
 ///The claim aggregator that uses wlx evaluations
 pub mod wlx_eval;
 
-use remainder_shared_types::{transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter}, FieldExt};
+use remainder_shared_types::{
+    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{layer::{combine_mle_refs::CombineMleRefError, Layer, LayerError, LayerId}, prover::{input_layer::InputLayer, GKRError}};
+use crate::{
+    layer::{combine_mle_refs::CombineMleRefError, Layer, LayerError, LayerId},
+    prover::{input_layer::InputLayer, GKRError},
+};
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims
@@ -53,10 +59,7 @@ pub struct Claim<F: FieldExt> {
 impl<F: FieldExt> Claim<F> {
     /// Constructs a new `Claim`
     pub fn new(point: Vec<F>, result: F) -> Self {
-        Self {
-            point,
-            result
-        }
+        Self { point, result }
     }
 
     /// Returns the length of the `point` vector.
@@ -73,13 +76,12 @@ impl<F: FieldExt> Claim<F> {
     pub fn get_result(&self) -> F {
         self.result
     }
-    
 }
 
 /// A trait that defines a protocol for the tracking/aggregation of many claims
 pub trait ClaimAggregator<F: FieldExt> {
     ///The struct the claim aggregator takes in.
-    /// 
+    ///
     /// Is typically composed of the `Claim` struct and additional information
     type Claim: std::fmt::Debug + Clone + Serialize + for<'a> Deserialize<'a>;
 
@@ -96,27 +98,39 @@ pub trait ClaimAggregator<F: FieldExt> {
     fn new() -> Self;
 
     ///Takes in claims to track and later aggregate
-    fn add_claims(&mut self, layer: & impl YieldClaim<F, Self::Claim>) -> Result<(), LayerError>;
-    
+    fn add_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>) -> Result<(), LayerError>;
+
     ///Retrieves claims for aggregation
     fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]>;
 
     ///Takes in some claims from the prover and aggregates them into one claim
-    /// 
+    ///
     /// Extracts additional information from the `Layer` the claims are made on if neccessary.
-    /// 
+    ///
     /// Adds any communication to the F-S Transcript
-    fn prover_aggregate_claims(&self, layer: &Self::Layer, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
+    fn prover_aggregate_claims(
+        &self,
+        layer: &Self::Layer,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
 
     ///Takes in some claims from the prover and aggregates them into one claim
-    /// 
+    ///
     /// Extracts additional information from the `InputLayer` the claims are made on if neccessary.
-    /// 
+    ///
     /// Adds any communication to the F-S Transcript
-    fn prover_aggregate_claims_input(&self, layer: &Self::InputLayer, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
+    fn prover_aggregate_claims_input(
+        &self,
+        layer: &Self::InputLayer,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
 
     ///Reads an AggregationProof from the Transcript and uses it to verify the aggregation of some claims.
-    fn verifier_aggregate_claims(&self, layer_id: LayerId, transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>) -> Result<Claim<F>, GKRError>;
+    fn verifier_aggregate_claims(
+        &self,
+        layer_id: LayerId,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Claim<F>, GKRError>;
 }
 
 ///A trait that allows the type to yield some claims to be added

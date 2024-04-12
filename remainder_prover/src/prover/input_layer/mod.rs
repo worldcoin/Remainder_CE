@@ -17,9 +17,14 @@ pub mod public_input_layer;
 pub mod random_input_layer;
 
 use crate::{
-    claims::{wlx_eval::{get_num_wlx_evaluations, ClaimGroup, YieldWLXEvals, ENABLE_PRE_FIX}, Claim, ClaimError}, layer::{
-        combine_mle_refs::pre_fix_mle_refs, LayerError, LayerId
-    }, mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef}, prover::ENABLE_OPTIMIZATION, sumcheck::evaluate_at_a_point
+    claims::{
+        wlx_eval::{get_num_wlx_evaluations, ClaimGroup, YieldWLXEvals, ENABLE_PRE_FIX},
+        Claim, ClaimError,
+    },
+    layer::{combine_mle_refs::pre_fix_mle_refs, LayerError, LayerId},
+    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
+    prover::ENABLE_OPTIMIZATION,
+    sumcheck::evaluate_at_a_point,
 };
 
 use self::enum_input_layer::InputLayerEnum;
@@ -50,7 +55,7 @@ pub trait InputLayer<F: FieldExt> {
     type OpeningProof: Serialize + for<'a> Deserialize<'a>;
 
     /// Generates a commitment
-    /// 
+    ///
     /// Can mutate self to cache useful information
     fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
 
@@ -68,7 +73,7 @@ pub trait InputLayer<F: FieldExt> {
 
     /// Generates a proof of polynomial evaluation at the point
     /// in the `Claim`
-    /// 
+    ///
     /// Appends any communication to the transcript
     fn open(
         &self,
@@ -170,5 +175,4 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     wlx_evals.extend(&next_evals);
     debug!("Returning evals:\n{:#?} ", wlx_evals);
     Ok(wlx_evals)
-
 }

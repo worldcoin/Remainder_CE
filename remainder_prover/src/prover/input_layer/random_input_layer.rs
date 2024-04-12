@@ -10,12 +10,20 @@ use remainder_shared_types::{
 use tracing::{debug, info};
 
 use crate::{
-    claims::{wlx_eval::{get_num_wlx_evaluations, YieldWLXEvals, ENABLE_PRE_FIX}, Claim}, layer::{LayerError, LayerId}, mle::{dense::DenseMle, MleIndex, MleRef, mle_enum::MleEnum}, sumcheck::evaluate_at_a_point
+    claims::{
+        wlx_eval::{get_num_wlx_evaluations, YieldWLXEvals, ENABLE_PRE_FIX},
+        Claim,
+    },
+    layer::{LayerError, LayerId},
+    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
+    sumcheck::evaluate_at_a_point,
 };
 
-use rayon::prelude::{ParallelIterator, IntoParallelIterator};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
-use super::{enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayer, InputLayerError};
+use super::{
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayer, InputLayerError,
+};
 
 pub struct RandomInputLayer<F: FieldExt> {
     mle: Vec<F>,
@@ -103,13 +111,13 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
 
 impl<F: FieldExt> RandomInputLayer<F> {
     ///Generates a random MLE of size `size` that is generated from the FS Transcript
-    pub fn new(transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>, size: usize, layer_id: LayerId) -> Self {
-        let mle = transcript
-            .get_challenges("Getting Random Challenges", size);
-        Self {
-            mle,
-            layer_id,
-        }
+    pub fn new(
+        transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        size: usize,
+        layer_id: LayerId,
+    ) -> Self {
+        let mle = transcript.get_challenges("Getting Random Challenges", size);
+        Self { mle, layer_id }
     }
 
     pub fn get_mle(&self) -> DenseMle<F, F> {
@@ -118,7 +126,6 @@ impl<F: FieldExt> RandomInputLayer<F> {
 }
 
 impl<F: FieldExt> YieldWLXEvals<F> for RandomInputLayer<F> {
-        
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
@@ -128,6 +135,13 @@ impl<F: FieldExt> YieldWLXEvals<F> for RandomInputLayer<F> {
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
-        get_wlx_evaluations_helper(self, claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx)
+        get_wlx_evaluations_helper(
+            self,
+            claim_vecs,
+            claimed_vals,
+            claimed_mles,
+            num_claims,
+            num_idx,
+        )
     }
 }

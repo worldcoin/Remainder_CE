@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::FieldExt;
 
-use crate::{claims::{wlx_eval::ClaimMle, YieldClaim}, layer::LayerError};
+use crate::{
+    claims::{wlx_eval::ClaimMle, YieldClaim},
+    layer::LayerError,
+};
 
 use super::{dense::DenseMleRef, zero::ZeroMleRef, Mle, MleIndex, MleRef};
 

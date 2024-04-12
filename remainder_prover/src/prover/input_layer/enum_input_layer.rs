@@ -1,12 +1,13 @@
 //! A wrapper type that makes working with variants of InputLayer easier
 
-use remainder_shared_types::{
-    FieldExt,
-};
+use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{wlx_eval::YieldWLXEvals, Claim}, input_layer_enum, layer::LayerId, mle::dense::DenseMle
+    claims::{wlx_eval::YieldWLXEvals, Claim},
+    input_layer_enum,
+    layer::LayerId,
+    mle::dense::DenseMle,
 };
 
 use super::{
@@ -16,7 +17,12 @@ use super::{
     InputLayer, InputLayerError,
 };
 
-input_layer_enum!(InputLayerEnum, (LigeroInputLayer: LigeroInputLayer<F>), (PublicInputLayer: PublicInputLayer<F>), (RandomInputLayer: RandomInputLayer<F>));
+input_layer_enum!(
+    InputLayerEnum,
+    (LigeroInputLayer: LigeroInputLayer<F>),
+    (PublicInputLayer: PublicInputLayer<F>),
+    (RandomInputLayer: RandomInputLayer<F>)
+);
 
 impl<F: FieldExt> InputLayerEnum<F> {
     pub fn set_layer_id(&mut self, layer_id: LayerId) {
@@ -38,9 +44,27 @@ impl<F: FieldExt> YieldWLXEvals<F> for InputLayerEnum<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
         match self {
-            InputLayerEnum::LigeroInputLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
-            InputLayerEnum::PublicInputLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
-            InputLayerEnum::RandomInputLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+            InputLayerEnum::LigeroInputLayer(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            InputLayerEnum::PublicInputLayer(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            InputLayerEnum::RandomInputLayer(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
         }
     }
 }

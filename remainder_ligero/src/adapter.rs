@@ -1,5 +1,3 @@
-
-
 use crate::poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use crate::{LcColumn, LcEncoding};
 
@@ -92,8 +90,6 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
     //     point: vec_ark_to_halo(&raw_claim.point),
     //     eval: ark_to_halo(&raw_claim.eval),
     // };
-
-    
 
     LigeroProof {
         merkle_root,

@@ -1,6 +1,8 @@
 use ark_crypto_primitives::crh::sha256::digest::typenum::Or;
 use itertools::Either;
-use remainder_shared_types::transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter};
+use remainder_shared_types::transcript::{
+    TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter,
+};
 use remainder_shared_types::FieldExt;
 use tracing::instrument;
 
@@ -20,8 +22,8 @@ use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIter
 use thiserror::Error;
 
 use crate::layer::combine_mle_refs::CombineMleRefError;
-use crate::layer::{Layer, LayerError};
 use crate::layer::LayerId;
+use crate::layer::{Layer, LayerError};
 
 use serde::{Deserialize, Serialize};
 
@@ -48,21 +50,26 @@ pub const ENABLE_RAW_MLE: bool = true;
 pub const ENABLE_PRE_FIX: bool = true;
 
 ///The basic ClaimAggregator
-/// 
+///
 /// Keeps tracks of claims using a hashmap with
 /// the layerid as the key
-/// 
+///
 /// Aggregates claims using univariate polynomial interpolation
-/// 
+///
 /// Collects additional information in the `ClaimMle` struct
-/// to make computation of evaluations easier, most importantly 
+/// to make computation of evaluations easier, most importantly
 /// the 'original_bookkeeping_table'
 pub struct WLXAggregator<F: FieldExt, L, LI> {
     claims: HashMap<LayerId, Vec<ClaimMle<F>>>,
     _marker: std::marker::PhantomData<(L, LI)>,
 }
 
-impl<F: FieldExt, L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>, LI: InputLayer<F> + YieldWLXEvals<F>> ClaimAggregator<F> for WLXAggregator<F, L, LI> {
+impl<
+        F: FieldExt,
+        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>,
+        LI: InputLayer<F> + YieldWLXEvals<F>,
+    > ClaimAggregator<F> for WLXAggregator<F, L, LI>
+{
     type Claim = ClaimMle<F>;
 
     type AggregationProof = Vec<Vec<F>>;
@@ -70,22 +77,38 @@ impl<F: FieldExt, L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>, L
     type Layer = L;
     type InputLayer = LI;
 
-    fn prover_aggregate_claims(&self, layer: &Self::Layer, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, Self::AggregationProof), GKRError> {
+    fn prover_aggregate_claims(
+        &self,
+        layer: &Self::Layer,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<(Claim<F>, Self::AggregationProof), GKRError> {
         let layer_id = layer.id();
         self.prover_aggregate_claims(layer, *layer_id, transcript_writer)
     }
 
-    fn prover_aggregate_claims_input(&self, layer: &Self::InputLayer, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, Self::AggregationProof), GKRError> {
+    fn prover_aggregate_claims_input(
+        &self,
+        layer: &Self::InputLayer,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<(Claim<F>, Self::AggregationProof), GKRError> {
         let layer_id = layer.layer_id();
         self.prover_aggregate_claims(layer, *layer_id, transcript_writer)
     }
 
-    fn verifier_aggregate_claims(&self, layer_id: LayerId, transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>) -> Result<Claim<F>, GKRError> {
-        let claims = self.get_claims(layer_id)
-            .ok_or(GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::ClaimError(ClaimError::ClaimAggroError)))?;
+    fn verifier_aggregate_claims(
+        &self,
+        layer_id: LayerId,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Claim<F>, GKRError> {
+        let claims = self
+            .get_claims(layer_id)
+            .ok_or(GKRError::ErrorWhenVerifyingLayer(
+                layer_id,
+                LayerError::ClaimError(ClaimError::ClaimAggroError),
+            ))?;
 
         let claim_group = ClaimGroup::new(claims.to_vec()).unwrap();
-            debug!("Layer Claim Group for input: {:#?}", claims);
+        debug!("Layer Claim Group for input: {:#?}", claims);
 
         // --- Add the claimed values to the FS transcript ---
         for claim in claims {
@@ -94,31 +117,36 @@ impl<F: FieldExt, L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>, L
                 .consume_elements(
                     "Claimed challenge coordinates to be aggregated",
                     claim_point_len,
-                ).map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err)))?;
+                )
+                .map_err(|err| {
+                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
+                })?;
             debug_assert_eq!(transcript_claim_point, *claim.get_point());
 
             let transcript_claim_result = transcript_reader
-                .consume_element("Claimed value to be aggregated").map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err)))?;
+                .consume_element("Claimed value to be aggregated")
+                .map_err(|err| {
+                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
+                })?;
             debug_assert_eq!(transcript_claim_result, claim.get_result());
         }
 
         if claims.len() > 1 {
-            let (prev_claim, _) =
-                verifier_aggregate_claims_helper(&claim_group, transcript_reader).map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err)))?;
+            let (prev_claim, _) = verifier_aggregate_claims_helper(&claim_group, transcript_reader)
+                .map_err(|err| {
+                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
+                })?;
 
             Ok(prev_claim)
         } else {
             Ok(claims[0].get_claim().clone())
         }
     }
-    
+
     fn add_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>) -> Result<(), LayerError> {
         let claims = layer.get_claims()?;
 
-        debug!(
-            "Ingesting claims: {:#?}",
-            claims
-        );
+        debug!("Ingesting claims: {:#?}", claims);
 
         for claim in claims {
             let layer_id = claim.get_to_layer_id().unwrap();
@@ -131,11 +159,11 @@ impl<F: FieldExt, L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>, L
 
         Ok(())
     }
-    
+
     fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]> {
         self.claims.get(&layer_id).map(|claims| claims.as_slice())
     }
-    
+
     fn new() -> Self {
         Self {
             claims: HashMap::new(),
@@ -144,38 +172,54 @@ impl<F: FieldExt, L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>, L
     }
 }
 
-impl<F: FieldExt, L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>, LI: InputLayer<F> + YieldWLXEvals<F>> WLXAggregator<F, L, LI> {
-    fn prover_aggregate_claims(&self, layer: &impl YieldWLXEvals<F>, layer_id: LayerId, transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>) -> Result<(Claim<F>, <Self as ClaimAggregator<F>>::AggregationProof), GKRError> {
-        let claims = self.get_claims(layer_id)
-                            .ok_or(GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::ClaimError(ClaimError::ClaimAggroError)))?;
+impl<
+        F: FieldExt,
+        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>,
+        LI: InputLayer<F> + YieldWLXEvals<F>,
+    > WLXAggregator<F, L, LI>
+{
+    fn prover_aggregate_claims(
+        &self,
+        layer: &impl YieldWLXEvals<F>,
+        layer_id: LayerId,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<(Claim<F>, <Self as ClaimAggregator<F>>::AggregationProof), GKRError> {
+        let claims = self
+            .get_claims(layer_id)
+            .ok_or(GKRError::ErrorWhenVerifyingLayer(
+                layer_id,
+                LayerError::ClaimError(ClaimError::ClaimAggroError),
+            ))?;
         let claim_group = ClaimGroup::new(claims.to_vec()).unwrap();
         debug!("Found Layer claims:\n{:#?}", claims);
 
         // --- Add the claimed values to the FS transcript ---
         for claim in claims {
-            transcript_writer
-                .append_elements("Claimed bits to be aggregated", claim.get_point());
+            transcript_writer.append_elements("Claimed bits to be aggregated", claim.get_point());
             transcript_writer.append("Claimed value to be aggregated", claim.get_result());
         }
 
-        prover_aggregate_claims_helper(&claim_group, &mut |claims, _, layer_mle_refs| {
-            let wlx_evals = layer
-                .get_wlx_evaluations(
-                    claims.get_claim_points_matrix(),
-                    claims.get_results(),
-                    layer_mle_refs.unwrap().clone(),
-                    claims.get_num_claims(),
-                    claims.get_num_vars(),
-                )
-                .unwrap();
-            Ok(wlx_evals)
-        }, transcript_writer)
+        prover_aggregate_claims_helper(
+            &claim_group,
+            &mut |claims, _, layer_mle_refs| {
+                let wlx_evals = layer
+                    .get_wlx_evaluations(
+                        claims.get_claim_points_matrix(),
+                        claims.get_results(),
+                        layer_mle_refs.unwrap().clone(),
+                        claims.get_num_claims(),
+                        claims.get_num_vars(),
+                    )
+                    .unwrap();
+                Ok(wlx_evals)
+            },
+            transcript_writer,
+        )
     }
-} 
+}
 
 ///The trait that layers must implement to be compatible with the WLXEval based claim aggregator
 pub trait YieldWLXEvals<F: FieldExt> {
-
     ///Get W(l(x)) evaluations
     fn get_wlx_evaluations(
         &self,
@@ -209,10 +253,7 @@ impl<F: FieldExt> ClaimMle<F> {
     /// Generate new raw claim without any origin/destination information.
     pub fn new_raw(point: Vec<F>, result: F) -> Self {
         Self {
-            claim: Claim {
-                point,
-                result,
-            },
+            claim: Claim { point, result },
             from_layer_id: None,
             to_layer_id: None,
             mle_ref: None,
@@ -228,10 +269,7 @@ impl<F: FieldExt> ClaimMle<F> {
         mle_ref: Option<MleEnum<F>>,
     ) -> Self {
         Self {
-            claim: Claim {
-                point,
-                result,
-            },
+            claim: Claim { point, result },
             from_layer_id,
             to_layer_id,
             mle_ref,
@@ -900,11 +938,10 @@ pub fn verifier_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<
     // First retrieve V_i(l(x)).
     let (num_wlx_evaluations, _) = get_num_wlx_evaluations(claims.get_claim_points_matrix());
     let num_relevant_wlx_evaluations = num_wlx_evaluations - num_claims;
-    let relevant_wlx_evaluations = transcript_reader
-        .consume_elements(
-            "Claim Aggregation Wlx_evaluations",
-            num_relevant_wlx_evaluations,
-        )?;
+    let relevant_wlx_evaluations = transcript_reader.consume_elements(
+        "Claim Aggregation Wlx_evaluations",
+        num_relevant_wlx_evaluations,
+    )?;
     let wlx_evaluations = claims
         .get_results()
         .clone()
@@ -913,8 +950,7 @@ pub fn verifier_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<
         .collect();
 
     // Next, sample `r^\star` from the transcript.
-    let agg_chal = transcript_reader
-        .get_challenge("Challenge for claim aggregation")?;
+    let agg_chal = transcript_reader.get_challenge("Challenge for claim aggregation")?;
     debug!("Aggregate challenge: {:#?}", agg_chal);
 
     let aggregated_challenges = compute_aggregated_challenges(claims, agg_chal).unwrap();
@@ -1043,7 +1079,7 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 pub(crate) mod tests {
     use crate::expression::generic_expr::Expression;
     use crate::expression::prover_expr::ProverExpr;
-    use crate::layer::{from_mle, RegularLayer, LayerId};
+    use crate::layer::{from_mle, LayerId, RegularLayer};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
     use remainder_shared_types::transcript::{poseidon_transcript::PoseidonSponge, Transcript};
@@ -1103,7 +1139,6 @@ pub(crate) mod tests {
 
         let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
 
-
         layer
     }
 
@@ -1114,7 +1149,10 @@ pub(crate) mod tests {
         layer_from_evals(mle_evals)
     }
 
-    fn compute_claim_wlx<F: FieldExt>(claims: &ClaimGroup<F>, layer: &impl YieldWLXEvals<F>) -> Vec<F> {
+    fn compute_claim_wlx<F: FieldExt>(
+        claims: &ClaimGroup<F>,
+        layer: &impl YieldWLXEvals<F>,
+    ) -> Vec<F> {
         let num_claims = claims.get_num_claims();
         let num_vars = claims.get_num_vars();
 
@@ -1174,10 +1212,7 @@ pub(crate) mod tests {
     }
 
     // Returns expected aggregated claim of `expr` on l(r_star) = `l_star`.
-    fn compute_expected_claim(
-        layer: &RegularLayer<Fr>,
-        l_star: &Vec<Fr>,
-    ) -> ClaimMle<Fr> {
+    fn compute_expected_claim(layer: &RegularLayer<Fr>, l_star: &Vec<Fr>) -> ClaimMle<Fr> {
         let mut expr = layer.expression().clone();
         expr.index_mle_indices(0);
         let result = expr.evaluate_expr(l_star.clone()).unwrap();

@@ -1,8 +1,11 @@
-use crate::{claims::wlx_eval::WLXAggregator, expression::{
-    generic_expr::{Expression, ExpressionNode, ExpressionType},
-    prover_expr::ProverExpr},
-};
 use crate::gate::gate::BinaryOperation;
+use crate::{
+    claims::wlx_eval::WLXAggregator,
+    expression::{
+        generic_expr::{Expression, ExpressionNode, ExpressionType},
+        prover_expr::ProverExpr,
+    },
+};
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
@@ -25,8 +28,8 @@ use crate::{
         Mle, MleIndex, MleRef,
     },
     prover::input_layer::enum_input_layer::InputLayerEnumCommitment,
-    prover::ProofSystem,
     prover::proof_system::DefaultProofSystem,
+    prover::ProofSystem,
     utils::get_random_mle,
 };
 use remainder_shared_types::{
@@ -35,11 +38,15 @@ use remainder_shared_types::{
 };
 
 use super::{
-    combine_layers::combine_layers, helpers::test_circuit, input_layer::{
+    combine_layers::combine_layers,
+    helpers::test_circuit,
+    input_layer::{
         self, combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer, InputLayer,
-    }, test_helper_circuits::{EmptyLayerAddBuilder, EmptyLayerBuilder, EmptyLayerSubBuilder}, CircuitInputLayer, CircuitTranscript, GKRCircuit, GKRError, Layers, Witness
+    },
+    test_helper_circuits::{EmptyLayerAddBuilder, EmptyLayerBuilder, EmptyLayerSubBuilder},
+    CircuitInputLayer, CircuitTranscript, GKRCircuit, GKRError, Layers, Witness,
 };
 
 /// This circuit is a 4 --> 2 circuit, such that
@@ -92,8 +99,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
         // The input layer is ready at this point!
-        let input_layer: LigeroInputLayer<F> =
-            input_layer.to_input_layer_with_rho_inv(4, 1.);
+        let input_layer: LigeroInputLayer<F> = input_layer.to_input_layer_with_rho_inv(4, 1.);
         let input_layers = vec![input_layer.into()];
 
         // --- Subtract the computed circuit output from the advice circuit output ---
@@ -258,8 +264,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
         let first_layer_output = layers.add_gkr(diff_builder);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: LigeroInputLayer<F> =
-            input_layer.to_input_layer_with_rho_inv(4, 1.);
+        let input_layer: LigeroInputLayer<F> = input_layer.to_input_layer_with_rho_inv(4, 1.);
 
         Witness {
             layers,
@@ -338,8 +343,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
         let batched_zero = combine_zero_mle_ref(batched_result);
 
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
-        let input_layer: PublicInputLayer<F> =
-            input_layer_builder.to_input_layer();
+        let input_layer: PublicInputLayer<F> = input_layer_builder.to_input_layer();
 
         Witness {
             layers,
@@ -366,7 +370,13 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
     fn synthesize_and_commit(
         &mut self,
         transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>), GKRError> {
+    ) -> Result<
+        (
+            Witness<F, Self::ProofSystem>,
+            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+        ),
+        GKRError,
+    > {
         let mut input =
             InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
                 .to_input_layer_with_rho_inv(4, 1.);
@@ -452,10 +462,15 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
     fn synthesize_and_commit(
         &mut self,
         transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>), GKRError> {
+    ) -> Result<
+        (
+            Witness<F, Self::ProofSystem>,
+            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+        ),
+        GKRError,
+    > {
         // --- Publicly commit to each input layer ---
         let mut input_layer_1: InputLayerEnum<_> = InputLayerBuilder::new(
-
             vec![
                 Box::new(&mut self.input_layer_1_mle_1),
                 Box::new(&mut self.input_layer_1_mle_2),
@@ -1119,13 +1134,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         let ratio = 1_f64;
         let (_, ligero_comm, ligero_root, ligero_aux) =
             remainder_ligero_commit_prove(&self.mle.mle, rho_inv, ratio);
-        let precommitted_input_layer: LigeroInputLayer<F> =
-            precommitted_input_layer_builder.to_input_layer_with_precommit(
-                ligero_comm,
-                ligero_aux,
-                ligero_root,
-                true,
-            );
+        let precommitted_input_layer: LigeroInputLayer<F> = precommitted_input_layer_builder
+            .to_input_layer_with_precommit(ligero_comm, ligero_aux, ligero_root, true);
         let live_committed_input_layer: LigeroInputLayer<F> =
             live_committed_input_layer_builder.to_input_layer_with_rho_inv(4, 1.);
 

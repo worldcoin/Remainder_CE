@@ -11,12 +11,22 @@ pub(crate) mod tests;
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
-    claims::{wlx_eval::{get_num_wlx_evaluations, prover_aggregate_claims_helper, verifier_aggregate_claims_helper, ClaimGroup, ClaimMle}, Claim, ClaimAggregator, YieldClaim}, gate::gate::{BinaryOperation, Gate}, layer::{
-        layer_enum::LayerEnum,
-        RegularLayer, Layer, LayerBuilder, LayerError, LayerId,
-    }, mle::{
-        dense::{DenseMle, DenseMleRef}, mle_enum::MleEnum, MleIndex, MleRef
-    }, sumcheck::evaluate_at_a_point, utils::{hash_layers, pad_to_nearest_power_of_two}
+    claims::{
+        wlx_eval::{
+            get_num_wlx_evaluations, prover_aggregate_claims_helper,
+            verifier_aggregate_claims_helper, ClaimGroup, ClaimMle,
+        },
+        Claim, ClaimAggregator, YieldClaim,
+    },
+    gate::gate::{BinaryOperation, Gate},
+    layer::{layer_enum::LayerEnum, Layer, LayerBuilder, LayerError, LayerId, RegularLayer},
+    mle::{
+        dense::{DenseMle, DenseMleRef},
+        mle_enum::MleEnum,
+        MleIndex, MleRef,
+    },
+    sumcheck::evaluate_at_a_point,
+    utils::{hash_layers, pad_to_nearest_power_of_two},
 };
 
 use tracing::{debug, info, trace};
@@ -37,9 +47,7 @@ use thiserror::Error;
 use tracing::{event, instrument, span, Level};
 
 use self::{
-    input_layer::{
-        InputLayer, InputLayerError,
-    },
+    input_layer::{InputLayer, InputLayerError},
     proof_system::ProofSystem,
 };
 
@@ -93,7 +101,8 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         num_dataparallel_bits: Option<usize>,
         gate_operation: BinaryOperation,
     ) -> DenseMle<F, F>
-        where T: From<Gate<F>>
+    where
+        T: From<Gate<F>>,
     {
         let id = LayerId::Layer(self.layers.len());
         // constructor for batched mul gate struct
@@ -216,7 +225,8 @@ pub struct LayerProof<F: FieldExt, Pf: ProofSystem<F>> {
 pub struct InputLayerProof<F: FieldExt, Pf: ProofSystem<F>> {
     pub layer_id: LayerId,
 
-    pub input_layer_claim_aggregation_proof: <Pf::ClaimAggregator as ClaimAggregator<F>>::AggregationProof,
+    pub input_layer_claim_aggregation_proof:
+        <Pf::ClaimAggregator as ClaimAggregator<F>>::AggregationProof,
     pub input_commitment: <Pf::InputLayer as InputLayer<F>>::Commitment,
     pub input_opening_proof: <Pf::InputLayer as InputLayer<F>>::OpeningProof,
 }
@@ -261,7 +271,8 @@ pub type CircuitInputLayer<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem
 
 #[allow(type_alias_bounds)]
 /// A helper type alias for easier reference to a circuits ClaimAggregator
-pub type CircuitClaimAggregator<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::ClaimAggregator;
+pub type CircuitClaimAggregator<F, C: GKRCircuit<F>> =
+    <C::ProofSystem as ProofSystem<F>>::ClaimAggregator;
 
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
@@ -278,7 +289,13 @@ pub trait GKRCircuit<F: FieldExt> {
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<(Witness<F, Self::ProofSystem>, Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>), GKRError> {
+    ) -> Result<
+        (
+            Witness<F, Self::ProofSystem>,
+            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+        ),
+        GKRError,
+    > {
         let mut witness = self.synthesize();
 
         let commitments = witness
@@ -286,7 +303,10 @@ pub trait GKRCircuit<F: FieldExt> {
             .iter_mut()
             .map(|input_layer| {
                 let commitment = input_layer.commit().map_err(GKRError::InputLayerError)?;
-                CircuitInputLayer::<F, Self>::prover_append_commitment_to_transcript(&commitment, transcript);
+                CircuitInputLayer::<F, Self>::prover_append_commitment_to_transcript(
+                    &commitment,
+                    transcript,
+                );
                 Ok(commitment)
             })
             .try_collect()?;
@@ -298,7 +318,7 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn prove(
         &mut self,
-        transcript_writer : &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
+        transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
     ) -> Result<GKRProof<F, Self::ProofSystem>, GKRError>
     where
         CircuitTranscript<F, Self>: Sync,
@@ -345,13 +365,14 @@ pub trait GKRCircuit<F: FieldExt> {
                     let challenge = transcript_writer.get_challenge("Setting Output Layer Claim");
                     claim = output.fix_variable(bit, challenge);
                 }
-
             }
             let layer_id = output.get_layer_id();
 
             // --- Add the claim to either the set of current claims we're proving ---
             // --- or the global set of claims we need to eventually prove ---
-            aggregator.add_claims(output).map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+            aggregator
+                .add_claims(output)
+                .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
         }
 
         end_timer!(claims_timer);
@@ -396,9 +417,9 @@ pub trait GKRCircuit<F: FieldExt> {
                 info!("Time for claim aggregation...");
                 let claim_aggr_timer =
                     start_timer!(|| format!("claim aggregation for layer {:?}", *layer.id()));
-    
 
-                let (layer_claim, claim_aggregation_proof) = aggregator.prover_aggregate_claims(&layer, transcript_writer)?;
+                let (layer_claim, claim_aggregation_proof) =
+                    aggregator.prover_aggregate_claims(&layer, transcript_writer)?;
 
                 debug!("Claim Aggregation Proof: {:#?}", claim_aggregation_proof);
                 end_timer!(claim_aggr_timer);
@@ -454,13 +475,13 @@ pub trait GKRCircuit<F: FieldExt> {
                     .get_claims(*layer_id)
                     .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
 
-            
                 let claim_aggr_timer = start_timer!(|| format!(
                     "claim aggregation for INPUT layer {:?}",
                     input_layer.layer_id()
                 ));
 
-                let (layer_claim, claim_aggregation_proof) = aggregator.prover_aggregate_claims_input(&input_layer, transcript_writer)?;
+                let (layer_claim, claim_aggregation_proof) =
+                    aggregator.prover_aggregate_claims_input(&input_layer, transcript_writer)?;
 
                 debug!("Claim Aggregation Proof: {:#?}", claim_aggregation_proof);
                 end_timer!(claim_aggr_timer);
@@ -651,7 +672,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 input_layer.layer_id
             ));
 
-            let input_layer_claim = aggregator.verifier_aggregate_claims(input_layer_id, transcript_reader)?;
+            let input_layer_claim =
+                aggregator.verifier_aggregate_claims(input_layer_id, transcript_reader)?;
 
             debug!("Input layer claim: {:#?}", input_layer_claim);
             end_timer!(claim_aggr_timer);
@@ -681,9 +703,11 @@ pub trait GKRCircuit<F: FieldExt> {
 
     ///Gen the circuit hash
     fn gen_circuit_hash(&mut self) -> F
-        where Self::ProofSystem: ProofSystem<F, Layer = LayerEnum<F>>
+    where
+        Self::ProofSystem: ProofSystem<F, Layer = LayerEnum<F>>,
     {
-        let mut transcript_writer = TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
+        let mut transcript_writer =
+            TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
         let (Witness { layers, .. }, _) =
             self.synthesize_and_commit(&mut transcript_writer).unwrap();
 

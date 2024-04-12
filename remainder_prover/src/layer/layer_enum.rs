@@ -7,23 +7,19 @@ use remainder_shared_types::{transcript::Transcript, FieldExt};
 use tracing::instrument;
 
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
-use crate::{claims::wlx_eval::WLXAggregator, gate::gate::Gate};
 use crate::layer_enum;
 use crate::mle::dense::DenseMleRef;
 use crate::mle::mle_enum::MleEnum;
+use crate::{claims::wlx_eval::WLXAggregator, gate::gate::Gate};
 
 use super::LayerError;
-use super::{RegularLayer, Layer};
+use super::{Layer, RegularLayer};
 
 use crate::claims::{Claim, YieldClaim};
 
 use std::fmt;
 
-layer_enum!(
-    LayerEnum,
-    (Gkr: RegularLayer<F>),
-    (Gate: Gate<F>)
-);
+layer_enum!(LayerEnum, (Gkr: RegularLayer<F>), (Gate: Gate<F>));
 
 impl<F: FieldExt> fmt::Debug for LayerEnum<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -63,8 +59,20 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
         match self {
-            LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
-            LayerEnum::Gate(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+            LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            LayerEnum::Gate(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
         }
     }
 }

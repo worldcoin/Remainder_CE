@@ -5,9 +5,9 @@
 use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
+use crate::claims::{wlx_eval::ClaimMle, Claim};
 use crate::claims::{ClaimError, YieldClaim};
 use crate::layer::{LayerError, LayerId};
-use crate::claims::{Claim, wlx_eval::ClaimMle};
 use remainder_shared_types::FieldExt;
 
 use super::{mle_enum::MleEnum, MleIndex, MleRef};
@@ -136,9 +136,23 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
 impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for ZeroMleRef<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
-            return Err(LayerError::ClaimError(ClaimError::MleRefMleError))
+            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
-        let mle_indices: Result<Vec<F>, _> = self.mle_indices.iter().map(|index| index.val().ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))).collect();
-        Ok(vec![ClaimMle::new(mle_indices?, F::zero(), None, Some(self.layer_id), Some(self.clone().get_enum()))])
+        let mle_indices: Result<Vec<F>, _> = self
+            .mle_indices
+            .iter()
+            .map(|index| {
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
+            })
+            .collect();
+        Ok(vec![ClaimMle::new(
+            mle_indices?,
+            F::zero(),
+            None,
+            Some(self.layer_id),
+            Some(self.clone().get_enum()),
+        )])
     }
 }

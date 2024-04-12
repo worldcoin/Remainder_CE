@@ -15,7 +15,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    claims::{wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals, ENABLE_PRE_FIX, ENABLE_RAW_MLE}, Claim, ClaimError, YieldClaim},
+    claims::{
+        wlx_eval::{
+            get_num_wlx_evaluations, ClaimMle, YieldWLXEvals, ENABLE_PRE_FIX, ENABLE_RAW_MLE,
+        },
+        Claim, ClaimError, YieldClaim,
+    },
     expression::{
         expr_errors::ExpressionError,
         generic_expr::{Expression, ExpressionNode, ExpressionType},
@@ -154,7 +159,7 @@ pub trait Layer<F: FieldExt> {
 
 /// Default Layer abstraction
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")] 
+#[serde(bound = "F: FieldExt")]
 pub struct RegularLayer<F: FieldExt> {
     id: LayerId,
     pub(crate) expression: Expression<F, ProverExpr>,
