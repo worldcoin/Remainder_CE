@@ -1,20 +1,19 @@
 //! A wrapper type that makes working with variants of InputLayer easier
 
 use remainder_shared_types::FieldExt;
-use serde::{Deserialize, Serialize};
+
 
 use crate::{
-    claims::{wlx_eval::YieldWLXEvals, Claim},
+    claims::{wlx_eval::YieldWLXEvals},
     input_layer_enum,
     layer::LayerId,
-    mle::dense::DenseMle,
 };
 
 use super::{
-    ligero_input_layer::{LigeroCommitment, LigeroInputLayer, LigeroInputProof},
+    ligero_input_layer::{LigeroInputLayer},
     public_input_layer::PublicInputLayer,
     random_input_layer::RandomInputLayer,
-    InputLayer, InputLayerError,
+    InputLayer,
 };
 
 input_layer_enum!(

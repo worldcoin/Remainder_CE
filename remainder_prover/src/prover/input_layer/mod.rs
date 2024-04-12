@@ -1,6 +1,6 @@
 //! Trait for dealing with InputLayer
 
-use ark_std::{cfg_into_iter, cfg_iter};
+use ark_std::{cfg_into_iter};
 
 use rayon::prelude::*;
 use remainder_shared_types::{
@@ -9,7 +9,7 @@ use remainder_shared_types::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::instrument;
+
 pub mod combine_input_layers;
 pub mod enum_input_layer;
 pub mod ligero_input_layer;
@@ -18,16 +18,15 @@ pub mod random_input_layer;
 
 use crate::{
     claims::{
-        wlx_eval::{get_num_wlx_evaluations, ClaimGroup, YieldWLXEvals, ENABLE_PRE_FIX},
-        Claim, ClaimError,
+        wlx_eval::{get_num_wlx_evaluations, ENABLE_PRE_FIX},
+        Claim,
     },
-    layer::{combine_mle_refs::pre_fix_mle_refs, LayerError, LayerId},
+    layer::{LayerId},
     mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
-    prover::ENABLE_OPTIMIZATION,
     sumcheck::evaluate_at_a_point,
 };
 
-use self::enum_input_layer::InputLayerEnum;
+
 
 use ark_std::{end_timer, start_timer};
 
@@ -45,7 +44,7 @@ pub enum InputLayerError {
     TranscriptMatchError,
 }
 
-use log::{debug, info, trace, warn};
+use log::{debug, info};
 ///Trait for dealing with the InputLayer
 pub trait InputLayer<F: FieldExt> {
     /// The struct that contains the commitment to the contents of the input_layer
@@ -109,12 +108,12 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     layer: &impl InputLayer<F>,
     claim_vecs: &Vec<Vec<F>>,
     claimed_vals: &Vec<F>,
-    claimed_mles: Vec<MleEnum<F>>,
+    _claimed_mles: Vec<MleEnum<F>>,
     num_claims: usize,
     num_idx: usize,
 ) -> Result<Vec<F>, crate::claims::ClaimError> {
     let prep_timer = start_timer!(|| "Claim wlx prep");
-    let mut mle_ref = layer.get_padded_mle().clone().mle_ref();
+    let mut mle_ref = layer.get_padded_mle().mle_ref();
     end_timer!(prep_timer);
     info!(
         "Wlx MLE len: {}",
@@ -129,15 +128,13 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
     let chal_point = &claim_vecs[0];
 
-    if ENABLE_PRE_FIX {
-        if common_idx.is_some() {
-            let common_idx = common_idx.unwrap();
-            common_idx.iter().for_each(|chal_idx| {
-                if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
-                    mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
-                }
-            });
-        }
+    if ENABLE_PRE_FIX && common_idx.is_some() {
+        let common_idx = common_idx.unwrap();
+        common_idx.iter().for_each(|chal_idx| {
+            if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
+                mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+            }
+        });
     }
 
     debug!("Evaluating {num_evals} times.");
@@ -150,7 +147,7 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
             let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
                 // let new_chal: Vec<F> = (0..num_idx).into_iter()
                 .map(|claim_idx| {
-                    let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                    let evals: Vec<F> = cfg_into_iter!(claim_vecs)
                         // let evals: Vec<F> = (&claim_vecs).into_iter()
                         .map(|claim| claim[claim_idx])
                         .collect();

@@ -1,27 +1,14 @@
 use super::*;
 use crate::{
-    claims::wlx_eval::ClaimGroup,
     claims::Claim,
     expression::generic_expr::ExpressionNode,
-    layer::{
-        // claims::tests::claim_aggregation_testing_wrapper,
-        from_mle,
-        Layer,
-        LayerBuilder,
-        LayerId,
-        RegularLayer,
-    },
-    mle::{
-        dense::{DenseMle, Tuple2},
-        Mle,
-    },
 };
-use ark_std::test_rng;
 
-use ark_std::{One, Zero};
+
+use ark_std::{Zero};
 use rand::Rng;
-use remainder_shared_types::transcript::{poseidon_transcript::PoseidonSponge, Transcript};
-use remainder_shared_types::Fr;
+
+
 
 /// Does a dummy version of sumcheck with a testing RNG
 pub fn dummy_sumcheck<F: FieldExt>(
@@ -91,7 +78,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     layer_claim: Claim<F>,
     rng: &mut impl Rng,
 ) -> Result<F, VerifyError> {
-    if messages.len() == 0 {
+    if messages.is_empty() {
         return Ok(F::zero());
     }
     let mut prev_evals = &messages[0].0;
@@ -201,7 +188,7 @@ pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
         .iter()
         .for_each(|round| expression.fix_variable_at_index(*round, challenges[*round]));
 
-    let beta = BetaValues::new(challenges_enumerate.clone());
+    let beta = BetaValues::new(challenges_enumerate);
     let eval = compute_sumcheck_message_beta_cascade(&expression, 0, 2, &beta).unwrap();
     let Evals(evals) = eval;
     let result = if evals.len() > 1 {

@@ -47,22 +47,22 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
 
     // compute the correct original indices, we have the first one be false, the second one as true instead of the iterated bit
     let first_og_indices = mle_ref.original_mle_indices()[0..first_iterated_idx]
-        .into_iter()
+        .iter()
         .cloned()
         .chain(std::iter::once(MleIndex::Fixed(false)))
         .chain(
             mle_ref.original_mle_indices()[first_iterated_idx + 1..]
-                .into_iter()
+                .iter()
                 .cloned(),
         )
         .collect_vec();
     let second_og_indices = mle_ref.original_mle_indices()[0..first_iterated_idx]
-        .into_iter()
+        .iter()
         .cloned()
         .chain(std::iter::once(MleIndex::Fixed(true)))
         .chain(
             mle_ref.original_mle_indices()[first_iterated_idx + 1..]
-                .into_iter()
+                .iter()
                 .cloned(),
         )
         .collect_vec();
@@ -130,7 +130,7 @@ fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(
     mle_refs: &Vec<MleEnum<F>>,
 ) -> Vec<MleEnum<F>> {
     mle_refs
-        .into_iter()
+        .iter()
         .flat_map(|mle_ref| {
             // this iterates through the mle indices to check whether there is an iterated bit within the fixed bits
             let (_, check_iterated_within_fixed) = mle_ref.original_mle_indices().iter().fold(
@@ -161,7 +161,7 @@ fn get_lsb_fixed_var<F: FieldExt>(
     mle_refs: &Vec<MleEnum<F>>,
 ) -> (Option<usize>, Option<MleEnum<F>>) {
     mle_refs
-        .into_iter()
+        .iter()
         .fold((None, None), |(acc_idx, acc_mle), mle_ref| {
             // this grabs the least significant bit of the fixed bits within each mle
             let lsb_within_mle = mle_ref.original_mle_indices().iter().enumerate().fold(
@@ -217,16 +217,16 @@ fn combine_pair<F: FieldExt>(
     // if the second mle ref is None, we assume its bookkeeping table is all zeros. we are dealing with
     // fully fixed mle_refs, so this bookkeeping table size is just 1
     let mle_ref_second_bt = {
-        if mle_ref_second.clone().is_none() {
+        if mle_ref_second.is_none() {
             vec![F::zero()]
         } else {
-            mle_ref_second.clone().unwrap().bookkeeping_table().to_vec()
+            mle_ref_second.unwrap().bookkeeping_table().to_vec()
         }
     };
 
     // recomputes the mle indices, which now reflect that that we are binding the bit in the least significant bit fixed bit index
     let interleaved_mle_indices = mle_ref_first.mle_indices()[0..lsb_idx]
-        .into_iter()
+        .iter()
         .cloned()
         .chain(std::iter::once(MleIndex::Bound(
             chal_point[lsb_idx],
@@ -234,18 +234,18 @@ fn combine_pair<F: FieldExt>(
         )))
         .chain(
             mle_ref_first.mle_indices()[lsb_idx + 1..]
-                .into_iter()
+                .iter()
                 .cloned(),
         )
         .collect_vec();
 
     let interleaved_mle_indices_og = mle_ref_first.original_mle_indices()[0..lsb_idx]
-        .into_iter()
+        .iter()
         .cloned()
         .chain(std::iter::once(MleIndex::Iterated))
         .chain(
             mle_ref_first.original_mle_indices()[lsb_idx + 1..]
-                .into_iter()
+                .iter()
                 .cloned(),
         )
         .collect_vec();
@@ -275,15 +275,15 @@ fn combine_pair<F: FieldExt>(
     // TODO!(vishady) also this is factually incorrect info lol because the original bookkeeping table is just wrong but
     // it is kind of dumb to recompute it because we don't use it anymore. ideally these would be stored somewhere else so we don't
     // have to keep catering to the fields we don't need ?
-    let res = DenseMleRef {
+    
+    DenseMleRef {
         current_mle,
         original_mle,
         mle_indices: interleaved_mle_indices,
         original_mle_indices: interleaved_mle_indices_og,
         layer_id: mle_ref_first.get_layer_id(),
         indexed: false,
-    };
-    res
+    }
 }
 
 /// given a list of mle refs, the lsb fixed var index, and the mle ref that contributes to it, this will go through all of them
@@ -399,7 +399,7 @@ pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
     // we go through all of the mle_refs and fix variable in all of them given the indexed indices they already have
     // so that they are fully bound.
     let fix_var_mle_refs = mle_refs
-        .into_iter()
+        .iter()
         .map(|mle_ref| match mle_ref.clone() {
             MleEnum::Dense(mut dense_mle_ref) => {
                 dense_mle_ref

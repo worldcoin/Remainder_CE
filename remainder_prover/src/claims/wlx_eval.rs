@@ -1,5 +1,5 @@
-use ark_crypto_primitives::crh::sha256::digest::typenum::Or;
-use itertools::Either;
+
+
 use remainder_shared_types::transcript::{
     TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter,
 };
@@ -7,21 +7,21 @@ use remainder_shared_types::FieldExt;
 use tracing::instrument;
 
 use crate::layer::combine_mle_refs::get_og_mle_refs;
-use crate::mle::dense::{DenseMle, DenseMleRef};
+
 use crate::mle::mle_enum::MleEnum;
-use crate::mle::zero::ZeroMleRef;
-use crate::mle::{MleIndex, MleRef};
-use crate::prover::input_layer::enum_input_layer::InputLayerEnum;
+
+
+
 use crate::prover::input_layer::InputLayer;
-use crate::prover::{GKRError, ENABLE_OPTIMIZATION};
+use crate::prover::{GKRError};
 use crate::sumcheck::*;
 
-use ark_std::{cfg_into_iter, cfg_iter};
+use ark_std::{cfg_into_iter};
 
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
-use thiserror::Error;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
-use crate::layer::combine_mle_refs::CombineMleRefError;
+
+
 use crate::layer::LayerId;
 use crate::layer::{Layer, LayerError};
 
@@ -33,7 +33,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 
-use log::{debug, info, warn};
+use log::{debug, info};
 
 use itertools::Itertools;
 
@@ -288,7 +288,7 @@ impl<F: FieldExt> ClaimMle<F> {
 
     /// Returns the expected result.
     pub fn get_result(&self) -> F {
-        self.claim.result.clone()
+        self.claim.result
     }
 
     /// Returns the source Layer ID.
@@ -437,7 +437,7 @@ impl<F: Copy + Clone + std::fmt::Debug + FieldExt> ClaimGroup<F> {
     /// # Panics
     /// When i is not in the range 0 <= i < `self.get_num_claims()`.
     pub fn get_challenge(&self, i: usize) -> &Vec<F> {
-        &self.claims[i].get_point()
+        self.claims[i].get_point()
     }
 
     /// Returns a reference to a vector of `self.get_num_claims()` elements, the
@@ -530,7 +530,7 @@ pub fn prover_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
 
-    let claim_preproc_timer = start_timer!(|| format!("Claim preprocessing"));
+    let claim_preproc_timer = start_timer!(|| "Claim preprocessing".to_string());
 
     let layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
 
@@ -552,7 +552,7 @@ pub fn prover_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     }
 
     end_timer!(claim_preproc_timer);
-    let intermediate_timer = start_timer!(|| format!("Intermediate claim aggregation."));
+    let intermediate_timer = start_timer!(|| "Intermediate claim aggregation.".to_string());
 
     // TODO(Makis): Parallelize
     let intermediate_results: Result<Vec<(ClaimMle<F>, Vec<Vec<F>>)>, GKRError> = claim_groups
@@ -578,15 +578,14 @@ pub fn prover_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
         .collect();
     let mut intermediate_wlx_evals: Vec<Vec<F>> = intermediate_results
         .into_iter()
-        .map(|result| result.1)
-        .flatten()
+        .flat_map(|result| result.1)
         .collect();
 
     // Gather all wlx evaluations into one place.
     group_wlx_evaluations.append(&mut intermediate_wlx_evals);
 
     end_timer!(intermediate_timer);
-    let final_timer = start_timer!(|| format!("Final stage aggregation."));
+    let final_timer = start_timer!(|| "Final stage aggregation.".to_string());
 
     // Finally, aggregate all intermediate claims.
     let (claim, mut wlx_evals_option) = prover_aggregate_claims_in_one_round(
@@ -611,9 +610,9 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
 
-    let claim_preproc_timer = start_timer!(|| format!("Claim preprocessing"));
+    let claim_preproc_timer = start_timer!(|| "Claim preprocessing".to_string());
 
-    let layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
+    let _layer_mle_refs = get_og_mle_refs(claims.get_claim_mle_refs());
 
     // Holds a sequence of relevant wlx evaluations, one for each claim
     // group that is being aggregated.
@@ -622,7 +621,7 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     let claims = preprocess_claims(claims.get_claim_vector().clone());
     let claim_groups = form_claim_groups(&claims);
 
-    let num_claim_groups = claim_groups.len();
+    let _num_claim_groups = claim_groups.len();
 
     debug!("Grouped claims for aggregation: ");
     for group in &claim_groups {
@@ -633,13 +632,13 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     }
 
     end_timer!(claim_preproc_timer);
-    let intermediate_timer = start_timer!(|| format!("Intermediate claim aggregation."));
+    let intermediate_timer = start_timer!(|| "Intermediate claim aggregation.".to_string());
 
     // TODO(Makis): Parallelize
     let intermediate_results: Result<Vec<(ClaimMle<F>, Vec<Vec<F>>)>, _> = claim_groups
         .into_iter()
         .enumerate()
-        .map(|(idx, claim_group)| {
+        .map(|(_idx, claim_group)| {
             verifier_aggregate_claims_in_one_round(&claim_group, transcript_reader)
         })
         .collect();
@@ -653,15 +652,14 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
         .collect();
     let mut intermediate_wlx_evals: Vec<Vec<F>> = intermediate_results
         .into_iter()
-        .map(|result| result.1)
-        .flatten()
+        .flat_map(|result| result.1)
         .collect();
 
     // Gather all wlx evaluations into one place.
     group_wlx_evaluations.append(&mut intermediate_wlx_evals);
 
     end_timer!(intermediate_timer);
-    let final_timer = start_timer!(|| format!("Final stage aggregation."));
+    let final_timer = start_timer!(|| "Final stage aggregation.".to_string());
 
     // Finally, aggregate all intermediate claims.
     let (claim, mut wlx_evals_option) = verifier_aggregate_claims_in_one_round(

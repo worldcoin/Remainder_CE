@@ -12,19 +12,19 @@ use crate::{
     collapse_columns,
     ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point},
     ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof},
-    poseidon_ligero::{PoseidonParams, PoseidonSpongeHasher},
+    poseidon_ligero::{PoseidonSpongeHasher},
     utils::{get_random_coeffs_for_multilinear_poly, halo2_ifft},
 };
 
 // --- For serialization/deserialization of the various structs ---
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
-use halo2_proofs::{poly::EvaluationDomain, transcript};
+use halo2_proofs::{poly::EvaluationDomain};
 // --- For BN-254 ---
 use itertools::{iterate, Itertools};
 use rand::Rng;
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, Transcript as RemainderTranscript},
+    transcript::{poseidon_transcript::PoseidonSponge},
     FieldExt,
 };
 use remainder_shared_types::{
@@ -207,7 +207,7 @@ fn halo2_bn_fft_test() {
 
     // --- Creates the polynomial in coeff form and performs the FFT from 2^3 coeffs --> 2^3 evals ---
     let polynomial_coeff = evaluation_domain.coeff_from_vec(coeffs);
-    let polynomial_eval_form = evaluation_domain.coeff_to_extended(&polynomial_coeff.clone());
+    let polynomial_eval_form = evaluation_domain.coeff_to_extended(&polynomial_coeff);
     assert_eq!(polynomial_eval_form.len(), 2_usize.pow(log_num_evals));
 
     // --- Perform the IFFT and assert that the resulting polynomial has degree 7 ---

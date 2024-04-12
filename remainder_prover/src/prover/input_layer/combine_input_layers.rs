@@ -5,7 +5,7 @@ use remainder_ligero::{
     LcProofAuxiliaryInfo, LcRoot,
 };
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptSponge},
+    transcript::{TranscriptSponge},
     FieldExt,
 };
 

@@ -1,30 +1,29 @@
 //! An input layer that is sent to the verifier in the clear
 
-use std::marker::PhantomData;
 
-use ark_std::{cfg_into_iter, end_timer, start_timer};
+
+
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
-use tracing::{debug, info};
+
 
 use crate::{
     claims::{
-        wlx_eval::{get_num_wlx_evaluations, YieldWLXEvals, ENABLE_PRE_FIX},
+        wlx_eval::{YieldWLXEvals},
         Claim,
     },
-    layer::{LayerError, LayerId},
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
-    sumcheck::evaluate_at_a_point,
+    layer::{LayerId},
+    mle::{dense::DenseMle, mle_enum::MleEnum, MleRef},
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayer, InputLayerError,
+    get_wlx_evaluations_helper, InputLayer, InputLayerError,
     MleInputLayer,
 };
 
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+
 
 ///An Input Layer that is send to the verifier in the clear
 pub struct PublicInputLayer<F: FieldExt> {
@@ -55,7 +54,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         let num_elements = commitment.len();
         let transcript_commitment = transcript_reader
             .consume_elements("Public Input Commitment", num_elements)
-            .map_err(|e| InputLayerError::TranscriptError(e))?;
+            .map_err(InputLayerError::TranscriptError)?;
         debug_assert_eq!(transcript_commitment, *commitment);
         Ok(())
     }
@@ -88,7 +87,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
             // println!("1, eval = {:#?}, claim = {:#?}", eval, claim);
             // dbg!(&eval);
             // dbg!(&claim);
-            (eval.ok_or(InputLayerError::PublicInputVerificationFailed)?).clone()
+            eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
             Claim::new(vec![], mle_ref.current_mle[0])
         };

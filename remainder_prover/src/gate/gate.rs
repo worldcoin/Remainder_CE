@@ -1,4 +1,4 @@
-use std::{cmp::max, marker::PhantomData};
+use std::{cmp::max};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -15,7 +15,7 @@ use crate::{
         Claim, ClaimError, YieldClaim,
     },
     gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
-    layer::{layer_enum::LayerEnum, Layer, LayerBuilder, LayerError, LayerId, VerificationError},
+    layer::{Layer, LayerBuilder, LayerError, LayerId, VerificationError},
     mle::{
         betavalues::BetaValues,
         dense::{DenseMle, DenseMleRef},
@@ -152,7 +152,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         let num_elements = sumcheck_rounds[0].len();
         let transcript_sumcheck_round_zero = transcript_reader
             .consume_elements("Initial Sumcheck evaluations", num_elements)
-            .map_err(|err| LayerError::TranscriptError(err))?;
+            .map_err(LayerError::TranscriptError)?;
         debug_assert_eq!(transcript_sumcheck_round_zero, sumcheck_rounds[0]);
 
         // check each of the messages -- note that here the verifier doesn't actually see the difference
@@ -174,7 +174,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
             let num_curr_evals = curr_evals.len();
             let transcript_curr_evals = transcript_reader
                 .consume_elements("Sumcheck evaluations", num_curr_evals)
-                .map_err(|err| LayerError::TranscriptError(err))?;
+                .map_err(LayerError::TranscriptError)?;
             debug_assert_eq!(transcript_curr_evals, *curr_evals);
             prev_evals = curr_evals;
             challenges.push(challenge);
@@ -193,7 +193,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         // final round of sumcheck
         let final_chal = transcript_reader
             .get_challenge("Final Sumcheck challenge")
-            .map_err(|err| LayerError::TranscriptError(err))?;
+            .map_err(LayerError::TranscriptError)?;
         challenges.push(final_chal);
 
         // this belongs in the last challenge bound to y
@@ -294,9 +294,9 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
         let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_u,
             val,
-            Some(self.id().clone()),
+            Some(*self.id()),
             Some(self.lhs.get_layer_id()),
-            Some(MleEnum::Dense(lhs_reduced.clone())),
+            Some(MleEnum::Dense(lhs_reduced)),
         );
         claims.push(claim);
 
@@ -313,9 +313,9 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
         let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_v,
             val,
-            Some(self.id().clone()),
+            Some(*self.id()),
             Some(self.rhs.get_layer_id()),
-            Some(MleEnum::Dense(rhs_reduced.clone())),
+            Some(MleEnum::Dense(rhs_reduced)),
         );
         claims.push(claim);
 
@@ -341,7 +341,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
                 // get the challenge l(idx)
                 let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
                     .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                        let evals: Vec<F> = cfg_into_iter!(claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
@@ -418,9 +418,9 @@ impl<F: FieldExt> Gate<F> {
             });
 
         // create two separate beta tables for each, as they are handled differently
-        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges.clone());
+        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges);
         beta_g2.index_mle_indices(0);
-        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges.clone());
+        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
 
         (beta_g1, beta_g2)
     }
@@ -446,26 +446,26 @@ impl<F: FieldExt> Gate<F> {
             });
 
         // create two separate beta tables for each, as they are handled differently
-        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges.clone());
+        let mut beta_g2 = BetaValues::new_beta_equality_mle(g2_challenges);
         beta_g2.index_mle_indices(0);
-        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges.clone());
+        let beta_g1 = BetaValues::new_beta_equality_mle(g1_challenges);
 
         // index original bookkeeping tables to send over to the non-batched mul gate after the copy phase
         self.lhs.index_mle_indices(0);
         self.rhs.index_mle_indices(0);
 
         // result of initializing is the first sumcheck message!
-        let first_sumcheck_message = libra_giraffe(
+        
+
+        libra_giraffe(
             &self.lhs,
             &self.rhs,
             &beta_g2,
             &beta_g1,
-            self.gate_operation.clone(),
+            self.gate_operation,
             &self.nonzero_gates,
             self.num_dataparallel_bits,
-        );
-
-        first_sumcheck_message
+        )
     }
 
     /// initialize phase 1, or the necessary mles in order to bind the variables in the `lhs` of the
@@ -654,13 +654,13 @@ impl<F: FieldExt> Gate<F> {
                 let eval = prove_round_dataparallel_phase(
                     lhs,
                     rhs,
-                    &beta_g1,
+                    beta_g1,
                     beta_g2,
                     round,
                     challenge,
                     &self.nonzero_gates,
                     self.num_dataparallel_bits - round,
-                    self.gate_operation.clone(),
+                    self.gate_operation,
                 )
                 .unwrap();
                 transcript_writer.append_elements("Sumcheck evaluations", &eval);
@@ -762,7 +762,7 @@ impl<F: FieldExt> Gate<F> {
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<Vec<Vec<F>>, LayerError> {
         let first_message = self
-            .init_phase_2(phase_1_challenges.clone(), f_at_u, &beta_g1)
+            .init_phase_2(phase_1_challenges, f_at_u, &beta_g1)
             .unwrap()
             .into_iter()
             .map(|eval| eval * beta_g2_fully_bound)
@@ -821,7 +821,7 @@ impl<F: FieldExt> Gate<F> {
 
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt> Gate<F> {
-    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
         struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a Gate<F>);

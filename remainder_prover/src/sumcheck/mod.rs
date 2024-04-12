@@ -282,7 +282,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
         &sum,
         &product,
         &scaled,
-        &beta_values,
+        beta_values,
         round_index,
     )
 }
@@ -359,8 +359,8 @@ fn successors_from_mle_ref_product<F: FieldExt>(
             .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
             .unwrap();
 
-        let eval_elements = successors_product.take(eval_count).collect_vec();
-        eval_elements
+        
+        successors_product.take(eval_count).collect_vec()
     });
     let evals_vec: Vec<F> = evals.collect();
     Ok(evals_vec)
@@ -399,7 +399,7 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
         });
         evals.collect()
     } else {
-        let val = mle_refs.into_iter().fold(F::one(), |acc, mle_ref| {
+        let val = mle_refs.iter().fold(F::one(), |acc, mle_ref| {
             assert_eq!(mle_ref.bookkeeping_table().len(), 1);
             acc * mle_ref.bookkeeping_table()[0]
         });
@@ -421,8 +421,8 @@ pub(crate) fn beta_cascade_step<F: FieldExt>(
         (mle_successor_vec[idx] * one_minus_beta_val)
             + (mle_successor_vec[idx + half_vec_len] * beta_val)
     });
-    let new_successor_vec = new_successor.collect();
-    new_successor_vec
+    
+    new_successor.collect()
 }
 
 /// this is the final step of beta cascade, where we take all the "bound" beta values
@@ -509,7 +509,7 @@ pub fn beta_cascade<F: FieldExt>(
         });
         // for the MSB of the beta value, this must be the independent variable. otherwise it would already be
         // bound. therefore we need to compute the successors of this value in order to get its evaluations.
-        let evals = if beta_vals.len() >= 1 {
+        let evals = if !beta_vals.is_empty() {
             let second_beta_successor = beta_vals[0];
             let first_beta_successor = F::one() - second_beta_successor;
             let step = second_beta_successor - first_beta_successor;

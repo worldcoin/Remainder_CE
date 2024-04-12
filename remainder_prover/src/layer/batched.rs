@@ -1,11 +1,10 @@
 use ark_std::log2;
-use itertools::{repeat_n, Itertools, MultiPeek};
+use itertools::{repeat_n, Itertools};
 use std::marker::PhantomData;
 use thiserror::Error;
 
 use crate::{
     expression::{
-        self,
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
@@ -145,13 +144,13 @@ pub fn unflatten_mle<F: FieldExt>(
 
     (0..num_copies)
         .map(|idx| {
-            let zero = &F::zero();
+            let _zero = &F::zero();
             let copy_idx = idx;
             let individual_mle_table = (0..individual_mle_len)
                 .map(|mle_idx| {
                     let flat_mle_ref = flattened_mle.mle_ref();
-                    let val = flat_mle_ref.current_mle.f[copy_idx + (mle_idx * num_copies)];
-                    val
+                    
+                    flat_mle_ref.current_mle.f[copy_idx + (mle_idx * num_copies)]
                 })
                 .collect_vec();
             let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(
@@ -277,7 +276,7 @@ fn combine_expressions_helper<F: FieldExt>(
                 .enumerate()
                 .map(|(idx, expr)| {
                     if let ExpressionNode::Product(mle_vec_indices) = expr {
-                        if mle_vec_index.len() == 0 {
+                        if mle_vec_index.is_empty() {
                             mle_vec_index = mle_vec_indices
                                 .iter()
                                 .map(|mle_vec_index| mle_vec_index.index())

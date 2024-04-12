@@ -1,9 +1,9 @@
 //! An InputLayer that will be have it's claim proven with a Ligero Opening Proof
 
-use std::marker::PhantomData;
 
-use ark_std::{cfg_into_iter, end_timer, start_timer};
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+
+
+
 use remainder_ligero::{
     adapter::{convert_halo_to_lcpc, LigeroProof},
     ligero_commit::{
@@ -18,18 +18,17 @@ use remainder_shared_types::{
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+
 
 use crate::{
-    claims::wlx_eval::{get_num_wlx_evaluations, YieldWLXEvals, ENABLE_PRE_FIX},
+    claims::wlx_eval::{YieldWLXEvals},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
+    mle::{dense::DenseMle, mle_enum::MleEnum},
     prover::input_layer::InputLayerError,
-    sumcheck::evaluate_at_a_point,
 };
 
 use super::{
-    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, InputLayer, MleInputLayer,
+    get_wlx_evaluations_helper, InputLayer, MleInputLayer,
 };
 
 pub struct LigeroInputLayer<F: FieldExt> {
@@ -73,7 +72,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             _ => {}
         }
 
-        let (_, comm, root, aux) = remainder_ligero_commit_prove(
+        let (_, _comm, _root, _aux) = remainder_ligero_commit_prove(
             &self.mle.mle,
             self.rho_inv.unwrap(),
             self.ratio.unwrap(),
@@ -104,7 +103,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     ) -> Result<(), InputLayerError> {
         let transcript_commitment = transcript_reader
             .consume_element("Ligero Merkle Commitment")
-            .map_err(|e| InputLayerError::TranscriptError(e))?;
+            .map_err(InputLayerError::TranscriptError)?;
         debug_assert_eq!(transcript_commitment, commitment.clone().into_raw());
         Ok(())
     }

@@ -27,12 +27,12 @@ use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
 use remainder_shared_types::{
     transcript::{
-        poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptSponge, TranscriptWriter,
+        TranscriptReader, TranscriptSponge, TranscriptWriter,
     },
     Poseidon,
 };
 use serde::{Deserialize, Serialize};
-use std::{marker::PhantomData, ops::Rem};
+use std::{marker::PhantomData};
 
 // --- Actual field trait + transcript stuff ---
 use remainder_shared_types::FieldExt;
@@ -63,8 +63,8 @@ pub trait PoseidonFieldHash: FieldExt {
     }
 
     /// Update the [remainder::transcript::Transcript] with label `l` and element `self`
-    fn transcript_update(&self, t: &mut impl TranscriptSponge<Self>, l: &'static str) {
-        let _ = t.absorb(*self);
+    fn transcript_update(&self, t: &mut impl TranscriptSponge<Self>, _l: &'static str) {
+        t.absorb(*self);
     }
 }
 
@@ -74,8 +74,8 @@ impl<F: FieldExt> PoseidonFieldHash for F {
         d.update(&[*self])
     }
 
-    fn transcript_update(&self, t: &mut impl TranscriptSponge<F>, l: &'static str) {
-        let _ = t.absorb(*self);
+    fn transcript_update(&self, t: &mut impl TranscriptSponge<F>, _l: &'static str) {
+        t.absorb(*self);
     }
 }
 
@@ -400,7 +400,7 @@ where
     // --- Go through each row of M' (the encoded matrix), as well as each row of M (the unencoded matrix) ---
     // --- and make a copy, then perform the encoding (i.e. FFT) ---
 
-    let fft_timer = start_timer!(|| format!("starting fft"));
+    let fft_timer = start_timer!(|| "starting fft".to_string());
     comm.par_chunks_mut(encoded_num_cols)
         .zip(coeffs.par_chunks(orig_num_cols))
         .try_for_each(|(r, c)| {
@@ -432,7 +432,7 @@ where
 
     // --- Computes Merkle commitments for each column using the Digest ---
     // --- then hashes all the col commitments together using the Digest again ---
-    let merkel_timer = start_timer!(|| format!("merkelize root"));
+    let merkel_timer = start_timer!(|| "merkelize root".to_string());
     merkleize(&mut ret);
     end_timer!(merkel_timer);
 
@@ -481,7 +481,7 @@ where
 
     // step 1: hash each column of the commitment (we always reveal a full column)
 
-    let hash_column_timer = start_timer!(|| format!("hashing the columns"));
+    let hash_column_timer = start_timer!(|| "hashing the columns".to_string());
     let hashes = &mut comm.hashes[..comm.encoded_num_cols];
     hash_columns::<D, E, F>(
         &comm.comm,
@@ -498,7 +498,7 @@ where
     assert!(len_plus_one.is_power_of_two());
     let (hin, hout) = comm.hashes.split_at_mut(len_plus_one / 2);
 
-    let merkelize_tree = start_timer!(|| format!("merkelize tree"));
+    let merkelize_tree = start_timer!(|| "merkelize tree".to_string());
     merkle_tree::<D, F>(hin, hout, &master_default_poseidon_merkle_hasher);
     end_timer!(merkelize_tree);
 }

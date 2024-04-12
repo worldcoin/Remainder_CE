@@ -4,8 +4,8 @@ use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::{prelude::Distribution, Rng};
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptSponge},
-    FieldExt, Fr, Poseidon,
+    transcript::{TranscriptSponge},
+    FieldExt, Poseidon,
 };
 
 use crate::{
@@ -121,7 +121,6 @@ pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Ve
 pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
     (0..(num_bits))
         .rev()
-        .into_iter()
         .map(|cur_num_bits| {
             let is_one =
                 (idx % 2_usize.pow(cur_num_bits as u32 + 1)) >= 2_usize.pow(cur_num_bits as u32);
@@ -155,9 +154,9 @@ pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
                     .iter()
                     .skip(1)
                     .fold(
-                        (F::from(first as u64), base.clone()),
+                        (F::from(first as u64), base),
                         |(accum, power), byte| {
-                            let accum = accum + (F::from(byte.clone() as u64) * power);
+                            let accum = accum + (F::from(*byte as u64) * power);
                             let power = power * base;
                             (accum, power)
                         },

@@ -8,52 +8,46 @@ pub mod test_helper_circuits;
 #[cfg(test)]
 pub(crate) mod tests;
 
-use std::{collections::HashMap, marker::PhantomData};
+use std::{marker::PhantomData};
 
 use crate::{
     claims::{
-        wlx_eval::{
-            get_num_wlx_evaluations, prover_aggregate_claims_helper,
-            verifier_aggregate_claims_helper, ClaimGroup, ClaimMle,
-        },
         Claim, ClaimAggregator, YieldClaim,
     },
     gate::gate::{BinaryOperation, Gate},
     layer::{layer_enum::LayerEnum, Layer, LayerBuilder, LayerError, LayerId, RegularLayer},
     mle::{
         dense::{DenseMle, DenseMleRef},
-        mle_enum::MleEnum,
         MleIndex, MleRef,
     },
-    sumcheck::evaluate_at_a_point,
-    utils::{hash_layers, pad_to_nearest_power_of_two},
+    utils::{hash_layers},
 };
 
-use tracing::{debug, info, trace};
+use tracing::{debug, info};
 
 // use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
 // use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
 
 use ark_std::{end_timer, start_timer};
 use remainder_shared_types::transcript::{
-    Transcript, TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter,
+    TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter,
 };
 use remainder_shared_types::FieldExt;
 
 // use derive_more::From;
-use itertools::{Either, Itertools};
+use itertools::{Itertools};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{event, instrument, span, Level};
+use tracing::{instrument, span, Level};
 
 use self::{
     input_layer::{InputLayer, InputLayerError},
     proof_system::ProofSystem,
 };
 
-use core::cmp::Ordering;
 
-use tracing::warn;
+
+
 
 /// New type for containing the list of Layers that make up the GKR circuit
 ///
@@ -410,9 +404,9 @@ pub trait GKRCircuit<F: FieldExt> {
                 .entered();
 
                 // --- For each layer, get the ID and all the claims on that layer ---
-                let layer_claims_vec = aggregator
+                let _layer_claims_vec = aggregator
                     .get_claims(layer_id)
-                    .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+                    .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
 
                 info!("Time for claim aggregation...");
                 let claim_aggr_timer =
@@ -446,7 +440,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 Ok(LayerProof {
                     sumcheck_proof: prover_sumcheck_messages,
                     layer,
-                    claim_aggregation_proof: claim_aggregation_proof,
+                    claim_aggregation_proof,
                 })
             })
             .try_collect()?;
@@ -471,9 +465,9 @@ pub trait GKRCircuit<F: FieldExt> {
                 let layer_id = input_layer.layer_id();
                 info!("New Input Layer: {:?}", layer_id);
 
-                let layer_claims_vec = aggregator
+                let _layer_claims_vec = aggregator
                     .get_claims(*layer_id)
-                    .ok_or_else(|| GKRError::NoClaimsForLayer(layer_id.clone()))?;
+                    .ok_or(GKRError::NoClaimsForLayer(*layer_id))?;
 
                 let claim_aggr_timer = start_timer!(|| format!(
                     "claim aggregation for INPUT layer {:?}",
@@ -544,7 +538,7 @@ pub trait GKRCircuit<F: FieldExt> {
         if let Some(circuit_hash) = maybe_circuit_hash {
             let transcript_circuit_hash = transcript_reader
                 .consume_element("Circuit Hash")
-                .map_err(|err| GKRError::ErrorWhenVerifyingCircuitHash(err))?;
+                .map_err(GKRError::ErrorWhenVerifyingCircuitHash)?;
             debug_assert_eq!(transcript_circuit_hash, circuit_hash);
         }
 
@@ -553,7 +547,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 &input_layer.input_commitment,
                 transcript_reader,
             )
-            .map_err(|err| GKRError::InputLayerError(err))?;
+            .map_err(GKRError::InputLayerError)?;
         }
         end_timer!(input_layers_timer);
 
@@ -608,7 +602,7 @@ pub trait GKRCircuit<F: FieldExt> {
             let LayerProof {
                 sumcheck_proof,
                 mut layer,
-                claim_aggregation_proof,
+                claim_aggregation_proof: _,
             } = sumcheck_proof_single;
 
             let layer_timer =

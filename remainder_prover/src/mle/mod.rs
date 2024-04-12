@@ -4,7 +4,7 @@ use core::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::claims::{wlx_eval::ClaimMle, Claim};
+use crate::claims::{Claim};
 use crate::layer::LayerId;
 use remainder_shared_types::FieldExt;
 

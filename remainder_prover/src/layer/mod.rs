@@ -26,8 +26,8 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    mle::{betavalues::BetaValues, dense::DenseMleRef, mle_enum::MleEnum, MleIndex, MleRef},
-    prover::{SumcheckProof, ENABLE_OPTIMIZATION},
+    mle::{betavalues::BetaValues, mle_enum::MleEnum, MleIndex, MleRef},
+    prover::{SumcheckProof},
     sumcheck::{
         compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
         InterpError,
@@ -40,7 +40,6 @@ use remainder_shared_types::{
 
 use self::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
-    layer_enum::LayerEnum,
 };
 
 use core::cmp::Ordering;
@@ -111,15 +110,15 @@ pub enum LayerId {
 impl Ord for LayerId {
     fn cmp(&self, layer2: &LayerId) -> Ordering {
         match (self, layer2) {
-            (LayerId::RandomInput(id1), LayerId::RandomInput(id2)) => id1.cmp(&id2),
-            (LayerId::RandomInput(id1), _) => Ordering::Less,
-            (LayerId::Input(id1), LayerId::Input(id2)) => id1.cmp(&id2),
-            (LayerId::Input(id1), _) => Ordering::Less,
-            (LayerId::Layer(id1), LayerId::Input(id2)) => Ordering::Greater,
-            (LayerId::Layer(id1), LayerId::Layer(id2)) => id1.cmp(&id2),
-            (LayerId::Layer(id1), _) => Ordering::Less,
-            (LayerId::Output(id1), LayerId::Output(id2)) => id1.cmp(&id2),
-            (LayerId::Output(id1), _) => Ordering::Greater,
+            (LayerId::RandomInput(id1), LayerId::RandomInput(id2)) => id1.cmp(id2),
+            (LayerId::RandomInput(_id1), _) => Ordering::Less,
+            (LayerId::Input(id1), LayerId::Input(id2)) => id1.cmp(id2),
+            (LayerId::Input(_id1), _) => Ordering::Less,
+            (LayerId::Layer(_id1), LayerId::Input(_id2)) => Ordering::Greater,
+            (LayerId::Layer(id1), LayerId::Layer(id2)) => id1.cmp(id2),
+            (LayerId::Layer(_id1), _) => Ordering::Less,
+            (LayerId::Output(id1), LayerId::Output(id2)) => id1.cmp(id2),
+            (LayerId::Output(_id1), _) => Ordering::Greater,
         }
     }
 }
@@ -209,7 +208,7 @@ impl<F: FieldExt> RegularLayer<F> {
             self.set_beta_vals(newbeta);
 
             // if there are no nonlinear indices in the expression we can return an empty vector early.
-            if expression_nonlinear_indices.len() == 0 {
+            if expression_nonlinear_indices.is_empty() {
                 return Ok(vec![]);
             }
             // otherwise we know the first nonlinear round is the first value here because these are sorted.
@@ -309,14 +308,14 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         claim: Claim<F>,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<Option<SumcheckProof<F>>, LayerError> {
-        let val = claim.get_result().clone();
+        let val = claim.get_result();
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
         let first_sumcheck_message = self.start_sumcheck(claim)?;
 
         let nonlinear_rounds = self.nonlinear_rounds.clone().unwrap();
-        if nonlinear_rounds.len() == 0 {
-            return Ok(None.into());
+        if nonlinear_rounds.is_empty() {
+            return Ok(None);
         }
 
         info!("Proving GKR Layer");
@@ -362,9 +361,8 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         let last_idx = nonlinear_rounds[nonlinear_rounds.len() - 1];
 
         self.expression.fix_variable(last_idx, final_chal);
-        self.beta_vals
-            .as_mut()
-            .map(|beta| beta.beta_update(last_idx, final_chal));
+        if let Some(beta) = self.beta_vals
+            .as_mut() { beta.beta_update(last_idx, final_chal) }
         Ok(Some(all_prover_sumcheck_messages.into()))
     }
 
@@ -391,7 +389,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         let num_prev_evals = sumcheck_prover_messages[0].len();
         let mut prev_evals = transcript_reader
             .consume_elements("Initial Sumcheck evaluations", num_prev_evals)
-            .map_err(|e| LayerError::TranscriptError(e))?;
+            .map_err(LayerError::TranscriptError)?;
 
         if prev_evals[0] + prev_evals[1] != claim.get_result() {
             debug!("I'm the PROBLEM");
@@ -412,14 +410,14 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         {
             let challenge = transcript_reader
                 .get_challenge("Sumcheck challenge")
-                .map_err(|e| LayerError::TranscriptError(e))?;
+                .map_err(LayerError::TranscriptError)?;
 
             let prev_at_r =
                 evaluate_at_a_point(&prev_evals, challenge).map_err(LayerError::InterpError)?;
 
             let curr_evals = transcript_reader
                 .consume_elements("Sumcheck evaluations", num_curr_evals)
-                .map_err(|e| LayerError::TranscriptError(e))?;
+                .map_err(LayerError::TranscriptError)?;
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 return Err(LayerError::VerificationError(
@@ -435,7 +433,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         // Here, we first sample r_n.
         let final_chal = transcript_reader
             .get_challenge("Final Sumcheck challenge")
-            .map_err(|e| LayerError::TranscriptError(e))?;
+            .map_err(LayerError::TranscriptError)?;
         challenges.push(final_chal);
 
         // --- This automatically asserts that the expression is fully bound and simply ---
@@ -533,7 +531,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
                         let claim: ClaimMle<F> = ClaimMle::new(
                             fixed_mle_indices,
                             claimed_value,
-                            Some(self.id().clone()),
+                            Some(*self.id()),
                             Some(mle_layer_id),
                             Some(MleEnum::Dense(mle_ref.clone())),
                         );
@@ -571,7 +569,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
                             let claim: ClaimMle<F> = ClaimMle::new(
                                 fixed_mle_indices,
                                 claimed_value,
-                                Some(self.id().clone()),
+                                Some(*self.id()),
                                 Some(mle_layer_id),
                                 Some(MleEnum::Dense(mle_ref.clone())),
                             );
@@ -608,12 +606,10 @@ impl<F: FieldExt> YieldWLXEvals<F> for RegularLayer<F> {
         // get the number of evaluations
         let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
 
-        let mut claim_mle_refs = claim_mle_refs.clone();
+        let mut claim_mle_refs = claim_mle_refs;
 
-        if ENABLE_PRE_FIX {
-            if common_idx.is_some() {
-                pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx.unwrap());
-            }
+        if ENABLE_PRE_FIX && common_idx.is_some() {
+            pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx.unwrap());
         }
 
         let mut degree = 0;
@@ -630,7 +626,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for RegularLayer<F> {
                 // get the challenge l(idx)
                 let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
                     .map(|claim_idx| {
-                        let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                        let evals: Vec<F> = cfg_into_iter!(claim_vecs)
                             .map(|claim| claim[claim_idx])
                             .collect();
                         evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()

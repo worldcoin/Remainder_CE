@@ -125,7 +125,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
     /// `label` is an identifier for this operation
     /// and is used for sanity checking by the `TranscriptReader`.
     pub fn append_elements(&mut self, label: &str, elements: &[F]) {
-        if elements.len() > 0 {
+        if !elements.is_empty() {
             self.sponge.absorb_elements(elements);
             self.transcript.append_elements(label, elements);
         }

@@ -168,7 +168,7 @@ mod test {
     use crate::utils::get_least_significant_bits_to_usize_little_endian;
     use ark_std::test_rng;
     use rand::Rng;
-    use remainder_shared_types::{FieldExt, Fr};
+    use remainder_shared_types::{Fr};
 
     use std::ops::Range;
 

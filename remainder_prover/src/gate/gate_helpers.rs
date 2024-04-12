@@ -363,8 +363,8 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
     libra_giraffe(
         lhs,
         rhs,
-        &beta_g2,
-        &beta_g1,
+        beta_g2,
+        beta_g1,
         operation,
         nonzero_gates,
         num_dataparallel_bits,

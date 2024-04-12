@@ -1,10 +1,7 @@
 use crate::mle::MleIndex;
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Debug,
-    ops::{Add, Mul, Neg, Sub},
-};
+
 
 /// Different Expression Types corresponds to different stages in the
 /// lift cycle of an expression
