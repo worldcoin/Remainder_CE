@@ -1,12 +1,12 @@
 use super::*;
 use crate::{
-    claims::Claim,
-    expression::generic_expr::ExpressionNode,
+    claims::Claim, expression::generic_expr::ExpressionNode, layer::LayerId, mle::dense::DenseMle
 };
 
 
-use ark_std::{Zero};
+use ark_std::{test_rng, Zero};
 use rand::Rng;
+use remainder_shared_types::Fr;
 
 
 

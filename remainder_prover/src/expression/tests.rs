@@ -14,6 +14,12 @@
 // 4. evaluate_sumcheck is tested in sumcheck/tests.rs (bc it's in compute_sumcheck_message)
 // 5. index_mle_indices
 
+use std::collections::HashSet;
+
+use remainder_shared_types::Fr;
+
+use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpr}, layer::LayerId, mle::dense::DenseMle};
+
 #[test]
 fn test_constants_eval() {
     let expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::one());
