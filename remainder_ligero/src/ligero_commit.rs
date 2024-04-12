@@ -1,5 +1,3 @@
-
-
 use crate::adapter::{convert_lcpc_to_halo, LigeroClaim, LigeroProof};
 use crate::ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point};
 use crate::ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof};

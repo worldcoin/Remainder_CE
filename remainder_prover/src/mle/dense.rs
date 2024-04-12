@@ -8,7 +8,7 @@ use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
 
-use rayon::{prelude::ParallelIterator};
+use rayon::prelude::ParallelIterator;
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};

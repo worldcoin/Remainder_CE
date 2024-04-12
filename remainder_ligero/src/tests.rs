@@ -12,21 +12,18 @@ use crate::{
     collapse_columns,
     ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point},
     ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof},
-    poseidon_ligero::{PoseidonSpongeHasher},
+    poseidon_ligero::PoseidonSpongeHasher,
     utils::{get_random_coeffs_for_multilinear_poly, halo2_ifft},
 };
 
 // --- For serialization/deserialization of the various structs ---
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
-use halo2_proofs::{poly::EvaluationDomain};
+use halo2_proofs::poly::EvaluationDomain;
 // --- For BN-254 ---
 use itertools::{iterate, Itertools};
 use rand::Rng;
-use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge},
-    FieldExt,
-};
+use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt};
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptWriter},
     Poseidon,

@@ -26,13 +26,11 @@ use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{
-        TranscriptReader, TranscriptSponge, TranscriptWriter,
-    },
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     Poseidon,
 };
 use serde::{Deserialize, Serialize};
-use std::{marker::PhantomData};
+use std::marker::PhantomData;
 
 // --- Actual field trait + transcript stuff ---
 use remainder_shared_types::FieldExt;

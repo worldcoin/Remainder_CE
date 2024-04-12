@@ -1,4 +1,3 @@
-
 use crate::prover::GKRCircuit;
 use ark_std::{end_timer, start_timer};
 

@@ -1,15 +1,11 @@
 use super::*;
 use crate::{
-    claims::Claim, expression::generic_expr::ExpressionNode, layer::LayerId, mle::dense::DenseMle
+    claims::Claim, expression::generic_expr::ExpressionNode, layer::LayerId, mle::dense::DenseMle,
 };
-
 
 use ark_std::{test_rng, Zero};
 use rand::Rng;
 use remainder_shared_types::Fr;
-
-
-
 
 /// Does a dummy version of sumcheck with a testing RNG
 pub fn dummy_sumcheck<F: FieldExt>(
@@ -698,13 +694,8 @@ fn test_beta_cascade_3() {
     mle_ref_3.index_mle_indices(0);
 
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
-    let betacascade_evals = beta_cascade(
-        &[&mle_ref_1, &mle_ref_2, &mle_ref_3],
-        4,
-        0,
-        &beta_vals,
-        &[],
-    );
+    let betacascade_evals =
+        beta_cascade(&[&mle_ref_1, &mle_ref_2, &mle_ref_3], 4, 0, &beta_vals, &[]);
     let expected_evals = Evals(vec![
         Fr::from(28).neg(),
         Fr::from(22),

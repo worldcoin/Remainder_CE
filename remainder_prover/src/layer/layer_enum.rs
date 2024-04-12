@@ -1,21 +1,17 @@
-use remainder_shared_types::transcript::{
-    TranscriptSponge,
-};
+use remainder_shared_types::transcript::TranscriptSponge;
 
-
-use remainder_shared_types::{FieldExt};
-
+use remainder_shared_types::FieldExt;
 
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::layer_enum;
 
+use crate::gate::gate::Gate;
 use crate::mle::mle_enum::MleEnum;
-use crate::{gate::gate::Gate};
 
 use super::LayerError;
 use super::{Layer, RegularLayer};
 
-use crate::claims::{YieldClaim};
+use crate::claims::YieldClaim;
 
 use std::fmt;
 
