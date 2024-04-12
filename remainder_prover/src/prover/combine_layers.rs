@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::{
     expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr},
-    layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
+    layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, RegularLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };
@@ -165,7 +165,7 @@ pub fn combine_layers<F: FieldExt>(
             if expression.get_expression_size(0) == 0 {
                 Ok(EmptyLayer::new_raw(layer_id, expression).into())
             } else {
-                Ok(GKRLayer::new_raw(layer_id, expression).into())
+                Ok(RegularLayer::new_raw(layer_id, expression).into())
             }
         })
         .try_collect()?;

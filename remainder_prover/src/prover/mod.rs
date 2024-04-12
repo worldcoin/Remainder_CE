@@ -12,10 +12,10 @@ pub(crate) mod tests;
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
-    claims::{wlx_eval::{get_num_wlx_evaluations, prover_aggregate_claims, verifier_aggregate_claims, ClaimGroup, ClaimMle}, Claim, ClaimAggregator, YieldClaim}, gate::gate::{BinaryOperation, Gate}, layer::{
+    claims::{wlx_eval::{get_num_wlx_evaluations, prover_aggregate_claims_helper, verifier_aggregate_claims_helper, ClaimGroup, ClaimMle}, Claim, ClaimAggregator, YieldClaim}, gate::gate::{BinaryOperation, Gate}, layer::{
         empty_layer::EmptyLayer,
         layer_enum::LayerEnum,
-        GKRLayer, Layer, LayerBuilder, LayerError, LayerId,
+        RegularLayer, Layer, LayerBuilder, LayerError, LayerId,
     }, mle::{
         dense::{DenseMle, DenseMleRef}, mle_enum::MleEnum, MleIndex, MleRef
     }, sumcheck::evaluate_at_a_point, utils::{hash_layers, pad_to_nearest_power_of_two}
@@ -61,11 +61,11 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
     /// Add a GKRLayer to a list of layers
     pub fn add_gkr<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor
     where
-        T: From<GKRLayer<F>>,
+        T: From<RegularLayer<F>>,
     {
         let id = LayerId::Layer(self.layers.len());
         let successor = new_layer.next_layer(id, None);
-        let layer = GKRLayer::<F>::new(new_layer, id);
+        let layer = RegularLayer::<F>::new(new_layer, id);
         self.layers.push(layer.into());
         successor
     }
@@ -262,7 +262,7 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
 pub const ENABLE_OPTIMIZATION: bool = true;
 
 #[allow(type_alias_bounds)]
-/// A helper type for easier reference to a circuits Transcript
+/// A helper type for easier reference to a circuit's Transcript
 pub type CircuitTranscript<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::Transcript;
 
 #[allow(type_alias_bounds)]

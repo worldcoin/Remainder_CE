@@ -3,7 +3,7 @@ use crate::{
     expression::generic_expr::ExpressionNode, layer::{
         // claims::tests::claim_aggregation_testing_wrapper,
         from_mle,
-        GKRLayer,
+        RegularLayer,
         Layer,
         LayerBuilder,
         LayerId,

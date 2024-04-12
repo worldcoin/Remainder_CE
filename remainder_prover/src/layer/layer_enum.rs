@@ -11,7 +11,7 @@ use crate::mle::dense::DenseMleRef;
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
-use super::{empty_layer::EmptyLayer, GKRLayer, Layer};
+use super::{empty_layer::EmptyLayer, RegularLayer, Layer};
 
 use crate::claims::{Claim, YieldClaim};
 
@@ -19,7 +19,7 @@ use std::fmt;
 
 layer_enum!(
     LayerEnum,
-    (Gkr: GKRLayer<F>),
+    (Gkr: RegularLayer<F>),
     (Gate: Gate<F>),
     (EmptyLayer: EmptyLayer<F>)
 );

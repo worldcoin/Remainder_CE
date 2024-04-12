@@ -35,26 +35,12 @@ use remainder_shared_types::{
 };
 
 use super::{
-    combine_layers::combine_layers, input_layer::{
+    combine_layers::combine_layers, proof_system::DefaultProofSystem, input_layer::{
         self, combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer, InputLayer,
     }, test_helper_circuits::{EmptyLayerAddBuilder, EmptyLayerBuilder, EmptyLayerSubBuilder}, CircuitInputLayer, CircuitTranscript, GKRCircuit, GKRError, Layers, Witness
 };
-
-struct TestProofSystem;
-
-impl<F: FieldExt> ProofSystem<F> for TestProofSystem {
-    type Layer = LayerEnum<F>;
-
-    type InputLayer = InputLayerEnum<F>;
-
-    type Transcript = PoseidonSponge<F>;
-
-    type OutputLayer = MleEnum<F>;
-
-    type ClaimAggregator = WLXAggregator<F, Self::Layer, Self::InputLayer>;
-}
 
 /// This circuit is a 4 --> 2 circuit, such that
 /// [x_1, x_2, x_3, x_4, (y_1, y_2)] --> [x_1 * x_3, x_2 * x_4] --> [x_1 * x_3 - y_1, x_2 * x_4 - y_2]
@@ -64,7 +50,7 @@ struct SimpleCircuit<F: FieldExt> {
     size: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -136,7 +122,7 @@ struct SimplestCircuit<F: FieldExt> {
     mle: DenseMle<F, Tuple2<F>>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     // const CIRCUIT_HASH: Option<[u8; 32]> = Some([
     //     201,181,0,14,124,41,18,30,207,198,237,142,57,140,114,224,28,140,62,0,109,36,200,27,208,218,32,166,8,35,115,46,
@@ -198,7 +184,7 @@ struct SimplestBatchedCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- Grab combined
@@ -280,7 +266,7 @@ struct RandomCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         unimplemented!()
@@ -366,7 +352,7 @@ struct MultiInputLayerCircuit<F: FieldExt> {
     input_layer_2_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         unimplemented!()
@@ -551,7 +537,7 @@ struct TestCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for TestCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle`, `mle_2`, and `output_input` ---
@@ -660,7 +646,7 @@ struct SimplestGateCircuit<F: FieldExt> {
     negmle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -706,7 +692,7 @@ struct SimplestGateCircuitUneven<F: FieldExt> {
     negmle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -749,7 +735,7 @@ struct MulAddSimplestGateCircuit<F: FieldExt> {
     neg_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MulAddSimplestGateCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -816,7 +802,7 @@ struct SimplestAddMulBatchedGateCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestAddMulBatchedGateCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -882,7 +868,7 @@ struct SimplestGateCircuitCombined<F: FieldExt> {
     negmle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitCombined<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -929,7 +915,7 @@ struct SimplestBatchedGateCircuit<F: FieldExt> {
     batch_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplestBatchedGateCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The input layer should just be the concatenation of `mle` and `output_input` ---
@@ -984,7 +970,7 @@ struct SimplePrecommitCircuit<F: FieldExt> {
     mle2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- The precommitted input layer MLE is just the first MLE ---
@@ -1082,7 +1068,7 @@ struct EmptyLayerTestCircuit<F: FieldExt> {
     other_empty_layer_src_mle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- We're not testing commitments here; just use PublicInputLayer ---
@@ -1130,7 +1116,7 @@ struct CombineCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let test_witness = self.test_circuit.synthesize();
@@ -1735,7 +1721,7 @@ struct BatchedTestCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for BatchedTestCircuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let new_bits = log2(self.mle.len()) as usize;
@@ -1958,7 +1944,7 @@ struct Combine3Circuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
-    type ProofSystem = TestProofSystem;
+    type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let test_witness = self.test_circuit.synthesize();

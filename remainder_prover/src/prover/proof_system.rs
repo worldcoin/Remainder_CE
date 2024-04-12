@@ -1,14 +1,14 @@
 use remainder_shared_types::{
-    transcript::{Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{poseidon_transcript::PoseidonSponge, Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
 use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
-use crate::{claims::{Claim, ClaimAggregator, YieldClaim}, layer::{GKRLayer, Layer}, mle::{mle_enum::MleEnum, MleRef}};
+use crate::{claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator, YieldClaim}, layer::{layer_enum::LayerEnum, Layer, RegularLayer}, mle::{mle_enum::MleEnum, MleRef}};
 
-use super::input_layer::{InputLayer, ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer};
+use super::input_layer::{enum_input_layer::InputLayerEnum, ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer};
 
 #[macro_export]
 ///This macro generates a layer enum that represents all the possible layers
@@ -16,7 +16,7 @@ use super::input_layer::{InputLayer, ligero_input_layer::LigeroInputLayer, publi
 ///
 /// Usage:
 ///
-/// layer_enum(EnumName, (FirstVariant: LayerType), (SecondVariant: SecondLayerType))
+/// layer_enum(EnumName, (FirstVariant: LayerType), (SecondVariant: SecondLayerType), ..)
 macro_rules! layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -245,5 +245,19 @@ pub trait ProofSystem<F: FieldExt> {
     /// As this trait defines the 'bridge' between layers, some helper traits may be neccessary to implement
     /// on the other layer types
     type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>;
+}
+
+pub struct DefaultProofSystem;
+
+impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
+    type Layer = LayerEnum<F>;
+
+    type InputLayer = InputLayerEnum<F>;
+
+    type Transcript = PoseidonSponge<F>;
+
+    type OutputLayer = MleEnum<F>;
+
+    type ClaimAggregator = WLXAggregator<F, Self::Layer, Self::InputLayer>;
 }
 

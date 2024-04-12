@@ -98,3 +98,77 @@ pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {
     ///Creates a new InputLayer from a flat mle
     fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self;
 }
+
+/// Computes the V_d(l(x)) evaluations for the input layer V_d.
+fn get_wlx_evaluations_helper<F: FieldExt>(
+    layer: &impl InputLayer<F>,
+    claim_vecs: &Vec<Vec<F>>,
+    claimed_vals: &Vec<F>,
+    claimed_mles: Vec<MleEnum<F>>,
+    num_claims: usize,
+    num_idx: usize,
+) -> Result<Vec<F>, crate::claims::ClaimError> {
+    let prep_timer = start_timer!(|| "Claim wlx prep");
+    let mut mle_ref = layer.get_padded_mle().clone().mle_ref();
+    end_timer!(prep_timer);
+    info!(
+        "Wlx MLE len: {}",
+        mle_ref.current_mle.get_evals_vector().len()
+    );
+
+    //fix variable hella times
+    //evaluate expr on the mutated expr
+
+    // get the number of evaluations
+    mle_ref.index_mle_indices(0);
+    let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
+    let chal_point = &claim_vecs[0];
+
+    if ENABLE_PRE_FIX {
+        if common_idx.is_some() {
+            let common_idx = common_idx.unwrap();
+            common_idx.iter().for_each(|chal_idx| {
+                if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
+                    mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+                }
+            });
+        }
+    }
+
+    debug!("Evaluating {num_evals} times.");
+
+    // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
+    let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
+        // let next_evals: Vec<F> = (num_claims..num_evals).into_iter()
+        .map(|idx| {
+            // get the challenge l(idx)
+            let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+                // let new_chal: Vec<F> = (0..num_idx).into_iter()
+                .map(|claim_idx| {
+                    let evals: Vec<F> = cfg_into_iter!(&claim_vecs)
+                        // let evals: Vec<F> = (&claim_vecs).into_iter()
+                        .map(|claim| claim[claim_idx])
+                        .collect();
+                    evaluate_at_a_point(&evals, F::from(idx as u64)).unwrap()
+                })
+                .collect();
+
+            let mut fix_mle = mle_ref.clone();
+            {
+                new_chal.into_iter().enumerate().for_each(|(idx, chal)| {
+                    if let MleIndex::IndexedBit(idx_num) = fix_mle.mle_indices()[idx] {
+                        fix_mle.fix_variable(idx_num, chal);
+                    }
+                });
+                fix_mle.current_mle[0]
+            }
+        })
+        .collect();
+
+    // concat this with the first k evaluations from the claims to get num_evals evaluations
+    let mut wlx_evals = claimed_vals.clone();
+    wlx_evals.extend(&next_evals);
+    debug!("Returning evals:\n{:#?} ", wlx_evals);
+    Ok(wlx_evals)
+
+}
