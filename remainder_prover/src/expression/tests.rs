@@ -1,4 +1,9 @@
-use crate::{layer::LayerId, mle::dense::DenseMle};
+use std::collections::HashSet;
+
+use crate::{
+    layer::LayerId,
+    mle::{dense::DenseMle, MleIndex},
+};
 
 use super::*;
 use ark_std::One;
@@ -253,10 +258,8 @@ fn test_mle_different_length_eval() {
 }
 
 #[test]
-fn test_mle_different_length_prod() {
-    let challenge = vec![Fr::from(2), Fr::from(3), Fr::from(5)];
-
-    let mle_1 = DenseMle::new_from_raw(
+fn test_all_mle_indices() {
+    let mle_1: crate::mle::dense::DenseMleRef<Fr> = DenseMle::new_from_raw(
         vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
         LayerId::Input(0),
         None,
@@ -279,14 +282,158 @@ fn test_mle_different_length_prod() {
     )
     .mle_ref();
 
-    let mut expression_product = Expression::products(vec![mle_1, mle_2]);
-    let num_indices = expression_product.index_mle_indices(0);
-    assert_eq!(num_indices, 3);
+    let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
+    let expression_mle = Expression::mle(mle_2);
+    let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
+    let mut expression_full = Expression::sum(
+        expression_product,
+        Box::new(expression_mle.concat_expr(expression_product_2)),
+    );
+    expression_full.index_mle_indices(0);
+    let mut curr_all_indices: Vec<usize> = Vec::new();
+    let all_indices = expression_full
+        .expression_node
+        .get_all_rounds(&mut curr_all_indices, &expression_full.mle_vec);
+    let expected_indices_vec: Vec<usize> = vec![0, 1, 2, 3];
+    let expected_all_indices: HashSet<&usize> = HashSet::from_iter(expected_indices_vec.iter());
+    let actual_all_indices: HashSet<&usize> = HashSet::from_iter(all_indices.iter());
+    assert_eq!(expected_all_indices, actual_all_indices);
+}
 
-    let eval_prod = expression_product.evaluate_expr(challenge).unwrap();
+#[test]
+fn test_nonlinear_mle_indices() {
+    let mle_1: crate::mle::dense::DenseMleRef<Fr> = DenseMle::new_from_raw(
+        vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
+        LayerId::Input(0),
+        None,
+    )
+    .mle_ref();
 
-    // (-230 + 68) * 11
-    assert_eq!(eval_prod, Fr::from(1782).neg());
+    let mle_2 = DenseMle::new_from_raw(
+        vec![
+            Fr::from(1),
+            Fr::from(4),
+            Fr::from(5),
+            Fr::from(2),
+            Fr::from(1),
+            Fr::from(9),
+            Fr::from(8),
+            Fr::from(2),
+        ],
+        LayerId::Input(0),
+        None,
+    )
+    .mle_ref();
+
+    let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
+    let expression_mle = Expression::mle(mle_2);
+    let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
+    let mut expression_full = Expression::sum(
+        expression_product,
+        Box::new(expression_mle.concat_expr(expression_product_2)),
+    );
+    expression_full.index_mle_indices(0);
+    let mut curr_all_indices: Vec<usize> = Vec::new();
+    let all_nonlinear_indices = expression_full
+        .expression_node
+        .get_all_nonlinear_rounds(&mut curr_all_indices, &expression_full.mle_vec);
+    let expected_nonlinear_indices_vec = vec![0, 1, 2];
+    let expected_all_nonlinear_indices: HashSet<&usize> =
+        HashSet::from_iter(expected_nonlinear_indices_vec.iter());
+    let actual_all_nonlinear_indices: HashSet<&usize> =
+        HashSet::from_iter(all_nonlinear_indices.iter());
+    assert_eq!(expected_all_nonlinear_indices, actual_all_nonlinear_indices);
+}
+
+#[test]
+fn test_linear_mle_indices() {
+    let mle_1: crate::mle::dense::DenseMleRef<Fr> = DenseMle::new_from_raw(
+        vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
+        LayerId::Input(0),
+        None,
+    )
+    .mle_ref();
+
+    let mle_2 = DenseMle::new_from_raw(
+        vec![
+            Fr::from(1),
+            Fr::from(4),
+            Fr::from(5),
+            Fr::from(2),
+            Fr::from(1),
+            Fr::from(9),
+            Fr::from(8),
+            Fr::from(2),
+        ],
+        LayerId::Input(0),
+        None,
+    )
+    .mle_ref();
+
+    let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
+    let expression_mle = Expression::mle(mle_2);
+    let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
+    let mut expression_full = Expression::sum(
+        expression_product,
+        Box::new(expression_mle.concat_expr(expression_product_2)),
+    );
+    expression_full.index_mle_indices(0);
+    let all_linear_indices = expression_full
+        .expression_node
+        .get_all_linear_rounds(&expression_full.mle_vec);
+    let expected_linear_indices_vec = vec![3];
+    let expected_all_linear_indices: HashSet<&usize> =
+        HashSet::from_iter(expected_linear_indices_vec.iter());
+    let actual_all_linear_indices: HashSet<&usize> = HashSet::from_iter(all_linear_indices.iter());
+    assert_eq!(expected_all_linear_indices, actual_all_linear_indices);
+}
+
+#[test]
+fn test_linear_mle_indices_2() {
+    let mle_1: crate::mle::dense::DenseMleRef<Fr> = DenseMle::new_from_raw(
+        vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
+        LayerId::Input(0),
+        None,
+    )
+    .mle_ref();
+
+    let mle_2 = DenseMle::new_from_raw(
+        vec![
+            Fr::from(1),
+            Fr::from(4),
+            Fr::from(5),
+            Fr::from(2),
+            Fr::from(1),
+            Fr::from(9),
+            Fr::from(8),
+            Fr::from(2),
+        ],
+        LayerId::Input(0),
+        None,
+    )
+    .mle_ref();
+
+    let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
+    let expression_mle = Expression::mle(mle_2);
+    let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
+    let expression_half = Expression::sum(
+        expression_product.clone(),
+        Box::new(expression_mle.concat_expr(expression_product_2.clone())),
+    );
+    let expression_other_half = Expression::sum(
+        Box::new(expression_product_2),
+        Box::new(Expression::negated(expression_product)),
+    );
+    let mut expression_full = expression_half.concat_expr(expression_other_half);
+    expression_full.index_mle_indices(0);
+    let all_linear_indices = expression_full
+        .expression_node
+        .get_all_linear_rounds(&expression_full.mle_vec);
+    let expected_linear_indices_vec = vec![0, 4];
+    let expected_all_linear_indices: HashSet<&usize> =
+        HashSet::from_iter(expected_linear_indices_vec.iter());
+    let actual_all_linear_indices: HashSet<&usize> = HashSet::from_iter(all_linear_indices.iter());
+    assert_eq!(expected_all_linear_indices, actual_all_linear_indices);
 }
 
 // #[test]

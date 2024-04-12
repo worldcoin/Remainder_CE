@@ -1,4 +1,6 @@
-use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
+use remainder_shared_types::transcript::{
+    self, TranscriptReader, TranscriptSponge, TranscriptWriter,
+};
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::{transcript::Transcript, FieldExt};
@@ -11,7 +13,7 @@ use crate::mle::dense::DenseMleRef;
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
-use super::{empty_layer::EmptyLayer, RegularLayer, Layer};
+use super::{RegularLayer, Layer};
 
 use crate::claims::{Claim, YieldClaim};
 
@@ -20,8 +22,7 @@ use std::fmt;
 layer_enum!(
     LayerEnum,
     (Gkr: RegularLayer<F>),
-    (Gate: Gate<F>),
-    (EmptyLayer: EmptyLayer<F>)
+    (Gate: Gate<F>)
 );
 
 impl<F: FieldExt> fmt::Debug for LayerEnum<F> {
@@ -29,7 +30,6 @@ impl<F: FieldExt> fmt::Debug for LayerEnum<F> {
         match self {
             LayerEnum::Gkr(_) => write!(f, "GKR Layer"),
             LayerEnum::Gate(_) => write!(f, "Gate"),
-            LayerEnum::EmptyLayer(_) => write!(f, "EmptyLayer"),
         }
     }
 }
@@ -39,7 +39,6 @@ impl<F: FieldExt> LayerEnum<F> {
     pub(crate) fn layer_size(&self) -> usize {
         let expression = match self {
             LayerEnum::Gkr(layer) => &layer.expression,
-            LayerEnum::EmptyLayer(layer) => &layer.expr,
             LayerEnum::Gate(_) => unimplemented!(),
         };
 
@@ -50,9 +49,6 @@ impl<F: FieldExt> LayerEnum<F> {
         match self {
             LayerEnum::Gkr(layer) => Box::new(layer.expression().circuit_description_fmt()),
             LayerEnum::Gate(gate_layer) => Box::new(gate_layer.circuit_description_fmt()),
-            LayerEnum::EmptyLayer(empty_layer) => {
-                Box::new(empty_layer.expression().circuit_description_fmt())
-            }
         }
     }
 }
@@ -69,7 +65,6 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
             LayerEnum::Gate(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
-            LayerEnum::EmptyLayer(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
         }
     }
 }
@@ -79,7 +74,6 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
             LayerEnum::Gate(layer) => layer.get_claims(),
-            LayerEnum::EmptyLayer(layer) => layer.get_claims(),
         }
     }
 }
