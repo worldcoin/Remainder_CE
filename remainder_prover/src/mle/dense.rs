@@ -12,11 +12,16 @@ use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
-use crate::{claims::{ClaimError, YieldClaim}, expression::{generic_expr::Expression, prover_expr::ProverExpr}, layer::{combine_mle_refs::combine_mle_refs, LayerError}, sumcheck::MleError};
 use crate::{
+    claims::{wlx_eval::ClaimMle, Claim},
     layer::{batched::combine_mles, LayerId},
-    claims::{Claim, wlx_eval::ClaimMle},
     mle::evals::{Evaluations, MultilinearExtension},
+};
+use crate::{
+    claims::{ClaimError, YieldClaim},
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    layer::{combine_mle_refs::combine_mle_refs, LayerError},
+    sumcheck::MleError,
 };
 use remainder_shared_types::FieldExt;
 
@@ -723,10 +728,24 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
 impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for DenseMleRef<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
-            return Err(LayerError::ClaimError(ClaimError::MleRefMleError))
+            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
-        let mle_indices: Result<Vec<F>, _> = self.mle_indices.iter().map(|index| index.val().ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))).collect();
-        Ok(vec![ClaimMle::new(mle_indices?, self.bookkeeping_table()[0], None, Some(self.layer_id), Some(self.clone().get_enum()))])
+        let mle_indices: Result<Vec<F>, _> = self
+            .mle_indices
+            .iter()
+            .map(|index| {
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
+            })
+            .collect();
+        Ok(vec![ClaimMle::new(
+            mle_indices?,
+            self.bookkeeping_table()[0],
+            None,
+            Some(self.layer_id),
+            Some(self.clone().get_enum()),
+        )])
     }
 }
 

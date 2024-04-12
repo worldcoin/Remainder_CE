@@ -1,14 +1,24 @@
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        poseidon_transcript::PoseidonSponge, Transcript, TranscriptReader, TranscriptSponge,
+        TranscriptWriter,
+    },
     FieldExt,
 };
 
-use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
-use crate::{claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator, YieldClaim}, layer::{layer_enum::LayerEnum, Layer, RegularLayer}, mle::{mle_enum::MleEnum, MleRef}};
+use crate::{
+    claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator, YieldClaim},
+    layer::{layer_enum::LayerEnum, Layer, RegularLayer},
+    mle::{mle_enum::MleEnum, MleRef},
+};
 
-use super::input_layer::{enum_input_layer::InputLayerEnum, ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer};
+use super::input_layer::{
+    enum_input_layer::InputLayerEnum, ligero_input_layer::LigeroInputLayer,
+    public_input_layer::PublicInputLayer, InputLayer,
+};
 
 #[macro_export]
 ///This macro generates a layer enum that represents all the possible layers
@@ -31,8 +41,8 @@ macro_rules! layer_enum {
 
         paste::paste! {
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]  
-            #[doc = r"Remainder generated Proof enum"]  
+            #[serde(bound = "F: FieldExt")]
+            #[doc = r"Remainder generated Proof enum"]
             pub enum [<$type_name Proof>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Proof variant"]
@@ -122,8 +132,8 @@ macro_rules! input_layer_enum {
             }
 
             #[derive(serde::Serialize, serde::Deserialize)]
-            #[serde(bound = "F: FieldExt")]   
-            #[doc = r"Remainder generated opening proof enum"] 
+            #[serde(bound = "F: FieldExt")]
+            #[doc = r"Remainder generated opening proof enum"]
             pub enum [<$type_name OpeningProof>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Commitment variant"]
@@ -159,7 +169,7 @@ macro_rules! input_layer_enum {
 
             fn verifier_append_commitment_to_transcript(
                 commitment: &Self::Commitment,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>> 
+                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>
             ) -> Result<(), $crate::prover::InputLayerError> {
                 match commitment {
                     $(
@@ -230,8 +240,12 @@ macro_rules! input_layer_enum {
 ///A trait for bundling a group of types that define the interfaces that go into a GKR Prover
 pub trait ProofSystem<F: FieldExt> {
     ///A trait that defines the allowed Layer for this ProofSystem
-    type Layer: Layer<F> + Serialize + for<'a> Deserialize<'a> + Debug + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
-    
+    type Layer: Layer<F>
+        + Serialize
+        + for<'a> Deserialize<'a>
+        + Debug
+        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
+
     ///A trait that defines the allowed InputLayer for this ProofSystem
     type InputLayer: InputLayer<F>;
 
@@ -239,7 +253,8 @@ pub trait ProofSystem<F: FieldExt> {
     type Transcript: TranscriptSponge<F>;
 
     ///The MleRef type that serves as the output layer representation
-    type OutputLayer: MleRef<F = F> + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
+    type OutputLayer: MleRef<F = F>
+        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
 
     ///The logic that handles how to aggregate claims
     /// As this trait defines the 'bridge' between layers, some helper traits may be neccessary to implement
@@ -260,4 +275,3 @@ impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
 
     type ClaimAggregator = WLXAggregator<F, Self::Layer, Self::InputLayer>;
 }
-

@@ -1,20 +1,20 @@
 use super::*;
 use crate::{
+    claims::wlx_eval::ClaimGroup,
+    claims::Claim,
     expression::generic_expr::ExpressionNode,
     layer::{
         // claims::tests::claim_aggregation_testing_wrapper,
         from_mle,
-        RegularLayer,
         Layer,
         LayerBuilder,
         LayerId,
+        RegularLayer,
     },
     mle::{
         dense::{DenseMle, Tuple2},
         Mle,
     },
-    claims::Claim,
-    claims::wlx_eval::ClaimGroup,
 };
 use ark_std::test_rng;
 

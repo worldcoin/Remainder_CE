@@ -3,7 +3,7 @@ use std::iter::repeat_with;
 use crate::log2;
 use ark_std::test_rng;
 use halo2_proofs::poly::EvaluationDomain;
-use rand::{Rng};
+use rand::Rng;
 use remainder_shared_types::FieldExt;
 
 /// TODO!(ryancao): Add support for passing in an RNG rather than
@@ -21,7 +21,11 @@ pub fn get_random_coeffs_for_multilinear_poly<F: FieldExt>(ml_num_vars: usize) -
 ///
 /// * `poly_len` - Number of coefficients in the actual polynomial
 /// * `rho_inv` - rho^{-1}, i.e. the code rate
-pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> Option<(usize, usize, usize)> {
+pub fn get_ligero_matrix_dims(
+    poly_len: usize,
+    rho_inv: u8,
+    ratio: f64,
+) -> Option<(usize, usize, usize)> {
     // --- Compute rho ---
     let rho: f64 = 1. / (rho_inv as f64);
 
@@ -31,8 +35,8 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> Optio
 
     // compute #cols, which must be a power of 2 because of FFT
     // computes the encoded num cols that will get closest to the ratio for original num cols : num rows
-    let encoded_num_cols = (((poly_len as f64 * ratio).sqrt() / rho).ceil() as usize)
-        .checked_next_power_of_two()?;
+    let encoded_num_cols =
+        (((poly_len as f64 * ratio).sqrt() / rho).ceil() as usize).checked_next_power_of_two()?;
 
     // minimize nr subject to #cols and rho
     // --- Not sure what the above is talking about, but basically computes ---
@@ -163,9 +167,9 @@ mod test {
 
     use crate::utils::get_least_significant_bits_to_usize_little_endian;
     use ark_std::test_rng;
-    use remainder_shared_types::{Fr, FieldExt};
     use rand::Rng;
-    
+    use remainder_shared_types::{FieldExt, Fr};
+
     use std::ops::Range;
 
     #[test]
