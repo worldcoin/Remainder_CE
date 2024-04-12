@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::{
     expression::{generic_expr::{Expression, ExpressionNode, ExpressionType}, prover_expr::ProverExpr},
-    layer::{empty_layer::EmptyLayer, layer_enum::LayerEnum, RegularLayer, Layer, LayerId},
+    layer::{layer_enum::LayerEnum, RegularLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };
@@ -155,18 +155,13 @@ pub fn combine_layers<F: FieldExt>(
                 .into_iter()
                 .map(|layer| match layer {
                     LayerEnum::Gkr(layer) => Ok(layer.expression),
-                    LayerEnum::EmptyLayer(layer) => Ok(layer.expr),
                     _ => Err(CombineError),
                 })
                 .try_collect()?;
 
             let expression = combine_expressions(expressions);
 
-            if expression.get_expression_size(0) == 0 {
-                Ok(EmptyLayer::new_raw(layer_id, expression).into())
-            } else {
-                Ok(RegularLayer::new_raw(layer_id, expression).into())
-            }
+            Ok(RegularLayer::new_raw(layer_id, expression).into())
         })
         .try_collect()?;
 
@@ -190,36 +185,16 @@ fn add_bits_to_layer_refs<F: FieldExt>(
     for layer in layers {
         let expression = match layer {
             LayerEnum::Gkr(layer) => Ok(&mut layer.expression),
-            LayerEnum::EmptyLayer(layer) => Ok(&mut layer.expr),
             _ => Err(CombineError),
         }?;
 
-        let mut closure = for<'a, 'b> |
-            expr: &'a mut ExpressionNode<F, ProverExpr>,
-            mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec
-        | -> Result<(), ()> {
-            match expr {
-                ExpressionNode::Mle(mle_vec_idx) => {
-                    let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
-
-                    if mle_ref.layer_id == effected_layer {
-                        mle_ref.mle_indices = new_bits
-                            .iter()
-                            .chain(mle_ref.mle_indices.iter())
-                            .cloned()
-                            .collect();
-                        mle_ref.original_mle_indices = new_bits
-                            .iter()
-                            .chain(mle_ref.original_mle_indices.iter())
-                            .cloned()
-                            .collect();
-                    }
-                    Ok(())
-                }
-                ExpressionNode::Product(mle_vec_indices) => {
-                    for mle_vec_index in mle_vec_indices {
-
-                        let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+        let mut closure =
+            for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
+                         mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec|
+                         -> Result<(), ()> {
+                match expr {
+                    ExpressionNode::Mle(mle_vec_idx) => {
+                        let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
 
                         if mle_ref.layer_id == effected_layer {
                             mle_ref.mle_indices = new_bits
@@ -233,16 +208,34 @@ fn add_bits_to_layer_refs<F: FieldExt>(
                                 .cloned()
                                 .collect();
                         }
+                        Ok(())
                     }
-                    Ok(())
+                    ExpressionNode::Product(mle_vec_indices) => {
+                        for mle_vec_index in mle_vec_indices {
+                            let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
+
+                            if mle_ref.layer_id == effected_layer {
+                                mle_ref.mle_indices = new_bits
+                                    .iter()
+                                    .chain(mle_ref.mle_indices.iter())
+                                    .cloned()
+                                    .collect();
+                                mle_ref.original_mle_indices = new_bits
+                                    .iter()
+                                    .chain(mle_ref.original_mle_indices.iter())
+                                    .cloned()
+                                    .collect();
+                            }
+                        }
+                        Ok(())
+                    }
+                    ExpressionNode::Constant(_)
+                    | ExpressionNode::Scaled(_, _)
+                    | ExpressionNode::Sum(_, _)
+                    | ExpressionNode::Negated(_)
+                    | ExpressionNode::Selector(_, _, _) => Ok(()),
                 }
-                ExpressionNode::Constant(_)
-                | ExpressionNode::Scaled(_, _)
-                | ExpressionNode::Sum(_, _)
-                | ExpressionNode::Negated(_)
-                | ExpressionNode::Selector(_, _, _) => Ok(()),
-            }
-        };
+            };
 
         expression.traverse_mut(&mut closure).unwrap();
     }

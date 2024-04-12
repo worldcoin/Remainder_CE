@@ -1,8 +1,8 @@
 use crate::{claims::wlx_eval::WLXAggregator, expression::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
-    prover_expr::ProverExpr,
-}, mle::mle_enum::MleEnum};
-use crate::{gate::gate::BinaryOperation, prover::helpers::test_circuit};
+    prover_expr::ProverExpr},
+};
+use crate::gate::gate::BinaryOperation;
 use ark_std::{end_timer, log2, start_timer, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
@@ -14,7 +14,6 @@ use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
 use crate::{
     layer::{
         batched::{combine_mles, combine_zero_mle_ref, BatchedLayer},
-        empty_layer::EmptyLayer,
         from_mle,
         layer_enum::LayerEnum,
         simple_builders::{EqualityCheck, ZeroBuilder},
@@ -27,6 +26,7 @@ use crate::{
     },
     prover::input_layer::enum_input_layer::InputLayerEnumCommitment,
     prover::ProofSystem,
+    prover::proof_system::DefaultProofSystem,
     utils::get_random_mle,
 };
 use remainder_shared_types::{
@@ -35,7 +35,7 @@ use remainder_shared_types::{
 };
 
 use super::{
-    combine_layers::combine_layers, proof_system::DefaultProofSystem, input_layer::{
+    combine_layers::combine_layers, helpers::test_circuit, input_layer::{
         self, combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer, InputLayer,
@@ -99,6 +99,97 @@ impl<F: FieldExt> GKRCircuit<F> for SimpleCircuit<F> {
         // --- Subtract the computed circuit output from the advice circuit output ---
         let output_diff_builder = from_mle(
             (first_layer_output, output_input.clone()),
+            |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
+            |(mle1, mle2), layer_id, prefix_bits| {
+                let num_vars = max(mle1.num_iterated_vars(), mle2.num_iterated_vars());
+                ZeroMleRef::new(num_vars, prefix_bits, layer_id)
+            },
+        );
+
+        // --- Add this final layer to the circuit ---
+        let circuit_output = layers.add_gkr(output_diff_builder);
+
+        Witness {
+            layers,
+            output_layers: vec![circuit_output.get_enum()],
+            input_layers,
+        }
+    }
+}
+
+struct CircuitNoLinearIndex<F: FieldExt> {
+    mle_1: DenseMle<F, F>,
+    mle_2: DenseMle<F, F>,
+    neg_mle_2: DenseMle<F, F>,
+    size: usize,
+}
+impl<F: FieldExt> GKRCircuit<F> for CircuitNoLinearIndex<F> {
+    type ProofSystem = DefaultProofSystem;
+
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
+        // --- The input layer should just be the concatenation of `mle` and `output_input` ---
+        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
+            Box::new(&mut self.mle_1),
+            Box::new(&mut self.mle_2),
+            Box::new(&mut self.neg_mle_2),
+        ];
+        let mut input_layer =
+            InputLayerBuilder::new(input_mles, Some(vec![self.size]), LayerId::Input(0));
+
+        // --- Create Layers to be added to ---
+        let mut layers = Layers::new();
+
+        // --- Create a SimpleLayer from the first `mle` within the circuit ---
+        let mult_builder = from_mle(
+            (self.mle_1.clone(), self.mle_2.clone()),
+            // --- The expression is a simple product between the first and second halves ---
+            |(mle_1, mle_2)| Expression::products(vec![mle_1.mle_ref(), mle_2.mle_ref()]),
+            // --- The witness generation simply zips the two halves and multiplies them ---
+            |(mle_1, mle_2), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    mle_1
+                        .mle_ref()
+                        .bookkeeping_table()
+                        .into_iter()
+                        .zip(mle_2.mle_ref().bookkeeping_table())
+                        .map(|(first, second)| *first * second),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+
+        // --- Create a SimpleLayer from the first `mle` within the circuit ---
+        let mult_builder_neg = from_mle(
+            (self.mle_1.clone(), self.neg_mle_2.clone()),
+            // --- The expression is a simple product between the first and second halves ---
+            |(mle_1, mle_2)| Expression::products(vec![mle_1.mle_ref(), mle_2.mle_ref()]),
+            // --- The witness generation simply zips the two halves and multiplies them ---
+            |(mle_1, mle_2), layer_id, prefix_bits| {
+                DenseMle::new_from_iter(
+                    mle_1
+                        .mle_ref()
+                        .bookkeeping_table()
+                        .into_iter()
+                        .zip(mle_2.mle_ref().bookkeeping_table())
+                        .map(|(first, second)| *first * second),
+                    layer_id,
+                    prefix_bits,
+                )
+            },
+        );
+
+        // --- Stacks the two aforementioned layers together into a single layer ---
+        // --- Then adds them to the overall circuit ---
+        let first_layer_output = layers.add_gkr(mult_builder);
+        let second_layer_output = layers.add_gkr(mult_builder_neg);
+
+        let input_layer: PublicInputLayer<F> = input_layer.to_input_layer();
+        let input_layers = vec![input_layer.into()];
+
+        // --- Subtract the computed circuit output from the advice circuit output ---
+        let output_diff_builder = from_mle(
+            (first_layer_output, second_layer_output.clone()),
             |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
             |(mle1, mle2), layer_id, prefix_bits| {
                 let num_vars = max(mle1.num_iterated_vars(), mle2.num_iterated_vars());
@@ -717,8 +808,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
 
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
 
-        let output_layer_mle =
-            layers.add_empty(output_layer_builder);
+        let output_layer_mle = layers.add_gkr(output_layer_builder);
 
         Witness {
             layers,
@@ -1092,7 +1182,7 @@ impl<F: FieldExt> GKRCircuit<F> for EmptyLayerTestCircuit<F> {
             self.empty_layer_src_mle.clone(),
             self.other_empty_layer_src_mle.clone(),
         );
-        let empty_layer_result = layers.add_empty(empty_layer_builder);
+        let empty_layer_result = layers.add_gkr(empty_layer_builder);
 
         // --- Subtracts from `self.mle` ---
         let sub_builder = EmptyLayerSubBuilder::new(empty_layer_result.clone(), self.mle.clone());
@@ -1152,7 +1242,6 @@ impl<F: FieldExt> GKRCircuit<F> for CombineCircuit<F> {
         for layer in simple_layers.layers.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
-                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
                 _ => panic!(),
             };
 
@@ -1219,6 +1308,56 @@ fn test_gkr_simple_circuit() {
     );
 
     let circuit: SimpleCircuit<Fr> = SimpleCircuit { mle, size };
+    test_circuit(circuit, Some(Path::new("simple_circuit_optimized.json")));
+}
+
+#[test]
+fn test_gkr_nonlinear_circuit() {
+    let mut rng = test_rng();
+    let size = 2;
+
+    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..1 << size).map(
+            |_| Fr::from(rng.gen::<u64>()), // Fr::from(20_u64)
+        ),
+        LayerId::Input(0),
+        None,
+    );
+
+    // let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+    //     vec![
+    //         Fr::from(1_u64),
+    //         Fr::from(1_u64),
+    //         Fr::from(1_u64),
+    //         Fr::from(1_u64),
+    //     ],
+    //     LayerId::Input(0),
+    //     None,
+    // );
+
+    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        (0..1 << size).map(|_| Fr::from(rng.gen::<u64>())),
+        // Fr::from(1_u64)),
+        LayerId::Input(0),
+        None,
+    );
+
+    let neg_mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+        mle_2
+            .mle_ref()
+            .bookkeeping_table()
+            .iter()
+            .map(|elem| elem.neg()),
+        LayerId::Input(0),
+        None,
+    );
+
+    let circuit: CircuitNoLinearIndex<Fr> = CircuitNoLinearIndex {
+        mle_1,
+        mle_2,
+        neg_mle_2,
+        size,
+    };
     test_circuit(circuit, Some(Path::new("simple_circuit_optimized.json")));
 }
 
@@ -1375,7 +1514,7 @@ fn test_random_layer_circuit() {
 // ------------------------------------ GATE CIRCUITS ------------------------------------
 
 #[test]
-fn test_gkr_gate_simplest_circuit() {
+fn ca() {
     let mut rng = test_rng();
     let size = 1 << 4;
 
@@ -1997,7 +2136,6 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
         for layer in simple_layers.layers.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
-                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
                 _ => panic!(),
             };
 
@@ -2040,7 +2178,6 @@ impl<F: FieldExt> GKRCircuit<F> for Combine3Circuit<F> {
         for layer in batch_layers.layers.iter_mut() {
             let expression = match layer {
                 LayerEnum::Gkr(layer) => &mut layer.expression,
-                LayerEnum::EmptyLayer(layer) => &mut layer.expr,
                 _ => panic!(),
             };
 

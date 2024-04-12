@@ -10,14 +10,13 @@ use remainder_shared_types::FieldExt;
 
 use self::mle_enum::MleEnum;
 use dyn_clonable::*;
-
-pub mod beta;
 /// Contains default dense implementation of Mle
 pub mod dense;
 
 pub mod mle_enum;
 pub mod zero;
 
+pub mod betavalues;
 pub mod evals;
 
 //TODO!(Maybe this type needs PartialEq, could be easily implemented with a random id...)

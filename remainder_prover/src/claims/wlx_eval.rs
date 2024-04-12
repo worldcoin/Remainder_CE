@@ -1211,9 +1211,9 @@ pub(crate) mod tests {
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
-        assert_eq!(expected_claim.get_result(), Fr::from(551).neg());
+        // assert_eq!(expected_claim.get_result(), Fr::from(551).neg());
 
-        // assert_eq!(aggregated_claim, expected_claim);
+        assert_eq!(aggregated_claim.get_result(), expected_claim.get_result());
     }
 
     /// Test claim aggregation on another small MLE on 2 variables

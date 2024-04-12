@@ -1,5 +1,4 @@
 //!Module that orchestrates creating a GKR Proof
-
 pub mod combine_layers;
 pub mod helpers;
 /// For the input layer to the GKR circuit
@@ -13,7 +12,6 @@ use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
     claims::{wlx_eval::{get_num_wlx_evaluations, prover_aggregate_claims_helper, verifier_aggregate_claims_helper, ClaimGroup, ClaimMle}, Claim, ClaimAggregator, YieldClaim}, gate::gate::{BinaryOperation, Gate}, layer::{
-        empty_layer::EmptyLayer,
         layer_enum::LayerEnum,
         RegularLayer, Layer, LayerBuilder, LayerError, LayerId,
     }, mle::{
@@ -66,19 +64,6 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         let id = LayerId::Layer(self.layers.len());
         let successor = new_layer.next_layer(id, None);
         let layer = RegularLayer::<F>::new(new_layer, id);
-        self.layers.push(layer.into());
-        successor
-    }
-
-    /// Add an EmptyLayer to a list of layers
-    pub fn add_empty<B: LayerBuilder<F>>(&mut self, new_layer: B) -> B::Successor
-    where
-        T: From<EmptyLayer<F>>,
-    {
-
-        let id = LayerId::Layer(self.layers.len());
-        let successor = new_layer.next_layer(id, None);
-        let layer = EmptyLayer::new(new_layer, id);
         self.layers.push(layer.into());
         successor
     }
@@ -206,6 +191,7 @@ pub enum GKRError {
 }
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
+/// this inner vec is none if there is no sumcheck proof -- this means that
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SumcheckProof<F>(pub Vec<Vec<F>>);
 
