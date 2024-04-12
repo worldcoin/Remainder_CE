@@ -550,9 +550,9 @@ mod test {
         }
     }
 
-    impl Into<Fr> for Qfr {
-        fn into(self) -> Fr {
-            self.0
+    impl From<Qfr> for Fr {
+        fn from(val: Qfr) -> Self {
+            val.0
         }
     }
 
@@ -579,8 +579,8 @@ mod test {
 
     #[test]
     fn evals_new_from_big_endian_2_vars() {
-        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(|v| Fr::from(v)).collect();
-        let expected_evals: Vec<Fr> = [1, 3, 2, 4].into_iter().map(|v| Fr::from(v)).collect();
+        let evals: Vec<Fr> = [1, 2, 3, 4].into_iter().map(Fr::from).collect();
+        let expected_evals: Vec<Fr> = [1, 3, 2, 4].into_iter().map(Fr::from).collect();
 
         let f = Evaluations::new_from_big_endian(2, &evals);
 
@@ -617,7 +617,7 @@ mod test {
     /// Property: flip_endianess(n, flip_endianess(n, vals)) == pad_with_zeros(vals).
     #[quickcheck]
     fn flip_endianess_cancellation_property(vals: Vec<Qfr>) -> TestResult {
-        if vals.len() == 0 {
+        if vals.is_empty() {
             return TestResult::discard();
         }
         let n = log2(vals.len()) as usize;
@@ -800,7 +800,7 @@ mod test {
 
         // Ensure f(2, 3) = 17.
         assert_eq!(
-            f_tilde.evaluate_at_point(&vec![Fr::from(2), Fr::from(3)]),
+            f_tilde.evaluate_at_point(&[Fr::from(2), Fr::from(3)]),
             Fr::from(17)
         );
     }
