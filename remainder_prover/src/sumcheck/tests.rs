@@ -1,12 +1,12 @@
 use super::*;
 use crate::{
-    claims::Claim, expression::generic_expr::ExpressionNode, layer::LayerId, mle::dense::DenseMle
+    claims::Claim, expression::generic_expr::ExpressionNode
 };
 
 
-use ark_std::{test_rng, Zero};
+use ark_std::{Zero};
 use rand::Rng;
-use remainder_shared_types::Fr;
+
 
 
 
@@ -655,7 +655,7 @@ fn test_beta_cascade_1() {
         DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
     mle_ref_1.index_mle_indices(0);
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
-    let betacascade_evals = beta_cascade(&[&mle_ref_1], 2, 0, &beta_vals, &vec![]);
+    let betacascade_evals = beta_cascade(&[&mle_ref_1], 2, 0, &beta_vals, &[]);
     let expected_evals = Evals(vec![Fr::from(4).neg(), Fr::from(10), Fr::from(30)]);
     assert_eq!(betacascade_evals, expected_evals);
 }
@@ -671,7 +671,7 @@ fn test_beta_cascade_2() {
     mle_ref_1.index_mle_indices(0);
     mle_ref_2.index_mle_indices(0);
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
-    let betacascade_evals = beta_cascade(&[&mle_ref_1, &mle_ref_2], 3, 0, &beta_vals, &vec![]);
+    let betacascade_evals = beta_cascade(&[&mle_ref_1, &mle_ref_2], 3, 0, &beta_vals, &[]);
     let expected_evals = Evals(vec![
         Fr::from(10).neg(),
         Fr::from(2),
@@ -702,7 +702,7 @@ fn test_beta_cascade_3() {
         4,
         0,
         &beta_vals,
-        &vec![],
+        &[],
     );
     let expected_evals = Evals(vec![
         Fr::from(28).neg(),

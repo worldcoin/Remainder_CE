@@ -1,18 +1,17 @@
 use crate::gate::gate::BinaryOperation;
 use crate::{
-    claims::wlx_eval::WLXAggregator,
     expression::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
 };
-use ark_std::{end_timer, log2, start_timer, test_rng, One};
+use ark_std::{log2, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
-use serde_json::{from_reader, to_writer};
 
-use std::{cmp::max, fs, iter::repeat_with, path::Path, time::Instant};
+
+use std::{cmp::max, iter::repeat_with, path::Path};
 
 use crate::{
     layer::{
@@ -27,13 +26,11 @@ use crate::{
         zero::ZeroMleRef,
         Mle, MleIndex, MleRef,
     },
-    prover::input_layer::enum_input_layer::InputLayerEnumCommitment,
     prover::proof_system::DefaultProofSystem,
-    prover::ProofSystem,
     utils::get_random_mle,
 };
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, Transcript, TranscriptWriter},
+    transcript::{TranscriptWriter},
     FieldExt, Fr,
 };
 
@@ -41,7 +38,7 @@ use super::{
     combine_layers::combine_layers,
     helpers::test_circuit,
     input_layer::{
-        self, combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
+        combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer, InputLayer,
     },
@@ -139,7 +136,7 @@ impl<F: FieldExt> GKRCircuit<F> for CircuitNoLinearIndex<F> {
             Box::new(&mut self.mle_2),
             Box::new(&mut self.neg_mle_2),
         ];
-        let mut input_layer =
+        let input_layer =
             InputLayerBuilder::new(input_mles, Some(vec![self.size]), LayerId::Input(0));
 
         // --- Create Layers to be added to ---
@@ -156,7 +153,7 @@ impl<F: FieldExt> GKRCircuit<F> for CircuitNoLinearIndex<F> {
                     mle_1
                         .mle_ref()
                         .bookkeeping_table()
-                        .into_iter()
+                        .iter()
                         .zip(mle_2.mle_ref().bookkeeping_table())
                         .map(|(first, second)| *first * second),
                     layer_id,
@@ -176,7 +173,7 @@ impl<F: FieldExt> GKRCircuit<F> for CircuitNoLinearIndex<F> {
                     mle_1
                         .mle_ref()
                         .bookkeeping_table()
-                        .into_iter()
+                        .iter()
                         .zip(mle_2.mle_ref().bookkeeping_table())
                         .map(|(first, second)| *first * second),
                     layer_id,
@@ -195,7 +192,7 @@ impl<F: FieldExt> GKRCircuit<F> for CircuitNoLinearIndex<F> {
 
         // --- Subtract the computed circuit output from the advice circuit output ---
         let output_diff_builder = from_mle(
-            (first_layer_output, second_layer_output.clone()),
+            (first_layer_output, second_layer_output),
             |(mle1, mle2)| mle1.mle_ref().expression() - mle2.mle_ref().expression(),
             |(mle1, mle2), layer_id, prefix_bits| {
                 let num_vars = max(mle1.num_iterated_vars(), mle2.num_iterated_vars());
@@ -377,7 +374,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         ),
         GKRError,
     > {
-        let mut input =
+        let input =
             InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
                 .to_input_layer_with_rho_inv(4, 1.);
         let mut input: CircuitInputLayer<F, Self> = input.into();
@@ -811,7 +808,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplestGateCircuitUneven<F> {
         // --- Create Layers to be added to ---
         let mut layers = Layers::new();
 
-        let mut nonzero_gates = vec![(0, 0, 0)];
+        let nonzero_gates = vec![(0, 0, 0)];
 
         let first_layer_output = layers.add_gate(
             nonzero_gates,
@@ -1595,7 +1592,7 @@ fn test_gkr_gate_simplest_circuit_combined() {
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
             .bookkeeping_table()
-            .into_iter()
+            .iter()
             .map(|elem| -elem),
         LayerId::Input(0),
         None,
@@ -1723,7 +1720,7 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
         mle_2
             .mle_ref()
             .bookkeeping_table()
-            .into_iter()
+            .iter()
             .map(|elem| -elem),
         LayerId::Input(0),
         None,
@@ -1770,7 +1767,7 @@ fn test_gkr_add_mul_gate_simplest_circuit() {
         mle_2
             .mle_ref()
             .bookkeeping_table()
-            .into_iter()
+            .iter()
             .map(|elem| -elem),
         LayerId::Input(0),
         None,

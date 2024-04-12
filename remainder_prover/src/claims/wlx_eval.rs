@@ -1080,7 +1080,7 @@ pub(crate) mod tests {
     use crate::layer::{from_mle, LayerId, RegularLayer};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
-    use remainder_shared_types::transcript::{poseidon_transcript::PoseidonSponge, Transcript};
+    use remainder_shared_types::transcript::{poseidon_transcript::PoseidonSponge};
 
     use super::*;
     use ark_std::test_rng;
@@ -1188,7 +1188,7 @@ pub(crate) mod tests {
         (0..num_vars)
             .map(|i| {
                 let evals: &Vec<Fr> = claims.get_points_column(i);
-                evaluate_at_a_point(evals, r_star.clone()).unwrap()
+                evaluate_at_a_point(evals, *r_star).unwrap()
             })
             .collect()
     }
@@ -1203,7 +1203,7 @@ pub(crate) mod tests {
             TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("Dummy transcript for testing");
         prover_aggregate_claims_helper(
             claims,
-            &mut |claim, _, mle_refs| Ok(compute_claim_wlx(claims, layer)),
+            &mut |_claim, _, _mle_refs| Ok(compute_claim_wlx(claims, layer)),
             &mut transcript_writer,
         )
         .unwrap()
@@ -1240,7 +1240,7 @@ pub(crate) mod tests {
         // Compare to l(10) computed by hand.
         assert_eq!(l_star, vec![Fr::from(7).neg(), Fr::from(43)]);
 
-        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star);
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
@@ -1272,7 +1272,7 @@ pub(crate) mod tests {
 
         // TODO: Assert l_star was computed correctly.
 
-        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star);
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         assert_eq!(aggregated_claim.get_result(), expected_claim.get_result());
@@ -1297,7 +1297,7 @@ pub(crate) mod tests {
 
         let l_star = compute_l_star(&claims, &r_star);
 
-        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star);
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         assert_eq!(aggregated_claim.get_result(), expected_claim.get_result());
@@ -1531,7 +1531,7 @@ pub(crate) mod tests {
         let wlx = compute_claim_wlx(&claims, &layer);
         assert_eq!(wlx, vec![Fr::from(163), Fr::from(1015), Fr::from(2269)]);
 
-        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star);
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
@@ -1570,7 +1570,7 @@ pub(crate) mod tests {
         // Compare to l(10) computed by hand.
         assert_eq!(l_star, vec![Fr::from(11), Fr::from(3), Fr::from(5)]);
 
-        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star.clone());
+        let aggregated_claim = claim_aggregation_back_end_wrapper(&layer, &claims, r_star);
         let expected_claim = compute_expected_claim(&layer, &l_star);
 
         // Compare to W(l_star) computed by hand.
