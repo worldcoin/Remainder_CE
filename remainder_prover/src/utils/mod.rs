@@ -3,10 +3,7 @@ use std::{fs, iter::repeat_with};
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::{prelude::Distribution, Rng};
-use remainder_shared_types::{
-    transcript::{TranscriptSponge},
-    FieldExt, Poseidon,
-};
+use remainder_shared_types::{transcript::TranscriptSponge, FieldExt, Poseidon};
 
 use crate::{
     layer::{layer_enum::LayerEnum, LayerId},
@@ -153,14 +150,11 @@ pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
                 bytes
                     .iter()
                     .skip(1)
-                    .fold(
-                        (F::from(first as u64), base),
-                        |(accum, power), byte| {
-                            let accum = accum + (F::from(*byte as u64) * power);
-                            let power = power * base;
-                            (accum, power)
-                        },
-                    )
+                    .fold((F::from(first as u64), base), |(accum, power), byte| {
+                        let accum = accum + (F::from(*byte as u64) * power);
+                        let power = power * base;
+                        (accum, power)
+                    })
                     .0
             })
             .collect_vec();

@@ -1,7 +1,5 @@
 use remainder_shared_types::{
-    transcript::{
-        poseidon_transcript::PoseidonSponge, TranscriptSponge,
-    },
+    transcript::{poseidon_transcript::PoseidonSponge, TranscriptSponge},
     FieldExt,
 };
 
@@ -14,9 +12,7 @@ use crate::{
     mle::{mle_enum::MleEnum, MleRef},
 };
 
-use super::input_layer::{
-    enum_input_layer::InputLayerEnum, InputLayer,
-};
+use super::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
 
 #[macro_export]
 ///This macro generates a layer enum that represents all the possible layers

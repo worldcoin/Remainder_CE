@@ -74,9 +74,7 @@ impl<F: FieldExt> BetaValues<F> {
         let bound_betas = mle_indices
             .iter()
             .filter_map(|index| match index {
-                MleIndex::Bound(_, round_idx) => {
-                    self.updated_values.get(round_idx).copied()
-                }
+                MleIndex::Bound(_, round_idx) => self.updated_values.get(round_idx).copied(),
                 _ => None,
             })
             .collect_vec();
@@ -84,9 +82,7 @@ impl<F: FieldExt> BetaValues<F> {
         let unbound_betas = mle_indices
             .iter()
             .filter_map(|index| match index {
-                MleIndex::IndexedBit(round_idx) => {
-                    self.unbound_values.get(round_idx).copied()
-                }
+                MleIndex::IndexedBit(round_idx) => self.unbound_values.get(round_idx).copied(),
                 _ => None,
             })
             .collect_vec();

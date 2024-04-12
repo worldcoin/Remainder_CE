@@ -1,4 +1,4 @@
-use std::{cmp::max};
+use std::cmp::max;
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -455,7 +455,6 @@ impl<F: FieldExt> Gate<F> {
         self.rhs.index_mle_indices(0);
 
         // result of initializing is the first sumcheck message!
-        
 
         libra_giraffe(
             &self.lhs,

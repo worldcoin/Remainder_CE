@@ -149,7 +149,7 @@ pub fn unflatten_mle<F: FieldExt>(
             let individual_mle_table = (0..individual_mle_len)
                 .map(|mle_idx| {
                     let flat_mle_ref = flattened_mle.mle_ref();
-                    
+
                     flat_mle_ref.current_mle.f[copy_idx + (mle_idx * num_copies)]
                 })
                 .collect_vec();

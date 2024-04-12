@@ -1,15 +1,12 @@
-use crate::gate::gate::BinaryOperation;
-use crate::{
-    expression::{
-        generic_expr::{Expression, ExpressionNode, ExpressionType},
-        prover_expr::ProverExpr,
-    },
+use crate::expression::{
+    generic_expr::{Expression, ExpressionNode, ExpressionType},
+    prover_expr::ProverExpr,
 };
+use crate::gate::gate::BinaryOperation;
 use ark_std::{log2, test_rng, One};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
-
 
 use std::{cmp::max, iter::repeat_with, path::Path};
 
@@ -29,10 +26,7 @@ use crate::{
     prover::proof_system::DefaultProofSystem,
     utils::get_random_mle,
 };
-use remainder_shared_types::{
-    transcript::{TranscriptWriter},
-    FieldExt, Fr,
-};
+use remainder_shared_types::{transcript::TranscriptWriter, FieldExt, Fr};
 
 use super::{
     combine_layers::combine_layers,
@@ -374,9 +368,8 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         ),
         GKRError,
     > {
-        let input =
-            InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
-                .to_input_layer_with_rho_inv(4, 1.);
+        let input = InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
+            .to_input_layer_with_rho_inv(4, 1.);
         let mut input: CircuitInputLayer<F, Self> = input.into();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
@@ -1590,10 +1583,7 @@ fn test_gkr_gate_simplest_circuit_combined() {
     dbg!("hello");
 
     let negmle = DenseMle::new_from_iter(
-        mle.mle_ref()
-            .bookkeeping_table()
-            .iter()
-            .map(|elem| -elem),
+        mle.mle_ref().bookkeeping_table().iter().map(|elem| -elem),
         LayerId::Input(0),
         None,
     );
@@ -1717,11 +1707,7 @@ fn test_gkr_add_mul_gate_batched_simplest_circuit() {
     );
 
     let neg_mle_2 = DenseMle::new_from_iter(
-        mle_2
-            .mle_ref()
-            .bookkeeping_table()
-            .iter()
-            .map(|elem| -elem),
+        mle_2.mle_ref().bookkeeping_table().iter().map(|elem| -elem),
         LayerId::Input(0),
         None,
     );
@@ -1764,11 +1750,7 @@ fn test_gkr_add_mul_gate_simplest_circuit() {
     );
 
     let neg_mle_2 = DenseMle::new_from_iter(
-        mle_2
-            .mle_ref()
-            .bookkeeping_table()
-            .iter()
-            .map(|elem| -elem),
+        mle_2.mle_ref().bookkeeping_table().iter().map(|elem| -elem),
         LayerId::Input(0),
         None,
     );

@@ -9,8 +9,11 @@ use std::collections::HashSet;
 
 use remainder_shared_types::Fr;
 
-use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpr}, layer::LayerId, mle::dense::DenseMle};
-
+use crate::{
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    layer::LayerId,
+    mle::dense::DenseMle,
+};
 
 #[test]
 fn test_constants_eval() {

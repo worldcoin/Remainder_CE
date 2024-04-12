@@ -1,5 +1,3 @@
-
-
 use remainder_shared_types::transcript::{
     TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter,
 };
@@ -10,17 +8,13 @@ use crate::layer::combine_mle_refs::get_og_mle_refs;
 
 use crate::mle::mle_enum::MleEnum;
 
-
-
 use crate::prover::input_layer::InputLayer;
-use crate::prover::{GKRError};
+use crate::prover::GKRError;
 use crate::sumcheck::*;
 
-use ark_std::{cfg_into_iter};
+use ark_std::cfg_into_iter;
 
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-
-
 
 use crate::layer::LayerId;
 use crate::layer::{Layer, LayerError};
@@ -1080,7 +1074,7 @@ pub(crate) mod tests {
     use crate::layer::{from_mle, LayerId, RegularLayer};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
-    use remainder_shared_types::transcript::{poseidon_transcript::PoseidonSponge};
+    use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 
     use super::*;
     use ark_std::test_rng;

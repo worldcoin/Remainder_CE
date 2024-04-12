@@ -2,18 +2,11 @@
 
 use remainder_shared_types::FieldExt;
 
-
-use crate::{
-    claims::{wlx_eval::YieldWLXEvals},
-    input_layer_enum,
-    layer::LayerId,
-};
+use crate::{claims::wlx_eval::YieldWLXEvals, input_layer_enum, layer::LayerId};
 
 use super::{
-    ligero_input_layer::{LigeroInputLayer},
-    public_input_layer::PublicInputLayer,
-    random_input_layer::RandomInputLayer,
-    InputLayer,
+    ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
+    random_input_layer::RandomInputLayer, InputLayer,
 };
 
 input_layer_enum!(

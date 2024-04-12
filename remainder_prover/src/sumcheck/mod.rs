@@ -359,7 +359,6 @@ fn successors_from_mle_ref_product<F: FieldExt>(
             .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
             .unwrap();
 
-        
         successors_product.take(eval_count).collect_vec()
     });
     let evals_vec: Vec<F> = evals.collect();
@@ -421,7 +420,7 @@ pub(crate) fn beta_cascade_step<F: FieldExt>(
         (mle_successor_vec[idx] * one_minus_beta_val)
             + (mle_successor_vec[idx + half_vec_len] * beta_val)
     });
-    
+
     new_successor.collect()
 }
 

@@ -232,11 +232,7 @@ fn combine_pair<F: FieldExt>(
             chal_point[lsb_idx],
             lsb_idx,
         )))
-        .chain(
-            mle_ref_first.mle_indices()[lsb_idx + 1..]
-                .iter()
-                .cloned(),
-        )
+        .chain(mle_ref_first.mle_indices()[lsb_idx + 1..].iter().cloned())
         .collect_vec();
 
     let interleaved_mle_indices_og = mle_ref_first.original_mle_indices()[0..lsb_idx]
@@ -275,7 +271,7 @@ fn combine_pair<F: FieldExt>(
     // TODO!(vishady) also this is factually incorrect info lol because the original bookkeeping table is just wrong but
     // it is kind of dumb to recompute it because we don't use it anymore. ideally these would be stored somewhere else so we don't
     // have to keep catering to the fields we don't need ?
-    
+
     DenseMleRef {
         current_mle,
         original_mle,

@@ -27,7 +27,7 @@ use crate::{
         prover_expr::ProverExpr,
     },
     mle::{betavalues::BetaValues, mle_enum::MleEnum, MleIndex, MleRef},
-    prover::{SumcheckProof},
+    prover::SumcheckProof,
     sumcheck::{
         compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
         InterpError,
@@ -38,9 +38,7 @@ use remainder_shared_types::{
     FieldExt,
 };
 
-use self::{
-    combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
-};
+use self::combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs};
 
 use core::cmp::Ordering;
 
@@ -361,8 +359,9 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         let last_idx = nonlinear_rounds[nonlinear_rounds.len() - 1];
 
         self.expression.fix_variable(last_idx, final_chal);
-        if let Some(beta) = self.beta_vals
-            .as_mut() { beta.beta_update(last_idx, final_chal) }
+        if let Some(beta) = self.beta_vals.as_mut() {
+            beta.beta_update(last_idx, final_chal)
+        }
         Ok(Some(all_prover_sumcheck_messages.into()))
     }
 

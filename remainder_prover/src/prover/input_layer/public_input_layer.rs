@@ -1,29 +1,17 @@
 //! An input layer that is sent to the verifier in the clear
 
-
-
-
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
-
 use crate::{
-    claims::{
-        wlx_eval::{YieldWLXEvals},
-        Claim,
-    },
-    layer::{LayerId},
+    claims::{wlx_eval::YieldWLXEvals, Claim},
+    layer::LayerId,
     mle::{dense::DenseMle, mle_enum::MleEnum, MleRef},
 };
 
-use super::{
-    get_wlx_evaluations_helper, InputLayer, InputLayerError,
-    MleInputLayer,
-};
-
-
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
 
 ///An Input Layer that is send to the verifier in the clear
 pub struct PublicInputLayer<F: FieldExt> {

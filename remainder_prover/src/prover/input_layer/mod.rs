@@ -1,6 +1,6 @@
 //! Trait for dealing with InputLayer
 
-use ark_std::{cfg_into_iter};
+use ark_std::cfg_into_iter;
 
 use rayon::prelude::*;
 use remainder_shared_types::{
@@ -21,12 +21,10 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ENABLE_PRE_FIX},
         Claim,
     },
-    layer::{LayerId},
+    layer::LayerId,
     mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
     sumcheck::evaluate_at_a_point,
 };
-
-
 
 use ark_std::{end_timer, start_timer};
 

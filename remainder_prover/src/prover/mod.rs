@@ -8,19 +8,17 @@ pub mod test_helper_circuits;
 #[cfg(test)]
 pub(crate) mod tests;
 
-use std::{marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::{
-    claims::{
-        Claim, ClaimAggregator, YieldClaim,
-    },
+    claims::{Claim, ClaimAggregator, YieldClaim},
     gate::gate::{BinaryOperation, Gate},
     layer::{layer_enum::LayerEnum, Layer, LayerBuilder, LayerError, LayerId, RegularLayer},
     mle::{
         dense::{DenseMle, DenseMleRef},
         MleIndex, MleRef,
     },
-    utils::{hash_layers},
+    utils::hash_layers,
 };
 
 use tracing::{debug, info};
@@ -35,7 +33,7 @@ use remainder_shared_types::transcript::{
 use remainder_shared_types::FieldExt;
 
 // use derive_more::From;
-use itertools::{Itertools};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{instrument, span, Level};
@@ -44,10 +42,6 @@ use self::{
     input_layer::{InputLayer, InputLayerError},
     proof_system::ProofSystem,
 };
-
-
-
-
 
 /// New type for containing the list of Layers that make up the GKR circuit
 ///

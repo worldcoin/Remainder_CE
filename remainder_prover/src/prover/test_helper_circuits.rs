@@ -1,4 +1,4 @@
-use remainder_shared_types::{FieldExt};
+use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},

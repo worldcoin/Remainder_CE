@@ -1,28 +1,17 @@
 //! A part of the input layer that is random and secured through F-S
 
-
-
-
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
-
 use crate::{
-    claims::{
-        wlx_eval::{YieldWLXEvals},
-        Claim,
-    },
-    layer::{LayerId},
+    claims::{wlx_eval::YieldWLXEvals, Claim},
+    layer::LayerId,
     mle::{dense::DenseMle, mle_enum::MleEnum, MleRef},
 };
 
-
-
-use super::{
-    get_wlx_evaluations_helper, InputLayer, InputLayerError,
-};
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError};
 
 pub struct RandomInputLayer<F: FieldExt> {
     mle: Vec<F>,

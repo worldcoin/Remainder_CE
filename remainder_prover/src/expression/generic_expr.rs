@@ -2,7 +2,6 @@ use crate::mle::MleIndex;
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 
-
 /// Different Expression Types corresponds to different stages in the
 /// lift cycle of an expression
 pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {

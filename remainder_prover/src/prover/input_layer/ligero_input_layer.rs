@@ -1,9 +1,5 @@
 //! An InputLayer that will be have it's claim proven with a Ligero Opening Proof
 
-
-
-
-
 use remainder_ligero::{
     adapter::{convert_halo_to_lcpc, LigeroProof},
     ligero_commit::{
@@ -19,17 +15,14 @@ use remainder_shared_types::{
 };
 use serde::{Deserialize, Serialize};
 
-
 use crate::{
-    claims::wlx_eval::{YieldWLXEvals},
+    claims::wlx_eval::YieldWLXEvals,
     layer::LayerId,
     mle::{dense::DenseMle, mle_enum::MleEnum},
     prover::input_layer::InputLayerError,
 };
 
-use super::{
-    get_wlx_evaluations_helper, InputLayer, MleInputLayer,
-};
+use super::{get_wlx_evaluations_helper, InputLayer, MleInputLayer};
 
 pub struct LigeroInputLayer<F: FieldExt> {
     pub mle: DenseMle<F, F>,

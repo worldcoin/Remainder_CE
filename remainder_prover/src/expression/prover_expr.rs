@@ -94,9 +94,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 
     /// Create a product Expression that multiplies many MLEs together
     pub fn products(product_list: <ProverExpr as ExpressionType<F>>::MleVec) -> Self {
-        let mle_vec_indices = (0..product_list.len())
-            .map(MleVecIndex::new)
-            .collect_vec();
+        let mle_vec_indices = (0..product_list.len()).map(MleVecIndex::new).collect_vec();
 
         let product_node = ExpressionNode::Product(mle_vec_indices);
 
