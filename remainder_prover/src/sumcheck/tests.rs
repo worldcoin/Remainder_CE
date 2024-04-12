@@ -660,3 +660,130 @@ fn test_dummy_sumcheck_sum() {
         verify_sumcheck_messages(res_messages, expression_aggro, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
 }
+
+#[test]
+fn test_beta_cascade_1() {
+    let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
+    let mut mle_ref_1: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
+    mle_ref_1.index_mle_indices(0);
+    let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
+    let betacascade_evals = beta_cascade(&[&mle_ref_1], 2, 0, &beta_vals, &vec![]);
+    let expected_evals = Evals(vec![Fr::from(4).neg(), Fr::from(10), Fr::from(30)]);
+    assert_eq!(betacascade_evals, expected_evals);
+}
+
+#[test]
+fn test_beta_cascade_2() {
+    let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
+    let mle_2_vec = vec![Fr::from(4_u64), Fr::from(2_u64), Fr::from(3_u64), Fr::one()];
+    let mut mle_ref_1: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_2: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0), None).mle_ref();
+    mle_ref_1.index_mle_indices(0);
+    mle_ref_2.index_mle_indices(0);
+    let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
+    let betacascade_evals = beta_cascade(&[&mle_ref_1, &mle_ref_2], 3, 0, &beta_vals, &vec![]);
+    let expected_evals = Evals(vec![
+        Fr::from(10).neg(),
+        Fr::from(2),
+        Fr::from(60).neg(),
+        Fr::from(232).neg(),
+    ]);
+    assert_eq!(betacascade_evals, expected_evals);
+}
+
+#[test]
+fn test_beta_cascade_3() {
+    let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
+    let mle_2_vec = vec![Fr::from(4_u64), Fr::from(2_u64), Fr::from(3_u64), Fr::one()];
+    let mle_3_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
+    let mut mle_ref_1: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_2: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_3: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0), None).mle_ref();
+    mle_ref_1.index_mle_indices(0);
+    mle_ref_2.index_mle_indices(0);
+    mle_ref_3.index_mle_indices(0);
+
+    let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
+    let betacascade_evals = beta_cascade(
+        &[&mle_ref_1, &mle_ref_2, &mle_ref_3],
+        4,
+        0,
+        &beta_vals,
+        &vec![],
+    );
+    let expected_evals = Evals(vec![
+        Fr::from(28).neg(),
+        Fr::from(22),
+        Fr::from(240).neg(),
+        Fr::from(1288).neg(),
+        Fr::from(3740).neg(),
+    ]);
+    assert_eq!(betacascade_evals, expected_evals);
+}
+
+#[test]
+fn test_successors_from_mle_ref_product() {
+    let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
+    let mle_2_vec = vec![Fr::from(4_u64), Fr::from(2_u64), Fr::from(3_u64), Fr::one()];
+    let mle_3_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
+    let mut mle_ref_1: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_2: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_3: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0), None).mle_ref();
+    mle_ref_1.index_mle_indices(0);
+    mle_ref_2.index_mle_indices(0);
+    mle_ref_3.index_mle_indices(0);
+
+    let successors_vec =
+        successors_from_mle_ref_product(&[&mle_ref_1, &mle_ref_2, &mle_ref_3], 4).unwrap();
+    let expected_vec = vec![
+        Fr::from(4),
+        Fr::from(8),
+        Fr::zero(),
+        Fr::from(32).neg(),
+        Fr::from(100).neg(),
+        Fr::from(12),
+        Fr::from(9),
+        Fr::from(16).neg(),
+        Fr::from(75).neg(),
+        Fr::from(180).neg(),
+    ];
+    assert_eq!(successors_vec, expected_vec);
+}
+
+#[test]
+fn test_beta_cascade_step() {
+    let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
+    let mle_2_vec = vec![Fr::from(4_u64), Fr::from(2_u64), Fr::from(3_u64), Fr::one()];
+    let mle_3_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
+    let mut mle_ref_1: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_2: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_3: DenseMleRef<Fr> =
+        DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0), None).mle_ref();
+    mle_ref_1.index_mle_indices(0);
+    mle_ref_2.index_mle_indices(0);
+    mle_ref_3.index_mle_indices(0);
+
+    let mut successors_vec =
+        successors_from_mle_ref_product(&[&mle_ref_1, &mle_ref_2, &mle_ref_3], 4).unwrap();
+
+    let one_step_with_beta_val_3 = beta_cascade_step(&mut successors_vec, Fr::from(3));
+    let expected_vec = vec![
+        Fr::from(28),
+        Fr::from(11),
+        Fr::from(48).neg(),
+        Fr::from(161).neg(),
+        Fr::from(340).neg(),
+    ];
+    assert_eq!(one_step_with_beta_val_3, expected_vec);
+}
