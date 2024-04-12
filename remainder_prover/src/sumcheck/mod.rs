@@ -369,7 +369,7 @@ fn successors_from_mle_ref_product<F: FieldExt>(
 /// this function performs the same funcionality as the above, except it is when the mle refs we
 /// are working with have no independent variable. therefore, we are actually just taking the
 /// sum over all of the variables and do not need evaluations.
-fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
+pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
     mle_refs: &[&impl MleRef<F = F>],
 ) -> Result<Vec<F>, MleError> {
     let max_num_vars = mle_refs
@@ -411,7 +411,10 @@ fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
 
 /// this is one step of the beta cascade algorithm. essentially we are doing
 /// (1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len] (big-endian version of fix variable)
-fn beta_cascade_step<F: FieldExt>(mle_successor_vec: &mut Vec<F>, beta_val: F) -> Vec<F> {
+pub(crate) fn beta_cascade_step<F: FieldExt>(
+    mle_successor_vec: &mut Vec<F>,
+    beta_val: F,
+) -> Vec<F> {
     let (one_minus_beta_val, beta_val) = (F::one() - beta_val, beta_val);
     let half_vec_len = mle_successor_vec.len() / 2;
     let new_successor = cfg_into_iter!((0..half_vec_len)).map(|idx| {
@@ -491,8 +494,14 @@ pub fn beta_cascade<F: FieldExt>(
         .reduce(|acc, item| acc | item)
         .unwrap();
 
+    dbg!(mles_have_independent_variable);
+
     if mles_have_independent_variable {
         let mut mle_successor_vec = successors_from_mle_ref_product(mle_refs, degree).unwrap();
+        dbg!(&mle_successor_vec);
+        mle_successor_vec.iter().for_each(|elem| {
+            dbg!(elem.neg());
+        });
         // we go from the LSB --> MSB for the beta values, and do the big-endian fix variable for each one,
         // reducing the size of `mle_successor_vec` by half.
         beta_vals.iter().skip(1).rev().for_each(|val| {
