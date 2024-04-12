@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 

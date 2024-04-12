@@ -87,7 +87,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
-            let mut send_claim = Claim::new(
+            let send_claim = Claim::new(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())

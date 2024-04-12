@@ -7,7 +7,7 @@ use crate::{
     layer::LayerError,
 };
 
-use super::{dense::DenseMleRef, zero::ZeroMleRef, Mle, MleIndex, MleRef};
+use super::{dense::DenseMleRef, zero::ZeroMleRef, MleIndex, MleRef};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]

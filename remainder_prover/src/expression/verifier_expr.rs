@@ -57,7 +57,7 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
             Err(ExpressionError::SelectorBitNotBoundError)
         };
         let mle_eval = for<'a> |mle_ref: &'a <VerifierExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, ExpressionError> {
-            Ok(mle_ref.clone())
+            Ok(*mle_ref)
         };
         let negated = |a: Result<F, ExpressionError>| match a {
             Err(e) => Err(e),
@@ -67,7 +67,7 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
             |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
         let product = for<'a, 'b> |mle_refs: &'a [<VerifierExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, ExpressionError> {
             mle_refs.iter().try_fold(F::one(), |acc, new_mle_ref| {
-                Ok(acc * new_mle_ref.clone())
+                Ok(acc * *new_mle_ref)
             })
         };
         let scaled = |a: Result<F, ExpressionError>, scalar: F| Ok(a? * scalar);

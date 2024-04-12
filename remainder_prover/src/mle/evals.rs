@@ -360,7 +360,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
             .iter() // was into_iter()
             .enumerate()
             .fold(F::zero(), |acc, (idx, v)| {
-                let beta = (0..n).into_iter().fold(F::one(), |acc, i| {
+                let beta = (0..n).fold(F::one(), |acc, i| {
                     let bit_i = idx & (1 << i);
                     if bit_i > 0 {
                         acc * point[i]

@@ -7,8 +7,8 @@ use std::{
 use ark_std::log2;
 // use derive_more::{From, Into};
 use itertools::{repeat_n, Itertools};
-use rand::seq::index;
-use rayon::{prelude::ParallelIterator, slice::ParallelSlice};
+
+use rayon::{prelude::ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
@@ -21,7 +21,6 @@ use crate::{
     claims::{ClaimError, YieldClaim},
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::{combine_mle_refs::combine_mle_refs, LayerError},
-    sumcheck::MleError,
 };
 use remainder_shared_types::FieldExt;
 
@@ -437,7 +436,7 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
 
 #[derive(Debug, Clone)]
 ///Newtype around a tuple of field elements
-pub struct TupleTree<F: FieldExt>(pub ((F, F)));
+pub struct TupleTree<F: FieldExt>(pub (F, F));
 
 impl<F: FieldExt> MleAble<F> for TupleTree<F> {
     type Repr = [Vec<F>; 2];
@@ -634,23 +633,21 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
                     if state.0 {
                         // Index already found; do nothing.
                         state
-                    } else {
-                        if let MleIndex::IndexedBit(current_bit_index) = *mle_index {
-                            if current_bit_index == indexed_bit_index {
-                                // Found the indexed bit in the current index;
-                                // bind it and increment the bit count.
-                                mle_index.bind_index(point);
-                                (true, state.1 + 1)
-                            } else {
-                                // Index not yet found but this is an indexed
-                                // bit; increasing bit count.
-                                (false, state.1 + 1)
-                            }
+                    } else if let MleIndex::IndexedBit(current_bit_index) = *mle_index {
+                        if current_bit_index == indexed_bit_index {
+                            // Found the indexed bit in the current index;
+                            // bind it and increment the bit count.
+                            mle_index.bind_index(point);
+                            (true, state.1 + 1)
                         } else {
-                            // Index not yet found but the current bit is not an
-                            // indexed bit; do nothing.
-                            state
+                            // Index not yet found but this is an indexed
+                            // bit; increasing bit count.
+                            (false, state.1 + 1)
                         }
+                    } else {
+                        // Index not yet found but the current bit is not an
+                        // indexed bit; do nothing.
+                        state
                     }
                 });
 
@@ -660,7 +657,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.current_mle.fix_variable_at_index(bit_count - 1, point);
 
         if self.num_vars() == 0 {
-            let mut fixed_claim_return = Claim::new(
+            let fixed_claim_return = Claim::new(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
@@ -686,7 +683,7 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
         self.current_mle.fix_variable(challenge);
 
         if self.num_vars() == 0 {
-            let mut fixed_claim_return = Claim::new(
+            let fixed_claim_return = Claim::new(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())

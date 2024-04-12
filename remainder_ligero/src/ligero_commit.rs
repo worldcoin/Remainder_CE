@@ -1,4 +1,4 @@
-use std::ops::Rem;
+
 
 use crate::adapter::{convert_lcpc_to_halo, LigeroClaim, LigeroProof};
 use crate::ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point};
@@ -289,7 +289,7 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
 
 /// Function for verification of Ligero proof
 pub fn remainder_ligero_verify<F: FieldExt, T: TranscriptSponge<F>>(
-    root: &LcRoot<LigeroEncoding<F>, F>,
+    _root: &LcRoot<LigeroEncoding<F>, F>,
     proof: &LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
     aux: LcProofAuxiliaryInfo,
     tr: &mut TranscriptReader<F, T>,
@@ -390,7 +390,7 @@ pub mod tests {
         let log_num_rows = 4;
         let log_orig_num_cols = 4;
         let rho_inv = 4;
-        let ratio = 1_f64;
+        let _ratio = 1_f64;
         let ligero_root_filename = "ligero_root.txt";
         let ligero_proof_filename = "ligero_eval_proof.txt";
         let ligero_aux_data_filename = "ligero_aux_info.txt";

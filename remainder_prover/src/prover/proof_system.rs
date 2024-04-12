@@ -1,7 +1,6 @@
 use remainder_shared_types::{
     transcript::{
-        poseidon_transcript::PoseidonSponge, Transcript, TranscriptReader, TranscriptSponge,
-        TranscriptWriter,
+        poseidon_transcript::PoseidonSponge, TranscriptSponge,
     },
     FieldExt,
 };
@@ -10,14 +9,13 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 use crate::{
-    claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator, YieldClaim},
-    layer::{layer_enum::LayerEnum, Layer, RegularLayer},
+    claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
+    layer::{layer_enum::LayerEnum, Layer},
     mle::{mle_enum::MleEnum, MleRef},
 };
 
 use super::input_layer::{
-    enum_input_layer::InputLayerEnum, ligero_input_layer::LigeroInputLayer,
-    public_input_layer::PublicInputLayer, InputLayer,
+    enum_input_layer::InputLayerEnum, InputLayer,
 };
 
 #[macro_export]
