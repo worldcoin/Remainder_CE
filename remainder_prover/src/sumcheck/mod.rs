@@ -496,14 +496,8 @@ pub fn beta_cascade<F: FieldExt>(
         .reduce(|acc, item| acc | item)
         .unwrap();
 
-    dbg!(mles_have_independent_variable);
-
     if mles_have_independent_variable {
         let mut mle_successor_vec = successors_from_mle_ref_product(mle_refs, degree).unwrap();
-        dbg!(&mle_successor_vec);
-        mle_successor_vec.iter().for_each(|elem| {
-            dbg!(elem.neg());
-        });
         // we go from the LSB --> MSB for the beta values, and do the big-endian fix variable for each one,
         // reducing the size of `mle_successor_vec` by half.
         beta_vals.iter().skip(1).rev().for_each(|val| {
