@@ -239,15 +239,15 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     }
 
     /// Turn the builder into an input layer WITH a pre-commitment
-    pub fn to_input_layer_with_precommit<Tr: TranscriptSponge<F>>(
+    pub fn to_input_layer_with_precommit(
         self,
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
         ligero_aux: LcProofAuxiliaryInfo,
         ligero_root: LcRoot<LigeroEncoding<F>, F>,
         verifier_is_precommit: bool,
-    ) -> LigeroInputLayer<F, Tr> {
+    ) -> LigeroInputLayer<F> {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
-        LigeroInputLayer::<F, Tr>::new_with_ligero_commitment(
+        LigeroInputLayer::<F>::new_with_ligero_commitment(
             final_mle,
             self.layer_id,
             ligero_comm,
@@ -258,12 +258,12 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     }
 
     /// Turn the builder into input layer with rho inv specified
-    pub fn to_input_layer_with_rho_inv<Tr: TranscriptSponge<F>>(
+    pub fn to_input_layer_with_rho_inv(
         self,
         rho_inv: u8,
         ratio: f64,
-    ) -> LigeroInputLayer<F, Tr> {
+    ) -> LigeroInputLayer<F> {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
-        LigeroInputLayer::<F, Tr>::new_with_rho_inv_ratio(final_mle, self.layer_id, rho_inv, ratio)
+        LigeroInputLayer::<F>::new_with_rho_inv_ratio(final_mle, self.layer_id, rho_inv, ratio)
     }
 }

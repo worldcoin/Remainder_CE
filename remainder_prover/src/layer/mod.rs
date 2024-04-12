@@ -1,13 +1,12 @@
 //! A layer is a combination of multiple MLEs with an expression
 
 pub mod batched;
-pub mod claims;
 pub mod combine_mle_refs;
 pub mod layer_enum;
 pub mod simple_builders;
 // mod gkr_layer;
 
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
 
 use ark_std::cfg_into_iter;
 use itertools::{repeat_n, Itertools};
@@ -16,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
+    claims::{wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals, ENABLE_PRE_FIX, ENABLE_RAW_MLE}, Claim, ClaimError, YieldClaim},
     expression::{
         expr_errors::ExpressionError,
         generic_expr::{Expression, ExpressionNode, ExpressionType},
@@ -34,7 +34,6 @@ use remainder_shared_types::{
 };
 
 use self::{
-    claims::{get_num_wlx_evaluations, Claim, ClaimError, ENABLE_PRE_FIX, ENABLE_RAW_MLE},
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     layer_enum::LayerEnum,
 };
@@ -128,63 +127,44 @@ impl std::fmt::Display for LayerId {
 
 /// A layer is what you perform sumcheck over, it is made up of an expression and MLEs that contribute evaluations to that expression
 pub trait Layer<F: FieldExt> {
-    /// The transcript that this layer uses
-    type Sponge: TranscriptSponge<F>;
+    /// The struct that contains the proof this `Layer` generates
+    type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
 
     /// Creates a sumcheck proof for this Layer
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
-    ) -> Result<SumcheckProof<F>, LayerError>;
+        transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::Proof, LayerError>;
 
     ///  Verifies the sumcheck protocol
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Option<Vec<Vec<F>>>,
-        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+        proof: Self::Proof,
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError>;
 
     /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError>;
+    // fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError>;
 
     /// Gets this layers id
     fn id(&self) -> &LayerId;
-
-    ///Get W(l(x)) evaluations
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &Vec<Vec<F>>,
-        claimed_vals: &Vec<F>,
-        claimed_mle_refs: Vec<MleEnum<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, ClaimError>;
-
-    /// Create new ConcreteLayer from a LayerBuilder
-    fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self
-    where
-        Self: Sized;
-
-    fn get_enum(self) -> LayerEnum<F, Self::Sponge>;
 }
 
 /// Default Layer abstraction
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct GKRLayer<F: FieldExt, Tr> {
+#[serde(bound = "F: FieldExt")] 
+pub struct RegularLayer<F: FieldExt> {
     id: LayerId,
     pub(crate) expression: Expression<F, ProverExpr>,
     /// store the nonlinear rounds in a GKR layer so that these are the only rounds we produce sumcheck proofs over.
     nonlinear_rounds: Option<Vec<usize>>,
     /// store the beta values associated with an expression.
     beta_vals: Option<BetaValues<F>>,
-    #[serde(skip)]
-    _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: TranscriptSponge<F>> GKRLayer<F, Tr> {
+impl<F: FieldExt> RegularLayer<F> {
     /// initialize all necessary information in order to start sumcheck within a layer of GKR. this includes
     /// pre-fixing all of the rounds within the layer which are linear,
     /// and then appropriately initializing the necessary beta values over the nonlinear rounds.
@@ -298,34 +278,32 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> GKRLayer<F, Tr> {
     }
 
     pub(crate) fn new_raw(id: LayerId, expression: Expression<F, ProverExpr>) -> Self {
-        GKRLayer {
+        RegularLayer {
             id,
             expression,
             nonlinear_rounds: None,
             beta_vals: None,
-            _marker: PhantomData,
         }
     }
-}
 
-impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
-    type Sponge = Tr;
-
-    fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
+    pub(crate) fn new<L: LayerBuilder<F>>(builder: L, id: LayerId) -> Self {
         Self {
             id,
             expression: builder.build_expression(),
             nonlinear_rounds: None,
             beta_vals: None,
-            _marker: PhantomData,
         }
     }
+}
+
+impl<F: FieldExt> Layer<F> for RegularLayer<F> {
+    type Proof = Option<SumcheckProof<F>>;
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
-    ) -> Result<SumcheckProof<F>, LayerError> {
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<Option<SumcheckProof<F>>, LayerError> {
         let val = claim.get_result().clone();
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
@@ -382,14 +360,14 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
         self.beta_vals
             .as_mut()
             .map(|beta| beta.beta_update(last_idx, final_chal));
-        Ok(Some(all_prover_sumcheck_messages).into())
+        Ok(Some(all_prover_sumcheck_messages.into()))
     }
 
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_prover_messages: Option<Vec<Vec<F>>>,
-        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+        sumcheck_prover_messages: Self::Proof,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError> {
         // if there are no sumcheck prover messages, this means this was an entirely linear layer. therefore
         // we can skip the verification for this layer.
@@ -399,6 +377,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
         let sumcheck_prover_messages = sumcheck_prover_messages.unwrap();
         // --- Keeps track of challenges u_1, ..., u_n to be bound ---
         let mut challenges = vec![];
+        let sumcheck_prover_messages: Vec<Vec<F>> = sumcheck_prover_messages.0;
 
         // --- First verify that g_1(0) + g_1(1) = \sum_{b_1, ..., b_n} g(b_1, ..., b_n) ---
         // (i.e. the first verification step of sumcheck)
@@ -492,7 +471,13 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
         Ok(())
     }
 
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    fn id(&self) -> &LayerId {
+        &self.id
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         // First off, parse the expression that is associated with the layer...
         // Next, get to the actual claims that are generated by each expression and grab them
         // Return basically a list of (usize, Claim)
@@ -502,7 +487,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
         // - Basically we just want to go down it and pass up claims
         // - We can only add a new claim if we see an MLE with all its indices bound
 
-        let mut claims: Vec<Claim<F>> = Vec::new();
+        let mut claims: Vec<ClaimMle<F>> = Vec::new();
 
         let mut observer_fn =
             |exp: &ExpressionNode<F, ProverExpr>,
@@ -540,7 +525,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
                         // --- Construct the claim ---
                         // println!("========\n I'm making a GKR layer claim for an MLE!!\n==========");
                         // println!("From: {:#?}, To: {:#?}", self.id().clone(), mle_layer_id);
-                        let claim: Claim<F> = Claim::new(
+                        let claim: ClaimMle<F> = ClaimMle::new(
                             fixed_mle_indices,
                             claimed_value,
                             Some(self.id().clone()),
@@ -578,7 +563,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
 
                             // --- Construct the claim ---
                             // need to populate the claim with the mle ref we are grabbing the claim from
-                            let claim: Claim<F> = Claim::new(
+                            let claim: ClaimMle<F> = ClaimMle::new(
                                 fixed_mle_indices,
                                 claimed_value,
                                 Some(self.id().clone()),
@@ -602,11 +587,9 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
 
         Ok(claims)
     }
+}
 
-    fn id(&self) -> &LayerId {
-        &self.id
-    }
-
+impl<F: FieldExt> YieldWLXEvals<F> for RegularLayer<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
@@ -672,10 +655,6 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
         let mut wlx_evals = claimed_vals.clone();
         wlx_evals.extend(&next_evals);
         Ok(wlx_evals)
-    }
-
-    fn get_enum(self) -> LayerEnum<F, Self::Sponge> {
-        LayerEnum::Gkr(self)
     }
 }
 

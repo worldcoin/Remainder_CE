@@ -6,26 +6,26 @@ use serde::{Deserialize, Serialize};
 use remainder_shared_types::{transcript::Transcript, FieldExt};
 use tracing::instrument;
 
-use crate::gate::gate::Gate;
+use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
+use crate::{claims::wlx_eval::WLXAggregator, gate::gate::Gate};
+use crate::layer_enum;
+use crate::mle::dense::DenseMleRef;
 use crate::mle::mle_enum::MleEnum;
 
-use super::{GKRLayer, Layer};
+use super::LayerError;
+use super::{RegularLayer, Layer};
 
-use super::claims::Claim;
+use crate::claims::{Claim, YieldClaim};
 
 use std::fmt;
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-///An enum representing all the possible kinds of Layers
-pub enum LayerEnum<F: FieldExt, Tr: TranscriptSponge<F>> {
-    ///A standard `GKRLayer`
-    Gkr(GKRLayer<F, Tr>),
-    /// Gate Generic
-    Gate(Gate<F, Tr>),
-}
+layer_enum!(
+    LayerEnum,
+    (Gkr: RegularLayer<F>),
+    (Gate: Gate<F>)
+);
 
-impl<F: FieldExt, Tr: TranscriptSponge<F>> fmt::Debug for LayerEnum<F, Tr> {
+impl<F: FieldExt> fmt::Debug for LayerEnum<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             LayerEnum::Gkr(_) => write!(f, "GKR Layer"),
@@ -34,93 +34,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> fmt::Debug for LayerEnum<F, Tr> {
     }
 }
 
-impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for LayerEnum<F, Tr> {
-    type Sponge = Tr;
-
-    #[instrument(skip_all, level = "debug", err)]
-    fn prove_rounds(
-        &mut self,
-        claim: Claim<F>,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
-    ) -> Result<crate::prover::SumcheckProof<F>, super::LayerError> {
-        match self {
-            LayerEnum::Gkr(layer) => layer.prove_rounds(claim, transcript_writer),
-            LayerEnum::Gate(layer) => layer.prove_rounds(claim, transcript_writer),
-        }
-    }
-
-    #[instrument(skip_all, level = "debug", err)]
-    fn verify_rounds(
-        &mut self,
-        claim: Claim<F>,
-        sumcheck_rounds: Option<Vec<Vec<F>>>,
-        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
-    ) -> Result<(), super::LayerError> {
-        match self {
-            LayerEnum::Gkr(layer) => layer.verify_rounds(claim, sumcheck_rounds, transcript_reader),
-            LayerEnum::Gate(layer) => {
-                layer.verify_rounds(claim, sumcheck_rounds, transcript_reader)
-            }
-        }
-    }
-
-    #[instrument(skip(self), level = "debug", err)]
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, super::LayerError> {
-        match self {
-            LayerEnum::Gkr(layer) => layer.get_claims(),
-            LayerEnum::Gate(layer) => layer.get_claims(),
-        }
-    }
-
-    fn id(&self) -> &super::LayerId {
-        match self {
-            LayerEnum::Gkr(layer) => layer.id(),
-            LayerEnum::Gate(layer) => layer.id(),
-        }
-    }
-
-    fn new<L: super::LayerBuilder<F>>(builder: L, id: super::LayerId) -> Self
-    where
-        Self: Sized,
-    {
-        LayerEnum::Gkr(GKRLayer::new(builder, id))
-    }
-
-    fn get_enum(self) -> LayerEnum<F, Self::Sponge> {
-        self
-    }
-
-    // TODO(Makis): Perhaps refactor to receive a `Claim<F>` instead.
-    /// NOTE: This function is effectively deprecated!!!
-    #[instrument(skip(self, claim_vecs, claimed_vals), level = "debug", err)]
-    fn get_wlx_evaluations(
-        &self,
-        claim_vecs: &Vec<Vec<F>>,
-        claimed_vals: &Vec<F>,
-        claimed_mles: Vec<MleEnum<F>>,
-        num_claims: usize,
-        num_idx: usize,
-    ) -> Result<Vec<F>, super::claims::ClaimError> {
-        match self {
-            LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(
-                claim_vecs,
-                claimed_vals,
-                claimed_mles,
-                num_claims,
-                num_idx,
-            ),
-            LayerEnum::Gate(layer) => layer.get_wlx_evaluations(
-                claim_vecs,
-                claimed_vals,
-                claimed_mles,
-                num_claims,
-                num_idx,
-            ),
-        }
-    }
-}
-
-impl<F: FieldExt, Tr: TranscriptSponge<F>> LayerEnum<F, Tr> {
+impl<F: FieldExt> LayerEnum<F> {
     ///Gets the size of the Layer as a whole in terms of number of bits
     pub(crate) fn layer_size(&self) -> usize {
         let expression = match self {
@@ -135,6 +49,31 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> LayerEnum<F, Tr> {
         match self {
             LayerEnum::Gkr(layer) => Box::new(layer.expression().circuit_description_fmt()),
             LayerEnum::Gate(gate_layer) => Box::new(gate_layer.circuit_description_fmt()),
+        }
+    }
+}
+
+impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, crate::claims::ClaimError> {
+        match self {
+            LayerEnum::Gkr(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+            LayerEnum::Gate(layer) => layer.get_wlx_evaluations(claim_vecs, claimed_vals, claimed_mles, num_claims, num_idx),
+        }
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        match self {
+            LayerEnum::Gkr(layer) => layer.get_claims(),
+            LayerEnum::Gate(layer) => layer.get_claims(),
         }
     }
 }

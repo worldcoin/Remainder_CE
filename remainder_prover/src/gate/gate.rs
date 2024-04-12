@@ -10,9 +10,7 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
-    layer::{
-        claims::{get_num_wlx_evaluations, Claim, ClaimError},
+    claims::{wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals}, Claim, ClaimError, YieldClaim}, gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate}, layer::{
         layer_enum::LayerEnum,
         Layer, LayerBuilder, LayerError, LayerId, VerificationError,
     },
@@ -21,9 +19,7 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         mle_enum::MleEnum,
         MleRef,
-    },
-    prover::SumcheckProof,
-    sumcheck::{evaluate_at_a_point, Evals},
+    }, prover::SumcheckProof, sumcheck::{evaluate_at_a_point, Evals}
 };
 
 use super::gate_helpers::{
@@ -57,7 +53,7 @@ impl BinaryOperation {
 /// the `gate_operation` parameter. additionally, the number of dataparallel variables
 /// is specified by `num_dataparallel_bits` in order to account for batched and un-batched
 /// gates.
-pub struct Gate<F: FieldExt, Sp: TranscriptSponge<F>> {
+pub struct Gate<F: FieldExt> {
     /// the layer id associated with this gate layer
     pub layer_id: LayerId,
     /// the number of bits representing the number of "dataparallel" copies of the circuit
@@ -76,16 +72,15 @@ pub struct Gate<F: FieldExt, Sp: TranscriptSponge<F>> {
     pub phase_2_mles: Option<Vec<Vec<DenseMleRef<F>>>>,
     /// the gate operation representing the fan-in-two relationship
     pub gate_operation: BinaryOperation,
-    _marker: PhantomData<Sp>,
 }
 
-impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
-    type Sponge = Sp;
+impl<F: FieldExt> Layer<F> for Gate<F> {
+    type Proof = SumcheckProof<F>;
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let mut sumcheck_rounds = vec![];
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
@@ -125,16 +120,16 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
         sumcheck_rounds.extend(phase_2_rounds);
 
         // the concatenation of all of these rounds is the proof resulting from a gate layer
-        Ok(Some(sumcheck_rounds).into())
+        Ok(sumcheck_rounds.into())
     }
 
     fn verify_rounds(
         &mut self,
         claim: Claim<F>,
-        sumcheck_rounds: Option<Vec<Vec<F>>>,
-        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+        sumcheck_rounds: Self::Proof,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError> {
-        let sumcheck_rounds = sumcheck_rounds.unwrap();
+        let sumcheck_rounds = sumcheck_rounds.0;
         let mut prev_evals = &sumcheck_rounds[0];
         let mut challenges = vec![];
         let mut first_u_challenges = vec![];
@@ -268,8 +263,15 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
         Ok(())
     }
 
-    /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<Claim<F>>, LayerError> {
+    /// Gets this layer's id
+    fn id(&self) -> &LayerId {
+        &self.layer_id
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
+        /// Get the claims that this layer makes on other layers
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
         let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
 
@@ -285,7 +287,7 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
             );
         }
         let val = lhs_reduced.bookkeeping_table()[0];
-        let claim: Claim<F> = Claim::new(
+        let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_u,
             val,
             Some(self.id().clone()),
@@ -304,7 +306,7 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
             );
         }
         let val = rhs_reduced.bookkeeping_table()[0];
-        let claim: Claim<F> = Claim::new(
+        let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_v,
             val,
             Some(self.id().clone()),
@@ -314,20 +316,10 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
         claims.push(claim);
 
         Ok(claims)
-    }
+    }    
+}
 
-    /// Gets this layer's id
-    fn id(&self) -> &LayerId {
-        &self.layer_id
-    }
-
-    /// Create new ConcreteLayer from a LayerBuilder -- not necessary for a gate layer because we
-    /// don't use layer builders in order to construct gate layers (as they don't operate on expressions,
-    /// just mles)
-    fn new<L: LayerBuilder<F>>(_builder: L, _id: LayerId) -> Self {
-        unimplemented!()
-    }
-
+impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
@@ -369,13 +361,9 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Layer<F> for Gate<F, Sp> {
         let wlx_evals = claimed_vals;
         Ok(wlx_evals)
     }
-
-    fn get_enum(self) -> LayerEnum<F, Self::Sponge> {
-        LayerEnum::Gate(self)
-    }
 }
 
-impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
+impl<F: FieldExt> Gate<F> {
     /// Construct a new gate layer
     ///
     /// # Arguments
@@ -407,7 +395,6 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
             phase_1_mles: None,
             phase_2_mles: None,
             gate_operation,
-            _marker: PhantomData,
         }
     }
 
@@ -641,7 +628,7 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
         claim: Vec<F>,
         beta_g1: &mut DenseMleRef<F>,
         beta_g2: &mut DenseMleRef<F>,
-        transcript_writer: &mut TranscriptWriter<F, <Gate<F, Sp> as Layer<F>>::Sponge>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<(Vec<Vec<F>>, F), LayerError> {
         // initialization, first message comes from here
         let mut challenges: Vec<F> = vec![];
@@ -701,7 +688,7 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
         &mut self,
         challenge: Vec<F>,
         beta_g2_fully_bound: F,
-        transcript_writer: &mut TranscriptWriter<F, <Gate<F, Sp> as Layer<F>>::Sponge>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<(Vec<Vec<F>>, F, Vec<F>), LayerError> {
         let first_message = self
             .init_phase_1(challenge)
@@ -768,7 +755,7 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
         phase_1_challenges: Vec<F>,
         beta_g1: DenseMleRef<F>,
         beta_g2_fully_bound: F,
-        transcript_writer: &mut TranscriptWriter<F, <Gate<F, Sp> as Layer<F>>::Sponge>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<Vec<Vec<F>>, LayerError> {
         let first_message = self
             .init_phase_2(phase_1_challenges.clone(), f_at_u, &beta_g1)
@@ -829,16 +816,16 @@ impl<F: FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
 }
 
 /// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + FieldExt, Sp: TranscriptSponge<F>> Gate<F, Sp> {
+impl<F: std::fmt::Debug + FieldExt> Gate<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Sp: TranscriptSponge<F>>(
-            &'a Gate<F, Sp>,
+        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(
+            &'a Gate<F>,
         );
 
-        impl<'a, F: std::fmt::Debug + FieldExt, Sp: TranscriptSponge<F>> std::fmt::Display
-            for GateCircuitDesc<'a, F, Sp>
+        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display
+            for GateCircuitDesc<'a, F>
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("Gate")

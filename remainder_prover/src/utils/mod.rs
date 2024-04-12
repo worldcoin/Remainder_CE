@@ -9,7 +9,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    layer::LayerId,
+    layer::{layer_enum::LayerEnum, LayerId},
     mle::{dense::DenseMle, MleIndex},
     prover::Layers,
 };
@@ -130,15 +130,6 @@ pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> V
         .collect_vec()
 }
 
-#[test]
-fn test_get_mle_idx_decomp_for_idx() {
-    let idx = 7;
-    let num_bits = 4;
-    let hi = get_mle_idx_decomp_for_idx::<Fr>(idx, num_bits);
-    dbg!(hi);
-    panic!();
-}
-
 /// Returns whether a particular file exists in the filesystem
 ///
 /// TODO!(ryancao): Shucks does this check a relative path...?
@@ -149,10 +140,10 @@ pub fn file_exists(file_path: &String) -> bool {
     }
 }
 
-pub fn hash_layers<F: FieldExt, Tr: TranscriptSponge<F>>(layers: &Layers<F, Tr>) -> F {
+pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 
-    layers.0.iter().for_each(|layer| {
+    layers.layers.iter().for_each(|layer| {
         let item = format!("{}", layer.circuit_description_fmt());
         let bytes = item.as_bytes();
         let elements: Vec<F> = bytes

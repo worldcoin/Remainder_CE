@@ -3,10 +3,8 @@ use crate::{
     expression::generic_expr::ExpressionNode,
     layer::{
         // claims::tests::claim_aggregation_testing_wrapper,
-        claims::Claim,
-        claims::ClaimGroup,
         from_mle,
-        GKRLayer,
+        RegularLayer,
         Layer,
         LayerBuilder,
         LayerId,
@@ -15,6 +13,8 @@ use crate::{
         dense::{DenseMle, Tuple2},
         Mle,
     },
+    claims::Claim,
+    claims::wlx_eval::ClaimGroup,
 };
 use ark_std::test_rng;
 
@@ -177,7 +177,7 @@ pub fn get_dummy_claim<F: FieldExt>(
             .collect_vec(),
         _ => panic!(),
     };
-    Claim::new_raw(claim, eval)
+    Claim::new(claim, eval)
 }
 
 pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
@@ -210,7 +210,7 @@ pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
         evals[0]
     };
 
-    Claim::new_raw(challenges, result)
+    Claim::new(challenges, result)
 }
 
 /// Test regular numerical evaluation, last round type beat

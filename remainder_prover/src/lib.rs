@@ -13,6 +13,8 @@ pub mod expression;
 pub mod gate;
 pub mod layer;
 pub mod mle;
+pub mod claims;
 pub mod prover;
 pub mod sumcheck;
 pub mod utils;
+pub use remainder_shared_types;
