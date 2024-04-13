@@ -131,11 +131,10 @@ impl<F: FieldExt> TripleNestedSelectorBuilder<F> {
 }
 
 struct BatchedCircuit<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
-    mle_3: DenseMle<F, F>,
-    mle_4: DenseMle<F, F>,
-    num_data_parallel_bits: usize,
+    mle_1_vec: Vec<DenseMle<F, F>>,
+    mle_2_vec: Vec<DenseMle<F, F>>,
+    mle_3_vec: Vec<DenseMle<F, F>>,
+    mle_4_vec: Vec<DenseMle<F, F>>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for BatchedCircuit<F> {
@@ -144,27 +143,29 @@ impl<F: FieldExt> GKRCircuit<F> for BatchedCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
         let mut layers = Layers::new();
 
-        let first_layer_builders = (0..(1 << self.num_data_parallel_bits))
-            .map(|_| ProductScaledBuilder::new(self.mle_1.clone(), self.mle_2.clone()))
-            .collect_vec();
+        let first_layer_builders = (self
+            .mle_1_vec
+            .clone()
+            .into_iter()
+            .zip(self.mle_2_vec.clone().into_iter()))
+        .map(|(mle_1, mle_2)| ProductScaledBuilder::new(mle_1, mle_2))
+        .collect_vec();
         let batched_first_layer_builder = BatchedLayer::new(first_layer_builders);
         let first_layer_output = layers.add_gkr(batched_first_layer_builder);
 
-        let second_layer_builders = first_layer_output
-            .iter()
-            .map(|mle| {
-                TripleNestedSelectorBuilder::new(
-                    mle.clone(),
-                    self.mle_3.clone(),
-                    self.mle_4.clone(),
-                )
-            })
-            .collect_vec();
+        let second_layer_builders = (first_layer_output.iter().zip(
+            self.mle_3_vec
+                .clone()
+                .into_iter()
+                .zip(self.mle_4_vec.clone().into_iter()),
+        ))
+        .map(|(mle, (mle_3, mle_4))| TripleNestedSelectorBuilder::new(mle.clone(), mle_3, mle_4))
+        .collect_vec();
 
         let batched_second_layer_builder = BatchedLayer::new(second_layer_builders);
-        let second_layer_output = layers.add_gkr(batched_second_layer_builder);
+        // let second_layer_output = layers.add_gkr(batched_second_layer_builder);
 
-        let zero_builders = second_layer_output
+        let zero_builders = first_layer_output
             .iter()
             .map(|mle| ZeroBuilder::new(mle.clone()))
             .collect_vec();
@@ -236,10 +237,14 @@ impl<F: FieldExt> GKRCircuit<F> for ScaledProductCircuit<F> {
 }
 
 struct CombinedCircuit<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
-    mle_3: DenseMle<F, F>,
-    mle_4: DenseMle<F, F>,
+    mle_1_vec: Vec<DenseMle<F, F>>,
+    mle_2_vec: Vec<DenseMle<F, F>>,
+    mle_3_vec: Vec<DenseMle<F, F>>,
+    mle_4_vec: Vec<DenseMle<F, F>>,
+    mle_5: DenseMle<F, F>,
+    mle_6: DenseMle<F, F>,
+    mle_7: DenseMle<F, F>,
+    mle_8: DenseMle<F, F>,
     num_data_parallel_bits: usize,
 }
 
@@ -254,17 +259,49 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
         &mut self,
         transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
     ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
-        self.mle_1.clone().layer_id = LayerId::Input(0);
-        self.mle_2.clone().layer_id = LayerId::Input(0);
-        self.mle_3.clone().layer_id = LayerId::Input(0);
-        self.mle_4.clone().layer_id = LayerId::Input(0);
+        let mut mle_1_combined = DenseMle::<F, F>::combine_mle_batch(self.mle_1_vec.clone());
+        let mut mle_2_combined = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
+        let mut mle_3_combined = DenseMle::<F, F>::combine_mle_batch(self.mle_3_vec.clone());
+        let mut mle_4_combined = DenseMle::<F, F>::combine_mle_batch(self.mle_4_vec.clone());
+        mle_1_combined.layer_id = LayerId::Input(0);
+        mle_2_combined.layer_id = LayerId::Input(0);
+        mle_3_combined.layer_id = LayerId::Input(0);
+        mle_4_combined.layer_id = LayerId::Input(0);
 
         let input_commit: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut self.mle_1),
-            Box::new(&mut self.mle_2),
-            Box::new(&mut self.mle_3),
-            Box::new(&mut self.mle_4),
+            Box::new(&mut mle_1_combined),
+            Box::new(&mut mle_2_combined),
+            Box::new(&mut mle_3_combined),
+            Box::new(&mut mle_4_combined),
+            // Box::new(&mut self.mle_5),
+            // Box::new(&mut self.mle_6),
+            // Box::new(&mut self.mle_7),
+            // Box::new(&mut self.mle_8),
         ];
+
+        self.mle_1_vec
+            .iter_mut()
+            .zip(
+                self.mle_2_vec
+                    .iter_mut()
+                    .zip(self.mle_3_vec.iter_mut().zip(self.mle_4_vec.iter_mut())),
+            )
+            .for_each(|(mle_1, (mle_2, (mle_3, mle_4)))| {
+                mle_1.layer_id = LayerId::Input(0);
+                mle_2.layer_id = LayerId::Input(0);
+                mle_3.layer_id = LayerId::Input(0);
+                mle_4.layer_id = LayerId::Input(0);
+                mle_1.set_prefix_bits(Some(vec![MleIndex::Iterated; self.num_data_parallel_bits]));
+                mle_2.set_prefix_bits(Some(vec![MleIndex::Iterated; self.num_data_parallel_bits]));
+                mle_3.set_prefix_bits(Some(vec![MleIndex::Iterated; self.num_data_parallel_bits]));
+                mle_4.set_prefix_bits(Some(vec![MleIndex::Iterated; self.num_data_parallel_bits]));
+            });
+
+        self.mle_5.layer_id = LayerId::Input(0);
+        self.mle_6.layer_id = LayerId::Input(0);
+        self.mle_7.layer_id = LayerId::Input(0);
+        self.mle_8.layer_id = LayerId::Input(0);
+
         let input_commit_builder =
             InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));
 
@@ -283,20 +320,19 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
             transcript_writer,
         );
         let mut batched_circuit = BatchedCircuit {
-            mle_1: self.mle_1.clone(),
-            mle_2: self.mle_2.clone(),
-            mle_3: self.mle_3.clone(),
-            mle_4: self.mle_4.clone(),
-            num_data_parallel_bits: self.num_data_parallel_bits,
+            mle_1_vec: self.mle_1_vec.clone(),
+            mle_2_vec: self.mle_2_vec.clone(),
+            mle_3_vec: self.mle_3_vec.clone(),
+            mle_4_vec: self.mle_4_vec.clone(),
         };
         let mut triple_nested_sel_circuit = TripleNestedSelectorCircuit {
-            inner_inner_sel_mle: self.mle_2.clone(),
-            inner_sel_mle: self.mle_3.clone(),
-            outer_sel_mle: self.mle_4.clone(),
+            inner_inner_sel_mle: self.mle_5.clone(),
+            inner_sel_mle: self.mle_6.clone(),
+            outer_sel_mle: self.mle_7.clone(),
         };
         let mut product_scaled_circuit = ScaledProductCircuit {
-            mle_1: self.mle_1.clone(),
-            mle_2: self.mle_2.clone(),
+            mle_1: self.mle_7.clone(),
+            mle_2: self.mle_8.clone(),
         };
 
         let batched_circuit_witness = batched_circuit.synthesize();
@@ -353,16 +389,32 @@ fn test_combined_circuit() {
     const VARS_MLE_4: usize = VARS_MLE_3 + 1;
     const NUM_DATA_PARALLEL_BITS: usize = 3;
 
-    let mle_1 = get_dummy_random_mle(VARS_MLE_1_2);
-    let mle_2 = get_dummy_random_mle(VARS_MLE_1_2);
-    let mle_3 = get_dummy_random_mle(VARS_MLE_3);
-    let mle_4 = get_dummy_random_mle(VARS_MLE_4);
+    let mle_1_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
+        .map(|_| get_dummy_random_mle(VARS_MLE_1_2))
+        .collect_vec();
+    let mle_2_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
+        .map(|_| get_dummy_random_mle(VARS_MLE_1_2))
+        .collect_vec();
+    let mle_3_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
+        .map(|_| get_dummy_random_mle(VARS_MLE_3))
+        .collect_vec();
+    let mle_4_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
+        .map(|_| get_dummy_random_mle(VARS_MLE_4))
+        .collect_vec();
+    let mle_5 = get_dummy_random_mle(VARS_MLE_1_2);
+    let mle_6 = get_dummy_random_mle(VARS_MLE_1_2);
+    let mle_7 = get_dummy_random_mle(VARS_MLE_3);
+    let mle_8 = get_dummy_random_mle(VARS_MLE_4);
 
     let combined_circuit: CombinedCircuit<Fr> = CombinedCircuit {
-        mle_1,
-        mle_2,
-        mle_3,
-        mle_4,
+        mle_1_vec,
+        mle_2_vec,
+        mle_3_vec,
+        mle_4_vec,
+        mle_5,
+        mle_6,
+        mle_7,
+        mle_8,
         num_data_parallel_bits: NUM_DATA_PARALLEL_BITS,
     };
     test_circuit(combined_circuit, None)
