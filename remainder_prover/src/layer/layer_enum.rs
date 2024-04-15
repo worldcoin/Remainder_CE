@@ -1,4 +1,5 @@
-use remainder_shared_types::transcript::TranscriptSponge;
+//! Helper struct that combines multiple `Layer` implementations into
+//! a single struct that can represent many types of `Layer`
 
 use remainder_shared_types::FieldExt;
 
@@ -9,22 +10,11 @@ use crate::gate::gate::Gate;
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
-use super::{Layer, RegularLayer};
+use super::{Layer, regular_layer::RegularLayer};
 
 use crate::claims::YieldClaim;
 
-use std::fmt;
-
 layer_enum!(LayerEnum, (Gkr: RegularLayer<F>), (Gate: Gate<F>));
-
-impl<F: FieldExt> fmt::Debug for LayerEnum<F> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            LayerEnum::Gkr(_) => write!(f, "GKR Layer"),
-            LayerEnum::Gate(_) => write!(f, "Gate"),
-        }
-    }
-}
 
 impl<F: FieldExt> LayerEnum<F> {
     ///Gets the size of the Layer as a whole in terms of number of bits
