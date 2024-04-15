@@ -1,7 +1,14 @@
 use ark_std::test_rng;
-use remainder_shared_types::{transcript::{poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptWriter}, Fr};
+use remainder_shared_types::{
+    transcript::{poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptWriter},
+    Fr,
+};
 
-use crate::{expression::generic_expr::Expression, layer::{Layer, LayerId}, mle::dense::DenseMle};
+use crate::{
+    expression::generic_expr::Expression,
+    layer::{Layer, LayerId},
+    mle::dense::DenseMle,
+};
 
 use super::RegularLayer;
 
