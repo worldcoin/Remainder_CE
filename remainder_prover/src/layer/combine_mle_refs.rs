@@ -33,8 +33,8 @@ pub enum CombineMleRefError {
 
 /// this fixes mle refs with shared points in the claims so that we don't have to keep doing them
 pub fn pre_fix_mle_refs<F: FieldExt>(
-    mle_refs: &mut Vec<MleEnum<F>>,
-    chal_point: &Vec<F>,
+    mle_refs: &mut [MleEnum<F>],
+    chal_point: &[F],
     common_idx: Vec<usize>,
 ) {
     cfg_iter_mut!(mle_refs).for_each(|mle_ref| {
@@ -92,8 +92,8 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
 /// variable on this combined mle ref using the challenge point
 /// instead, we fix variable as we combine as this keeps the bookkeeping table sizes at one and is faster to compute
 pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
-    mle_refs: &Vec<MleEnum<F>>,
-    chal_point: &Vec<F>,
+    mle_refs: &[MleEnum<F>],
+    chal_point: &[F],
 ) -> Result<F, CombineMleRefError> {
     // we go through all of the mle_refs and fix variable in all of them given the indexed indices they already have
     // so that they are fully bound.
@@ -286,7 +286,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
 
 /// this function will take a list of mle refs and update the list to contain mle_refs where all fixed bits are contiguous
 fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(
-    mle_refs: &Vec<MleEnum<F>>,
+    mle_refs: &[MleEnum<F>],
 ) -> Vec<MleEnum<F>> {
     mle_refs
         .iter()
@@ -317,7 +317,7 @@ fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(
 /// ref that contributes to this lsb
 /// if there are no fixed bits in any of the mle refs, it returns a `(None, None)` tuple
 fn get_lsb_fixed_var<F: FieldExt>(
-    mle_refs: &Vec<MleEnum<F>>,
+    mle_refs: &[MleEnum<F>],
 ) -> (Option<usize>, Option<MleEnum<F>>) {
     mle_refs
         .iter()
@@ -369,19 +369,14 @@ fn combine_pair<F: FieldExt>(
     mle_ref_first: MleEnum<F>,
     mle_ref_second: Option<MleEnum<F>>,
     lsb_idx: usize,
-    chal_point: &Vec<F>,
+    chal_point: &[F],
 ) -> DenseMleRef<F> {
     let mle_ref_first_bt = mle_ref_first.bookkeeping_table().to_vec();
 
     // if the second mle ref is None, we assume its bookkeeping table is all zeros. we are dealing with
     // fully fixed mle_refs, so this bookkeeping table size is just 1
-    let mle_ref_second_bt = {
-        if mle_ref_second.is_none() {
-            vec![F::zero()]
-        } else {
-            mle_ref_second.unwrap().bookkeeping_table().to_vec()
-        }
-    };
+
+    let mle_ref_second_bt = mle_ref_second.map(|mle_ref| mle_ref.bookkeeping_table().to_vec()).unwrap_or(vec![F::zero()]);
 
     // recomputes the mle indices, which now reflect that that we are binding the bit in the least significant bit fixed bit index
     let interleaved_mle_indices = mle_ref_first.mle_indices()[0..lsb_idx]
@@ -445,10 +440,10 @@ fn combine_pair<F: FieldExt>(
 /// and find its pair (if none exists, that's fine) and combine the two
 /// it will then update the original list of mle refs to contain the combined mle ref and remove the original ones that were paired
 fn find_pair_and_combine<F: FieldExt>(
-    all_refs: &Vec<MleEnum<F>>,
+    all_refs: &[MleEnum<F>],
     lsb_idx: usize,
     mle_ref_of_lsb: MleEnum<F>,
-    chal_point: &Vec<F>,
+    chal_point: &[F],
 ) -> Vec<MleEnum<F>> {
     // we want to compare all fixed bits except the one at the least significant bit index
     let indices_to_compare = mle_ref_of_lsb.original_mle_indices()[0..lsb_idx].to_vec();
@@ -486,3 +481,5 @@ fn find_pair_and_combine<F: FieldExt>(
     all_refs_updated.push(MleEnum::Dense(new_mle_ref_to_add));
     all_refs_updated
 }
+
+//todo(nickccosby) tests

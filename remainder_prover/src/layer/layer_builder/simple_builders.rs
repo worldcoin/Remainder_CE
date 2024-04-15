@@ -33,8 +33,7 @@ impl<F: FieldExt> ZeroBuilder<F> {
 }
 
 /// calculates the difference between two mles
-/// effectively means checking they are equal
-/// should spit out ZeroMleRef
+/// and contrains it to be a `ZeroMleRef`
 pub struct EqualityCheck<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,

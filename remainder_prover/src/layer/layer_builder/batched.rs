@@ -57,8 +57,6 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
             .map(|layer| layer.build_expression())
             .collect_vec();
 
-        // dbg!(&exprs);
-
         combine_expressions(exprs)
             .expect("Expressions fed into BatchedLayer don't have the same structure!")
     }
@@ -73,7 +71,6 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
 
         self.layers
             .iter()
-            // .zip(bits)
             .map(|layer| {
                 layer.next_layer(
                     id,
@@ -99,33 +96,10 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
 }
 
-// pub fn fake_unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>, num_dataparallel_bits: usize) -> DenseMle<F, F> {
-//     let old_layer_id = mles[0].layer_id;
-//     let new_bits = log2(mles.len()) as usize;
-
-//     // dbg!("hihi");
-//     // dbg!(new_bits);
-//     let old_prefix_bits = mles[0]
-//         .prefix_bits
-//         .clone()
-//         .map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - num_dataparallel_bits - new_bits].to_vec().into_iter().chain(old_prefix_bits[(old_prefix_bits.len() - num_dataparallel_bits)..].to_vec().into_iter()).collect_vec());
-//     let mut mle_ret = DenseMle::new_from_raw(
-//         combine_mles(
-//             mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(),
-//             new_bits,
-//         )
-//         .bookkeeping_table,
-//         old_layer_id,
-//         old_prefix_bits,
-//     );
-// }
-
 ///Helper function for "unbatching" when required by circuit design
 pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     let old_layer_id = mles[0].layer_id;
     let new_bits = log2(mles.len()) as usize;
-    // dbg!("hihi");
-    // dbg!(new_bits);
     let old_prefix_bits = mles[0]
         .prefix_bits
         .clone()
@@ -188,8 +162,8 @@ fn combine_expressions<F: FieldExt>(
 
     let mut new_mle_vec: Vec<Option<DenseMleRef<F>>> = vec![None; exprs[0].num_mle_ref()];
     let (expression_nodes, mle_vecs): (
-        Vec<ExpressionNode<F, ProverExpr>>,
-        Vec<<ProverExpr as ExpressionType<F>>::MleVec>,
+        Vec<_>,
+        Vec<_>,
     ) = exprs.into_iter().map(|expr| expr.deconstruct()).unzip();
 
     let out_expression_node = expression_nodes[0].clone();

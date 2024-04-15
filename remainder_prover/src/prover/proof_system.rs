@@ -29,7 +29,7 @@ macro_rules! layer_enum {
         pub enum $type_name<F: FieldExt> {
             $(
                 #[doc = "Remainder generated layer variant"]
-                $var_name($variant),
+                $var_name(Box<$variant>),
             )*
         }
 
@@ -90,7 +90,7 @@ macro_rules! layer_enum {
         $(
             impl<F: FieldExt> From<$variant> for $type_name<F> {
                 fn from(var: $variant) -> $type_name<F> {
-                    Self::$var_name(var)
+                    Self::$var_name(Box::new(var))
                 }
             }
         )*
@@ -110,7 +110,7 @@ macro_rules! input_layer_enum {
         pub enum $type_name<F: FieldExt> {
             $(
                 #[doc = "Remainder generated layer variant"]
-                $var_name($variant),
+                $var_name(Box<$variant>),
             )*
         }
 
@@ -224,7 +224,7 @@ macro_rules! input_layer_enum {
         $(
             impl<F: FieldExt> From<$variant> for $type_name<F> {
                 fn from(var: $variant) -> $type_name<F> {
-                    Self::$var_name(var)
+                    Self::$var_name(Box::new(var))
                 }
             }
         )*

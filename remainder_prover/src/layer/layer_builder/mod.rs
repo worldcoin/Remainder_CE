@@ -12,6 +12,9 @@ use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpr}, mle
 use super::LayerId;
 
 /// The builder type for a Layer
+/// 
+/// A intermediate trait for defining components that can be combined/modified
+/// before being 'build' into an `Expression`
 pub trait LayerBuilder<F: FieldExt> {
     /// The layer that makes claims on this layer in the GKR protocol. The next layer in the GKR protocol
     type Successor;
@@ -100,8 +103,6 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         let first = self.first.build_expression();
         let second = self.second.build_expression();
 
-        // return first.concat_expr(second);
-
         let zero_expression: Expression<F, ProverExpr> = Expression::constant(F::zero());
 
         let first_padded = if let Padding::Left(padding) = self.padding {
@@ -125,7 +126,6 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         };
 
         first_padded.concat_expr(second_padded)
-        // Expression::Selector(MleIndex::Iterated, Box::new(first_padded), Box::new(second_padded))
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
