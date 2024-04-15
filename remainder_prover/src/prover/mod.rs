@@ -13,7 +13,7 @@ use std::marker::PhantomData;
 use crate::{
     claims::{Claim, ClaimAggregator, YieldClaim},
     gate::gate::{BinaryOperation, Gate},
-    layer::{layer_enum::LayerEnum, Layer, LayerBuilder, LayerError, LayerId, RegularLayer},
+    layer::{layer_enum::LayerEnum, Layer, layer_builder::LayerBuilder, LayerError, LayerId, regular_layer::RegularLayer},
     mle::{
         dense::{DenseMle, DenseMleRef},
         MleIndex, MleRef,

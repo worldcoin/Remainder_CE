@@ -23,7 +23,7 @@ use super::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
 /// layer_enum(EnumName, (FirstVariant: LayerType), (SecondVariant: SecondLayerType), ..)
 macro_rules! layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
-        #[derive(serde::Serialize, serde::Deserialize, Clone)]
+        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
         #[serde(bound = "F: FieldExt")]
         #[doc = r"Remainder generated trait enum"]
         pub enum $type_name<F: FieldExt> {
@@ -103,7 +103,7 @@ macro_rules! layer_enum {
 ///
 /// Usage:
 ///
-/// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType))
+/// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType), ..)
 macro_rules! input_layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[doc = r"Remainder generated trait enum"]

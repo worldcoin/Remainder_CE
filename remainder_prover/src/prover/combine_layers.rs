@@ -12,7 +12,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    layer::{layer_enum::LayerEnum, Layer, LayerId, RegularLayer},
+    layer::{layer_enum::LayerEnum, Layer, LayerId, regular_layer::RegularLayer},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };

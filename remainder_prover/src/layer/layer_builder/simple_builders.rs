@@ -1,7 +1,9 @@
+//! A set of simple re-usable `LayerBuilder`s
+
 use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
-use crate::layer::batched::BatchedLayer;
-use crate::layer::{LayerBuilder, LayerId};
+use crate::layer::layer_builder::batched::BatchedLayer;
+use crate::layer::{layer_builder::LayerBuilder, LayerId};
 use crate::mle::dense::DenseMle;
 use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;

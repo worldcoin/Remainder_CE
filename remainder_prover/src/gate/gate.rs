@@ -15,7 +15,7 @@ use crate::{
         Claim, ClaimError, YieldClaim,
     },
     gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
-    layer::{Layer, LayerBuilder, LayerError, LayerId, VerificationError},
+    layer::{Layer, layer_builder::LayerBuilder, LayerError, LayerId, VerificationError},
     mle::{
         betavalues::BetaValues,
         dense::{DenseMle, DenseMleRef},

@@ -1,3 +1,7 @@
+//! A LayerBuilder combinator that takes in many LayerBuilders and combines them
+//! into a batched version, that proves a constraint over all of them at once. 
+
+
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use std::marker::PhantomData;
@@ -12,7 +16,7 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         evals::{Evaluations, MultilinearExtension},
         zero::ZeroMleRef,
-        Mle, MleAble, MleIndex, MleRef,
+        Mle, MleIndex, MleRef,
     },
 };
 use remainder_shared_types::FieldExt;
@@ -24,12 +28,17 @@ use super::{LayerBuilder, LayerId};
 ///An error for when combining expressions
 pub struct CombineExpressionError();
 
+
+/// A LayerBuilder combinator that takes in many LayerBuilders and combines them
+/// into a batched version, that proves a constraint over all of them at once. 
 pub struct BatchedLayer<F: FieldExt, A: LayerBuilder<F>> {
     layers: Vec<A>,
     _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
+    /// Creates a new `BatchedLayer` from a homogenous set of
+    /// sub `LayerBuilder`s
     pub fn new(layers: Vec<A>) -> Self {
         Self {
             layers,
@@ -392,7 +401,7 @@ mod tests {
 
     use crate::{
         expression::{generic_expr::Expression, prover_expr::ProverExpr},
-        layer::{from_mle, LayerBuilder, LayerId},
+        layer::{layer_builder::{from_mle, LayerBuilder}, LayerId},
         mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
     };

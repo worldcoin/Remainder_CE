@@ -1,3 +1,7 @@
+//! Contains helper functions for working with collections
+//! of `MleRef`s which can be considered part of the same
+//! `Layer`
+
 use crate::mle::{
     dense::{DenseMle, DenseMleRef},
     evals::{Evaluations, MultilinearExtension},
@@ -20,9 +24,164 @@ use super::LayerId;
 #[derive(Error, Debug, Clone)]
 pub enum CombineMleRefError {
     #[error("we have not fully combined all the mle refs because the list size is > 1")]
+    /// We have not fully combined all the mle refs because the list size is > 1
     NotFullyCombined,
     #[error("we have an mle ref that is not fully fixed even after fixing on the challenge point")]
+    /// We have an mle ref that is not fully fixed even after fixing on the challenge point
     MleRefNotFullyFixed,
+}
+
+/// this fixes mle refs with shared points in the claims so that we don't have to keep doing them
+pub fn pre_fix_mle_refs<F: FieldExt>(
+    mle_refs: &mut Vec<MleEnum<F>>,
+    chal_point: &Vec<F>,
+    common_idx: Vec<usize>,
+) {
+    cfg_iter_mut!(mle_refs).for_each(|mle_ref| {
+        common_idx.iter().for_each(|chal_idx| {
+            if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
+                mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
+            }
+        });
+    });
+}
+
+/// function that prepares all the mle refs to be fixed, then combined. this involves filtering out for
+/// unique original mle indices, then splitting the mles with iterated bits within prefix bits, then
+/// indexing them so that their mutable bookkeeping table is the original bookkeeping table.
+pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>> {
+    // first we want to filter out for mle_refs that are duplicates. we look at their original indices
+    // instead of their bookkeeping tables because sometimes two mle_refs can have the same original_bookkeeping_table
+    // but have different prefix bits. if they have the same prefix bits, they must be duplicates.
+    let mle_refs = mle_refs
+        .into_iter()
+        .unique_by(|mle_ref| match mle_ref {
+            MleEnum::Dense(dense_mle_ref) => dense_mle_ref.original_mle_indices.clone(),
+            MleEnum::Zero(zero_mle_ref) => zero_mle_ref.original_mle_indices.clone(),
+        })
+        .collect_vec();
+
+    // then, we split all the mle_refs with an iterated bit within the prefix bits
+    let mle_refs_split = collapse_mles_with_iterated_in_prefix(&mle_refs);
+
+    // go through and create mle refs that have original bookkeeping tables, and index them so that they can be fixed later
+    let mle_ref_fix = cfg_into_iter!(mle_refs_split).map(|mle_ref| match mle_ref {
+        MleEnum::Dense(dense_mle_ref) => {
+            let mut mle_ref_og = DenseMleRef {
+                current_mle: dense_mle_ref.original_mle.clone(),
+                original_mle: dense_mle_ref.original_mle.clone(),
+                mle_indices: dense_mle_ref.original_mle_indices.clone(),
+                original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
+                layer_id: dense_mle_ref.get_layer_id(),
+                indexed: false,
+            };
+            mle_ref_og.index_mle_indices(0);
+            MleEnum::Dense(mle_ref_og)
+        }
+        zero => zero,
+    });
+
+    let mut ret_mles: Vec<MleEnum<F>> = vec![];
+    mle_ref_fix.collect_into_vec(&mut ret_mles);
+    ret_mles
+}
+
+/// this function takes in a list of mle refs, a challenge point we want to combine them under, and returns
+/// the final value in the bookkeeping table of the combined mle_ref.
+/// this is equivalent to combining all of these mle refs according to their prefix bits, and then fixing
+/// variable on this combined mle ref using the challenge point
+/// instead, we fix variable as we combine as this keeps the bookkeeping table sizes at one and is faster to compute
+pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
+    mle_refs: &Vec<MleEnum<F>>,
+    chal_point: &Vec<F>,
+) -> Result<F, CombineMleRefError> {
+    // we go through all of the mle_refs and fix variable in all of them given the indexed indices they already have
+    // so that they are fully bound.
+    let fix_var_mle_refs = mle_refs
+        .iter()
+        .map(|mle_ref| match mle_ref.clone() {
+            MleEnum::Dense(mut dense_mle_ref) => {
+                dense_mle_ref
+                    .mle_indices
+                    .clone()
+                    .into_iter()
+                    .enumerate()
+                    .for_each(|(idx, mle_idx)| {
+                        if let MleIndex::IndexedBit(idx_num) = mle_idx {
+                            dense_mle_ref.fix_variable(idx_num, chal_point[idx]);
+                        }
+                    });
+                MleEnum::Dense(dense_mle_ref)
+            }
+            zero => zero,
+        })
+        .collect_vec();
+
+    // mutable variable that is overwritten every time we combine mle refs
+    let mut updated_list = fix_var_mle_refs;
+
+    // an infinite loop that breaks when all the mle refs no longer have any fixed bits and only have iterated bits
+    loop {
+        // we first get the lsb fixed bit and the mle_ref that contributes to it
+        let (lsb_fixed_var_opt, mle_ref_to_pair_opt) = get_lsb_fixed_var(&updated_list);
+
+        // this is only none of all the bits in all of the mle refs are iterated, so we are done with the combining process
+        if lsb_fixed_var_opt.is_none() {
+            break;
+        }
+
+        // now we know they are not none, so unwrap and overwrite updated_list with the combined mle_ref
+        let (lsb_fixed_var, mle_ref_to_pair) =
+            (lsb_fixed_var_opt.unwrap(), mle_ref_to_pair_opt.unwrap()); // change to error
+        updated_list =
+            find_pair_and_combine(&updated_list, lsb_fixed_var, mle_ref_to_pair, chal_point);
+    }
+
+    // the list now should only have one combined mle ref because we removed duplicates, and its bookkeeping table should only have one value
+
+    if updated_list.len() > 1 {
+        return Err(CombineMleRefError::NotFullyCombined);
+    }
+    if updated_list[0].bookkeeping_table().len() != 1 {
+        return Err(CombineMleRefError::MleRefNotFullyFixed);
+    }
+
+    Ok(updated_list[0].bookkeeping_table()[0])
+}
+
+/// for input layer stuff, combining refs together
+/// Takes the individual bookkeeping tables from the MleRefs within an MLE
+/// and merges them with padding, using a little-endian representation
+/// merge strategy. Assumes that ALL MleRefs are the same size.
+pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
+    let num_fields = items.len();
+
+    // --- All the items within should be the same size ---
+    let max_size = items
+        .iter()
+        .map(|mle_ref| mle_ref.current_mle.get_evals_vector().len())
+        .max()
+        .unwrap();
+
+    let part_size = 1 << log2(max_size);
+    let part_count = 2_u32.pow(log2(num_fields)) as usize;
+
+    // --- Number of "part" slots which need to filled with padding ---
+    let padding_count = part_count - num_fields;
+    let total_size = part_size * part_count;
+    let total_padding: usize = total_size - max_size * part_count;
+
+    let result = (0..max_size)
+        .flat_map(|index| {
+            items
+                .iter()
+                .map(move |item| *item.bookkeeping_table().get(index).unwrap_or(&F::zero()))
+                .chain(repeat_n(F::zero(), padding_count))
+        })
+        .chain(repeat_n(F::zero(), total_padding))
+        .collect_vec();
+
+    DenseMle::new_from_raw(result, LayerId::Input(0), None)
 }
 
 /// this function takes an mle ref that has an iterated bit in between a bunch of fixed bits
@@ -326,157 +485,4 @@ fn find_pair_and_combine<F: FieldExt>(
     let new_mle_ref_to_add = combine_pair(mle_ref_of_lsb, mle_ref_pair, lsb_idx, chal_point);
     all_refs_updated.push(MleEnum::Dense(new_mle_ref_to_add));
     all_refs_updated
-}
-
-/// this fixes mle refs with shared points in the claims so that we don't have to keep doing them
-pub fn pre_fix_mle_refs<F: FieldExt>(
-    mle_refs: &mut Vec<MleEnum<F>>,
-    chal_point: &Vec<F>,
-    common_idx: Vec<usize>,
-) {
-    cfg_iter_mut!(mle_refs).for_each(|mle_ref| {
-        common_idx.iter().for_each(|chal_idx| {
-            if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
-                mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
-            }
-        });
-    });
-}
-
-/// function that prepares all the mle refs to be fixed, then combined. this involves filtering out for
-/// unique original mle indices, then splitting the mles with iterated bits within prefix bits, then
-/// indexing them so that their mutable bookkeeping table is the original bookkeeping table.
-pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>> {
-    // first we want to filter out for mle_refs that are duplicates. we look at their original indices
-    // instead of their bookkeeping tables because sometimes two mle_refs can have the same original_bookkeeping_table
-    // but have different prefix bits. if they have the same prefix bits, they must be duplicates.
-    let mle_refs = mle_refs
-        .into_iter()
-        .unique_by(|mle_ref| match mle_ref {
-            MleEnum::Dense(dense_mle_ref) => dense_mle_ref.original_mle_indices.clone(),
-            MleEnum::Zero(zero_mle_ref) => zero_mle_ref.original_mle_indices.clone(),
-        })
-        .collect_vec();
-
-    // then, we split all the mle_refs with an iterated bit within the prefix bits
-    let mle_refs_split = collapse_mles_with_iterated_in_prefix(&mle_refs);
-
-    // go through and create mle refs that have original bookkeeping tables, and index them so that they can be fixed later
-    let mle_ref_fix = cfg_into_iter!(mle_refs_split).map(|mle_ref| match mle_ref {
-        MleEnum::Dense(dense_mle_ref) => {
-            let mut mle_ref_og = DenseMleRef {
-                current_mle: dense_mle_ref.original_mle.clone(),
-                original_mle: dense_mle_ref.original_mle.clone(),
-                mle_indices: dense_mle_ref.original_mle_indices.clone(),
-                original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
-                layer_id: dense_mle_ref.get_layer_id(),
-                indexed: false,
-            };
-            mle_ref_og.index_mle_indices(0);
-            MleEnum::Dense(mle_ref_og)
-        }
-        zero => zero,
-    });
-
-    let mut ret_mles: Vec<MleEnum<F>> = vec![];
-    mle_ref_fix.collect_into_vec(&mut ret_mles);
-    ret_mles
-}
-
-/// this function takes in a list of mle refs, a challenge point we want to combine them under, and returns
-/// the final value in the bookkeeping table of the combined mle_ref.
-/// this is equivalent to combining all of these mle refs according to their prefix bits, and then fixing
-/// variable on this combined mle ref using the challenge point
-/// instead, we fix variable as we combine as this keeps the bookkeeping table sizes at one and is faster to compute
-pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
-    mle_refs: &Vec<MleEnum<F>>,
-    chal_point: &Vec<F>,
-) -> Result<F, CombineMleRefError> {
-    // we go through all of the mle_refs and fix variable in all of them given the indexed indices they already have
-    // so that they are fully bound.
-    let fix_var_mle_refs = mle_refs
-        .iter()
-        .map(|mle_ref| match mle_ref.clone() {
-            MleEnum::Dense(mut dense_mle_ref) => {
-                dense_mle_ref
-                    .mle_indices
-                    .clone()
-                    .into_iter()
-                    .enumerate()
-                    .for_each(|(idx, mle_idx)| {
-                        if let MleIndex::IndexedBit(idx_num) = mle_idx {
-                            dense_mle_ref.fix_variable(idx_num, chal_point[idx]);
-                        }
-                    });
-                MleEnum::Dense(dense_mle_ref)
-            }
-            zero => zero,
-        })
-        .collect_vec();
-
-    // mutable variable that is overwritten every time we combine mle refs
-    let mut updated_list = fix_var_mle_refs;
-
-    // an infinite loop that breaks when all the mle refs no longer have any fixed bits and only have iterated bits
-    loop {
-        // we first get the lsb fixed bit and the mle_ref that contributes to it
-        let (lsb_fixed_var_opt, mle_ref_to_pair_opt) = get_lsb_fixed_var(&updated_list);
-
-        // this is only none of all the bits in all of the mle refs are iterated, so we are done with the combining process
-        if lsb_fixed_var_opt.is_none() {
-            break;
-        }
-
-        // now we know they are not none, so unwrap and overwrite updated_list with the combined mle_ref
-        let (lsb_fixed_var, mle_ref_to_pair) =
-            (lsb_fixed_var_opt.unwrap(), mle_ref_to_pair_opt.unwrap()); // change to error
-        updated_list =
-            find_pair_and_combine(&updated_list, lsb_fixed_var, mle_ref_to_pair, chal_point);
-    }
-
-    // the list now should only have one combined mle ref because we removed duplicates, and its bookkeeping table should only have one value
-
-    if updated_list.len() > 1 {
-        return Err(CombineMleRefError::NotFullyCombined);
-    }
-    if updated_list[0].bookkeeping_table().len() != 1 {
-        return Err(CombineMleRefError::MleRefNotFullyFixed);
-    }
-
-    Ok(updated_list[0].bookkeeping_table()[0])
-}
-
-/// for input layer stuff, combining refs together
-/// Takes the individual bookkeeping tables from the MleRefs within an MLE
-/// and merges them with padding, using a little-endian representation
-/// merge strategy. Assumes that ALL MleRefs are the same size.
-pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
-    let num_fields = items.len();
-
-    // --- All the items within should be the same size ---
-    let max_size = items
-        .iter()
-        .map(|mle_ref| mle_ref.current_mle.get_evals_vector().len())
-        .max()
-        .unwrap();
-
-    let part_size = 1 << log2(max_size);
-    let part_count = 2_u32.pow(log2(num_fields)) as usize;
-
-    // --- Number of "part" slots which need to filled with padding ---
-    let padding_count = part_count - num_fields;
-    let total_size = part_size * part_count;
-    let total_padding: usize = total_size - max_size * part_count;
-
-    let result = (0..max_size)
-        .flat_map(|index| {
-            items
-                .iter()
-                .map(move |item| *item.bookkeeping_table().get(index).unwrap_or(&F::zero()))
-                .chain(repeat_n(F::zero(), padding_count))
-        })
-        .chain(repeat_n(F::zero(), total_padding))
-        .collect_vec();
-
-    DenseMle::new_from_raw(result, LayerId::Input(0), None)
 }

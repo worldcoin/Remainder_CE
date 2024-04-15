@@ -755,10 +755,11 @@ pub fn preprocess_claims<F: FieldExt>(mut claims: Vec<ClaimMle<F>>) -> Vec<Claim
     // A trivial total order is imposed which includes `None` values.
     claims.sort_by(|claim1, claim2| {
         match (claim1.get_from_layer_id(), claim2.get_from_layer_id()) {
-            (Some(id1), Some(id2)) => match id1.cmp(&id2) {
+            (Some(id1), Some(id2)) => match id1.partial_cmp(&id2) {
                 // Ties are broken by point value.
                 // Ordering::Equal => claim1.get_point().cmp(claim2.get_point()),
-                ordering => ordering,
+                Some(ordering) => ordering,
+                None => Ordering::Greater,
             },
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
@@ -1071,7 +1072,7 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 pub(crate) mod tests {
     use crate::expression::generic_expr::Expression;
     use crate::expression::prover_expr::ProverExpr;
-    use crate::layer::{from_mle, LayerId, RegularLayer};
+    use crate::layer::{layer_builder::from_mle, LayerId, regular_layer::RegularLayer};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
     use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
