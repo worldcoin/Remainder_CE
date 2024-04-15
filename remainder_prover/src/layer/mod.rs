@@ -1,27 +1,21 @@
 //! A layer is a combination of multiple MLEs with an expression
 
 pub mod combine_mle_refs;
-pub mod layer_enum;
 pub mod layer_builder;
+pub mod layer_enum;
 pub mod regular_layer;
 // mod gkr_layer;
 
 use std::fmt::Debug;
 
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use derive_more::Display;
 
 use crate::{
-    claims::{
-        Claim, ClaimError,
-    },
-    expression::
-        expr_errors::ExpressionError
-    ,
-    sumcheck::
-        InterpError
-    ,
+    claims::{Claim, ClaimError},
+    expression::expr_errors::ExpressionError,
+    sumcheck::InterpError,
 };
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
@@ -80,7 +74,7 @@ pub enum VerificationError {
 /// The location of a layer within the GKR circuit
 pub enum LayerId {
     /// A random mle input layer
-    /// 
+    ///
     /// TODO!(nick) Remove this once new batching code is implemented
     RandomInput(usize),
     /// An Mle located in the input layer
@@ -92,8 +86,8 @@ pub enum LayerId {
 }
 
 /// A layer is the smallest component of the GKR protocol.
-/// 
-/// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof 
+///
+/// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
 pub trait Layer<F: FieldExt> {
     /// The struct that contains the proof this `Layer` generates

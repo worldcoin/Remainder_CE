@@ -7,12 +7,15 @@ use std::marker::PhantomData;
 use itertools::repeat_n;
 use remainder_shared_types::FieldExt;
 
-use crate::{expression::{generic_expr::Expression, prover_expr::ProverExpr}, mle::MleIndex};
+use crate::{
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    mle::MleIndex,
+};
 
 use super::LayerId;
 
 /// The builder type for a Layer
-/// 
+///
 /// A intermediate trait for defining components that can be combined/modified
 /// before being 'build' into an `Expression`
 pub trait LayerBuilder<F: FieldExt> {
@@ -75,7 +78,7 @@ pub fn from_mle<
     }
 }
 
-///A description of how much padding should be added when 
+///A description of how much padding should be added when
 /// concatonating two `LayerBuilder`s together
 pub enum Padding {
     /// Indicates that the 'Right' side is larger by

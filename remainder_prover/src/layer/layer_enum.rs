@@ -10,7 +10,7 @@ use crate::gate::gate::Gate;
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
-use super::{Layer, regular_layer::RegularLayer};
+use super::{regular_layer::RegularLayer, Layer};
 
 use crate::claims::YieldClaim;
 

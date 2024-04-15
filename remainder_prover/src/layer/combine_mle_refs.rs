@@ -285,9 +285,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
 }
 
 /// this function will take a list of mle refs and update the list to contain mle_refs where all fixed bits are contiguous
-fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(
-    mle_refs: &[MleEnum<F>],
-) -> Vec<MleEnum<F>> {
+fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> Vec<MleEnum<F>> {
     mle_refs
         .iter()
         .flat_map(|mle_ref| {
@@ -316,9 +314,7 @@ fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(
 /// returns a tuple of an option of the index of the least significant bit and an option of the mle
 /// ref that contributes to this lsb
 /// if there are no fixed bits in any of the mle refs, it returns a `(None, None)` tuple
-fn get_lsb_fixed_var<F: FieldExt>(
-    mle_refs: &[MleEnum<F>],
-) -> (Option<usize>, Option<MleEnum<F>>) {
+fn get_lsb_fixed_var<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> (Option<usize>, Option<MleEnum<F>>) {
     mle_refs
         .iter()
         .fold((None, None), |(acc_idx, acc_mle), mle_ref| {
@@ -376,7 +372,9 @@ fn combine_pair<F: FieldExt>(
     // if the second mle ref is None, we assume its bookkeeping table is all zeros. we are dealing with
     // fully fixed mle_refs, so this bookkeeping table size is just 1
 
-    let mle_ref_second_bt = mle_ref_second.map(|mle_ref| mle_ref.bookkeeping_table().to_vec()).unwrap_or(vec![F::zero()]);
+    let mle_ref_second_bt = mle_ref_second
+        .map(|mle_ref| mle_ref.bookkeeping_table().to_vec())
+        .unwrap_or(vec![F::zero()]);
 
     // recomputes the mle indices, which now reflect that that we are binding the bit in the least significant bit fixed bit index
     let interleaved_mle_indices = mle_ref_first.mle_indices()[0..lsb_idx]

@@ -1,11 +1,25 @@
 use ark_std::cfg_into_iter;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::FieldExt;
-use rayon::prelude::{ParallelIterator, IntoParallelIterator};
 
-use crate::{claims::{wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals}, ClaimError, YieldClaim}, expression::{generic_expr::{ExpressionNode, ExpressionType}, prover_expr::ProverExpr}, layer::{combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs}, Layer, LayerError}, mle::{mle_enum::MleEnum, MleRef}, sumcheck::evaluate_at_a_point};
+use crate::{
+    claims::{
+        wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
+        ClaimError, YieldClaim,
+    },
+    expression::{
+        generic_expr::{ExpressionNode, ExpressionType},
+        prover_expr::ProverExpr,
+    },
+    layer::{
+        combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
+        Layer, LayerError,
+    },
+    mle::{mle_enum::MleEnum, MleRef},
+    sumcheck::evaluate_at_a_point,
+};
 
 use super::RegularLayer;
-
 
 impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
@@ -27,7 +41,11 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
                     ExpressionNode::Mle(mle_vec_idx) => {
                         let mle_ref = mle_vec_idx.get_mle(mle_vec);
 
-                        let fixed_mle_indices = mle_ref.mle_indices.iter().map(|index| index.val().ok_or(ClaimError::MleRefMleError)).collect::<Result<Vec<_>, _>>()?;
+                        let fixed_mle_indices = mle_ref
+                            .mle_indices
+                            .iter()
+                            .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
+                            .collect::<Result<Vec<_>, _>>()?;
 
                         // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
                         let mle_layer_id = mle_ref.get_layer_id();
@@ -54,7 +72,11 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
                         for mle_vec_index in mle_vec_indices {
                             let mle_ref = mle_vec_index.get_mle(mle_vec);
 
-                            let fixed_mle_indices = mle_ref.mle_indices.iter().map(|index| index.val().ok_or(ClaimError::MleRefMleError)).collect::<Result<Vec<_>, _>>()?;
+                            let fixed_mle_indices = mle_ref
+                                .mle_indices
+                                .iter()
+                                .map(|index| index.val().ok_or(ClaimError::MleRefMleError))
+                                .collect::<Result<Vec<_>, _>>()?;
 
                             // --- Grab the layer ID (i.e. MLE index) which this mle_ref refers to ---
                             let mle_layer_id = mle_ref.get_layer_id();
@@ -86,8 +108,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
             };
 
         // --- Apply the observer function from above onto the expression ---
-        layerwise_expr
-            .traverse(&mut observer_fn)?;
+        layerwise_expr.traverse(&mut observer_fn)?;
 
         Ok(claims)
     }

@@ -1,6 +1,5 @@
 //! A LayerBuilder combinator that takes in many LayerBuilders and combines them
-//! into a batched version, that proves a constraint over all of them at once. 
-
+//! into a batched version, that proves a constraint over all of them at once.
 
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
@@ -28,9 +27,8 @@ use super::{LayerBuilder, LayerId};
 ///An error for when combining expressions
 pub struct CombineExpressionError();
 
-
 /// A LayerBuilder combinator that takes in many LayerBuilders and combines them
-/// into a batched version, that proves a constraint over all of them at once. 
+/// into a batched version, that proves a constraint over all of them at once.
 pub struct BatchedLayer<F: FieldExt, A: LayerBuilder<F>> {
     layers: Vec<A>,
     _marker: PhantomData<F>,
@@ -161,10 +159,8 @@ fn combine_expressions<F: FieldExt>(
     let new_bits = log2(exprs.len());
 
     let mut new_mle_vec: Vec<Option<DenseMleRef<F>>> = vec![None; exprs[0].num_mle_ref()];
-    let (expression_nodes, mle_vecs): (
-        Vec<_>,
-        Vec<_>,
-    ) = exprs.into_iter().map(|expr| expr.deconstruct()).unzip();
+    let (expression_nodes, mle_vecs): (Vec<_>, Vec<_>) =
+        exprs.into_iter().map(|expr| expr.deconstruct()).unzip();
 
     let out_expression_node = expression_nodes[0].clone();
 
@@ -375,7 +371,10 @@ mod tests {
 
     use crate::{
         expression::{generic_expr::Expression, prover_expr::ProverExpr},
-        layer::{layer_builder::{from_mle, LayerBuilder}, LayerId},
+        layer::{
+            layer_builder::{from_mle, LayerBuilder},
+            LayerId,
+        },
         mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
     };

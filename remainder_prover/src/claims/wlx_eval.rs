@@ -1072,7 +1072,7 @@ pub(crate) fn verify_aggregate_claim<F: FieldExt>(
 pub(crate) mod tests {
     use crate::expression::generic_expr::Expression;
     use crate::expression::prover_expr::ProverExpr;
-    use crate::layer::{layer_builder::from_mle, LayerId, regular_layer::RegularLayer};
+    use crate::layer::{layer_builder::from_mle, regular_layer::RegularLayer, LayerId};
     use crate::mle::dense::DenseMle;
     use rand::Rng;
     use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;

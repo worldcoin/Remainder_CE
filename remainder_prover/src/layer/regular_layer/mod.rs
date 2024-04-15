@@ -7,16 +7,28 @@ pub mod claims;
 mod tests;
 
 use itertools::Itertools;
-use remainder_shared_types::{transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter}, FieldExt};
+use remainder_shared_types::{
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::{layer::{Layer, layer_builder::LayerBuilder, LayerError, LayerId, VerificationError}, claims::Claim, expression::{generic_expr::Expression, prover_expr::ProverExpr}, mle::betavalues::BetaValues, prover::SumcheckProof, sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals}};
+use crate::{
+    claims::Claim,
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    layer::{layer_builder::LayerBuilder, Layer, LayerError, LayerId, VerificationError},
+    mle::betavalues::BetaValues,
+    prover::SumcheckProof,
+    sumcheck::{
+        compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
+    },
+};
 
 /// The most common implementation of `Layer`
-/// 
+///
 /// A `Layer` made up of a structured polynomial relationship between MLEs of previous Layers
-/// 
+///
 /// Proofs are generated with the Sumcheck protocol
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
@@ -113,8 +125,8 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 
         // TODO(Makis): Retrieve `num_prev_evals` directly from the transcript.
         let num_prev_evals = sumcheck_prover_messages[0].len();
-        let mut prev_evals = transcript_reader
-            .consume_elements("Initial Sumcheck evaluations", num_prev_evals)?;
+        let mut prev_evals =
+            transcript_reader.consume_elements("Initial Sumcheck evaluations", num_prev_evals)?;
 
         if prev_evals[0] + prev_evals[1] != claim.get_result() {
             return Err(LayerError::VerificationError(
@@ -130,14 +142,12 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
             .skip(1)
             .map(|evals| evals.len())
         {
-            let challenge = transcript_reader
-                .get_challenge("Sumcheck challenge")?;
+            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
 
-            let prev_at_r =
-                evaluate_at_a_point(&prev_evals, challenge)?;
+            let prev_at_r = evaluate_at_a_point(&prev_evals, challenge)?;
 
-            let curr_evals = transcript_reader
-                .consume_elements("Sumcheck evaluations", num_curr_evals)?;
+            let curr_evals =
+                transcript_reader.consume_elements("Sumcheck evaluations", num_curr_evals)?;
 
             if prev_at_r != curr_evals[0] + curr_evals[1] {
                 return Err(LayerError::VerificationError(
@@ -151,8 +161,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 
         // --- In the final round, we check that g(r_1, ..., r_n) = g_n(r_n) ---
         // Here, we first sample r_n.
-        let final_chal = transcript_reader
-            .get_challenge("Final Sumcheck challenge")?;
+        let final_chal = transcript_reader.get_challenge("Final Sumcheck challenge")?;
         challenges.push(final_chal);
 
         // --- This automatically asserts that the expression is fully bound and simply ---
@@ -180,8 +189,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
             expr_evaluated_at_challenge_coord * beta_fn_evaluated_at_challenge_point;
 
         // --- Computing g_n(r_n) ---
-        let g_n_evaluated_at_r_n =
-            evaluate_at_a_point(&prev_evals, final_chal)?;
+        let g_n_evaluated_at_r_n = evaluate_at_a_point(&prev_evals, final_chal)?;
 
         // --- Checking the two against one another ---
         if mle_evaluated_at_challenge_coord != g_n_evaluated_at_r_n {
@@ -236,7 +244,7 @@ impl<F: FieldExt> RegularLayer<F> {
 
             // store the nonlinear rounds of the expression within the layer so that we know these are the
             // rounds we perform sumcheck over.
-            let first_nonlinear_round =  expression_nonlinear_indices.first().cloned();
+            let first_nonlinear_round = expression_nonlinear_indices.first().cloned();
             self.nonlinear_rounds = Some(expression_nonlinear_indices);
 
             // if there are no nonlinear indices in the expression we can return an empty vector early.
@@ -301,7 +309,7 @@ impl<F: FieldExt> RegularLayer<F> {
     }
 
     /// Creates a new `RegularLayer` from an `Expression` and a `LayerId`
-    /// 
+    ///
     /// The `Expression` is the relationship this `Layer` proves
     /// and the `LayerId` is the location of this `Layer` in the overall circuit
     pub fn new_raw(id: LayerId, expression: Expression<F, ProverExpr>) -> Self {
