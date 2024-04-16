@@ -13,7 +13,7 @@ use crate::{
         prover_expr::ProverExpr,
     },
     layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
-    mle::{mle_enum::MleEnum, MleIndex, MleRef},
+    mle::{mle_enum::MleEnum, MleIndex},
     utils::{argsort, bits_iter},
 };
 
@@ -21,6 +21,7 @@ use super::Layers;
 
 #[derive(Error, Debug)]
 #[error("Layers can't be combined!")]
+/// Error when combining layers
 pub struct CombineError;
 
 ///Utility for combining sub-circuits into a single circuit

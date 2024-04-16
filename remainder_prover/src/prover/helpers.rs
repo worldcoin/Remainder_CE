@@ -10,8 +10,7 @@ use std::path::Path;
 
 use super::CircuitTranscript;
 
-// Note: we removed this from the tests module, since that module is not visible to project
-// binaries, where this function is often needed.
+/// boilerplate code for testing a circuit
 pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>)
 where
     CircuitTranscript<F, C>: Sync,
