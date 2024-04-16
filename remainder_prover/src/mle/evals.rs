@@ -142,6 +142,7 @@ impl<F: FieldExt> Evaluations<F> {
     }
 
     /// Temporary function returning the length of the internal representation.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.evals.len()
     }
@@ -170,7 +171,7 @@ impl<F: FieldExt> Evaluations<F> {
     /// omitting the longest contiguous suffix of `F::zero()`s from each results
     /// in the same vectors.
     #[allow(dead_code)]
-    fn equiv_repr(evals1: &Vec<F>, evals2: &Vec<F>) -> bool {
+    fn equiv_repr(evals1: &[F], evals2: &[F]) -> bool {
         evals1
             .iter()
             .zip_longest(evals2.iter())
@@ -194,21 +195,7 @@ impl<F: FieldExt> Evaluations<F> {
     fn flip_endianess(num_bits: usize, values: &[F]) -> Vec<F> {
         let num_evals = values.len();
 
-        #[cfg(feature = "parallel")]
         let result: Vec<F> = cfg_into_iter!(0..(1 << num_bits))
-            .map(|idx| {
-                let mirrored_idx = mirror_bits(num_bits, idx);
-                if mirrored_idx >= num_evals {
-                    F::zero()
-                } else {
-                    values[mirrored_idx]
-                }
-            })
-            .collect();
-
-        #[cfg(not(feature = "parallel"))]
-        let result: Vec<F> = (0..(1 << num_bits))
-            .into_iter()
             .map(|idx| {
                 let mirrored_idx = mirror_bits(num_bits, idx);
                 if mirrored_idx >= num_evals {
@@ -463,7 +450,8 @@ impl<F: FieldExt> MultilinearExtension<F> {
             .flatten()
             .collect();
 
-        // --- Note that MLE is destructively modified into the new bookkeeping table here ---
+        // --- Note that MLE is destructively modified into the new bookkeeping table
+        // here ---
         self.f = Evaluations::<F>::new(self.num_vars() - 1, evals);
         // ------------------------------------
 
@@ -604,7 +592,8 @@ mod test {
         vals
     }
 
-    /// Property: flip_endianess(n, flip_endianess(n, vals)) == pad_with_zeros(vals).
+    /// Property: flip_endianess(n, flip_endianess(n, vals)) ==
+    /// pad_with_zeros(vals).
     #[quickcheck]
     fn flip_endianess_cancellation_property(vals: Vec<Qfr>) -> TestResult {
         if vals.is_empty() {
