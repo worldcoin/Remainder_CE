@@ -59,7 +59,8 @@ where
 }
 
 impl<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> DenseMle<F, T> {
-    /// Constructs a new `DenseMle` from an iterator over items of the [MleAble] type `T`.
+    /// Constructs a new `DenseMle` from an iterator over items of the [MleAble]
+    /// type `T`.
     ///
     /// # Example
     /// ```
@@ -85,7 +86,8 @@ impl<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> DenseMle<F, T> {
         }
     }
 
-    /// Constructs a new `DenseMle` from any valid representation of the [MleAble] type `T`.
+    /// Constructs a new `DenseMle` from any valid representation of the
+    /// [MleAble] type `T`.
     ///
     /// # Example
     /// ```
@@ -123,8 +125,9 @@ impl<'a, F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> IntoIterator
     }
 }
 
-/// Takes the individual bookkeeping tables from the `MleRefs` within an MLE and merges them with
-/// padding, using a little-endian representation merge strategy.
+/// Takes the individual bookkeeping tables from the `MleRefs` within an MLE and
+/// merges them with padding, using a little-endian representation merge
+/// strategy.
 ///
 /// # Requires / Panics
 /// *All* MleRefs should be of the same size, otherwise panics.
@@ -252,7 +255,8 @@ impl<F: FieldExt> DenseMle<F, F> {
         )
     }
 
-    /// Constructs a `DenseMle` with `mle_len` evaluations, all equal to `F::one()`.
+    /// Constructs a `DenseMle` with `mle_len` evaluations, all equal to
+    /// `F::one()`.
     pub fn one(
         mle_len: usize,
         layer_id: LayerId,
@@ -262,8 +266,9 @@ impl<F: FieldExt> DenseMle<F, F> {
         DenseMle::new_from_raw(ones_vec, layer_id, prefix_bits)
     }
 
-    /// Combines a batch of `DenseMle<F, F>`s into a single `DenseMle<F, F>` appropriately, such
-    /// that the bit ordering is (batched_bits, (mle_ref_bits), iterated_bits)
+    /// Combines a batch of `DenseMle<F, F>`s into a single `DenseMle<F, F>`
+    /// appropriately, such that the bit ordering is (batched_bits,
+    /// (mle_ref_bits), iterated_bits)
     ///
     /// TODO!(ende): refactor
     pub fn combine_mle_batch(mle_batch: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
@@ -326,7 +331,8 @@ impl<F: FieldExt> From<(F, F)> for Tuple2<F> {
 // impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, Tuple2<F>> {
 //     type Item = (F, F);
 
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>, Cloned<std::slice::Iter<'a, F>>>;
+//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>,
+// Cloned<std::slice::Iter<'a, F>>>;
 
 //     fn into_iter(self) -> Self::IntoIter {
 //         self.mle[0].iter().cloned().zip(self.mle[1].iter().cloned())
@@ -336,7 +342,8 @@ impl<F: FieldExt> From<(F, F)> for Tuple2<F> {
 // impl<F: FieldExt> FromIterator<Tuple2<F>> for DenseMle<F, Tuple2<F>> {
 //     fn from_iter<T: IntoIterator<Item = Tuple2<F>>>(iter: T) -> Self {
 //         let iter = iter.into_iter();
-//         let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0 .1)).unzip();
+//         let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0
+// .1)).unzip();
 
 //         let num_vars: usize = log2(first.len() + second.len()) as usize;
 
@@ -406,8 +413,9 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
         }
     }
 
-    /// To combine a batch of `DenseMle<F, Tuple2<F>>` into a single `DenseMle<F, F>`
-    /// appropriately, such that the bit ordering is (batched_bits, mle_ref_bits, iterated_bits)
+    /// To combine a batch of `DenseMle<F, Tuple2<F>>` into a single
+    /// `DenseMle<F, F>` appropriately, such that the bit ordering is
+    /// (batched_bits, mle_ref_bits, iterated_bits)
     ///
     /// TODO!(ende): refactor
     pub fn combine_mle_batch(tuple2_mle_batch: Vec<DenseMle<F, Tuple2<F>>>) -> DenseMle<F, F> {
@@ -564,14 +572,16 @@ impl<F: FieldExt> DenseMleRef<F> {
         Expression::mle(self)
     }
 
-    /// Returns the current number of variables of the function that this MLE represents. This value
-    /// may change throughout the lifetime of the `DenseMleRef` as variables are being fixed.
+    /// Returns the current number of variables of the function that this MLE
+    /// represents. This value may change throughout the lifetime of the
+    /// `DenseMleRef` as variables are being fixed.
     pub fn num_vars(&self) -> usize {
         self.current_mle.num_vars()
     }
 
-    /// Returns the original number of variables of the MLE that was used to construct this
-    /// `DenseMleRef`. This is constant throughout the lifetime of a `DenseMleRef`.
+    /// Returns the original number of variables of the MLE that was used to
+    /// construct this `DenseMleRef`. This is constant throughout the
+    /// lifetime of a `DenseMleRef`.
     pub fn original_num_vars(&self) -> usize {
         self.original_mle.num_vars()
     }
@@ -617,7 +627,8 @@ impl<F: FieldExt> MleRef for DenseMleRef<F> {
 
         // First, find the bit corresponding to `index` and compute its absolute
         // index. For example, if `mle_indices` is equal to
-        // `[MleIndex::Fixed(0), MleIndex::Bound(42, 0), MleIndex::IndexedBit(1), MleIndex::Bound(17, 2) MleIndex::IndexedBit(3))]`
+        // `[MleIndex::Fixed(0), MleIndex::Bound(42, 0), MleIndex::IndexedBit(1),
+        // MleIndex::Bound(17, 2) MleIndex::IndexedBit(3))]`
         // then `fix_variable_at_index(3, r)` will fix `IndexedBit(3)`, which is
         // the 2nd indexed bit, to `r`
 
@@ -1181,7 +1192,8 @@ mod tests {
             Fr::from(7),
         ];
 
-        //DON'T do this normally, it clones the vec, if you have a flat MLE just use Mle::new
+        //DON'T do this normally, it clones the vec, if you have a flat MLE just use
+        // Mle::new
         let mle_iter =
             DenseMle::new_from_iter(mle_vec.clone().into_iter(), LayerId::Input(0), None);
 
