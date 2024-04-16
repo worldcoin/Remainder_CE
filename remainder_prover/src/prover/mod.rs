@@ -1,17 +1,30 @@
-//!Module that orchestrates creating a GKR Proof
+//!Modules that orchestrates creating a GKR Proof
+
+/// For combining sub-circuits(multiple layers) into a single circuit(layer)
 pub mod combine_layers;
+
+/// Includes boilerplate for creating a GKR circuit, i.e. creating a transcript, proving, verifying, etc.
 pub mod helpers;
-/// For the input layer to the GKR circuit
+
+/// For the various input layers to the GKR circuit
 pub mod input_layer;
+
+/// Includes various traits that define interfaces of a GKR Prover
 pub mod proof_system;
+
+/// Includes various builders needed for testing purposes
 pub mod test_helper_circuits;
+
+/// Comprehensive tests for the GKR Prover
 #[cfg(test)]
 pub(crate) mod tests;
 
-use std::marker::PhantomData;
-
+use self::{
+    input_layer::{InputLayer, InputLayerError},
+    proof_system::ProofSystem,
+};
 use crate::{
-    claims::{Claim, ClaimAggregator, YieldClaim},
+    claims::{Claim, ClaimAggregator},
     gate::gate::{BinaryOperation, Gate},
     layer::{
         layer_builder::LayerBuilder, layer_enum::LayerEnum, regular_layer::RegularLayer, Layer,
@@ -23,33 +36,21 @@ use crate::{
     },
     utils::hash_layers,
 };
-
-use tracing::{debug, info};
-
-// use lcpc_2d::{FieldExt, ligero_commit::{remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify}, adapter::convert_halo_to_lcpc, LcProofAuxiliaryInfo, poseidon_ligero::PoseidonSpongeHasher, ligero_structs::LigeroEncoding, ligero_ml_helper::naive_eval_mle_at_challenge_point};
-// use lcpc_2d::fs_transcript::halo2_remainder_transcript::Transcript;
-
 use ark_std::{end_timer, start_timer};
+use itertools::Itertools;
 use remainder_shared_types::transcript::{
-    TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter,
+    TranscriptReader, TranscriptReaderError, TranscriptWriter,
 };
 use remainder_shared_types::FieldExt;
-
-// use derive_more::From;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
 use thiserror::Error;
+use tracing::{debug, info};
 use tracing::{instrument, span, Level};
 
-use self::{
-    input_layer::{InputLayer, InputLayerError},
-    proof_system::ProofSystem,
-};
-
-/// New type for containing the list of Layers that make up the GKR circuit
-///
-/// Literally just a Vec of pointers to various layer types!
+/// The list of Layers that make up the GKR circuit
 pub struct Layers<F: FieldExt, T: Layer<F>> {
+    /// A Vec of pointers to various layer types
     pub layers: Vec<T>,
     marker: PhantomData<F>,
 }
@@ -149,7 +150,8 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         }
     }
 
-    pub fn next_layer_id(&self) -> usize {
+    /// Returns the number of layers in the GKR circuit
+    pub fn num_layers(&self) -> usize {
         self.layers.len()
     }
 }
@@ -170,6 +172,7 @@ pub enum GKRError {
     /// No claims were found for layer
     NoClaimsForLayer(LayerId),
     #[error("Transcript during verifier's interaction with the transcript.")]
+    /// Errors when reading from the transcript
     TranscriptError(TranscriptReaderError),
     #[error("Error when proving layer {0:?}: {1}")]
     /// Error when proving layer
@@ -187,11 +190,12 @@ pub enum GKRError {
     #[error("Error when commiting to InputLayer {0}")]
     InputLayerError(InputLayerError),
     #[error("Error when verifying circuit hash.")]
+    /// Error when verifying circuit hash
     ErrorWhenVerifyingCircuitHash(TranscriptReaderError),
 }
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
-/// this inner vec is none if there is no sumcheck proof -- this means that
+/// this inner vec is none if there is no sumcheck proof
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SumcheckProof<F>(pub Vec<Vec<F>>);
 
@@ -205,8 +209,11 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct LayerProof<F: FieldExt, Pf: ProofSystem<F>> {
+    /// The sumcheck proof of each Layer, could either be a RegularLayer or a Gate
     pub sumcheck_proof: <Pf::Layer as Layer<F>>::Proof,
+    /// The layer we are proving over
     pub layer: Pf::Layer,
+    /// The proof of the claim aggregation
     pub claim_aggregation_proof: <Pf::ClaimAggregator as ClaimAggregator<F>>::AggregationProof,
 }
 
@@ -214,11 +221,14 @@ pub struct LayerProof<F: FieldExt, Pf: ProofSystem<F>> {
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct InputLayerProof<F: FieldExt, Pf: ProofSystem<F>> {
+    /// the layer id of the input layer
     pub layer_id: LayerId,
-
+    /// The proof of the claim aggregation for this input layer
     pub input_layer_claim_aggregation_proof:
         <Pf::ClaimAggregator as ClaimAggregator<F>>::AggregationProof,
+    /// The commitment to the input layer
     pub input_commitment: <Pf::InputLayer as InputLayer<F>>::Commitment,
+    /// The opening proof for the commitment
     pub input_opening_proof: <Pf::InputLayer as InputLayer<F>>::OpeningProof,
 }
 
@@ -227,21 +237,23 @@ pub struct InputLayerProof<F: FieldExt, Pf: ProofSystem<F>> {
 #[serde(bound = "F: FieldExt")]
 pub struct GKRProof<F: FieldExt, Pf: ProofSystem<F>> {
     /// The sumcheck proof of each GKR Layer, along with the fully bound expression.
-    ///
     /// In reverse order (i.e. layer closest to the output layer is first)
     pub layer_sumcheck_proofs: Vec<LayerProof<F, Pf>>,
     /// All the output layers that this circuit yields
     pub output_layers: Vec<Pf::OutputLayer>,
     /// Proofs for each input layer (e.g. `LigeroInputLayer` or `PublicInputLayer`).
     pub input_layer_proofs: Vec<InputLayerProof<F, Pf>>,
-    /// Hash of the entire circuit description, to be used in the FS transcript!
-    /// TODO!(%Labs): Actually make this secure!
+    /// Hash of the entire circuit description, to be used in the FS transcript
     pub maybe_circuit_hash: Option<F>,
 }
 
+/// The witness of a GKR circuit, used to actually prove the circuit
 pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
+    /// The intermediate layers of the circuit, as defined by the ProofSystem
     pub layers: Layers<F, Pf::Layer>,
+    /// The output layers of the circuit, as defined by the ProofSystem
     pub output_layers: Vec<Pf::OutputLayer>,
+    /// The input layers of the circuit, as defined by the ProofSystem
     pub input_layers: Vec<Pf::InputLayer>,
 }
 
@@ -270,6 +282,7 @@ pub trait GKRCircuit<F: FieldExt> {
     /// The ProofSystem that describes the allowed cryptographic operations this Circuit uses
     type ProofSystem: ProofSystem<F>;
 
+    /// The hash of the circuit, use to uniquely identify the circuit
     const CIRCUIT_HASH: Option<[u8; 32]> = None;
 
     /// The forward pass, defining the layer relationships and generating the layers
@@ -346,7 +359,6 @@ pub trait GKRCircuit<F: FieldExt> {
         // --- Go through circuit output layers and grab claims on each ---
         for output in output_layers.iter_mut() {
             info!("New Output Layer: {:?}", output.get_layer_id());
-            let mut claim = None;
             let bits = output.index_mle_indices(0);
 
             if bits != 0 {
@@ -354,7 +366,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 // --- Evaluate each output MLE at a random challenge point ---
                 for bit in 0..bits {
                     let challenge = transcript_writer.get_challenge("Setting Output Layer Claim");
-                    claim = output.fix_variable(bit, challenge);
+                    output.fix_variable(bit, challenge);
                 }
             }
             let layer_id = output.get_layer_id();
@@ -420,8 +432,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 ));
 
                 // --- Compute all sumcheck messages across this particular layer ---
-                // dbg!(&layer_claim);
-                // dbg!(&claims);
                 let prover_sumcheck_messages =
                     layer
                         .prove_rounds(layer_claim, transcript_writer)
@@ -430,7 +440,9 @@ pub trait GKRCircuit<F: FieldExt> {
                 debug!("sumcheck_proof: {:#?}", prover_sumcheck_messages);
                 end_timer!(sumcheck_msg_timer);
 
-                aggregator.add_claims(&layer);
+                aggregator
+                    .add_claims(&layer)
+                    .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
                 end_timer!(layer_timer);
 
@@ -584,7 +596,9 @@ pub trait GKRCircuit<F: FieldExt> {
             info!("New Output Layer {:?}", layer_id);
 
             // --- Append claims to either the claim tracking map OR the first (sumchecked) layer's list of claims ---
-            aggregator.add_claims(output);
+            aggregator
+                .add_claims(output)
+                .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
         }
 
         end_timer!(claims_timer);
@@ -594,7 +608,7 @@ pub trait GKRCircuit<F: FieldExt> {
         // --- END TRACE: output claims ---
         verifier_output_claims_span.exit();
 
-        // --- Go through each of the layers' sumcheck proofs... ---
+        // --- Go through each of the layers' sumcheck proofs ---
         for sumcheck_proof_single in layer_sumcheck_proofs {
             let LayerProof {
                 sumcheck_proof,
@@ -640,7 +654,9 @@ pub trait GKRCircuit<F: FieldExt> {
 
             end_timer!(sumcheck_msg_timer);
 
-            aggregator.add_claims(&layer);
+            aggregator
+                .add_claims(&layer)
+                .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
 
             end_timer!(layer_timer);
         }
@@ -692,7 +708,7 @@ pub trait GKRCircuit<F: FieldExt> {
         Ok(())
     }
 
-    ///Gen the circuit hash
+    /// Generate the circuit hash
     fn gen_circuit_hash(&mut self) -> F
     where
         Self::ProofSystem: ProofSystem<F, Layer = LayerEnum<F>>,
@@ -705,6 +721,7 @@ pub trait GKRCircuit<F: FieldExt> {
         hash_layers(&layers)
     }
 
+    /// Get the circuit hash
     fn get_circuit_hash() -> Option<F> {
         Self::CIRCUIT_HASH.map(|bytes| F::from_bytes_le(&bytes))
     }
