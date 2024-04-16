@@ -286,7 +286,9 @@ fn combine_expressions<F: FieldExt>(
 
     loop {
         if exprs.len() == 1 {
-            break exprs.remove(0).1;
+            let hi = exprs.remove(0).1;
+            dbg!(&hi);
+            break hi;
         }
 
         exprs.sort_by(|first, second| {

@@ -124,17 +124,23 @@ impl<F: FieldExt> GKRCircuit<F> for LinearNonLinearCircuit<F> {
     }
 }
 
+impl<F: FieldExt> LinearNonLinearCircuit<F> {
+    fn new(sel_mle: DenseMle<F, F>, prod_mle: DenseMle<F, F>) -> Self {
+        assert_eq!(sel_mle.num_iterated_vars(), prod_mle.num_iterated_vars());
+        Self { sel_mle, prod_mle }
+    }
+}
+
 #[test]
 fn test_nonlinear_sel_circuit_test() {
     const VARS_SEL_SIDE: usize = 2;
     const VARS_PROD_SIDE: usize = VARS_SEL_SIDE;
+    let mut rng = test_rng();
 
-    let sel_mle = get_dummy_random_mle(VARS_SEL_SIDE);
-    let prod_mle = get_dummy_random_mle(VARS_PROD_SIDE);
+    let sel_mle = get_dummy_random_mle(VARS_SEL_SIDE, &mut rng);
+    let prod_mle = get_dummy_random_mle(VARS_PROD_SIDE, &mut rng);
 
-    let linear_non_linear_circuit: LinearNonLinearCircuit<Fr> = LinearNonLinearCircuit {
-        sel_mle: sel_mle,
-        prod_mle: prod_mle,
-    };
+    let linear_non_linear_circuit: LinearNonLinearCircuit<Fr> =
+        LinearNonLinearCircuit::new(sel_mle, prod_mle);
     test_circuit(linear_non_linear_circuit, None)
 }

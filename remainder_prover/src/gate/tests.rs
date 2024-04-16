@@ -401,8 +401,6 @@ fn test_gkr_gate_simplest_circuit_combined() {
         None,
     );
 
-    dbg!("hello");
-
     let negmle = DenseMle::new_from_iter(
         mle.mle_ref()
             .bookkeeping_table()
@@ -411,8 +409,6 @@ fn test_gkr_gate_simplest_circuit_combined() {
         LayerId::Input(0),
         None,
     );
-
-    dbg!("hfboooo");
 
     let circuit: SimplestGateCircuitCombined<Fr> = SimplestGateCircuitCombined { mle, negmle };
 

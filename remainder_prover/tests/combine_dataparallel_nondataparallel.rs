@@ -38,12 +38,12 @@ use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
 use crate::utils::get_dummy_random_mle;
 mod utils;
 
-struct BatchedCircuit<F: FieldExt> {
+struct DataParallelCircuit<F: FieldExt> {
     mle_1_vec: Vec<DenseMle<F, F>>,
     mle_2_vec: Vec<DenseMle<F, F>>,
 }
 
-impl<F: FieldExt> GKRCircuit<F> for BatchedCircuit<F> {
+impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
     type Sponge = PoseidonSponge<F>;
 
     fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
@@ -223,7 +223,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
                 ));
             });
 
-        let mut batched_circuit = BatchedCircuit {
+        let mut batched_circuit = DataParallelCircuit {
             mle_1_vec: self.mle_1_vec.clone(),
             mle_2_vec: self.mle_2_vec.clone(),
         };
@@ -280,32 +280,69 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
     }
 }
 
+impl<F: FieldExt> CombinedCircuit<F> {
+    fn new(
+        mle_1_vec: Vec<DenseMle<F, F>>,
+        mle_2_vec: Vec<DenseMle<F, F>>,
+        mle_3: DenseMle<F, F>,
+        mle_4: DenseMle<F, F>,
+        mle_5: DenseMle<F, F>,
+        mle_6: DenseMle<F, F>,
+        num_data_parallel_bits: usize,
+    ) -> Self {
+        assert_eq!(mle_3.num_iterated_vars(), mle_4.num_iterated_vars());
+        assert_eq!(mle_5.num_iterated_vars(), mle_4.num_iterated_vars() + 1);
+        assert_eq!(mle_6.num_iterated_vars(), mle_5.num_iterated_vars() + 1);
+        let all_num_vars: Vec<usize> = mle_1_vec
+            .iter()
+            .chain(mle_2_vec.iter())
+            .map(|mle| mle.num_iterated_vars())
+            .collect();
+        let all_vars_same = all_num_vars
+            .iter()
+            .fold(true, |acc, elem| (*elem == mle_3.num_iterated_vars()) & acc);
+        assert!(all_vars_same);
+        assert_eq!(mle_1_vec.len(), mle_2_vec.len());
+        assert_eq!(mle_1_vec.len(), 1 << num_data_parallel_bits);
+        Self {
+            mle_1_vec,
+            mle_2_vec,
+            mle_3,
+            mle_4,
+            mle_5,
+            mle_6,
+            num_data_parallel_bits,
+        }
+    }
+}
+
 #[test]
 fn test_combined_circuit() {
     const VARS_MLE_1_2: usize = 2;
     const VARS_MLE_3: usize = VARS_MLE_1_2 + 1;
     const VARS_MLE_4: usize = VARS_MLE_3 + 1;
     const NUM_DATA_PARALLEL_BITS: usize = 1;
+    let mut rng = test_rng();
 
     let mle_1_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
-        .map(|_| get_dummy_random_mle(VARS_MLE_1_2))
+        .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
         .collect_vec();
     let mle_2_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
-        .map(|_| get_dummy_random_mle(VARS_MLE_1_2))
+        .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
         .collect_vec();
-    let mle_3 = get_dummy_random_mle(VARS_MLE_1_2);
-    let mle_4 = get_dummy_random_mle(VARS_MLE_1_2);
-    let mle_5 = get_dummy_random_mle(VARS_MLE_3);
-    let mle_6 = get_dummy_random_mle(VARS_MLE_4);
+    let mle_3 = get_dummy_random_mle(VARS_MLE_1_2, &mut rng);
+    let mle_4 = get_dummy_random_mle(VARS_MLE_1_2, &mut rng);
+    let mle_5 = get_dummy_random_mle(VARS_MLE_3, &mut rng);
+    let mle_6 = get_dummy_random_mle(VARS_MLE_4, &mut rng);
 
-    let combined_circuit: CombinedCircuit<Fr> = CombinedCircuit {
+    let combined_circuit: CombinedCircuit<Fr> = CombinedCircuit::new(
         mle_1_vec,
         mle_2_vec,
         mle_3,
         mle_4,
         mle_5,
         mle_6,
-        num_data_parallel_bits: NUM_DATA_PARALLEL_BITS,
-    };
+        NUM_DATA_PARALLEL_BITS,
+    );
     test_circuit(combined_circuit, None)
 }

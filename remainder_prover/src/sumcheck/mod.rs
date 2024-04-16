@@ -131,7 +131,24 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
 ) -> Result<Evals<F>, ExpressionError> {
     // a constant does not have any variables, so we do not need a beta table at all. therefore we just repeat
     // the constant evaluation for the degree+1 number of times as this is how many evaluations we need.
-    let constant = |constant| Ok(Evals((0..max_degree + 1).map(|_| constant).collect_vec()));
+    let constant = |constant, beta_table: &BetaValues<F>| {
+        let constant_updated_vals = beta_values
+            .updated_values
+            .values()
+            .map(|elem| elem.clone())
+            .collect_vec();
+        let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
+        let one_minus_index_claim = F::one() - index_claim;
+        let beta_step = *index_claim - one_minus_index_claim;
+        let evals = std::iter::successors(Some(one_minus_index_claim), move |item| {
+            Some(*item + beta_step)
+        })
+        .take(max_degree + 1)
+        .map(|elem| constant * elem)
+        .collect_vec();
+        let updated_evals = apply_updated_beta_values_to_evals(evals, &constant_updated_vals);
+        Ok(updated_evals)
+    };
 
     // the selector is split into three cases:
     // - when the selector bit itself is not the independent variable and hasn't been bound yet,

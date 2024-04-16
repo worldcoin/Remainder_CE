@@ -133,21 +133,50 @@ impl<F: FieldExt> GKRCircuit<F> for NonlinearSelectorCircuit<F> {
     }
 }
 
+impl<F: FieldExt> NonlinearSelectorCircuit<F> {
+    fn new(
+        left_sel_mle: DenseMle<F, F>,
+        right_sel_mle: DenseMle<F, F>,
+        right_sum_mle_1: DenseMle<F, F>,
+        right_sum_mle_2: DenseMle<F, F>,
+    ) -> Self {
+        assert_eq!(
+            left_sel_mle.num_iterated_vars(),
+            right_sel_mle.num_iterated_vars()
+        );
+        assert_eq!(
+            right_sum_mle_1.num_iterated_vars(),
+            right_sum_mle_2.num_iterated_vars()
+        );
+        assert_eq!(
+            left_sel_mle.num_iterated_vars() + 1,
+            right_sum_mle_1.num_iterated_vars()
+        );
+        Self {
+            left_sel_mle,
+            right_sel_mle,
+            right_sum_mle_1,
+            right_sum_mle_2,
+        }
+    }
+}
+
 #[test]
 fn test_nonlinear_sel_circuit_test() {
     const VARS_PRODUCT_SIDE: usize = 3;
     const VARS_SEL_SIDE: usize = VARS_PRODUCT_SIDE - 1;
+    let mut rng = &mut test_rng();
 
-    let left_sel_mle = get_dummy_random_mle(VARS_SEL_SIDE);
-    let right_sel_mle = get_dummy_random_mle(VARS_SEL_SIDE);
-    let right_sum_mle_1 = get_dummy_random_mle(VARS_PRODUCT_SIDE);
-    let right_sum_mle_2 = get_dummy_random_mle(VARS_PRODUCT_SIDE);
+    let left_sel_mle = get_dummy_random_mle(VARS_SEL_SIDE, &mut rng);
+    let right_sel_mle = get_dummy_random_mle(VARS_SEL_SIDE, &mut rng);
+    let right_sum_mle_1 = get_dummy_random_mle(VARS_PRODUCT_SIDE, &mut rng);
+    let right_sum_mle_2 = get_dummy_random_mle(VARS_PRODUCT_SIDE, &mut rng);
 
-    let non_linear_sel_circuit: NonlinearSelectorCircuit<Fr> = NonlinearSelectorCircuit {
+    let non_linear_sel_circuit: NonlinearSelectorCircuit<Fr> = NonlinearSelectorCircuit::new(
         left_sel_mle,
         right_sel_mle,
         right_sum_mle_1,
         right_sum_mle_2,
-    };
+    );
     test_circuit(non_linear_sel_circuit, None)
 }

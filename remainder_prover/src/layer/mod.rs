@@ -329,7 +329,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> Layer<F> for GKRLayer<F, Tr> {
         let val = claim.get_result().clone();
 
         // --- Initialize tables and compute prover message for first round of sumcheck ---
-        let first_sumcheck_message = self.start_sumcheck(claim)?;
+        let first_sumcheck_message = self.start_sumcheck(claim.clone())?;
 
         let nonlinear_rounds = self.nonlinear_rounds.clone().unwrap();
         if nonlinear_rounds.len() == 0 {
