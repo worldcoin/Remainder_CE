@@ -6,6 +6,7 @@ use std::{
 };
 
 /// tests for sumcheck with various expressions
+#[cfg(test)]
 pub mod tests;
 
 use ark_std::cfg_into_iter;

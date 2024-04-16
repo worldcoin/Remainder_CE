@@ -2,7 +2,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{LayerBuilder, LayerId},
+    layer::{layer_builder::LayerBuilder, LayerId},
     mle::{dense::DenseMle, zero::ZeroMleRef, MleIndex},
 };
 
