@@ -9,10 +9,13 @@ use crate::{
 
 use super::{dense::DenseMleRef, zero::ZeroMleRef, MleIndex, MleRef};
 
+/// A wrapper type for various kinds of [MleRef]s.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub enum MleEnum<F: FieldExt> {
+    /// A [DenseMleRef] variant.
     Dense(DenseMleRef<F>),
+    /// A [ZeroMleRef] variant.
     Zero(ZeroMleRef<F>),
 }
 
