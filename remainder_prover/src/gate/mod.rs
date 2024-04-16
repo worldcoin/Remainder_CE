@@ -2,3 +2,6 @@
 pub mod gate;
 /// the helper functions required to support gate operations
 pub mod gate_helpers;
+
+/// testing module
+mod tests;

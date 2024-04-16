@@ -132,7 +132,24 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
 ) -> Result<Evals<F>, ExpressionError> {
     // a constant does not have any variables, so we do not need a beta table at all. therefore we just repeat
     // the constant evaluation for the degree+1 number of times as this is how many evaluations we need.
-    let constant = |constant| Ok(Evals((0..max_degree + 1).map(|_| constant).collect_vec()));
+    let constant = |constant, beta_table: &BetaValues<F>| {
+        let constant_updated_vals = beta_values
+            .updated_values
+            .values()
+            .map(|elem| elem.clone())
+            .collect_vec();
+        let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
+        let one_minus_index_claim = F::one() - index_claim;
+        let beta_step = *index_claim - one_minus_index_claim;
+        let evals = std::iter::successors(Some(one_minus_index_claim), move |item| {
+            Some(*item + beta_step)
+        })
+        .take(max_degree + 1)
+        .map(|elem| constant * elem)
+        .collect_vec();
+        let updated_evals = apply_updated_beta_values_to_evals(evals, &constant_updated_vals);
+        Ok(updated_evals)
+    };
 
     // the selector is split into three cases:
     // - when the selector bit itself is not the independent variable and hasn't been bound yet,
@@ -598,4 +615,82 @@ pub(crate) fn evaluate_at_a_point<F: FieldExt>(
         )
         .reduce(|x, y| x + y);
     eval.ok_or(InterpError::NoInverse)
+}
+
+/// evaluates the product of multiple mle refs (in the evalutaion form),
+/// (the mles could be beta tables as well)
+/// the returned results can be the following expresssion:
+/// sum_{x_2, ..., x_n} V_1(X, x_2, ..., x_n) * V_2(X, x_2, ..., x_n) * V_2(X, x_2, x_3),
+/// evaluated at X = 0, 1, ..., degree
+/// note that when one of the mle_refs have less variables, there's a wrap around: % max
+pub fn evaluate_mle_ref_product<F: FieldExt>(
+    mle_refs: &[&impl MleRef<F = F>],
+    degree: usize,
+) -> Result<Evals<F>, MleError> {
+    // --- Gets the total number of iterated variables across all MLEs within this product ---
+    let max_num_vars = mle_refs
+        .iter()
+        .map(|mle_ref| mle_ref.num_vars())
+        .max()
+        .ok_or(MleError::EmptyMleList)?;
+
+    //There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
+    let eval_count = degree + 1;
+
+    //iterate across all pairs of evaluations
+    let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
+        #[cfg(feature = "parallel")]
+        || vec![F::zero(); eval_count],
+        #[cfg(not(feature = "parallel"))]
+        vec![F::zero(); eval_count],
+        |mut acc, index| {
+            //get the product of all evaluations over 0/1/..degree
+            let evals = mle_refs
+                .iter()
+                .map(|mle_ref| {
+                    let zero = F::zero();
+                    let index = if mle_ref.num_vars() < max_num_vars {
+                        let max = 1 << mle_ref.num_vars();
+                        (index * 2) % max
+                    } else {
+                        index * 2
+                    };
+                    let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
+
+                    let second = if mle_ref.num_vars() != 0 {
+                        *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
+                    } else {
+                        first
+                    };
+
+                    // let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
+                    let step = second - first;
+                    let successors =
+                        std::iter::successors(Some(second), move |item| Some(*item + step));
+                    //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
+                    std::iter::once(first).chain(successors)
+                })
+                .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
+                .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
+                .unwrap();
+
+            acc.iter_mut()
+                .zip(evals)
+                .for_each(|(acc, eval)| *acc += eval);
+            acc
+        },
+    );
+
+    #[cfg(feature = "parallel")]
+    let evals = evals.reduce(
+        || vec![F::zero(); eval_count],
+        |mut acc, partial| {
+            acc.iter_mut()
+                .zip(partial)
+                .for_each(|(acc, partial)| *acc += partial);
+            acc
+        },
+    );
+
+    Ok(Evals(evals))
 }
