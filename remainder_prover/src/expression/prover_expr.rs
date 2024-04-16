@@ -310,7 +310,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     /// node of the expression tree.
     pub fn evaluate_sumcheck_beta_cascade<T>(
         &self,
-        constant: &impl Fn(F) -> T,
+        constant: &impl Fn(F, &BetaValues<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
         mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
         negated: &impl Fn(T) -> T,
@@ -539,7 +539,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate_sumcheck_node_beta_cascade<T>(
         &self,
-        constant: &impl Fn(F) -> T,
+        constant: &impl Fn(F, &BetaValues<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
         mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
         negated: &impl Fn(T) -> T,
@@ -551,7 +551,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> T {
         match self {
-            ExpressionNode::Constant(scalar) => constant(*scalar),
+            ExpressionNode::Constant(scalar) => constant(*scalar, beta),
             ExpressionNode::Selector(index, a, b) => selector_column(
                 index,
                 a.evaluate_sumcheck_node_beta_cascade(
