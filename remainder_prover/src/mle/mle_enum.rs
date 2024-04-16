@@ -2,7 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::FieldExt;
 
-use super::{dense::DenseMleRef, zero::ZeroMleRef, Mle, MleIndex, MleRef};
+use crate::{
+    claims::{wlx_eval::ClaimMle, YieldClaim},
+    layer::LayerError,
+};
+
+use super::{dense::DenseMleRef, zero::ZeroMleRef, MleIndex, MleRef};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
@@ -60,7 +65,7 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         &mut self,
         round_index: usize,
         challenge: Self::F,
-    ) -> Option<crate::layer::claims::Claim<Self::F>> {
+    ) -> Option<crate::claims::Claim<Self::F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable(round_index, challenge),
             MleEnum::Zero(item) => item.fix_variable(round_index, challenge),
@@ -71,7 +76,7 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         &mut self,
         indexed_bit_index: usize,
         point: Self::F,
-    ) -> Option<crate::layer::claims::Claim<Self::F>> {
+    ) -> Option<crate::claims::Claim<Self::F>> {
         match self {
             MleEnum::Dense(item) => item.fix_variable_at_index(indexed_bit_index, point),
             MleEnum::Zero(item) => item.fix_variable_at_index(indexed_bit_index, point),
@@ -107,6 +112,15 @@ impl<F: FieldExt> MleRef for MleEnum<F> {
         match self {
             MleEnum::Dense(item) => item.push_mle_indices(new_indices),
             MleEnum::Zero(item) => item.push_mle_indices(new_indices),
+        }
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MleEnum<F> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        match self {
+            MleEnum::Dense(layer) => layer.get_claims(),
+            MleEnum::Zero(layer) => layer.get_claims(),
         }
     }
 }

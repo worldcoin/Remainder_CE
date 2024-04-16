@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::sumcheck::MleError;
+use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 ///Error for handling the parsing and evaluation of expressions

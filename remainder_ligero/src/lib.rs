@@ -18,28 +18,24 @@ to the codebase.
 */
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
-use ark_ff::biginteger::BigInteger;
 use ark_std::{end_timer, start_timer};
 use err_derive::Error;
-use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{
-        poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptSponge, TranscriptWriter,
-    },
+    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     Poseidon,
 };
 use serde::{Deserialize, Serialize};
-use std::{marker::PhantomData, ops::Rem};
+use std::marker::PhantomData;
 
-// --- Actual field trait + transcript stuff ---
 use remainder_shared_types::FieldExt;
 
 mod macros;
 
-/// For converting between this codebase's types and the types the page would like to have
+/// For converting between this codebase's types and the types the
+/// Halo2-GKR verifier would like to have.
 pub mod adapter;
 /// Public functions for univariate and multilinear Ligero commitment (with Poseidon)
 pub mod ligero_commit;
@@ -54,8 +50,8 @@ pub mod tests;
 /// Helper functions
 pub mod utils;
 
-/// TODO!(ryancao): Perhaps we should rename this? After everything is working.
-/// We are distinguishing it from `FieldHash` for now.
+/// Trait wrapper over `FieldExt` which gives a field element the ability to be
+/// absorbed into a [FieldHashFnDigest], as well as a [TranscriptSponge].
 pub trait PoseidonFieldHash: FieldExt {
     /// Update the digest `d` with the `self` (since `self` should already be a field element)
     fn digest_update<D: FieldHashFnDigest<Self>>(&self, d: &mut D) {
@@ -63,28 +59,26 @@ pub trait PoseidonFieldHash: FieldExt {
     }
 
     /// Update the [remainder::transcript::Transcript] with label `l` and element `self`
-    fn transcript_update(&self, t: &mut impl TranscriptSponge<Self>, l: &'static str) {
-        let _ = t.absorb(*self);
+    fn transcript_update(&self, t: &mut impl TranscriptSponge<Self>, _l: &'static str) {
+        t.absorb(*self);
     }
 }
 
-// --- Ryan's addendum ---
 impl<F: FieldExt> PoseidonFieldHash for F {
     fn digest_update<D: FieldHashFnDigest<F>>(&self, d: &mut D) {
         d.update(&[*self])
     }
 
-    fn transcript_update(&self, t: &mut impl TranscriptSponge<F>, l: &'static str) {
-        let _ = t.absorb(*self);
+    fn transcript_update(&self, t: &mut impl TranscriptSponge<F>, _l: &'static str) {
+        t.absorb(*self);
     }
 }
 
-/// Trait for a linear encoding used by the polycommit
+/// Trait for a linear encoding used by the Ligero PCS. In particular, the
+/// encoding provides the metadata around e.g. the dimensions of the unencoded
+/// and encoded matrices, as well as other information e.g. the number of
+/// degree tests required (in the multilinear GKR + Ligero PCS case, none!)
 pub trait LcEncoding<F: FieldExt>: Clone + std::fmt::Debug + Sync {
-    /// Field over which coefficients are defined
-    // type F: Field + FieldHash + std::fmt::Debug + Clone;
-    // type F: FieldExt + std::fmt::Debug + Clone;
-
     /// Domain separation label - degree test (see def_labels!())
     const LABEL_DT: &'static [u8];
     /// Domain separation label - random lin combs (see def_labels!())
@@ -103,11 +97,11 @@ pub trait LcEncoding<F: FieldExt>: Clone + std::fmt::Debug + Sync {
     /// Get dimensions for this encoding instance on an input vector of length `len`
     fn get_dims(&self, len: usize) -> (usize, usize, usize);
 
-    /// Check that supplied dimensions are compatible with this encoding
-    fn dims_ok(&self, orig_num_cols: usize, encoded_num_cols: usize) -> bool;
-
     /// Get the number of column openings required for this encoding
     fn get_n_col_opens(&self) -> usize;
+
+    /// Ensures that dimensions passed in match expected dimensions for the encoding
+    fn dims_ok(&self, orig_num_cols: usize, encoded_num_cols: usize) -> bool;
 
     /// Get the number of degree tests required for this encoding
     fn get_n_degree_tests(&self) -> usize;
@@ -174,7 +168,8 @@ where
     Encode(#[source] ErrT),
 }
 
-/// --- For encoding the matrix size and other useful info ---
+/// For encoding the matrix size and other information necessary to compute
+/// a Ligero commitment / verify a Ligero PCS proof
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LcProofAuxiliaryInfo {
     /// Inverse of the encoding rate rho
@@ -190,18 +185,21 @@ pub struct LcProofAuxiliaryInfo {
 /// result of a verifier operation
 pub type VerifierResult<T, ErrT> = Result<T, VerifierError<ErrT>>;
 
-/// a commitment
+/// Ligero commitment to be used by the prover. This should *not* be sent
+/// to the verifier (only `self.comm`)!
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LcCommit<D, E, F> {
-    // --- Flattened version of M' (encoded) matrix ---
+    // Flattened version of M' (encoded) matrix
     comm: Vec<F>,
-    // --- Flattened version of M (non-encoded) matrix ---
+    // Flattened version of M (non-encoded) matrix
     coeffs: Vec<F>,
-    // --- Matrix dims ---
-    n_rows: usize,           // Height of M (and M')
-    encoded_num_cols: usize, // Width of M'
-    orig_num_cols: usize,    // Width of M
-    // --- TODO!(ryancao): What this? ---
+    /// Height of M (and M')
+    n_rows: usize,
+    /// Width of M'
+    encoded_num_cols: usize,
+    /// Width of M
+    orig_num_cols: usize,
+    /// All values within the Merkle tree (where leaves are column-wise linear hashes)
     hashes: Vec<F>,
     phantom_data: PhantomData<D>,
     phantom_data_2: PhantomData<E>,
@@ -213,7 +211,7 @@ where
     F: FieldExt,
     E: LcEncoding<F> + Send + Sync,
 {
-    /// returns the Merkle root of this polynomial commitment (which is the commitment itself)
+    /// Returns the Merkle root of this polynomial commitment (which is the commitment itself)
     pub fn get_root(&self) -> LcRoot<E, F> {
         LcRoot {
             root: (self.hashes.last().cloned().unwrap() as F),
@@ -221,27 +219,39 @@ where
         }
     }
 
-    /// return the number of coefficients encoded in each matrix row
+    /// Returns the number of coefficients encoded in each matrix row
     pub fn get_orig_num_cols(&self) -> usize {
         self.orig_num_cols
     }
 
-    /// return the number of columns in the encoded matrix
+    /// Returns the number of columns in the encoded matrix
     pub fn get_encoded_num_cols(&self) -> usize {
         self.encoded_num_cols
     }
 
-    /// return the number of rows in the encoded matrix
+    /// Returns the number of rows in the encoded matrix
     pub fn get_n_rows(&self) -> usize {
         self.n_rows
     }
 
-    /// generate a commitment to a polynomial
+    /// Generates a commitment to a polynomial represented by `coeffs`
+    ///
+    /// ## Arguments
+    /// * `coeffs` - coefficients of the polynomial to be committed to
+    /// * `enc` - encoding to be used for transforming M --> M'
     pub fn commit(coeffs: &[F], enc: &E) -> ProverResult<Self, ErrT<E, F>> {
         commit::<D, E, F>(coeffs, enc)
     }
 
-    /// Generate an evaluation of a committed polynomial
+    /// Generates an evaluation proof for `self` as a commitment.
+    ///
+    /// ## Arguments
+    /// * `outer_tensor` - the "b^T" vector over the split expanded challenge point
+    /// * `enc` - encoding used for transforming M --> M'
+    ///
+    /// ## Returns
+    /// * `proof` - Ligero evaluation proof for committed polynomial at the
+    ///     challenge point represented by `outer_tensor`
     pub fn prove<T: TranscriptSponge<F>>(
         &self,
         outer_tensor: &[F],
@@ -252,7 +262,7 @@ where
     }
 }
 
-/// A Merkle root corresponding to a committed polynomial
+/// A Merkle root corresponding to a committed polynomial.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct LcRoot<E, F>
@@ -260,10 +270,9 @@ where
     F: FieldExt,
     E: LcEncoding<F> + Send + Sync,
 {
-    /// Root of the Merkle Tree
+    /// The root of the Merkle tree is a single field element
     pub root: F,
     _p: PhantomData<E>,
-    // phantom_data: PhantomData<D>
 }
 
 impl<E, F> LcRoot<E, F>
@@ -294,9 +303,12 @@ where
     F: FieldExt,
     E: Send + Sync,
 {
+    /// The column index within M'
     col_idx: usize,
-    col: Vec<F>,  // The actual column from M
-    path: Vec<F>, // TODO!(ryancao)
+    /// The actual column values
+    col: Vec<F>,
+    /// The Merkle path, i.e. the siblings within the Merkle tree
+    path: Vec<F>,
     phantom_data: PhantomData<E>,
 }
 
@@ -308,10 +320,12 @@ where
     F: FieldExt,
     E: LcEncoding<F> + Send + Sync,
 {
+    /// Width of M'
     encoded_num_cols: usize,
+    /// Challenge point to be evaluated at
     p_eval: Vec<F>,
-    // --- No longer doing the well-formedness check ---
-    // p_random_vec: Vec<Vec<F>>,
+    /// Columns randomly sampled via Fiat-Shamir to be checked against the
+    /// commitment + claimed value
     columns: Vec<LcColumn<E, F>>,
     phantom_data: PhantomData<D>,
 }
@@ -361,9 +375,14 @@ pub fn n_degree_tests(lambda: usize, len: usize, flog2: usize) -> usize {
 // parallelization limit when working on columns
 const LOG_MIN_NCOLS: usize = 5;
 
-/// Commit to a univariate polynomial whose coefficients are `coeffs` using encoding `enc`
-/// --- Note that our hash function needs to implement `Digest` to be used here ---
-/// --- In the test cases, `coeffs_in` is literally a Vec<F> ---
+/// Commit to a polynomial whose coefficients are `coeffs_in` using encoding `enc`.
+///
+/// ## Arguments
+/// * `coeffs_in` - coefficients of the polynomial to be committed to.
+/// * `enc` - encoding to perform over rows of M --> M'
+///
+/// ## Returns
+/// * `commitment` - Ligero commitment to be used by the prover
 fn commit<D, E, F>(coeffs_in: &[F], enc: &E) -> ProverResult<LcCommit<D, E, F>, ErrT<E, F>>
 where
     F: FieldExt,
@@ -371,9 +390,6 @@ where
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Matrix size params ---
-    // n_rows: Total number of matrix rows (i.e. height)
-    // orig_num_cols: Total number of UNENCODED matrix cols (i.e. width)
-    // encoded_num_cols: Total number of ENCODED matrix cols (i.e. orig_num_cols * \rho^{-1})
     let (n_rows, orig_num_cols, encoded_num_cols) = enc.get_dims(coeffs_in.len());
 
     // check that parameters are ok
@@ -381,14 +397,12 @@ where
     assert!((n_rows - 1) * orig_num_cols < coeffs_in.len());
     assert!(enc.dims_ok(orig_num_cols, encoded_num_cols));
 
-    // matrix (encoded as a vector)
-    // XXX(zk) pad coeffs
     // --- `coeffs` should be the original coefficients ---
     let mut coeffs = vec![F::zero(); n_rows * orig_num_cols];
     // --- `comm` should be the matrix of FFT-encoded rows ---
     let mut comm = vec![F::zero(); n_rows * encoded_num_cols];
 
-    // local copy of coeffs with padding
+    // --- Copy of `coeffs` with padding ---
     coeffs
         .par_chunks_mut(orig_num_cols)
         .zip(coeffs_in.par_chunks(orig_num_cols))
@@ -396,11 +410,9 @@ where
             c[..c_in.len()].copy_from_slice(c_in);
         });
 
-    // now compute FFTs
     // --- Go through each row of M' (the encoded matrix), as well as each row of M (the unencoded matrix) ---
     // --- and make a copy, then perform the encoding (i.e. FFT) ---
-
-    let fft_timer = start_timer!(|| format!("starting fft"));
+    let fft_timer = start_timer!(|| "starting fft".to_string());
     comm.par_chunks_mut(encoded_num_cols)
         .zip(coeffs.par_chunks(orig_num_cols))
         .try_for_each(|(r, c)| {
@@ -409,7 +421,7 @@ where
         })?;
     end_timer!(fft_timer);
 
-    // compute Merkle tree
+    // --- Compute Merkle tree ---
     let encoded_num_cols_np2 = encoded_num_cols
         .checked_next_power_of_two()
         .ok_or(ProverError::TooBig)?;
@@ -420,8 +432,6 @@ where
         n_rows,
         encoded_num_cols,
         orig_num_cols,
-        // --- There are 2^{k + 1} - 1 total hash things ---
-        // TODO!(ryancao): Why...?
         hashes: vec![F::default(); 2 * encoded_num_cols_np2 - 1],
         phantom_data: PhantomData,
         phantom_data_2: PhantomData,
@@ -432,28 +442,31 @@ where
 
     // --- Computes Merkle commitments for each column using the Digest ---
     // --- then hashes all the col commitments together using the Digest again ---
-    let merkel_timer = start_timer!(|| format!("merkelize root"));
+    let merkel_timer = start_timer!(|| "merkelize root".to_string());
     merkleize(&mut ret);
     end_timer!(merkel_timer);
 
     Ok(ret)
 }
 
-// -- This seems to be checking the size of various commitment parameters
+/// Sanitycheck for commitment and encoding dimensionality.
+///
+/// ## Arguments
+/// * `comm` - Ligero commitment struct
+/// * `enc` - Encoding used to compute M --> M'
 fn check_comm<D, E, F>(comm: &LcCommit<D, E, F>, enc: &E) -> ProverResult<(), ErrT<E, F>>
 where
     D: FieldHashFnDigest<F> + Send + Sync,
     F: FieldExt,
     E: LcEncoding<F> + Send + Sync,
 {
-    // -- |commitment| = |rows| * |cols|, where cols are the ENCODED cols
+    // --- M' total flattened length must be M' rows * M' cols ---
     let comm_sz = comm.comm.len() != comm.n_rows * comm.encoded_num_cols;
-    // -- |commitment_coeffs|  = |rows| * |orig_num_cols| where `orig_num_cols` are the UNENCODED cols
-    // -- that is, this is the |coeffs| of the actual polynomial
+    // --- M total flattened length must be M rows * M cols ---
     let coeff_sz = comm.coeffs.len() != comm.n_rows * comm.orig_num_cols;
-    // -- hmmm...does the prover keep the hashes of all the merkle tree nodes,
-    // -- so that it does not have to recompute all this during the opening phase?
+    // --- Merkle tree total length must be 2 * M' cols - 1 (since there are M' cols leaves) ---
     let hashlen = comm.hashes.len() != 2 * comm.encoded_num_cols.next_power_of_two() - 1;
+    // --- Dimension check of matrix against encoding ---
     let dims = !enc.dims_ok(comm.orig_num_cols, comm.encoded_num_cols);
 
     if comm_sz || coeff_sz || hashlen || dims {
@@ -463,14 +476,23 @@ where
     }
 }
 
+/// Modifies the `comm.hashes` field within `comm` to contain all of the Merkle
+/// tree nodes, starting from the leaves. In other words, if the Merkle tree
+/// looks like the following:
+///       [1]
+///   [2]     [3]
+/// [4] [5] [6] [7]
+/// The resulting flattened hashes within `comm.hashes` will be
+/// (4, 5, 6, 7, 2, 3, 1)
+///
+/// ## Arguments
+/// * `comm` - Ligero commitment struct whose `hashes` field is to be populated.
 fn merkleize<D, E, F>(comm: &mut LcCommit<D, E, F>)
 where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
-    // --- This is SUPER ugly, but for the sake of efficiency... ---
-    // TODO!(ryancao): Riperoni
     let master_default_poseidon_merkle_hasher = Poseidon::<F, 3, 2>::new(8, 57);
     let master_default_poseidon_column_hasher = Poseidon::<F, 3, 2>::new(8, 57);
 
@@ -480,8 +502,7 @@ where
     // with the layers of the tree being flattened and literally appended from bottom to top
 
     // step 1: hash each column of the commitment (we always reveal a full column)
-
-    let hash_column_timer = start_timer!(|| format!("hashing the columns"));
+    let hash_column_timer = start_timer!(|| "hashing the columns".to_string());
     let hashes = &mut comm.hashes[..comm.encoded_num_cols];
     hash_columns::<D, E, F>(
         &comm.comm,
@@ -498,17 +519,26 @@ where
     assert!(len_plus_one.is_power_of_two());
     let (hin, hout) = comm.hashes.split_at_mut(len_plus_one / 2);
 
-    let merkelize_tree = start_timer!(|| format!("merkelize tree"));
+    let merkelize_tree = start_timer!(|| "merkelize tree".to_string());
     merkle_tree::<D, F>(hin, hout, &master_default_poseidon_merkle_hasher);
     end_timer!(merkelize_tree);
 }
 
+/// Computes the column hashes from `comm` interpreted as a matrix of size
+/// `n_rows` by `encoded_num_cols`, and writes the results into `hashes`.
+///
+/// ## Arguments
+/// * `comm` - The flattened version of M'
+/// * `hashes` - This is the thing we are populating with the column hashes.
+/// * `n_rows` - Height of M and M'
+/// * `encoded_num_cols` - Width of M'
+/// * `offset` - Gets set to zero above; not used.
 fn hash_columns<D, E, F>(
-    comm: &[F],              // The flattened version of M'
-    hashes: &mut [F],        // This is the thing we are populating
-    n_rows: usize,           // Height of M and M'
-    encoded_num_cols: usize, // Width of M'
-    offset: usize,           // Gets set to zero above
+    comm: &[F],
+    hashes: &mut [F],
+    n_rows: usize,
+    encoded_num_cols: usize,
+    offset: usize,
     master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
 ) where
     F: FieldExt,
@@ -521,10 +551,6 @@ fn hash_columns<D, E, F>(
         // 1. prepare the digests for each column
         let mut digests = Vec::with_capacity(hashes.len());
         for _ in 0..hashes.len() {
-            // let column_hash_poseidon_params = PoseidonParams::new(8, 63, 8, 9);
-            // let dig = PoseidonSpongeHasher::new_with_params(column_hash_poseidon_params);
-            // let halo2_default_sponge = dig.get_()
-            // dig = PoseidonSpongeHasher::new_column_hasher(halo2_default_sponge);
             let dig =
                 PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
             digests.push(dig);
@@ -534,7 +560,6 @@ fn hash_columns<D, E, F>(
         for row in 0..n_rows {
             for (col, digest) in digests.iter_mut().enumerate() {
                 // --- Updates the digest with the value at `comm[row * encoded_num_cols + offset + col]` ---
-                // TODO!(ryancao): We can simply replace this with a sponge absorb
                 let com_val: F = comm[row * encoded_num_cols + offset + col];
                 com_val.digest_update(digest);
             }
@@ -573,8 +598,17 @@ fn hash_columns<D, E, F>(
     }
 }
 
-/// @param ins: The leaves to the Merkle tree
-/// @param outs: The hashes for the internal nodes up to the root
+/// Computes the remaining Merkle tree layers from the layer of leaves. In other
+/// words, if `ins` is [1] [2] [3] [4], then our Merkle tree appears as follows:
+///       [hash(hash(1, 2), hash(3, 4))]
+///   [hash(1, 2)]              [hash(3, 4)]
+/// [1]           [2]           [3]           [4]
+/// and `outs` is [hash(1, 2)] [hash(3, 4)] [hash(hash(1, 2), hash(3, 4))].
+///
+/// ## Arguments
+/// `ins` - The leaves to the Merkle tree
+/// `outs` - The hashes for the internal nodes up to the root
+/// `master_default_poseidon_merkle_hasher` - Hasher instance to be used
 fn merkle_tree<D, F>(
     ins: &[F],
     outs: &mut [F],
@@ -596,7 +630,13 @@ fn merkle_tree<D, F>(
     }
 }
 
-/// --- Computes a single Merkle tree layer by hashing adjacent pairs of "leaves" ---
+/// Computes a single layer of Merkle tree from a previous layer. In other words,
+/// if `ins` is [1] [2] [3] [4], then `outs` should be [hash(1, 2)] [hash(3, 4)].
+///
+/// ## Arguments
+/// `ins` - The leaves to the Merkle tree
+/// `outs` - The hashes for the next layer of internal nodes
+/// `master_default_poseidon_merkle_hasher` - Hasher instance to be used
 fn merkle_layer<D, F>(
     ins: &[F],
     outs: &mut [F],
@@ -610,12 +650,8 @@ fn merkle_layer<D, F>(
     if ins.len() <= (1 << LOG_MIN_NCOLS) {
         // base case: just compute all of the hashes
 
-        // let mut digest = D::new();
-        // let mut digest = D::new_merkle_hasher(master_default_poseidon_merkle_hasher);
         for idx in 0..outs.len() {
             let mut digest = D::new_merkle_hasher(master_default_poseidon_merkle_hasher);
-            // --- I see. We update the digest with the things we want to "hash" ---
-            // --- Then call `finalize()` or something like that to get the hash ---
             digest.update(&[ins[2 * idx]]);
             digest.update(&[ins[2 * idx + 1]]);
             outs[idx] = digest.finalize();
@@ -631,10 +667,17 @@ fn merkle_layer<D, F>(
     }
 }
 
-/// Open the commitment to one column
-/// @param comm -- actual Ligero commitment
-/// @param column -- the index of the column to open
-/// @return TODO!(ryancao)
+/// Open the commitment to a single column of M' by
+/// * Sending the column in the clear to the verifier
+/// * Sending the Merkle path to the Merkle root from that column's corresponding
+///     leaf node hash
+///
+/// ## Arguments
+/// * `comm` - actual Ligero commitment
+/// * `column` - the index of the column to open
+///
+/// ## Returns
+/// * `column_pf` - the column opening proof to be sent to the verifier
 fn open_column<D, E, F>(
     comm: &LcCommit<D, E, F>,
     mut column: usize,
@@ -665,11 +708,9 @@ where
     let path_len = log2(comm.encoded_num_cols);
     let mut path = Vec::with_capacity(path_len);
     for _ in 0..path_len {
-        // --- Ahh I see this is the clever way of getting the "other" child ---
-        // Either n - 1 or n + 1: nice work, Riad
+        // --- A clever way of getting the "other" child, i.e. either n - 1 or n + 1 ---
         let other = (column & !1) | (!column & 1);
         assert_eq!(other ^ column, 1);
-        // --- Mmmmmm okay so `hashes` contains all of the Merkle hashes. I see I see ---
         path.push(hashes[other]);
         let (_, hashes_new) = hashes.split_at((hashes.len() + 1) / 2);
         hashes = hashes_new;
@@ -677,11 +718,6 @@ where
     }
     assert_eq!(column, 0);
 
-    // --- Returns the actual column of values, plus the Merkle path ---
-    // --- To verify this, we should hash the column of values and check that ---
-    // --- the final hash of such, when used as the target leaf node within ---
-    // --- a Merkle proof, given the Merkle path `path` below, yields the ---
-    // --- original commitment ---
     Ok(LcColumn {
         col,
         path,
@@ -694,13 +730,25 @@ const fn log2(v: usize) -> usize {
     (63 - (v.next_power_of_two() as u64).leading_zeros()) as usize
 }
 
-/// Verify the evaluation of a committed polynomial and return the result
+/// Verify the evaluation of a committed polynomial and return the result. Checks that
+/// * All the `r^T M'` s (i.e. column-wise) are consistent with the verifier-derived enc(r^T M)
+/// * All the `b^T M'` s (i.e. column-wise) are consistent with the verifier-derived enc(b^T M)
+/// * All the columns are consistent with the merkle commitment
+/// * Evaluates (b^T M) * a on its own (where b^T M is given by the prover) and returns the result
+///      as the evaluation
+///
+/// ## Arguments
+/// * `root` - Merkle root, i.e. the Ligero commitment
+/// * `outer_tensor` - b^T
+/// * `inner_tensor` - a
+/// * `proof` - Ligero evaluation proof, i.e. columns + Merkle paths
+/// * `enc` - Encoding for computing M --> M'
+/// * `tr` - Fiat-Shamir transcript
 fn verify<D, E, F, T>(
     root: &F,
-    outer_tensor: &[F], // b^T
-    inner_tensor: &[F], // a
+    outer_tensor: &[F],
+    inner_tensor: &[F],
     proof: &LcEvalProof<D, E, F>,
-    // This is not real. Well, really it just gives you the setup for being able to compute an FFT
     enc: &E,
     tr: &mut TranscriptReader<F, T>,
 ) -> VerifierResult<F, ErrT<E, F>>
@@ -711,9 +759,6 @@ where
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Grab ONE global copy of Merkle + column hashing Poseidon ---
-    // --- This is SUPER ugly, but for the sake of efficiency... ---
-    // TODO!(ryancao): Riperoni
-    // TODO!(ryancao): Put in the new rate for the column hash... maybe?
     let master_default_poseidon_merkle_hasher = Poseidon::<F, 3, 2>::new(8, 57);
     let master_default_poseidon_column_hasher = Poseidon::<F, 3, 2>::new(8, 57);
 
@@ -735,46 +780,6 @@ where
         return Err(VerifierError::EncodingDims);
     }
 
-    // step 1: random tensor for degree test and random columns to test
-    // step 1a: extract random tensor from transcript
-    // we run multiple instances of this to boost soundness
-
-    // --- This is for the verifier-generated versions of `r` ---
-    let _rand_tensor_vec: Vec<Vec<F>> = Vec::new();
-
-    // --- This is for the verifier evaluations of r^T M' ---
-    // --- but computed where r^T comes from the prover (???) ---
-    let _p_random_fft: Vec<Vec<F>> = Vec::new();
-
-    // --- No longer doing the well-formedness check ---
-    // let n_degree_tests = enc.get_n_degree_tests();
-
-    // -- This for loop is for soundness amplification by repetition
-    // for i in 0..n_degree_tests {
-
-    //     // --- TODO!(ryancao): Propagate the error up! ---
-    //     let rand_tensor = tr.get_challenges("random_vec_well_formedness_check", n_rows).unwrap();
-    //     rand_tensor_vec.push(rand_tensor);
-
-    //     // step 1b: eval encoding of p_random
-    //     {
-    //         let mut tmp = Vec::with_capacity(encoded_num_cols);
-    //         tmp.extend_from_slice(&proof.p_random_vec[i][..]); // Copies over the random vec from the prover
-    //         tmp.resize(encoded_num_cols, F::from(0));
-    //         // Ohhhhh I see. This gives the RLC \rho^{-1} * \sqrt{N} -coordinate thingy
-    //         // of r^T M' (where `r` was prover-generated). Note that we got this by basically
-    //         // calling `enc(r^T M)`
-    //         enc.encode(&mut tmp)?;
-    //         p_random_fft.push(tmp);
-    //     };
-
-    //     // step 1c: push p_random...
-    //     proof.p_random_vec[i]
-    //         .iter()
-    //         .for_each(|coeff| coeff.transcript_update(tr, "LABEL_PR"));
-    // }
-
-    // ...and p_eval into the transcript
     // Retrieve length of `p_eval` vector and request that number of elements
     // from the trascript reader.
     let num_p_evals = proof.p_eval.len();
@@ -805,25 +810,10 @@ where
         .par_iter()
         .zip(&proof.columns[..])
         .try_for_each(|(&col_num, column)| {
-            // --- No longer doing the well-formedness check ---
-            // --- Okay so we zip the indices with the actual columns ---
-            // let rand = {
-            //     let mut rand = true;
-            //     // --- This is just 1 for us; we don't need boosting ---
-            //     for i in 0..n_degree_tests {
-            //         rand &=
-            //             // --- This literally does r^T M'_j and checks against (r^T M')[j]
-            //             // (the latter is computed by the verifier) ---
-            //             verify_column_value::<D, E, F>(column, &rand_tensor_vec[i], &p_random_fft[i][col_num]);
-            //     }
-            //     rand
-            // };
-
             // --- Does the RLC evaluation check for b^T as well ---
             let eval = verify_column_value::<D, E, F>(column, outer_tensor, &p_eval_fft[col_num]);
 
             // --- Merkle path verification: Does hashing for each column, then Merkle tree hashes ---
-            // TODO!(ryancao): Make this use Poseidon
             let path = verify_column_path::<D, E, F>(
                 column,
                 col_num,
@@ -832,10 +822,7 @@ where
                 &master_default_poseidon_column_hasher,
             );
 
-            // --- "Very elegant, Riad" - Ryan ---
             match (eval, path) {
-                // --- No longer doing the well-formedness check ---
-                // (false, _, _) => Err(VerifierError::ColumnDegree),
                 (false, _) => Err(VerifierError::ColumnEval),
                 (_, false) => Err(VerifierError::ColumnPath),
                 _ => Ok(()),
@@ -851,7 +838,18 @@ where
         .reduce(|| F::zero(), |a, v| a + v))
 }
 
-// Check a column opening
+/// Check a column opening by
+/// * Computing a linear hash over the column elements
+/// * Taking that hash as the Merkle leaf, and computing pairwise hashes against
+///     the Merkle path
+/// * Checking that against `root`
+///
+/// ## Arguments
+/// * `column` - M' column to be opened
+/// * `col_num` - Index of the column within M'
+/// * `root` - Merkle root, i.e. the Ligero commitment
+/// * `master_default_poseidon_merkle_hasher` - Hasher for Merkle path
+/// * `master_default_poseidon_column_hasher` - Hasher for column --> leaf
 fn verify_column_path<D, E, F>(
     column: &LcColumn<E, F>,
     col_num: usize,
@@ -865,12 +863,7 @@ where
     E: LcEncoding<F> + Send + Sync,
 {
     // --- New Poseidon params + Poseidon hasher ---
-    // let poseidon_column_hash_params = PoseidonParams::new(8, 63, 8, 9);
-    // let mut digest = PoseidonSpongeHasher::new_with_params(poseidon_column_hash_params);
     let mut digest = PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
-
-    // TODO!(ryancao): What's this about?
-    // digest.update(&[F::default()]);
 
     // --- Just eat up the column elements themselves ---
     for e in &column.col[..] {
@@ -878,11 +871,9 @@ where
     }
 
     // check Merkle path
-    // let mut hash = digest.finalize_reset();
     let mut hash = digest.finalize();
     digest = PoseidonSpongeHasher::new_merkle_hasher(master_default_poseidon_merkle_hasher);
     let mut col = col_num;
-    // TODO!(ryancao): Understand this...?
     for p in &column.path[..] {
         if col % 2 == 0 {
             digest.update(&[hash]);
@@ -891,7 +882,6 @@ where
             digest.update(&[*p]);
             digest.update(&[hash]);
         }
-        // hash = digest.finalize_reset();
         hash = digest.finalize();
         digest = PoseidonSpongeHasher::new_merkle_hasher(master_default_poseidon_merkle_hasher);
         col >>= 1;
@@ -900,12 +890,15 @@ where
     &hash == root
 }
 
-// check column value
-fn verify_column_value<D, E, F>(
-    column: &LcColumn<E, F>, // The actual Ligero matrix col M_j
-    tensor: &[F],            // The random r^T we are evaluating at
-    poly_eval: &F,           // The RLC'd, evaluated version r^T M'[j]
-) -> bool
+/// Checks that the jth index of b_T M' matches the value of b_T * M'[j], where
+/// the b_T M' value is computed via enc(b_T M), and the second via the prover
+/// sending over M'[j] and the verifier manually computing b_T * M'[j].
+///
+/// ## Arguments
+/// * `column` - The actual Ligero matrix col M_j
+/// * `tensor` - The random b^T we are evaluating at
+/// * `poly_eval` - The RLC'd, evaluated version b^T M'[j]
+fn verify_column_value<D, E, F>(column: &LcColumn<E, F>, tensor: &[F], poly_eval: &F) -> bool
 where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
@@ -921,7 +914,17 @@ where
 
 /// Computes the column index from a challenge over F by taking the
 /// least significant bits from the bit-wise representation of `challenge`
-/// and directly using those as the `col_idx`
+/// and directly using those as the `col_idx`.
+///
+/// Note that this works since the number of columns in M' is always
+/// a power of two!
+///
+/// ## Arguments
+/// * `challenge` - the Fiat-Shamir challenge representing the column idx
+/// * `encoded_num_cols` - the number of columns within M'
+///
+/// ## Returns
+/// * `col_idx` - a value 0 \leq col_idx < encoded_num_cols
 fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
     challenge: F,
     encoded_num_cols: usize,
@@ -941,6 +944,12 @@ fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
 
 /// Evaluate the committed polynomial using the supplied "outer" tensor
 /// and generate a proof of (1) low-degreeness and (2) correct evaluation.
+///
+/// ## Arguments
+/// * `comm` - Prover-side commitment generated via the [commit()] function
+/// * `outer_tensor` - b^T
+/// * `enc` - Encoding auxiliary struct containing metadata from FFT
+/// * `tr` - Fiat-Shamir transcript
 fn prove<D, E, F, T>(
     comm: &LcCommit<D, E, F>,
     outer_tensor: &[F],
@@ -958,40 +967,6 @@ where
     if outer_tensor.len() != comm.n_rows {
         return Err(ProverError::OuterTensor);
     }
-
-    // --- No longer doing the well-formedness check (START) ---
-    // let mut p_random_vec: Vec<Vec<F>> = Vec::new();
-    // first, evaluate the polynomial on a random tensor (low-degree test)
-    // we repeat this to boost soundness
-    // let n_degree_tests = enc.get_n_degree_tests()
-    // for _i in 0..n_degree_tests {
-    //     let p_random = {
-    //         // --- Instead, we sample random challenges from the transcript ---
-    //         // TODO!(ryancao): Make this return an actual error!
-    //         let rand_tensor = tr.get_challenges("rand_Ligero_well_formedness_vec", comm.n_rows).unwrap();
-
-    //         let mut tmp = vec![F::zero(); comm.orig_num_cols];
-
-    //         // --- This takes the dot product against `comm.coeffs` and stores the result in `tmp` ---
-    //         // --- Basically this is the prover's claimed value for r^T M ---
-    //         collapse_columns::<E, F>(
-    //             &comm.coeffs,
-    //             &rand_tensor,
-    //             &mut tmp,
-    //             comm.n_rows,
-    //             comm.orig_num_cols,
-    //             0,
-    //         );
-    //         tmp
-    //     };
-    //     // add p_random to the transcript
-    //     p_random
-    //         .iter()
-    //         .for_each(|coeff| coeff.transcript_update(tr, "LABEL_PR"));
-
-    //     p_random_vec.push(p_random);
-    // }
-    // --- No longer doing the well-formedness check (END) ---
 
     // next, evaluate the polynomial using the supplied tensor
     let p_eval = {
@@ -1012,10 +987,9 @@ where
         .iter()
         .for_each(|coeff| tr.append("LABEL_PE", *coeff));
 
-    // now extract the column numbers to open
+    // --- Sample the appropriate number of columns to open from the transcript ---
     let n_col_opens = enc.get_n_col_opens();
     let columns: Vec<LcColumn<E, F>> = {
-        // --- I think we need to do a mod operation here... ---
         let cols_to_open: Vec<usize> = tr
             .get_challenges("Columns", n_col_opens)
             .into_iter()
@@ -1025,10 +999,7 @@ where
             })
             .collect();
 
-        // --- Let's check out this `open_column` function ---
-        // Yeah so `open_column()` basically gives you the column itself, along with a Merkle path
-        // Pretty straightforward. "I LIKE it! - Creed" - Ryan
-        // TODO!(ryancao): Put the parallelism back
+        // --- Send columns + Merkle paths to verifier ---
         cols_to_open
             .par_iter()
             .map(|&col| open_column(comm, col))
@@ -1038,14 +1009,12 @@ where
     Ok(LcEvalProof {
         encoded_num_cols: comm.encoded_num_cols, // Number of columns
         p_eval,                                  // Actual b^T M value
-        // --- No longer doing the well-formedness check ---
-        // p_random_vec, // Random vectors to check well-formedness
-        columns, // Columns plus necessary opening proof content
+        columns,                                 // Columns plus necessary opening proof content
         phantom_data: PhantomData,
     })
 }
 
-/// This takes the product b^T M
+/// This takes the product b^T M, and stores the result in `poly`.
 ///
 /// ## Arguments
 /// * `coeffs` - M, but flattened
@@ -1053,7 +1022,7 @@ where
 /// * `poly` - The component of M we are currently looking at (for parallelism)
 /// * `n_rows` - Height of M
 /// * `orig_num_cols` - Width of M
-/// * `offset` - Something we don't use...?
+/// * `offset` - Not used; this is always set to zero.
 fn collapse_columns<E, F>(
     coeffs: &[F],
     tensor: &[F],
@@ -1094,8 +1063,10 @@ fn collapse_columns<E, F>(
     }
 }
 
-// TESTING ONLY //
+// ----------------------- TESTING ONLY ----------------------- //
 
+/// Non-parallel version of [merkleize()] function above! For testing
+/// correctness of the parallel function.
 #[cfg(test)]
 fn merkleize_ser<D, E, F>(
     comm: &mut LcCommit<D, E, F>,
@@ -1110,11 +1081,8 @@ fn merkleize_ser<D, E, F>(
 
     // hash each column
     for (col, hash) in hashes.iter_mut().enumerate().take(comm.encoded_num_cols) {
-        // let poseidon_column_hash_params = PoseidonParams::new(8, 63, 8, 9);
-        // let mut digest = PoseidonSpongeHasher::new_with_params(poseidon_column_hash_params);
         let mut digest =
             PoseidonSpongeHasher::new_column_hasher(master_default_poseidon_column_hasher);
-        // digest.update(&[F::default()]);
         for row in 0..comm.n_rows {
             comm.comm[row * comm.encoded_num_cols + col].digest_update(&mut digest);
         }
@@ -1125,7 +1093,6 @@ fn merkleize_ser<D, E, F>(
     let (mut ins, mut outs) = hashes.split_at_mut(comm.encoded_num_cols);
     while !outs.is_empty() {
         for idx in 0..ins.len() / 2 {
-            // let mut digest = D::new();
             let mut digest = D::new_merkle_hasher(master_default_poseidon_merkle_hasher);
             digest.update(&[ins[2 * idx]]);
             digest.update(&[ins[2 * idx + 1]]);
@@ -1137,34 +1104,11 @@ fn merkleize_ser<D, E, F>(
     }
 }
 
-#[cfg(test)]
-// Check a column opening
-fn verify_column<D, E, F>(
-    column: &LcColumn<E, F>,
-    col_num: usize,
-    root: &F,
-    tensor: &[F],
-    poly_eval: &F,
-    master_default_poseidon_column_hasher: &Poseidon<F, 3, 2>,
-    master_default_poseidon_merkle_hasher: &Poseidon<F, 3, 2>,
-) -> bool
-where
-    F: FieldExt,
-    D: FieldHashFnDigest<F> + Send + Sync,
-    E: LcEncoding<F> + Send + Sync,
-{
-    verify_column_path::<D, E, F>(
-        column,
-        col_num,
-        root,
-        master_default_poseidon_merkle_hasher,
-        master_default_poseidon_column_hasher,
-    ) && verify_column_value::<D, E, F>(column, tensor, poly_eval)
-}
-
-// Evaluate the committed polynomial using the "outer" tensor
-// --- I'm not sure why Riad is calling it a "tensor" because it's ---
-// --- definitely just a vector but it's the b^T M' component ---
+/// Evaluate the committed polynomial using the "outer" tensor, i.e. b^T M.
+///
+/// ## Arguments
+/// * `comm` - Prover Ligero commitment generated by [commit()] containing M.
+/// * `tensor` - b^T
 #[cfg(test)]
 fn eval_outer<D, E, F>(comm: &LcCommit<D, E, F>, tensor: &[F]) -> ProverResult<Vec<F>, ErrT<E, F>>
 where
@@ -1190,6 +1134,7 @@ where
     Ok(poly)
 }
 
+/// Serial version of [eval_outer()] for testing purposes only!
 #[cfg(test)]
 fn eval_outer_ser<D, E, F>(
     comm: &LcCommit<D, E, F>,
@@ -1215,7 +1160,11 @@ where
     Ok(poly)
 }
 
-/// Computes b^T M' (where `tensor` is b^T and `comm.comm` is M')
+/// Computes b^T M' (where `tensor` is b^T and `comm.comm` is M').
+///
+/// ## Arguments
+/// * `comm` - Prover Ligero commitment generated by [commit()] containing M.
+/// * `tensor` - b^T
 #[cfg(test)]
 fn eval_outer_fft<D, E, F>(
     comm: &LcCommit<D, E, F>,
@@ -1230,10 +1179,10 @@ where
         return Err(ProverError::OuterTensor);
     }
 
-    // --- M' row length worth of 0s ---
+    // --- Allocate resulting vector ---
     let mut poly_fft = vec![F::zero(); comm.encoded_num_cols];
 
-    // --- For each coefficient within `tensor` corresponding to a row in M'... ---
+    // --- Compute dot product column-by-column in M' ---
     for (coeffs, tensorval) in comm.comm.chunks(comm.encoded_num_cols).zip(tensor.iter()) {
         for (coeff, polyval) in coeffs.iter().zip(poly_fft.iter_mut()) {
             *polyval += *coeff * tensorval;

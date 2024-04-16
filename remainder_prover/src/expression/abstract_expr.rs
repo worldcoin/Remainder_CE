@@ -1,10 +1,9 @@
-use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 use remainder_shared_types::FieldExt;
 
 use super::generic_expr::ExpressionType;
-
 
 /// Abstract Expression
 #[derive(Serialize, Deserialize, Clone, Debug)]

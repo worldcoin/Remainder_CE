@@ -9,6 +9,7 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+pub mod claims;
 pub mod expression;
 pub mod gate;
 pub mod layer;
@@ -16,3 +17,4 @@ pub mod mle;
 pub mod prover;
 pub mod sumcheck;
 pub mod utils;
+pub use remainder_shared_types;

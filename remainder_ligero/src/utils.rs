@@ -3,25 +3,38 @@ use std::iter::repeat_with;
 use crate::log2;
 use ark_std::test_rng;
 use halo2_proofs::poly::EvaluationDomain;
-use rand::{Rng};
+use rand::Rng;
 use remainder_shared_types::FieldExt;
 
-/// TODO!(ryancao): Add support for passing in an RNG rather than
-/// constructing one within the function
-pub fn get_random_coeffs_for_multilinear_poly<F: FieldExt>(ml_num_vars: usize) -> Vec<F> {
-    let mut rng = test_rng();
+/// Generates and returns a random set of evaluations representing an MLE over
+/// the boolean hypercube.
+///
+/// ## Arguments
+/// * `ml_num_vars` - Number of variables within the MLE.
+/// * `rng` - RNG to be used for generation.
+pub fn get_random_coeffs_for_multilinear_poly<F: FieldExt>(
+    ml_num_vars: usize,
+    rng: &mut impl Rng,
+) -> Vec<F> {
     repeat_with(|| F::from(rng.gen::<u64>()))
         .take(2_usize.pow(ml_num_vars as u32))
         .collect()
 }
 
-/// Grabs the matrix dimensions for M and M'
+/// Grabs the matrix dimensions for M and M', where M is the original
+/// coefficient/evaluation matrix, and M' is M but where each row of M' is the
+/// RS encoding of the corresponding row in M.
 ///
 /// ## Arguments
 ///
-/// * `poly_len` - Number of coefficients in the actual polynomial
+/// * `poly_len` - Number of coefficients in the actual polynomial, i.e.
+///     width(M) * height(M)
 /// * `rho_inv` - rho^{-1}, i.e. the code rate
-pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> Option<(usize, usize, usize)> {
+pub fn get_ligero_matrix_dims(
+    poly_len: usize,
+    rho_inv: u8,
+    ratio: f64,
+) -> Option<(usize, usize, usize)> {
     // --- Compute rho ---
     let rho: f64 = 1. / (rho_inv as f64);
 
@@ -29,14 +42,11 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> Optio
     assert!(rho > 0f64);
     assert!(rho < 1f64);
 
-    // compute #cols, which must be a power of 2 because of FFT
     // computes the encoded num cols that will get closest to the ratio for original num cols : num rows
-    let encoded_num_cols = (((poly_len as f64 * ratio).sqrt() / rho).ceil() as usize)
-        .checked_next_power_of_two()?;
+    let encoded_num_cols =
+        (((poly_len as f64 * ratio).sqrt() / rho).ceil() as usize).checked_next_power_of_two()?;
 
-    // minimize nr subject to #cols and rho
-    // --- Not sure what the above is talking about, but basically computes ---
-    // --- the other dimensions with respect to `encoded_num_cols` ---
+    // --- Computes the other dimensions with respect to `encoded_num_cols` ---
     let orig_num_cols = ((encoded_num_cols as f64) * rho).floor() as usize;
     let num_rows = (poly_len + orig_num_cols - 1) / orig_num_cols;
 
@@ -47,14 +57,15 @@ pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> Optio
     Some((num_rows, orig_num_cols, encoded_num_cols))
 }
 
-/// Wrapper function over Halo2's FFT
+/// Wrapper function over Halo2's FFT.
 ///
 /// ## Arguments
-/// * `coeffs` -
-/// * `rho_inv` -
+/// * `coeffs` - Coefficients of a univariate polynomial.
+/// * `rho_inv` - FFT code rate.
 ///
 /// ## Returns
-/// * `evals` -
+/// * `evals` - Evaluations over the roots-of-unity subset of polynomial p
+///     represented by `coeffs`.
 pub fn halo2_fft<F: FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
     // --- Sanitycheck ---
     debug_assert!(coeffs.len().is_power_of_two());
@@ -65,9 +76,6 @@ pub fn halo2_fft<F: FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
     debug_assert!(num_evals.is_power_of_two());
 
     // --- Note that `2^{j + 1}` is the total number of evaluations you actually want, and `2^k` is the number of coeffs ---
-    // dbg!(rho_inv);
-    // dbg!(coeffs.len());
-    // dbg!(coeffs.len() as u32);
     let evaluation_domain: EvaluationDomain<F> =
         EvaluationDomain::new(rho_inv as u32, log_num_coeffs as u32);
 
@@ -79,20 +87,19 @@ pub fn halo2_fft<F: FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
     polynomial_eval_form.to_vec()
 }
 
-/// Wrapper function over Halo2's FFT
+/// Wrapper function over Halo2's IFFT.
 ///
 /// ## Arguments
-/// * `coeffs` -
-/// * `rho_inv` -
+/// * `evals` - `rho_inv` * deg(p) evaluations of the polynomial p.
+/// * `rho_inv` - FFT code rate.
 ///
 /// ## Returns
-/// * `evals` -
+/// * `coeffs` - Coefficients of univariate polynomial p.
 pub fn halo2_ifft<F: FieldExt>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
     // --- Sanitycheck ---
     debug_assert!(evals.len().is_power_of_two());
     debug_assert!(rho_inv.is_power_of_two());
 
-    // let log_num_evals = log2(evals.len());
     let num_coeffs = (evals.len() as f64 / rho_inv as f64) as usize;
     debug_assert_eq!(num_coeffs * rho_inv as usize, evals.len());
     debug_assert!(num_coeffs.is_power_of_two());
@@ -102,7 +109,7 @@ pub fn halo2_ifft<F: FieldExt>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
     let evaluation_domain: EvaluationDomain<F> =
         EvaluationDomain::new(rho_inv as u32, log_num_coeffs as u32);
 
-    // --- Creates the polynomial in coeff form and performs the FFT ---
+    // --- Creates the polynomial in eval form and performs the IFFT ---
     let mut polynomial_eval_form = evaluation_domain.empty_extended();
     polynomial_eval_form.copy_from_slice(&evals);
     let polynomial_coeff_form = evaluation_domain.extended_to_coeff(polynomial_eval_form);
@@ -163,11 +170,14 @@ mod test {
 
     use crate::utils::get_least_significant_bits_to_usize_little_endian;
     use ark_std::test_rng;
-    use remainder_shared_types::{Fr, FieldExt};
     use rand::Rng;
-    
+    use remainder_shared_types::Fr;
+
     use std::ops::Range;
 
+    /// Purpose of the test is to ensure that the
+    /// [get_least_significant_bits_to_usize_little_endian()] function computes
+    /// the correct recomposition of the least significant `num_bits` bits.
     #[test]
     fn test_get_least_significant_bits() {
         let mut rng = test_rng();

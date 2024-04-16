@@ -1,10 +1,6 @@
-use std::{
-    fmt::Debug, ops::{Add, Mul, Neg, Sub}
-};
-use serde::{Deserialize, Serialize};
 use crate::mle::MleIndex;
 use remainder_shared_types::FieldExt;
-
+use serde::{Deserialize, Serialize};
 
 /// Different Expression Types corresponds to different stages in the
 /// lift cycle of an expression
@@ -17,10 +13,9 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
 
     /// MleRefs is the optional data array of mle_refs
     /// that can be indexed into by the MleRefIndex defind in the ProverExpr
-    /// -- this is either unit type for VerifierExpr or 
+    /// -- this is either unit type for VerifierExpr or
     /// -- Vec<DenseMleRef> for ProverExpr
-    type MleVec: Serialize + for<'de> Deserialize<'de>; 
-
+    type MleVec: Serialize + for<'de> Deserialize<'de>;
 }
 
 /// Generic Expressions
@@ -35,7 +30,7 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
         Box<ExpressionNode<F, E>>,
         Box<ExpressionNode<F, E>>,
     ),
-    /// This is an MLE node, its repr could be 
+    /// This is an MLE node, its repr could be
     /// for prover: MleVecIndex (which index into a vec of DenseMleRef), or
     /// for verifier: a constant field element
     Mle(E::MLENodeRepr),
@@ -43,7 +38,7 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
     Negated(Box<ExpressionNode<F, E>>),
     /// This is the sum of two expression nodes
     Sum(Box<ExpressionNode<F, E>>, Box<ExpressionNode<F, E>>),
-    /// This is the product of some MLE nodes, their repr could be 
+    /// This is the product of some MLE nodes, their repr could be
     /// for prover: a vec of MleVecIndex's (which index into a Vec of DenseMleRef), or
     /// for verifier: a vec of constant field element
     Product(Vec<E::MLENodeRepr>),
@@ -61,15 +56,14 @@ pub struct Expression<F: FieldExt, E: ExpressionType<F>> {
 
 /// generic methods shared across all types of expressions
 impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
-
-    /// Create a new expression 
+    /// Create a new expression
     pub fn new(expression_node: ExpressionNode<F, E>, mle_vec: E::MleVec) -> Self {
         Self {
             expression_node,
             mle_vec,
         }
     }
-    
+
     /// get the expression node and mle_vec, mutable
     pub fn deconstruct_mut(&mut self) -> (&mut ExpressionNode<F, E>, &mut E::MleVec) {
         (&mut self.expression_node, &mut self.mle_vec)
@@ -87,7 +81,8 @@ impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
         &self,
         observer_fn: &mut impl FnMut(&ExpressionNode<F, E>, &E::MleVec) -> Result<(), D>,
     ) -> Result<(), D> {
-        self.expression_node.traverse_node(observer_fn, &self.mle_vec)
+        self.expression_node
+            .traverse_node(observer_fn, &self.mle_vec)
     }
 
     /// similar to traverse, but allows mutation of self (expression node and mle_vec)
@@ -95,13 +90,13 @@ impl<F: FieldExt, E: ExpressionType<F>> Expression<F, E> {
         &mut self,
         observer_fn: &mut impl FnMut(&mut ExpressionNode<F, E>, &mut E::MleVec) -> Result<(), D>,
     ) -> Result<(), D> {
-        self.expression_node.traverse_node_mut(observer_fn, &mut self.mle_vec)
+        self.expression_node
+            .traverse_node_mut(observer_fn, &mut self.mle_vec)
     }
 }
 
 /// generic methods shared across all types of expressions
 impl<F: FieldExt, E: ExpressionType<F>> ExpressionNode<F, E> {
-
     /// traverse the expression tree, and applies the observer_fn to all child node / the mle_vec reference
     pub fn traverse_node<D>(
         &self,
@@ -110,9 +105,9 @@ impl<F: FieldExt, E: ExpressionType<F>> ExpressionNode<F, E> {
     ) -> Result<(), D> {
         observer_fn(self, mle_vec)?;
         match self {
-            ExpressionNode::Constant(_)
-            | ExpressionNode::Mle(_)
-            | ExpressionNode::Product(_) => Ok(()),
+            ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
+                Ok(())
+            }
             ExpressionNode::Negated(exp) => exp.traverse_node(observer_fn, mle_vec),
             ExpressionNode::Scaled(exp, _) => exp.traverse_node(observer_fn, mle_vec),
             ExpressionNode::Selector(_, lhs, rhs) => {
@@ -135,9 +130,9 @@ impl<F: FieldExt, E: ExpressionType<F>> ExpressionNode<F, E> {
         // dbg!(&self);
         observer_fn(self, mle_vec)?;
         match self {
-            ExpressionNode::Constant(_)
-            | ExpressionNode::Mle(_)
-            | ExpressionNode::Product(_) => Ok(()),
+            ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {
+                Ok(())
+            }
             ExpressionNode::Negated(exp) => exp.traverse_node_mut(observer_fn, mle_vec),
             ExpressionNode::Scaled(exp, _) => exp.traverse_node_mut(observer_fn, mle_vec),
             ExpressionNode::Selector(_, lhs, rhs) => {

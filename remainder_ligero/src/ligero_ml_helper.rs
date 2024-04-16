@@ -3,7 +3,21 @@ use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
 /// Initializes with every iterated combination of the bits in `challenge_coord`.
-/// TODO!(ryancao): Is this going in the correct endian-ness order?
+///
+/// In other words, if `challenge_coord` is [r_1, r_2, r_3] then
+/// `initialize_tensor` should output the following:
+/// (r_1) * (r_2) * (r_3),
+/// (1 - r_1) * (r_2) * (r_3),
+/// (r_1) * (1 - r_2) * (r_3),
+/// (1 - r_1) * (1 - r_2) * (r_3),
+/// (r_1) * (r_2) * (1 - r_3),
+/// (1 - r_1) * (r_2) * (1 - r_3),
+/// (r_1) * (1 - r_2) * (1 - r_3),
+/// (1 - r_1) * (1 - r_2) * (1 - r_3),
+/// (Note that this is in little-endian!)
+///
+/// ## Arguments
+/// * `challenge_coord` - Challenge point to be expanded in little-endian
 fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
     // --- For each of the challenge coordinates ---
     challenge_coord
@@ -23,12 +37,20 @@ fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
         })
 }
 
-/// Returns `b^T` and `a` tensors for multilinear evaluation
-/// such that b^T M a is the evaluation
+/// Returns `b^T` and `a` vectors for MLE evaluation, such that b^T M a is the
+/// evaluation of the MLE over `challenge_coord`. Note that the returned vectors
+/// are in litle-endian.
+///
+/// ## Arguments
+/// * `challenge_coord` - Original challenge point to evaluate MLE at
+/// * `num_rows` - Total number of rows in the matrix M
+/// * `orig_num_cols` - Total number of columns in the matrix M
 ///
 /// ---
 ///
 /// ## Example
+///
+/// `challenge_coord`: x_0, x_1, x_2
 ///
 /// M:
 /// [a_{00}, a_{01}, a_{02}, a_{03}]
@@ -44,8 +66,7 @@ pub fn get_ml_inner_outer_tensors<F: FieldExt>(
     num_rows: usize,
     orig_num_cols: usize,
 ) -> (Vec<F>, Vec<F>) {
-    // --- Okay we need to actually think about this one ---
-    // --- First assert that num_rows and orig_num_cols are both powers of 2 ---
+    // --- Sanitychecks ---
     assert!(num_rows.is_power_of_two());
     assert!(orig_num_cols.is_power_of_two());
 
@@ -70,9 +91,12 @@ pub fn get_ml_inner_outer_tensors<F: FieldExt>(
     (inner_tensor, outer_tensor)
 }
 
-/// Simply evaluates an MLE (specified via coefficients, i.e. evaluations over the
+/// Evaluates an MLE (specified via coefficients, i.e. evaluations over the
 /// boolean hypercube), over the given challenge point.
-/// TODO!(ryancao): Do we need to account for endian-ness here?
+///
+/// ## Arguments
+/// * `mle_coeffs` - MLE evaluations over the boolean hypercube.
+/// * `challenge_coord` - Challenge point at which to evaluate the MLE.
 pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
     mle_coeffs: &Vec<F>,
     challenge_coord: &Vec<F>,
@@ -98,15 +122,16 @@ pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
     reduced_bookkeeping_table[0]
 }
 
+/// The purpose of this test is to manually check that the [initialize_tensor()]
+/// function produces the expected expansion from its given `challenge_coord`.
 #[test]
 fn test_initialize_tensor() {
     use ark_std::{test_rng, One};
-    use remainder_shared_types::Fr;
     use rand::Rng;
+    use remainder_shared_types::Fr;
 
     let mut rng = test_rng();
 
-    // --- TODO!(ryancao): Change the random generation to how it should be!
     let first = Fr::from(rng.gen::<u64>());
     let second = Fr::from(rng.gen::<u64>());
     let third = Fr::from(rng.gen::<u64>());
@@ -130,11 +155,14 @@ fn test_initialize_tensor() {
     assert_eq!(expected_tensor, result_tensor);
 }
 
+/// The purpose of this test is to manually check that [get_ml_inner_outer_tensors()]
+/// successfully expands, then splits, the original `challenge_coord` into the
+/// appropriate "a" and "b" vectors.
 #[test]
 fn test_split_tensor() {
     use ark_std::{test_rng, One};
-    use remainder_shared_types::Fr;
     use rand::Rng;
+    use remainder_shared_types::Fr;
 
     let mut rng = test_rng();
 
@@ -147,8 +175,7 @@ fn test_split_tensor() {
 
     let one = Fr::one();
 
-    // TODO!(ryancao): Double check that this is right lol
-    // NOTE that this is little-endian!!!
+    // --- Little-endian ---
     let expected_inner_tensor: Vec<Fr> = vec![
         (one - first) * (one - second) * (one - third),
         (first) * (one - second) * (one - third),

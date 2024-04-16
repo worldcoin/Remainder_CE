@@ -1,194 +1,62 @@
 //! A wrapper type that makes working with variants of InputLayer easier
 
-use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
-    FieldExt,
-};
-use serde::{Deserialize, Serialize};
+use remainder_shared_types::FieldExt;
 
-use crate::{
-    layer::{claims::Claim, LayerId},
-    mle::dense::DenseMle,
-};
+use crate::{claims::wlx_eval::YieldWLXEvals, input_layer_enum, layer::LayerId};
 
 use super::{
-    ligero_input_layer::{LigeroCommitment, LigeroInputLayer, LigeroInputProof},
-    public_input_layer::PublicInputLayer,
-    random_input_layer::RandomInputLayer,
-    InputLayer, InputLayerError,
+    ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
+    random_input_layer::RandomInputLayer, InputLayer,
 };
 
-///A wrapper type that makes working with variants of InputLayer easier
-pub enum InputLayerEnum<F: FieldExt, Tr> {
-    LigeroInputLayer(LigeroInputLayer<F, Tr>),
-    PublicInputLayer(PublicInputLayer<F, Tr>),
-    RandomInputLayer(RandomInputLayer<F, Tr>),
-}
+input_layer_enum!(
+    InputLayerEnum,
+    (LigeroInputLayer: LigeroInputLayer<F>),
+    (PublicInputLayer: PublicInputLayer<F>),
+    (RandomInputLayer: RandomInputLayer<F>)
+);
 
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub enum CommitmentEnum<F: FieldExt> {
-    LigeroCommitment(LigeroCommitment<F>),
-    PublicCommitment(Vec<F>),
-    RandomCommitment(Vec<F>),
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub enum OpeningEnum<F: FieldExt> {
-    LigeroProof(LigeroInputProof<F>),
-    PublicProof(()),
-    RandomProof(()),
-}
-
-impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for InputLayerEnum<F, Tr> {
-    type Sponge = Tr;
-
-    type Commitment = CommitmentEnum<F>;
-
-    type OpeningProof = OpeningEnum<F>;
-
-    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        match self {
-            InputLayerEnum::LigeroInputLayer(layer) => {
-                Ok(CommitmentEnum::LigeroCommitment(layer.commit()?))
-            }
-            InputLayerEnum::PublicInputLayer(layer) => {
-                Ok(CommitmentEnum::PublicCommitment(layer.commit()?))
-            }
-            InputLayerEnum::RandomInputLayer(layer) => {
-                Ok(CommitmentEnum::RandomCommitment(layer.commit()?))
-            }
-        }
-    }
-
-    fn prover_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
-    ) {
-        match commitment {
-            CommitmentEnum::LigeroCommitment(commit) => {
-                LigeroInputLayer::<F, Tr>::prover_append_commitment_to_transcript(
-                    commit,
-                    transcript_writer,
-                );
-            }
-            CommitmentEnum::PublicCommitment(commit) => {
-                PublicInputLayer::prover_append_commitment_to_transcript(commit, transcript_writer);
-            }
-            CommitmentEnum::RandomCommitment(commit) => {
-                RandomInputLayer::prover_append_commitment_to_transcript(commit, transcript_writer);
-            }
-        }
-    }
-
-    fn verifier_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
-    ) -> Result<(), InputLayerError> {
-        match commitment {
-            CommitmentEnum::LigeroCommitment(commit) => {
-                LigeroInputLayer::<F, Tr>::verifier_append_commitment_to_transcript(
-                    commit,
-                    transcript_reader,
-                )
-            }
-            CommitmentEnum::PublicCommitment(commit) => {
-                PublicInputLayer::verifier_append_commitment_to_transcript(
-                    commit,
-                    transcript_reader,
-                )
-            }
-            CommitmentEnum::RandomCommitment(commit) => {
-                RandomInputLayer::verifier_append_commitment_to_transcript(
-                    commit,
-                    transcript_reader,
-                )
-            }
-        }
-    }
-
-    fn open(
-        &self,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
-        claim: crate::layer::claims::Claim<F>,
-    ) -> Result<Self::OpeningProof, super::InputLayerError> {
-        match self {
-            InputLayerEnum::LigeroInputLayer(layer) => Ok(OpeningEnum::LigeroProof(
-                layer.open(transcript_writer, claim)?,
-            )),
-            InputLayerEnum::PublicInputLayer(layer) => Ok(OpeningEnum::PublicProof(
-                layer.open(transcript_writer, claim)?,
-            )),
-            InputLayerEnum::RandomInputLayer(layer) => Ok(OpeningEnum::RandomProof(
-                layer.open(transcript_writer, claim)?,
-            )),
-        }
-    }
-
-    fn verify(
-        commitment: &Self::Commitment,
-        opening_proof: &Self::OpeningProof,
-        claim: Claim<F>,
-        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
-    ) -> Result<(), super::InputLayerError> {
-        match commitment {
-            CommitmentEnum::LigeroCommitment(commit) => {
-                if let OpeningEnum::LigeroProof(opening_proof) = opening_proof {
-                    LigeroInputLayer::<F, Tr>::verify(
-                        commit,
-                        opening_proof,
-                        claim,
-                        transcript_reader,
-                    )
-                } else {
-                    panic!()
-                }
-            }
-            CommitmentEnum::PublicCommitment(commit) => {
-                if let OpeningEnum::PublicProof(opening_proof) = opening_proof {
-                    PublicInputLayer::verify(commit, opening_proof, claim, transcript_reader)
-                } else {
-                    panic!()
-                }
-            }
-            CommitmentEnum::RandomCommitment(commit) => {
-                if let OpeningEnum::RandomProof(opening_proof) = opening_proof {
-                    RandomInputLayer::verify(commit, opening_proof, claim, transcript_reader)
-                } else {
-                    panic!()
-                }
-            }
-        }
-    }
-
-    fn layer_id(&self) -> &LayerId {
-        match self {
-            InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id(),
-            InputLayerEnum::PublicInputLayer(layer) => layer.layer_id(),
-            InputLayerEnum::RandomInputLayer(layer) => layer.layer_id(),
-        }
-    }
-
-    fn get_padded_mle(&self) -> DenseMle<F, F> {
-        match self {
-            InputLayerEnum::LigeroInputLayer(layer) => layer.get_padded_mle(),
-            InputLayerEnum::PublicInputLayer(layer) => layer.get_padded_mle(),
-            InputLayerEnum::RandomInputLayer(layer) => layer.get_padded_mle(),
-        }
-    }
-
-    fn to_enum(self) -> InputLayerEnum<F, Self::Sponge> {
-        self
-    }
-}
-
-impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayerEnum<F, Tr> {
+impl<F: FieldExt> InputLayerEnum<F> {
     pub fn set_layer_id(&mut self, layer_id: LayerId) {
         match self {
             InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,
             InputLayerEnum::PublicInputLayer(layer) => layer.layer_id = layer_id,
             InputLayerEnum::RandomInputLayer(layer) => layer.layer_id = layer_id,
+        }
+    }
+}
+
+impl<F: FieldExt> YieldWLXEvals<F> for InputLayerEnum<F> {
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
+        claimed_mles: Vec<crate::mle::mle_enum::MleEnum<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, crate::claims::ClaimError> {
+        match self {
+            InputLayerEnum::LigeroInputLayer(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            InputLayerEnum::PublicInputLayer(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            InputLayerEnum::RandomInputLayer(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
         }
     }
 }

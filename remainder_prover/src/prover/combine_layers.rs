@@ -1,6 +1,6 @@
 //!Utilities for combining sub-circuits
 
-use std::cmp::min;
+use std::{cmp::min, marker::PhantomData};
 
 use ark_std::log2;
 use itertools::Itertools;
@@ -12,7 +12,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    layer::{layer_enum::LayerEnum, GKRLayer, Layer, LayerId},
+    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
     mle::{mle_enum::MleEnum, MleIndex, MleRef},
     utils::{argsort, bits_iter},
 };
@@ -25,13 +25,17 @@ pub struct CombineError;
 
 ///Utility for combining sub-circuits into a single circuit
 /// DOES NOT WORK FOR GATE MLE
-pub fn combine_layers<F: FieldExt, Tr: TranscriptSponge<F>>(
-    mut layers: Vec<Layers<F, Tr>>,
+pub fn combine_layers<F: FieldExt>(
+    mut layers: Vec<Layers<F, LayerEnum<F>>>,
     mut output_layers: Vec<Vec<MleEnum<F>>>,
-) -> Result<(Layers<F, Tr>, Vec<MleEnum<F>>), CombineError> {
+) -> Result<(Layers<F, LayerEnum<F>>, Vec<MleEnum<F>>), CombineError> {
     //We're going to add multiple selectors to merge the sub-circuits, and then
     //the future layers need to take those selectors into account in thier claims.
-    let layer_count = layers.iter().map(|layers| layers.0.len()).max().unwrap();
+    let layer_count = layers
+        .iter()
+        .map(|layers| layers.layers.len())
+        .max()
+        .unwrap();
     let subcircuit_count = layers.len();
 
     // --- Grabbing the "columns" of layers (with associated circuit index) ---
@@ -40,7 +44,10 @@ pub fn combine_layers<F: FieldExt, Tr: TranscriptSponge<F>>(
             .iter()
             .enumerate()
             .filter_map(|(subcircuit_idx, layers)| {
-                layers.0.get(layer_idx).map(|layer| (subcircuit_idx, layer))
+                layers
+                    .layers
+                    .get(layer_idx)
+                    .map(|layer| (subcircuit_idx, layer))
             })
             .collect_vec()
     });
@@ -120,9 +127,10 @@ pub fn combine_layers<F: FieldExt, Tr: TranscriptSponge<F>>(
         // --- For each subcircuit... ---
         .map(|((layers, output_layers), new_bits)| {
             for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
-                if let Some(&effected_layer) = layers.0.get(layer_idx).map(|layer| layer.id()) {
+                if let Some(&effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.id())
+                {
                     add_bits_to_layer_refs(
-                        &mut layers.0[layer_idx..],
+                        &mut layers.layers[layer_idx..],
                         output_layers,
                         new_bits,
                         effected_layer,
@@ -135,11 +143,11 @@ pub fn combine_layers<F: FieldExt, Tr: TranscriptSponge<F>>(
 
     //Combine all the sub-circuits expressions in such a way that it matches the
     //extra bits we calculated
-    let layers: Vec<LayerEnum<F, Tr>> = (0..layer_count)
+    let layers: Vec<LayerEnum<F>> = (0..layer_count)
         .map(|layer_idx| {
             layers
                 .iter()
-                .filter_map(|layers| layers.0.get(layer_idx).cloned())
+                .filter_map(|layers| layers.layers.get(layer_idx).cloned())
                 .collect_vec()
         })
         .map(|layers| {
@@ -156,20 +164,23 @@ pub fn combine_layers<F: FieldExt, Tr: TranscriptSponge<F>>(
 
             let expression = combine_expressions(expressions);
 
-            Ok(GKRLayer::new_raw(layer_id, expression).get_enum())
+            Ok(RegularLayer::new_raw(layer_id, expression).into())
         })
         .try_collect()?;
 
     Ok((
-        Layers(layers),
+        Layers {
+            layers,
+            marker: PhantomData,
+        },
         output_layers.into_iter().flatten().collect(),
     ))
 }
 
 ///Add all the extra bits that represent selectors between the sub-circuits to
 ///the future DenseMleRefs that refer to the modified layer
-fn add_bits_to_layer_refs<F: FieldExt, Tr: TranscriptSponge<F>>(
-    layers: &mut [LayerEnum<F, Tr>],
+fn add_bits_to_layer_refs<F: FieldExt>(
+    layers: &mut [LayerEnum<F>],
     output_layers: &mut Vec<MleEnum<F>>,
     new_bits: Vec<MleIndex<F>>,
     effected_layer: LayerId,
