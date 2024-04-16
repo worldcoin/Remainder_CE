@@ -1,4 +1,4 @@
-//! Module for dealing with the Beta equality function
+//! Module for dealing with the Beta equality function.
 
 use std::{collections::HashMap, fmt::Debug};
 
@@ -21,7 +21,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// bound using the Tha13 definition of a beta table.
 ///
 /// Beta tables are used to "linearize" an expression that we wish to evaluate
-/// over a claimed point `(g_0, ..., g_n)``. Therefore we create an MLE that
+/// over a claimed point `(g_0, ..., g_n)`. Therefore we create an MLE that
 /// evaluates to `1` at this point and `0`` at every other point, which is a
 /// beta table. This would be a table of size `2^n`.
 ///
