@@ -1,3 +1,5 @@
+//! A wrapper `enum` type around various implementations of [MleRef]s.
+
 use serde::{Deserialize, Serialize};
 
 use remainder_shared_types::FieldExt;
