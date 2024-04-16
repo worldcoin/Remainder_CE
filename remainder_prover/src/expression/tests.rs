@@ -1,21 +1,19 @@
-use std::collections::HashSet;
-
-use crate::{
-    layer::LayerId,
-    mle::{dense::DenseMle, MleIndex},
-};
-
-use super::*;
-use ark_std::One;
-use remainder_shared_types::Fr;
-use tests::{generic_expr::Expression, prover_expr::ProverExpr};
-
 // a breakdown of the functions that are tested here
 // 1. constructors in prover_expr such as products, mle, constant, sum, scaled, and concat_expr
 // 2. increment_mle_vec_indices is indirectly tested because of sum, concat_expr, etc.
 // 3. evalute_expr (and fix_variable is indirectly tested bc this)
 // 4. evaluate_sumcheck is tested in sumcheck/tests.rs (bc it's in compute_sumcheck_message)
 // 5. index_mle_indices
+
+use std::collections::HashSet;
+
+use remainder_shared_types::Fr;
+
+use crate::{
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    layer::LayerId,
+    mle::dense::DenseMle,
+};
 
 #[test]
 fn test_constants_eval() {

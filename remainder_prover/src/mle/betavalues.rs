@@ -11,7 +11,7 @@ use crate::layer::LayerId;
 
 use super::{
     dense::{DenseMle, DenseMleRef},
-    MleIndex, MleRef,
+    MleIndex,
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -74,9 +74,7 @@ impl<F: FieldExt> BetaValues<F> {
         let bound_betas = mle_indices
             .iter()
             .filter_map(|index| match index {
-                MleIndex::Bound(_, round_idx) => {
-                    self.updated_values.get(round_idx).map(|&item| item.clone())
-                }
+                MleIndex::Bound(_, round_idx) => self.updated_values.get(round_idx).copied(),
                 _ => None,
             })
             .collect_vec();
@@ -84,9 +82,7 @@ impl<F: FieldExt> BetaValues<F> {
         let unbound_betas = mle_indices
             .iter()
             .filter_map(|index| match index {
-                MleIndex::IndexedBit(round_idx) => {
-                    self.unbound_values.get(round_idx).map(|&item| item.clone())
-                }
+                MleIndex::IndexedBit(round_idx) => self.unbound_values.get(round_idx).copied(),
                 _ => None,
             })
             .collect_vec();
@@ -112,7 +108,7 @@ impl<F: FieldExt> BetaValues<F> {
     /// n challenge points it returns a table of size 2^n. this is when we do still need the
     /// entire beta table.
     pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMleRef<F> {
-        if layer_claim_vars.len() > 0 {
+        if !layer_claim_vars.is_empty() {
             // dynamic programming algorithm where we start from the most significant bit, which
             // is alternating in (1 - r) or (r) as the base case
             let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);

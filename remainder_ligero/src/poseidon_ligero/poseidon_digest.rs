@@ -1,5 +1,5 @@
-use remainder_shared_types::Poseidon;
 use remainder_shared_types::FieldExt;
+use remainder_shared_types::Poseidon;
 
 /// FieldHashFnDigest gives you a trait which is basically `Digest` but compatible
 /// with FieldExt-based hash functions.
@@ -24,11 +24,6 @@ pub trait FieldHashFnDigest<F: FieldExt> {
     ///
     /// This method can be called repeatedly for use with streaming messages.
     fn update(&mut self, data: &[F]);
-
-    /// (FieldHashFnDigest) Digest input data in a chained manner.
-    fn chain(self, data: &[F]) -> Self
-    where
-        Self: Sized;
 
     /// (FieldHashFnDigest) Retrieve result and consume hasher instance.
     fn finalize(self) -> F;

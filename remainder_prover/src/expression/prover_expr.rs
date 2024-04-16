@@ -94,9 +94,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 
     /// Create a product Expression that multiplies many MLEs together
     pub fn products(product_list: <ProverExpr as ExpressionType<F>>::MleVec) -> Self {
-        let mle_vec_indices = (0..product_list.len())
-            .map(|index| MleVecIndex::new(index))
-            .collect_vec();
+        let mle_vec_indices = (0..product_list.len()).map(MleVecIndex::new).collect_vec();
 
         let product_node = ExpressionNode::Product(mle_vec_indices);
 
@@ -262,7 +260,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
                 }
                 ExpressionNode::Product(mle_vec_indices) => {
                     let mle_refs = mle_vec_indices
-                        .into_iter()
+                        .iter()
                         .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                         .collect_vec();
 
@@ -404,7 +402,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             )),
             ExpressionNode::Product(mle_vec_indices) => {
                 let mle_refs = mle_vec_indices
-                    .into_iter()
+                    .iter_mut()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
@@ -416,7 +414,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 Ok(ExpressionNode::Product(
                     mle_refs
                         .into_iter()
-                        .map(|mle_ref| mle_ref.bookkeeping_table()[0].clone())
+                        .map(|mle_ref| mle_ref.bookkeeping_table()[0])
                         .collect_vec(),
                 ))
             }
@@ -460,7 +458,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 mle_vec_indices
-                    .into_iter()
+                    .iter_mut()
                     .map(|mle_vec_index| {
                         let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
 
@@ -515,7 +513,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 mle_vec_indices
-                    .into_iter()
+                    .iter_mut()
                     .map(|mle_vec_index| {
                         let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
 
@@ -630,7 +628,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 let mle_refs = mle_vec_indices
-                    .into_iter()
+                    .iter()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
@@ -693,7 +691,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 max(a_bits, b_bits)
             }
             ExpressionNode::Product(mle_vec_indices) => mle_vec_indices
-                .into_iter()
+                .iter_mut()
                 .map(|mle_vec_index| {
                     let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
                     if !mle_ref.indexed() {
@@ -722,7 +720,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 // in a product, we need the union of all the indices in each of the individual mle refs.
                 ExpressionNode::Product(mle_vec_indices) => {
                     let mle_refs = mle_vec_indices
-                        .into_iter()
+                        .iter()
                         .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                         .collect_vec();
                     let mut product_indices: HashSet<usize> = HashSet::new();
@@ -801,7 +799,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         // once all of them have been collected, we can take the union of all of them to grab all of the rounds in an expression.
         indices_in_node.into_iter().for_each(|index| {
             if !curr_indices.contains(&index) {
-                curr_indices.push(index.clone());
+                curr_indices.push(index);
             }
         });
         curr_indices.clone()
@@ -820,7 +818,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 // to look for repeated indices within a single node.
                 ExpressionNode::Product(mle_vec_indices) => {
                     let mle_refs = mle_vec_indices
-                        .into_iter()
+                        .iter()
                         .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                         .collect_vec();
                     let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
@@ -828,8 +826,8 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     mle_refs.into_iter().for_each(|mle_ref| {
                         mle_ref.mle_indices.iter().for_each(|mle_index| {
                             let curr_count = {
-                                if product_indices_counts.contains_key(&mle_index) {
-                                    product_indices_counts.get(&mle_index).unwrap()
+                                if product_indices_counts.contains_key(mle_index) {
+                                    product_indices_counts.get(mle_index).unwrap()
                                 } else {
                                     &0
                                 }
@@ -891,7 +889,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         // we grab all of the indices and take the union of all of them to return all nonlinear rounds in an expression tree.
         nonlinear_indices_in_node.into_iter().for_each(|index| {
             if !curr_nonlinear_indices.contains(&index) {
-                curr_nonlinear_indices.push(index.clone());
+                curr_nonlinear_indices.push(index);
             }
         });
         curr_nonlinear_indices.clone()
@@ -956,7 +954,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Product(mle_vec_indices) => {
                 let mle_refs = mle_vec_indices
-                    .into_iter()
+                    .iter()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
@@ -1054,7 +1052,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, Prover
 
 /// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
 impl<F: std::fmt::Debug + FieldExt> Expression<F, ProverExpr> {
-    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+    pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
         struct CircuitDesc<'a, F: FieldExt>(
             &'a ExpressionNode<F, ProverExpr>,
             &'a <ProverExpr as ExpressionType<F>>::MleVec,
