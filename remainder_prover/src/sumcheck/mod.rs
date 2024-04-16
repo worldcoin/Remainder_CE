@@ -299,7 +299,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
 /// the resulting vector will always be size (degree + 1) * (2 ^ (max_num_vars - 1))
 ///
 /// this function assumes that the first variable is an independent variable.
-fn successors_from_mle_ref_product<F: FieldExt>(
+pub fn successors_from_mle_ref_product<F: FieldExt>(
     mle_refs: &[&impl MleRef<F = F>],
     degree: usize,
 ) -> Result<Vec<F>, MleError> {
@@ -314,56 +314,59 @@ fn successors_from_mle_ref_product<F: FieldExt>(
     // a unique curve over the evaluations.
     let eval_count = degree + 1;
 
-    // we can parallelize over all of the "pairs" in the bookkeeping table (i.e. (a_1, a_2) or (a_3, a_4) above)
-    // in order to determine their relevant successors and element-wise multiply them by the rest of the
-    // mle_ref bookkeeping table successors.
-    let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).flat_map(|index| {
-        //get the product of all evaluations over 0/1/..degree
-        let successors_product = mle_refs
-            .iter()
-            .map(|mle_ref| {
-                let zero = F::zero();
-                // over here, we perform the wrap-around functionality if we are multiplying
-                // two mle_refs with different number of variables.
-                // for example if we are multiplying V(b_1, b_2) * V(b_1), and summing over
-                // b_2, then the overall sum is V(b_1, 0) * V(b_1) + V(b_1, 1) * V(b_1).
-                // it can be seen that the "smaller" mle_ref (the one over less variables) has
-                // to repeat itself an according number of times when the sum is over a variable
-                // it does not contain. the appropriate index is therefore determined as follows.
-                let index = if mle_ref.num_vars() < max_num_vars {
-                    // if we have less than the max number of variables, then we perform this wrap-around
-                    // functionality by first rounding to the nearest power of 2, and then taking the mod
-                    // of this index as we implicitly pad for powers of 2.
-                    let max = 1 << mle_ref.num_vars();
-                    (index * 2) % max
-                } else {
-                    index * 2
-                };
-                // over here, we get the elements in the pair so when index = 0, it's [0] and [1], if index = 1,
-                // it's [2] and [3], etc. because we are extending a function that was originally defined
-                // over the hypercube, each pair corresponds to two points on a line. we grab these two points here
-                let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
-                let second = if mle_ref.num_vars() != 0 {
-                    *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
-                } else {
-                    first
-                };
-                // and then we use the difference between the points in order to generate the successors,
-                // (1 - X) * first + X * second
-                let step = second - first;
-                let successors =
-                    std::iter::successors(Some(second), move |item| Some(*item + step));
-                std::iter::once(first).chain(successors)
-            })
-            .map(|item| -> Box<dyn Iterator<Item = F>> { Box::new(item) })
-            // then we take the elementwise product over each of these successors
-            .reduce(|acc, evals| Box::new(acc.zip(evals).map(|(acc, eval)| acc * eval)))
-            .unwrap();
+    let evals = cfg_into_iter!((0..eval_count * (1 << (max_num_vars - 1))))
+        .map(|index| {
+            mle_refs
+                .iter()
+                .map(|mle_ref| {
+                    let zero = F::zero();
 
-        successors_product.take(eval_count).collect_vec()
-    });
-    let evals_vec: Vec<F> = evals.collect();
-    Ok(evals_vec)
+                    // The relevant index into the mle bookkeeping table.
+                    let mle_index = index / eval_count;
+                    // We're computing `eval_count` evaluations of the MLE product.
+                    // This is the `eval_index`-th one.
+                    let eval_index = index % eval_count;
+
+                    // over here, we perform the wrap-around functionality if we are multiplying
+                    // two mle_refs with different number of variables.
+                    // for example if we are multiplying V(b_1, b_2) * V(b_1), and summing over
+                    // b_2, then the overall sum is V(b_1, 0) * V(b_1) + V(b_1, 1) * V(b_1).
+                    // it can be seen that the "smaller" mle_ref (the one over less variables) has
+                    // to repeat itself an according number of times when the sum is over a variable
+                    // it does not contain. the appropriate index is therefore
+                    // determined as follows.
+                    let mle_index = if mle_ref.num_vars() < max_num_vars {
+                        // if we have less than the max number of variables, then we perform this wrap-around
+                        // functionality by first rounding to the nearest power of 2, and then taking the mod
+                        // of this index as we implicitly pad for powers of 2.
+                        let max = 1 << mle_ref.num_vars();
+                        (mle_index * 2) % max
+                    } else {
+                        mle_index * 2
+                    };
+                    // over here, we get the elements in the pair so when index = 0, it's [0] and [1], if index = 1,
+                    // it's [2] and [3], etc. because we are extending a function that was originally defined
+                    // over the hypercube, each pair corresponds to two points on a line. we grab these two points here
+                    let first = *mle_ref.bookkeeping_table().get(mle_index).unwrap_or(&zero);
+                    let second = if mle_ref.num_vars() != 0 {
+                        *mle_ref
+                            .bookkeeping_table()
+                            .get(mle_index + 1)
+                            .unwrap_or(&zero)
+                    } else {
+                        first
+                    };
+                    let step = second - first;
+
+                    // and then we use the difference between the points in order to
+                    // generate the `eval_index`-th successor.
+                    first + step * F::from(eval_index as u64)
+                })
+                .fold(F::one(), |acc, eval: F| acc * eval)
+        })
+        .collect();
+
+    Ok(evals)
 }
 
 /// this function performs the same funcionality as the above, except it is when the mle refs we
@@ -494,14 +497,8 @@ pub fn beta_cascade<F: FieldExt>(
         .reduce(|acc, item| acc | item)
         .unwrap();
 
-    dbg!(mles_have_independent_variable);
-
     if mles_have_independent_variable {
         let mut mle_successor_vec = successors_from_mle_ref_product(mle_refs, degree).unwrap();
-        dbg!(&mle_successor_vec);
-        mle_successor_vec.iter().for_each(|elem| {
-            dbg!(elem.neg());
-        });
         // we go from the LSB --> MSB for the beta values, and do the big-endian fix variable for each one,
         // reducing the size of `mle_successor_vec` by half.
         beta_vals.iter().skip(1).rev().for_each(|val| {
