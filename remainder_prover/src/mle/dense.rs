@@ -56,6 +56,10 @@ where
     fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>> {
         self.prefix_bits.clone()
     }
+
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
 }
 
 impl<F: FieldExt, T: Send + Sync + Clone + Debug + MleAble<F>> DenseMle<F, T> {
