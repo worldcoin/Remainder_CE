@@ -1,39 +1,27 @@
 use ark_std::test_rng;
 use itertools::Itertools;
-use rand::Rng;
+
 use remainder::{
-    expression::{
-        generic_expr::{Expression, ExpressionNode, ExpressionType},
-        prover_expr::ProverExpr,
-    },
     layer::{
         layer_builder::{
             batched::{combine_zero_mle_ref, BatchedLayer},
             simple_builders::ZeroBuilder,
         },
-        layer_enum::LayerEnum,
         LayerId,
     },
-    mle::{
-        dense::{DenseMle, Tuple2},
-        Mle, MleIndex, MleRef,
-    },
+    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
     prover::{
         combine_layers::combine_layers,
         helpers::test_circuit,
         input_layer::{
-            combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
-            public_input_layer::PublicInputLayer, InputLayer,
+            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
         },
         proof_system::DefaultProofSystem,
-        GKRCircuit, GKRError, Layers, Witness,
+        GKRCircuit, Layers, Witness,
     },
 };
-use remainder_shared_types::{
-    transcript::{self, poseidon_transcript::PoseidonSponge, TranscriptWriter},
-    FieldExt, Fr,
-};
-use tracing::instrument;
+use remainder_shared_types::{FieldExt, Fr};
+
 use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
 
 use crate::utils::get_dummy_random_mle;
@@ -227,7 +215,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
         let input_layer: PublicInputLayer<F> =
             input_commit_builder.to_input_layer::<PublicInputLayer<F>>();
 
-        let mut input_layer_enum = input_layer.into();
+        let input_layer_enum = input_layer.into();
 
         self.mle_1_vec
             .iter_mut()

@@ -1,37 +1,23 @@
 use ark_std::test_rng;
-use itertools::Itertools;
-use rand::Rng;
+
 use remainder::{
-    expression::{
-        generic_expr::{Expression, ExpressionNode, ExpressionType},
-        prover_expr::ProverExpr,
-    },
     layer::{layer_builder::simple_builders::ZeroBuilder, LayerId},
-    mle::{
-        dense::{DenseMle, Tuple2},
-        Mle, MleIndex, MleRef,
-    },
+    mle::{dense::DenseMle, Mle, MleRef},
     prover::{
         combine_layers::combine_layers,
         helpers::test_circuit,
         input_layer::{
             combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-            InputLayer,
         },
         proof_system::DefaultProofSystem,
-        GKRCircuit, GKRError, Layers, Witness,
+        GKRCircuit, Layers, Witness,
     },
 };
-use remainder_shared_types::{
-    transcript::{self, poseidon_transcript::PoseidonSponge, TranscriptWriter},
-    FieldExt, Fr,
-};
-use tracing::instrument;
-use utils::{
-    ConstantScaledSumBuilder, ProductScaledBuilder, ProductSumBuilder, TripleNestedSelectorBuilder,
-};
+use remainder_shared_types::{FieldExt, Fr};
 
-use crate::utils::{get_dummy_one_mle, get_dummy_random_mle};
+use utils::{ConstantScaledSumBuilder, ProductScaledBuilder, ProductSumBuilder};
+
+use crate::utils::get_dummy_random_mle;
 mod utils;
 
 /// A circuit which takes in two MLEs of the same size:

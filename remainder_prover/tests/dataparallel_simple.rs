@@ -1,10 +1,7 @@
-use std::cmp::max;
+use ark_std::test_rng;
+use itertools::Itertools;
 
-use ark_std::{log2, test_rng};
-use itertools::{repeat_n, Itertools};
-use rand::Rng;
 use remainder::{
-    expression::generic_expr::Expression,
     layer::{
         layer_builder::{
             batched::{combine_zero_mle_ref, BatchedLayer},
@@ -12,26 +9,18 @@ use remainder::{
         },
         LayerId,
     },
-    mle::{
-        dense::{DenseMle, Tuple2},
-        zero::ZeroMleRef,
-        Mle, MleIndex, MleRef,
-    },
+    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
     prover::{
         helpers::test_circuit,
         input_layer::{
             combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-            InputLayer,
         },
         proof_system::DefaultProofSystem,
-        GKRCircuit, GKRError, Layers, Witness,
+        GKRCircuit, Layers, Witness,
     },
 };
-use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, TranscriptWriter},
-    FieldExt, Fr,
-};
-use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
+use remainder_shared_types::FieldExt;
+use utils::ProductScaledBuilder;
 
 use crate::utils::get_dummy_random_mle_vec;
 mod utils;

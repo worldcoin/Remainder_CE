@@ -1,6 +1,6 @@
 use ark_std::test_rng;
 use itertools::Itertools;
-use rand::Rng;
+
 use remainder::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::{
@@ -12,13 +12,12 @@ use remainder::{
         helpers::test_circuit,
         input_layer::{
             combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-            InputLayer,
         },
         proof_system::DefaultProofSystem,
         GKRCircuit, Layers, Witness,
     },
 };
-use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt, Fr};
+use remainder_shared_types::{FieldExt, Fr};
 
 use crate::utils::get_dummy_random_mle;
 mod utils;
