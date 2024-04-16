@@ -256,6 +256,7 @@ pub trait ProofSystem<F: FieldExt> {
     type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>;
 }
 
+/// The default proof system for the remainder prover
 pub struct DefaultProofSystem;
 
 impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
