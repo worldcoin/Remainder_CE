@@ -10,10 +10,12 @@
 use super::LcRoot;
 use crate::{
     collapse_columns,
+    ligero_commit::remainder_ligero_commit,
     ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point},
     ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof},
     poseidon_ligero::PoseidonSpongeHasher,
     utils::{get_random_coeffs_for_multilinear_poly, halo2_ifft},
+    verify_column_path, verify_column_value,
 };
 
 // --- For serialization/deserialization of the various structs ---
@@ -30,10 +32,6 @@ use remainder_shared_types::{
 };
 use std::{iter::repeat_with, marker::PhantomData};
 
-const LIGERO_AUX_INFO_FILENAME: &str = "ligero_aux_info.txt";
-const LIGERO_PROOF_FILENAME: &str = "ligero_proof.txt";
-const LIGERO_ROOT_FILENAME: &str = "ligero_root.txt";
-
 #[test]
 fn log2() {
     use super::log2;
@@ -43,18 +41,26 @@ fn log2() {
     }
 }
 
+/// The purpose of this test is to check that the parallel version of the
+/// Merkle hashing step, i.e. [merkleize()], yields the same result as the
+/// serial version, i.e. [merkleize_ser()], using Poseidon as the hashing
+/// function.
 #[test]
-fn merkleize() {
+fn test_merkleize() {
+    use ark_std::test_rng;
     use remainder_shared_types::Fr;
 
-    // --- This is SUPER ugly, but for the sake of efficiency... ---
-    // TODO!(ryancao): Riperoni
     let master_default_poseidon_merkle_hasher = Poseidon::<Fr, 3, 2>::new(8, 57);
     let master_default_poseidon_column_hasher = Poseidon::<Fr, 3, 2>::new(8, 57);
 
     use super::{merkleize, merkleize_ser};
 
-    let mut test_comm = random_comm::<Fr>();
+    const MLE_NUM_VARS: usize = 4;
+    const RHO_INV: u8 = 4;
+    const RATIO: f64 = 4.0;
+    let mut rng = test_rng();
+    let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
+    let (_, mut test_comm, _, _) = remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO);
     let mut test_comm_2 = test_comm.clone();
 
     merkleize(&mut test_comm);
@@ -69,13 +75,23 @@ fn merkleize() {
     assert_eq!(&test_comm.hashes, &test_comm_2.hashes);
 }
 
+/// The purpose of this test is to check that the parallel version of the matrix
+/// vector product, i.e. [eval_outer()], yields the same result as that of the
+/// serial version, i.e. [eval_outer_ser()].
 #[test]
-fn eval_outer() {
+fn test_eval_outer() {
+    use ark_std::test_rng;
     use remainder_shared_types::Fr;
 
     use super::{eval_outer, eval_outer_ser};
 
-    let test_comm = random_comm();
+    const MLE_NUM_VARS: usize = 4;
+    const RHO_INV: u8 = 4;
+    const RATIO: f64 = 4.0;
+    let mut rng = test_rng();
+    let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
+    let (_, test_comm, _, _) = remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO);
+
     let mut rng = rand::thread_rng();
     let tensor: Vec<Fr> = repeat_with(|| Fr::from(rng.gen::<u64>()))
         .take(test_comm.n_rows)
@@ -87,20 +103,27 @@ fn eval_outer() {
     assert_eq!(&res1[..], &res2[..]);
 }
 
+/// The purpose of this test is to check that the column opening step within
+/// the Ligero verification process, i.e. the [open_column()] and
+/// [verify_column_value()] and [verify_column_path()]
+/// steps, are working as intended given a valid commitment generated via
+/// [remainder_ligero_commit()].
 #[test]
-fn open_column() {
-    use super::{merkleize, open_column, verify_column};
+fn test_open_column() {
+    use super::{merkleize, open_column};
     use remainder_shared_types::Fr;
 
-    // --- This is SUPER ugly, but for the sake of efficiency... ---
-    // TODO!(ryancao): Riperoni
     let master_default_poseidon_merkle_hasher = Poseidon::<Fr, 3, 2>::new(8, 57);
     let master_default_poseidon_column_hasher = Poseidon::<Fr, 3, 2>::new(8, 57);
 
     let mut rng = rand::thread_rng();
 
     let test_comm = {
-        let mut tmp = random_comm::<Fr>();
+        const MLE_NUM_VARS: usize = 4;
+        const RHO_INV: u8 = 4;
+        const RATIO: f64 = 4.0;
+        let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
+        let (_, mut tmp, _, _) = remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO);
         merkleize(&mut tmp);
         tmp
     };
@@ -109,22 +132,28 @@ fn open_column() {
     for _ in 0..64 {
         let col_num = rng.gen::<usize>() % test_comm.encoded_num_cols;
         let column = open_column(&test_comm, col_num).unwrap();
-        assert!(verify_column::<
+
+        let column_hash_check =
+            verify_column_path::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(
+                &column,
+                col_num,
+                root.as_ref(),
+                &master_default_poseidon_merkle_hasher,
+                &master_default_poseidon_column_hasher,
+            );
+        let column_value_check = verify_column_value::<
             PoseidonSpongeHasher<Fr>,
             LigeroEncoding<Fr>,
             Fr,
-        >(
-            &column,
-            col_num,
-            root.as_ref(),
-            &[],
-            &Fr::from(0_u64),
-            &master_default_poseidon_column_hasher,
-            &master_default_poseidon_merkle_hasher
-        ));
+        >(&column, &[], &Fr::from(0_u64));
+
+        assert!(column_hash_check && column_value_check);
     }
 }
 
+/// This test checks that the [CanonicalDeserialize] and [CanonicalSerialize]
+/// derivations for an arbitrary struct work as intended. More of an example
+/// snippet than a true test!
 #[test]
 fn arkworks_serialize_test() {
     // Example from https://docs.rs/ark-serialize/latest/ark_serialize/
@@ -157,16 +186,15 @@ fn arkworks_serialize_test() {
     assert_eq!(test_struct, test_struct_deserialized);
 }
 
+/// This test serves as an example of using Arkworks' FFT and IFFT functionality.
 #[test]
 fn arkworks_bn_fft_test() {
     // Example from: https://github.com/arkworks-rs/algebra/blob/master/poly/src/domain/general.rs
     use ark_bn254::Fr;
-    // use ark_std::test_rng;
     use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
     use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
-    // use ark_ff::FftField;
 
-    // --- Let's try IFFT-ing a polynomial, then FFT-ing it, and seeing if we get back the same thing ---
+    // --- IFFT a polynomial, then FFT the evaluations, and ensure the result is the same as the original thing ---
     let orig_coeffs = vec![Fr::from(1u8), Fr::from(2u8), Fr::from(3u8), Fr::from(4u8)];
     let small_domain = GeneralEvaluationDomain::<Fr>::new(8).unwrap();
     let fft_evals: Vec<Fr> = small_domain.ifft(&orig_coeffs);
@@ -178,6 +206,7 @@ fn arkworks_bn_fft_test() {
     assert_eq!(orig_poly, ifft_poly);
 }
 
+/// This test serves as an example of using Halo2's FFT and IFFT functionality.
 #[test]
 fn halo2_bn_fft_test() {
     use ark_std::log2;
@@ -193,7 +222,6 @@ fn halo2_bn_fft_test() {
     assert!(num_evals.is_power_of_two());
     let log_num_evals = log2(num_evals);
 
-    // let coeffs = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4), Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
     let coeffs = repeat_with(|| Fr::from(rng.gen::<u64>()))
         .take(num_coeffs)
         .collect_vec();
@@ -230,6 +258,13 @@ fn halo2_bn_fft_test() {
         });
 }
 
+/// This test confirms the functionality of the initial Ligero commitment step by
+/// * Computing a Ligero matrix M from its corresponding MLE coefficients.
+/// * Computing its encoding, M', row-wise.
+/// * Computing the matrix-vector product b^T M'
+/// * Computing the reverse encoding IFFT(b^T M')
+/// * Computing the matrix-vector product IFFT(b^T M') a, and checking it against
+///     b^T M a.
 #[test]
 fn poseidon_commit_test() {
     use super::poseidon_ligero::PoseidonSpongeHasher;
@@ -237,30 +272,27 @@ fn poseidon_commit_test() {
     use ark_std::test_rng;
     use remainder_shared_types::Fr;
 
-    // --- RNG for testing ---
-    let mut rng = test_rng();
-
     // --- Grabs random (univariate poly!) coefficients and the rho value ---
-    let (coeffs, rho) = random_coeffs_rho_bn254::<Fr>();
-    let rho_inv: u8 = (1.0 / rho) as u8;
-    let ratio: f64 = 1_f64;
+    const MLE_NUM_VARS: usize = 4;
+    const RHO_INV: u8 = 4;
+    const RATIO: f64 = 4.0;
+    let mut rng = test_rng();
+    let random_mle_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
 
-    // --- Preps the FFT encoding and grabs the matrix size ---
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho, ratio);
-
-    // --- Commitment needs to use PoseidonHasher instead of Blake3 ---
-    let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<_>, Fr>(&coeffs, &enc).unwrap();
+    // --- Preps the FFT encoding and grabs the matrix size, then computes the commitment ---
+    let enc = LigeroEncoding::<Fr>::new(random_mle_coeffs.len(), RHO_INV, RATIO);
+    let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<_>, Fr>(&random_mle_coeffs, &enc)
+        .unwrap();
 
     // --- For a univariate commitment, `x` is the eval point ---
     let x = Fr::from(rng.gen::<u64>());
 
     // --- Zipping the coefficients against 1, x, x^2, ... ---
-    // Literally computing the evaluation. I'm dumb - Ryan
     let eval = comm
         .coeffs
         .iter()
         // --- Just computing 1, x, x^2, ... ---
-        .zip(iterate(Fr::from(1), |&v| v * x).take(coeffs.len()))
+        .zip(iterate(Fr::from(1), |&v| v * x).take(random_mle_coeffs.len()))
         .fold(Fr::from(0), |acc, (c, r)| acc + *c * r);
 
     // --- The "a" vector in b^T M a (the one which increments by ones) ---
@@ -288,22 +320,9 @@ fn poseidon_commit_test() {
     // --- Basically the big tensor product and the actual polynomial evaluation should be the same ---
     assert_eq!(eval, eval2);
 
-    // --- Need to confirm this, but sounds like it does b^T M'...? (RLC of the columns in encoded M') ---
+    // --- Compute b^T M' (RLC of the columns in encoded M'), which should be a codeword as well ---
     let poly_fft = eval_outer_fft(&comm, &roots_hi[..]).unwrap();
-
-    // Okay so `poly_fft` gives us
-    // (b_1 * f_1(1) + ... + b_{\sqrt{N}} * f_{\sqrt{N}}(1),
-    // (b_1 * f_1(2) + ... + b_{\sqrt{N}} * f_{\sqrt{N}}(2),
-    // (b_1 * f_1(3) + ... + b_{\sqrt{N}} * f_{\sqrt{N}}(3),
-    // ...,
-    // b_1 * f_1(\rho^{-1} * \sqrt{N}) + ... + b_{\sqrt{N}} * f_{\sqrt{N}}(\rho^{-1} * \sqrt{N})
-    // Note that coordinates all have the same evaluation point,
-    // and we sum across linear combination of functions f_1, ..., f_{\sqrt{N}}
-    // with coefficients b_1, ..., b_{\sqrt{N}}
-    // ---
-    // Okay so after the IFFT, we should basically get the coefficients of
-    // (b_1 * f_1 + ... + b_{\sqrt{N}} f_{\sqrt{N}})(x)
-    let coeffs = halo2_ifft(poly_fft, rho_inv);
+    let coeffs = halo2_ifft(poly_fft, RHO_INV);
 
     // --- So after the IFFT, we should receive a univariate polynomial of degree (num cols in M) ---
     assert!(coeffs
@@ -320,6 +339,13 @@ fn poseidon_commit_test() {
     assert_eq!(eval2, eval3);
 }
 
+/// This test confirms the functionality of the [prove()] and [verify()] functions
+/// within Ligero, by
+/// * Computing a Ligero commitment from a random MLE.
+/// * Computing its evaluation at a random challenge point.
+/// * Computing an evaluation proof.
+/// * Verifying the (commitment, evaluation proof) against the corresponding
+///     challenge point + claimed evaluation.
 #[test]
 fn poseidon_end_to_end_test() {
     use super::poseidon_ligero::PoseidonSpongeHasher;
@@ -329,11 +355,13 @@ fn poseidon_end_to_end_test() {
 
     // --- RNG for testing ---
     let mut rng = test_rng();
+    let ml_num_vars = 8;
 
     // commit to a random polynomial at a random rate
-    let (coeffs, rho) = random_coeffs_rho_bn254();
+    let coeffs = get_random_coeffs_for_multilinear_poly(ml_num_vars, &mut rng);
+    let rho_inv = 4;
     let ratio = 1_f64;
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho, ratio);
+    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho_inv, ratio);
     let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(&coeffs, &enc).unwrap();
 
     // this is the polynomial commitment
@@ -342,19 +370,13 @@ fn poseidon_end_to_end_test() {
     // --- For a univariate commitment, `x` is the eval point ---
     let x = Fr::from(rng.gen::<u64>());
 
-    // --- Zipping the coefficients against 1, x, x^2, ... ---
-    // Literally computing the evaluation. I'm dumb - Ryan
+    // --- Zipping the coefficients against 1, x, x^2, ... to compute the evaluation. ---
     let eval = comm
         .coeffs
         .iter()
         // --- Just computing 1, x, x^2, ... ---
         .zip(iterate(Fr::from(1), |&v| v * x).take(coeffs.len()))
         .fold(Fr::from(0), |acc, (c, r)| acc + *c * r);
-
-    // compute the outer and inner tensors for powers of x
-    // NOTE: we treat coeffs as a univariate polynomial, but it doesn't
-    // really matter --- the only difference from a multilinear is the
-    // way we compute outer_tensor and inner_tensor from the eval point
 
     // --- The "a" vector in b^T M a (the one which increments by ones) ---
     let inner_tensor: Vec<Fr> = iterate(Fr::from(1), |&v| v * x)
@@ -369,80 +391,23 @@ fn poseidon_end_to_end_test() {
             .collect()
     };
 
-    // --- The above is all the same as the `commit` test functionality ---
-
-    // compute an evaluation proof
     // --- Replacing the old transcript with the Remainder one ---
     let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("test transcript");
 
     // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
     transcript_writer.append("polycommit", root.root);
 
-    // TODO!(ryancao): Uhhhhhhh figure out how to add the rate to the transcript...
-    // tr1.append_field_element("rate", rho);
-    // let _ = tr1.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
-
-    // --- Okay this function is new; let's check it out ---
-    // Tl;dr this gives us the random vectors to check well-formedness from
-    // As well as the actual columns we're opening at, plus proofs that those
-    // columns are consistent against the Merkle root
     let pf: LigeroEvalProof<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr> =
         prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
 
-    // ------------------- SERIALIZATION -------------------
-    // --- Serializing the auxiliaries ---
-    // let ligero_proof_aux_info = LcProofAuxiliaryInfo {
-    //     // TODO!(ryancao): Is this rounding correctly? I think only for values of `rho` which are powers of two...?
-    //     rho_inv: (1.0 / rho) as u8,
-    //     encoded_num_cols: comm.encoded_num_cols,
-    //     orig_num_cols: comm.orig_num_cols,
-    //     num_rows: comm.n_rows,
-    // };
-    // let mut encoded_proof_aux_info_bytes: Vec<u8> = Vec::new();
-    // let _ = ligero_proof_aux_info.serialize_compressed(&mut encoded_proof_aux_info_bytes);
-
-    // --- First things first, we want to serialize the LigeroEvalProof ---
-    // let mut encoded_proof_bytes: Vec<u8> = Vec::new();
-    // pf.serialize_compressed(&mut encoded_proof_bytes).unwrap();
-
-    // --- Next, we want to serialize the commitment root ---
-    // let mut encoded_root_bytes: Vec<u8> = Vec::new();
-    // let lc_root_to_be_encoded = LcRoot::<LigeroEncoding<Fr>, Fr> {
-    //     root: root.root,
-    //     _p: PhantomData
-    // };
-    // let _ = lc_root_to_be_encoded.serialize_compressed(&mut encoded_root_bytes).unwrap();
-
-    // --- Write both things (root and LigeroProof) to file ---
-    // fs::write(LIGERO_AUX_INFO_FILENAME, encoded_proof_aux_info_bytes).expect("Unable to write proof auxiliaries to file");
-    // fs::write(LIGERO_PROOF_FILENAME, encoded_proof_bytes.clone()).expect("Unable to write proof to file");
-    // fs::write(LIGERO_ROOT_FILENAME, encoded_root_bytes.clone()).expect("Unable to write root to file");
-
-    // verify it and finish evaluation
-    // Q: Why do we have a second transcript???
-    // Answer: I guess it's because we're simulating the verifier receiving the transcript
-    // ...Perhaps there's also some state reset stuff that needs to be done?
     let transcript = transcript_writer.get_transcript();
     let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
     let prover_root = transcript_reader.consume_element("polycommit").unwrap();
     assert_eq!(prover_root, root.root);
-    // TODO!(ryancao): Uhhhhhhh figure out how to add the rate to the transcript...
-    // tr2.append_field_element("rate", rho);
-    // let _ = tr2.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
-
-    // (ryancao): Oh hmmm is this where they test the randomly generated vector...?
-    // Answer: No, it's just them setting up another FFT to use in `verify()`
-    // TODO!(ryancao): Get rid of this entirely, or have some other way of just passing along the `orig_num_cols` and `encoded_num_cols`
     let enc2 =
         LigeroEncoding::<Fr>::new_from_dims(pf.get_orig_num_cols(), pf.get_encoded_num_cols());
 
-    // --- We need to check out this `verify()` function ---
-    // --- Okay basically checks that
-    // a) All the `r^T M'` s (i.e. column-wise) are consistent with the verifier-derived enc(r^T M)
-    // b) All the `b^T M'` s (i.e. column-wise) are consistent with the verifier-derived enc(b^T M)
-    // c) All the columns are consistent with the merkle commitment
-    // d) Evaluates (b^T M) * a on its own (where b^T M is given by the prover) and returns the result
-    //      as the evaluation
+    // --- Verify the proof and return the prover-claimed result ---
     let res = verify(
         root.as_ref(),
         &outer_tensor[..],
@@ -453,342 +418,6 @@ fn poseidon_end_to_end_test() {
     )
     .unwrap();
 
-    // --- Does the same thing (i.e. verification), but after deserializing ---
-    // let encoded_proof_bytes_2 = fs::read(LIGERO_PROOF_FILENAME).expect("Unable to read proof from file");
-    // let encoded_root_bytes_2 = fs::read(LIGERO_ROOT_FILENAME).expect("Unable to read root from file");
-
-    // let root2 = LcRoot::<LigeroEncoding<Fr>, Fr>::deserialize_compressed(&*encoded_root_bytes_2).unwrap();
-    // let pf2 = LigeroEvalProof::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>::deserialize_compressed(&*encoded_proof_bytes_2).unwrap();
-
-    // let mut tr3 = PoseidonTranscript::new("test transcript 3");
-    // let _ = tr3.append_field_element("polycommit", root.root);
-    // TODO!(ryancao): Uhhhhhhh figure out how to add the rate to the transcript...
-    // tr3.append_field_element("rate", rho);
-    // let _ = tr3.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
-
-    // let enc3 = LigeroEncoding::<Fr>::new_from_dims(pf2.get_orig_num_cols(), pf2.get_encoded_num_cols());
-    // let res2 = verify(
-    //     root2.as_ref(),
-    //     &outer_tensor[..],
-    //     &inner_tensor[..],
-    //     &pf2,
-    //     &enc3,
-    //     &mut tr3,
-    // ).unwrap();
-
     // --- Checks that both evaluations are correct ---
     assert_eq!(res, eval);
-    // assert_eq!(res, res2);
-}
-
-/// Poseidon multilinear commitment test (checking that the matrix generated is correct
-/// when one computes the inner + outer tensor products vs. the actual evaluation)
-#[test]
-fn poseidon_ml_commit_test() {
-    use super::poseidon_ligero::PoseidonSpongeHasher;
-    use super::{commit, eval_outer, eval_outer_fft};
-    use ark_std::test_rng;
-    use remainder_shared_types::Fr;
-
-    // --- RNG for testing ---
-    let mut rng = test_rng();
-
-    // --- Generate a random polynomial and set rho ---
-    let rho_inv = 4;
-    let rho = 1. / (rho_inv as f64);
-    let num_ml_vars = 16;
-    let log_num_rows = 8;
-    let num_rows = 2_usize.pow(log_num_rows);
-    let log_orig_num_cols = 8;
-    let orig_num_cols = 2_usize.pow(log_orig_num_cols);
-    let coeffs = get_random_coeffs_for_multilinear_poly::<Fr>(num_ml_vars);
-    let ratio = 1_f64;
-
-    // --- Create commitment ---
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho, ratio);
-    let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(&coeffs, &enc).unwrap();
-
-    // --- Generating the random multilinear point ---
-    let challenge_coord: Vec<Fr> = repeat_with(|| Fr::from(rng.gen::<u64>()))
-        .take(num_ml_vars)
-        .collect_vec();
-
-    // --- Computing the raw evaluation of the MLE at the coordinate generated above ---
-    let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, &challenge_coord);
-
-    // --- Compute "a" and "b" from `challenge_coord` ---
-    let (inner_tensor, outer_tensor) =
-        get_ml_inner_outer_tensors(&challenge_coord, num_rows, orig_num_cols);
-
-    // --- Literally does b^T M (I'm pretty sure) ---
-    let coeffs_flattened = eval_outer(&comm, &outer_tensor[..]).unwrap();
-
-    // --- Then does (b^T M) a (I'm pretty sure) ---
-    let eval2 = coeffs_flattened
-        .iter()
-        .zip(inner_tensor.iter())
-        .fold(Fr::from(0), |acc, (c, r)| acc + *c * r);
-
-    // --- Basically the big tensor product and the actual polynomial evaluation should be the same ---
-    assert_eq!(eval, eval2);
-
-    // --- Need to confirm this, but sounds like it does b^T M'...? (RLC of the columns in encoded M') ---
-    let poly_fft = eval_outer_fft(&comm, &outer_tensor[..]).unwrap();
-
-    // Okay so `poly_fft` gives us
-    // (b_1 * f_1(1) + ... + b_{\sqrt{N}} * f_{\sqrt{N}}(1),
-    // (b_1 * f_1(2) + ... + b_{\sqrt{N}} * f_{\sqrt{N}}(2),
-    // (b_1 * f_1(3) + ... + b_{\sqrt{N}} * f_{\sqrt{N}}(3),
-    // ...,
-    // b_1 * f_1(\rho^{-1} * \sqrt{N}) + ... + b_{\sqrt{N}} * f_{\sqrt{N}}(\rho^{-1} * \sqrt{N})
-    // Note that coordinates all have the same evaluation point,
-    // and we sum across linear combination of functions f_1, ..., f_{\sqrt{N}}
-    // with coefficients b_1, ..., b_{\sqrt{N}}
-    // ---
-    // Okay so after the IFFT, we should basically get the coefficients of
-    // (b_1 * f_1 + ... + b_{\sqrt{N}} f_{\sqrt{N}})(x)
-    // --- TODO!(ryancao): Does this truncate AND round to the next largest power of 2? ---
-    let coeffs = halo2_ifft(poly_fft, rho_inv);
-
-    // --- So after the IFFT, we should receive a univariate polynomial of degree (num cols in M) ---
-    assert!(coeffs
-        .iter()
-        .skip(comm.orig_num_cols)
-        .all(|&v| v == Fr::from(0)));
-
-    // --- And if we "evaluate" this polynomial (b^T M, in theory) against `a`, we should still ---
-    // --- get the same evaluation ---
-    let eval3 = coeffs
-        .iter()
-        .zip(inner_tensor.iter())
-        .fold(Fr::from(0), |acc, (c, r)| acc + *c * r);
-    assert_eq!(eval2, eval3);
-}
-
-/// Poseidon multilinear end-to-end test
-#[test]
-fn poseidon_ml_end_to_end_test() {
-    use super::poseidon_ligero::PoseidonSpongeHasher;
-    use super::{commit, prove, verify};
-    use ark_std::test_rng;
-    use remainder_shared_types::Fr;
-    // use std::fs;
-
-    // --- RNG for testing ---
-    let mut rng = test_rng();
-
-    // --- Generate a random polynomial and set rho ---
-    let rho_inv = 4;
-    let rho = 1. / (rho_inv as f64);
-    let num_ml_vars = 8;
-    let log_num_rows = 4;
-    let num_rows = 2_usize.pow(log_num_rows);
-    let log_orig_num_cols = 4;
-    let orig_num_cols = 2_usize.pow(log_orig_num_cols);
-    let coeffs = get_random_coeffs_for_multilinear_poly::<Fr>(num_ml_vars);
-
-    // --- Create commitment ---
-    let ratio = 1_f64;
-    let enc = LigeroEncoding::<Fr>::new(coeffs.len(), rho, ratio);
-    let comm = commit::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(&coeffs, &enc).unwrap();
-
-    // --- Only component of commitment which needs to be sent to the verifier is the commitment root ---
-    let root: LcRoot<LigeroEncoding<Fr>, Fr> = comm.get_root();
-
-    // --- Generating the random multilinear point ---
-    let challenge_coord: Vec<Fr> = repeat_with(|| Fr::from(rng.gen::<u64>()))
-        .take(num_ml_vars)
-        .collect_vec();
-
-    // --- Computing the raw evaluation of the MLE at the coordinate generated above ---
-    let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, &challenge_coord);
-
-    // --- Compute "a" and "b" from `challenge_coord` ---
-    let mut poly = vec![Fr::zero(); comm.orig_num_cols];
-    let (inner_tensor, outer_tensor) =
-        get_ml_inner_outer_tensors(&challenge_coord, num_rows, orig_num_cols);
-
-    // --- Sanitycheck that b^T M a is equivalent to the naive evaluation ---
-    collapse_columns::<LigeroEncoding<Fr>, Fr>(
-        &coeffs,
-        &outer_tensor,
-        &mut poly[..],
-        num_rows,
-        orig_num_cols,
-        0,
-    );
-    let b_transpose_m_times_a: Fr = poly
-        .into_iter()
-        .zip(inner_tensor.clone().into_iter())
-        .fold(Fr::zero(), |acc, (poly_coeff, inner_tensor_coeff)| {
-            acc + (poly_coeff * inner_tensor_coeff)
-        });
-    assert_eq!(b_transpose_m_times_a, eval);
-
-    // ------------ The above is all the same as the `commit` test functionality ------------
-
-    // --- Replacing the old transcript with the Remainder one ---
-    let mut transcript_writer = TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("test transcript");
-
-    // --- Transcript includes the Merkle root, the code rate, and the number of columns to be sampled ---
-    transcript_writer.append("polycommit", root.root);
-    // let _ = tr1.append_field_element("rate", Fr::from(rho_inv));
-    // let _ = tr1.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
-
-    // --- Okay this function is new; let's check it out ---
-    // Tl;dr this gives us the random vectors to check well-formedness from
-    // As well as the actual columns we're opening at, plus proofs that those
-    // columns are consistent against the Merkle root
-    let pf: LigeroEvalProof<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr> =
-        prove(&comm, &outer_tensor[..], &enc, &mut transcript_writer).unwrap();
-
-    // ------------------- SERIALIZATION -------------------
-    // --- Serializing the auxiliaries ---
-    // let ligero_proof_aux_info = LcProofAuxiliaryInfo {
-    //     // TODO!(ryancao): Is this rounding correctly? I think only for values of `rho` which are powers of two...?
-    //     rho_inv: (1.0 / rho) as u8,
-    //     encoded_num_cols: comm.encoded_num_cols,
-    //     orig_num_cols: comm.orig_num_cols,
-    //     num_rows: comm.n_rows,
-    // };
-    // let mut encoded_proof_aux_info_bytes: Vec<u8> = Vec::new();
-    // let _ = ligero_proof_aux_info.serialize_compressed(&mut encoded_proof_aux_info_bytes);
-
-    // --- First things first, we want to serialize the LigeroEvalProof ---
-    // let mut encoded_proof_bytes: Vec<u8> = Vec::new();
-    // pf.serialize_compressed(&mut encoded_proof_bytes).unwrap();
-
-    // --- Next, we want to serialize the commitment root ---
-    // let mut encoded_root_bytes: Vec<u8> = Vec::new();
-    // let lc_root_to_be_encoded = LcRoot::<LigeroEncoding<Fr>, Fr> {
-    //     root: root.root,
-    //     _p: PhantomData
-    // };
-    // let _ = lc_root_to_be_encoded.serialize_compressed(&mut encoded_root_bytes).unwrap();
-
-    // --- Write both things (root and LigeroProof) to file ---
-    // fs::write(LIGERO_AUX_INFO_FILENAME, encoded_proof_aux_info_bytes).expect("Unable to write proof auxiliaries to file");
-    // fs::write(LIGERO_PROOF_FILENAME, encoded_proof_bytes.clone()).expect("Unable to write proof to file");
-    // fs::write(LIGERO_ROOT_FILENAME, encoded_root_bytes.clone()).expect("Unable to write root to file");
-
-    // verify it and finish evaluation
-    // Q: Why do we have a second transcript???
-    // Answer: I guess it's because we're simulating the verifier receiving the transcript
-    // ...Perhaps there's also some state reset stuff that needs to be done?
-    let transcript = transcript_writer.get_transcript();
-    let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
-    let prover_root = transcript_reader.consume_element("polycommit").unwrap();
-    assert_eq!(prover_root, root.root);
-    // let _ = tr2.append_field_element("rate", Fr::from(rho_inv));
-    // let _ = tr2.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
-
-    // (ryancao): Oh hmmm is this where they test the randomly generated vector...?
-    // Answer: No, it's just them setting up another FFT to use in `verify()`
-    // TODO!(ryancao): Get rid of this entirely, or have some other way of just passing along the `orig_num_cols` and `encoded_num_cols`
-    let enc2 =
-        LigeroEncoding::<Fr>::new_from_dims(pf.get_orig_num_cols(), pf.get_encoded_num_cols());
-
-    // --- We need to check out this `verify()` function ---
-    // --- Okay basically checks that
-    // a) All the `r^T M'` s (i.e. column-wise) are consistent with the verifier-derived enc(r^T M)
-    // b) All the `b^T M'` s (i.e. column-wise) are consistent with the verifier-derived enc(b^T M)
-    // c) All the columns are consistent with the merkle commitment
-    // d) Evaluates (b^T M) * a on its own (where b^T M is given by the prover) and returns the result
-    //      as the evaluation
-    let res = verify(
-        root.as_ref(),
-        &outer_tensor[..],
-        &inner_tensor[..],
-        &pf,
-        &enc2,
-        &mut transcript_reader,
-    )
-    .unwrap();
-
-    // --- Does the same thing (i.e. verification), but after deserializing ---
-    // let encoded_proof_bytes_2 = fs::read(LIGERO_PROOF_FILENAME).expect("Unable to read proof from file");
-    // let encoded_root_bytes_2 = fs::read(LIGERO_ROOT_FILENAME).expect("Unable to read root from file");
-
-    // let root2 = LcRoot::<LigeroEncoding<Fr>, Fr>::deserialize_compressed(&*encoded_root_bytes_2).unwrap();
-    // let pf2 = LigeroEvalProof::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>::deserialize_compressed(&*encoded_proof_bytes_2).unwrap();
-
-    // let mut tr3 = PoseidonTranscript::new("test transcript 3");
-    // let _ = tr3.append_field_element("polycommit", root.root);
-    // let _ = tr3.append_field_element("rate", Fr::from(rho_inv));
-    // let _ = tr3.append_field_element("ncols", Fr::from(N_COL_OPENS as u64));
-
-    // let enc3 = LigeroEncoding::<Fr>::new_from_dims(pf2.get_orig_num_cols(), pf2.get_encoded_num_cols());
-    // let res2 = verify(
-    //     root2.as_ref(),
-    //     &outer_tensor[..],
-    //     &inner_tensor[..],
-    //     &pf2,
-    //     &enc3,
-    //     &mut tr3,
-    // ).unwrap();
-
-    // --- Checks that both evaluations are correct ---
-    assert_eq!(res, eval);
-    // assert_eq!(res, res2);
-}
-
-/// Ryan's note -- this basically replaces the other `random_coeffs_rho()` but
-/// returns ark_bn254::Fr instead of Ft63
-/// TODO!(ryancao): Pass in the RNG if possible!
-fn random_coeffs_rho_bn254<F: FieldExt>() -> (Vec<F>, f64) {
-    // --- This is Riad's RNG ---
-    let mut rng = rand::thread_rng();
-
-    // --- LGL is the "log length" ---
-    let lgl = 8 + rng.gen::<usize>() % 8;
-    let len_base = 1 << (lgl - 1);
-    let len = len_base + (rng.gen::<usize>() % len_base);
-
-    (
-        // --- Uniform random sampling over Fr (well, sort of...) ---
-        repeat_with(|| F::from(rng.gen::<u64>()))
-            .take(len)
-            .collect(),
-        // Rho is something between 0.1 and 0.9
-        // rng.gen_range(0.1f64..0.9f64),
-        0.25f64,
-    )
-}
-
-// Honestly not sure why this function exists lol -- Ryan
-fn random_comm<F: FieldExt>() -> LigeroCommit<PoseidonSpongeHasher<F>, F> {
-    let mut rng = rand::thread_rng();
-
-    let lgl = 8 + rng.gen::<usize>() % 8;
-    let len_base = 1 << (lgl - 1);
-    let len = len_base + (rng.gen::<usize>() % len_base);
-    let rho = rng.gen_range(0.1f64..0.9f64);
-    let ratio = 1_f64;
-    let (n_rows, orig_num_cols, encoded_num_cols) =
-        LigeroEncoding::<F>::get_dims(len, rho, ratio).unwrap();
-
-    let coeffs_len = (orig_num_cols - 1) * n_rows + 1 + (rng.gen::<usize>() % n_rows);
-    let coeffs = {
-        let mut tmp = repeat_with(|| F::from(rng.gen::<u64>()))
-            .take(coeffs_len)
-            .collect::<Vec<F>>();
-        tmp.resize(orig_num_cols * n_rows, F::zero());
-        tmp
-    };
-
-    let comm_len = n_rows * encoded_num_cols;
-    let comm: Vec<F> = repeat_with(|| F::from(rng.gen::<u64>()))
-        .take(comm_len)
-        .collect();
-
-    LigeroCommit::<PoseidonSpongeHasher<F>, F> {
-        comm,
-        coeffs,
-        n_rows,
-        encoded_num_cols,
-        orig_num_cols,
-        hashes: vec![F::default(); 2 * encoded_num_cols - 1],
-        phantom_data: PhantomData,
-        phantom_data_2: PhantomData,
-    }
 }

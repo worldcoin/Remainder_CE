@@ -25,11 +25,6 @@ pub trait FieldHashFnDigest<F: FieldExt> {
     /// This method can be called repeatedly for use with streaming messages.
     fn update(&mut self, data: &[F]);
 
-    /// (FieldHashFnDigest) Digest input data in a chained manner.
-    fn chain(self, data: &[F]) -> Self
-    where
-        Self: Sized;
-
     /// (FieldHashFnDigest) Retrieve result and consume hasher instance.
     fn finalize(self) -> F;
 

@@ -3,7 +3,7 @@
 use remainder_ligero::{
     adapter::{convert_halo_to_lcpc, LigeroProof},
     ligero_commit::{
-        remainder_ligero_commit_prove, remainder_ligero_eval_prove, remainder_ligero_verify,
+        remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
     },
     ligero_structs::LigeroEncoding,
     poseidon_ligero::PoseidonSpongeHasher,
@@ -65,16 +65,10 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             _ => {}
         }
 
-        let (_, _comm, _root, _aux) = remainder_ligero_commit_prove(
-            &self.mle.mle,
-            self.rho_inv.unwrap(),
-            self.ratio.unwrap(),
-        );
-        let (_, comm, root, aux) = remainder_ligero_commit_prove(
-            &self.mle.mle,
-            self.rho_inv.unwrap(),
-            self.ratio.unwrap(),
-        );
+        let (_, _comm, _root, _aux) =
+            remainder_ligero_commit(&self.mle.mle, self.rho_inv.unwrap(), self.ratio.unwrap());
+        let (_, comm, root, aux) =
+            remainder_ligero_commit(&self.mle.mle, self.rho_inv.unwrap(), self.ratio.unwrap());
 
         self.comm = Some(comm);
         self.aux = Some(aux);
@@ -136,7 +130,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     }
 
     fn verify(
-        commitment: &Self::Commitment,
+        _commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
         claim: crate::claims::Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
@@ -145,7 +139,6 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         let (_, ligero_eval_proof, _) =
             convert_halo_to_lcpc(opening_proof.aux.clone(), opening_proof.proof.clone());
         remainder_ligero_verify::<F, _>(
-            commitment,
             &ligero_eval_proof,
             ligero_aux.clone(),
             transcript_reader,
