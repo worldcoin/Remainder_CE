@@ -4,7 +4,7 @@ use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
     LcProofAuxiliaryInfo, LcRoot,
 };
-use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
+use remainder_shared_types::FieldExt;
 
 use crate::{
     layer::LayerId,
@@ -14,6 +14,8 @@ use crate::{
 
 use super::{ligero_input_layer::LigeroInputLayer, MleInputLayer};
 
+/// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
+/// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.
 fn get_prefix_bits_from_capacity<F: FieldExt>(
     capacity: u32,
     total_num_bits: usize,
@@ -21,11 +23,11 @@ fn get_prefix_bits_from_capacity<F: FieldExt>(
 ) -> Vec<MleIndex<F>> {
     (0..total_num_bits - num_iterated_bits)
         .map(|bit_position| {
+            // Divide capacity by 2**(total_num_bits - bit_position - 1) and see whether the last bit is 1
             let bit_val = (capacity >> (total_num_bits - bit_position - 1)) & 1;
             MleIndex::Fixed(bit_val == 1)
         })
         .collect()
-    // result
 }
 
 /// Takes an MLE bookkeeping table interpreted as (big/little)-endian,
@@ -64,7 +66,7 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
         .collect()
 }
 
-///A interface for defining the set of MLEs you want to combine into a single InputLayer
+/// An interface for defining the set of MLEs you want to combine into a single InputLayer.
 pub struct InputLayerBuilder<F> {
     mles: Vec<Box<dyn Mle<F>>>,
     extra_mle_indices: Option<Vec<Vec<MleIndex<F>>>>,
@@ -86,9 +88,6 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     ///
     /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this
     /// input_layer, but haven't yet generated the data for
-    ///
-    /// TODO!(ryancao): Assert or enforce that the `layer_id` of each of the `input_mles` matches
-    /// the `layer_id` which is passed in here!
     pub fn new(
         mut input_mles: Vec<Box<&mut (dyn Mle<F> + 'static)>>,
         extra_mle_num_vars: Option<Vec<usize>>,
@@ -98,7 +97,11 @@ impl<F: FieldExt> InputLayerBuilder<F> {
             InputLayerBuilder::index_input_mles(&mut input_mles, extra_mle_num_vars);
         let input_mles = input_mles
             .into_iter()
-            .map(|mle| dyn_clone::clone_box(*mle))
+            .map(|mle| {
+                let mle_deref = *mle;
+                assert_eq!(mle_deref.layer_id(), layer_id);
+                dyn_clone::clone_box(mle_deref)
+            })
             .collect_vec();
         Self {
             mles: input_mles,

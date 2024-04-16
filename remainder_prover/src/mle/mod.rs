@@ -32,14 +32,17 @@ where
     // + FromIterator<T>,
     F: FieldExt,
 {
-    ///Get the log_2 size of the WHOLE mle
+    /// Get the log_2 size of the WHOLE mle
     fn num_iterated_vars(&self) -> usize;
-    ///Get the padded set of evaluations over the boolean hypercube; Useful for constructing the input layer
+    /// Get the padded set of evaluations over the boolean hypercube; Useful for constructing the input layer
     fn get_padded_evaluations(&self) -> Vec<F>;
 
     fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
 
     fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>>;
+
+    /// Get the layer id of the associated MLE.
+    fn layer_id(&self) -> LayerId;
 }
 
 ///MleRef keeps track of an Mle and the fixed indices of the Mle to be used in an expression
