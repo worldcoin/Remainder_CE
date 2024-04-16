@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
 use crate::{
     claims::{wlx_eval::ClaimMle, Claim},
-    layer::{batched::combine_mles, LayerId},
+    layer::{layer_builder::batched::combine_mles, LayerId},
     mle::evals::{Evaluations, MultilinearExtension},
 };
 use crate::{

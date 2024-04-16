@@ -12,11 +12,11 @@ use std::{cmp::max, iter::repeat_with, path::Path};
 
 use crate::{
     layer::{
-        batched::{combine_mles, combine_zero_mle_ref, BatchedLayer},
-        from_mle,
+        layer_builder::batched::{combine_mles, combine_zero_mle_ref, BatchedLayer},
+        layer_builder::simple_builders::{EqualityCheck, ZeroBuilder},
+        layer_builder::{from_mle, LayerBuilder},
         layer_enum::LayerEnum,
-        simple_builders::{EqualityCheck, ZeroBuilder},
-        LayerBuilder, LayerId,
+        LayerId,
     },
     mle::{
         dense::{DenseMle, Tuple2},

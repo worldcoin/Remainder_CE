@@ -1,3 +1,6 @@
+//! A LayerBuilder combinator that takes in many LayerBuilders and combines them
+//! into a batched version, that proves a constraint over all of them at once.
+
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use std::marker::PhantomData;
@@ -12,7 +15,7 @@ use crate::{
         dense::{DenseMle, DenseMleRef},
         evals::{Evaluations, MultilinearExtension},
         zero::ZeroMleRef,
-        Mle, MleAble, MleIndex, MleRef,
+        Mle, MleIndex, MleRef,
     },
 };
 use remainder_shared_types::FieldExt;
@@ -24,12 +27,16 @@ use super::{LayerBuilder, LayerId};
 ///An error for when combining expressions
 pub struct CombineExpressionError();
 
+/// A LayerBuilder combinator that takes in many LayerBuilders and combines them
+/// into a batched version, that proves a constraint over all of them at once.
 pub struct BatchedLayer<F: FieldExt, A: LayerBuilder<F>> {
     layers: Vec<A>,
     _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt, A: LayerBuilder<F>> BatchedLayer<F, A> {
+    /// Creates a new `BatchedLayer` from a homogenous set of
+    /// sub `LayerBuilder`s
     pub fn new(layers: Vec<A>) -> Self {
         Self {
             layers,
@@ -48,8 +55,6 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
             .map(|layer| layer.build_expression())
             .collect_vec();
 
-        // dbg!(&exprs);
-
         combine_expressions(exprs)
             .expect("Expressions fed into BatchedLayer don't have the same structure!")
     }
@@ -64,7 +69,6 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
 
         self.layers
             .iter()
-            // .zip(bits)
             .map(|layer| {
                 layer.next_layer(
                     id,
@@ -90,33 +94,10 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
     ZeroMleRef::new(num_vars + new_bits, None, layer_id)
 }
 
-// pub fn fake_unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>, num_dataparallel_bits: usize) -> DenseMle<F, F> {
-//     let old_layer_id = mles[0].layer_id;
-//     let new_bits = log2(mles.len()) as usize;
-
-//     // dbg!("hihi");
-//     // dbg!(new_bits);
-//     let old_prefix_bits = mles[0]
-//         .prefix_bits
-//         .clone()
-//         .map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - num_dataparallel_bits - new_bits].to_vec().into_iter().chain(old_prefix_bits[(old_prefix_bits.len() - num_dataparallel_bits)..].to_vec().into_iter()).collect_vec());
-//     let mut mle_ret = DenseMle::new_from_raw(
-//         combine_mles(
-//             mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(),
-//             new_bits,
-//         )
-//         .bookkeeping_table,
-//         old_layer_id,
-//         old_prefix_bits,
-//     );
-// }
-
 ///Helper function for "unbatching" when required by circuit design
 pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
     let old_layer_id = mles[0].layer_id;
     let new_bits = log2(mles.len()) as usize;
-    // dbg!("hihi");
-    // dbg!(new_bits);
     let old_prefix_bits = mles[0]
         .prefix_bits
         .clone()
@@ -178,10 +159,8 @@ fn combine_expressions<F: FieldExt>(
     let new_bits = log2(exprs.len());
 
     let mut new_mle_vec: Vec<Option<DenseMleRef<F>>> = vec![None; exprs[0].num_mle_ref()];
-    let (expression_nodes, mle_vecs): (
-        Vec<ExpressionNode<F, ProverExpr>>,
-        Vec<<ProverExpr as ExpressionType<F>>::MleVec>,
-    ) = exprs.into_iter().map(|expr| expr.deconstruct()).unzip();
+    let (expression_nodes, mle_vecs): (Vec<_>, Vec<_>) =
+        exprs.into_iter().map(|expr| expr.deconstruct()).unzip();
 
     let out_expression_node = expression_nodes[0].clone();
 
@@ -392,7 +371,10 @@ mod tests {
 
     use crate::{
         expression::{generic_expr::Expression, prover_expr::ProverExpr},
-        layer::{from_mle, LayerBuilder, LayerId},
+        layer::{
+            layer_builder::{from_mle, LayerBuilder},
+            LayerId,
+        },
         mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
     };
