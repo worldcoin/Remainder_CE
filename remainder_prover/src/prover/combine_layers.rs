@@ -4,7 +4,7 @@ use std::{cmp::min, marker::PhantomData};
 
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
+use remainder_shared_types::FieldExt;
 use thiserror::Error;
 
 use crate::{
