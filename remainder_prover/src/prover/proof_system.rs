@@ -23,13 +23,13 @@ use super::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
 /// layer_enum(EnumName, (FirstVariant: LayerType), (SecondVariant: SecondLayerType), ..)
 macro_rules! layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
-        #[derive(serde::Serialize, serde::Deserialize, Clone)]
+        #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
         #[serde(bound = "F: FieldExt")]
         #[doc = r"Remainder generated trait enum"]
         pub enum $type_name<F: FieldExt> {
             $(
                 #[doc = "Remainder generated layer variant"]
-                $var_name($variant),
+                $var_name(Box<$variant>),
             )*
         }
 
@@ -90,7 +90,7 @@ macro_rules! layer_enum {
         $(
             impl<F: FieldExt> From<$variant> for $type_name<F> {
                 fn from(var: $variant) -> $type_name<F> {
-                    Self::$var_name(var)
+                    Self::$var_name(Box::new(var))
                 }
             }
         )*
@@ -103,14 +103,14 @@ macro_rules! layer_enum {
 ///
 /// Usage:
 ///
-/// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType))
+/// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType), ..)
 macro_rules! input_layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[doc = r"Remainder generated trait enum"]
         pub enum $type_name<F: FieldExt> {
             $(
                 #[doc = "Remainder generated layer variant"]
-                $var_name($variant),
+                $var_name(Box<$variant>),
             )*
         }
 
@@ -224,7 +224,7 @@ macro_rules! input_layer_enum {
         $(
             impl<F: FieldExt> From<$variant> for $type_name<F> {
                 fn from(var: $variant) -> $type_name<F> {
-                    Self::$var_name(var)
+                    Self::$var_name(Box::new(var))
                 }
             }
         )*
