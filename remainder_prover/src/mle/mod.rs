@@ -21,8 +21,8 @@ pub mod zero;
 /// Contains a wrapper type around [Mle] implementations.
 pub mod mle_enum;
 
-/// Defines [BetaValues], a struct for storing the bookkeeping tables of beta
-/// functions.
+/// Defines [betavalues::BetaValues], a struct for storing the bookkeeping
+/// tables of Beta functions.
 pub mod betavalues;
 
 /// Defines [Evaluations], [MultilinearExtension] for representing un-indexed
