@@ -1,29 +1,25 @@
 //! An input layer that is sent to the verifier in the clear
 
-use std::marker::PhantomData;
-
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 
 use crate::{
-    layer::{claims::Claim, LayerId},
-    mle::{dense::DenseMle, MleRef},
+    claims::{wlx_eval::YieldWLXEvals, Claim},
+    layer::LayerId,
+    mle::{dense::DenseMle, mle_enum::MleEnum, MleRef},
 };
 
-use super::{enum_input_layer::InputLayerEnum, InputLayer, InputLayerError, MleInputLayer};
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
 
 ///An Input Layer that is send to the verifier in the clear
-pub struct PublicInputLayer<F: FieldExt, Tr> {
+pub struct PublicInputLayer<F: FieldExt> {
     mle: DenseMle<F, F>,
     pub(crate) layer_id: LayerId,
-    _marker: PhantomData<Tr>,
 }
 
-impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for PublicInputLayer<F, Tr> {
-    type Sponge = Tr;
-
+impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     type Commitment = Vec<F>;
 
     type OpeningProof = ();
@@ -34,27 +30,27 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for PublicInputLayer<F,
 
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
         transcript_writer.append_elements("Public Input Commitment", commitment);
     }
 
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError> {
         let num_elements = commitment.len();
         let transcript_commitment = transcript_reader
             .consume_elements("Public Input Commitment", num_elements)
-            .map_err(|e| InputLayerError::TranscriptError(e))?;
+            .map_err(InputLayerError::TranscriptError)?;
         debug_assert_eq!(transcript_commitment, *commitment);
         Ok(())
     }
 
     fn open(
         &self,
-        _: &mut TranscriptWriter<F, Self::Sponge>,
-        _: crate::layer::claims::Claim<F>,
+        _: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        _: crate::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
     }
@@ -63,7 +59,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for PublicInputLayer<F,
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript_reader: &mut TranscriptReader<F, Self::Sponge>,
+        _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
         // println!("3, calling verify");
         let mut mle_ref =
@@ -81,7 +77,7 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for PublicInputLayer<F,
             // dbg!(&claim);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
-            Claim::new_raw(vec![], mle_ref.current_mle[0])
+            Claim::new(vec![], mle_ref.current_mle[0])
         };
 
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
@@ -99,18 +95,31 @@ impl<F: FieldExt, Tr: TranscriptSponge<F>> InputLayer<F> for PublicInputLayer<F,
     fn get_padded_mle(&self) -> DenseMle<F, F> {
         self.mle.clone()
     }
+}
 
-    fn to_enum(self) -> InputLayerEnum<F, Self::Sponge> {
-        InputLayerEnum::PublicInputLayer(self)
+impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
+    fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
+        Self { mle, layer_id }
     }
 }
 
-impl<F: FieldExt, Tr: TranscriptSponge<F>> MleInputLayer<F> for PublicInputLayer<F, Tr> {
-    fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
-        Self {
-            mle,
-            layer_id,
-            _marker: PhantomData,
-        }
+impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
+    /// Computes the V_d(l(x)) evaluations for the input layer V_d.
+    fn get_wlx_evaluations(
+        &self,
+        claim_vecs: &Vec<Vec<F>>,
+        claimed_vals: &Vec<F>,
+        claimed_mles: Vec<MleEnum<F>>,
+        num_claims: usize,
+        num_idx: usize,
+    ) -> Result<Vec<F>, crate::claims::ClaimError> {
+        get_wlx_evaluations_helper(
+            self,
+            claim_vecs,
+            claimed_vals,
+            claimed_mles,
+            num_claims,
+            num_idx,
+        )
     }
 }

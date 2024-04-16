@@ -5,16 +5,16 @@
 //! Later verifier checks that the prover's computation is correct by receiving claims (in
 //! the form of VerifierExpressions), and interacting with the prover to reuce and verify the claims.
 
-/// the generic expression type, consists of 
-///     - abstract expression, 
-///     - prover expression, 
+/// the generic expression type, consists of
+///     - abstract expression,
+///     - prover expression,
 ///     - verifier expression
 /// Common methods shared by these expressions are implemented here.
 pub mod generic_expr;
 
 /// the abstract expression type, in the life cycle of an expression,
 /// this is the starting point, where these abstract expressions construct layers,
-/// make up circuits, etc. Methods here include ones to describe the circuit, etc. 
+/// make up circuits, etc. Methods here include ones to describe the circuit, etc.
 pub mod abstract_expr;
 
 /// the prover expression type, in the life cycle of an expression,

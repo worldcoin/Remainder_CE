@@ -3,13 +3,10 @@ use std::{fs, iter::repeat_with};
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::{prelude::Distribution, Rng};
-use remainder_shared_types::{
-    transcript::{Transcript, TranscriptSponge},
-    FieldExt, Fr, Poseidon,
-};
+use remainder_shared_types::{transcript::TranscriptSponge, FieldExt, Poseidon};
 
 use crate::{
-    layer::LayerId,
+    layer::{layer_enum::LayerEnum, LayerId},
     mle::{dense::DenseMle, MleIndex},
     prover::Layers,
 };
@@ -121,22 +118,12 @@ pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Ve
 pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
     (0..(num_bits))
         .rev()
-        .into_iter()
         .map(|cur_num_bits| {
             let is_one =
                 (idx % 2_usize.pow(cur_num_bits as u32 + 1)) >= 2_usize.pow(cur_num_bits as u32);
             MleIndex::Fixed(is_one)
         })
         .collect_vec()
-}
-
-#[test]
-fn test_get_mle_idx_decomp_for_idx() {
-    let idx = 7;
-    let num_bits = 4;
-    let hi = get_mle_idx_decomp_for_idx::<Fr>(idx, num_bits);
-    dbg!(hi);
-    panic!();
 }
 
 /// Returns whether a particular file exists in the filesystem
@@ -149,10 +136,10 @@ pub fn file_exists(file_path: &String) -> bool {
     }
 }
 
-pub fn hash_layers<F: FieldExt, Tr: TranscriptSponge<F>>(layers: &Layers<F, Tr>) -> F {
+pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 
-    layers.0.iter().for_each(|layer| {
+    layers.layers.iter().for_each(|layer| {
         let item = format!("{}", layer.circuit_description_fmt());
         let bytes = item.as_bytes();
         let elements: Vec<F> = bytes
@@ -163,14 +150,11 @@ pub fn hash_layers<F: FieldExt, Tr: TranscriptSponge<F>>(layers: &Layers<F, Tr>)
                 bytes
                     .iter()
                     .skip(1)
-                    .fold(
-                        (F::from(first as u64), base.clone()),
-                        |(accum, power), byte| {
-                            let accum = accum + (F::from(byte.clone() as u64) * power);
-                            let power = power * base;
-                            (accum, power)
-                        },
-                    )
+                    .fold((F::from(first as u64), base), |(accum, power), byte| {
+                        let accum = accum + (F::from(*byte as u64) * power);
+                        let power = power * base;
+                        (accum, power)
+                    })
                     .0
             })
             .collect_vec();

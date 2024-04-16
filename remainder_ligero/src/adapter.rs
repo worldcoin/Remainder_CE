@@ -1,5 +1,3 @@
-
-
 use crate::poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use crate::{LcColumn, LcEncoding};
 
@@ -12,14 +10,12 @@ use remainder_shared_types::FieldExt;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-/// Following the spec from Notion!
+/// Struct containing all of the components of a Ligero commitment + evaluation
+/// proof, as required by the Halo2-GKR verifier.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LigeroProof<F> {
     /// Root of the Merkle tree
     pub merkle_root: F,
-    /// Product r.A, where r is the random vector and A is the coefficient matrix
-    /// UPDATE!(ryancao): We are no longer doing the well-formedness check!
-    // pub r_a: Vec<F>,
     /// List of products v_i.A, where v_i is the tensor constructed from (half of) the i-th opened point
     pub v_0_a: Vec<Vec<F>>,
     /// List of full columns queried by the verifier
@@ -30,27 +26,23 @@ pub struct LigeroProof<F> {
     pub col_indices: Vec<usize>,
 }
 
-/// Complementary information to a LigeroProof necessary
-/// in some contexts: point and evaluation
+/// Analogous to `Claim<F>` within `remainder-prover`.
+///
+/// TODO!(ryancao): Deprecate this by just using `Claim<F>`!
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LigeroClaim<F> {
-    /// The opened point
+    /// The challenge point to evaluate the MLE at
     pub point: Vec<F>,
-    /// The value of the polynomial at the point
+    /// The claimed value of the polynomial evaluated at `self.point`
     pub eval: F,
 }
 
 /// Converts a lcpc-style Ligero proof/root into the above data structure.
 pub fn convert_lcpc_to_halo<F: FieldExt>(
-    _aux: LcProofAuxiliaryInfo,
     root: LcRoot<LigeroEncoding<F>, F>,
     pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
 ) -> LigeroProof<F> {
     let merkle_root = root.root;
-
-    // --- No longer doing the well-formedness check ---
-    // assert_eq!(pf.p_random_vec.len(), 1);
-    // let r_a = pf.p_random_vec[0].clone();
 
     // we convert this into a vector, since the circuit for the Ligero verifier
     // assumes that we can have multiple point openings
@@ -76,29 +68,8 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
         .map(|lc_column| lc_column.col_idx)
         .collect();
 
-    // --- Printing the parameters in a Rust-ready format ---
-    // println!(
-    //     "const LOG_M_TEST: usize = {}",
-    //     log2_ceil(aux.orig_num_cols as u64)
-    // );
-    // println!("const RHO_INV_TEST: usize = {}", aux.rho_inv);
-    // println!(
-    //     "const LOG_N_TEST: usize = {}",
-    //     log2_ceil(aux.num_rows as u64)
-    // );
-    // println!("const T_TEST: usize =  {}", columns.len());
-
-    // let claim = LigeroClaim {
-    //     point: vec_ark_to_halo(&raw_claim.point),
-    //     eval: ark_to_halo(&raw_claim.eval),
-    // };
-
-    
-
     LigeroProof {
         merkle_root,
-        // --- No longer doing the well-formedness check ---
-        // r_a,
         v_0_a,
         columns,
         merkle_paths,
@@ -139,8 +110,6 @@ where
     let ligero_eval_proof = LigeroEvalProof::<D, E, F> {
         encoded_num_cols: aux.encoded_num_cols,
         p_eval: halo2_ligero_proof.v_0_a[0].clone(),
-        // --- No longer doing the well-formedness check ---
-        // p_random_vec: vec![halo2_ligero_proof.r_a],
         columns: halo2_ligero_proof
             .col_indices
             .into_iter()
@@ -169,29 +138,3 @@ where
 
     (root, ligero_eval_proof, enc)
 }
-
-// /// Converts the saved Ligero proof/root into the above data structure and serializes it to a file ready for Halo2 Ligero verifier
-// pub fn load_and_convert<F: FieldExt>(
-//     aux_path: &str,
-//     proof_path: &str,
-//     root_path: &str,
-// ) -> LigeroProof<F> {
-//     // --- Loads and converts into byte vector ---
-//     let encoded_auxiliary_bytes =
-//         fs::read(aux_path).expect("Unable to read proof aux info from file");
-//     let encoded_proof_bytes = fs::read(proof_path).expect("Unable to read proof from file");
-//     let encoded_root_bytes = fs::read(root_path).expect("Unable to read root from file");
-
-//     // --- Loads into the original Ligero data structures ---
-//     let aux = LcProofAuxiliaryInfo::deserialize_compressed(&*encoded_auxiliary_bytes).unwrap();
-//     let root =
-//         LcRoot::<LigeroEncoding<F>, F>::deserialize_compressed(&*encoded_root_bytes).unwrap();
-//     let pf =
-//         LigeroEvalProof::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>::deserialize_compressed(
-//             &*encoded_proof_bytes,
-//         )
-//         .unwrap();
-
-//     // --- Performs conversion on loaded structs ---
-//     convert_lcpc_to_halo(aux, root, pf)
-// }

@@ -5,7 +5,9 @@
 use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{claims::Claim, LayerId};
+use crate::claims::{wlx_eval::ClaimMle, Claim};
+use crate::claims::{ClaimError, YieldClaim};
+use crate::layer::{LayerError, LayerId};
 use remainder_shared_types::FieldExt;
 
 use super::{mle_enum::MleEnum, MleIndex, MleRef};
@@ -63,7 +65,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
     }
 
     fn original_bookkeeping_table(&self) -> &[Self::F] {
-        &self.original_bookkeeping_table()
+        &self.zero
     }
 
     fn num_vars(&self) -> usize {
@@ -85,14 +87,13 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.num_vars -= 1;
 
         if self.num_vars == 0 {
-            let mut send_claim = Claim::new_raw(
+            let send_claim = Claim::new(
                 self.mle_indices
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect_vec(),
                 F::zero(),
             );
-            send_claim.mle_ref = Some(MleEnum::Zero(self.clone()));
             Some(send_claim)
         } else {
             None
@@ -129,5 +130,29 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
 
     fn get_enum(self) -> MleEnum<Self::F> {
         MleEnum::Zero(self)
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for ZeroMleRef<F> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
+        if self.bookkeeping_table().len() != 1 {
+            return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
+        }
+        let mle_indices: Result<Vec<F>, _> = self
+            .mle_indices
+            .iter()
+            .map(|index| {
+                index
+                    .val()
+                    .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
+            })
+            .collect();
+        Ok(vec![ClaimMle::new(
+            mle_indices?,
+            F::zero(),
+            None,
+            Some(self.layer_id),
+            Some(self.clone().get_enum()),
+        )])
     }
 }

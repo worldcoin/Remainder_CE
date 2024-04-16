@@ -1,19 +1,23 @@
 use crate::prover::GKRCircuit;
 use ark_std::{end_timer, start_timer};
-use remainder_shared_types::transcript::{Transcript, TranscriptReader, TranscriptWriter};
+
+use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
 use remainder_shared_types::FieldExt;
 use serde_json;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
+use super::CircuitTranscript;
+
 // Note: we removed this from the tests module, since that module is not visible to project
 // binaries, where this function is often needed.
 pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>)
 where
-    <C as GKRCircuit<F>>::Sponge: Sync,
+    CircuitTranscript<F, C>: Sync,
 {
-    let mut transcript_writer = TranscriptWriter::<F, C::Sponge>::new("GKR Prover Transcript");
+    let mut transcript_writer =
+        TranscriptWriter::<_, CircuitTranscript<F, C>>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
     match circuit.prove(&mut transcript_writer) {
@@ -27,7 +31,8 @@ where
                 end_timer!(write_out_timer);
             }
             let transcript = transcript_writer.get_transcript();
-            let mut transcript_reader = TranscriptReader::<F, C::Sponge>::new(transcript);
+            let mut transcript_reader =
+                TranscriptReader::<_, CircuitTranscript<F, C>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
             let proof = if let Some(path) = path {

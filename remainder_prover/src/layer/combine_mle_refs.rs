@@ -1,3 +1,7 @@
+//! Contains helper functions for working with collections
+//! of `MleRef`s which can be considered part of the same
+//! `Layer`
+
 use crate::mle::{
     dense::{DenseMle, DenseMleRef},
     evals::{Evaluations, MultilinearExtension},
@@ -20,322 +24,17 @@ use super::LayerId;
 #[derive(Error, Debug, Clone)]
 pub enum CombineMleRefError {
     #[error("we have not fully combined all the mle refs because the list size is > 1")]
+    /// We have not fully combined all the mle refs because the list size is > 1
     NotFullyCombined,
     #[error("we have an mle ref that is not fully fixed even after fixing on the challenge point")]
+    /// We have an mle ref that is not fully fixed even after fixing on the challenge point
     MleRefNotFullyFixed,
-}
-
-/// this function takes an mle ref that has an iterated bit in between a bunch of fixed bits
-/// and it splits it into two mle refs, one where the iterated bit is replaced with
-/// fixed(false), and the other where it is replaced with fixed(true). this ensures that all
-/// the fixed bits are contiguous
-/// NOTE we assume that this function is called on an mle ref that has an iterated bit within
-/// a bunch of fixed bits (note how it is used in the `collapse_mles_with_iterated_in_prefix`
-/// function)
-fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
-    // get the index of the first iterated bit in the mle ref
-    let first_iterated_idx: usize = mle_ref.original_mle_indices().iter().enumerate().fold(
-        mle_ref.original_mle_indices().len(),
-        |acc, (idx, mle_idx)| {
-            if let MleIndex::Iterated = mle_idx {
-                std::cmp::min(acc, idx)
-            } else {
-                acc
-            }
-        },
-    );
-
-    // compute the correct original indices, we have the first one be false, the second one as true instead of the iterated bit
-    let first_og_indices = mle_ref.original_mle_indices()[0..first_iterated_idx]
-        .into_iter()
-        .cloned()
-        .chain(std::iter::once(MleIndex::Fixed(false)))
-        .chain(
-            mle_ref.original_mle_indices()[first_iterated_idx + 1..]
-                .into_iter()
-                .cloned(),
-        )
-        .collect_vec();
-    let second_og_indices = mle_ref.original_mle_indices()[0..first_iterated_idx]
-        .into_iter()
-        .cloned()
-        .chain(std::iter::once(MleIndex::Fixed(true)))
-        .chain(
-            mle_ref.original_mle_indices()[first_iterated_idx + 1..]
-                .into_iter()
-                .cloned(),
-        )
-        .collect_vec();
-
-    // depending on whether this is a zero mle ref or dense mle ref, construct the first mle_ref in the pair
-    let first_mle_ref = {
-        match mle_ref.clone() {
-            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
-                current_mle: dense_mle_ref.current_mle.clone(),
-                original_mle: MultilinearExtension::new(Evaluations::<F>::new(
-                    dense_mle_ref.original_num_vars() - 1,
-                    dense_mle_ref
-                        .original_mle
-                        .get_evals_vector()
-                        .clone()
-                        .into_iter()
-                        .step_by(2)
-                        .collect_vec(),
-                )),
-                mle_indices: dense_mle_ref.mle_indices.clone(),
-                original_mle_indices: first_og_indices,
-                layer_id: dense_mle_ref.layer_id,
-                indexed: false,
-            }),
-            MleEnum::Zero(mut zero_mle_ref) => {
-                zero_mle_ref.original_mle_indices = first_og_indices;
-                MleEnum::Zero(zero_mle_ref)
-            }
-        }
-    };
-
-    // second mle ref in the pair
-    let second_mle_ref = {
-        match mle_ref {
-            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
-                current_mle: dense_mle_ref.current_mle.clone(),
-                original_mle: MultilinearExtension::new(Evaluations::<F>::new(
-                    dense_mle_ref.original_num_vars() - 1,
-                    dense_mle_ref
-                        .original_mle
-                        .get_evals_vector()
-                        .clone()
-                        .into_iter()
-                        .skip(1)
-                        .step_by(2)
-                        .collect_vec(),
-                )),
-                mle_indices: dense_mle_ref.mle_indices,
-                original_mle_indices: second_og_indices,
-                layer_id: dense_mle_ref.layer_id,
-                indexed: false,
-            }),
-            MleEnum::Zero(mut zero_mle_ref) => {
-                zero_mle_ref.original_mle_indices = second_og_indices;
-                MleEnum::Zero(zero_mle_ref)
-            }
-        }
-    };
-
-    vec![first_mle_ref, second_mle_ref]
-}
-
-/// this function will take a list of mle refs and update the list to contain mle_refs where all fixed bits are contiguous
-fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(
-    mle_refs: &Vec<MleEnum<F>>,
-) -> Vec<MleEnum<F>> {
-    mle_refs
-        .into_iter()
-        .flat_map(|mle_ref| {
-            // this iterates through the mle indices to check whether there is an iterated bit within the fixed bits
-            let (_, check_iterated_within_fixed) = mle_ref.original_mle_indices().iter().fold(
-                (false, false),
-                |(iterated_seen_so_far, fixed_after_iterated_so_far), mle_idx| match mle_idx {
-                    MleIndex::Iterated => (true, fixed_after_iterated_so_far),
-                    MleIndex::Fixed(_) => (iterated_seen_so_far, iterated_seen_so_far),
-                    _ => (iterated_seen_so_far, fixed_after_iterated_so_far),
-                },
-            );
-            // if true, we split, otherwise, we don't
-            if check_iterated_within_fixed {
-                split_mle_ref(mle_ref.clone())
-            } else {
-                vec![mle_ref.clone()]
-            }
-        })
-        .collect_vec()
-}
-
-/// gets the index of the least significant bit (lsb) of the fixed bits out of a vector of mle refs
-/// in other words, this computes the lsb fixed bit in each mle ref, and then returns the max of those
-///
-/// returns a tuple of an option of the index of the least significant bit and an option of the mle
-/// ref that contributes to this lsb
-/// if there are no fixed bits in any of the mle refs, it returns a `(None, None)` tuple
-fn get_lsb_fixed_var<F: FieldExt>(
-    mle_refs: &Vec<MleEnum<F>>,
-) -> (Option<usize>, Option<MleEnum<F>>) {
-    mle_refs
-        .into_iter()
-        .fold((None, None), |(acc_idx, acc_mle), mle_ref| {
-            // this grabs the least significant bit of the fixed bits within each mle
-            let lsb_within_mle = mle_ref.original_mle_indices().iter().enumerate().fold(
-                None,
-                |acc, (idx_num, mle_idx)| {
-                    if let MleIndex::Fixed(_) = mle_idx {
-                        Some(idx_num)
-                    } else {
-                        acc
-                    }
-                },
-            );
-
-            // this computes the maximum of those lsb's, along with keeping track of the mle_ref that contributes to it
-            if let Some(idx_num) = acc_idx {
-                if let Some(max_within_mle) = lsb_within_mle {
-                    if max_within_mle > idx_num {
-                        (lsb_within_mle, Some(mle_ref.clone()))
-                    } else {
-                        (acc_idx, acc_mle)
-                    }
-                } else {
-                    (Some(idx_num), acc_mle)
-                }
-            } else {
-                (lsb_within_mle, Some(mle_ref.clone()))
-            }
-        })
-}
-
-/// given an mle ref, and an option of a second mle ref, this combines the two together
-/// this assumes that the first mle ref and the second mle ref are pairs, if the second
-/// mle ref is a Some()
-///
-/// a pair consists of two mle refs that match in every fixed bit except for the least
-/// significant one. this is because we combine in the reverse order that we split in
-/// terms of selectors, and we split in terms of selectors by doing huffman (most significant bit)
-///
-/// example: if mle_ref_first has fixed bits true, true, false, its pair would have fixed bits
-/// true, true, true. when we combine them, the combined mle ref has fixed bits true, true, and then
-/// the third fixed it is replaced with a bound bit, since we simultaneously fix that bit
-/// to the correct index in the challenge point.
-///
-/// if there is no pair, then this is assumed to be an mle_ref with all 0s.
-fn combine_pair<F: FieldExt>(
-    mle_ref_first: MleEnum<F>,
-    mle_ref_second: Option<MleEnum<F>>,
-    lsb_idx: usize,
-    chal_point: &Vec<F>,
-) -> DenseMleRef<F> {
-    let mle_ref_first_bt = mle_ref_first.bookkeeping_table().to_vec();
-
-    // if the second mle ref is None, we assume its bookkeeping table is all zeros. we are dealing with
-    // fully fixed mle_refs, so this bookkeeping table size is just 1
-    let mle_ref_second_bt = {
-        if mle_ref_second.clone().is_none() {
-            vec![F::zero()]
-        } else {
-            mle_ref_second.clone().unwrap().bookkeeping_table().to_vec()
-        }
-    };
-
-    // recomputes the mle indices, which now reflect that that we are binding the bit in the least significant bit fixed bit index
-    let interleaved_mle_indices = mle_ref_first.mle_indices()[0..lsb_idx]
-        .into_iter()
-        .cloned()
-        .chain(std::iter::once(MleIndex::Bound(
-            chal_point[lsb_idx],
-            lsb_idx,
-        )))
-        .chain(
-            mle_ref_first.mle_indices()[lsb_idx + 1..]
-                .into_iter()
-                .cloned(),
-        )
-        .collect_vec();
-
-    let interleaved_mle_indices_og = mle_ref_first.original_mle_indices()[0..lsb_idx]
-        .into_iter()
-        .cloned()
-        .chain(std::iter::once(MleIndex::Iterated))
-        .chain(
-            mle_ref_first.original_mle_indices()[lsb_idx + 1..]
-                .into_iter()
-                .cloned(),
-        )
-        .collect_vec();
-
-    // depending on whether the lsb fixed bit was true or false, we bind it to the correct challenge point at this index
-    // this is either the challenge point at the index, or one minus this value
-
-    let bound_coord = if let MleIndex::Fixed(false) = mle_ref_first.original_mle_indices()[lsb_idx]
-    {
-        F::one() - chal_point[lsb_idx]
-    } else {
-        chal_point[lsb_idx]
-    };
-
-    // the new bookkeeping table also only has size one, but now reflects that we have another bound index
-    let new_bt =
-        vec![bound_coord * mle_ref_first_bt[0] + (F::one() - bound_coord) * mle_ref_second_bt[0]];
-
-    let current_mle = MultilinearExtension::new(Evaluations::<F>::new(
-        mle_ref_first.num_vars(),
-        new_bt.clone(),
-    ));
-    let original_mle = MultilinearExtension::new(Evaluations::<F>::new(0, new_bt));
-
-    // construct the dense mle ref that we return. note that even if we are pairing zero mle refs, we just return a dense mle ref here
-    //
-    // TODO!(vishady) also this is factually incorrect info lol because the original bookkeeping table is just wrong but
-    // it is kind of dumb to recompute it because we don't use it anymore. ideally these would be stored somewhere else so we don't
-    // have to keep catering to the fields we don't need ?
-    let res = DenseMleRef {
-        current_mle,
-        original_mle,
-        mle_indices: interleaved_mle_indices,
-        original_mle_indices: interleaved_mle_indices_og,
-        layer_id: mle_ref_first.get_layer_id(),
-        indexed: false,
-    };
-    res
-}
-
-/// given a list of mle refs, the lsb fixed var index, and the mle ref that contributes to it, this will go through all of them
-/// and find its pair (if none exists, that's fine) and combine the two
-/// it will then update the original list of mle refs to contain the combined mle ref and remove the original ones that were paired
-fn find_pair_and_combine<F: FieldExt>(
-    all_refs: &Vec<MleEnum<F>>,
-    lsb_idx: usize,
-    mle_ref_of_lsb: MleEnum<F>,
-    chal_point: &Vec<F>,
-) -> Vec<MleEnum<F>> {
-    // we want to compare all fixed bits except the one at the least significant bit index
-    let indices_to_compare = mle_ref_of_lsb.original_mle_indices()[0..lsb_idx].to_vec();
-    let og_indices = &mle_ref_of_lsb.original_mle_indices();
-    let mut mle_ref_pair = None;
-    let mut all_refs_updated = Vec::new();
-
-    for mle_ref in all_refs {
-        let max_slice_idx = mle_ref.original_mle_indices().len();
-        let compare_indices =
-            mle_ref.original_mle_indices()[0..std::cmp::min(lsb_idx, max_slice_idx)].to_vec();
-        // we want to make sure we aren't combining an mle_ref with itself!
-        if (compare_indices == indices_to_compare)
-            && (&mle_ref.original_mle_indices() != og_indices)
-        {
-            mle_ref_pair = Some(mle_ref.clone());
-        }
-        // we also want to check whether we should add it back to this new updated list, it will always be added here unless
-        // the mle_ref contributes to the pair
-        if &mle_ref.original_mle_indices() != og_indices {
-            if mle_ref_pair.is_some() {
-                if mle_ref.original_mle_indices()
-                    != mle_ref_pair.clone().unwrap().original_mle_indices()
-                {
-                    all_refs_updated.push(mle_ref.clone());
-                }
-            } else {
-                all_refs_updated.push(mle_ref.clone());
-            }
-        }
-    }
-
-    // add the paired mle ref to the list and return this new updated list
-    let new_mle_ref_to_add = combine_pair(mle_ref_of_lsb, mle_ref_pair, lsb_idx, chal_point);
-    all_refs_updated.push(MleEnum::Dense(new_mle_ref_to_add));
-    all_refs_updated
 }
 
 /// this fixes mle refs with shared points in the claims so that we don't have to keep doing them
 pub fn pre_fix_mle_refs<F: FieldExt>(
-    mle_refs: &mut Vec<MleEnum<F>>,
-    chal_point: &Vec<F>,
+    mle_refs: &mut [MleEnum<F>],
+    chal_point: &[F],
     common_idx: Vec<usize>,
 ) {
     cfg_iter_mut!(mle_refs).for_each(|mle_ref| {
@@ -393,13 +92,13 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
 /// variable on this combined mle ref using the challenge point
 /// instead, we fix variable as we combine as this keeps the bookkeeping table sizes at one and is faster to compute
 pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
-    mle_refs: &Vec<MleEnum<F>>,
-    chal_point: &Vec<F>,
+    mle_refs: &[MleEnum<F>],
+    chal_point: &[F],
 ) -> Result<F, CombineMleRefError> {
     // we go through all of the mle_refs and fix variable in all of them given the indexed indices they already have
     // so that they are fully bound.
     let fix_var_mle_refs = mle_refs
-        .into_iter()
+        .iter()
         .map(|mle_ref| match mle_ref.clone() {
             MleEnum::Dense(mut dense_mle_ref) => {
                 dense_mle_ref
@@ -484,3 +183,301 @@ pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, 
 
     DenseMle::new_from_raw(result, LayerId::Input(0), None)
 }
+
+/// this function takes an mle ref that has an iterated bit in between a bunch of fixed bits
+/// and it splits it into two mle refs, one where the iterated bit is replaced with
+/// fixed(false), and the other where it is replaced with fixed(true). this ensures that all
+/// the fixed bits are contiguous
+/// NOTE we assume that this function is called on an mle ref that has an iterated bit within
+/// a bunch of fixed bits (note how it is used in the `collapse_mles_with_iterated_in_prefix`
+/// function)
+fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
+    // get the index of the first iterated bit in the mle ref
+    let first_iterated_idx: usize = mle_ref.original_mle_indices().iter().enumerate().fold(
+        mle_ref.original_mle_indices().len(),
+        |acc, (idx, mle_idx)| {
+            if let MleIndex::Iterated = mle_idx {
+                std::cmp::min(acc, idx)
+            } else {
+                acc
+            }
+        },
+    );
+
+    // compute the correct original indices, we have the first one be false, the second one as true instead of the iterated bit
+    let first_og_indices = mle_ref.original_mle_indices()[0..first_iterated_idx]
+        .iter()
+        .cloned()
+        .chain(std::iter::once(MleIndex::Fixed(false)))
+        .chain(
+            mle_ref.original_mle_indices()[first_iterated_idx + 1..]
+                .iter()
+                .cloned(),
+        )
+        .collect_vec();
+    let second_og_indices = mle_ref.original_mle_indices()[0..first_iterated_idx]
+        .iter()
+        .cloned()
+        .chain(std::iter::once(MleIndex::Fixed(true)))
+        .chain(
+            mle_ref.original_mle_indices()[first_iterated_idx + 1..]
+                .iter()
+                .cloned(),
+        )
+        .collect_vec();
+
+    // depending on whether this is a zero mle ref or dense mle ref, construct the first mle_ref in the pair
+    let first_mle_ref = {
+        match mle_ref.clone() {
+            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
+                current_mle: dense_mle_ref.current_mle.clone(),
+                original_mle: MultilinearExtension::new(Evaluations::<F>::new(
+                    dense_mle_ref.original_num_vars() - 1,
+                    dense_mle_ref
+                        .original_mle
+                        .get_evals_vector()
+                        .clone()
+                        .into_iter()
+                        .step_by(2)
+                        .collect_vec(),
+                )),
+                mle_indices: dense_mle_ref.mle_indices.clone(),
+                original_mle_indices: first_og_indices,
+                layer_id: dense_mle_ref.layer_id,
+                indexed: false,
+            }),
+            MleEnum::Zero(mut zero_mle_ref) => {
+                zero_mle_ref.original_mle_indices = first_og_indices;
+                MleEnum::Zero(zero_mle_ref)
+            }
+        }
+    };
+
+    // second mle ref in the pair
+    let second_mle_ref = {
+        match mle_ref {
+            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
+                current_mle: dense_mle_ref.current_mle.clone(),
+                original_mle: MultilinearExtension::new(Evaluations::<F>::new(
+                    dense_mle_ref.original_num_vars() - 1,
+                    dense_mle_ref
+                        .original_mle
+                        .get_evals_vector()
+                        .clone()
+                        .into_iter()
+                        .skip(1)
+                        .step_by(2)
+                        .collect_vec(),
+                )),
+                mle_indices: dense_mle_ref.mle_indices,
+                original_mle_indices: second_og_indices,
+                layer_id: dense_mle_ref.layer_id,
+                indexed: false,
+            }),
+            MleEnum::Zero(mut zero_mle_ref) => {
+                zero_mle_ref.original_mle_indices = second_og_indices;
+                MleEnum::Zero(zero_mle_ref)
+            }
+        }
+    };
+
+    vec![first_mle_ref, second_mle_ref]
+}
+
+/// this function will take a list of mle refs and update the list to contain mle_refs where all fixed bits are contiguous
+fn collapse_mles_with_iterated_in_prefix<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> Vec<MleEnum<F>> {
+    mle_refs
+        .iter()
+        .flat_map(|mle_ref| {
+            // this iterates through the mle indices to check whether there is an iterated bit within the fixed bits
+            let (_, check_iterated_within_fixed) = mle_ref.original_mle_indices().iter().fold(
+                (false, false),
+                |(iterated_seen_so_far, fixed_after_iterated_so_far), mle_idx| match mle_idx {
+                    MleIndex::Iterated => (true, fixed_after_iterated_so_far),
+                    MleIndex::Fixed(_) => (iterated_seen_so_far, iterated_seen_so_far),
+                    _ => (iterated_seen_so_far, fixed_after_iterated_so_far),
+                },
+            );
+            // if true, we split, otherwise, we don't
+            if check_iterated_within_fixed {
+                split_mle_ref(mle_ref.clone())
+            } else {
+                vec![mle_ref.clone()]
+            }
+        })
+        .collect_vec()
+}
+
+/// gets the index of the least significant bit (lsb) of the fixed bits out of a vector of mle refs
+/// in other words, this computes the lsb fixed bit in each mle ref, and then returns the max of those
+///
+/// returns a tuple of an option of the index of the least significant bit and an option of the mle
+/// ref that contributes to this lsb
+/// if there are no fixed bits in any of the mle refs, it returns a `(None, None)` tuple
+fn get_lsb_fixed_var<F: FieldExt>(mle_refs: &[MleEnum<F>]) -> (Option<usize>, Option<MleEnum<F>>) {
+    mle_refs
+        .iter()
+        .fold((None, None), |(acc_idx, acc_mle), mle_ref| {
+            // this grabs the least significant bit of the fixed bits within each mle
+            let lsb_within_mle = mle_ref.original_mle_indices().iter().enumerate().fold(
+                None,
+                |acc, (idx_num, mle_idx)| {
+                    if let MleIndex::Fixed(_) = mle_idx {
+                        Some(idx_num)
+                    } else {
+                        acc
+                    }
+                },
+            );
+
+            // this computes the maximum of those lsb's, along with keeping track of the mle_ref that contributes to it
+            if let Some(idx_num) = acc_idx {
+                if let Some(max_within_mle) = lsb_within_mle {
+                    if max_within_mle > idx_num {
+                        (lsb_within_mle, Some(mle_ref.clone()))
+                    } else {
+                        (acc_idx, acc_mle)
+                    }
+                } else {
+                    (Some(idx_num), acc_mle)
+                }
+            } else {
+                (lsb_within_mle, Some(mle_ref.clone()))
+            }
+        })
+}
+
+/// given an mle ref, and an option of a second mle ref, this combines the two together
+/// this assumes that the first mle ref and the second mle ref are pairs, if the second
+/// mle ref is a Some()
+///
+/// a pair consists of two mle refs that match in every fixed bit except for the least
+/// significant one. this is because we combine in the reverse order that we split in
+/// terms of selectors, and we split in terms of selectors by doing huffman (most significant bit)
+///
+/// example: if mle_ref_first has fixed bits true, true, false, its pair would have fixed bits
+/// true, true, true. when we combine them, the combined mle ref has fixed bits true, true, and then
+/// the third fixed it is replaced with a bound bit, since we simultaneously fix that bit
+/// to the correct index in the challenge point.
+///
+/// if there is no pair, then this is assumed to be an mle_ref with all 0s.
+fn combine_pair<F: FieldExt>(
+    mle_ref_first: MleEnum<F>,
+    mle_ref_second: Option<MleEnum<F>>,
+    lsb_idx: usize,
+    chal_point: &[F],
+) -> DenseMleRef<F> {
+    let mle_ref_first_bt = mle_ref_first.bookkeeping_table().to_vec();
+
+    // if the second mle ref is None, we assume its bookkeeping table is all zeros. we are dealing with
+    // fully fixed mle_refs, so this bookkeeping table size is just 1
+
+    let mle_ref_second_bt = mle_ref_second
+        .map(|mle_ref| mle_ref.bookkeeping_table().to_vec())
+        .unwrap_or(vec![F::zero()]);
+
+    // recomputes the mle indices, which now reflect that that we are binding the bit in the least significant bit fixed bit index
+    let interleaved_mle_indices = mle_ref_first.mle_indices()[0..lsb_idx]
+        .iter()
+        .cloned()
+        .chain(std::iter::once(MleIndex::Bound(
+            chal_point[lsb_idx],
+            lsb_idx,
+        )))
+        .chain(mle_ref_first.mle_indices()[lsb_idx + 1..].iter().cloned())
+        .collect_vec();
+
+    let interleaved_mle_indices_og = mle_ref_first.original_mle_indices()[0..lsb_idx]
+        .iter()
+        .cloned()
+        .chain(std::iter::once(MleIndex::Iterated))
+        .chain(
+            mle_ref_first.original_mle_indices()[lsb_idx + 1..]
+                .iter()
+                .cloned(),
+        )
+        .collect_vec();
+
+    // depending on whether the lsb fixed bit was true or false, we bind it to the correct challenge point at this index
+    // this is either the challenge point at the index, or one minus this value
+
+    let bound_coord = if let MleIndex::Fixed(false) = mle_ref_first.original_mle_indices()[lsb_idx]
+    {
+        F::one() - chal_point[lsb_idx]
+    } else {
+        chal_point[lsb_idx]
+    };
+
+    // the new bookkeeping table also only has size one, but now reflects that we have another bound index
+    let new_bt =
+        vec![bound_coord * mle_ref_first_bt[0] + (F::one() - bound_coord) * mle_ref_second_bt[0]];
+
+    let current_mle = MultilinearExtension::new(Evaluations::<F>::new(
+        mle_ref_first.num_vars(),
+        new_bt.clone(),
+    ));
+    let original_mle = MultilinearExtension::new(Evaluations::<F>::new(0, new_bt));
+
+    // construct the dense mle ref that we return. note that even if we are pairing zero mle refs, we just return a dense mle ref here
+    //
+    // TODO!(vishady) also this is factually incorrect info lol because the original bookkeeping table is just wrong but
+    // it is kind of dumb to recompute it because we don't use it anymore. ideally these would be stored somewhere else so we don't
+    // have to keep catering to the fields we don't need ?
+
+    DenseMleRef {
+        current_mle,
+        original_mle,
+        mle_indices: interleaved_mle_indices,
+        original_mle_indices: interleaved_mle_indices_og,
+        layer_id: mle_ref_first.get_layer_id(),
+        indexed: false,
+    }
+}
+
+/// given a list of mle refs, the lsb fixed var index, and the mle ref that contributes to it, this will go through all of them
+/// and find its pair (if none exists, that's fine) and combine the two
+/// it will then update the original list of mle refs to contain the combined mle ref and remove the original ones that were paired
+fn find_pair_and_combine<F: FieldExt>(
+    all_refs: &[MleEnum<F>],
+    lsb_idx: usize,
+    mle_ref_of_lsb: MleEnum<F>,
+    chal_point: &[F],
+) -> Vec<MleEnum<F>> {
+    // we want to compare all fixed bits except the one at the least significant bit index
+    let indices_to_compare = mle_ref_of_lsb.original_mle_indices()[0..lsb_idx].to_vec();
+    let og_indices = &mle_ref_of_lsb.original_mle_indices();
+    let mut mle_ref_pair = None;
+    let mut all_refs_updated = Vec::new();
+
+    for mle_ref in all_refs {
+        let max_slice_idx = mle_ref.original_mle_indices().len();
+        let compare_indices =
+            mle_ref.original_mle_indices()[0..std::cmp::min(lsb_idx, max_slice_idx)].to_vec();
+        // we want to make sure we aren't combining an mle_ref with itself!
+        if (compare_indices == indices_to_compare)
+            && (&mle_ref.original_mle_indices() != og_indices)
+        {
+            mle_ref_pair = Some(mle_ref.clone());
+        }
+        // we also want to check whether we should add it back to this new updated list, it will always be added here unless
+        // the mle_ref contributes to the pair
+        if &mle_ref.original_mle_indices() != og_indices {
+            if mle_ref_pair.is_some() {
+                if mle_ref.original_mle_indices()
+                    != mle_ref_pair.clone().unwrap().original_mle_indices()
+                {
+                    all_refs_updated.push(mle_ref.clone());
+                }
+            } else {
+                all_refs_updated.push(mle_ref.clone());
+            }
+        }
+    }
+
+    // add the paired mle ref to the list and return this new updated list
+    let new_mle_ref_to_add = combine_pair(mle_ref_of_lsb, mle_ref_pair, lsb_idx, chal_point);
+    all_refs_updated.push(MleEnum::Dense(new_mle_ref_to_add));
+    all_refs_updated
+}
+
+//todo(nickccosby) tests
