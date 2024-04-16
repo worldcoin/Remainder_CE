@@ -197,17 +197,17 @@ pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
     Claim::new(challenges, result)
 }
 
-/// Test regular numerical evaluation, last round type beat
+/// Test regular numerical evaluation, last round.
 #[test]
 fn eval_expr_nums() {
-    let new_beta = BetaValues::new(vec![]);
+    let new_beta = BetaValues::new(vec![(0, Fr::one())]);
     let mut expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::from(6));
-    let res = compute_sumcheck_message_beta_cascade(&mut expression1, 0, 0, &new_beta);
-    let exp = Evals(vec![Fr::from(6)]);
+    let res = compute_sumcheck_message_beta_cascade(&mut expression1, 0, 1, &new_beta);
+    let exp = Evals(vec![Fr::from(0), Fr::from(6)]);
     assert_eq!(res.unwrap(), exp);
 }
 
-/// Test the evaluation at an arbitrary point, all positives
+/// Test the evaluation at an arbitrary point, all positives.
 #[test]
 fn eval_at_point_pos() {
     //poly = 3x^2 + 5x + 9
