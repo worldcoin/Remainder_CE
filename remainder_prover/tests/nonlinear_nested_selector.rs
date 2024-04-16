@@ -18,6 +18,20 @@ use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, Fi
 
 use crate::utils::get_dummy_random_mle;
 mod utils;
+
+/// A builder which returns the following expression:
+/// - sel(sel(`left_inner_sel_mle`, `right_inner_sel_mle`), `right_outer_sel_mle`)
+///   + `right_sum_mle_1` * `right_sum_mle_2`
+///
+/// The idea is that this builder has two selector bits which are nonlinear.
+///
+/// ## Arguments
+/// * `left_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
+/// * `right_inner_sel_mle` - An MLE with arbitrary bookkeeping table values, same size as `left_inner_sel_mle`.
+/// * `right_outer_sel_mle` - An MLE with arbitrary bookkeeping table values, one more variable
+/// than `right_inner_sel_mle`.
+/// * `right_sum_mle_1`, `right_sum_mle_2` - MLEs with arbitrary bookkeeping table values, same size,
+/// one more variable than `right_outer_sel_mle`.
 struct NonlinearNestedSelectorBuilder<F: FieldExt> {
     left_inner_sel_mle: DenseMle<F, F>,
     right_inner_sel_mle: DenseMle<F, F>,
@@ -102,6 +116,14 @@ impl<F: FieldExt> NonlinearNestedSelectorBuilder<F> {
     }
 }
 
+/// A circuit which does the following:
+/// * Layer 0: [NonlinearNestedSelectorBuilder] with all inputs.
+/// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// See [NonlinearNestedSelectorBuilder].
 struct NonlinearNestedSelectorCircuit<F: FieldExt> {
     left_inner_sel_mle: DenseMle<F, F>,
     right_inner_sel_mle: DenseMle<F, F>,

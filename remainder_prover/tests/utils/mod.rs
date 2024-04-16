@@ -1,4 +1,3 @@
-use ark_std::test_rng;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::{
@@ -8,12 +7,13 @@ use remainder::{
 };
 use remainder_shared_types::{FieldExt, Fr};
 
+/// Returns an MLE with all Fr::one() for testing according to the number of variables.
 pub(crate) fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr, Fr> {
-    let mut rng = test_rng();
     let mle_vec = (0..(1 << num_vars)).map(|_| Fr::one()).collect_vec();
     DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
 }
 
+/// Returns an MLE with random elements generated from u64 for testing according to the number of variables.
 pub(crate) fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr, Fr> {
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
@@ -21,6 +21,8 @@ pub(crate) fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> Dense
     DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
 }
 
+/// Returns a vector of MLEs for dataparallel testing according to the number of variables and
+/// number of dataparallel bits.
 pub(crate) fn get_dummy_random_mle_vec(
     num_vars: usize,
     num_dataparallel_bits: usize,
@@ -36,6 +38,17 @@ pub(crate) fn get_dummy_random_mle_vec(
         .collect_vec()
 }
 
+/// A builder which returns an expression with three nested selectors:
+/// - innermost_selector: sel(`inner_inner_sel_mle`, `inner_inner_sel_mle * inner_inner_sel_mle`)
+/// - inner_selector: sel(`innermost_selector`, `inner_sel_mle`)
+/// - overall_expression: sel(`inner_selector`, `outer_sel_mle`).
+///
+/// ## Arguments
+/// * `inner_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
+/// * `inner_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
+/// the size of `inner_inner_sel_mle`
+/// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
+/// the size of `inner_sel_mle`
 pub(crate) struct TripleNestedSelectorBuilder<F: FieldExt> {
     inner_inner_sel_mle: DenseMle<F, F>,
     inner_sel_mle: DenseMle<F, F>,
@@ -88,6 +101,12 @@ impl<F: FieldExt> TripleNestedSelectorBuilder<F> {
     }
 }
 
+/// A builder which returns the following expression:
+/// - `mle_1` * `mle_2` + (10 * `mle_1`)
+///
+/// ## Arguments
+/// * `mle_1` - An MLE with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
 pub(crate) struct ProductScaledBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -128,6 +147,12 @@ impl<F: FieldExt> ProductScaledBuilder<F> {
     }
 }
 
+/// A builder which returns the following expression:
+/// - `mle_1` * `mle_2` + (`mle_1` + `mle_2`)
+///
+/// ## Arguments
+/// * `mle_1` - An MLE with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
 pub(crate) struct ProductSumBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -173,6 +198,12 @@ impl<F: FieldExt> ProductSumBuilder<F> {
     }
 }
 
+/// A builder which returns the following expression:
+/// - `mle_1` + 10 + (`mle_2` * 10)
+///
+/// ## Arguments
+/// * `mle_1` - An MLE with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
 pub(crate) struct ConstantScaledSumBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,

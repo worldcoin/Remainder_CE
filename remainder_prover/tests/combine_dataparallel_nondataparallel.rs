@@ -38,6 +38,15 @@ use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
 use crate::utils::get_dummy_random_mle;
 mod utils;
 
+/// A circuit which takes in two vectors of MLEs of the same size:
+/// * Layer 0: [ProductScaledBuilder] with the two inputs
+/// * Layer 1: [ProductScaledBuilder] with the output of Layer 0 and output of Layer 0.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
+/// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 struct DataParallelCircuit<F: FieldExt> {
     mle_1_vec: Vec<DenseMle<F, F>>,
     mle_2_vec: Vec<DenseMle<F, F>>,
@@ -82,6 +91,18 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
     }
 }
 
+/// A circuit in which:
+/// * Layer 0: [TripleNestedSelectorBuilder] with the three inputs
+/// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `inner_inner_sel_mle` - An MLE with arbitrary bookkeeping table values.
+/// * `inner_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
+/// the size of `inner_inner_sel_mle`
+/// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
+/// the size of `inner_sel_mle`
 struct TripleNestedSelectorCircuit<F: FieldExt> {
     inner_inner_sel_mle: DenseMle<F, F>,
     inner_sel_mle: DenseMle<F, F>,
@@ -112,6 +133,15 @@ impl<F: FieldExt> GKRCircuit<F> for TripleNestedSelectorCircuit<F> {
     }
 }
 
+/// A circuit in which:
+/// * Layer 0: [ProductScaledBuilder] with the two inputs
+/// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1` - An MLE with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
 struct ScaledProductCircuit<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -137,6 +167,20 @@ impl<F: FieldExt> GKRCircuit<F> for ScaledProductCircuit<F> {
     }
 }
 
+/// A circuit which combines the [DataParallelCircuit], [TripleNestedSelectorCircuit],
+/// and [ScaledProductCircuit].
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1_vec`, `mle_2_vec` - inputs to [DataParallelCircuit] both arbitrary bookkeeping
+/// table values, same size.
+/// * `mle_4`, `mle_5`, `mle_6` - inputs to [TripleNestedSelectorCircuit], `mle_4` has the same
+/// size as the mles in `mle_1_vec`, arbitrary bookkeeping table values. `mle_5` has one more
+/// variable than `mle_4`, `mle_6` has one more variable than `mle_5`, both arbitrary bookkeeping
+/// table values.
+/// * `mle_3`, `mle_4` - inputs to [ScaledProductCircuit], both arbitrary bookkeeping table values,
+/// same size.
+/// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct CombinedCircuit<F: FieldExt> {
     mle_1_vec: Vec<DenseMle<F, F>>,
     mle_2_vec: Vec<DenseMle<F, F>>,

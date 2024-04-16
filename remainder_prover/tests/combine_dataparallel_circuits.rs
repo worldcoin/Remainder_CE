@@ -40,6 +40,16 @@ use utils::{
 use crate::utils::{get_dummy_one_mle, get_dummy_random_mle, get_dummy_random_mle_vec};
 mod utils;
 
+/// A circuit which takes in two vectors of MLEs of the same size:
+/// * Layer 0: [ProductScaledBuilder] with the two inputs
+/// * Layer 1: [ProductSumBuilder] with the output of Layer 0 and `mle_1_vec`
+/// * Layer 2: [ZeroBuilder] with output of Layer 1 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
+/// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 struct DataParallelProductScaledSumCircuit<F: FieldExt> {
     mle_1_vec: Vec<DenseMle<F, F>>,
     mle_2_vec: Vec<DenseMle<F, F>>,
@@ -83,6 +93,16 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelProductScaledSumCircuit<F> {
     }
 }
 
+/// A circuit which takes in two vectors of MLEs of the same size:
+/// * Layer 0: [ProductSumBuilder] with the two inputs
+/// * Layer 1: [ConstantScaledSumBuilder] with the output of Layer 0 and `mle_1_vec`
+/// * Layer 2: [ZeroBuilder] with output of Layer 1 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
+/// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 struct DataParallelSumConstantCircuit<F: FieldExt> {
     mle_1_vec: Vec<DenseMle<F, F>>,
     mle_2_vec: Vec<DenseMle<F, F>>,
@@ -127,6 +147,16 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelSumConstantCircuit<F> {
     }
 }
 
+/// A circuit which takes in two vectors of MLEs of the same size:
+/// * Layer 0: [ConstantScaledSumBuilder] with the two inputs
+/// * Layer 1: [ProductScaledBuilder] with the output of Layer 0 and `mle_1_vec`
+/// * Layer 2: [ZeroBuilder] with output of Layer 1 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
+/// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 struct DataParallelConstantScaledCircuit<F: FieldExt> {
     mle_1_vec: Vec<DenseMle<F, F>>,
     mle_2_vec: Vec<DenseMle<F, F>>,
@@ -172,6 +202,14 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelConstantScaledCircuit<F> {
     }
 }
 
+/// A circuit which combines the [DataParallelProductScaledSumCircuit], [DataParallelSumConstantCircuit],
+/// and [DataParallelConstantScaledCircuit].
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
+/// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
+/// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct DataParallelCombinedCircuit<F: FieldExt> {
     mle_1_vec: Vec<DenseMle<F, F>>,
     mle_2_vec: Vec<DenseMle<F, F>>,

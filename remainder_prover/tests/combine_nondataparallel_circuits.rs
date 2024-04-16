@@ -40,6 +40,16 @@ use utils::{
 use crate::utils::{get_dummy_one_mle, get_dummy_random_mle};
 mod utils;
 
+/// A circuit which takes in two MLEs of the same size:
+/// * Layer 0: [ProductScaledBuilder] with the two inputs
+/// * Layer 1: [ProductSumBuilder] with the output of Layer 0 and `mle_1`
+/// * Layer 2: [ZeroBuilder] with output of Layer 1 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1`  An MLE with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
 struct ProductScaledSumCircuit<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -68,6 +78,16 @@ impl<F: FieldExt> GKRCircuit<F> for ProductScaledSumCircuit<F> {
     }
 }
 
+/// A circuit which takes in two MLEs of the same size:
+/// * Layer 0: [ProductSumBuilder] with the two inputs
+/// * Layer 1: [ConstantScaledSumBuilder] with the output of Layer 0 and `mle_1`
+/// * Layer 2: [ZeroBuilder] with output of Layer 1 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1` - An MLE vec with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1`.
 struct SumConstantCircuit<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -97,6 +117,16 @@ impl<F: FieldExt> GKRCircuit<F> for SumConstantCircuit<F> {
     }
 }
 
+/// A circuit which takes in two MLEs of the same size:
+/// * Layer 0: [ConstantScaledSumBuilder] with the two inputs
+/// * Layer 1: [ProductScaledBuilder] with the output of Layer 0 and `mle_1`
+/// * Layer 2: [ZeroBuilder] with output of Layer 1 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1` - An MLE vec with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1`.
 struct ConstantScaledCircuit<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
@@ -127,6 +157,13 @@ impl<F: FieldExt> GKRCircuit<F> for ConstantScaledCircuit<F> {
     }
 }
 
+/// A circuit which combines the [ProductScaledSumCircuit], [SumConstantCircuit],
+/// and [ConstantScaledCircuit].
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1` - An MLE vec with arbitrary bookkeeping table values.
+/// * `mle_2` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1`.
 struct CombinedCircuit<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,

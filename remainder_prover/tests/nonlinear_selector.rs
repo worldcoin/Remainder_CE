@@ -19,7 +19,17 @@ use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, Fi
 use crate::utils::get_dummy_random_mle;
 mod utils;
 
-/// selector is a nonlinear bit -- no nested selector!
+/// A builder which returns the following expression:
+/// - sel(`left_sel_mle`, `right_sel_mle`)
+///   + `right_sum_mle_1` * `right_sum_mle_2`
+///
+/// The idea is that this builder has one selector bit which is nonlinear.
+///
+/// ## Arguments
+/// * `left_sel_mle` - An MLE with arbitrary bookkeeping table values.
+/// * `right_sel_mle` - An MLE with arbitrary bookkeeping table values, same size as `left_sel_mle`.
+/// * `right_sum_mle_1`, `right_sum_mle_2` - MLEs with arbitrary bookkeeping table values, same size,
+/// one more variable than `right_sel_mle`.
 
 struct NonlinearSelectorBuilder<F: FieldExt> {
     left_sel_mle: DenseMle<F, F>,
@@ -92,6 +102,14 @@ impl<F: FieldExt> NonlinearSelectorBuilder<F> {
     }
 }
 
+/// A circuit which does the following:
+/// * Layer 0: [NonlinearSelectorBuilder] with all inputs.
+/// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// See [NonlinearSelectorBuilder].
 struct NonlinearSelectorCircuit<F: FieldExt> {
     left_sel_mle: DenseMle<F, F>,
     right_sel_mle: DenseMle<F, F>,

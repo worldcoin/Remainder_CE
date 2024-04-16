@@ -19,6 +19,14 @@ use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, Fi
 use crate::utils::get_dummy_random_mle;
 mod utils;
 
+/// A builder which returns the following expression:
+/// - sel(`mle_1`, `mle_1`) + `mle_2` * `mle_2`
+///
+/// The idea is that the last bit in this expression is linear.
+///
+/// ## Arguments
+/// * `sel_mle` - An MLE with arbitrary bookkeeping table values.
+/// * `prod_mle` - An MLE with arbitrary bookkeeping table values; same size as `sel_mle`.
 struct LastBitLinearBuilder<F: FieldExt> {
     sel_mle: DenseMle<F, F>,
     prod_mle: DenseMle<F, F>,
@@ -60,6 +68,13 @@ impl<F: FieldExt> LastBitLinearBuilder<F> {
     }
 }
 
+/// A builder which returns the following expression:
+/// - sel(`mle_1` * `mle_1`, `mle_1`)
+///
+/// The idea is that the first bit (selector bit) in this expression is linear.
+///
+/// ## Arguments
+/// * `sel_mle` - An MLE with arbitrary bookkeeping table values.
 struct FirstBitLinearBuilder<F: FieldExt> {
     sel_mle: DenseMle<F, F>,
 }
@@ -89,6 +104,16 @@ impl<F: FieldExt> FirstBitLinearBuilder<F> {
         Self { sel_mle }
     }
 }
+
+/// A circuit which does the following:
+/// * Layer 0: [LastBitLinearBuilder] with `sel_mle`, `prod_mle`
+/// * Layer 1: [FirstBitLinearBuilder] with `sel_mle`
+/// * Layer 2: [ZeroBuilder] with the output of Layer 0 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `sel_mle`, `prod_mle` both MLEs with arbitrary bookkeeping table values, same size.
 
 struct LinearNonLinearCircuit<F: FieldExt> {
     sel_mle: DenseMle<F, F>,

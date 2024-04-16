@@ -35,6 +35,22 @@ use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
 
 use crate::utils::get_dummy_random_mle_vec;
 mod utils;
+
+/// A circuit which does the following:
+/// * Layer 0: [ProductScaledBuilder] with `mle_1_vec`, `mle_2_vec`
+/// * Layer 1: [TripleNestedSelectorBuilder] with output of Layer 0, `mle_3_vec`, `mle_4_vec`
+/// * Layer 2: [ZeroBuilder] with the output of Layer 1 and itself.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_1_vec`, `mle_2_vec` - inputs to [ProductScaledBuilder] both arbitrary bookkeeping
+/// table values, same size.
+/// * `mle_3_vec`, `mle_4_vec` - inputs to [TripleNestedSelectorBuilder], both arbitrary bookkeeping table values,
+/// `mle_3_vec` mles have one more variable than in `mle_1_vec`, `mle_2_vec`, and `mle_4_vec` mles
+/// have one more variable than in `mle_3_vec`.
+///
+/// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct DataParallelCircuit<F: FieldExt> {
     mle_1_vec: Vec<DenseMle<F, F>>,
     mle_2_vec: Vec<DenseMle<F, F>>,
