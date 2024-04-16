@@ -5,7 +5,7 @@ use rand::Rng;
 use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt, Fr};
 
 use crate::{
-    layer::{simple_builders::ZeroBuilder, LayerId},
+    layer::{layer_builder::simple_builders::ZeroBuilder, LayerId},
     mle::{dense::DenseMle, Mle, MleRef},
     prover::{
         helpers::test_circuit,
@@ -13,6 +13,7 @@ use crate::{
             combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
             InputLayer,
         },
+        proof_system::DefaultProofSystem,
         GKRCircuit, Layers, Witness,
     },
 };
@@ -33,14 +34,14 @@ struct AddGateCircuit<F: FieldExt> {
     neg_mle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle), Box::new(&mut self.neg_mle)];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         let mut layers = Layers::new();
 
@@ -91,14 +92,14 @@ struct UnevenAddGateCircuit<F: FieldExt> {
     neg_mle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle), Box::new(&mut self.neg_mle)];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         let mut layers = Layers::new();
 
@@ -148,17 +149,17 @@ struct MulAddGateCircuit<F: FieldExt> {
     neg_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.mle_1),
             Box::new(&mut self.mle_2),
             Box::new(&mut self.neg_mle_2),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         let mut layers = Layers::new();
 
@@ -234,17 +235,17 @@ struct DataparallelMulAddGateCircuit<F: FieldExt> {
     num_dataparallel_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.mle_1_dataparallel),
             Box::new(&mut self.mle_2_dataparallel),
             Box::new(&mut self.neg_mle_2_dataparallel),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         let mut layers = Layers::new();
 
@@ -333,16 +334,16 @@ struct DataparallelAddGateCircuit<F: FieldExt> {
     num_dataparallel_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.mle_dataparallel),
             Box::new(&mut self.neg_mle_dataparallel),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         let mut layers = Layers::new();
 
@@ -408,16 +409,16 @@ struct DataparallelUnevenAddGateCircuit<F: FieldExt> {
     num_dataparallel_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.mle_dataparallel),
             Box::new(&mut self.neg_mle_dataparallel),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         let mut layers = Layers::new();
 

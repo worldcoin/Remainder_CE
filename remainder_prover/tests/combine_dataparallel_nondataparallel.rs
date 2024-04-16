@@ -7,10 +7,12 @@ use remainder::{
         prover_expr::ProverExpr,
     },
     layer::{
-        batched::{self, combine_zero_mle_ref, BatchedLayer},
+        layer_builder::{
+            batched::{combine_zero_mle_ref, BatchedLayer},
+            simple_builders::ZeroBuilder,
+        },
         layer_enum::LayerEnum,
-        simple_builders::ZeroBuilder,
-        LayerBuilder, LayerId,
+        LayerId,
     },
     mle::{
         dense::{DenseMle, Tuple2},
@@ -20,11 +22,10 @@ use remainder::{
         combine_layers::combine_layers,
         helpers::test_circuit,
         input_layer::{
-            combine_input_layers::InputLayerBuilder,
-            enum_input_layer::{CommitmentEnum, InputLayerEnum},
-            public_input_layer::PublicInputLayer,
-            InputLayer,
+            combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
+            public_input_layer::PublicInputLayer, InputLayer,
         },
+        proof_system::DefaultProofSystem,
         GKRCircuit, GKRError, Layers, Witness,
     },
 };
@@ -53,9 +54,9 @@ struct DataParallelCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builders = (self
@@ -110,9 +111,9 @@ struct TripleNestedSelectorCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for TripleNestedSelectorCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builder = TripleNestedSelectorBuilder::new(
@@ -148,9 +149,9 @@ struct ScaledProductCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ScaledProductCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builder = ProductScaledBuilder::new(self.mle_1.clone(), self.mle_2.clone());
@@ -192,16 +193,9 @@ struct CombinedCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
-        unimplemented!()
-    }
-
-    fn synthesize_and_commit(
-        &mut self,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
-    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut mle_1_combined = DenseMle::<F, F>::combine_mle_batch(self.mle_1_vec.clone());
         let mut mle_2_combined = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
         mle_1_combined.layer_id = LayerId::Input(0);
@@ -230,20 +224,10 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
         let input_commit_builder =
             InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));
 
-        let input_layer: PublicInputLayer<F, Self::Sponge> =
-            input_commit_builder.to_input_layer::<PublicInputLayer<F, Self::Sponge>>();
+        let input_layer: PublicInputLayer<F> =
+            input_commit_builder.to_input_layer::<PublicInputLayer<F>>();
 
-        let mut input_layer_enum = input_layer.to_enum();
-
-        let input_layer_commit = input_layer_enum
-            .commit()
-            .map_err(|err| GKRError::InputLayerError(err))
-            .unwrap();
-
-        InputLayerEnum::prover_append_commitment_to_transcript(
-            &input_layer_commit,
-            transcript_writer,
-        );
+        let mut input_layer_enum = input_layer.into();
 
         self.mle_1_vec
             .iter_mut()
@@ -313,14 +297,11 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
         )
         .unwrap();
 
-        Ok((
-            Witness {
-                layers,
-                output_layers,
-                input_layers: vec![input_layer_enum],
-            },
-            vec![input_layer_commit],
-        ))
+        Witness {
+            layers,
+            output_layers,
+            input_layers: vec![input_layer_enum],
+        }
     }
 }
 

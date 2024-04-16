@@ -3,7 +3,7 @@ use std::{cmp::max, iter::repeat_with, path::Path};
 use ark_std::test_rng;
 use itertools::Itertools;
 use rand::Rng;
-use remainder_ligero::ligero_commit::remainder_ligero_commit_prove;
+use remainder_ligero::ligero_commit::remainder_ligero_commit;
 use remainder_shared_types::{
     transcript::{poseidon_transcript::PoseidonSponge, TranscriptWriter},
     FieldExt, Fr,
@@ -11,19 +11,22 @@ use remainder_shared_types::{
 
 use crate::{
     expression::generic_expr::{Expression, ExpressionNode},
-    layer::{from_mle, simple_builders::EqualityCheck, LayerBuilder, LayerId},
+    layer::{
+        layer_builder::{from_mle, simple_builders::EqualityCheck, LayerBuilder},
+        LayerId,
+    },
     mle::{dense::DenseMle, zero::ZeroMleRef, Mle, MleRef},
-    prover::{helpers::test_circuit, GKRCircuit, GKRError, Layers, Witness},
+    prover::{
+        helpers::test_circuit, proof_system::DefaultProofSystem, CircuitInputLayer,
+        CircuitTranscript, GKRCircuit, GKRError, Layers, Witness,
+    },
     utils::get_random_mle,
 };
 
 use super::{
-    combine_input_layers::InputLayerBuilder,
-    enum_input_layer::{CommitmentEnum, InputLayerEnum},
-    ligero_input_layer::LigeroInputLayer,
-    public_input_layer::PublicInputLayer,
-    random_input_layer::RandomInputLayer,
-    InputLayer,
+    combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
+    ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
+    random_input_layer::RandomInputLayer, InputLayer,
 };
 
 /// This circuit takes in a single MLE and performs the following:
@@ -38,19 +41,25 @@ struct RandomCircuit<F: FieldExt> {
     mle: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
-    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
+        transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
+    ) -> Result<
+        (
+            Witness<F, Self::ProofSystem>,
+            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+        ),
+        GKRError,
+    > {
         let input = InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
             .to_input_layer_with_rho_inv(4, 1.);
-        let mut input = input.to_enum();
+        let mut input: CircuitInputLayer<F, Self> = input.into();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::prover_append_commitment_to_transcript(&input_commit, transcript_writer);
@@ -58,7 +67,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         // TODO!(ryancao): Fix the `RandomInputLayer::new()` argument to make it less confusing
         let random = RandomInputLayer::new(transcript_writer, 1, LayerId::Input(1));
         let random_mle = random.get_mle();
-        let mut random = random.to_enum();
+        let mut random: CircuitInputLayer<F, Self> = random.into();
         let random_commit = random.commit().map_err(GKRError::InputLayerError)?;
 
         let mut layers = Layers::new();
@@ -81,10 +90,10 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
         let mut output_input = output.clone();
         output_input.layer_id = LayerId::Input(2);
-        let mut input_layer_2 =
+        let mut input_layer_2: CircuitInputLayer<F, Self> =
             InputLayerBuilder::new(vec![Box::new(&mut output_input)], None, LayerId::Input(2))
-                .to_input_layer::<PublicInputLayer<F, _>>()
-                .to_enum();
+                .to_input_layer::<PublicInputLayer<F>>()
+                .into();
         let input_layer_2_commit = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::prover_append_commitment_to_transcript(
             &input_layer_2_commit,
@@ -170,18 +179,24 @@ struct MultiInputLayerCircuit<F: FieldExt> {
     input_layer_2_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         unimplemented!()
     }
 
     fn synthesize_and_commit(
         &mut self,
-        transcript_writer: &mut TranscriptWriter<F, Self::Sponge>,
-    ) -> Result<(Witness<F, Self::Sponge>, Vec<CommitmentEnum<F>>), GKRError> {
+        transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
+    ) -> Result<
+        (
+            Witness<F, Self::ProofSystem>,
+            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+        ),
+        GKRError,
+    > {
         // --- First input layer contains the first two MLE arguments ---
-        let mut input_layer_1 = InputLayerBuilder::new(
+        let mut input_layer_1: CircuitInputLayer<F, Self> = InputLayerBuilder::new(
             vec![
                 Box::new(&mut self.input_layer_1_mle_1),
                 Box::new(&mut self.input_layer_1_mle_2),
@@ -189,8 +204,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             None,
             LayerId::Input(0),
         )
-        .to_input_layer::<PublicInputLayer<F, _>>()
-        .to_enum();
+        .to_input_layer::<PublicInputLayer<F>>()
+        .into();
         let input_layer_1_commitment = input_layer_1.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::prover_append_commitment_to_transcript(
             &input_layer_1_commitment,
@@ -198,7 +213,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         );
 
         // --- Second input layer contains the next two MLE arguments ---
-        let mut input_layer_2 = InputLayerBuilder::new(
+        let mut input_layer_2: CircuitInputLayer<F, Self> = InputLayerBuilder::new(
             vec![
                 Box::new(&mut self.input_layer_2_mle_1),
                 Box::new(&mut self.input_layer_2_mle_2),
@@ -206,8 +221,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             None,
             LayerId::Input(1),
         )
-        .to_input_layer::<PublicInputLayer<F, _>>()
-        .to_enum();
+        .to_input_layer::<PublicInputLayer<F>>()
+        .into();
         let input_layer_2_commitment = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
         InputLayerEnum::prover_append_commitment_to_transcript(
             &input_layer_2_commitment,
@@ -278,9 +293,9 @@ struct SimplePrecommitCircuit<F: FieldExt> {
     mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         // --- Set layer IDs to be correct with respect to input layers ---
         self.mle.layer_id = LayerId::Input(0);
         self.mle_2.layer_id = LayerId::Input(1);
@@ -295,7 +310,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         let live_committed_input_layer_builder =
             InputLayerBuilder::new(live_committed_input_mles, None, LayerId::Input(1));
 
-        let mut layers: Layers<F, Self::Sponge> = Layers::new();
+        let mut layers: Layers<F, _> = Layers::new();
 
         let diff_builder_1 = EqualityCheck::new(self.mle.clone(), self.mle.clone());
         let diff_builder_2 = EqualityCheck::new(self.mle_2.clone(), self.mle_2.clone());
@@ -309,15 +324,10 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         let rho_inv = 4;
         let ratio = 1_f64;
         let (_, ligero_comm, ligero_root, ligero_aux) =
-            remainder_ligero_commit_prove(&self.mle.mle, rho_inv, ratio);
-        let precommitted_input_layer: LigeroInputLayer<F, Self::Sponge> =
-            precommitted_input_layer_builder.to_input_layer_with_precommit(
-                ligero_comm,
-                ligero_aux,
-                ligero_root,
-                true,
-            );
-        let live_committed_input_layer: LigeroInputLayer<F, Self::Sponge> =
+            remainder_ligero_commit(&self.mle.mle, rho_inv, ratio);
+        let precommitted_input_layer: LigeroInputLayer<F> = precommitted_input_layer_builder
+            .to_input_layer_with_precommit(ligero_comm, ligero_aux, ligero_root, true);
+        let live_committed_input_layer: LigeroInputLayer<F> =
             live_committed_input_layer_builder.to_input_layer_with_rho_inv(4, 1.);
 
         Witness {
@@ -327,8 +337,8 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
                 first_layer_output_2.get_enum(),
             ],
             input_layers: vec![
-                precommitted_input_layer.to_enum(),
-                live_committed_input_layer.to_enum(),
+                precommitted_input_layer.into(),
+                live_committed_input_layer.into(),
             ],
         }
     }

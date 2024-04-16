@@ -4,9 +4,6 @@ pub mod helpers;
 /// For the input layer to the GKR circuit
 pub mod input_layer;
 pub mod proof_system;
-pub mod test_helper_circuits;
-#[cfg(test)]
-pub(crate) mod tests;
 
 use std::marker::PhantomData;
 

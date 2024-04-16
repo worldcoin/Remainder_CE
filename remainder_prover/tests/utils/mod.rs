@@ -2,7 +2,7 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{LayerBuilder, LayerId},
+    layer::{layer_builder::LayerBuilder, LayerId},
     mle::{dense::DenseMle, MleIndex},
 };
 use remainder_shared_types::{FieldExt, Fr};

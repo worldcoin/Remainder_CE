@@ -3,7 +3,10 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{simple_builders::ZeroBuilder, LayerBuilder, LayerId},
+    layer::{
+        layer_builder::{simple_builders::ZeroBuilder, LayerBuilder},
+        LayerId,
+    },
     mle::{dense::DenseMle, Mle, MleIndex, MleRef},
     prover::{
         helpers::test_circuit,
@@ -11,6 +14,7 @@ use remainder::{
             combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
             InputLayer,
         },
+        proof_system::DefaultProofSystem,
         GKRCircuit, Layers, Witness,
     },
 };
@@ -117,9 +121,9 @@ struct NonlinearSelectorCircuit<F: FieldExt> {
     right_sum_mle_2: DenseMle<F, F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for NonlinearSelectorCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
             Box::new(&mut self.left_sel_mle),
             Box::new(&mut self.right_sel_mle),
@@ -127,8 +131,8 @@ impl<F: FieldExt> GKRCircuit<F> for NonlinearSelectorCircuit<F> {
             Box::new(&mut self.right_sum_mle_2),
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         let mut layers = Layers::new();
 

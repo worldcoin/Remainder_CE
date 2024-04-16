@@ -6,12 +6,7 @@ use remainder::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    layer::{
-        batched::{self, combine_zero_mle_ref, BatchedLayer},
-        layer_enum::LayerEnum,
-        simple_builders::ZeroBuilder,
-        LayerBuilder, LayerId,
-    },
+    layer::{layer_builder::simple_builders::ZeroBuilder, LayerId},
     mle::{
         dense::{DenseMle, Tuple2},
         Mle, MleIndex, MleRef,
@@ -20,11 +15,10 @@ use remainder::{
         combine_layers::combine_layers,
         helpers::test_circuit,
         input_layer::{
-            combine_input_layers::InputLayerBuilder,
-            enum_input_layer::{CommitmentEnum, InputLayerEnum},
-            public_input_layer::PublicInputLayer,
+            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
             InputLayer,
         },
+        proof_system::DefaultProofSystem,
         GKRCircuit, GKRError, Layers, Witness,
     },
 };
@@ -56,9 +50,9 @@ struct ProductScaledSumCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ProductScaledSumCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builder = ProductScaledBuilder::new(self.mle_1.clone(), self.mle_2.clone());
@@ -94,9 +88,9 @@ struct SumConstantCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for SumConstantCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builder = ProductSumBuilder::new(self.mle_1.clone(), self.mle_2.clone());
@@ -133,9 +127,9 @@ struct ConstantScaledCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ConstantScaledCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builder =
@@ -170,14 +164,14 @@ struct CombinedCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle_1), Box::new(&mut self.mle_2)];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         let mut pss_circuit = ProductScaledSumCircuit {
             mle_1: self.mle_1.clone(),

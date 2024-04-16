@@ -7,10 +7,12 @@ use remainder::{
         prover_expr::ProverExpr,
     },
     layer::{
-        batched::{self, combine_zero_mle_ref, BatchedLayer},
+        layer_builder::{
+            batched::{combine_zero_mle_ref, BatchedLayer},
+            simple_builders::ZeroBuilder,
+        },
         layer_enum::LayerEnum,
-        simple_builders::ZeroBuilder,
-        LayerBuilder, LayerId,
+        LayerId,
     },
     mle::{
         dense::{DenseMle, Tuple2},
@@ -20,11 +22,10 @@ use remainder::{
         combine_layers::combine_layers,
         helpers::test_circuit,
         input_layer::{
-            combine_input_layers::InputLayerBuilder,
-            enum_input_layer::{CommitmentEnum, InputLayerEnum},
-            public_input_layer::PublicInputLayer,
-            InputLayer,
+            combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
+            public_input_layer::PublicInputLayer, InputLayer,
         },
+        proof_system::DefaultProofSystem,
         GKRCircuit, GKRError, Layers, Witness,
     },
 };
@@ -56,9 +57,9 @@ struct DataParallelProductScaledSumCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelProductScaledSumCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builders = self
@@ -109,9 +110,9 @@ struct DataParallelSumConstantCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelSumConstantCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builders = self
@@ -163,9 +164,9 @@ struct DataParallelConstantScaledCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelConstantScaledCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let first_layer_builders = self
@@ -217,9 +218,9 @@ struct DataParallelCombinedCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut combined_mle_1 = DenseMle::<F, F>::combine_mle_batch(self.mle_1_vec.clone());
         let mut combined_mle_2 = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
         combined_mle_1.layer_id = LayerId::Input(0);
@@ -227,8 +228,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuit<F> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut combined_mle_1), Box::new(&mut combined_mle_2)];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
-            .to_input_layer::<PublicInputLayer<F, _>>()
-            .to_enum();
+            .to_input_layer::<PublicInputLayer<F>>()
+            .into();
 
         self.mle_1_vec
             .iter_mut()

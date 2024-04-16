@@ -6,9 +6,10 @@ use rand::Rng;
 use remainder::{
     expression::generic_expr::Expression,
     layer::{
-        batched::{combine_mles, combine_zero_mle_ref, BatchedLayer},
-        from_mle,
-        simple_builders::ZeroBuilder,
+        layer_builder::{
+            batched::{combine_zero_mle_ref, BatchedLayer},
+            simple_builders::ZeroBuilder,
+        },
         LayerId,
     },
     mle::{
@@ -19,11 +20,10 @@ use remainder::{
     prover::{
         helpers::test_circuit,
         input_layer::{
-            combine_input_layers::InputLayerBuilder,
-            enum_input_layer::{CommitmentEnum, InputLayerEnum},
-            public_input_layer::PublicInputLayer,
+            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
             InputLayer,
         },
+        proof_system::DefaultProofSystem,
         GKRCircuit, GKRError, Layers, Witness,
     },
 };
@@ -54,9 +54,9 @@ struct NonSelectorDataparallelCircuit<F: FieldExt> {
 }
 
 impl<F: FieldExt> GKRCircuit<F> for NonSelectorDataparallelCircuit<F> {
-    type Sponge = PoseidonSponge<F>;
+    type ProofSystem = DefaultProofSystem;
 
-    fn synthesize(&mut self) -> Witness<F, Self::Sponge> {
+    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
         let mut combined_mle_1 = DenseMle::<F, F>::combine_mle_batch(self.mle_1_vec.clone());
@@ -70,10 +70,10 @@ impl<F: FieldExt> GKRCircuit<F> for NonSelectorDataparallelCircuit<F> {
         let input_commit_builder =
             InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));
 
-        let input_layer: PublicInputLayer<F, Self::Sponge> =
-            input_commit_builder.to_input_layer::<PublicInputLayer<F, Self::Sponge>>();
+        let input_layer: PublicInputLayer<F> =
+            input_commit_builder.to_input_layer::<PublicInputLayer<F>>();
 
-        let input_layer_enum = input_layer.to_enum();
+        let input_layer_enum = input_layer.into();
 
         self.mle_1_vec
             .iter_mut()
@@ -151,7 +151,7 @@ impl<F: FieldExt> NonSelectorDataparallelCircuit<F> {
 }
 
 #[test]
-fn test_gkr_simplest_batched_circuit() {
+fn test_simple_dataparallel_circuit() {
     const NUM_DATA_PARALLEL_BITS: usize = 3;
     const NUM_VARS_MLE_1_2: usize = 2;
     let mut rng = test_rng();
