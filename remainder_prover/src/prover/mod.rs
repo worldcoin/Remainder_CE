@@ -12,13 +12,6 @@ pub mod input_layer;
 /// Includes various traits that define interfaces of a GKR Prover
 pub mod proof_system;
 
-/// Includes various builders needed for testing purposes
-pub mod test_helper_circuits;
-
-/// Comprehensive tests for the GKR Prover
-#[cfg(test)]
-pub(crate) mod tests;
-
 use self::{
     input_layer::{InputLayer, InputLayerError},
     proof_system::ProofSystem,

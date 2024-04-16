@@ -52,4 +52,9 @@ derive_more = "0.99.17"
 
 [features]
 default = ["parallel"]
-parallel = ["ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "ark-crypto-primitives/parallel"]
+parallel = [
+  "ark-ff/parallel",
+  "ark-poly/parallel",
+  "ark-std/parallel",
+  "ark-crypto-primitives/parallel",
+]

@@ -15,6 +15,7 @@ pub mod enum_input_layer;
 pub mod ligero_input_layer;
 pub mod public_input_layer;
 pub mod random_input_layer;
+mod tests;
 
 use crate::{
     claims::{wlx_eval::get_num_wlx_evaluations, Claim},
