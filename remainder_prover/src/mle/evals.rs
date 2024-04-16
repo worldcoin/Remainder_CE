@@ -84,8 +84,6 @@ impl<F: FieldExt> Evaluations<F> {
     /// case, for example,`f(0, 1) == f(1, 1) == F::zero()`, those values may be
     /// omitted and the following will generate an equivalent representation:
     /// `Evaluations::new(2, vec![ f(0, 0), f(1, 0) ])`.
-    /// # Panics
-    /// If `evals` contains more than `2^num_vars` evaluations.
     pub fn new(num_vars: usize, evals: Vec<F>) -> Self {
         debug_assert!(evals.len() <= (1 << num_vars));
 
@@ -105,10 +103,8 @@ impl<F: FieldExt> Evaluations<F> {
     /// case, for example,`f(1, 0) == f(1, 1) == F::zero()`, those values may be
     /// omitted and the following will generate an equivalent representation:
     /// `Evaluations::new(2, &[ f(0, 0), f(0, 1) ])`.
-    /// # Panics
-    /// If `evals` contains more than `2^num_vars` evaluations.
     pub fn new_from_big_endian(num_vars: usize, evals: &[F]) -> Self {
-        assert!(evals.len() <= (1 << num_vars));
+        debug_assert!(evals.len() <= (1 << num_vars));
 
         Self {
             evals: Self::flip_endianess(num_vars, evals),
@@ -569,12 +565,6 @@ mod test {
     #[test]
     fn evals_new_2_vars() {
         let _f = Evaluations::new(2, vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
-    }
-
-    #[test]
-    #[should_panic]
-    fn evals_new_numvar_mismatch() {
-        let _f = Evaluations::new(1, vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()]);
     }
 
     #[test]
