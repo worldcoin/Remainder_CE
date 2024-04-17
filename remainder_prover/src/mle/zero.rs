@@ -1,6 +1,4 @@
-//!Contains ZeroMleRef which is an MleRef which always contains only all zeros
-
-//!Contains ZeroMleRef which is an MleRef which always contains only all zeros
+//! A space-efficient implementation of an [MleRef] which contains only zeros.
 
 use itertools::{repeat_n, Itertools};
 use serde::{Deserialize, Serialize};
@@ -12,13 +10,13 @@ use remainder_shared_types::FieldExt;
 
 use super::{mle_enum::MleEnum, MleIndex, MleRef};
 
-///An MLERef that is only zeros; Typically used for the output layer
+/// An [MleRef] that contains only zeros; typically used for the output layer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZeroMleRef<F> {
     pub(crate) mle_indices: Vec<MleIndex<F>>,
     pub(crate) original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
-    /// (warning: this gets modified destructively DURING sumcheck)
+    /// (warning: this gets modified destructively DURING sumcheck).
     num_vars: usize,
     pub(crate) layer_id: LayerId,
     zero: [F; 1],
@@ -26,7 +24,8 @@ pub struct ZeroMleRef<F> {
 }
 
 impl<F: FieldExt> ZeroMleRef<F> {
-    ///Creates a new ZERO MleRef
+    /// Constructs a new `ZeroMleRef` on `num_vars` variables with the
+    /// appropriate `prefix_bits` for a layer with ID `layer_id`.
     pub fn new(num_vars: usize, prefix_bits: Option<Vec<MleIndex<F>>>, layer_id: LayerId) -> Self {
         let mle_indices = prefix_bits
             .into_iter()

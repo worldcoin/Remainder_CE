@@ -126,7 +126,7 @@ pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
 /// function produces the expected expansion from its given `challenge_coord`.
 #[test]
 fn test_initialize_tensor() {
-    use ark_std::{test_rng, One};
+    use ark_std::test_rng;
     use rand::Rng;
     use remainder_shared_types::Fr;
 
@@ -160,7 +160,7 @@ fn test_initialize_tensor() {
 /// appropriate "a" and "b" vectors.
 #[test]
 fn test_split_tensor() {
-    use ark_std::{test_rng, One};
+    use ark_std::test_rng;
     use rand::Rng;
     use remainder_shared_types::Fr;
 

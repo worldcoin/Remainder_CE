@@ -444,7 +444,8 @@ impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     }
 }
 
-/// New type around a tuple of field elements.
+/// New type around a tuple of field elements -- specifically for when the tuple
+/// of elements are not adjacent in the bookkeeping table construction.
 #[derive(Debug, Clone)]
 pub struct TupleTree<F: FieldExt>(pub (F, F));
 
@@ -481,8 +482,13 @@ impl<F: FieldExt> From<(F, F)> for TupleTree<F> {
     }
 }
 
+/// Returns a DenseMle with the correct fixed bit representing which
+/// significant bits are in the MleRef for first and second.
 impl<F: FieldExt> DenseMle<F, TupleTree<F>> {
-    /// Returns a [DenseMleRef] of the first elements in the tuple.
+    /// Returns a [DenseMleRef] of the first elements in the tuple, but
+    /// because the tuple elements aren't adjacent values in the
+    /// bookkeeping table, we need to iterate through "splitter" elements
+    /// in order to insert the correct fixed bit. (0)
     pub fn first(&'_ self, splitter: usize) -> DenseMleRef<F> {
         // Number of *remaining* iterated variables.
         let new_num_iterated_vars = self.num_iterated_vars - 1;
@@ -513,7 +519,10 @@ impl<F: FieldExt> DenseMle<F, TupleTree<F>> {
         }
     }
 
-    /// Returns a [DenseMleRef] of the second elements in the tuple.
+    /// Returns a [DenseMleRef] of the second elements in the tuple, but
+    /// because the tuple elements aren't adjacent values in the
+    /// bookkeeping table, we need to iterate through "splitter" elements
+    /// in order to insert the correct fixed bit. (1).
     pub fn second(&'_ self, splitter: usize) -> DenseMleRef<F> {
         let new_num_iterated_vars = self.num_iterated_vars - 1;
         let mle_indices = self
