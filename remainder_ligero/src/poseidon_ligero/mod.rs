@@ -37,9 +37,9 @@ pub struct PoseidonParams {
     /// a single element within the state rather than the whole state.
     partial_rounds: usize,
     /// Number of elements which can be absorbed at the same time.
-    rate: usize,
+    _rate: usize,
     /// Total vector length of the Poseidon state (rate + capacity).
-    width: usize,
+    _width: usize,
 }
 
 impl PoseidonParams {
@@ -48,8 +48,8 @@ impl PoseidonParams {
         Self {
             full_rounds,
             partial_rounds,
-            rate,
-            width,
+            _rate: rate,
+            _width: width,
         }
     }
 }
