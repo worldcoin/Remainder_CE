@@ -2,7 +2,6 @@
 pub mod gate;
 /// The helper functions required to support gate operations.
 pub mod gate_helpers;
-
 /// Testing module.
 #[cfg(test)]
 mod tests;

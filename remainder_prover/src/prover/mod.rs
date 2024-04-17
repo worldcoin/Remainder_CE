@@ -18,7 +18,7 @@ use self::{
 };
 use crate::{
     claims::{Claim, ClaimAggregator, ClaimAndProof},
-    gate::gate::{BinaryOperation, Gate},
+    gate_mle::gate::{BinaryOperation, Gate},
     layer::{
         layer_builder::LayerBuilder, layer_enum::LayerEnum, regular_layer::RegularLayer, Layer,
         LayerError, LayerId,

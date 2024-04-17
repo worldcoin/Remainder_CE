@@ -1,8 +1,8 @@
 use crate::adapter::{convert_lcpc_to_halo, LigeroClaim, LigeroProof};
 use crate::ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point};
-use crate::ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof};
+use crate::ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof, LigeroRoot};
 use crate::utils::get_ligero_matrix_dims;
-use crate::{verify, LcProofAuxiliaryInfo, LcRoot};
+use crate::{verify, LcProofAuxiliaryInfo};
 use ark_std::log2;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
 use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
@@ -43,8 +43,8 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
     rho_inv: u8,
 ) -> (
     LigeroEncoding<F>,
-    crate::LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-    LcRoot<LigeroEncoding<F>, F>,
+    LigeroCommit<PoseidonSpongeHasher<F>, F>,
+    LigeroRoot<F>,
     LcProofAuxiliaryInfo,
 ) {
     // --- Auxiliaries ---
@@ -61,7 +61,7 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
     let comm = commit::<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>(coeffs, &enc).unwrap();
 
     // --- Only component of commitment which needs to be sent to the verifier is the commitment root ---
-    let root: LcRoot<LigeroEncoding<F>, F> = comm.get_root();
+    let root: LigeroRoot<F> = comm.get_root();
 
     let aux = LcProofAuxiliaryInfo {
         rho_inv,
@@ -96,6 +96,7 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
 /// ```
 /// // TODO!(ryancao) -- see tests below!
 /// ```
+#[allow(clippy::too_many_arguments)]
 pub fn poseidon_ml_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
     coeffs: &Vec<F>,
     rho_inv: u8,
@@ -104,7 +105,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
     challenge_coord: &Vec<F>,
     transcript: &mut TranscriptWriter<F, T>,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
-    root: LcRoot<LigeroEncoding<F>, F>,
+    root: LigeroRoot<F>,
 ) -> (
     F,
     LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
@@ -168,8 +169,8 @@ pub fn remainder_ligero_commit<F: FieldExt>(
     ratio: f64,
 ) -> (
     LigeroEncoding<F>,
-    crate::LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-    LcRoot<LigeroEncoding<F>, F>,
+    LigeroCommit<PoseidonSpongeHasher<F>, F>,
+    LigeroRoot<F>,
     LcProofAuxiliaryInfo,
 ) {
     // --- Sanitycheck ---
@@ -213,7 +214,7 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
     transcript: &mut TranscriptWriter<F, T>,
     aux: LcProofAuxiliaryInfo,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
-    root: LcRoot<LigeroEncoding<F>, F>,
+    root: LigeroRoot<F>,
 ) -> LigeroProof<F> {
     // --- Sanitycheck ---
     assert!(input_layer_bookkeeping_table.len().is_power_of_two());
