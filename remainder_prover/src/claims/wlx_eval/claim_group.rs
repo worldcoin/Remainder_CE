@@ -4,7 +4,7 @@ use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 use tracing::{debug, info};
 
-use crate::{claims::ClaimError, layer::LayerId, mle::mle_enum::MleEnum};
+use crate::{claims::ClaimError, mle::mle_enum::MleEnum};
 
 use super::ClaimMle;
 
@@ -17,11 +17,6 @@ use super::ClaimMle;
 pub struct ClaimGroup<F: FieldExt> {
     /// A vector of claims in F^n.
     pub claims: Vec<ClaimMle<F>>,
-    /// TODO(Makis): The following fields are all redundant. We should remove
-    /// them on the next refactoring and consider using iterators instead!
-    /// -------------- REFACTOR NEEDED ---------------------
-    /// The common layer ID of all claims stored in this group.
-    src_layer_id: Option<LayerId>,
     /// A 2D matrix with the claim's points as its rows.
     claim_points_matrix: Vec<Vec<F>>,
     /// The points in `claims` is effectively a matrix of elements in F. We also
@@ -32,7 +27,7 @@ pub struct ClaimGroup<F: FieldExt> {
     result_vector: Vec<F>,
 }
 
-impl<F: Copy + Clone + std::fmt::Debug + FieldExt> ClaimGroup<F> {
+impl<F: FieldExt> ClaimGroup<F> {
     /// Builds a ClaimGroup<F> struct from a vector of claims. Also populates
     /// all the redundant fields for easy access to rows/columns.
     /// If the claims do not all agree on the number of variables, a
@@ -44,7 +39,6 @@ impl<F: Copy + Clone + std::fmt::Debug + FieldExt> ClaimGroup<F> {
         if num_claims == 0 {
             return Ok(Self {
                 claims: vec![],
-                src_layer_id: None,
                 claim_points_matrix: vec![],
                 claim_points_transpose: vec![],
                 result_vector: vec![],
@@ -88,7 +82,6 @@ impl<F: Copy + Clone + std::fmt::Debug + FieldExt> ClaimGroup<F> {
 
         Ok(Self {
             claims,
-            src_layer_id: layer_id,
             claim_points_matrix: points_matrix,
             claim_points_transpose,
             result_vector,
@@ -111,26 +104,6 @@ impl<F: Copy + Clone + std::fmt::Debug + FieldExt> ClaimGroup<F> {
         self.claims[0].get_num_vars()
     }
 
-    /// Returns the common destination layer ID of all the claims stored in this
-    /// group.
-    pub fn get_layer_id(&self) -> Option<LayerId> {
-        self.src_layer_id
-    }
-
-    /// Returns the i-th result.
-    /// # Panics
-    /// If i is not in the range 0 <= i < `self.get_num_claims()`.
-    pub fn get_result(&self, i: usize) -> F {
-        self.claims[i].get_result()
-    }
-
-    /// Returns reference to the i-th point vector.
-    /// # Panics
-    /// When i is not in the range 0 <= i < `self.get_num_claims()`.
-    pub fn get_challenge(&self, i: usize) -> &Vec<F> {
-        self.claims[i].get_point()
-    }
-
     /// Returns a reference to a vector of `self.get_num_claims()` elements, the
     /// j-th entry of which is the i-th coordinate of the j-th claim's point. In
     /// other words, it returns the i-th column of the matrix containing the
@@ -145,13 +118,6 @@ impl<F: Copy + Clone + std::fmt::Debug + FieldExt> ClaimGroup<F> {
     /// and m = `self.get_num_claims()` with the claim points as its rows.
     pub fn get_claim_points_matrix(&self) -> &Vec<Vec<F>> {
         &self.claim_points_matrix
-    }
-
-    /// Returns a reference to an "n x m" matrix where n = `self.get_num_vars()`
-    /// and m = `self.get_num_claims()`, containing the claim points as its
-    /// columns.
-    pub fn get_claim_points_transpose(&self) -> &Vec<Vec<F>> {
-        &self.claim_points_transpose
     }
 
     /// Returns a reference to a vector with m = `self.get_num_claims()`

@@ -326,8 +326,8 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
 impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: &Vec<Vec<F>>,
-        claimed_vals: &Vec<F>,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
         _claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
@@ -359,7 +359,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
             .collect();
 
         // Concat this with the first k evaluations from the claims to get num_evals evaluations.
-        let mut claimed_vals = claimed_vals.clone();
+        let mut claimed_vals = claimed_vals.to_vec();
 
         claimed_vals.extend(&next_evals);
         let wlx_evals = claimed_vals;

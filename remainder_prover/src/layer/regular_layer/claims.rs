@@ -117,8 +117,8 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
 impl<F: FieldExt> YieldWLXEvals<F> for RegularLayer<F> {
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: &Vec<Vec<F>>,
-        claimed_vals: &Vec<F>,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
         claim_mle_refs: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
@@ -153,7 +153,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for RegularLayer<F> {
 
         // concat this with the first k evaluations from the claims to
         // get num_evals evaluations
-        let mut wlx_evals = claimed_vals.clone();
+        let mut wlx_evals = claimed_vals.to_vec();
         wlx_evals.extend(&next_evals);
         Ok(wlx_evals)
     }
