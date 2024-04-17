@@ -20,6 +20,8 @@ pub mod ligero_input_layer;
 pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
 pub mod random_input_layer;
+
+#[cfg(test)]
 mod tests;
 
 use crate::{
