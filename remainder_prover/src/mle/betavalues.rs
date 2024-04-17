@@ -18,11 +18,11 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// A struct that holds the claim and the relevant bound values for the beta
 /// equality MLE. Rather than storing the entire beta table, we simply store the
 /// points in the claim that are still "unbound", and the points that have been
-/// bound using the Tha13 definition of a beta table.
+/// bound using the \[Thaler13\] definition of a beta table.
 ///
 /// Beta tables are used to "linearize" an expression that we wish to evaluate
 /// over a claimed point `(g_0, ..., g_n)`. Therefore we create an MLE that
-/// evaluates to `1` at this point and `0`` at every other point, which is a
+/// evaluates to `1` at this point and `0` at every other point, which is a
 /// beta table. This would be a table of size `2^n`.
 ///
 /// Instead, we choose to store just the individual values in a hash map as we
@@ -36,10 +36,12 @@ pub struct BetaValues<F: FieldExt> {
     /// which challenge in the claim that corresponds to. Every key in
     /// unbound values should be >= the current round index in sumcheck.
     pub unbound_values: HashMap<usize, F>,
+
     /// The challenges that have already been bound in the sumcheck protocol.
-    /// Keys are round it corresponds to, and values are `(1 - r_i)(1 - g_i)
-    /// + r_i*g_i`` where `i`` is the key, `g_i`` is the claim challenge point,
-    /// and `r_i`` is the current challenge point. Every key here should be
+    /// Keys are the round it corresponds to, and values are
+    /// `(1 - r_i)(1 - g_i) + r_i*g_i` where `i` is the key, `g_i` is the
+    /// claim challenge point,
+    /// and `r_i` is the current challenge point. Every key here should be
     /// < the current round index in sumcheck.
     pub updated_values: HashMap<usize, F>,
 }
@@ -111,7 +113,7 @@ impl<F: FieldExt> BetaValues<F> {
             })
     }
 
-    /// Returns the full beta equality table as defined in Thaler 13, so over
+    /// Returns the full beta equality table as defined in \[Thaler13\], so over
     /// `n` challenge points it returns a table of size `2^n`. This is when we
     /// do still need the entire beta table.
     pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMleRef<F> {

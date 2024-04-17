@@ -27,14 +27,18 @@ use remainder_shared_types::FieldExt;
 pub struct DenseMle<F, T: Send + Sync + Clone + Debug + MleAble<F>> {
     /// The underlying data.
     pub mle: T::Repr,
+
     /// Number of iterated variables.
     num_iterated_vars: usize,
+
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,
-    /// Any prefix bits that must be added to any MleRefs yielded by this Mle.
+
+    /// Any prefix bits that must be added to any [MleRef]s yielded by this MLE.
     pub prefix_bits: Option<Vec<MleIndex<F>>>,
+
     /// Marker.
-    pub _marker: PhantomData<F>,
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt, T> Mle<F> for DenseMle<F, T>
@@ -188,18 +192,6 @@ impl<F: FieldExt> MleAble<F> for F {
 }
 
 impl<F: FieldExt> DenseMle<F, F> {
-    ///Creates a flat DenseMle from a Vec<F>
-    // pub fn new(mle: Vec<F>) -> Self {
-    //     let num_vars = log2(mle.len()) as usize;
-    //     Self {
-    //         mle,
-    //         num_vars,
-    //         layer_id: None,
-    //         prefix_bits: None,
-    //         _marker: PhantomData,
-    //     }
-    // }
-
     /// Constructs a [DenseMleRef] from this `DenseMle`.
     pub fn mle_ref(&self) -> DenseMleRef<F> {
         let mle_indices: Vec<MleIndex<F>> = self
@@ -236,7 +228,7 @@ impl<F: FieldExt> DenseMle<F, F> {
         )
     }
 
-    /// Splits the MLE into a new MLE with a tuple of size 3 as its element.
+    /// Splits the MLE into a new MLE with `TupleTree` as its element.
     pub fn split_tree(&self, num_split: usize) -> DenseMle<F, TupleTree<F>> {
         let mut first_half = vec![];
         let mut second_half = vec![];
@@ -271,8 +263,8 @@ impl<F: FieldExt> DenseMle<F, F> {
     }
 
     /// Combines a batch of `DenseMle<F, F>`s into a single `DenseMle<F, F>`
-    /// appropriately, such that the bit ordering is (batched_bits,
-    /// (mle_ref_bits), iterated_bits)
+    /// appropriately, such that the bit ordering is
+    /// `(batched_bits, mle_ref_bits, iterated_bits)`.
     ///
     /// TODO!(ende): refactor
     pub fn combine_mle_batch(mle_batch: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
@@ -330,36 +322,6 @@ impl<F: FieldExt> From<(F, F)> for Tuple2<F> {
         Self(value)
     }
 }
-
-//TODO!(Fix this so that it clones less)
-// impl<'a, F: FieldExt> IntoIterator for &'a DenseMle<F, Tuple2<F>> {
-//     type Item = (F, F);
-
-//     type IntoIter = Zip<Cloned<std::slice::Iter<'a, F>>,
-// Cloned<std::slice::Iter<'a, F>>>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.mle[0].iter().cloned().zip(self.mle[1].iter().cloned())
-//     }
-// }
-
-// impl<F: FieldExt> FromIterator<Tuple2<F>> for DenseMle<F, Tuple2<F>> {
-//     fn from_iter<T: IntoIterator<Item = Tuple2<F>>>(iter: T) -> Self {
-//         let iter = iter.into_iter();
-//         let (first, second): (Vec<F>, Vec<F>) = iter.map(|x| (x.0 .0, x.0
-// .1)).unzip();
-
-//         let num_vars: usize = log2(first.len() + second.len()) as usize;
-
-//         Self {
-//             mle: [first, second],
-//             num_vars,
-//             layer_id: None,
-//             prefix_bits: None,
-//             _marker: PhantomData,
-//         }
-//     }
-// }
 
 impl<F: FieldExt> DenseMle<F, Tuple2<F>> {
     /// Returns a [DenseMleRef] of the first elements in the tuple.
