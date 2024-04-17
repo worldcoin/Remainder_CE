@@ -24,12 +24,14 @@ use super::Layers;
 /// Error when combining layers
 pub struct CombineError;
 
+type IntermediateAndOutputLayers<F> = (Layers<F, LayerEnum<F>>, Vec<MleEnum<F>>);
+
 ///Utility for combining sub-circuits into a single circuit
 /// DOES NOT WORK FOR GATE MLE
 pub fn combine_layers<F: FieldExt>(
     mut layers: Vec<Layers<F, LayerEnum<F>>>,
     mut output_layers: Vec<Vec<MleEnum<F>>>,
-) -> Result<(Layers<F, LayerEnum<F>>, Vec<MleEnum<F>>), CombineError> {
+) -> Result<IntermediateAndOutputLayers<F>, CombineError> {
     //We're going to add multiple selectors to merge the sub-circuits, and then
     //the future layers need to take those selectors into account in thier claims.
     let layer_count = layers

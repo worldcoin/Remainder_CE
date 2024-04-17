@@ -270,6 +270,12 @@ pub type CircuitInputLayer<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem
 pub type CircuitClaimAggregator<F, C: GKRCircuit<F>> =
     <C::ProofSystem as ProofSystem<F>>::ClaimAggregator;
 
+#[allow(type_alias_bounds)]
+type WitnessAndCommitments<F, C: GKRCircuit<F>> = (
+    Witness<F, C::ProofSystem>,
+    Vec<<CircuitInputLayer<F, C> as InputLayer<F>>::Commitment>,
+);
+
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
     /// The ProofSystem that describes the allowed cryptographic operations this Circuit uses
@@ -286,13 +292,7 @@ pub trait GKRCircuit<F: FieldExt> {
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<
-        (
-            Witness<F, Self::ProofSystem>,
-            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
-        ),
-        GKRError,
-    > {
+    ) -> Result<WitnessAndCommitments<F, Self>, GKRError> {
         let mut witness = self.synthesize();
 
         let commitments = witness
