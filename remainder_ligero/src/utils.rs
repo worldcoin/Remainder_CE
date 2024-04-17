@@ -1,7 +1,6 @@
 use std::iter::repeat_with;
 
 use crate::log2;
-use ark_std::test_rng;
 use halo2_proofs::poly::EvaluationDomain;
 use rand::Rng;
 use remainder_shared_types::FieldExt;

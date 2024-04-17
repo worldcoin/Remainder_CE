@@ -2,8 +2,8 @@ use std::{fs, iter::repeat_with};
 
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
-use rand::{prelude::Distribution, Rng};
-use remainder_shared_types::{transcript::TranscriptSponge, FieldExt, Poseidon};
+use rand::Rng;
+use remainder_shared_types::{FieldExt, Poseidon};
 
 use crate::{
     layer::{layer_enum::LayerEnum, LayerId},
@@ -139,6 +139,8 @@ pub fn file_exists(file_path: &String) -> bool {
     }
 }
 
+/// Hashes the layers of a GKR circuit by calling their circuit descriptions
+/// Returns one single Field element
 pub fn hash_layers<F: FieldExt>(layers: &Layers<F, LayerEnum<F>>) -> F {
     let mut sponge: Poseidon<F, 3, 2> = Poseidon::new(8, 57);
 

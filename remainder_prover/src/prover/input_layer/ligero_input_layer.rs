@@ -1,4 +1,4 @@
-//! An InputLayer that will be have it's claim proven with a Ligero Opening Proof
+//! An InputLayer that will have it's claim proven with a Ligero Opening Proof.
 
 use remainder_ligero::{
     adapter::{convert_halo_to_lcpc, LigeroProof},
@@ -24,30 +24,40 @@ use crate::{
 
 use super::{get_wlx_evaluations_helper, InputLayer, MleInputLayer};
 
+/// An input layer in which `mle` will be committed to using the Ligero polynomial
+/// commitment scheme.
 pub struct LigeroInputLayer<F: FieldExt> {
+    /// The MLE which we wish to commit to.
     pub mle: DenseMle<F, F>,
+    /// The ID corresponding to this layer.
     pub(crate) layer_id: LayerId,
+    /// The Ligero commitment to `mle`.
     comm: Option<LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>>,
+    /// The auxiliary information needed in order to perform an opening proof.
     aux: Option<LcProofAuxiliaryInfo>,
+    /// The Merkle root corresponding to the commitment.
     root: Option<LcRoot<LigeroEncoding<F>, F>>,
+    /// Whether this layer has already been committed to.
     is_precommit: bool,
+    /// The rho inverse for the Reed Solomon encoding.
     rho_inv: Option<u8>,
+    /// The ratio of the number of rows : number of columns of the matrix.
     ratio: Option<f64>,
 }
 
-/// The *actual* Ligero evaluation proof the prover needs to send to the verifier
+/// The Ligero evaluation proof that the prover needs to send to the verifier.
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct LigeroInputProof<F: FieldExt> {
+    /// The proof itself, see [LigeroProof].
     pub proof: LigeroProof<F>,
+    /// The auxiliary information needed to verify the above proof.
     pub aux: LcProofAuxiliaryInfo,
     /// Whether this is a pre-committed (true) or live-committed Ligero input layer
     pub is_precommit: bool,
 }
 
-const RHO_INV: u8 = 4;
-
-/// The *actual* Ligero commitment the prover needs to send to the verifier
+/// The Ligero commitment the prover needs to send to the verifier
 pub type LigeroCommitment<F> = LcRoot<LigeroEncoding<F>, F>;
 
 impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
@@ -77,6 +87,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         Ok(root)
     }
 
+    /// Add the commitment to the prover transcript for Fiat-Shamir.
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
@@ -84,6 +95,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         transcript_writer.append("Ligero Merkle Commitment", commitment.clone().into_raw());
     }
 
+    /// Add the commitment to the verifier transcript for Fiat-Shamir.
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
@@ -95,6 +107,9 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         Ok(())
     }
 
+    /// "Open" the commitment, in other words, see whether the polynomial evaluated at the
+    /// random point in `claim` corresopnds to the claimed value in `claim` by "opening"
+    /// the commitment and this random point.
     fn open(
         &self,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
@@ -129,6 +144,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         })
     }
 
+    /// Verify the evaluation proof generated from the `open()` function.
     fn verify(
         _commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,

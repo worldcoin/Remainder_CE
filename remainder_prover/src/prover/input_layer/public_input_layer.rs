@@ -13,7 +13,8 @@ use crate::{
 
 use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
 
-///An Input Layer that is send to the verifier in the clear
+/// An Input Layer in which the data is sent to the verifier
+/// "in the clear" (i.e. without a commitment).
 pub struct PublicInputLayer<F: FieldExt> {
     mle: DenseMle<F, F>,
     pub(crate) layer_id: LayerId,
@@ -24,10 +25,13 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
 
     type OpeningProof = ();
 
+    /// Because this is a public input layer, we do not need to commit to the MLE and the
+    /// "commitment" is just the MLE itself.
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
         Ok(self.mle.mle.clone())
     }
 
+    /// Append the commitment to the Fiat-Shamir transcript.
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
@@ -35,6 +39,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         transcript_writer.append_elements("Public Input Commitment", commitment);
     }
 
+    /// Append the commitment to the Fiat-Shamir transcript.
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
@@ -47,6 +52,8 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         Ok(())
     }
 
+    /// We do not have an opening proof because we did not commit to anything. The MLE
+    /// exists in the clear.
     fn open(
         &self,
         _: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
@@ -55,13 +62,15 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         Ok(())
     }
 
+    /// In order to verify, simply fix variable on each of the variables for the point
+    /// in `claim`. Check whether the single element left in the bookkeeping table is
+    /// equal to the claimed value in `claim`.
     fn verify(
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
         _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
-        // println!("3, calling verify");
         let mut mle_ref =
             DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
@@ -72,9 +81,6 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
             debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
-            // println!("1, eval = {:#?}, claim = {:#?}", eval, claim);
-            // dbg!(&eval);
-            // dbg!(&claim);
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
             Claim::new(vec![], mle_ref.current_mle[0])
@@ -83,7 +89,6 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
             Ok(())
         } else {
-            // println!("2, eval = {:#?}, claim = {:#?}", eval, claim);
             Err(InputLayerError::PublicInputVerificationFailed)
         }
     }

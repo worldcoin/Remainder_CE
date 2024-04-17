@@ -1,21 +1,16 @@
-use std::{cmp::max, iter::repeat_with, path::Path};
+use std::cmp::max;
 
 use ark_std::test_rng;
-use itertools::Itertools;
-use rand::Rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit;
-use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, TranscriptWriter},
-    FieldExt, Fr,
-};
+use remainder_shared_types::{transcript::TranscriptWriter, FieldExt, Fr};
 
 use crate::{
-    expression::generic_expr::{Expression, ExpressionNode},
+    expression::generic_expr::Expression,
     layer::{
         layer_builder::{from_mle, simple_builders::EqualityCheck, LayerBuilder},
         LayerId,
     },
-    mle::{dense::DenseMle, zero::ZeroMleRef, Mle, MleRef},
+    mle::{dense::DenseMle, Mle, MleRef},
     prover::{
         helpers::test_circuit, proof_system::DefaultProofSystem, CircuitInputLayer,
         CircuitTranscript, GKRCircuit, GKRError, Layers, Witness,

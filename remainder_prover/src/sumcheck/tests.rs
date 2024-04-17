@@ -3,7 +3,7 @@ use crate::{
     claims::Claim, expression::generic_expr::ExpressionNode, layer::LayerId, mle::dense::DenseMle,
 };
 
-use ark_std::{test_rng, Zero};
+use ark_std::test_rng;
 use rand::Rng;
 use remainder_shared_types::Fr;
 

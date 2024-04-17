@@ -74,16 +74,6 @@ pub struct InputLayerBuilder<F> {
 }
 
 impl<F: FieldExt> InputLayerBuilder<F> {
-    /// Fetches the prefix bits of mles for Layer::layer(0)
-    /// These prefix bits need to be added before the batching bits
-    pub fn fetch_prefix_bits(&self) -> Vec<Vec<MleIndex<F>>> {
-        self.mles
-            .clone()
-            .into_iter()
-            .map(|x| x.get_prefix_bits().unwrap())
-            .collect_vec()
-    }
-
     /// Creates a new InputLayerBuilder that will yield an InputLayer from many MLEs
     ///
     /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this
@@ -176,7 +166,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         }
     }
 
-    ///Add a concrete value for the extra_mle declared at the start
+    /// Add a concrete value for the extra_mle declared at the start.
     pub fn add_extra_mle(
         &mut self,
         extra_mle: Box<&mut (dyn Mle<F> + 'static)>,
@@ -189,6 +179,8 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         Ok(())
     }
 
+    /// Combines the list of input MLEs in the input layer into one giant MLE by interleaving them
+    /// assuming that the indices of the bookkeeping table are stored in little endian.
     fn combine_input_mles(&self) -> DenseMle<F, F> {
         let input_mles = &self.mles;
         let mle_combine_indices = argsort(
@@ -205,15 +197,12 @@ impl<F: FieldExt> InputLayerBuilder<F> {
                 // --- Grab from the list of input MLEs OR the input-output MLE if the index calls for it ---
                 let input_mle = &input_mles[input_mle_idx];
 
-                // dbg!(input_mle.get_padded_evaluations());
-
                 // --- Basically, everything is stored in big-endian (including bookkeeping tables ---
                 // --- and indices), BUT the indexing functions all happen as if we're interpreting ---
                 // --- the indices as little-endian. Therefore we need to merge the input MLEs via ---
                 // --- interleaving, or alternatively by converting everything to "big-endian", ---
                 // --- merging the usual big-endian way, and re-converting the merged version back to ---
                 // --- "little-endian" ---
-                //TODO!(Please get rid of this stupid thing)
                 let inverted_input_mle =
                     invert_mle_bookkeeping_table(input_mle.get_padded_evaluations());
 
@@ -232,13 +221,13 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         DenseMle::new_from_raw(re_inverted_final_bookkeeping_table, self.layer_id, None)
     }
 
-    /// Turn this builder into a real input layer
+    /// Turn this builder into an input layer.
     pub fn to_input_layer<I: MleInputLayer<F>>(self) -> I {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
         I::new(final_mle, self.layer_id)
     }
 
-    /// Turn the builder into an input layer WITH a pre-commitment
+    /// Turn the builder into an input layer WITH a pre-commitment.
     pub fn to_input_layer_with_precommit(
         self,
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
@@ -257,7 +246,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         )
     }
 
-    /// Turn the builder into input layer with rho inv specified
+    /// Turn the builder into input layer with rho inv specified.
     pub fn to_input_layer_with_rho_inv(self, rho_inv: u8, ratio: f64) -> LigeroInputLayer<F> {
         let final_mle: DenseMle<F, F> = self.combine_input_mles();
         LigeroInputLayer::<F>::new_with_rho_inv_ratio(final_mle, self.layer_id, rho_inv, ratio)

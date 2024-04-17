@@ -1,8 +1,6 @@
-use std::path::Path;
-
 use ark_std::test_rng;
 use rand::Rng;
-use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt, Fr};
+use remainder_shared_types::{FieldExt, Fr};
 
 use crate::{
     layer::{layer_builder::simple_builders::ZeroBuilder, LayerId},
