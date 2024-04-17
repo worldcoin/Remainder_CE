@@ -1,8 +1,7 @@
 //! Utilities that are only useful for tests
 
-use super::TranscriptSponge;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
 
 /// A dummy transcript that can have arbitrary values fed into it.
 ///

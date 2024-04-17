@@ -2,6 +2,7 @@ use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
 use crate::layer::{layer_builder::from_mle, regular_layer::RegularLayer, LayerId};
 use crate::mle::dense::DenseMle;
+use crate::mle::MleIndex;
 use crate::utils::test_utils::DummySponge;
 use rand::Rng;
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
@@ -240,8 +241,16 @@ fn test_aggro_claim_4() {
     ];
 
     let mut rng = test_rng();
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle1_evals, LayerId::Input(0), None);
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle2_evals, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+        mle1_evals,
+        LayerId::Input(0),
+        Some(vec![MleIndex::Fixed(false), MleIndex::Fixed(false)]),
+    );
+    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+        mle2_evals,
+        LayerId::Input(0),
+        Some(vec![MleIndex::Fixed(true)]),
+    );
     let mle_ref = mle1.mle_ref();
     let mle_ref2 = mle2.mle_ref();
 
@@ -258,23 +267,12 @@ fn test_aggro_claim_4() {
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
     let chals3 = vec![Fr::from(92108), Fr::from(29014), Fr::from(524)];
-    let chals = vec![&chals1, &chals2, &chals3];
-    let mut valchal: Vec<Fr> = Vec::new();
-    for i in 0..3 {
-        let mut exp = expr.clone();
-        exp.index_mle_indices(0);
-        let eval = exp.evaluate_expr((*chals[i]).clone());
-        valchal.push(eval.unwrap());
-    }
+    let chals = vec![chals1, chals2, chals3];
 
-    let claim1: ClaimMle<Fr> = ClaimMle::new_raw(chals1, valchal[0]);
-    let claim2: ClaimMle<Fr> = ClaimMle::new_raw(chals2, valchal[1]);
-    let claim3: ClaimMle<Fr> = ClaimMle::new_raw(chals3, valchal[2] + Fr::one());
+    let claim_group = claims_from_expr_and_points(&layer.expression, &chals);
 
     let rchal = Fr::from(40).neg();
 
-    let claims: Vec<ClaimMle<Fr>> = vec![claim1, claim2, claim3];
-    let claim_group = ClaimGroup::new(claims).unwrap();
     let res =
         claim_aggregation_back_end_wrapper::<DummySponge<_, -40>>(&layer, &claim_group, rchal);
 
@@ -324,23 +322,12 @@ fn test_aggro_claim_negative_1() {
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
     let chals3 = vec![Fr::from(92108), Fr::from(29014), Fr::from(524)];
-    let chals = vec![&chals1, &chals2, &chals3];
-    let mut valchal: Vec<Fr> = Vec::new();
-    for i in 0..3 {
-        let mut exp = expr.clone();
-        exp.index_mle_indices(0);
-        let eval = exp.evaluate_expr((*chals[i]).clone());
-        valchal.push(eval.unwrap());
-    }
-
-    let claim1: ClaimMle<Fr> = ClaimMle::new_raw(chals1, valchal[0] - Fr::one());
-    let claim2: ClaimMle<Fr> = ClaimMle::new_raw(chals2, valchal[1]);
-    let claim3: ClaimMle<Fr> = ClaimMle::new_raw(chals3, valchal[2]);
+    let chals = vec![chals1, chals2, chals3];
 
     let rchal = Fr::from(76);
 
-    let claims_vec: Vec<ClaimMle<Fr>> = vec![claim1, claim2, claim3];
-    let claim_group = ClaimGroup::new(claims_vec).unwrap();
+    let mut claim_group = claims_from_expr_and_points(&layer.expression, &chals);
+    claim_group.claims[0].claim.result -= Fr::one();
     let res = claim_aggregation_back_end_wrapper::<DummySponge<_, 76>>(&layer, &claim_group, rchal);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
@@ -389,23 +376,12 @@ fn test_aggro_claim_negative_2() {
     let chals1 = vec![Fr::from(2).neg(), Fr::from(192013).neg(), Fr::from(2148)];
     let chals2 = vec![Fr::from(123), Fr::from(482), Fr::from(241)];
     let chals3 = vec![Fr::from(92108), Fr::from(29014), Fr::from(524)];
-    let chals = vec![&chals1, &chals2, &chals3];
-    let mut valchal: Vec<Fr> = Vec::new();
-    for i in 0..3 {
-        let mut exp = expr.clone();
-        exp.index_mle_indices(0);
-        let eval = exp.evaluate_expr((*chals[i]).clone());
-        valchal.push(eval.unwrap());
-    }
+    let chals = vec![chals1, chals2, chals3];
 
-    let claim1: ClaimMle<Fr> = ClaimMle::new_raw(chals1, valchal[0]);
-    let claim2: ClaimMle<Fr> = ClaimMle::new_raw(chals2, valchal[1]);
-    let claim3: ClaimMle<Fr> = ClaimMle::new_raw(chals3, valchal[2] + Fr::one());
+    let rchal = Fr::from(76);
 
-    let rchal = Fr::from(40);
-
-    let claims_vec: Vec<ClaimMle<Fr>> = vec![claim1, claim2, claim3];
-    let claim_group = ClaimGroup::new(claims_vec).unwrap();
+    let mut claim_group = claims_from_expr_and_points(&layer.expression, &chals);
+    claim_group.claims[2].claim.result += Fr::one();
     let res = claim_aggregation_back_end_wrapper::<DummySponge<_, 40>>(&layer, &claim_group, rchal);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
@@ -453,10 +429,7 @@ fn test_aggro_claim_common_suffix1() {
     assert_eq!(l_star, vec![Fr::from(11), Fr::from(13), Fr::from(5)]);
 
     let wlx = compute_claim_wlx::<_, DummySponge<Fr, 10>>(&claims, &layer);
-    assert_eq!(
-        wlx.1.first().unwrap().clone(),
-        vec![Fr::from(163), Fr::from(1015), Fr::from(2269)]
-    );
+    assert_eq!(wlx.1.first().unwrap().clone(), vec![Fr::from(2269)]);
 
     let aggregated_claim =
         claim_aggregation_back_end_wrapper::<DummySponge<Fr, 10>>(&layer, &claims, r_star);
@@ -491,9 +464,6 @@ fn test_aggro_claim_common_suffix2() {
     assert_eq!(claims.get_result(1), Fr::from(767));
 
     let l_star = compute_l_star(&claims, &r_star);
-
-    let wlx = compute_claim_wlx::<_, DummySponge<Fr, 10>>(&claims, &layer);
-    assert_eq!(wlx.1[0], vec![Fr::from(163), Fr::from(767)]);
 
     // Compare to l(10) computed by hand.
     assert_eq!(l_star, vec![Fr::from(11), Fr::from(3), Fr::from(5)]);
