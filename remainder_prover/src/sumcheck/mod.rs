@@ -133,11 +133,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
     // a constant does not have any variables, so we do not need a beta table at all. therefore we just repeat
     // the constant evaluation for the degree+1 number of times as this is how many evaluations we need.
     let constant = |constant, beta_table: &BetaValues<F>| {
-        let constant_updated_vals = beta_values
-            .updated_values
-            .values()
-            .map(|elem| elem.clone())
-            .collect_vec();
+        let constant_updated_vals = beta_values.updated_values.values().copied().collect_vec();
         let index_claim = beta_table.unbound_values.get(&round_index).unwrap();
         let one_minus_index_claim = F::one() - index_claim;
         let beta_step = *index_claim - one_minus_index_claim;

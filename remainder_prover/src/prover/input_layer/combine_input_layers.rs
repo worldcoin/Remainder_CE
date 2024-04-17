@@ -168,12 +168,12 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     /// Add a concrete value for the extra_mle declared at the start.
     pub fn add_extra_mle(
         &mut self,
-        extra_mle: Box<&mut (dyn Mle<F> + 'static)>,
+        extra_mle: &mut (dyn Mle<F> + 'static),
     ) -> Result<(), &'static str> {
         let new_bits = self.extra_mle_indices.as_mut().ok_or("Called add_extra_mle too many times compared to the extra_mles that were declared when creating the builder")?;
         let new_bits = new_bits.remove(0);
         extra_mle.set_prefix_bits(Some(new_bits));
-        let extra_mle = dyn_clone::clone_box(*extra_mle);
+        let extra_mle = dyn_clone::clone_box(extra_mle);
         self.mles.push(extra_mle);
         Ok(())
     }
