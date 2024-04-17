@@ -19,7 +19,7 @@ use remainder::{
 use remainder_shared_types::{FieldExt, Fr};
 
 use crate::utils::get_dummy_random_mle;
-mod utils;
+pub mod utils;
 
 /// A builder which returns the following expression:
 /// - sel(sel(`left_inner_sel_mle`, `right_inner_sel_mle`), `right_outer_sel_mle`)

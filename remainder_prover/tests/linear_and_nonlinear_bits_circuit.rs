@@ -20,7 +20,7 @@ use remainder::{
 use remainder_shared_types::{FieldExt, Fr};
 
 use crate::utils::get_dummy_random_mle;
-mod utils;
+pub mod utils;
 
 /// A builder which returns the following expression:
 /// - sel(`mle_1`, `mle_1`) + `mle_2` * `mle_2`

@@ -22,10 +22,11 @@ use remainder::{
 };
 use remainder_shared_types::{FieldExt, Fr};
 
+pub mod utils;
+
 use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
 
 use crate::utils::get_dummy_random_mle;
-mod utils;
 
 /// A circuit which takes in two vectors of MLEs of the same size:
 /// * Layer 0: [ProductScaledBuilder] with the two inputs
