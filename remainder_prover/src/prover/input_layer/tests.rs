@@ -122,10 +122,7 @@ impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> Expression<F, crate::expression::prover_expr::ProverExpr> {
-        Expression::sum(
-            Box::new(Expression::mle(self.mle_1.mle_ref())),
-            Box::new(Expression::mle(self.mle_2.mle_ref())),
-        )
+        self.mle_1.mle_ref().expression() + self.mle_2.mle_ref().expression()
     }
 
     fn next_layer(

@@ -301,7 +301,6 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
         &product,
         &scaled,
         beta_values,
-        round_index,
     )
 }
 

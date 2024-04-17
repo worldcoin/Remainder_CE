@@ -107,7 +107,7 @@ pub fn prover_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
 
     end_timer!(final_timer);
     Ok(ClaimAndProof {
-        claim: claim,
+        claim,
         proof: group_wlx_evaluations,
     })
 }
@@ -175,7 +175,7 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
 
     end_timer!(final_timer);
     Ok(ClaimAndProof {
-        claim: claim,
+        claim,
         proof: group_wlx_evaluations,
     })
 }
