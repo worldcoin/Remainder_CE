@@ -153,8 +153,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut self.mle_1), Box::new(&mut self.mle_2)];
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut self.mle_1, &mut self.mle_2];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();

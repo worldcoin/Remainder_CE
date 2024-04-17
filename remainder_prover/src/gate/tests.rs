@@ -34,8 +34,7 @@ impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut self.mle), Box::new(&mut self.neg_mle)];
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut self.mle, &mut self.neg_mle];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
@@ -92,8 +91,7 @@ impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut self.mle), Box::new(&mut self.neg_mle)];
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut self.mle, &mut self.neg_mle];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
@@ -149,11 +147,8 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut self.mle_1),
-            Box::new(&mut self.mle_2),
-            Box::new(&mut self.neg_mle_2),
-        ];
+        let input_mles: Vec<&mut dyn Mle<F>> =
+            vec![&mut self.mle_1, &mut self.mle_2, &mut self.neg_mle_2];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
@@ -235,10 +230,10 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut self.mle_1_dataparallel),
-            Box::new(&mut self.mle_2_dataparallel),
-            Box::new(&mut self.neg_mle_2_dataparallel),
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![
+            &mut self.mle_1_dataparallel,
+            &mut self.mle_2_dataparallel,
+            &mut self.neg_mle_2_dataparallel,
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
@@ -334,10 +329,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut self.mle_dataparallel),
-            Box::new(&mut self.neg_mle_dataparallel),
-        ];
+        let input_mles: Vec<&mut dyn Mle<F>> =
+            vec![&mut self.mle_dataparallel, &mut self.neg_mle_dataparallel];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
@@ -409,10 +402,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut self.mle_dataparallel),
-            Box::new(&mut self.neg_mle_dataparallel),
-        ];
+        let input_mles: Vec<&mut dyn Mle<F>> =
+            vec![&mut self.mle_dataparallel, &mut self.neg_mle_dataparallel];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();

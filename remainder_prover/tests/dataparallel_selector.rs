@@ -63,11 +63,11 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
         combined_mle_3.layer_id = LayerId::Input(0);
         combined_mle_4.layer_id = LayerId::Input(0);
 
-        let input_commit: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut combined_mle_1),
-            Box::new(&mut combined_mle_2),
-            Box::new(&mut combined_mle_3),
-            Box::new(&mut combined_mle_4),
+        let input_commit: Vec<&mut dyn Mle<F>> = vec![
+            &mut combined_mle_1,
+            &mut combined_mle_2,
+            &mut combined_mle_3,
+            &mut combined_mle_4,
         ];
 
         let input_commit_builder =

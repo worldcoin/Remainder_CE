@@ -201,13 +201,13 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
         self.mle_5.layer_id = LayerId::Input(0);
         self.mle_6.layer_id = LayerId::Input(0);
 
-        let input_commit: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut mle_1_combined),
-            Box::new(&mut mle_2_combined),
-            Box::new(&mut self.mle_3),
-            Box::new(&mut self.mle_4),
-            Box::new(&mut self.mle_5),
-            Box::new(&mut self.mle_6),
+        let input_commit: Vec<&mut dyn Mle<F>> = vec![
+            &mut mle_1_combined,
+            &mut mle_2_combined,
+            &mut self.mle_3,
+            &mut self.mle_4,
+            &mut self.mle_5,
+            &mut self.mle_6,
         ];
 
         let input_commit_builder =

@@ -68,11 +68,8 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
         // --- If we've already generated a commitment (i.e. through `new_with_ligero_commitment()`), ---
         // --- no need to regenerate the commitment ---
-        match (&self.comm, &self.aux, &self.root) {
-            (Some(_), Some(_), Some(root)) => {
-                return Ok(root.clone());
-            }
-            _ => {}
+        if let (Some(_), Some(_), Some(root)) = (&self.comm, &self.aux, &self.root) {
+            return Ok(root.clone());
         }
 
         let (_, _comm, _root, _aux) =
