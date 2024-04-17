@@ -39,7 +39,7 @@ impl MleVecIndex {
     /// return the actual mle_ref in the vec within the prover expression
     pub fn get_mle<'a, F: FieldExt>(
         &self,
-        mle_ref_vec: &'a Vec<DenseMleRef<F>>,
+        mle_ref_vec: &'a [DenseMleRef<F>],
     ) -> &'a DenseMleRef<F> {
         &mle_ref_vec[self.0]
     }
@@ -47,7 +47,7 @@ impl MleVecIndex {
     /// return the actual mle_ref in the vec within the prover expression
     pub fn get_mle_mut<'a, F: FieldExt>(
         &self,
-        mle_ref_vec: &'a mut Vec<DenseMleRef<F>>,
+        mle_ref_vec: &'a mut [DenseMleRef<F>],
     ) -> &'a mut DenseMleRef<F> {
         &mut mle_ref_vec[self.0]
     }
@@ -117,7 +117,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 
     /// not tested
     /// negates an Expression
-    pub fn negated(expression: Box<Expression<F, ProverExpr>>) -> Self {
+    pub fn negated(expression: Self) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
         let mle_node = ExpressionNode::Negated(Box::new(node));
@@ -127,10 +127,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 
     /// not tested
     /// Create a Sum Expression that contains two MLEs
-    pub fn sum(
-        lhs: Box<Expression<F, ProverExpr>>,
-        mut rhs: Box<Expression<F, ProverExpr>>,
-    ) -> Self {
+    pub fn sum(lhs: Self, mut rhs: Self) -> Self {
         let offset = lhs.num_mle_ref();
         rhs.increment_mle_vec_indices(offset);
 
@@ -148,7 +145,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 
     /// not tested
     /// scales an Expression by a field element
-    pub fn scaled(expression: Box<Expression<F, ProverExpr>>, scale: F) -> Self {
+    pub fn scaled(expression: Expression<F, ProverExpr>, scale: F) -> Self {
         let (node, mle_vec) = expression.deconstruct();
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), mle_vec)
@@ -316,7 +313,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T, // changed signature here, note to modify caller's calling code
         scaled: &impl Fn(T, F) -> T,
         beta: &BetaValues<F>,
-        round_index: usize,
     ) -> T {
         self.expression_node.evaluate_sumcheck_node_beta_cascade(
             constant,
@@ -327,7 +323,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
             product,
             scaled,
             beta,
-            round_index,
             &self.mle_vec,
         )
     }
@@ -545,7 +540,6 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T,
         scaled: &impl Fn(T, F) -> T,
         beta: &BetaValues<F>,
-        round_index: usize,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
     ) -> T {
         match self {
@@ -561,7 +555,6 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     product,
                     scaled,
                     beta,
-                    round_index,
                     mle_vec,
                 ),
                 b.evaluate_sumcheck_node_beta_cascade(
@@ -573,7 +566,6 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     product,
                     scaled,
                     beta,
-                    round_index,
                     mle_vec,
                 ),
                 beta,
@@ -594,7 +586,6 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     product,
                     scaled,
                     beta,
-                    round_index,
                     mle_vec,
                 );
                 negated(a)
@@ -609,7 +600,6 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     product,
                     scaled,
                     beta,
-                    round_index,
                     mle_vec,
                 );
                 let b = b.evaluate_sumcheck_node_beta_cascade(
@@ -621,7 +611,6 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     product,
                     scaled,
                     beta,
-                    round_index,
                     mle_vec,
                 );
                 sum(a, b)
@@ -655,7 +644,6 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     product,
                     scaled,
                     beta,
-                    round_index,
                     mle_vec,
                 );
                 scaled(a, *f)
@@ -726,12 +714,9 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     let mut product_indices: HashSet<usize> = HashSet::new();
                     mle_refs.into_iter().for_each(|mle_ref| {
                         mle_ref.mle_indices.iter().for_each(|mle_index| {
-                            match mle_index {
-                                MleIndex::IndexedBit(i) => {
-                                    product_indices.insert(*i);
-                                }
-                                _ => (),
-                            };
+                            if let MleIndex::IndexedBit(i) = mle_index {
+                                product_indices.insert(*i);
+                            }
                         })
                     });
                     product_indices
@@ -753,11 +738,8 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 // itself to the total set of all indices in an expression.
                 ExpressionNode::Selector(sel_index, a, b) => {
                     let mut sel_indices: HashSet<usize> = HashSet::new();
-                    match sel_index {
-                        MleIndex::IndexedBit(i) => {
-                            sel_indices.insert(*i);
-                        }
-                        _ => (),
+                    if let MleIndex::IndexedBit(i) = sel_index {
+                        sel_indices.insert(*i);
                     };
 
                     let a_indices = a.get_all_rounds(curr_indices, mle_vec);
@@ -839,11 +821,8 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                         .into_iter()
                         .for_each(|(mle_index, count)| {
                             if count > 1 {
-                                match mle_index {
-                                    MleIndex::IndexedBit(i) => {
-                                        product_nonlinear_indices.insert(i);
-                                    }
-                                    _ => (),
+                                if let MleIndex::IndexedBit(i) = mle_index {
+                                    product_nonlinear_indices.insert(i);
                                 }
                             }
                         });
@@ -989,7 +968,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
 impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn neg(self) -> Self::Output {
-        Expression::negated(Box::new(self))
+        Expression::negated(self)
     }
 }
 
@@ -997,7 +976,7 @@ impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
 impl<F: FieldExt> Add for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn add(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
-        Expression::sum(Box::new(self), Box::new(rhs))
+        Expression::sum(self, rhs)
     }
 }
 
@@ -1011,7 +990,7 @@ impl<F: FieldExt> Sub for Expression<F, ProverExpr> {
 impl<F: FieldExt> Mul<F> for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn mul(self, rhs: F) -> Self::Output {
-        Expression::scaled(Box::new(self), rhs)
+        Expression::scaled(self, rhs)
     }
 }
 
