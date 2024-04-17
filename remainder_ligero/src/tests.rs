@@ -9,10 +9,8 @@
 
 use super::LcRoot;
 use crate::{
-    collapse_columns,
     ligero_commit::remainder_ligero_commit,
-    ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point},
-    ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof},
+    ligero_structs::{LigeroEncoding, LigeroEvalProof},
     poseidon_ligero::PoseidonSpongeHasher,
     utils::{get_random_coeffs_for_multilinear_poly, halo2_ifft},
     verify_column_path, verify_column_value,
@@ -25,12 +23,12 @@ use halo2_proofs::poly::EvaluationDomain;
 // --- For BN-254 ---
 use itertools::{iterate, Itertools};
 use rand::Rng;
-use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt};
+use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptWriter},
     Poseidon,
 };
-use std::{iter::repeat_with, marker::PhantomData};
+use std::iter::repeat_with;
 
 #[test]
 fn log2() {
