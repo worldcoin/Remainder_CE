@@ -11,7 +11,6 @@ use super::LcRoot;
 use crate::{
     ligero_commit::remainder_ligero_commit,
     ligero_structs::{LigeroEncoding, LigeroEvalProof},
-    poseidon_ligero::PoseidonSpongeHasher,
     utils::{get_random_coeffs_for_multilinear_poly, halo2_ifft},
     verify_column_path, verify_column_value,
 };
@@ -131,19 +130,15 @@ fn test_open_column() {
         let col_num = rng.gen::<usize>() % test_comm.encoded_num_cols;
         let column = open_column(&test_comm, col_num).unwrap();
 
-        let column_hash_check =
-            verify_column_path::<PoseidonSpongeHasher<Fr>, LigeroEncoding<Fr>, Fr>(
-                &column,
-                col_num,
-                root.as_ref(),
-                &master_default_poseidon_merkle_hasher,
-                &master_default_poseidon_column_hasher,
-            );
-        let column_value_check = verify_column_value::<
-            PoseidonSpongeHasher<Fr>,
-            LigeroEncoding<Fr>,
-            Fr,
-        >(&column, &[], &Fr::from(0_u64));
+        let column_hash_check = verify_column_path::<LigeroEncoding<Fr>, Fr>(
+            &column,
+            col_num,
+            root.as_ref(),
+            &master_default_poseidon_merkle_hasher,
+            &master_default_poseidon_column_hasher,
+        );
+        let column_value_check =
+            verify_column_value::<LigeroEncoding<Fr>, Fr>(&column, &[], &Fr::from(0_u64));
 
         assert!(column_hash_check && column_value_check);
     }
