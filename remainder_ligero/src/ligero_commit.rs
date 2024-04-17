@@ -110,7 +110,6 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
     LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
 ) {
     // --- Auxiliaries ---
-    let rho = 1. / (rho_inv as f64);
     let num_rows = 1 << log_num_rows;
     let orig_num_cols = 1 << log_orig_num_cols;
 
@@ -368,7 +367,6 @@ pub mod tests {
         let rho_inv = 4;
         let _ratio = 1_f64;
 
-        let mut rng = test_rng();
         let num_rows = 1 << log_num_rows;
         let orig_num_cols = 1 << log_orig_num_cols;
 
