@@ -17,7 +17,7 @@ use self::{
     proof_system::ProofSystem,
 };
 use crate::{
-    claims::{Claim, ClaimAggregator},
+    claims::{Claim, ClaimAggregator, ClaimAndProof},
     gate::gate::{BinaryOperation, Gate},
     layer::{
         layer_builder::LayerBuilder, layer_enum::LayerEnum, regular_layer::RegularLayer, Layer,
@@ -414,8 +414,10 @@ pub trait GKRCircuit<F: FieldExt> {
                 let claim_aggr_timer =
                     start_timer!(|| format!("claim aggregation for layer {:?}", *layer.id()));
 
-                let (layer_claim, claim_aggregation_proof) =
-                    aggregator.prover_aggregate_claims(&layer, transcript_writer)?;
+                let ClaimAndProof {
+                    claim: layer_claim,
+                    proof: claim_aggregation_proof,
+                } = aggregator.prover_aggregate_claims(&layer, transcript_writer)?;
 
                 debug!("Claim Aggregation Proof: {:#?}", claim_aggregation_proof);
                 end_timer!(claim_aggr_timer);
@@ -476,8 +478,10 @@ pub trait GKRCircuit<F: FieldExt> {
                     input_layer.layer_id()
                 ));
 
-                let (layer_claim, claim_aggregation_proof) =
-                    aggregator.prover_aggregate_claims_input(&input_layer, transcript_writer)?;
+                let ClaimAndProof {
+                    claim: layer_claim,
+                    proof: claim_aggregation_proof,
+                } = aggregator.prover_aggregate_claims_input(&input_layer, transcript_writer)?;
 
                 debug!("Claim Aggregation Proof: {:#?}", claim_aggregation_proof);
                 end_timer!(claim_aggr_timer);

@@ -212,7 +212,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuit<F> {
         combined_mle_2.layer_id = LayerId::Input(0);
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut combined_mle_1), Box::new(&mut combined_mle_2)];
-        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 

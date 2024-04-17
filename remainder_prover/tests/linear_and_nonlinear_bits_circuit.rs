@@ -128,7 +128,7 @@ impl<F: FieldExt> GKRCircuit<F> for LinearNonLinearCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.sel_mle), Box::new(&mut self.prod_mle)];
-        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 

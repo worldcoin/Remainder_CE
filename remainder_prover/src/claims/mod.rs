@@ -37,10 +37,13 @@ pub enum ClaimError {
     ///Should be evaluating to a sum
     ExpressionEvalError,
     #[error("All claims in a group should agree on the number of variables")]
+    ///All claims in a group should agree on the number of variables
     NumVarsMismatch,
     #[error("All claims in a group should agree the destination layer field")]
+    ///All claims in a group should agree the destination layer field
     LayerIdMismatch,
     #[error("Error while combining mle refs in order to evaluate challenge point")]
+    ///Error while combining mle refs in order to evaluate challenge point
     MleRefCombineError(CombineMleRefError),
 }
 
@@ -78,6 +81,16 @@ impl<F: FieldExt> Claim<F> {
     }
 }
 
+/// A wrapper struct that represents the `Claim` a `ClaimAggregator`
+/// generates and the proof that this claim is correct
+#[derive(Clone, Debug)]
+pub struct ClaimAndProof<F: FieldExt, P> {
+    /// The `Claim` that was proven
+    pub claim: Claim<F>,
+    /// The proof that the `Claim` is correct
+    pub proof: P,
+}
+
 /// A trait that defines a protocol for the tracking/aggregation of many claims
 pub trait ClaimAggregator<F: FieldExt> {
     ///The struct the claim aggregator takes in.
@@ -112,7 +125,7 @@ pub trait ClaimAggregator<F: FieldExt> {
         &self,
         layer: &Self::Layer,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
+    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError>;
 
     ///Takes in some claims from the prover and aggregates them into one claim
     ///
@@ -123,7 +136,7 @@ pub trait ClaimAggregator<F: FieldExt> {
         &self,
         layer: &Self::InputLayer,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<(Claim<F>, Self::AggregationProof), GKRError>;
+    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError>;
 
     ///Reads an AggregationProof from the Transcript and uses it to verify the aggregation of some claims.
     fn verifier_aggregate_claims(

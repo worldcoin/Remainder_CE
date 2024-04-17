@@ -52,7 +52,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         ),
         GKRError,
     > {
-        let input = InputLayerBuilder::new(vec![Box::new(&mut self.mle)], LayerId::Input(0))
+        let input = InputLayerBuilder::new(vec![Box::new(&mut self.mle)], None, LayerId::Input(0))
             .to_input_layer_with_rho_inv(4, 1.);
         let mut input: CircuitInputLayer<F, Self> = input.into();
 
@@ -86,7 +86,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         let mut output_input = output.clone();
         output_input.layer_id = LayerId::Input(2);
         let mut input_layer_2: CircuitInputLayer<F, Self> =
-            InputLayerBuilder::new(vec![Box::new(&mut output_input)], LayerId::Input(2))
+            InputLayerBuilder::new(vec![Box::new(&mut output_input)], None, LayerId::Input(2))
                 .to_input_layer::<PublicInputLayer<F>>()
                 .into();
         let input_layer_2_commit = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
@@ -122,10 +122,7 @@ impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
     type Successor = DenseMle<F, F>;
 
     fn build_expression(&self) -> Expression<F, crate::expression::prover_expr::ProverExpr> {
-        Expression::sum(
-            Box::new(Expression::mle(self.mle_1.mle_ref())),
-            Box::new(Expression::mle(self.mle_2.mle_ref())),
-        )
+        self.mle_1.mle_ref().expression() + self.mle_2.mle_ref().expression()
     }
 
     fn next_layer(
@@ -196,6 +193,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
                 Box::new(&mut self.input_layer_1_mle_1),
                 Box::new(&mut self.input_layer_1_mle_2),
             ],
+            None,
             LayerId::Input(0),
         )
         .to_input_layer::<PublicInputLayer<F>>()
@@ -212,6 +210,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
                 Box::new(&mut self.input_layer_2_mle_1),
                 Box::new(&mut self.input_layer_2_mle_2),
             ],
+            None,
             LayerId::Input(1),
         )
         .to_input_layer::<PublicInputLayer<F>>()
@@ -296,12 +295,12 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         // --- The precommitted input layer MLE is just the first MLE ---
         let precommitted_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle)];
         let precommitted_input_layer_builder =
-            InputLayerBuilder::new(precommitted_input_mles, LayerId::Input(0));
+            InputLayerBuilder::new(precommitted_input_mles, None, LayerId::Input(0));
 
         // --- The non-precommitted input layer MLE is just the second ---
         let live_committed_input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![Box::new(&mut self.mle_2)];
         let live_committed_input_layer_builder =
-            InputLayerBuilder::new(live_committed_input_mles, LayerId::Input(1));
+            InputLayerBuilder::new(live_committed_input_mles, None, LayerId::Input(1));
 
         let mut layers: Layers<F, _> = Layers::new();
 

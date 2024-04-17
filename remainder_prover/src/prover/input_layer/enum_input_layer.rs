@@ -32,8 +32,8 @@ impl<F: FieldExt> YieldWLXEvals<F> for InputLayerEnum<F> {
     /// in order to perform claim aggregation.
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: &Vec<Vec<F>>,
-        claimed_vals: &Vec<F>,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
         claimed_mles: Vec<crate::mle::mle_enum::MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,

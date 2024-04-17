@@ -70,7 +70,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
             Box::new(&mut combined_mle_4),
         ];
 
-        let input_commit_builder = InputLayerBuilder::<F>::new(input_commit, LayerId::Input(0));
+        let input_commit_builder =
+            InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));
 
         let input_layer: PublicInputLayer<F> =
             input_commit_builder.to_input_layer::<PublicInputLayer<F>>();

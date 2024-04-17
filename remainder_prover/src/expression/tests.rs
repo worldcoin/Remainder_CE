@@ -284,8 +284,8 @@ fn test_all_mle_indices() {
     let expression_mle = Expression::mle(mle_2);
     let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
     let mut expression_full = Expression::sum(
-        expression_product,
-        Box::new(expression_mle.concat_expr(expression_product_2)),
+        *expression_product,
+        expression_mle.concat_expr(expression_product_2),
     );
     expression_full.index_mle_indices(0);
     let mut curr_all_indices: Vec<usize> = Vec::new();
@@ -327,8 +327,8 @@ fn test_nonlinear_mle_indices() {
     let expression_mle = Expression::mle(mle_2);
     let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
     let mut expression_full = Expression::sum(
-        expression_product,
-        Box::new(expression_mle.concat_expr(expression_product_2)),
+        *expression_product,
+        expression_mle.concat_expr(expression_product_2),
     );
     expression_full.index_mle_indices(0);
     let mut curr_all_indices: Vec<usize> = Vec::new();
@@ -372,8 +372,8 @@ fn test_linear_mle_indices() {
     let expression_mle = Expression::mle(mle_2);
     let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
     let mut expression_full = Expression::sum(
-        expression_product,
-        Box::new(expression_mle.concat_expr(expression_product_2)),
+        *expression_product,
+        expression_mle.concat_expr(expression_product_2),
     );
     expression_full.index_mle_indices(0);
     let all_linear_indices = expression_full
@@ -415,12 +415,12 @@ fn test_linear_mle_indices_2() {
     let expression_mle = Expression::mle(mle_2);
     let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
     let expression_half = Expression::sum(
-        expression_product.clone(),
-        Box::new(expression_mle.concat_expr(expression_product_2.clone())),
+        *expression_product.clone(),
+        expression_mle.concat_expr(expression_product_2.clone()),
     );
     let expression_other_half = Expression::sum(
-        Box::new(expression_product_2),
-        Box::new(Expression::negated(expression_product)),
+        expression_product_2,
+        Expression::negated(*expression_product),
     );
     let mut expression_full = expression_half.concat_expr(expression_other_half);
     expression_full.index_mle_indices(0);

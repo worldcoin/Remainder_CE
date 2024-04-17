@@ -128,7 +128,7 @@ impl<F: FieldExt> GKRCircuit<F> for NonlinearSelectorCircuit<F> {
             Box::new(&mut self.right_sum_mle_1),
             Box::new(&mut self.right_sum_mle_2),
         ];
-        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 

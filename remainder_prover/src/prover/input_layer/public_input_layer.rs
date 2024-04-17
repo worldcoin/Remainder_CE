@@ -112,8 +112,8 @@ impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
-        claim_vecs: &Vec<Vec<F>>,
-        claimed_vals: &Vec<F>,
+        claim_vecs: &[Vec<F>],
+        claimed_vals: &[F],
         claimed_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
