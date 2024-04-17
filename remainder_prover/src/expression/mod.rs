@@ -32,4 +32,5 @@ pub mod verifier_expr;
 pub mod expr_errors;
 
 /// tests for the expression module
+#[cfg(test)]
 pub mod tests;

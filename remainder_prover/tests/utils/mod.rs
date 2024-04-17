@@ -116,10 +116,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductScaledBuilder<F> {
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         let prod_expr = Expression::products(vec![self.mle_1.mle_ref(), self.mle_2.mle_ref()]);
-        let scaled_expr = Expression::scaled(
-            Box::new(Expression::mle(self.mle_1.mle_ref())),
-            F::from(10_u64),
-        );
+        let scaled_expr = self.mle_1.mle_ref().expression() * F::from(10_u64);
         prod_expr + scaled_expr
     }
 
@@ -162,10 +159,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductSumBuilder<F> {
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         let prod_expr = Expression::products(vec![self.mle_1.mle_ref(), self.mle_2.mle_ref()]);
-        let sum_expr = Expression::sum(
-            Box::new(Expression::mle(self.mle_1.mle_ref())),
-            Box::new(Expression::mle(self.mle_2.mle_ref())),
-        );
+        let sum_expr = self.mle_1.mle_ref().expression() + self.mle_2.mle_ref().expression();
         prod_expr + sum_expr
     }
 
@@ -214,10 +208,7 @@ impl<F: FieldExt> LayerBuilder<F> for ConstantScaledSumBuilder<F> {
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         let constant_expr =
             Expression::mle(self.mle_1.mle_ref()) + Expression::constant(F::from(10_u64));
-        let scaled_expr = Expression::scaled(
-            Box::new(Expression::mle(self.mle_2.mle_ref())),
-            F::from(10_u64),
-        );
+        let scaled_expr = self.mle_2.mle_ref().expression() * F::from(10_u64);
         constant_expr + scaled_expr
     }
 
