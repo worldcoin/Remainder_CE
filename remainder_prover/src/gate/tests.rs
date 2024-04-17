@@ -1,8 +1,6 @@
-use std::path::Path;
-
 use ark_std::test_rng;
 use rand::Rng;
-use remainder_shared_types::{transcript::poseidon_transcript::PoseidonSponge, FieldExt, Fr};
+use remainder_shared_types::{FieldExt, Fr};
 
 use crate::{
     layer::{layer_builder::simple_builders::ZeroBuilder, LayerId},
@@ -39,7 +37,7 @@ impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle), Box::new(&mut self.neg_mle)];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 
@@ -97,7 +95,7 @@ impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let input_mles: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut self.mle), Box::new(&mut self.neg_mle)];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 
@@ -157,7 +155,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
             Box::new(&mut self.mle_2),
             Box::new(&mut self.neg_mle_2),
         ];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 
@@ -243,7 +241,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
             Box::new(&mut self.mle_2_dataparallel),
             Box::new(&mut self.neg_mle_2_dataparallel),
         ];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 
@@ -341,7 +339,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
             Box::new(&mut self.mle_dataparallel),
             Box::new(&mut self.neg_mle_dataparallel),
         ];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 
@@ -416,7 +414,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
             Box::new(&mut self.mle_dataparallel),
             Box::new(&mut self.neg_mle_dataparallel),
         ];
-        let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
+        let input_layer = InputLayerBuilder::new(input_mles, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 

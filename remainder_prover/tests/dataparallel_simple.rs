@@ -56,8 +56,7 @@ impl<F: FieldExt> GKRCircuit<F> for NonSelectorDataparallelCircuit<F> {
         let input_commit: Vec<Box<&mut dyn Mle<F>>> =
             vec![Box::new(&mut combined_mle_1), Box::new(&mut combined_mle_2)];
 
-        let input_commit_builder =
-            InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));
+        let input_commit_builder = InputLayerBuilder::<F>::new(input_commit, LayerId::Input(0));
 
         let input_layer: PublicInputLayer<F> =
             input_commit_builder.to_input_layer::<PublicInputLayer<F>>();

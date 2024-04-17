@@ -12,34 +12,30 @@ use thiserror::Error;
 
 use super::gate::BinaryOperation;
 
-/// Error handling for gate mle construction
+/// Error handling for gate mle construction.
 #[derive(Error, Debug, Clone)]
 pub enum GateError {
     #[error("phase 1 not initialized")]
-    /// error when initializing the first phase, which is when we bind the "x" bits
+    /// Error when initializing the first phase, which is when we bind the "x" bits.
     Phase1InitError,
     #[error("phase 2 not initialized")]
-    /// error when initializing the second phase, which is when we bind the "y" bits
+    /// Error when initializing the second phase, which is when we bind the "y" bits.
     Phase2InitError,
     #[error("mle not fully bound")]
-    /// we are on the last round of sumcheck and want to grab claims, but the MLE is not fully bound
+    /// We are on the last round of sumcheck and want to grab claims, but the MLE is not fully bound
     /// which should not be the case for the last round of sumcheck.
     MleNotFullyBoundError,
     #[error("empty list for lhs or rhs")]
-    /// we are initializing a gate on something that does not have either a left or right side of the expression
+    /// We are initializing a gate on something that does not have either a left or right side of the expression.
     EmptyMleList,
     #[error("bound indices fail to match challenge")]
-    /// when checking the last round of sumcheck, the challenges don't match what is bound to the MLE.
+    /// When checking the last round of sumcheck, the challenges don't match what is bound to the MLE.
     EvaluateBoundIndicesDontMatch,
     #[error("beta table associated is not indexed")]
-    /// the beta table we are working with doesn't have numbered indices but we need labeled bits!
+    /// The beta table we are working with doesn't have numbered indices but we need labeled bits!
     BetaTableNotIndexed,
 }
 
-/// evaluate_mle_ref_product without beta tables........
-///
-/// ---
-///
 /// Given (possibly half-fixed) bookkeeping tables of the MLEs which are multiplied,
 /// e.g. V_i(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) * V_{i + 1}(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n)
 /// computes g_k(x) = \sum_{b_{k + 1}, ..., b_n} V_i(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n) * V_{i + 1}(u_1, ..., u_{k - 1}, x, b_{k + 1}, ..., b_n)
@@ -206,14 +202,14 @@ pub fn check_fully_bound<F: FieldExt>(
     })
 }
 
-/// index mle indices for an array of mles
+/// Index mle indices for an array of mles.
 pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl MleRef<F = F>], index: usize) {
     mle_refs.iter_mut().for_each(|mle_ref| {
         mle_ref.index_mle_indices(index);
     })
 }
 
-/// fix variable for an array of mles
+/// Fix variable for an array of mles.
 pub fn fix_var_gate<F: FieldExt>(
     mle_refs: &mut [impl MleRef<F = F>],
     round_index: usize,
@@ -229,7 +225,7 @@ pub fn fix_var_gate<F: FieldExt>(
     })
 }
 
-/// Computes a round of the sumcheck protocol on this Layer
+/// Computes a round of the sumcheck protocol on this Layer.
 pub fn prove_round_gate<F: FieldExt>(
     round_index: usize,
     challenge: F,
@@ -257,7 +253,7 @@ pub fn prove_round_gate<F: FieldExt>(
     final_vec_evals
 }
 
-/// fully evaluates a gate expression (for both the batched and non-batched case, add and mul gates)
+/// Fully evaluates a gate expression (for both the batched and non-batched case, add and mul gates).
 pub fn compute_full_gate<F: FieldExt>(
     challenges: Vec<F>,
     lhs: &mut DenseMleRef<F>,
@@ -265,7 +261,7 @@ pub fn compute_full_gate<F: FieldExt>(
     nonzero_gates: &Vec<(usize, usize, usize)>,
     copy_bits: usize,
 ) -> F {
-    // split the challenges into which ones are for batched bits, which ones are for others
+    // Split the challenges into which ones are for batched bits, which ones are for others.
     let mut copy_chals: Vec<F> = vec![];
     let mut z_chals: Vec<F> = vec![];
     challenges.into_iter().enumerate().for_each(|(idx, chal)| {
@@ -276,11 +272,11 @@ pub fn compute_full_gate<F: FieldExt>(
         }
     });
 
-    // if the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on z
+    // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on z.
     let beta_g = BetaValues::new_beta_equality_mle(z_chals);
     let zero = F::zero();
 
-    // literally summing over everything else (x, y)
+    // Literally summing over everything else (x, y).
     if copy_bits == 0 {
         nonzero_gates
             .clone()
@@ -293,10 +289,10 @@ pub fn compute_full_gate<F: FieldExt>(
             })
     } else {
         let num_copy_idx = 1 << copy_bits;
-        // if the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on p2
+        // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on p2.
         let beta_g2 = BetaValues::new_beta_equality_mle(copy_chals);
         {
-            // sum over everything else, outer sum being over p2, inner sum over (x, y)
+            // Sum over everything else, outer sum being over p2, inner sum over (x, y).
             (0..(1 << num_copy_idx)).fold(F::zero(), |acc_outer, idx| {
                 let g2 = *beta_g2.bookkeeping_table().get(idx).unwrap_or(&F::zero());
                 let inner_sum = nonzero_gates.clone().into_iter().fold(
@@ -320,14 +316,13 @@ pub fn compute_full_gate<F: FieldExt>(
     }
 }
 
-/// compute sumcheck message without a beta table!!!!!!!!!!!!!!
+/// Compute sumcheck message without a beta table.
 pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
     mles: &[impl MleRef<F = F>],
     round_index: usize,
     degree: usize,
 ) -> Result<Vec<F>, GateError> {
     // --- Go through all of the MLEs being multiplied together on the LHS and see if any of them contain an IV ---
-    // TODO!(ryancao): Should this not always be true...?
     let independent_variable = mles
         .iter()
         .map(|mle_ref| {
@@ -344,7 +339,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
     Ok(evaluations)
 }
 
-/// does all the necessary updates when proving a round for batched gate mles
+/// Does all the necessary updates when proving a round for batched gate mles.
 pub fn prove_round_dataparallel_phase<F: FieldExt>(
     lhs: &mut DenseMleRef<F>,
     rhs: &mut DenseMleRef<F>,
@@ -357,7 +352,7 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
     operation: BinaryOperation,
 ) -> Result<Vec<F>, GateError> {
     beta_g2.fix_variable(round_index - 1, challenge);
-    // need to separately update these because the phase_lhs and phase_rhs has no version of them
+    // Need to separately update these because the phase_lhs and phase_rhs has no version of them.
     lhs.fix_variable(round_index - 1, challenge);
     rhs.fix_variable(round_index - 1, challenge);
     libra_giraffe(
@@ -371,7 +366,7 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
     )
 }
 
-/// get the evals for a batched mul gate
+/// Get the evals for a batched mul gate.
 pub fn libra_giraffe<F: FieldExt>(
     f2_p2_x: &DenseMleRef<F>,
     f3_p2_y: &DenseMleRef<F>,
@@ -381,10 +376,10 @@ pub fn libra_giraffe<F: FieldExt>(
     nonzero_gates: &Vec<(usize, usize, usize)>,
     num_dataparallel_bits: usize,
 ) -> Result<Vec<F>, GateError> {
-    // when we have an add gate, we can distribute the beta table over the dataparallel challenges
-    // so we only multiply to the function with the x variables or y variables one at a time
-    // when we have a mul gate, we have to multiply the beta table over the dataparallel challenges
-    // with the function on the x variables and the function on the y variables
+    // When we have an add gate, we can distribute the beta table over the dataparallel challenges
+    // so we only multiply to the function with the x variables or y variables one at a time.
+    // When we have a mul gate, we have to multiply the beta table over the dataparallel challenges
+    // with the function on the x variables and the function on the y variables.
     let degree = match operation {
         BinaryOperation::Add => 2,
         BinaryOperation::Mul => 3,
@@ -394,18 +389,18 @@ pub fn libra_giraffe<F: FieldExt>(
         return Err(GateError::BetaTableNotIndexed);
     }
 
-    // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`
+    // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`.
     let eval_count = degree + 1;
 
-    // iterate across all pairs of evaluations
+    // Iterate across all pairs of evaluations.
     let evals = cfg_into_iter!((0..1 << (num_dataparallel_bits - 1))).fold(
         #[cfg(feature = "parallel")]
         || vec![F::zero(); eval_count],
         #[cfg(not(feature = "parallel"))]
         vec![F::zero(); eval_count],
         |mut acc, p2_idx| {
-            // compute the beta successors the same way it's done for each mle. do it outside the loop
-            // because it only needs to be done once per product of mles
+            // Compute the beta successors the same way it's done for each mle. Do it outside the loop
+            // because it only needs to be done once per product of mles.
             let first = *beta_g2.bookkeeping_table().get(p2_idx * 2).unwrap();
             let second = if beta_g2.num_vars() != 0 {
                 *beta_g2.bookkeeping_table().get(p2_idx * 2 + 1).unwrap()
@@ -416,7 +411,7 @@ pub fn libra_giraffe<F: FieldExt>(
 
             let beta_successors_snd =
                 std::iter::successors(Some(second), move |item| Some(*item + step));
-            //iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1
+            // Iterator that represents all evaluations of the MLE extended to arbitrarily many linear extrapolations on the line of 0/1.
             let beta_successors = std::iter::once(first).chain(beta_successors_snd);
             let beta_iter: Box<dyn Iterator<Item = F>> = Box::new(beta_successors);
 
