@@ -19,7 +19,7 @@ pub mod expression;
 
 /// module for defining the gate layer, uses the libra trick
 /// to reduce the number of rounds for gate layers (with binary operations)
-pub mod gate;
+pub mod gate_mle;
 
 /// module with the Layer trait, which is the main trait for
 /// which we prove/verify over

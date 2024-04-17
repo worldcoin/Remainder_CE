@@ -6,7 +6,7 @@ use remainder_shared_types::FieldExt;
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::layer_enum;
 
-use crate::gate::gate::Gate;
+use crate::gate_mle::gate::Gate;
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;

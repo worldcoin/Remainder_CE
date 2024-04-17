@@ -14,7 +14,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    gate::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
+    gate_mle::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
     layer::{Layer, LayerError, LayerId, VerificationError},
     mle::{
         betavalues::BetaValues,
@@ -101,7 +101,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
                 )
                 .unwrap();
             beta_g2_fully_bound = beta_g2_bound;
-            sumcheck_rounds.extend(dataparallel_rounds);
+            sumcheck_rounds.extend(dataparallel_rounds.0);
         }
         // We perform the rounds binding "x" variables (phase 1) and the rounds binding "y" variables (phase 2) in sequence.
         let (phase_1_rounds, f2_at_u, u_challenges) = self
@@ -120,8 +120,8 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
                 transcript_writer,
             )
             .unwrap();
-        sumcheck_rounds.extend(phase_1_rounds);
-        sumcheck_rounds.extend(phase_2_rounds);
+        sumcheck_rounds.extend(phase_1_rounds.0);
+        sumcheck_rounds.extend(phase_2_rounds.0);
 
         // The concatenation of all of these rounds is the proof resulting from a gate layer.
         Ok(sumcheck_rounds.into())
@@ -402,7 +402,7 @@ impl<F: FieldExt> Gate<F> {
         }
     }
 
-    fn compute_beta_tables(&mut self, challenges: &Vec<F>) -> (DenseMleRef<F>, DenseMleRef<F>) {
+    fn compute_beta_tables(&mut self, challenges: &[F]) -> (DenseMleRef<F>, DenseMleRef<F>) {
         let mut g2_challenges = vec![];
         let mut g1_challenges = vec![];
 
@@ -632,7 +632,7 @@ impl<F: FieldExt> Gate<F> {
         beta_g1: &mut DenseMleRef<F>,
         beta_g2: &mut DenseMleRef<F>,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<(Vec<Vec<F>>, F), LayerError> {
+    ) -> Result<(SumcheckProof<F>, F), LayerError> {
         // Initialization, first message comes from here.
         let mut challenges: Vec<F> = vec![];
 
@@ -679,7 +679,7 @@ impl<F: FieldExt> Gate<F> {
 
         if beta_g2.bookkeeping_table().len() == 1 {
             let beta_g2_fully_bound = beta_g2.bookkeeping_table()[0];
-            Ok((sumcheck_rounds, beta_g2_fully_bound))
+            Ok((sumcheck_rounds.into(), beta_g2_fully_bound))
         } else {
             Err(LayerError::LayerNotReady)
         }
@@ -692,7 +692,7 @@ impl<F: FieldExt> Gate<F> {
         challenge: Vec<F>,
         beta_g2_fully_bound: F,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<(Vec<Vec<F>>, F, Vec<F>), LayerError> {
+    ) -> Result<(SumcheckProof<F>, F, Vec<F>), LayerError> {
         let first_message = self
             .init_phase_1(challenge)
             .expect("could not evaluate original lhs and rhs")
@@ -744,7 +744,7 @@ impl<F: FieldExt> Gate<F> {
 
         if f_2.bookkeeping_table().len() == 1 {
             let f2_at_u = f_2.bookkeeping_table()[0];
-            Ok((sumcheck_rounds, f2_at_u, challenges))
+            Ok((sumcheck_rounds.into(), f2_at_u, challenges))
         } else {
             Err(LayerError::LayerNotReady)
         }
@@ -759,7 +759,7 @@ impl<F: FieldExt> Gate<F> {
         beta_g1: DenseMleRef<F>,
         beta_g2_fully_bound: F,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<Vec<Vec<F>>, LayerError> {
+    ) -> Result<SumcheckProof<F>, LayerError> {
         let first_message = self
             .init_phase_2(phase_1_challenges, f_at_u, &beta_g1)
             .unwrap()
@@ -811,9 +811,9 @@ impl<F: FieldExt> Gate<F> {
                 })
             });
 
-            Ok(sumcheck_rounds_y)
+            Ok(sumcheck_rounds_y.into())
         } else {
-            Ok(vec![])
+            Ok(vec![].into())
         }
     }
 }

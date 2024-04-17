@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 use crate::utils::{get_ligero_matrix_dims, halo2_fft};
-use crate::{def_labels, LcCommit, LcEncoding, LcEvalProof};
+use crate::{def_labels, LcCommit, LcEncoding, LcEvalProof, LcRoot};
 use fffft::FFTError;
 use remainder_shared_types::FieldExt;
 
@@ -91,10 +91,7 @@ where
 
         // --- TODO!(ryancao): This is wasteful (we clone twice!!!) ---
         let evals = halo2_fft(
-            inp.to_vec()
-                .into_iter()
-                .take(self.orig_num_cols)
-                .collect_vec(),
+            inp.iter().copied().take(self.orig_num_cols).collect_vec(),
             self.rho_inv,
         );
         inp.copy_from_slice(&evals[..]);
@@ -140,3 +137,6 @@ pub type LigeroCommit<D, F> = LcCommit<D, LigeroEncoding<F>, F>;
 
 /// Ligero evaluation proof over generic `LcEvalProof`
 pub type LigeroEvalProof<D, E, F> = LcEvalProof<D, E, F>;
+
+/// Ligero root over generic `LcRoot`
+pub type LigeroRoot<F> = LcRoot<LigeroEncoding<F>, F>;
