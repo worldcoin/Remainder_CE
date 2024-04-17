@@ -79,7 +79,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     /// Note that `extra_mle_num_vars` refers to the length of any MLE you want to be a part of this
     /// input_layer, but haven't yet generated the data for
     pub fn new(
-        mut input_mles: Vec<Box<&mut (dyn Mle<F> + 'static)>>,
+        mut input_mles: Vec<&mut (dyn Mle<F> + 'static)>,
         extra_mle_num_vars: Option<Vec<usize>>,
         layer_id: LayerId,
     ) -> Self {
@@ -88,9 +88,8 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         let input_mles = input_mles
             .into_iter()
             .map(|mle| {
-                let mle_deref = *mle;
-                assert_eq!(mle_deref.layer_id(), layer_id);
-                dyn_clone::clone_box(mle_deref)
+                assert_eq!(mle.layer_id(), layer_id);
+                dyn_clone::clone_box(mle)
             })
             .collect_vec();
         Self {
@@ -101,7 +100,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     }
 
     fn index_input_mles(
-        input_mles: &mut Vec<Box<&mut (dyn Mle<F> + 'static)>>,
+        input_mles: &mut Vec<&mut (dyn Mle<F> + 'static)>,
         extra_mle_num_vars: Option<Vec<usize>>,
     ) -> Option<Vec<Vec<MleIndex<F>>>> {
         let mut input_mle_num_vars = input_mles

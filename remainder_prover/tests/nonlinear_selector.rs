@@ -122,11 +122,11 @@ impl<F: FieldExt> GKRCircuit<F> for NonlinearSelectorCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> = vec![
-            Box::new(&mut self.left_sel_mle),
-            Box::new(&mut self.right_sel_mle),
-            Box::new(&mut self.right_sum_mle_1),
-            Box::new(&mut self.right_sum_mle_2),
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![
+            &mut self.left_sel_mle,
+            &mut self.right_sel_mle,
+            &mut self.right_sum_mle_1,
+            &mut self.right_sum_mle_2,
         ];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
@@ -182,7 +182,7 @@ impl<F: FieldExt> NonlinearSelectorCircuit<F> {
 }
 
 #[test]
-fn test_nonlinear_sel_circuit_test() {
+fn test_nonlinear_sel_circuit() {
     const VARS_PRODUCT_SIDE: usize = 3;
     const VARS_SEL_SIDE: usize = VARS_PRODUCT_SIDE - 1;
     let mut rng = &mut test_rng();

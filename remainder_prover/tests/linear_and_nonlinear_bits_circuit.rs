@@ -126,8 +126,7 @@ impl<F: FieldExt> GKRCircuit<F> for LinearNonLinearCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut self.sel_mle), Box::new(&mut self.prod_mle)];
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut self.sel_mle, &mut self.prod_mle];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
@@ -160,7 +159,7 @@ impl<F: FieldExt> LinearNonLinearCircuit<F> {
 }
 
 #[test]
-fn test_nonlinear_sel_circuit_test() {
+fn test_linear_and_nonlinear_bits_circuit() {
     const VARS_SEL_SIDE: usize = 2;
     const VARS_PROD_SIDE: usize = VARS_SEL_SIDE;
     let mut rng = test_rng();

@@ -24,7 +24,7 @@ use super::Layers;
 /// Error when combining layers
 pub struct CombineError;
 
-///Utility for combining sub-circuits into a single circuit
+/// Utility for combining sub-circuits into a single circuit
 /// DOES NOT WORK FOR GATE MLE
 pub fn combine_layers<F: FieldExt>(
     mut layers: Vec<Layers<F, LayerEnum<F>>>,
@@ -298,9 +298,7 @@ fn combine_expressions<F: FieldExt>(
 
     loop {
         if exprs.len() == 1 {
-            let hi = exprs.remove(0).1;
-            dbg!(&hi);
-            break hi;
+            break exprs.remove(0).1;
         }
 
         exprs.sort_by(|first, second| {

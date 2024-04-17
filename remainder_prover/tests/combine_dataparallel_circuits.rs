@@ -210,8 +210,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuit<F> {
         let mut combined_mle_2 = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
         combined_mle_1.layer_id = LayerId::Input(0);
         combined_mle_2.layer_id = LayerId::Input(0);
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut combined_mle_1), Box::new(&mut combined_mle_2)];
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut combined_mle_1, &mut combined_mle_2];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
@@ -313,7 +312,7 @@ impl<F: FieldExt> DataParallelCombinedCircuit<F> {
 }
 
 #[test]
-fn test_combined_circuit() {
+fn test_combined_dataparallel_circuit() {
     const NUM_DATAPARALLEL_BITS: usize = 1;
     const VARS_MLE_1_2: usize = 2;
     let mut rng = test_rng();
