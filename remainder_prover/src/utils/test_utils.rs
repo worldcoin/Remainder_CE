@@ -1,0 +1,46 @@
+//! Utilities that are only useful for tests
+
+use super::TranscriptSponge;
+use itertools::Itertools;
+use remainder_shared_types::FieldExt;
+
+/// A dummy transcript that can have arbitrary values fed into it.
+///
+/// Useful for writing tests where you want the transcript to return
+/// small readable and consistent values.
+///
+/// Will return the values in VALUES in order upon each squeeze request.
+/// Once SIZE is reached values will wrap around.
+#[derive(Clone)]
+pub struct DummySponge<F: FieldExt, const VALUE: i32> {
+    /// The current position in the values list.
+    _marker: std::marker::PhantomData<F>,
+}
+
+impl<F: FieldExt, const VALUE: i32> TranscriptSponge<F> for DummySponge<F, VALUE> {
+    fn new() -> Self {
+        Self {
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    fn absorb(&mut self, _: F) {}
+
+    fn absorb_elements(&mut self, _: &[F]) {}
+
+    fn squeeze(&mut self) -> F {
+        let is_negative = VALUE.is_negative();
+        let abs = VALUE.abs();
+        let value = F::from(abs as u64);
+
+        if is_negative {
+            value.neg()
+        } else {
+            value
+        }
+    }
+
+    fn squeeze_elements(&mut self, num_elements: usize) -> Vec<F> {
+        (0..num_elements).map(|_| self.squeeze()).collect_vec()
+    }
+}
