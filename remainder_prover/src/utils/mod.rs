@@ -11,6 +11,9 @@ use crate::{
     prover::Layers,
 };
 
+#[cfg(test)]
+pub(crate) mod test_utils;
+
 /// Returns a zero-padded version of `coeffs` with length padded
 /// to the nearest power of two.
 ///
