@@ -1,4 +1,4 @@
-//! A wrapper type that makes working with variants of InputLayer easier
+//! A wrapper type that makes working with variants of InputLayer easier.
 
 use remainder_shared_types::FieldExt;
 
@@ -17,6 +17,7 @@ input_layer_enum!(
 );
 
 impl<F: FieldExt> InputLayerEnum<F> {
+    /// This function sets the layer ID of the corresponding input layer.
     pub fn set_layer_id(&mut self, layer_id: LayerId) {
         match self {
             InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,
@@ -27,6 +28,8 @@ impl<F: FieldExt> InputLayerEnum<F> {
 }
 
 impl<F: FieldExt> YieldWLXEvals<F> for InputLayerEnum<F> {
+    /// Get the evaluations of the bookkeeping table of this layer over enumerated points
+    /// in order to perform claim aggregation.
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &Vec<Vec<F>>,
