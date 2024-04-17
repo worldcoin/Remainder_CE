@@ -50,8 +50,12 @@ pub trait Mle<F: FieldExt>: Clone {
     /// constructing the input layer.
     fn get_padded_evaluations(&self) -> Vec<F>;
 
+    /// Mutates the MLE in order to set the prefix bits. This is needed when we
+    /// are working with dataparallel circuits and new bits need to be added.
     fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
 
+    /// Gets the prefix bits currently stored in the MLE. This is needed when
+    /// prefix bits are generated after combining MLEs.
     fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>>;
 
     /// Get the layer ID of the associated MLE.
@@ -70,10 +74,15 @@ pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize
     /// Get the indicies of the `Mle` that this `MleRef` represents.
     fn mle_indices(&self) -> &[MleIndex<Self::F>];
 
+    /// Gets the original, unmutated MLE indices associated with an MLE
+    /// when it was first created (before any variable binding occured).
     fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>>;
 
+    /// Gets the original, unmutated MLE bookkeeping table associated with an MLE
+    /// when it was first created (before any variable binding occured).
     fn original_bookkeeping_table(&self) -> &[Self::F];
 
+    /// Add new indices at the end of an MLE.
     fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]);
 
     /// Number of variables the [Mle] this is a reference to is over.
@@ -115,6 +124,7 @@ pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize
     /// Whether the MLE has been indexed.
     fn indexed(&self) -> bool;
 
+    /// Get the associated enum that this MLE is a part of ([MleEnum::Dense] or [MleEnum::Zero]).
     fn get_enum(self) -> MleEnum<Self::F>;
 }
 
@@ -123,20 +133,26 @@ pub trait MleRef: Clone + Debug + Send + Sync + Serialize + for<'de> Deserialize
 /// `IntoIterator` and creates associated functions for yielding appropriate
 /// `MleRefs`)
 pub trait MleAble<F> {
-    ///T he particular representation that is convienent for an `MleAble`; most
+    /// The particular representation that is convienent for an `MleAble`; most
     /// of the time it will be a `[Vec<F>; Size]` array
     type Repr: Send + Sync + Clone + Debug;
 
+    /// The iterator that is used in order to iterate through the contents or data
+    /// of the [MleAble].
     type IntoIter<'a>: Iterator<Item = Self>
     where
         Self: 'a;
 
+    /// Get the evaluations of each of the points on the boolean hypercube.
     fn get_padded_evaluations(items: &Self::Repr) -> Vec<F>;
 
+    /// Convert into the [MleAble] repr from an iterator.
     fn from_iter(iter: impl IntoIterator<Item = Self>) -> Self::Repr;
 
+    /// Iterate through the contents of the bookkeeping table.
     fn to_iter(items: &Self::Repr) -> Self::IntoIter<'_>;
 
+    /// The number of variables associated with the MLE.
     fn num_vars(items: &Self::Repr) -> usize;
 }
 
