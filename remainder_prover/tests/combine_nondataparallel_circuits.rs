@@ -18,7 +18,7 @@ use remainder_shared_types::{FieldExt, Fr};
 use utils::{ConstantScaledSumBuilder, ProductScaledBuilder, ProductSumBuilder};
 
 use crate::utils::get_dummy_random_mle;
-mod utils;
+pub mod utils;
 
 /// A circuit which takes in two MLEs of the same size:
 /// * Layer 0: [ProductScaledBuilder] with the two inputs

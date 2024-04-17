@@ -4,4 +4,5 @@ pub mod gate;
 pub mod gate_helpers;
 
 /// Testing module.
+#[cfg(test)]
 mod tests;

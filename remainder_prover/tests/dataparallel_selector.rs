@@ -23,7 +23,7 @@ use remainder_shared_types::FieldExt;
 use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
 
 use crate::utils::get_dummy_random_mle_vec;
-mod utils;
+pub mod utils;
 
 /// A circuit which does the following:
 /// * Layer 0: [ProductScaledBuilder] with `mle_1_vec`, `mle_2_vec`

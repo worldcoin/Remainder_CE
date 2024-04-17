@@ -8,13 +8,13 @@ use remainder::{
 use remainder_shared_types::{FieldExt, Fr};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.
-pub(crate) fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr, Fr> {
+pub fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr, Fr> {
     let mle_vec = (0..(1 << num_vars)).map(|_| Fr::one()).collect_vec();
     DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
 }
 
 /// Returns an MLE with random elements generated from u64 for testing according to the number of variables.
-pub(crate) fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr, Fr> {
+pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr, Fr> {
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
         .collect_vec();
@@ -23,7 +23,7 @@ pub(crate) fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> Dense
 
 /// Returns a vector of MLEs for dataparallel testing according to the number of variables and
 /// number of dataparallel bits.
-pub(crate) fn get_dummy_random_mle_vec(
+pub fn get_dummy_random_mle_vec(
     num_vars: usize,
     num_dataparallel_bits: usize,
     rng: &mut impl Rng,
@@ -49,7 +49,7 @@ pub(crate) fn get_dummy_random_mle_vec(
 /// the size of `inner_inner_sel_mle`
 /// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
 /// the size of `inner_sel_mle`
-pub(crate) struct TripleNestedSelectorBuilder<F: FieldExt> {
+pub struct TripleNestedSelectorBuilder<F: FieldExt> {
     inner_inner_sel_mle: DenseMle<F, F>,
     inner_sel_mle: DenseMle<F, F>,
     outer_sel_mle: DenseMle<F, F>,
@@ -88,7 +88,7 @@ impl<F: FieldExt> LayerBuilder<F> for TripleNestedSelectorBuilder<F> {
     }
 }
 impl<F: FieldExt> TripleNestedSelectorBuilder<F> {
-    pub(crate) fn new(
+    pub fn new(
         inner_inner_sel_mle: DenseMle<F, F>,
         inner_sel_mle: DenseMle<F, F>,
         outer_sel_mle: DenseMle<F, F>,
@@ -107,7 +107,7 @@ impl<F: FieldExt> TripleNestedSelectorBuilder<F> {
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
-pub(crate) struct ProductScaledBuilder<F: FieldExt> {
+pub struct ProductScaledBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
 }
@@ -139,7 +139,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductScaledBuilder<F> {
     }
 }
 impl<F: FieldExt> ProductScaledBuilder<F> {
-    pub(crate) fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
         Self { mle_1, mle_2 }
     }
 }
@@ -150,7 +150,7 @@ impl<F: FieldExt> ProductScaledBuilder<F> {
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
-pub(crate) struct ProductSumBuilder<F: FieldExt> {
+pub struct ProductSumBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
 }
@@ -187,7 +187,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductSumBuilder<F> {
     }
 }
 impl<F: FieldExt> ProductSumBuilder<F> {
-    pub(crate) fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
         Self { mle_1, mle_2 }
     }
 }
@@ -198,7 +198,7 @@ impl<F: FieldExt> ProductSumBuilder<F> {
 /// ## Arguments
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
-pub(crate) struct ConstantScaledSumBuilder<F: FieldExt> {
+pub struct ConstantScaledSumBuilder<F: FieldExt> {
     mle_1: DenseMle<F, F>,
     mle_2: DenseMle<F, F>,
 }
@@ -226,7 +226,7 @@ impl<F: FieldExt> LayerBuilder<F> for ConstantScaledSumBuilder<F> {
     }
 }
 impl<F: FieldExt> ConstantScaledSumBuilder<F> {
-    pub(crate) fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
         Self { mle_1, mle_2 }
     }
 }

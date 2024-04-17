@@ -9,7 +9,6 @@ use crate::{
         helpers::test_circuit,
         input_layer::{
             combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-            InputLayer,
         },
         proof_system::DefaultProofSystem,
         GKRCircuit, Layers, Witness,
@@ -539,11 +538,11 @@ fn test_dataparallel_add_gate_circuit() {
         LayerId::Input(0),
         None,
     );
-    let circuit: DataparallelAddGateCircuit<Fr> = DataparallelAddGateCircuit {
+    let circuit: DataparallelAddGateCircuit<Fr> = DataparallelAddGateCircuit::new(
         mle_dataparallel,
         neg_mle_dataparallel,
-        num_dataparallel_bits: NUM_DATAPARALLEL_BITS,
-    };
+        NUM_DATAPARALLEL_BITS,
+    );
 
     test_circuit(circuit, None);
 }
@@ -651,11 +650,7 @@ fn test_mul_add_gate_circuit() {
         None,
     );
 
-    let circuit: MulAddGateCircuit<Fr> = MulAddGateCircuit {
-        mle_1,
-        mle_2,
-        neg_mle_2,
-    };
+    let circuit: MulAddGateCircuit<Fr> = MulAddGateCircuit::new(mle_1, mle_2, neg_mle_2);
 
     test_circuit(circuit, None);
 }
