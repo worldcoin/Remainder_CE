@@ -12,7 +12,7 @@ use crate::{
     mle::{mle_enum::MleEnum, MleRef},
 };
 
-use super::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
+use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
 
 #[macro_export]
 ///This macro generates a layer enum that represents all the possible layers
@@ -136,13 +136,13 @@ macro_rules! input_layer_enum {
             }
         }
 
-        impl<F: FieldExt> $crate::prover::InputLayer<F> for $type_name<F> {
+        impl<F: FieldExt> $crate::input_layer::InputLayer<F> for $type_name<F> {
             paste::paste! {
                 type Commitment = [<$type_name Commitment>]<F>;
                 type OpeningProof = [<$type_name OpeningProof>]<F>;
             }
 
-            fn commit(&mut self) -> Result<Self::Commitment, $crate::prover::InputLayerError> {
+            fn commit(&mut self) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
                 match self {
                     $(
                         Self::$var_name(layer) => Ok(Self::Commitment::$var_name(layer.commit()?)),
@@ -164,7 +164,7 @@ macro_rules! input_layer_enum {
             fn verifier_append_commitment_to_transcript(
                 commitment: &Self::Commitment,
                 transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>
-            ) -> Result<(), $crate::prover::InputLayerError> {
+            ) -> Result<(), $crate::input_layer::InputLayerError> {
                 match commitment {
                     $(
                         Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::verifier_append_commitment_to_transcript(commitment, transcript),
@@ -175,8 +175,8 @@ macro_rules! input_layer_enum {
             fn open(
                 &self,
                 transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-                claim: $crate::prover::Claim<F>,
-            ) -> Result<Self::OpeningProof, $crate::prover::InputLayerError> {
+                claim: $crate::claims::Claim<F>,
+            ) -> Result<Self::OpeningProof, $crate::input_layer::InputLayerError> {
                 match self {
                     $(
                         Self::$var_name(layer) => Ok(Self::OpeningProof::$var_name(layer.open(transcript, claim)?)),
@@ -187,9 +187,9 @@ macro_rules! input_layer_enum {
             fn verify(
                 commitment: &Self::Commitment,
                 opening_proof: &Self::OpeningProof,
-                claim: $crate::prover::Claim<F>,
+                claim: $crate::claims::Claim<F>,
                 transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-            ) -> Result<(), $crate::prover::InputLayerError> {
+            ) -> Result<(), $crate::input_layer::InputLayerError> {
                 match commitment {
                     $(
                         Self::Commitment::$var_name(commitment) => {
@@ -203,7 +203,7 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn layer_id(&self) -> &$crate::prover::LayerId {
+            fn layer_id(&self) -> &$crate::layer::LayerId {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.layer_id(),
@@ -211,7 +211,7 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn get_padded_mle(&self) -> $crate::prover::DenseMle<F, F>{
+            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F, F>{
                 match self {
                     $(
                         Self::$var_name(layer) => layer.get_padded_mle(),

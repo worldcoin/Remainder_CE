@@ -434,28 +434,6 @@ fn test_linear_mle_indices_2() {
     assert_eq!(expected_all_linear_indices, actual_all_linear_indices);
 }
 
-// #[test]
-// fn test_not_fully_bounded_eval() {
-//     let mle = DenseMle::<_, Fr>::new(vec![
-//         Fr::from(4),
-//         Fr::from(2),
-//         Fr::from(5),
-//         Fr::from(7),
-//         Fr::from(2),
-//         Fr::from(4),
-//         Fr::from(9),
-//         Fr::from(6),
-//     ])
-//     .mle_ref();
-
-//     let mut expression = Expression::mle(mle);
-//     let _ = expression.index_mle_indices(3);
-
-//     let challenge = vec![Fr::from(-2), Fr::from(3), Fr::from(5)];
-//     let eval = expression.evaluate_expr(challenge);
-//     assert_eq!(eval, Err(ExpressionError::EvaluateNotFullyBoundError));
-// }
-
 #[test]
 fn big_test_eval() {
     let expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::one());

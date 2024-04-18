@@ -811,10 +811,10 @@ where
         .zip(&proof.columns[..])
         .try_for_each(|(&col_num, column)| {
             // --- Does the RLC evaluation check for b^T as well ---
-            let eval = verify_column_value::<D, E, F>(column, outer_tensor, &p_eval_fft[col_num]);
+            let eval = verify_column_value::<E, F>(column, outer_tensor, &p_eval_fft[col_num]);
 
             // --- Merkle path verification: Does hashing for each column, then Merkle tree hashes ---
-            let path = verify_column_path::<D, E, F>(
+            let path = verify_column_path::<E, F>(
                 column,
                 col_num,
                 root,
@@ -850,7 +850,7 @@ where
 /// * `root` - Merkle root, i.e. the Ligero commitment
 /// * `master_default_poseidon_merkle_hasher` - Hasher for Merkle path
 /// * `master_default_poseidon_column_hasher` - Hasher for column --> leaf
-fn verify_column_path<D, E, F>(
+fn verify_column_path<E, F>(
     column: &LcColumn<E, F>,
     col_num: usize,
     root: &F,
@@ -859,7 +859,6 @@ fn verify_column_path<D, E, F>(
 ) -> bool
 where
     F: FieldExt,
-    D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- New Poseidon params + Poseidon hasher ---
@@ -898,10 +897,9 @@ where
 /// * `column` - The actual Ligero matrix col M_j
 /// * `tensor` - The random b^T we are evaluating at
 /// * `poly_eval` - The RLC'd, evaluated version b^T M'[j]
-fn verify_column_value<D, E, F>(column: &LcColumn<E, F>, tensor: &[F], poly_eval: &F) -> bool
+fn verify_column_value<E, F>(column: &LcColumn<E, F>, tensor: &[F], poly_eval: &F) -> bool
 where
     F: FieldExt,
-    D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
     let tensor_eval = tensor
@@ -972,14 +970,7 @@ where
     let p_eval = {
         let mut tmp = vec![F::zero(); comm.orig_num_cols];
         // --- Take the vector-matrix product b^T M ---
-        collapse_columns::<E, F>(
-            &comm.coeffs,
-            outer_tensor,
-            &mut tmp,
-            comm.n_rows,
-            comm.orig_num_cols,
-            0,
-        );
+        collapse_columns::<E, F>(&comm.coeffs, outer_tensor, &mut tmp, comm.orig_num_cols, 0);
         tmp
     };
     // add p_eval to the transcript
@@ -1027,7 +1018,6 @@ fn collapse_columns<E, F>(
     coeffs: &[F],
     tensor: &[F],
     poly: &mut [F],
-    n_rows: usize,
     orig_num_cols: usize,
     offset: usize,
 ) where
@@ -1048,17 +1038,8 @@ fn collapse_columns<E, F>(
         let half_cols = poly.len() / 2;
         let (lo, hi) = poly.split_at_mut(half_cols);
         rayon::join(
-            || collapse_columns::<E, F>(coeffs, tensor, lo, n_rows, orig_num_cols, offset),
-            || {
-                collapse_columns::<E, F>(
-                    coeffs,
-                    tensor,
-                    hi,
-                    n_rows,
-                    orig_num_cols,
-                    offset + half_cols,
-                )
-            },
+            || collapse_columns::<E, F>(coeffs, tensor, lo, orig_num_cols, offset),
+            || collapse_columns::<E, F>(coeffs, tensor, hi, orig_num_cols, offset + half_cols),
         );
     }
 }
@@ -1122,14 +1103,7 @@ where
 
     // allocate result and compute
     let mut poly = vec![F::zero(); comm.orig_num_cols];
-    collapse_columns::<E, F>(
-        &comm.coeffs,
-        tensor,
-        &mut poly,
-        comm.n_rows,
-        comm.orig_num_cols,
-        0,
-    );
+    collapse_columns::<E, F>(&comm.coeffs, tensor, &mut poly, comm.orig_num_cols, 0);
 
     Ok(poly)
 }
