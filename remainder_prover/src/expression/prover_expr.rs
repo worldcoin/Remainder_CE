@@ -115,7 +115,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         Expression::new(mle_node, [].to_vec())
     }
 
-    /// not tested
     /// negates an Expression
     pub fn negated(expression: Self) -> Self {
         let (node, mle_vec) = expression.deconstruct();
@@ -125,7 +124,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         Expression::new(mle_node, mle_vec)
     }
 
-    /// not tested
     /// Create a Sum Expression that contains two MLEs
     pub fn sum(lhs: Self, mut rhs: Self) -> Self {
         let offset = lhs.num_mle_ref();
@@ -143,7 +141,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         Expression::new(sum_node, sum_mle_vec)
     }
 
-    /// not tested
     /// scales an Expression by a field element
     pub fn scaled(expression: Expression<F, ProverExpr>, scale: F) -> Self {
         let (node, mle_vec) = expression.deconstruct();
@@ -186,9 +183,12 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     }
 
     /// transforms the expression to a verifier expression
+    ///
     /// should only be called when the entire expression is fully bound
+    ///
     /// traverses the expression and changes the DenseMleRef to F,
     /// by grabbing their bookkeeping table's 1st and only element,
+    ///
     /// if the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
     pub fn transform_to_verifier_expression(
@@ -291,7 +291,6 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
             }
         };
         self.traverse(&mut observer_fn)?;
-        // ----- this is literally a check ends -----
 
         // --- Traverse the expression and pick up all the evals ---
         self.clone()

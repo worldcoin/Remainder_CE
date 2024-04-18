@@ -2,21 +2,18 @@ use ark_std::test_rng;
 use itertools::Itertools;
 
 use remainder::{
-    layer::{
+    builders::{
+        combine_input_layers::InputLayerBuilder,
         layer_builder::{
             batched::{combine_zero_mle_ref, BatchedLayer},
             simple_builders::ZeroBuilder,
         },
-        LayerId,
     },
+    input_layer::public_input_layer::PublicInputLayer,
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex, MleRef},
     prover::{
-        helpers::test_circuit,
-        input_layer::{
-            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-        },
-        proof_system::DefaultProofSystem,
-        GKRCircuit, Layers, Witness,
+        helpers::test_circuit, proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness,
     },
 };
 use remainder_shared_types::FieldExt;
@@ -53,8 +50,7 @@ impl<F: FieldExt> GKRCircuit<F> for NonSelectorDataparallelCircuit<F> {
         combined_mle_1.layer_id = LayerId::Input(0);
         combined_mle_2.layer_id = LayerId::Input(0);
 
-        let input_commit: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut combined_mle_1), Box::new(&mut combined_mle_2)];
+        let input_commit: Vec<&mut dyn Mle<F>> = vec![&mut combined_mle_1, &mut combined_mle_2];
 
         let input_commit_builder =
             InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));

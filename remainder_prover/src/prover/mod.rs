@@ -1,27 +1,21 @@
 //!Modules that orchestrates creating a GKR Proof
 
-/// For combining sub-circuits(multiple layers) into a single circuit(layer)
-pub mod combine_layers;
-
 /// Includes boilerplate for creating a GKR circuit, i.e. creating a transcript, proving, verifying, etc.
 pub mod helpers;
-
-/// For the various input layers to the GKR circuit
-pub mod input_layer;
 
 /// Includes various traits that define interfaces of a GKR Prover
 pub mod proof_system;
 
-use self::{
-    input_layer::{InputLayer, InputLayerError},
-    proof_system::ProofSystem,
-};
+use self::proof_system::ProofSystem;
 use crate::{
-    claims::{Claim, ClaimAggregator, ClaimAndProof},
-    gate::gate::{BinaryOperation, Gate},
+    builders::layer_builder::LayerBuilder,
+    claims::{ClaimAggregator, ClaimAndProof},
+    input_layer::{InputLayer, InputLayerError},
     layer::{
-        layer_builder::LayerBuilder, layer_enum::LayerEnum, regular_layer::RegularLayer, Layer,
-        LayerError, LayerId,
+        gate::{BinaryOperation, Gate},
+        layer_enum::LayerEnum,
+        regular_layer::RegularLayer,
+        Layer, LayerError, LayerId,
     },
     mle::{
         dense::{DenseMle, DenseMleRef},
@@ -253,22 +247,25 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
-#[allow(type_alias_bounds)]
 /// A helper type for easier reference to a circuit's Transcript
-pub type CircuitTranscript<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::Transcript;
+pub type CircuitTranscript<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Transcript;
 
-#[allow(type_alias_bounds)]
 /// A helper type alias for easier reference to a circuits Layer
-pub type CircuitLayer<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::Layer;
+pub type CircuitLayer<F, C> = <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Layer;
 
-#[allow(type_alias_bounds)]
 /// A helper type alias for easier reference to a circuits InputLayer
-pub type CircuitInputLayer<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::InputLayer;
+pub type CircuitInputLayer<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::InputLayer;
 
-#[allow(type_alias_bounds)]
 /// A helper type alias for easier reference to a circuits ClaimAggregator
-pub type CircuitClaimAggregator<F, C: GKRCircuit<F>> =
-    <C::ProofSystem as ProofSystem<F>>::ClaimAggregator;
+pub type CircuitClaimAggregator<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::ClaimAggregator;
+
+type WitnessAndCommitments<F, C> = (
+    Witness<F, <C as GKRCircuit<F>>::ProofSystem>,
+    Vec<<CircuitInputLayer<F, C> as InputLayer<F>>::Commitment>,
+);
 
 /// A GKRCircuit ready to be proven
 pub trait GKRCircuit<F: FieldExt> {
@@ -286,13 +283,7 @@ pub trait GKRCircuit<F: FieldExt> {
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<
-        (
-            Witness<F, Self::ProofSystem>,
-            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
-        ),
-        GKRError,
-    > {
+    ) -> Result<WitnessAndCommitments<F, Self>, GKRError> {
         let mut witness = self.synthesize();
 
         let commitments = witness
@@ -545,7 +536,7 @@ pub trait GKRCircuit<F: FieldExt> {
             let transcript_circuit_hash = transcript_reader
                 .consume_element("Circuit Hash")
                 .map_err(GKRError::ErrorWhenVerifyingCircuitHash)?;
-            debug_assert_eq!(transcript_circuit_hash, circuit_hash);
+            assert_eq!(transcript_circuit_hash, circuit_hash);
         }
 
         for input_layer in input_layer_proofs.iter() {
@@ -583,8 +574,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 // doing the initial step of evaluating V_1'(z) as specified in Thaler 13 page 14,
                 // but given the assumption we have that V_1'(z) = 0 for all z if the prover is honest.
                 if MleIndex::Bound(challenge, bit) != *index {
-                    dbg!(&(challenge, bit));
-                    dbg!(&index);
                     return Err(GKRError::ErrorWhenVerifyingOutputLayer);
                 }
                 claim_chal.push(challenge);

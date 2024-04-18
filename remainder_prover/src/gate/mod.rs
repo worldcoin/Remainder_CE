@@ -1,8 +1,0 @@
-/// The module holding the gate struct in order to prove and verify gate layers.
-pub mod gate;
-/// The helper functions required to support gate operations.
-pub mod gate_helpers;
-
-/// Testing module.
-#[cfg(test)]
-mod tests;

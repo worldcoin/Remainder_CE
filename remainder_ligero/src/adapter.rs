@@ -1,9 +1,10 @@
+use crate::ligero_structs::LigeroRoot;
 use crate::poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use crate::{LcColumn, LcEncoding};
 
 use crate::poseidon_ligero::PoseidonSpongeHasher;
 use crate::LcProofAuxiliaryInfo;
-use crate::{ligero_structs::LigeroEncoding, ligero_structs::LigeroEvalProof, LcRoot};
+use crate::{ligero_structs::LigeroEncoding, ligero_structs::LigeroEvalProof};
 
 use remainder_shared_types::FieldExt;
 
@@ -39,7 +40,7 @@ pub struct LigeroClaim<F> {
 
 /// Converts a lcpc-style Ligero proof/root into the above data structure.
 pub fn convert_lcpc_to_halo<F: FieldExt>(
-    root: LcRoot<LigeroEncoding<F>, F>,
+    root: LigeroRoot<F>,
     pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
 ) -> LigeroProof<F> {
     let merkle_root = root.root;
@@ -91,18 +92,14 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
 pub fn convert_halo_to_lcpc<D, E, F>(
     aux: LcProofAuxiliaryInfo,
     halo2_ligero_proof: LigeroProof<F>,
-) -> (
-    LcRoot<LigeroEncoding<F>, F>,
-    LigeroEvalProof<D, E, F>,
-    LigeroEncoding<F>,
-)
+) -> (LigeroRoot<F>, LigeroEvalProof<D, E, F>, LigeroEncoding<F>)
 where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Unpacking the Merkle root ---
-    let root = LcRoot::<LigeroEncoding<F>, F> {
+    let root = LigeroRoot::<F> {
         root: halo2_ligero_proof.merkle_root,
         _p: std::marker::PhantomData,
     };

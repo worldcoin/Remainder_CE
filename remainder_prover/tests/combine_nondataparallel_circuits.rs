@@ -1,16 +1,15 @@
 use ark_std::test_rng;
 
 use remainder::{
-    layer::{layer_builder::simple_builders::ZeroBuilder, LayerId},
+    builders::{
+        combine_input_layers::InputLayerBuilder, combine_layers::combine_layers,
+        layer_builder::simple_builders::ZeroBuilder,
+    },
+    input_layer::public_input_layer::PublicInputLayer,
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleRef},
     prover::{
-        combine_layers::combine_layers,
-        helpers::test_circuit,
-        input_layer::{
-            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-        },
-        proof_system::DefaultProofSystem,
-        GKRCircuit, Layers, Witness,
+        helpers::test_circuit, proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness,
     },
 };
 use remainder_shared_types::{FieldExt, Fr};
@@ -153,8 +152,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut self.mle_1), Box::new(&mut self.mle_2)];
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut self.mle_1, &mut self.mle_2];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
@@ -216,7 +214,7 @@ impl<F: FieldExt> CombinedCircuit<F> {
 }
 
 #[test]
-fn test_combined_circuit() {
+fn test_combined_nondataparallel_circuit() {
     const VARS_MLE_1_2: usize = 2;
     let mut rng = test_rng();
 

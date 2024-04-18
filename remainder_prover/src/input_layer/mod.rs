@@ -10,8 +10,6 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Combine multiple MLEs into one input layer.
-pub mod combine_input_layers;
 /// An enum which represents which type of input layer we are working with.
 pub mod enum_input_layer;
 /// An input layer in which the input data is committed to using the Ligero PCS.

@@ -15,7 +15,7 @@ use crate::claims::wlx_eval::helpers::{
 
 use crate::mle::mle_enum::MleEnum;
 
-use crate::prover::input_layer::InputLayer;
+use crate::input_layer::InputLayer;
 use crate::prover::GKRError;
 use crate::sumcheck::*;
 

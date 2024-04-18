@@ -127,7 +127,6 @@ impl<F: FieldExt, E: ExpressionType<F>> ExpressionNode<F, E> {
         observer_fn: &mut impl FnMut(&mut ExpressionNode<F, E>, &mut E::MleVec) -> Result<(), D>,
         mle_vec: &mut E::MleVec,
     ) -> Result<(), D> {
-        // dbg!(&self);
         observer_fn(self, mle_vec)?;
         match self {
             ExpressionNode::Constant(_) | ExpressionNode::Mle(_) | ExpressionNode::Product(_) => {

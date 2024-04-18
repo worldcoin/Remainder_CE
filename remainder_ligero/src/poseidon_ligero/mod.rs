@@ -5,7 +5,6 @@ pub mod poseidon_digest;
 use self::poseidon_digest::FieldHashFnDigest;
 use remainder_shared_types::FieldExt;
 use remainder_shared_types::Poseidon;
-use std::convert::TryInto;
 use std::marker::PhantomData;
 
 /// Wrapper around [Poseidon] sponge which provides an implementation
@@ -106,7 +105,7 @@ impl<F: FieldExt> FieldHashFnDigest<F> for PoseidonSpongeHasher<F> {
 
     /// Returns the single element squeezed from the sponge after absorbing.
     fn finalize(mut self) -> F {
-        let result: F = self.halo2_sponge.squeeze().try_into().unwrap();
+        let result: F = self.halo2_sponge.squeeze();
         result
     }
 

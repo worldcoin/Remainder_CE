@@ -1,6 +1,6 @@
-//!Utilities for combining sub-circuits
+//! For combining sub-circuits(multiple layers) into a single circuit(layer)
 
-use std::{cmp::min, marker::PhantomData};
+use std::cmp::min;
 
 use ark_std::log2;
 use itertools::Itertools;
@@ -17,19 +17,21 @@ use crate::{
     utils::{argsort, bits_iter},
 };
 
-use super::Layers;
+use crate::prover::Layers;
 
 #[derive(Error, Debug)]
 #[error("Layers can't be combined!")]
 /// Error when combining layers
 pub struct CombineError;
 
-///Utility for combining sub-circuits into a single circuit
+type IntermediateAndOutputLayers<F> = (Layers<F, LayerEnum<F>>, Vec<MleEnum<F>>);
+
+/// Utility for combining sub-circuits into a single circuit
 /// DOES NOT WORK FOR GATE MLE
 pub fn combine_layers<F: FieldExt>(
     mut layers: Vec<Layers<F, LayerEnum<F>>>,
     mut output_layers: Vec<Vec<MleEnum<F>>>,
-) -> Result<(Layers<F, LayerEnum<F>>, Vec<MleEnum<F>>), CombineError> {
+) -> Result<IntermediateAndOutputLayers<F>, CombineError> {
     //We're going to add multiple selectors to merge the sub-circuits, and then
     //the future layers need to take those selectors into account in thier claims.
     let layer_count = layers
@@ -63,8 +65,6 @@ pub fn combine_layers<F: FieldExt>(
             let layer_sizes = layers_at_combined_index
                 .iter()
                 .map(|layer| layer.1.layer_size());
-            // let layer_sizes_concrete = layer_sizes.clone().collect_vec();
-            // dbg!(layer_sizes_concrete);
 
             // --- Getting the total combined layer size ---
             let total_size = log2(layer_sizes.clone().map(|size| 1 << size).sum()) as usize;
@@ -107,8 +107,6 @@ pub fn combine_layers<F: FieldExt>(
         })
         .filter(|item: &Vec<Vec<MleIndex<F>>>| item.len() > 1)
         .collect_vec();
-
-    // dbg!(&bit_counts);
 
     // --- Iterates the above `sorted_and_padded_bits` in subcircuit-major (row-major) order ---
     let layer_bits = (0..layers.len())
@@ -169,13 +167,10 @@ pub fn combine_layers<F: FieldExt>(
         })
         .try_collect()?;
 
-    Ok((
-        Layers {
-            layers,
-            marker: PhantomData,
-        },
-        output_layers.into_iter().flatten().collect(),
-    ))
+    let mut layers_out = Layers::new();
+    layers_out.layers = layers;
+
+    Ok((layers_out, output_layers.into_iter().flatten().collect()))
 }
 
 ///Add all the extra bits that represent selectors between the sub-circuits to
@@ -298,9 +293,7 @@ fn combine_expressions<F: FieldExt>(
 
     loop {
         if exprs.len() == 1 {
-            let hi = exprs.remove(0).1;
-            dbg!(&hi);
-            break hi;
+            break exprs.remove(0).1;
         }
 
         exprs.sort_by(|first, second| {

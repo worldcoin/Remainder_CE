@@ -1,7 +1,8 @@
 //! A layer is a combination of multiple MLEs with an expression
 
 pub mod combine_mle_refs;
-pub mod layer_builder;
+
+pub mod gate;
 pub mod layer_enum;
 pub mod regular_layer;
 // mod gkr_layer;

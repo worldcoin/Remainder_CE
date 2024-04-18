@@ -18,13 +18,12 @@ pub mod claims;
 // functions) for which the prover and the verifier interact with
 pub mod expression;
 
-// module for defining the gate layer, uses the libra trick
-// to reduce the number of rounds for gate layers (with binary operations)
-pub mod gate;
-
 // module with the Layer trait, which is the main trait for
 // which we prove/verify over
 pub mod layer;
+
+// For the various input layers to the GKR circuit
+pub mod input_layer;
 
 // module for defining the MLE (multi-linear extension) data structure
 // we keep track of prefix bits, the evaluations there
@@ -45,5 +44,8 @@ pub mod sumcheck;
 // module for generating and manipulating mles, also includes a function to
 // generate the description of circuits
 pub mod utils;
+
+// module for tools to help circuit designers build circuits
+pub mod builders;
 
 pub use remainder_shared_types;

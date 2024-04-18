@@ -10,7 +10,7 @@ use remainder_shared_types::FieldExt;
 use crate::mle::{dense::DenseMleRef, MleIndex, MleRef};
 use thiserror::Error;
 
-use super::gate::BinaryOperation;
+use super::BinaryOperation;
 
 /// Error handling for gate mle construction.
 #[derive(Error, Debug, Clone)]
@@ -91,7 +91,6 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                             first
                         };
 
-                        // let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
                         let step = second - first;
 
                         let successors =
@@ -136,7 +135,6 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                     // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
                         let index = if mle_ref.num_vars() < max_num_vars {
-                            // max = 2^{num_vars}; index := index % 2^{num_vars}
                             let max = 1 << mle_ref.num_vars();
                             index % max
                         } else {
@@ -209,27 +207,11 @@ pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl MleRef<F = F>], 
     })
 }
 
-/// Fix variable for an array of mles.
-pub fn fix_var_gate<F: FieldExt>(
-    mle_refs: &mut [impl MleRef<F = F>],
-    round_index: usize,
-    challenge: F,
-) {
-    mle_refs.iter_mut().for_each(|mle_ref| {
-        if mle_ref
-            .mle_indices()
-            .contains(&MleIndex::IndexedBit(round_index))
-        {
-            mle_ref.fix_variable(round_index, challenge);
-        }
-    })
-}
-
 /// Computes a round of the sumcheck protocol on this Layer.
 pub fn prove_round_gate<F: FieldExt>(
     round_index: usize,
     challenge: F,
-    mle_refs: &mut Vec<Vec<DenseMleRef<F>>>,
+    mle_refs: &mut [Vec<DenseMleRef<F>>],
 ) -> Vec<F> {
     mle_refs.iter_mut().for_each(|mle_ref_vec| {
         mle_ref_vec.iter_mut().for_each(|mle_ref| {
@@ -258,7 +240,7 @@ pub fn compute_full_gate<F: FieldExt>(
     challenges: Vec<F>,
     lhs: &mut DenseMleRef<F>,
     rhs: &mut DenseMleRef<F>,
-    nonzero_gates: &Vec<(usize, usize, usize)>,
+    nonzero_gates: &[(usize, usize, usize)],
     copy_bits: usize,
 ) -> F {
     // Split the challenges into which ones are for batched bits, which ones are for others.
@@ -279,8 +261,8 @@ pub fn compute_full_gate<F: FieldExt>(
     // Literally summing over everything else (x, y).
     if copy_bits == 0 {
         nonzero_gates
-            .clone()
-            .into_iter()
+            .iter()
+            .copied()
             .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
                 let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
                 let ux = lhs.bookkeeping_table().get(x_ind).unwrap_or(&zero);
@@ -295,21 +277,22 @@ pub fn compute_full_gate<F: FieldExt>(
             // Sum over everything else, outer sum being over p2, inner sum over (x, y).
             (0..(1 << num_copy_idx)).fold(F::zero(), |acc_outer, idx| {
                 let g2 = *beta_g2.bookkeeping_table().get(idx).unwrap_or(&F::zero());
-                let inner_sum = nonzero_gates.clone().into_iter().fold(
-                    F::zero(),
-                    |acc, (z_ind, x_ind, y_ind)| {
-                        let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
-                        let ux = lhs
-                            .bookkeeping_table()
-                            .get(idx + (x_ind * num_copy_idx))
-                            .unwrap_or(&zero);
-                        let vy = rhs
-                            .bookkeeping_table()
-                            .get(idx + (y_ind * num_copy_idx))
-                            .unwrap_or(&zero);
-                        acc + gz * (*ux + *vy)
-                    },
-                );
+                let inner_sum =
+                    nonzero_gates
+                        .iter()
+                        .copied()
+                        .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
+                            let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
+                            let ux = lhs
+                                .bookkeeping_table()
+                                .get(idx + (x_ind * num_copy_idx))
+                                .unwrap_or(&zero);
+                            let vy = rhs
+                                .bookkeeping_table()
+                                .get(idx + (y_ind * num_copy_idx))
+                                .unwrap_or(&zero);
+                            acc + gz * (*ux + *vy)
+                        });
                 acc_outer + (g2 * inner_sum)
             })
         }
@@ -340,6 +323,7 @@ pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
 }
 
 /// Does all the necessary updates when proving a round for batched gate mles.
+#[allow(clippy::too_many_arguments)]
 pub fn prove_round_dataparallel_phase<F: FieldExt>(
     lhs: &mut DenseMleRef<F>,
     rhs: &mut DenseMleRef<F>,
@@ -347,7 +331,7 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
     beta_g2: &mut DenseMleRef<F>,
     round_index: usize,
     challenge: F,
-    nonzero_gates: &Vec<(usize, usize, usize)>,
+    nonzero_gates: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
     operation: BinaryOperation,
 ) -> Result<Vec<F>, GateError> {
@@ -373,7 +357,7 @@ pub fn libra_giraffe<F: FieldExt>(
     beta_g2: &DenseMleRef<F>,
     beta_g1: &DenseMleRef<F>,
     operation: BinaryOperation,
-    nonzero_gates: &Vec<(usize, usize, usize)>,
+    nonzero_gates: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
 ) -> Result<Vec<F>, GateError> {
     // When we have an add gate, we can distribute the beta table over the dataparallel challenges
@@ -417,8 +401,8 @@ pub fn libra_giraffe<F: FieldExt>(
 
             let num_dataparallel_entries = 1 << num_dataparallel_bits;
             let inner_sum_successors = nonzero_gates
-                .clone()
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|(z, x, y)| {
                     let g1_z = beta_g1.current_mle[z];
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));

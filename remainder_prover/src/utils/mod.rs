@@ -1,3 +1,6 @@
+//! Module for generating and manipulating mles, also includes a function to
+//! generate the description of circuits.
+
 use std::{fs, iter::repeat_with};
 
 use ark_std::test_rng;
@@ -23,7 +26,8 @@ pub(crate) mod test_utils;
 ///
 /// ## Returns
 ///
-/// * `padded_coeffs` - The coeffients, zero-padded to the nearest power of two (in length)
+/// * `padded_coeffs` - The coeffients, zero-padded to the nearest power of two
+///   (in length)
 pub fn pad_to_nearest_power_of_two<F: FieldExt>(coeffs: Vec<F>) -> Vec<F> {
     // --- No need to duplicate things if we're already a power of two! ---
     if coeffs.len().is_power_of_two() {
@@ -55,7 +59,8 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 }
 
 /// Helper function to create random MLE with specific number of vars
-// pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F, F> {
+// pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) ->
+// DenseMle<F, F> {
 pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F, F> {
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
@@ -84,7 +89,8 @@ pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F,
     DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
 }
 
-///returns an iterator that wil give permutations of binary bits of size num_bits
+///returns an iterator that wil give permutations of binary bits of size
+/// num_bits
 ///
 /// 0,0,0 -> 0,0,1 -> 0,1,0 -> 0,1,1 -> 1,0,0 -> 1,0,1 -> 1,1,0 -> 1,1,1
 pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {

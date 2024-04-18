@@ -2,22 +2,19 @@ use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 
 use remainder::{
-    layer::{
+    builders::{
+        combine_input_layers::InputLayerBuilder,
+        combine_layers::combine_layers,
         layer_builder::{
             batched::{combine_zero_mle_ref, BatchedLayer},
             simple_builders::ZeroBuilder,
         },
-        LayerId,
     },
+    input_layer::public_input_layer::PublicInputLayer,
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex, MleRef},
     prover::{
-        combine_layers::combine_layers,
-        helpers::test_circuit,
-        input_layer::{
-            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-        },
-        proof_system::DefaultProofSystem,
-        GKRCircuit, Layers, Witness,
+        helpers::test_circuit, proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness,
     },
 };
 use remainder_shared_types::{FieldExt, Fr};
@@ -210,8 +207,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuit<F> {
         let mut combined_mle_2 = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
         combined_mle_1.layer_id = LayerId::Input(0);
         combined_mle_2.layer_id = LayerId::Input(0);
-        let input_mles: Vec<Box<&mut dyn Mle<F>>> =
-            vec![Box::new(&mut combined_mle_1), Box::new(&mut combined_mle_2)];
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut combined_mle_1, &mut combined_mle_2];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
@@ -313,7 +309,7 @@ impl<F: FieldExt> DataParallelCombinedCircuit<F> {
 }
 
 #[test]
-fn test_combined_circuit() {
+fn test_combined_dataparallel_circuit() {
     const NUM_DATAPARALLEL_BITS: usize = 1;
     const VARS_MLE_1_2: usize = 2;
     let mut rng = test_rng();
