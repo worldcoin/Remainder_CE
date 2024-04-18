@@ -1,6 +1,6 @@
 //! For combining sub-circuits(multiple layers) into a single circuit(layer)
 
-use std::{cmp::min, marker::PhantomData};
+use std::cmp::min;
 
 use ark_std::log2;
 use itertools::Itertools;

@@ -207,22 +207,6 @@ pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl MleRef<F = F>], 
     })
 }
 
-/// Fix variable for an array of mles.
-pub fn fix_var_gate<F: FieldExt>(
-    mle_refs: &mut [impl MleRef<F = F>],
-    round_index: usize,
-    challenge: F,
-) {
-    mle_refs.iter_mut().for_each(|mle_ref| {
-        if mle_ref
-            .mle_indices()
-            .contains(&MleIndex::IndexedBit(round_index))
-        {
-            mle_ref.fix_variable(round_index, challenge);
-        }
-    })
-}
-
 /// Computes a round of the sumcheck protocol on this Layer.
 pub fn prove_round_gate<F: FieldExt>(
     round_index: usize,

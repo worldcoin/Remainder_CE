@@ -9,7 +9,7 @@ pub mod proof_system;
 use self::proof_system::ProofSystem;
 use crate::{
     builders::layer_builder::LayerBuilder,
-    claims::{Claim, ClaimAggregator, ClaimAndProof},
+    claims::{ClaimAggregator, ClaimAndProof},
     input_layer::{InputLayer, InputLayerError},
     layer::{
         gate::{BinaryOperation, Gate},
