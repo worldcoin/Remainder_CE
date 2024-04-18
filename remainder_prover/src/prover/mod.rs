@@ -545,7 +545,7 @@ pub trait GKRCircuit<F: FieldExt> {
             let transcript_circuit_hash = transcript_reader
                 .consume_element("Circuit Hash")
                 .map_err(GKRError::ErrorWhenVerifyingCircuitHash)?;
-            debug_assert_eq!(transcript_circuit_hash, circuit_hash);
+            assert_eq!(transcript_circuit_hash, circuit_hash);
         }
 
         for input_layer in input_layer_proofs.iter() {
@@ -583,8 +583,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 // doing the initial step of evaluating V_1'(z) as specified in Thaler 13 page 14,
                 // but given the assumption we have that V_1'(z) = 0 for all z if the prover is honest.
                 if MleIndex::Bound(challenge, bit) != *index {
-                    dbg!(&(challenge, bit));
-                    dbg!(&index);
                     return Err(GKRError::ErrorWhenVerifyingOutputLayer);
                 }
                 claim_chal.push(challenge);

@@ -91,7 +91,6 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                             first
                         };
 
-                        // let second = *mle_ref.mle().get(index + 1).unwrap_or(&zero);
                         let step = second - first;
 
                         let successors =
@@ -136,7 +135,6 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                     // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
                         let index = if mle_ref.num_vars() < max_num_vars {
-                            // max = 2^{num_vars}; index := index % 2^{num_vars}
                             let max = 1 << mle_ref.num_vars();
                             index % max
                         } else {

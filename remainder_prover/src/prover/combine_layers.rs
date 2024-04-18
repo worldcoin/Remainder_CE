@@ -65,8 +65,6 @@ pub fn combine_layers<F: FieldExt>(
             let layer_sizes = layers_at_combined_index
                 .iter()
                 .map(|layer| layer.1.layer_size());
-            // let layer_sizes_concrete = layer_sizes.clone().collect_vec();
-            // dbg!(layer_sizes_concrete);
 
             // --- Getting the total combined layer size ---
             let total_size = log2(layer_sizes.clone().map(|size| 1 << size).sum()) as usize;
@@ -109,8 +107,6 @@ pub fn combine_layers<F: FieldExt>(
         })
         .filter(|item: &Vec<Vec<MleIndex<F>>>| item.len() > 1)
         .collect_vec();
-
-    // dbg!(&bit_counts);
 
     // --- Iterates the above `sorted_and_padded_bits` in subcircuit-major (row-major) order ---
     let layer_bits = (0..layers.len())

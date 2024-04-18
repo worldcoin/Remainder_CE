@@ -10,7 +10,7 @@ use std::path::Path;
 
 use super::CircuitTranscript;
 
-/// boilerplate code for testing a circuit
+/// Boilerplate code for testing a circuit
 pub fn test_circuit<F: FieldExt, C: GKRCircuit<F>>(mut circuit: C, path: Option<&Path>)
 where
     CircuitTranscript<F, C>: Sync,
@@ -45,7 +45,6 @@ where
                 proof
             };
 
-            // Makis: Ignore verify for now.
             match circuit.verify(&mut transcript_reader, proof) {
                 Ok(_) => {
                     end_timer!(verifier_timer);
