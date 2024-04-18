@@ -253,26 +253,23 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
-#[allow(type_alias_bounds)]
 /// A helper type for easier reference to a circuit's Transcript
-pub type CircuitTranscript<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::Transcript;
+pub type CircuitTranscript<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Transcript;
 
-#[allow(type_alias_bounds)]
 /// A helper type alias for easier reference to a circuits Layer
-pub type CircuitLayer<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::Layer;
+pub type CircuitLayer<F, C> = <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Layer;
 
-#[allow(type_alias_bounds)]
 /// A helper type alias for easier reference to a circuits InputLayer
-pub type CircuitInputLayer<F, C: GKRCircuit<F>> = <C::ProofSystem as ProofSystem<F>>::InputLayer;
+pub type CircuitInputLayer<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::InputLayer;
 
-#[allow(type_alias_bounds)]
 /// A helper type alias for easier reference to a circuits ClaimAggregator
-pub type CircuitClaimAggregator<F, C: GKRCircuit<F>> =
-    <C::ProofSystem as ProofSystem<F>>::ClaimAggregator;
+pub type CircuitClaimAggregator<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::ClaimAggregator;
 
-#[allow(type_alias_bounds)]
-type WitnessAndCommitments<F, C: GKRCircuit<F>> = (
-    Witness<F, C::ProofSystem>,
+type WitnessAndCommitments<F, C> = (
+    Witness<F, <C as GKRCircuit<F>>::ProofSystem>,
     Vec<<CircuitInputLayer<F, C> as InputLayer<F>>::Commitment>,
 );
 
