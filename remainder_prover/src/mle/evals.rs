@@ -13,11 +13,13 @@ use serde::{Deserialize, Serialize};
 
 /// Mirrors the `num_bits` LSBs of `value`.
 /// # Example
+/// ```ignore
 ///     assert_eq!(mirror_bits(4, 0b1110), 0b0111);
 ///     assert_eq!(mirror_bits(3, 0b1110), 0b1011);
 ///     assert_eq!(mirror_bits(2, 0b1110), 0b1101);
 ///     assert_eq!(mirror_bits(1, 0b1110), 0b1110);
 ///     assert_eq!(mirror_bits(0, 0b1110), 0b1110);
+/// ```
 fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
     let mut result: usize = 0;
 
@@ -124,6 +126,7 @@ impl<F: FieldExt> Evaluations<F> {
     /// `( f(x0, x_1, ..., x_i = 0, ..., x_{n-1}), f(x0, x1, ..., x_i = 1, ...,
     /// x_{n-1}) )`.
     /// The pairs are returned in little-endian order. For example:
+    /// ```ignore
     /// [
     ///     ( f(0, 0, ..., 0, ..., 0), f(0, 0, ..., 1, ..., 0) ),
     ///     ( f(1, 0, ..., 0, ..., 0), f(1, 0, ..., 1, ..., 0) ),
@@ -131,6 +134,7 @@ impl<F: FieldExt> Evaluations<F> {
     ///      ....
     ///     ( f(1, 1, ..., 0, ..., 1), f(1, 1, ..., 1, ..., 1) ),
     /// ]
+    /// ```
     pub fn project(&self, fixed_variable_index: usize) -> EvaluationsPairIterator<F> {
         let lsb_mask = (1_usize << fixed_variable_index) - 1;
 
@@ -188,9 +192,11 @@ impl<F: FieldExt> Evaluations<F> {
     /// "endianess" of the index ordering. If `values.len() < 2^num_bits`, the
     /// missing values are assumed to be zeros. The resulting vector is always
     /// of size `2^num_bits`.
-    /// # For example:
+    /// # Example
+    /// ```ignore
     ///     assert_eq!(flip_endianess(2, &[1, 2, 3, 4], vec![ 1, 3, 2, 4 ]);
     ///     assert_eq!(flip_endianess(2, &[ 1, 2 ]), vec![ 1, 0, 2, 0 ]);
+    /// ```
     /// TODO(Makis): Benchmark and provide alternative implementations.
     fn flip_endianess(num_bits: usize, values: &[F]) -> Vec<F> {
         let num_evals = values.len();
@@ -277,14 +283,14 @@ impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
 
 /// Stores a function `\tilde{f}: F^n -> F`, the unique Multilinear
 /// Extension (MLE) of a given function `f: {0, 1}^n -> F`:
-/// ```
+/// ```ignore
 ///     \tilde{f}(x_0, ..., x_{n-1})
 ///         = \sum_{b_0, ..., b_{n-1} \in {0, 1}^n}
 ///             \tilde{beta}(x_0, ..., x_{n-1}, b_0, ..., b_{n-1})
 ///             * f(b_0, ..., b_{n-1}).
 /// ```
 /// where `\tilde{beta}` is the MLE of the equality function:
-/// ```
+/// ```ignore
 ///     \tilde{beta}(x_0, ..., x_{n-1}, b_0, ..., b_{n-1})
 ///         = \prod_{i  = 0}^{n-1} ( x_i * b_i + (1 - x_i) * (1 - b_i) )
 /// ```
