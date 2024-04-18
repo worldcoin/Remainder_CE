@@ -1,3 +1,10 @@
+//! module for defining the gate layer, uses the libra trick
+//! to reduce the number of rounds for gate layers (with binary operations)
+
+mod gate_helpers;
+#[cfg(test)]
+mod tests;
+
 use std::cmp::max;
 
 use ark_std::cfg_into_iter;
@@ -14,7 +21,6 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    gate_mle::gate_helpers::{prove_round_dataparallel_phase, prove_round_gate},
     layer::{Layer, LayerError, LayerId, VerificationError},
     mle::{
         betavalues::BetaValues,
@@ -26,9 +32,10 @@ use crate::{
     sumcheck::{evaluate_at_a_point, Evals},
 };
 
-use super::gate_helpers::{
+use self::gate_helpers::{
     check_fully_bound, compute_full_gate, compute_sumcheck_message_no_beta_table,
-    index_mle_indices_gate, libra_giraffe, GateError,
+    index_mle_indices_gate, libra_giraffe, prove_round_dataparallel_phase, prove_round_gate,
+    GateError,
 };
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]

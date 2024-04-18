@@ -12,7 +12,7 @@ use crate::{
     mle::MleIndex,
 };
 
-use super::LayerId;
+use crate::layer::LayerId;
 
 /// The builder type for a Layer
 ///

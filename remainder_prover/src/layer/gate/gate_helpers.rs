@@ -10,7 +10,7 @@ use remainder_shared_types::FieldExt;
 use crate::mle::{dense::DenseMleRef, MleIndex, MleRef};
 use thiserror::Error;
 
-use super::gate::BinaryOperation;
+use super::BinaryOperation;
 
 /// Error handling for gate mle construction.
 #[derive(Error, Debug, Clone)]

@@ -19,10 +19,9 @@ use crate::{
     claims::wlx_eval::YieldWLXEvals,
     layer::LayerId,
     mle::{dense::DenseMle, mle_enum::MleEnum},
-    prover::input_layer::InputLayerError,
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, MleInputLayer};
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
 
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
 /// commitment scheme.

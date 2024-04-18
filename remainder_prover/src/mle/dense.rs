@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
 use crate::{
+    builders::layer_builder::batched::combine_mles,
     claims::{wlx_eval::ClaimMle, Claim},
-    layer::{layer_builder::batched::combine_mles, LayerId},
+    layer::LayerId,
     mle::evals::{Evaluations, MultilinearExtension},
 };
 use crate::{

@@ -1,19 +1,16 @@
 use ark_std::test_rng;
 
 use remainder::{
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{
+    builders::{
+        combine_input_layers::InputLayerBuilder,
         layer_builder::{simple_builders::ZeroBuilder, LayerBuilder},
-        LayerId,
     },
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    input_layer::public_input_layer::PublicInputLayer,
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex, MleRef},
     prover::{
-        helpers::test_circuit,
-        input_layer::{
-            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-        },
-        proof_system::DefaultProofSystem,
-        GKRCircuit, Layers, Witness,
+        helpers::test_circuit, proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness,
     },
 };
 use remainder_shared_types::{FieldExt, Fr};

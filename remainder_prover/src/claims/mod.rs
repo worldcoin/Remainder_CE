@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
+    input_layer::InputLayer,
     layer::{combine_mle_refs::CombineMleRefError, Layer, LayerError, LayerId},
-    prover::{input_layer::InputLayer, GKRError},
+    prover::GKRError,
 };
 
 #[derive(Error, Debug, Clone)]

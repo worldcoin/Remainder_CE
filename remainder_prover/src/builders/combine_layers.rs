@@ -1,4 +1,4 @@
-//!Utilities for combining sub-circuits
+//! For combining sub-circuits(multiple layers) into a single circuit(layer)
 
 use std::{cmp::min, marker::PhantomData};
 
@@ -17,7 +17,7 @@ use crate::{
     utils::{argsort, bits_iter},
 };
 
-use super::Layers;
+use crate::prover::Layers;
 
 #[derive(Error, Debug)]
 #[error("Layers can't be combined!")]
@@ -167,13 +167,10 @@ pub fn combine_layers<F: FieldExt>(
         })
         .try_collect()?;
 
-    Ok((
-        Layers {
-            layers,
-            marker: PhantomData,
-        },
-        output_layers.into_iter().flatten().collect(),
-    ))
+    let mut layers_out = Layers::new();
+    layers_out.layers = layers;
+
+    Ok((layers_out, output_layers.into_iter().flatten().collect()))
 }
 
 ///Add all the extra bits that represent selectors between the sub-circuits to

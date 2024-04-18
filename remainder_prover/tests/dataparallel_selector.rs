@@ -1,21 +1,17 @@
 use itertools::Itertools;
 
 use remainder::{
-    layer::{
+    builders::{
+        combine_input_layers::InputLayerBuilder,
         layer_builder::{
             batched::{combine_zero_mle_ref, BatchedLayer},
             simple_builders::ZeroBuilder,
         },
-        LayerId,
     },
+    input_layer::public_input_layer::PublicInputLayer,
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex, MleRef},
-    prover::{
-        input_layer::{
-            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-        },
-        proof_system::DefaultProofSystem,
-        GKRCircuit, Layers, Witness,
-    },
+    prover::{proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness},
 };
 use remainder_shared_types::FieldExt;
 use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};

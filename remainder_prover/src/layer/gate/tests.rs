@@ -3,19 +3,18 @@ use rand::Rng;
 use remainder_shared_types::{FieldExt, Fr};
 
 use crate::{
-    layer::{layer_builder::simple_builders::ZeroBuilder, LayerId},
+    builders::{
+        combine_input_layers::InputLayerBuilder, layer_builder::simple_builders::ZeroBuilder,
+    },
+    input_layer::public_input_layer::PublicInputLayer,
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleRef},
     prover::{
-        helpers::test_circuit,
-        input_layer::{
-            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-        },
-        proof_system::DefaultProofSystem,
-        GKRCircuit, Layers, Witness,
+        helpers::test_circuit, proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness,
     },
 };
 
-use super::gate::BinaryOperation;
+use super::BinaryOperation;
 
 /// A circuit which takes in two MLEs of the same size and adds
 /// the contents, element-wise, to one another.

@@ -15,9 +15,10 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
+    builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{layer_builder::LayerBuilder, Layer, LayerError, LayerId, VerificationError},
+    layer::{Layer, LayerError, LayerId, VerificationError},
     mle::betavalues::BetaValues,
     prover::SumcheckProof,
     sumcheck::{

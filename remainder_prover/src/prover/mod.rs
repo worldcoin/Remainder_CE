@@ -1,27 +1,21 @@
 //!Modules that orchestrates creating a GKR Proof
 
-/// For combining sub-circuits(multiple layers) into a single circuit(layer)
-pub mod combine_layers;
-
 /// Includes boilerplate for creating a GKR circuit, i.e. creating a transcript, proving, verifying, etc.
 pub mod helpers;
-
-/// For the various input layers to the GKR circuit
-pub mod input_layer;
 
 /// Includes various traits that define interfaces of a GKR Prover
 pub mod proof_system;
 
-use self::{
-    input_layer::{InputLayer, InputLayerError},
-    proof_system::ProofSystem,
-};
+use self::proof_system::ProofSystem;
 use crate::{
+    builders::layer_builder::LayerBuilder,
     claims::{Claim, ClaimAggregator, ClaimAndProof},
-    gate_mle::gate::{BinaryOperation, Gate},
+    input_layer::{InputLayer, InputLayerError},
     layer::{
-        layer_builder::LayerBuilder, layer_enum::LayerEnum, regular_layer::RegularLayer, Layer,
-        LayerError, LayerId,
+        gate::{BinaryOperation, Gate},
+        layer_enum::LayerEnum,
+        regular_layer::RegularLayer,
+        Layer, LayerError, LayerId,
     },
     mle::{
         dense::{DenseMle, DenseMleRef},

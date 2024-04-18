@@ -1,6 +1,7 @@
+use crate::builders::layer_builder::from_mle;
 use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
-use crate::layer::{layer_builder::from_mle, regular_layer::RegularLayer, LayerId};
+use crate::layer::{regular_layer::RegularLayer, LayerId};
 use crate::mle::dense::DenseMle;
 use crate::mle::MleIndex;
 use crate::utils::test_utils::DummySponge;

@@ -1,3 +1,5 @@
+//! Combine multiple MLEs into one input layer.
+
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_ligero::{
@@ -12,7 +14,7 @@ use crate::{
     utils::{argsort, pad_to_nearest_power_of_two},
 };
 
-use super::{ligero_input_layer::LigeroInputLayer, MleInputLayer};
+use crate::input_layer::{ligero_input_layer::LigeroInputLayer, MleInputLayer};
 
 /// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.

@@ -370,11 +370,9 @@ mod tests {
     use remainder_shared_types::Fr;
 
     use crate::{
+        builders::layer_builder::{from_mle, LayerBuilder},
         expression::{generic_expr::Expression, prover_expr::ProverExpr},
-        layer::{
-            layer_builder::{from_mle, LayerBuilder},
-            LayerId,
-        },
+        layer::LayerId,
         mle::{dense::DenseMle, MleIndex},
         sumcheck::tests::{dummy_sumcheck, get_dummy_claim, verify_sumcheck_messages},
     };

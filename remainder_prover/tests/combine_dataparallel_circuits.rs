@@ -2,22 +2,19 @@ use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 
 use remainder::{
-    layer::{
+    builders::{
+        combine_input_layers::InputLayerBuilder,
+        combine_layers::combine_layers,
         layer_builder::{
             batched::{combine_zero_mle_ref, BatchedLayer},
             simple_builders::ZeroBuilder,
         },
-        LayerId,
     },
+    input_layer::public_input_layer::PublicInputLayer,
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex, MleRef},
     prover::{
-        combine_layers::combine_layers,
-        helpers::test_circuit,
-        input_layer::{
-            combine_input_layers::InputLayerBuilder, public_input_layer::PublicInputLayer,
-        },
-        proof_system::DefaultProofSystem,
-        GKRCircuit, Layers, Witness,
+        helpers::test_circuit, proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness,
     },
 };
 use remainder_shared_types::{FieldExt, Fr};

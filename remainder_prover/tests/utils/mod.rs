@@ -1,8 +1,9 @@
 use itertools::Itertools;
 use rand::Rng;
 use remainder::{
+    builders::layer_builder::LayerBuilder,
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{layer_builder::LayerBuilder, LayerId},
+    layer::LayerId,
     mle::{dense::DenseMle, MleIndex},
 };
 use remainder_shared_types::{FieldExt, Fr};

@@ -5,11 +5,12 @@ use remainder_ligero::ligero_commit::remainder_ligero_commit;
 use remainder_shared_types::{transcript::TranscriptWriter, FieldExt, Fr};
 
 use crate::{
-    expression::generic_expr::Expression,
-    layer::{
+    builders::{
+        combine_input_layers::InputLayerBuilder,
         layer_builder::{from_mle, simple_builders::EqualityCheck, LayerBuilder},
-        LayerId,
     },
+    expression::generic_expr::Expression,
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleRef},
     prover::{
         helpers::test_circuit, proof_system::DefaultProofSystem, CircuitInputLayer,
@@ -19,9 +20,8 @@ use crate::{
 };
 
 use super::{
-    combine_input_layers::InputLayerBuilder, enum_input_layer::InputLayerEnum,
-    ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
-    random_input_layer::RandomInputLayer, InputLayer,
+    enum_input_layer::InputLayerEnum, ligero_input_layer::LigeroInputLayer,
+    public_input_layer::PublicInputLayer, random_input_layer::RandomInputLayer, InputLayer,
 };
 
 /// This circuit takes in a single MLE and performs the following:
