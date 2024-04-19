@@ -1,0 +1,41 @@
+[package]
+name = "remainder-ligero"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+digest = "0.9"
+err-derive = "0.2"
+ff = "0.12"
+merlin = "2.0"
+rand = "0.8"
+rand_chacha = "0.3"
+rayon = "1.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
+# poseidon = { git = "https://github.com/scroll-tech/poseidon/", branch = "main" } # Scroll's Poseidon impl
+ark-crypto-primitives = {version = "0.4.0", features = ["sponge", "crh"]} # Poseidon from Arkworks
+blake3 = { version = "1", features = ["traits-preview"] } # Duplicate from dev-dependencies
+ark-bn254 = "0.4.0" # For BN-254 field
+ark-std = "0.4.0" # Also for BN-254 (mostly RNG purposes)
+# halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_04_20" } # Halo2 for BN-254 FFT and what not
+halo2_proofs = { git = "https://github.com/axiom-crypto/halo2.git", tag = "v2023_04_06"}
+# halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib", tag = "v0.3.0-ce" }
+ark-poly = "0.4.2" # For BN-254 FFT stuff
+ark-ff = "0.4.2" # Also for FFT stuff
+ark-serialize = { version = "0.4", features = ["derive"] } # For serialization
+fffft = "0.4"
+itertools = "0.10"
+halo2curves = "0.4.0"
+lazy_static = "1.4.0"
+thiserror = "1.0.40"
+once_cell = "1.18.0"
+tracing = "0.1.37"
+remainder-shared-types = { path = "../remainder_shared_types" }
+
+[dev-dependencies]
+bincode = "1.3"
+blake3 = { version = "1", features = ["traits-preview"] }
+itertools = "0.10"
