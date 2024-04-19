@@ -2,5 +2,7 @@
 
 members = ["remainder_prover", "remainder_shared_types", "remainder_ligero"]
 
+resolve = "2"
+
 [patch."https://github.com/privacy-scaling-explorations/halo2curves"]
-halo2curves = { git = "https://github.com/axiom-crypto/halo2.git", tag = "v2023_04_06"}
+halo2curves = { git = "https://github.com/axiom-crypto/halo2.git", tag = "v2023_04_06" }
