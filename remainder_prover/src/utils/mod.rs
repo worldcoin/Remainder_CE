@@ -11,7 +11,7 @@ use remainder_shared_types::{FieldExt, Poseidon};
 use crate::{
     layer::{layer_enum::LayerEnum, LayerId},
     mle::{dense::DenseMle, MleIndex},
-    prover::Layers,
+    prover::layers::Layers,
 };
 
 #[cfg(test)]

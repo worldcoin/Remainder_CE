@@ -13,8 +13,8 @@ use crate::{
     layer::LayerId,
     mle::{dense::DenseMle, Mle, MleRef},
     prover::{
-        helpers::test_circuit, proof_system::DefaultProofSystem, CircuitInputLayer,
-        CircuitTranscript, GKRCircuit, GKRError, Layers, Witness,
+        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, CircuitInputLayer,
+        CircuitTranscript, GKRCircuit, GKRError, Witness,
     },
     utils::get_random_mle,
 };

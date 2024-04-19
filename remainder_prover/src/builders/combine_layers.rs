@@ -17,7 +17,7 @@ use crate::{
     utils::{argsort, bits_iter},
 };
 
-use crate::prover::Layers;
+use crate::prover::layers::Layers;
 
 #[derive(Error, Debug)]
 #[error("Layers can't be combined!")]

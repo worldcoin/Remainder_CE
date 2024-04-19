@@ -12,7 +12,7 @@ use remainder::{
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex, MleRef},
-    prover::{proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness},
+    prover::{layers::Layers, proof_system::DefaultProofSystem, GKRCircuit, Witness},
 };
 use remainder_shared_types::FieldExt;
 

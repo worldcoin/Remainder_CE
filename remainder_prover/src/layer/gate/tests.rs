@@ -10,7 +10,8 @@ use crate::{
     layer::LayerId,
     mle::{dense::DenseMle, Mle, MleRef},
     prover::{
-        helpers::test_circuit, proof_system::DefaultProofSystem, GKRCircuit, Layers, Witness,
+        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
+        Witness,
     },
 };
 
