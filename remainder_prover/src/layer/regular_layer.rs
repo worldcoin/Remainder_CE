@@ -114,6 +114,19 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         // if there are no sumcheck prover messages, this means this was an entirely linear layer. therefore
         // we can skip the verification for this layer.
         if sumcheck_prover_messages.is_none() {
+            let expr_evaluated_at_challenge_coord = self
+                .expression
+                .clone()
+                .transform_to_verifier_expression()
+                .unwrap()
+                .gather_combine_all_evals()
+                .unwrap();
+            let claim_result = claim.get_result();
+            if expr_evaluated_at_challenge_coord != claim_result {
+                return Err(LayerError::VerificationError(
+                    VerificationError::FinalSumcheckFailed,
+                ));
+            }
             return Ok(());
         }
         let sumcheck_prover_messages = sumcheck_prover_messages.unwrap();
