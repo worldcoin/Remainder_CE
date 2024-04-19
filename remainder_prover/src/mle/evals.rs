@@ -384,9 +384,45 @@ impl<F: FieldExt> MultilinearExtension<F> {
     /// # Panics
     /// if `var_index` is outside the interval `[0, self.num_vars())`.
     pub fn fix_variable_at_index(&mut self, var_index: usize, point: F) {
+        // NEWEST IMPLEMENTATION: manually parallelize.
+        let lsb_mask = (1_usize << var_index) - 1;
+
+        let num_vars = self.num_vars();
+        let num_pairs = 1_usize << (num_vars - 1);
+
+        let new_evals: Vec<F> = (0..num_pairs)
+            .into_par_iter()
+            .map(|idx| {
+                // Compute the two indices by inserting a `0` and a `1` respectively
+                // in the appropriate position of `current_pair_index`.
+                // For example, if this is an Iterator projecting on
+                // `fix_variable_index == 2` for an Evaluations table of `num_vars
+                // == 5`, then `lsb_mask == 0b00011` (the `fix_variable_index` LSBs
+                // are on). When, for example `current_pair_index == 0b1010`, it is
+                // split into a "right part": `lsb_idx == 0b00 0 10`, and a "shifted
+                // left part": `msb_idx == 0b10 0 00`.  The two parts are then
+                // combined with the middle bit on and off respectively: `idx1 ==
+                // 0b10 0 10`, `idx2 == 0b10 1 10`.
+                let lsb_idx = idx & lsb_mask;
+                let msb_idx = (idx & (!lsb_mask)) << 1;
+                let mid_idx = lsb_mask + 1;
+
+                let idx1 = lsb_idx | msb_idx;
+                let idx2 = lsb_idx | mid_idx | msb_idx;
+
+                let val1 = self[idx1];
+                let val2 = self[idx2];
+
+                val1 + (val2 - val1) * point
+            })
+            .collect();
+
+        debug_assert_eq!(new_evals.len(), 1 << (num_vars - 1));
+        self.f = Evaluations::new(num_vars - 1, new_evals);
+
         // OLD IMPLEMENTATION: By accessing the bookkeeping table directly and
         // using parallel iterators.
-        // ------------------------------------
+        /*
         // Switch to 1-based indices.
         let var_index = var_index + 1;
         assert!(1 <= var_index && var_index <= self.num_vars());
@@ -459,7 +495,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
         // --- Note that MLE is destructively modified into the new bookkeeping table
         // here ---
         self.f = Evaluations::<F>::new(self.num_vars() - 1, evals);
-        // ------------------------------------
+        */
 
         // NEW IMPLEMENTATION: using projection iterators for succinct
         // description.
