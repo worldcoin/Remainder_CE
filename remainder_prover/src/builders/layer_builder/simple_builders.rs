@@ -9,7 +9,7 @@ use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
 use std::cmp::max;
 
-/// takes a densemleref that is all zeros and returns a zeromleref as the successor
+/// takes a DenseMleRef and subtracts it from itself to get all zeroes.
 pub struct ZeroBuilder<F: FieldExt> {
     mle: DenseMle<F, F>,
 }
@@ -17,7 +17,7 @@ pub struct ZeroBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
     type Successor = ZeroMleRef<F>;
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.mle.mle_ref())
+        Expression::mle(self.mle.mle_ref()) - Expression::mle(self.mle.mle_ref())
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let mle_num_vars = self.mle.num_iterated_vars();
