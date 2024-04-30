@@ -160,10 +160,10 @@ pub fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec
         .flat_map(|index| {
             items
                 .iter()
-                .map(move |item| *item.get(index).unwrap_or(&F::zero()))
-                .chain(repeat_n(F::zero(), padding_count))
+                .map(move |item| *item.get(index).unwrap_or(&F::ZERO))
+                .chain(repeat_n(F::ZERO, padding_count))
         })
-        .chain(repeat_n(F::zero(), total_padding))
+        .chain(repeat_n(F::ZERO, total_padding))
         .collect()
 }
 
@@ -178,7 +178,7 @@ impl<F: FieldExt> MleAble<F> for F {
         items
             .iter()
             .cloned()
-            .chain(repeat_n(F::zero(), padding))
+            .chain(repeat_n(F::ZERO, padding))
             .collect()
     }
 
@@ -256,13 +256,13 @@ impl<F: FieldExt> DenseMle<F, F> {
     }
 
     /// Constructs a `DenseMle` with `mle_len` evaluations, all equal to
-    /// `F::one()`.
+    /// `F::ONE`.
     pub fn one(
         mle_len: usize,
         layer_id: LayerId,
         prefix_bits: Option<Vec<MleIndex<F>>>,
     ) -> DenseMle<F, F> {
-        let ones_vec: Vec<F> = (0..mle_len).map(|_| F::one()).collect();
+        let ones_vec: Vec<F> = (0..mle_len).map(|_| F::ONE).collect();
         DenseMle::new_from_raw(ones_vec, layer_id, prefix_bits)
     }
 

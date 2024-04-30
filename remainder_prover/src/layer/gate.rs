@@ -95,7 +95,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
     ) -> Result<SumcheckProof<F>, LayerError> {
         let mut sumcheck_rounds = vec![];
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
-        let mut beta_g2_fully_bound = F::one();
+        let mut beta_g2_fully_bound = F::ONE;
         // We perform the dataparallel initiliazation only if there is at least one variable
         // representing which copy we are in.
         if self.num_dataparallel_bits > 0 {
@@ -242,10 +242,10 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
             self.nonzero_gates
                 .clone()
                 .into_iter()
-                .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
-                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::zero());
-                    let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::zero());
+                .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
+                    let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                    let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
                     acc + gz * ux * vy
                 });
 
@@ -485,8 +485,8 @@ impl<F: FieldExt> Gate<F> {
 
         // Because we are binding `x` variables after this phase, all bookkeeping tables should have size
         // 2^(number of x variables).
-        let mut a_hg_rhs = vec![F::zero(); 1 << num_x];
-        let mut a_hg_lhs = vec![F::zero(); 1 << num_x];
+        let mut a_hg_rhs = vec![F::ZERO; 1 << num_x];
+        let mut a_hg_lhs = vec![F::ZERO; 1 << num_x];
 
         // Over here, we are looping through the nonzero gates using the Libra trick. This takes advantage
         // of the sparsity of the gate function. if we have the following expression:
@@ -496,12 +496,8 @@ impl<F: FieldExt> Gate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind, y_ind)| {
-                let beta_g_at_z = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
-                let f_3_at_y = *self
-                    .rhs
-                    .bookkeeping_table()
-                    .get(y_ind)
-                    .unwrap_or(&F::zero());
+                let beta_g_at_z = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let f_3_at_y = *self.rhs.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
                 a_hg_rhs[x_ind] += beta_g_at_z * f_3_at_y;
                 if self.gate_operation == BinaryOperation::Add {
                     a_hg_lhs[x_ind] += beta_g_at_z;
@@ -569,8 +565,8 @@ impl<F: FieldExt> Gate<F> {
 
         // Because we are binding the "y" variables, the size of the bookkeeping tables after this init
         // phase are 2^(number of y variables).
-        let mut a_f1_lhs = vec![F::zero(); 1 << num_y];
-        let mut a_f1_rhs = vec![F::zero(); 1 << num_y];
+        let mut a_f1_lhs = vec![F::ZERO; 1 << num_y];
+        let mut a_f1_rhs = vec![F::ZERO; 1 << num_y];
 
         // By the time we get here, we assume the "x" variables and "dataparallel" variables have been
         // bound. Therefore, we are simply scaling by the appropriate gate value and the fully bound
@@ -579,8 +575,8 @@ impl<F: FieldExt> Gate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind, y_ind)| {
-                let gz = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::zero());
+                let gz = *beta_g1.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
                 let adder = gz * ux;
                 a_f1_lhs[y_ind] += adder * f_at_u;
                 if self.gate_operation == BinaryOperation::Add {

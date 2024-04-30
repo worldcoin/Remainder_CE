@@ -22,12 +22,12 @@ fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
     // --- For each of the challenge coordinates ---
     challenge_coord
         .iter()
-        .fold(vec![F::one()], |current_tensor, challenge| {
+        .fold(vec![F::ONE], |current_tensor, challenge| {
             // --- Take first coordinate and double current tensor ---
             current_tensor
                 .clone()
                 .into_iter()
-                .map(|tensor_val| tensor_val * (F::one() - challenge))
+                .map(|tensor_val| tensor_val * (F::ONE - challenge))
                 .chain(
                     current_tensor
                         .into_iter()
@@ -104,7 +104,7 @@ pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
     assert!(mle_coeffs.len().is_power_of_two());
     assert_eq!(log2(mle_coeffs.len()), challenge_coord.len() as u32);
 
-    let one = F::one();
+    let one = F::ONE;
     let reduced_bookkeeping_table =
         challenge_coord
             .iter()

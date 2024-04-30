@@ -2,10 +2,11 @@ use crate::adapter::{convert_lcpc_to_halo, LigeroClaim, LigeroProof};
 use crate::ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point};
 use crate::ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof, LigeroRoot};
 use crate::utils::get_ligero_matrix_dims;
+use crate::FieldExt;
 use crate::{verify, LcProofAuxiliaryInfo};
 use ark_std::log2;
+use remainder_shared_types::transcript::TranscriptSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
-use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
 use tracing::instrument;
 
 use super::poseidon_ligero::PoseidonSpongeHasher;
