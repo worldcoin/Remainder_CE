@@ -190,9 +190,8 @@ pub fn check_fully_bound<F: FieldExt>(
         return Err(GateError::EvaluateBoundIndicesDontMatch);
     }
 
-    mle_refs.iter_mut().fold(Ok(F::ONE), |acc, mle_ref| {
+    mle_refs.iter_mut().try_fold(F::ONE, |acc, mle_ref| {
         // --- Accumulate either errors or multiply ---
-        let acc = acc?;
         if mle_ref.bookkeeping_table().len() != 1 {
             return Err(GateError::MleNotFullyBoundError);
         }

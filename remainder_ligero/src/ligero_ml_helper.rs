@@ -62,7 +62,7 @@ fn initialize_tensor<F: FieldExt>(challenge_coord: &[F]) -> Vec<F> {
 /// a:
 /// [(1 - x_0)(1 - x_1), x_0(1 - x_1), (1 - x_0)x_1, x_0x_1]
 pub fn get_ml_inner_outer_tensors<F: FieldExt>(
-    challenge_coord: &Vec<F>,
+    challenge_coord: &[F],
     num_rows: usize,
     orig_num_cols: usize,
 ) -> (Vec<F>, Vec<F>) {
@@ -98,8 +98,8 @@ pub fn get_ml_inner_outer_tensors<F: FieldExt>(
 /// * `mle_coeffs` - MLE evaluations over the boolean hypercube.
 /// * `challenge_coord` - Challenge point at which to evaluate the MLE.
 pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
-    mle_coeffs: &Vec<F>,
-    challenge_coord: &Vec<F>,
+    mle_coeffs: &[F],
+    challenge_coord: &[F],
 ) -> F {
     assert!(mle_coeffs.len().is_power_of_two());
     assert_eq!(log2(mle_coeffs.len()), challenge_coord.len() as u32);
@@ -108,7 +108,7 @@ pub fn naive_eval_mle_at_challenge_point<F: FieldExt>(
     let reduced_bookkeeping_table =
         challenge_coord
             .iter()
-            .fold(mle_coeffs.clone(), |bookkeeping_table, new_challenge| {
+            .fold(mle_coeffs.to_vec(), |bookkeeping_table, new_challenge| {
                 // --- Grab every pair of elements and use the formula ---
                 bookkeeping_table
                     .chunks(2)

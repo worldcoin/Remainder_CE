@@ -114,7 +114,7 @@ where
                 halo2_ligero_proof
                     .columns
                     .into_iter()
-                    .zip(halo2_ligero_proof.merkle_paths.into_iter()),
+                    .zip(halo2_ligero_proof.merkle_paths),
             )
             .map(|(col_idx, (column, merkle_path))| LcColumn::<E, F> {
                 col_idx,

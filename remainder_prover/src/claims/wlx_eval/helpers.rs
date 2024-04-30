@@ -1,6 +1,7 @@
 //! A set of helper functions for wlx style claim aggregation
 
 use ark_std::{cfg_into_iter, end_timer, start_timer};
+use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
@@ -334,8 +335,8 @@ fn verifier_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<F>>(
         .get_results()
         .clone()
         .into_iter()
-        .chain(relevant_wlx_evaluations.clone().into_iter())
-        .collect();
+        .chain(relevant_wlx_evaluations.clone())
+        .collect_vec();
 
     // Next, sample `r^\star` from the transcript.
     let agg_chal = transcript_reader.get_challenge("Challenge for claim aggregation")?;

@@ -75,10 +75,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 
         let concat_node =
             ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));
-        let concat_mle_vec = lhs_mle_vec
-            .into_iter()
-            .chain(rhs_mle_vec.into_iter())
-            .collect_vec();
+        let concat_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
 
         Expression::new(concat_node, concat_mle_vec)
     }
@@ -133,10 +130,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         let (rhs_node, rhs_mle_vec) = rhs.deconstruct();
 
         let sum_node = ExpressionNode::Sum(Box::new(lhs_node), Box::new(rhs_node));
-        let sum_mle_vec = lhs_mle_vec
-            .into_iter()
-            .chain(rhs_mle_vec.into_iter())
-            .collect_vec();
+        let sum_mle_vec = lhs_mle_vec.into_iter().chain(rhs_mle_vec).collect_vec();
 
         Expression::new(sum_node, sum_mle_vec)
     }
@@ -743,12 +737,13 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
 
                     let a_indices = a.get_all_rounds(curr_indices, mle_vec);
                     let b_indices = b.get_all_rounds(curr_indices, mle_vec);
-                    a_indices.into_iter().zip(b_indices.into_iter()).for_each(
-                        |(a_mle_idx, b_mle_idx)| {
+                    a_indices
+                        .into_iter()
+                        .zip(b_indices)
+                        .for_each(|(a_mle_idx, b_mle_idx)| {
                             sel_indices.insert(a_mle_idx);
                             sel_indices.insert(b_mle_idx);
-                        },
-                    );
+                        });
                     sel_indices
                 }
                 // we add the indices in each of the parts of the sum.
@@ -756,12 +751,13 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     let mut sum_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_rounds(curr_indices, mle_vec);
                     let b_indices = b.get_all_rounds(curr_indices, mle_vec);
-                    a_indices.into_iter().zip(b_indices.into_iter()).for_each(
-                        |(a_mle_idx, b_mle_idx)| {
+                    a_indices
+                        .into_iter()
+                        .zip(b_indices)
+                        .for_each(|(a_mle_idx, b_mle_idx)| {
                             sum_indices.insert(a_mle_idx);
                             sum_indices.insert(b_mle_idx);
-                        },
-                    );
+                        });
                     sum_indices
                 }
                 // for scaled and negated, we can add all of the indices found in the expression being negated or scaled.
@@ -833,24 +829,26 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     let mut sel_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
                     let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    a_indices.into_iter().zip(b_indices.into_iter()).for_each(
-                        |(a_mle_idx, b_mle_idx)| {
+                    a_indices
+                        .into_iter()
+                        .zip(b_indices)
+                        .for_each(|(a_mle_idx, b_mle_idx)| {
                             sel_nonlinear_indices.insert(a_mle_idx);
                             sel_nonlinear_indices.insert(b_mle_idx);
-                        },
-                    );
+                        });
                     sel_nonlinear_indices
                 }
                 ExpressionNode::Sum(a, b) => {
                     let mut sum_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let a_indices = a.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
                     let b_indices = b.get_all_nonlinear_rounds(curr_nonlinear_indices, mle_vec);
-                    a_indices.into_iter().zip(b_indices.into_iter()).for_each(
-                        |(a_mle_idx, b_mle_idx)| {
+                    a_indices
+                        .into_iter()
+                        .zip(b_indices)
+                        .for_each(|(a_mle_idx, b_mle_idx)| {
                             sum_nonlinear_indices.insert(a_mle_idx);
                             sum_nonlinear_indices.insert(b_mle_idx);
-                        },
-                    );
+                        });
                     sum_nonlinear_indices
                 }
                 ExpressionNode::Scaled(a, _) => a
