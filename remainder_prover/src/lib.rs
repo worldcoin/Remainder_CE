@@ -48,4 +48,6 @@ pub mod utils;
 // module for tools to help circuit designers build circuits
 pub mod builders;
 
+pub mod layouter;
+
 pub use remainder_shared_types;
