@@ -100,7 +100,7 @@ impl<F: FieldExt> BetaValues<F> {
 
     /// Takes two challenge points and computes the fully bound beta equality
     /// value.
-    pub fn compute_beta_over_two_challenges(challenge_one: &Vec<F>, challenge_two: &Vec<F>) -> F {
+    pub fn compute_beta_over_two_challenges(challenge_one: &[F], challenge_two: &[F]) -> F {
         assert_eq!(challenge_one.len(), challenge_two.len());
 
         // Formula is just: \prod_i (x_i * y_i) + (1 - x_i) * (1 - y_i)

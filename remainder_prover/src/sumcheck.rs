@@ -426,10 +426,7 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
 
 /// this is one step of the beta cascade algorithm. essentially we are doing
 /// (1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len] (big-endian version of fix variable)
-pub(crate) fn beta_cascade_step<F: FieldExt>(
-    mle_successor_vec: &mut Vec<F>,
-    beta_val: F,
-) -> Vec<F> {
+pub(crate) fn beta_cascade_step<F: FieldExt>(mle_successor_vec: &mut [F], beta_val: F) -> Vec<F> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
     let half_vec_len = mle_successor_vec.len() / 2;
     let new_successor = cfg_into_iter!((0..half_vec_len)).map(|idx| {
@@ -582,7 +579,7 @@ pub(crate) fn get_round_degree<F: FieldExt>(
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
 pub(crate) fn evaluate_at_a_point<F: FieldExt>(
-    given_evals: &Vec<F>,
+    given_evals: &[F],
     point: F,
 ) -> Result<F, InterpError> {
     // Need degree + 1 evaluations to interpolate
