@@ -37,7 +37,7 @@ pub fn pad_to_nearest_power_of_two<F: FieldExt>(coeffs: Vec<F>) -> Vec<F> {
     let num_padding = coeffs.len().checked_next_power_of_two().unwrap() - coeffs.len();
     coeffs
         .into_iter()
-        .chain(repeat_with(|| F::zero()).take(num_padding))
+        .chain(repeat_with(|| F::ZERO).take(num_padding))
         .collect_vec()
 }
 

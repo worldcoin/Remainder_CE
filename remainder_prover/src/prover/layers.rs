@@ -85,7 +85,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         self.layers.push(gate.into());
 
         // iterate through each of the indices and perform the binary operation specified
-        let mut res_table = vec![F::zero(); res_table_num_entries];
+        let mut res_table = vec![F::ZERO; res_table_num_entries];
         (0..num_dataparallel_vals).for_each(|idx| {
             nonzero_gates
                 .clone()
@@ -94,11 +94,11 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
                     let f2_val = *lhs
                         .bookkeeping_table()
                         .get(idx + (x_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::zero());
+                        .unwrap_or(&F::ZERO);
                     let f3_val = *rhs
                         .bookkeeping_table()
                         .get(idx + (y_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::zero());
+                        .unwrap_or(&F::ZERO);
                     res_table[idx + (z_ind * num_dataparallel_vals)] =
                         gate_operation.perform_operation(f2_val, f3_val);
                 });

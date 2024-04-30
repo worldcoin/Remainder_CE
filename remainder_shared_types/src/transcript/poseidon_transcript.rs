@@ -30,13 +30,13 @@ impl<F: FieldExt> TranscriptSponge<F> for PoseidonSponge<F> {
 
     fn squeeze(&mut self) -> F {
         self.sponge.squeeze()
-        // F::one() + F::one()
+        // F::ONE + F::ONE
     }
 
     fn squeeze_elements(&mut self, num_elements: usize) -> Vec<F> {
         (0..num_elements)
             .map(|_| self.sponge.squeeze())
             .collect_vec()
-        // (0..num_elements).map(|_| F::one()).collect_vec()
+        // (0..num_elements).map(|_| F::ONE).collect_vec()
     }
 }

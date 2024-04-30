@@ -69,15 +69,15 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
         // iterate across all pairs of evaluations
         let evals = cfg_into_iter!((0..1 << (max_num_vars - 1))).fold(
             #[cfg(feature = "parallel")]
-            || vec![F::zero(); eval_count],
+            || vec![F::ZERO; eval_count],
             #[cfg(not(feature = "parallel"))]
-            vec![F::zero(); eval_count],
+            vec![F::ZERO; eval_count],
             |mut acc, index| {
                 //get the product of all evaluations over 0/1/..degree
                 let evals = mle_refs
                     .iter()
                     .map(|mle_ref| {
-                        let zero = F::zero();
+                        let zero = F::ZERO;
                         let index = if mle_ref.num_vars() < max_num_vars {
                             let max = 1 << mle_ref.num_vars();
                             (index * 2) % max
@@ -111,7 +111,7 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
 
         #[cfg(feature = "parallel")]
         let evals = evals.reduce(
-            || vec![F::zero(); eval_count],
+            || vec![F::ZERO; eval_count],
             |mut acc, partial| {
                 acc.iter_mut()
                     .zip(partial)
@@ -125,9 +125,9 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
         // There is no independent variable and we can sum over everything
         let sum = cfg_into_iter!((0..(1 << max_num_vars))).fold(
             #[cfg(feature = "parallel")]
-            || F::zero(),
+            || F::ZERO,
             #[cfg(not(feature = "parallel"))]
-            F::zero(),
+            F::ZERO,
             |acc, index| {
                 // Go through each MLE within the product
                 let product = mle_refs
@@ -145,7 +145,7 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                             .bookkeeping_table()
                             .get(index)
                             .cloned()
-                            .unwrap_or(F::zero())
+                            .unwrap_or(F::ZERO)
                     })
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
@@ -157,7 +157,7 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
         );
 
         #[cfg(feature = "parallel")]
-        let sum = sum.reduce(|| F::zero(), |acc, partial| acc + partial);
+        let sum = sum.reduce(|| F::ZERO, |acc, partial| acc + partial);
 
         Ok(Evals(vec![sum; degree]))
     }
@@ -190,9 +190,8 @@ pub fn check_fully_bound<F: FieldExt>(
         return Err(GateError::EvaluateBoundIndicesDontMatch);
     }
 
-    mle_refs.iter_mut().fold(Ok(F::one()), |acc, mle_ref| {
+    mle_refs.iter_mut().try_fold(F::ONE, |acc, mle_ref| {
         // --- Accumulate either errors or multiply ---
-        let acc = acc?;
         if mle_ref.bookkeeping_table().len() != 1 {
             return Err(GateError::MleNotFullyBoundError);
         }
@@ -256,15 +255,15 @@ pub fn compute_full_gate<F: FieldExt>(
 
     // If the gate looks like f1(z, x, y)(f2(p2, x) + f3(p2, y)) then this is the beta table for the challenges on z.
     let beta_g = BetaValues::new_beta_equality_mle(z_chals);
-    let zero = F::zero();
+    let zero = F::ZERO;
 
     // Literally summing over everything else (x, y).
     if copy_bits == 0 {
         nonzero_gates
             .iter()
             .copied()
-            .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
+            .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
+                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
                 let ux = lhs.bookkeeping_table().get(x_ind).unwrap_or(&zero);
                 let vy = rhs.bookkeeping_table().get(y_ind).unwrap_or(&zero);
                 acc + gz * (*ux + *vy)
@@ -275,14 +274,14 @@ pub fn compute_full_gate<F: FieldExt>(
         let beta_g2 = BetaValues::new_beta_equality_mle(copy_chals);
         {
             // Sum over everything else, outer sum being over p2, inner sum over (x, y).
-            (0..(1 << num_copy_idx)).fold(F::zero(), |acc_outer, idx| {
-                let g2 = *beta_g2.bookkeeping_table().get(idx).unwrap_or(&F::zero());
+            (0..(1 << num_copy_idx)).fold(F::ZERO, |acc_outer, idx| {
+                let g2 = *beta_g2.bookkeeping_table().get(idx).unwrap_or(&F::ZERO);
                 let inner_sum =
                     nonzero_gates
                         .iter()
                         .copied()
-                        .fold(F::zero(), |acc, (z_ind, x_ind, y_ind)| {
-                            let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::zero());
+                        .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
+                            let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
                             let ux = lhs
                                 .bookkeeping_table()
                                 .get(idx + (x_ind * num_copy_idx))
@@ -379,9 +378,9 @@ pub fn libra_giraffe<F: FieldExt>(
     // Iterate across all pairs of evaluations.
     let evals = cfg_into_iter!((0..1 << (num_dataparallel_bits - 1))).fold(
         #[cfg(feature = "parallel")]
-        || vec![F::zero(); eval_count],
+        || vec![F::ZERO; eval_count],
         #[cfg(not(feature = "parallel"))]
-        vec![F::zero(); eval_count],
+        vec![F::ZERO; eval_count],
         |mut acc, p2_idx| {
             // Compute the beta successors the same way it's done for each mle. Do it outside the loop
             // because it only needs to be done once per product of mles.
@@ -488,7 +487,7 @@ pub fn libra_giraffe<F: FieldExt>(
 
     #[cfg(feature = "parallel")]
     let evals = evals.reduce(
-        || vec![F::zero(); eval_count],
+        || vec![F::ZERO; eval_count],
         |mut acc, partial| {
             acc.iter_mut()
                 .zip(partial)

@@ -175,10 +175,10 @@ pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, 
         .flat_map(|index| {
             items
                 .iter()
-                .map(move |item| *item.bookkeeping_table().get(index).unwrap_or(&F::zero()))
-                .chain(repeat_n(F::zero(), padding_count))
+                .map(move |item| *item.bookkeeping_table().get(index).unwrap_or(&F::ZERO))
+                .chain(repeat_n(F::ZERO, padding_count))
         })
-        .chain(repeat_n(F::zero(), total_padding))
+        .chain(repeat_n(F::ZERO, total_padding))
         .collect_vec();
 
     DenseMle::new_from_raw(result, LayerId::Input(0), None)
@@ -374,7 +374,7 @@ fn combine_pair<F: FieldExt>(
 
     let mle_ref_second_bt = mle_ref_second
         .map(|mle_ref| mle_ref.bookkeeping_table().to_vec())
-        .unwrap_or(vec![F::zero()]);
+        .unwrap_or(vec![F::ZERO]);
 
     // recomputes the mle indices, which now reflect that that we are binding the bit in the least significant bit fixed bit index
     let interleaved_mle_indices = mle_ref_first.mle_indices()[0..lsb_idx]
@@ -403,14 +403,14 @@ fn combine_pair<F: FieldExt>(
 
     let bound_coord = if let MleIndex::Fixed(false) = mle_ref_first.original_mle_indices()[lsb_idx]
     {
-        F::one() - chal_point[lsb_idx]
+        F::ONE - chal_point[lsb_idx]
     } else {
         chal_point[lsb_idx]
     };
 
     // the new bookkeeping table also only has size one, but now reflects that we have another bound index
     let new_bt =
-        vec![bound_coord * mle_ref_first_bt[0] + (F::one() - bound_coord) * mle_ref_second_bt[0]];
+        vec![bound_coord * mle_ref_first_bt[0] + (F::ONE - bound_coord) * mle_ref_second_bt[0]];
 
     let current_mle = MultilinearExtension::new(Evaluations::<F>::new(
         mle_ref_first.num_vars(),

@@ -57,7 +57,7 @@ pub fn dummy_sumcheck<F: FieldExt>(
         };
 
         challenge = Some(F::from(rng.gen::<u64>()));
-        // challenge = Some(F::one());
+        // challenge = Some(F::ONE);
     }
 
     // expr.fix_variable(max_round - 1, challenge.unwrap());
@@ -76,10 +76,10 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
     rng: &mut impl Rng,
 ) -> Result<F, VerifyError> {
     if messages.is_empty() {
-        return Ok(F::zero());
+        return Ok(F::ZERO);
     }
     let mut prev_evals = &messages[0].0;
-    let mut chal = F::zero();
+    let mut chal = F::ZERO;
 
     // Thaler book page 34
     // First round:
@@ -115,7 +115,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
 
     // Round v, again Thaler book page 34
     let final_chal = F::from(rng.gen::<u64>());
-    // let final_chal = F::one();
+    // let final_chal = F::ONE;
     challenges.push(final_chal);
 
     // uses the expression to make one single oracle query

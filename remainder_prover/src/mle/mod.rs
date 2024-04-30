@@ -201,8 +201,8 @@ impl<F: FieldExt> MleIndex<F> {
     /// * `Bound(chal, idx)` variants evaluate to `chal`.
     pub fn val(&self) -> Option<F> {
         match self {
-            MleIndex::Fixed(true) => Some(F::one()),
-            MleIndex::Fixed(false) => Some(F::zero()),
+            MleIndex::Fixed(true) => Some(F::ONE),
+            MleIndex::Fixed(false) => Some(F::ZERO),
             MleIndex::Bound(chal, _) => Some(*chal),
             _ => None,
         }

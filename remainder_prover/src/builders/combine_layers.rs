@@ -187,13 +187,30 @@ fn add_bits_to_layer_refs<F: FieldExt>(
             _ => Err(CombineError),
         }?;
 
-        let mut closure =
-            for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
-                         mle_vec: &'b mut <ProverExpr as ExpressionType<F>>::MleVec|
-                         -> Result<(), ()> {
-                match expr {
-                    ExpressionNode::Mle(mle_vec_idx) => {
-                        let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+        let mut closure = |expr: &mut ExpressionNode<F, ProverExpr>,
+                           mle_vec: &mut <ProverExpr as ExpressionType<F>>::MleVec|
+         -> Result<(), ()> {
+            match expr {
+                ExpressionNode::Mle(mle_vec_idx) => {
+                    let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
+
+                    if mle_ref.layer_id == effected_layer {
+                        mle_ref.mle_indices = new_bits
+                            .iter()
+                            .chain(mle_ref.mle_indices.iter())
+                            .cloned()
+                            .collect();
+                        mle_ref.original_mle_indices = new_bits
+                            .iter()
+                            .chain(mle_ref.original_mle_indices.iter())
+                            .cloned()
+                            .collect();
+                    }
+                    Ok(())
+                }
+                ExpressionNode::Product(mle_vec_indices) => {
+                    for mle_vec_index in mle_vec_indices {
+                        let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
 
                         if mle_ref.layer_id == effected_layer {
                             mle_ref.mle_indices = new_bits
@@ -207,34 +224,16 @@ fn add_bits_to_layer_refs<F: FieldExt>(
                                 .cloned()
                                 .collect();
                         }
-                        Ok(())
                     }
-                    ExpressionNode::Product(mle_vec_indices) => {
-                        for mle_vec_index in mle_vec_indices {
-                            let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
-
-                            if mle_ref.layer_id == effected_layer {
-                                mle_ref.mle_indices = new_bits
-                                    .iter()
-                                    .chain(mle_ref.mle_indices.iter())
-                                    .cloned()
-                                    .collect();
-                                mle_ref.original_mle_indices = new_bits
-                                    .iter()
-                                    .chain(mle_ref.original_mle_indices.iter())
-                                    .cloned()
-                                    .collect();
-                            }
-                        }
-                        Ok(())
-                    }
-                    ExpressionNode::Constant(_)
-                    | ExpressionNode::Scaled(_, _)
-                    | ExpressionNode::Sum(_, _)
-                    | ExpressionNode::Negated(_)
-                    | ExpressionNode::Selector(_, _, _) => Ok(()),
+                    Ok(())
                 }
-            };
+                ExpressionNode::Constant(_)
+                | ExpressionNode::Scaled(_, _)
+                | ExpressionNode::Sum(_, _)
+                | ExpressionNode::Negated(_)
+                | ExpressionNode::Selector(_, _, _) => Ok(()),
+            }
+        };
 
         expression.traverse_mut(&mut closure).unwrap();
     }
@@ -328,7 +327,7 @@ fn add_padding<F: FieldExt>(
     num_padding: usize,
 ) -> Expression<F, ProverExpr> {
     for _ in 0..num_padding {
-        expr = Expression::constant(F::zero()).concat_expr(expr);
+        expr = Expression::constant(F::ZERO).concat_expr(expr);
     }
     expr
 }
