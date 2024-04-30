@@ -19,18 +19,16 @@ to the codebase.
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
 use ark_std::{end_timer, start_timer};
-use err_derive::Error;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
-    Poseidon,
+    FieldExt, Poseidon,
 };
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
-
-use remainder_shared_types::FieldExt;
+use thiserror::Error;
 
 mod macros;
 
@@ -89,7 +87,7 @@ pub trait LcEncoding<F: FieldExt>: Clone + std::fmt::Debug + Sync {
     const LABEL_CO: &'static [u8];
 
     /// Error type for encoding
-    type Err: std::fmt::Debug + std::error::Error + Send;
+    type Err: std::fmt::Debug + Send;
 
     /// Encoding function
     fn encode(&self, inp: &mut [F]) -> Result<(), Self::Err>;
@@ -114,22 +112,22 @@ type ErrT<E, F> = <E as LcEncoding<F>>::Err;
 #[derive(Debug, Error)]
 pub enum ProverError<ErrT>
 where
-    ErrT: std::fmt::Debug + std::error::Error + 'static,
+    ErrT: std::fmt::Debug + 'static,
 {
     /// size too big
-    #[error(display = "encoded_num_cols is too large for this encoding")]
+    #[error("encoded_num_cols is too large for this encoding")]
     TooBig,
     /// error encoding a vector
-    #[error(display = "encoding error: {:?}", _0)]
-    Encode(#[source] ErrT),
+    #[error("encoding error: {:?}", _0)]
+    Encode(#[from] ErrT),
     /// inconsistent LcCommit fields
-    #[error(display = "inconsistent commitment fields")]
+    #[error("inconsistent commitment fields")]
     Commit,
     /// bad column number
-    #[error(display = "bad column number")]
+    #[error("bad column number")]
     ColumnNumber,
     /// bad outer tensor
-    #[error(display = "outer tensor: wrong size")]
+    #[error("outer tensor: wrong size")]
     OuterTensor,
 }
 
@@ -140,32 +138,32 @@ pub type ProverResult<T, ErrT> = Result<T, ProverError<ErrT>>;
 #[derive(Debug, Error)]
 pub enum VerifierError<ErrT>
 where
-    ErrT: std::fmt::Debug + std::error::Error + 'static,
+    ErrT: std::fmt::Debug + 'static,
 {
     /// wrong number of column openings in proof
-    #[error(display = "wrong number of column openings in proof")]
+    #[error("wrong number of column openings in proof")]
     NumColOpens,
     /// failed to verify column merkle path
-    #[error(display = "column verification: merkle path failed")]
+    #[error("column verification: merkle path failed")]
     ColumnPath,
     /// failed to verify column dot product for poly eval
-    #[error(display = "column verification: eval dot product failed")]
+    #[error("column verification: eval dot product failed")]
     ColumnEval,
     /// failed to verify column dot product for degree test
-    #[error(display = "column verification: degree test dot product failed")]
+    #[error("column verification: degree test dot product failed")]
     ColumnDegree,
     /// bad outer tensor
-    #[error(display = "outer tensor: wrong size")]
+    #[error("outer tensor: wrong size")]
     OuterTensor,
     /// bad inner tensor
-    #[error(display = "inner tensor: wrong size")]
+    #[error("inner tensor: wrong size")]
     InnerTensor,
     /// encoding dimensions do not match proof
-    #[error(display = "encoding dimension mismatch")]
+    #[error("encoding dimension mismatch")]
     EncodingDims,
     /// error encoding a vector
-    #[error(display = "encoding error: {:?}", _0)]
-    Encode(#[source] ErrT),
+    #[error("encoding error: {:?}", _0)]
+    Encode(#[from] ErrT),
 }
 
 /// For encoding the matrix size and other information necessary to compute
@@ -398,9 +396,9 @@ where
     assert!(enc.dims_ok(orig_num_cols, encoded_num_cols));
 
     // --- `coeffs` should be the original coefficients ---
-    let mut coeffs = vec![F::zero(); n_rows * orig_num_cols];
+    let mut coeffs = vec![F::ZERO; n_rows * orig_num_cols];
     // --- `comm` should be the matrix of FFT-encoded rows ---
-    let mut comm = vec![F::zero(); n_rows * encoded_num_cols];
+    let mut comm = vec![F::ZERO; n_rows * encoded_num_cols];
 
     // --- Copy of `coeffs` with padding ---
     coeffs
@@ -834,8 +832,8 @@ where
     Ok(inner_tensor
         .par_iter()
         .zip(&p_eval[..])
-        .fold(|| F::zero(), |a, (t, e)| a + *t * e)
-        .reduce(|| F::zero(), |a, v| a + v))
+        .fold(|| F::ZERO, |a, (t, e)| a + *t * e)
+        .reduce(|| F::ZERO, |a, v| a + v))
 }
 
 /// Check a column opening by
@@ -905,7 +903,7 @@ where
     let tensor_eval = tensor
         .iter()
         .zip(&column.col[..])
-        .fold(F::zero(), |a, (t, e)| a + *t * e);
+        .fold(F::ZERO, |a, (t, e)| a + *t * e);
 
     poly_eval == &tensor_eval
 }
@@ -931,9 +929,9 @@ fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
     let log_col_len = log2(encoded_num_cols);
     debug_assert!(log_col_len < 32);
 
-    let challenge_le_bytes = challenge.to_bytes_le();
+    let challenge_le_bytes = challenge.to_repr().as_ref().to_vec();
     let col_idx =
-        get_least_significant_bits_to_usize_little_endian(challenge_le_bytes, log_col_len);
+        get_least_significant_bits_to_usize_little_endian(challenge_le_bytes.to_vec(), log_col_len);
 
     // --- Sanitycheck ---
     assert!(col_idx < encoded_num_cols);
@@ -968,7 +966,7 @@ where
 
     // next, evaluate the polynomial using the supplied tensor
     let p_eval = {
-        let mut tmp = vec![F::zero(); comm.orig_num_cols];
+        let mut tmp = vec![F::ZERO; comm.orig_num_cols];
         // --- Take the vector-matrix product b^T M ---
         collapse_columns::<E, F>(&comm.coeffs, outer_tensor, &mut tmp, comm.orig_num_cols, 0);
         tmp
@@ -1102,7 +1100,7 @@ where
     }
 
     // allocate result and compute
-    let mut poly = vec![F::zero(); comm.orig_num_cols];
+    let mut poly = vec![F::ZERO; comm.orig_num_cols];
     collapse_columns::<E, F>(&comm.coeffs, tensor, &mut poly, comm.orig_num_cols, 0);
 
     Ok(poly)
@@ -1123,7 +1121,7 @@ where
         return Err(ProverError::OuterTensor);
     }
 
-    let mut poly = vec![F::zero(); comm.orig_num_cols];
+    let mut poly = vec![F::ZERO; comm.orig_num_cols];
     for (row, tensor_val) in tensor.iter().enumerate() {
         for (col, val) in poly.iter_mut().enumerate() {
             let entry = row * comm.orig_num_cols + col;
@@ -1154,7 +1152,7 @@ where
     }
 
     // --- Allocate resulting vector ---
-    let mut poly_fft = vec![F::zero(); comm.encoded_num_cols];
+    let mut poly_fft = vec![F::ZERO; comm.encoded_num_cols];
 
     // --- Compute dot product column-by-column in M' ---
     for (coeffs, tensorval) in comm.comm.chunks(comm.encoded_num_cols).zip(tensor.iter()) {

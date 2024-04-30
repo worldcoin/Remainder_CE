@@ -1,9 +1,9 @@
 use std::iter::repeat_with;
 
 use crate::log2;
+use crate::FieldExt;
 use halo2_proofs::poly::EvaluationDomain;
 use rand::Rng;
-use remainder_shared_types::FieldExt;
 
 /// Generates and returns a random set of evaluations representing an MLE over
 /// the boolean hypercube.
@@ -80,7 +80,7 @@ pub fn halo2_fft<F: FieldExt>(coeffs: Vec<F>, rho_inv: u8) -> Vec<F> {
 
     // --- Creates the polynomial in coeff form and performs the FFT ---
     let polynomial_coeff = evaluation_domain.coeff_from_vec(coeffs);
-    let polynomial_eval_form = evaluation_domain.coeff_to_extended(&polynomial_coeff);
+    let polynomial_eval_form = evaluation_domain.coeff_to_extended(polynomial_coeff);
     debug_assert_eq!(polynomial_eval_form.len(), num_evals);
 
     polynomial_eval_form.to_vec()
@@ -118,7 +118,7 @@ pub fn halo2_ifft<F: FieldExt>(evals: Vec<F>, rho_inv: u8) -> Vec<F> {
         .iter()
         .skip(num_coeffs)
         .for_each(|coeff| {
-            debug_assert_eq!(*coeff, F::zero());
+            debug_assert_eq!(*coeff, F::ZERO);
         });
 
     polynomial_coeff_form.to_vec()

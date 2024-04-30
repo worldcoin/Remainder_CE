@@ -52,11 +52,11 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
                                rhs: Result<F, ExpressionError>| {
             // --- Selector bit must be bound ---
             if let MleIndex::Bound(val, _) = idx {
-                return Ok(*val * rhs? + (F::one() - val) * lhs?);
+                return Ok(*val * rhs? + (F::ONE - val) * lhs?);
             }
             Err(ExpressionError::SelectorBitNotBoundError)
         };
-        let mle_eval = for<'a> |mle_ref: &'a <VerifierExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, ExpressionError> {
+        let mle_eval = |mle_ref: & <VerifierExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, ExpressionError> {
             Ok(*mle_ref)
         };
         let negated = |a: Result<F, ExpressionError>| match a {
@@ -65,8 +65,8 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
         };
         let sum =
             |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
-        let product = for<'a, 'b> |mle_refs: &'a [<VerifierExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, ExpressionError> {
-            mle_refs.iter().try_fold(F::one(), |acc, new_mle_ref| {
+        let product = |mle_refs: & [<VerifierExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, ExpressionError> {
+            mle_refs.iter().try_fold(F::ONE, |acc, new_mle_ref| {
                 Ok(acc * *new_mle_ref)
             })
         };

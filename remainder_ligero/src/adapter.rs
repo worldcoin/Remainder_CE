@@ -6,7 +6,7 @@ use crate::poseidon_ligero::PoseidonSpongeHasher;
 use crate::LcProofAuxiliaryInfo;
 use crate::{ligero_structs::LigeroEncoding, ligero_structs::LigeroEvalProof};
 
-use remainder_shared_types::FieldExt;
+use crate::FieldExt;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};

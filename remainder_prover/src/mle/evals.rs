@@ -50,7 +50,7 @@ pub struct Evaluations<F: FieldExt> {
     /// will be referred to as the Most Significant Bit (MSB) and bit `b_0` as
     /// Least Significant Bit (LSB). This ordering is sometimes referred to as
     /// "little-endian" due to its resemblance to little-endian byte ordering.
-    /// A suffix of contiguous evaluations all equal to `F::zero()` may be
+    /// A suffix of contiguous evaluations all equal to `F::ZERO` may be
     /// omitted in this internal representation but this struct is not
     /// responsible for maintaining this property at all times.
     /// # Example
@@ -75,7 +75,7 @@ pub struct Evaluations<F: FieldExt> {
 
 impl<F: FieldExt> Evaluations<F> {
     /// Returns a representation of the constant function on zero variables
-    /// equal to `F::zero()`.
+    /// equal to `F::ZERO`.
     pub fn new_zero() -> Self {
         Self::new(0, vec![])
     }
@@ -86,7 +86,7 @@ impl<F: FieldExt> Evaluations<F> {
     /// # Example
     /// For a function `f: {0, 1}^2 -> F`, an evaluations table may be built as:
     /// `Evaluations::new(2, vec![ f(0, 0), f(1, 0), f(0, 1), f(1, 1) ])`.  In
-    /// case, for example,`f(0, 1) == f(1, 1) == F::zero()`, those values may be
+    /// case, for example,`f(0, 1) == f(1, 1) == F::ZERO`, those values may be
     /// omitted and the following will generate an equivalent representation:
     /// `Evaluations::new(2, vec![ f(0, 0), f(1, 0) ])`.
     pub fn new(num_vars: usize, evals: Vec<F>) -> Self {
@@ -95,7 +95,7 @@ impl<F: FieldExt> Evaluations<F> {
         Evaluations::<F> {
             evals,
             num_vars,
-            zero: F::zero(),
+            zero: F::ZERO,
         }
     }
 
@@ -105,7 +105,7 @@ impl<F: FieldExt> Evaluations<F> {
     /// # Example
     /// For a function `f: {0, 1}^2 -> F`, an evaluations table may be built as:
     /// `Evaluations::new(2, &[ f(0, 0), f(0, 1), f(1, 0), f(1, 1) ])`.  In
-    /// case, for example,`f(1, 0) == f(1, 1) == F::zero()`, those values may be
+    /// case, for example,`f(1, 0) == f(1, 1) == F::ZERO`, those values may be
     /// omitted and the following will generate an equivalent representation:
     /// `Evaluations::new(2, &[ f(0, 0), f(0, 1) ])`.
     pub fn new_from_big_endian(num_vars: usize, evals: &[F]) -> Self {
@@ -114,7 +114,7 @@ impl<F: FieldExt> Evaluations<F> {
         Self {
             evals: Self::flip_endianess(num_vars, evals),
             num_vars,
-            zero: F::zero(),
+            zero: F::ZERO,
         }
     }
 
@@ -175,7 +175,7 @@ impl<F: FieldExt> Evaluations<F> {
 
     /// Checks whether its arguments correspond to equivalent representations of
     /// the same list of evaluations. Two representations are equivalent if
-    /// omitting the longest contiguous suffix of `F::zero()`s from each results
+    /// omitting the longest contiguous suffix of `F::ZERO`s from each results
     /// in the same vectors.
     #[allow(dead_code)]
     fn equiv_repr(evals1: &[F], evals2: &[F]) -> bool {
@@ -184,8 +184,8 @@ impl<F: FieldExt> Evaluations<F> {
             .zip_longest(evals2.iter())
             .map(|pair| match pair {
                 Both(l, r) => *l == *r,
-                Left(l) => *l == F::zero(),
-                Right(r) => *r == F::zero(),
+                Left(l) => *l == F::ZERO,
+                Right(r) => *r == F::ZERO,
             })
             .all(|x| x)
     }
@@ -208,7 +208,7 @@ impl<F: FieldExt> Evaluations<F> {
             .map(|idx| {
                 let mirrored_idx = mirror_bits(num_bits, idx);
                 if mirrored_idx >= num_evals {
-                    F::zero()
+                    F::ZERO
                 } else {
                     values[mirrored_idx]
                 }
@@ -351,13 +351,13 @@ impl<F: FieldExt> MultilinearExtension<F> {
             .clone()
             .iter() // was into_iter()
             .enumerate()
-            .fold(F::zero(), |acc, (idx, v)| {
-                let beta = (0..n).fold(F::one(), |acc, i| {
+            .fold(F::ZERO, |acc, (idx, v)| {
+                let beta = (0..n).fold(F::ONE, |acc, i| {
                     let bit_i = idx & (1 << i);
                     if bit_i > 0 {
                         acc * point[i]
                     } else {
-                        acc * (F::one() - point[i])
+                        acc * (F::ONE - point[i])
                     }
                 });
                 acc + *v * beta
@@ -439,7 +439,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
             let window_size: usize = (1 << (var_index - 1)) + 1;
 
             let inner_transform = |window: &[F]| {
-                let zero = F::zero();
+                let zero = F::ZERO;
                 let first = window[0];
                 let second = *window.get(window_size - 1).unwrap_or(&zero);
 
@@ -460,8 +460,8 @@ impl<F: FieldExt> MultilinearExtension<F> {
             let window_len = 1_usize << (var_index - 1);
 
             let inner_transform = |i: usize| {
-                let first = *chunk.get(i).unwrap_or(&F::zero());
-                let second = *chunk.get(i + window_len).unwrap_or(&F::zero());
+                let first = *chunk.get(i).unwrap_or(&F::ZERO);
+                let second = *chunk.get(i + window_len).unwrap_or(&F::ZERO);
 
                 first + (second - first) * point
             };
@@ -523,7 +523,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
         assert!(self.num_vars() > 0);
 
         let transform = |chunk: &[F]| {
-            let zero = F::zero();
+            let zero = F::ZERO;
             let first = chunk[0];
             let second = chunk.get(1).unwrap_or(&zero);
 

@@ -157,9 +157,9 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     pub fn increment_mle_vec_indices(&mut self, offset: usize) {
         // define a closure that increments the MleVecIndex by the given amount
         // use traverse_mut
-        let mut increment_closure = for<'a, 'b> |expr: &'a mut ExpressionNode<F, ProverExpr>,
-                                                 _mle_vec: &'b mut Vec<DenseMleRef<F>>|
-                     -> Result<(), ()> {
+        let mut increment_closure = |expr: &mut ExpressionNode<F, ProverExpr>,
+                                     _mle_vec: &mut Vec<DenseMleRef<F>>|
+         -> Result<(), ()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
                     mle_vec_index.increment(offset);
