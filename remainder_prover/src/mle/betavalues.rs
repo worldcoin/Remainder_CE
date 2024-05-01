@@ -67,7 +67,7 @@ impl<F: FieldExt> BetaValues<F> {
     pub(crate) fn beta_update(&mut self, round_index: usize, challenge: F) {
         let val_to_update = self.unbound_values.remove(&round_index).unwrap();
         let updated_val =
-            ((F::one() - val_to_update) * (F::one() - challenge)) + (val_to_update * challenge);
+            ((F::ONE - val_to_update) * (F::ONE - challenge)) + (val_to_update * challenge);
         self.updated_values.insert(round_index, updated_val);
     }
 
@@ -100,15 +100,15 @@ impl<F: FieldExt> BetaValues<F> {
 
     /// Takes two challenge points and computes the fully bound beta equality
     /// value.
-    pub fn compute_beta_over_two_challenges(challenge_one: &Vec<F>, challenge_two: &Vec<F>) -> F {
+    pub fn compute_beta_over_two_challenges(challenge_one: &[F], challenge_two: &[F]) -> F {
         assert_eq!(challenge_one.len(), challenge_two.len());
 
         // Formula is just: \prod_i (x_i * y_i) + (1 - x_i) * (1 - y_i)
-        let one = F::one();
+        let one = F::ONE;
         challenge_one
             .iter()
             .zip(challenge_two.iter())
-            .fold(F::one(), |acc, (x_i, y_i)| {
+            .fold(F::ONE, |acc, (x_i, y_i)| {
                 acc * ((*x_i * y_i) + (one - x_i) * (one - y_i))
             })
     }
@@ -120,7 +120,7 @@ impl<F: FieldExt> BetaValues<F> {
         if !layer_claim_vars.is_empty() {
             // dynamic programming algorithm where we start from the most significant bit,
             // which is alternating in (1 - r) or (r) as the base case
-            let (one_minus_r, r) = (F::one() - layer_claim_vars[0], layer_claim_vars[0]);
+            let (one_minus_r, r) = (F::ONE - layer_claim_vars[0], layer_claim_vars[0]);
             let mut cur_table = vec![one_minus_r, r];
 
             // TODO!(vishruti) make this parallelizable
@@ -128,7 +128,7 @@ impl<F: FieldExt> BetaValues<F> {
             // by multiplying by (1 - r_i) and r_i appropriately as in thaler
             // 13.
             for claim in layer_claim_vars.iter().skip(1) {
-                let (one_minus_r, r) = (F::one() - claim, claim);
+                let (one_minus_r, r) = (F::ONE - claim, claim);
                 let mut firsthalf: Vec<F> = cfg_into_iter!(cur_table.clone())
                     .map(|eval| eval * one_minus_r)
                     .collect();
@@ -141,7 +141,7 @@ impl<F: FieldExt> BetaValues<F> {
                 DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
             cur_table_mle_ref
         } else {
-            DenseMle::new_from_raw(vec![F::one()], LayerId::Input(0), None).mle_ref()
+            DenseMle::new_from_raw(vec![F::ONE], LayerId::Input(0), None).mle_ref()
         }
     }
 }

@@ -6,7 +6,7 @@ use crate::poseidon_ligero::PoseidonSpongeHasher;
 use crate::LcProofAuxiliaryInfo;
 use crate::{ligero_structs::LigeroEncoding, ligero_structs::LigeroEvalProof};
 
-use remainder_shared_types::FieldExt;
+use crate::FieldExt;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -114,7 +114,7 @@ where
                 halo2_ligero_proof
                     .columns
                     .into_iter()
-                    .zip(halo2_ligero_proof.merkle_paths.into_iter()),
+                    .zip(halo2_ligero_proof.merkle_paths),
             )
             .map(|(col_idx, (column, merkle_path))| LcColumn::<E, F> {
                 col_idx,

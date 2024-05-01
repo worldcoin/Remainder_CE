@@ -64,7 +64,7 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
     // --- Return the concatenation of the two ---
     inverted_first_half
         .into_iter()
-        .chain(inverted_second_half.into_iter())
+        .chain(inverted_second_half)
         .collect()
 }
 
@@ -102,7 +102,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     }
 
     fn index_input_mles(
-        input_mles: &mut Vec<&mut (dyn Mle<F> + 'static)>,
+        input_mles: &mut [&mut (dyn Mle<F> + 'static)],
         extra_mle_num_vars: Option<Vec<usize>>,
     ) -> Option<Vec<Vec<MleIndex<F>>>> {
         let mut input_mle_num_vars = input_mles
@@ -211,7 +211,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
                 // let padded_bookkeeping_table = input_mle.get_padded_evaluations();
                 current_bookkeeping_table
                     .into_iter()
-                    .chain(inverted_input_mle.into_iter())
+                    .chain(inverted_input_mle)
                     .collect()
             },
         );

@@ -28,9 +28,6 @@ use thiserror::Error;
 use tracing::{debug, info};
 use tracing::{instrument, span, Level};
 
-///An output layer which will have it's bits bound and then evaluated
-pub type OutputLayer<F> = Box<dyn MleRef<F = F>>;
-
 #[derive(Error, Debug, Clone)]
 /// Errors relating to the proving of a GKR circuit
 pub enum GKRError {
@@ -152,7 +149,7 @@ pub trait GKRCircuit<F: FieldExt> {
     type ProofSystem: ProofSystem<F>;
 
     /// The hash of the circuit, use to uniquely identify the circuit
-    const CIRCUIT_HASH: Option<[u8; 32]> = None;
+    const CIRCUIT_HASH: Option<F::Repr> = None;
 
     /// The forward pass, defining the layer relationships and generating the layers
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem>;
@@ -587,7 +584,8 @@ pub trait GKRCircuit<F: FieldExt> {
     }
 
     /// Get the circuit hash
-    fn get_circuit_hash() -> Option<F> {
-        Self::CIRCUIT_HASH.map(|bytes| F::from_bytes_le(&bytes))
+    fn get_circuit_hash() -> Option<F>
+where {
+        Self::CIRCUIT_HASH.map(|bytes| F::from_repr(bytes).unwrap())
     }
 }

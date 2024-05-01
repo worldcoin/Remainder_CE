@@ -125,7 +125,7 @@ pub fn unflatten_mle<F: FieldExt>(
 
     (0..num_copies)
         .map(|idx| {
-            let _zero = &F::zero();
+            let _zero = &F::ZERO;
             let copy_idx = idx;
             let individual_mle_table = (0..individual_mle_len)
                 .map(|mle_idx| {

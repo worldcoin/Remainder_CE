@@ -69,7 +69,7 @@ impl<F: FieldExt> EqualityCheck<F> {
         BatchedLayer::new(
             mle_1
                 .into_iter()
-                .zip(mle_2.into_iter())
+                .zip(mle_2)
                 .map(|(mle_1, mle_2)| Self { mle_1, mle_2 })
                 .collect(),
         )
