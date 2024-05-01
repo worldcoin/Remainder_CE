@@ -2,10 +2,11 @@ use crate::adapter::{convert_lcpc_to_halo, LigeroClaim, LigeroProof};
 use crate::ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point};
 use crate::ligero_structs::{LigeroCommit, LigeroEncoding, LigeroEvalProof, LigeroRoot};
 use crate::utils::get_ligero_matrix_dims;
+use crate::FieldExt;
 use crate::{verify, LcProofAuxiliaryInfo};
 use ark_std::log2;
+use remainder_shared_types::transcript::TranscriptSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
-use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
 use tracing::instrument;
 
 use super::poseidon_ligero::PoseidonSpongeHasher;
@@ -37,7 +38,7 @@ use super::{commit, prove};
 /// ```
 #[instrument(skip_all, level = "debug")]
 pub fn poseidon_ml_commit_prove<F: FieldExt>(
-    coeffs: &Vec<F>,
+    coeffs: &[F],
     log_num_rows: usize,
     log_orig_num_cols: usize,
     rho_inv: u8,
@@ -98,11 +99,11 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
 /// ```
 #[allow(clippy::too_many_arguments)]
 pub fn poseidon_ml_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
-    coeffs: &Vec<F>,
+    coeffs: &[F],
     rho_inv: u8,
     log_num_rows: usize,
     log_orig_num_cols: usize,
-    challenge_coord: &Vec<F>,
+    challenge_coord: &[F],
     transcript: &mut TranscriptWriter<F, T>,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
     root: LigeroRoot<F>,
@@ -136,7 +137,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
     let eval = naive_eval_mle_at_challenge_point(&comm.coeffs, challenge_coord);
 
     let _claim = LigeroClaim {
-        point: challenge_coord.clone(),
+        point: challenge_coord.to_vec(),
         eval,
     };
     (eval, ligero_eval_proof)
@@ -164,7 +165,7 @@ pub fn poseidon_ml_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
 /// ```
 #[instrument(skip_all, level = "debug")]
 pub fn remainder_ligero_commit<F: FieldExt>(
-    input_mle_bookkeeping_table: &Vec<F>,
+    input_mle_bookkeeping_table: &[F],
     rho_inv: u8,
     ratio: f64,
 ) -> (
@@ -209,8 +210,8 @@ pub fn remainder_ligero_commit<F: FieldExt>(
 /// // TODO!(ryancao) -- see tests below!
 /// ```
 pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
-    input_layer_bookkeeping_table: &Vec<F>,
-    challenge_coord: &Vec<F>,
+    input_layer_bookkeeping_table: &[F],
+    challenge_coord: &[F],
     transcript: &mut TranscriptWriter<F, T>,
     aux: LcProofAuxiliaryInfo,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
@@ -257,7 +258,7 @@ pub fn remainder_ligero_verify<F: FieldExt, T: TranscriptSponge<F>>(
     proof: &LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
     aux: LcProofAuxiliaryInfo,
     tr: &mut TranscriptReader<F, T>,
-    challenge_coord: &Vec<F>,
+    challenge_coord: &[F],
     claimed_value: F,
 ) {
     // --- Sanitycheck ---

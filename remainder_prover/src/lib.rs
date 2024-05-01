@@ -1,5 +1,4 @@
 #![warn(missing_docs)]
-#![feature(closure_lifetime_binder)]
 //!Remainder: A fast GKR based library for building zkSNARKS for ML
 //! applications
 

@@ -38,7 +38,7 @@ impl<F: FieldExt> ZeroMleRef<F> {
             original_mle_indices: mle_indices,
             num_vars,
             layer_id,
-            zero: [F::zero()],
+            zero: [F::ZERO],
             indexed: false,
         }
     }
@@ -91,7 +91,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
                     .iter()
                     .map(|index| index.val().unwrap())
                     .collect_vec(),
-                F::zero(),
+                F::ZERO,
             );
             Some(send_claim)
         } else {
@@ -148,7 +148,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for ZeroMleRef<F> {
             .collect();
         Ok(vec![ClaimMle::new(
             mle_indices?,
-            F::zero(),
+            F::ZERO,
             None,
             Some(self.layer_id),
             Some(self.clone().get_enum()),

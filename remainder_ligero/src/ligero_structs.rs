@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 use crate::utils::{get_ligero_matrix_dims, halo2_fft};
+use crate::FieldExt;
 use crate::{def_labels, LcCommit, LcEncoding, LcEvalProof, LcRoot};
-use fffft::FFTError;
-use remainder_shared_types::FieldExt;
+// use fffft::FFTError;
 
 /// Auxiliary struct which simply keeps track of Ligero hyperparameters, e.g.
 /// the matrix width and code rate.
@@ -74,7 +74,7 @@ impl<F> LcEncoding<F> for LigeroEncoding<F>
 where
     F: FieldExt,
 {
-    type Err = FFTError;
+    type Err = &'static str;
 
     def_labels!(lcpc2d_test);
 
@@ -84,10 +84,10 @@ where
     /// * `inp` - Slice of coefficients of length `self.rho_inv` *
     ///     `self.orig_num_cols`. Note that only the first `self.orig_num_cols`
     ///     values should be nonzero.
-    fn encode(&self, inp: &mut [F]) -> Result<(), FFTError> {
+    fn encode(&self, inp: &mut [F]) -> Result<(), Self::Err> {
         // --- So we need to convert num_cols(M) coefficients into num_cols(M) * (1 / rho) evaluations ---
         // --- All the coefficients past the original number of cols should be zero-padded ---
-        debug_assert!(inp.iter().skip(self.orig_num_cols).all(|&v| v == F::zero()));
+        debug_assert!(inp.iter().skip(self.orig_num_cols).all(|&v| v == F::ZERO));
 
         // --- TODO!(ryancao): This is wasteful (we clone twice!!!) ---
         let evals = halo2_fft(
