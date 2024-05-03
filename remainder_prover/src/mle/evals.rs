@@ -42,8 +42,7 @@ fn mirror_bits(num_bits: usize, mut value: usize) -> usize {
 /// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
 /// the object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct Evaluations<F: FieldExt> {
+pub struct Evaluations<F> {
     /// To understand how evaluations are stored, let's index `f`'s input bits
     /// as follows: `f(b_0, b_1, ..., b_{n-1})`. Evaluations are ordered using
     /// the bit-string `b_{n-1}b_{n-2}...b_1b_0` as key, hence the bit `b_{n-1}`
@@ -302,8 +301,7 @@ impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
 /// The `n` variables are indexed from `0` to `n-1` throughout the lifetime of
 /// the object even if `n` is modified by fixing a variable to a constant value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct MultilinearExtension<F: FieldExt> {
+pub struct MultilinearExtension<F> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
 }
