@@ -29,6 +29,9 @@ pub mod betavalues;
 /// MLEs.
 pub mod evals;
 
+/// Defines trait/struct relevant for Mles (as input) in circuit.
+pub mod circuit_mle;
+
 // TODO!(Maybe this type needs PartialEq, could be easily implemented with a
 // random id...).
 /// The trait that defines how a semantic Type (T) and a MultiLinearEvaluation

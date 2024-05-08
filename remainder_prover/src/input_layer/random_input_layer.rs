@@ -75,7 +75,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
         let mut mle_ref =
-            DenseMle::<F, F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
+            DenseMle::<F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_vars() != 0 {
@@ -99,7 +99,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         &self.layer_id
     }
 
-    fn get_padded_mle(&self) -> DenseMle<F, F> {
+    fn get_padded_mle(&self) -> DenseMle<F> {
         DenseMle::new_from_raw(self.mle.clone(), self.layer_id, None)
     }
 }
@@ -116,7 +116,7 @@ impl<F: FieldExt> RandomInputLayer<F> {
     }
 
     /// Return the MLE stored in self as a DenseMle with the correct layer ID.
-    pub fn get_mle(&self) -> DenseMle<F, F> {
+    pub fn get_mle(&self) -> DenseMle<F> {
         DenseMle::new_from_raw(self.mle.clone(), self.layer_id, None)
     }
 }

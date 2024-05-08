@@ -211,7 +211,7 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F, F>{
+            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F,>{
                 match self {
                     $(
                         Self::$var_name(layer) => layer.get_padded_mle(),

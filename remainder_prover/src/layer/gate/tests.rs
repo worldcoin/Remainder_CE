@@ -27,8 +27,8 @@ use super::BinaryOperation;
 /// * `neg_mle` - An MLE whose bookkeeping table is the element-wise negation
 ///     of that of `mle`.
 struct AddGateCircuit<F: FieldExt> {
-    mle: DenseMle<F, F>,
-    neg_mle: DenseMle<F, F>,
+    mle: DenseMle<F>,
+    neg_mle: DenseMle<F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -68,7 +68,7 @@ impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
     }
 }
 impl<F: FieldExt> AddGateCircuit<F> {
-    fn new(mle: DenseMle<F, F>, neg_mle: DenseMle<F, F>) -> Self {
+    fn new(mle: DenseMle<F>, neg_mle: DenseMle<F>) -> Self {
         assert_eq!(mle.num_iterated_vars(), neg_mle.num_iterated_vars());
         Self { mle, neg_mle }
     }
@@ -84,8 +84,8 @@ impl<F: FieldExt> AddGateCircuit<F> {
 /// * `neg_mle` - An MLE whose bookkeeping table is the element-wise negation
 ///     of that of `mle`.
 struct UnevenAddGateCircuit<F: FieldExt> {
-    mle: DenseMle<F, F>,
-    neg_mle: DenseMle<F, F>,
+    mle: DenseMle<F>,
+    neg_mle: DenseMle<F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -120,7 +120,7 @@ impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
     }
 }
 impl<F: FieldExt> UnevenAddGateCircuit<F> {
-    fn new(mle: DenseMle<F, F>, neg_mle: DenseMle<F, F>) -> Self {
+    fn new(mle: DenseMle<F>, neg_mle: DenseMle<F>) -> Self {
         Self { mle, neg_mle }
     }
 }
@@ -139,9 +139,9 @@ impl<F: FieldExt> UnevenAddGateCircuit<F> {
 /// * `neg_mle_2` - An MLE whose bookkeeping table is the element-wise negation
 ///     of that of `mle_2`.
 struct MulAddGateCircuit<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
-    neg_mle_2: DenseMle<F, F>,
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
+    neg_mle_2: DenseMle<F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -198,7 +198,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
     }
 }
 impl<F: FieldExt> MulAddGateCircuit<F> {
-    fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>, neg_mle_2: DenseMle<F, F>) -> Self {
+    fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>, neg_mle_2: DenseMle<F>) -> Self {
         assert_eq!(mle_1.num_iterated_vars(), mle_2.num_iterated_vars());
         assert_eq!(mle_2.num_iterated_vars(), neg_mle_2.num_iterated_vars());
         Self {
@@ -221,9 +221,9 @@ impl<F: FieldExt> MulAddGateCircuit<F> {
 ///     `2^num_dataparallel_bits` copies of smaller MLEs.
 /// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
 struct DataparallelMulAddGateCircuit<F: FieldExt> {
-    mle_1_dataparallel: DenseMle<F, F>,
-    mle_2_dataparallel: DenseMle<F, F>,
-    neg_mle_2_dataparallel: DenseMle<F, F>,
+    mle_1_dataparallel: DenseMle<F>,
+    mle_2_dataparallel: DenseMle<F>,
+    neg_mle_2_dataparallel: DenseMle<F>,
     num_dataparallel_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
@@ -286,9 +286,9 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
 }
 impl<F: FieldExt> DataparallelMulAddGateCircuit<F> {
     fn new(
-        mle_1_dataparallel: DenseMle<F, F>,
-        mle_2_dataparallel: DenseMle<F, F>,
-        neg_mle_2_dataparallel: DenseMle<F, F>,
+        mle_1_dataparallel: DenseMle<F>,
+        mle_2_dataparallel: DenseMle<F>,
+        neg_mle_2_dataparallel: DenseMle<F>,
         num_dataparallel_bits: usize,
     ) -> Self {
         // TODO: Add sanitycheck for dataparallel bits
@@ -321,8 +321,8 @@ impl<F: FieldExt> DataparallelMulAddGateCircuit<F> {
 ///     `2^num_dataparallel_bits` copies of smaller MLEs.
 /// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
 struct DataparallelAddGateCircuit<F: FieldExt> {
-    mle_dataparallel: DenseMle<F, F>,
-    neg_mle_dataparallel: DenseMle<F, F>,
+    mle_dataparallel: DenseMle<F>,
+    neg_mle_dataparallel: DenseMle<F>,
     num_dataparallel_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
@@ -365,8 +365,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
 }
 impl<F: FieldExt> DataparallelAddGateCircuit<F> {
     fn new(
-        mle_dataparallel: DenseMle<F, F>,
-        neg_mle_dataparallel: DenseMle<F, F>,
+        mle_dataparallel: DenseMle<F>,
+        neg_mle_dataparallel: DenseMle<F>,
         num_dataparallel_bits: usize,
     ) -> Self {
         // TODO: Add sanitycheck for dataparallel bits
@@ -394,8 +394,8 @@ impl<F: FieldExt> DataparallelAddGateCircuit<F> {
 ///     `2^num_dataparallel_bits` copies of smaller MLEs.
 /// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
 struct DataparallelUnevenAddGateCircuit<F: FieldExt> {
-    mle_dataparallel: DenseMle<F, F>,
-    neg_mle_dataparallel: DenseMle<F, F>,
+    mle_dataparallel: DenseMle<F>,
+    neg_mle_dataparallel: DenseMle<F>,
     num_dataparallel_bits: usize,
 }
 impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
@@ -436,8 +436,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
 }
 impl<F: FieldExt> DataparallelUnevenAddGateCircuit<F> {
     fn new(
-        mle_dataparallel: DenseMle<F, F>,
-        neg_mle_dataparallel: DenseMle<F, F>,
+        mle_dataparallel: DenseMle<F>,
+        neg_mle_dataparallel: DenseMle<F>,
         num_dataparallel_bits: usize,
     ) -> Self {
         // TODO: Add sanitycheck for dataparallel bits
@@ -460,7 +460,7 @@ fn test_add_gate_circuit() {
     let mut rng = test_rng();
     let size = 1 << NUM_ITERATED_BITS;
 
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+    let mle: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
         None,
@@ -487,7 +487,7 @@ fn test_uneven_add_gate_circuit() {
     let mut rng = test_rng();
     let size = 1 << NUM_ITERATED_BITS;
 
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+    let mle: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
         None,
@@ -512,7 +512,7 @@ fn test_dataparallel_add_gate_circuit() {
     let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
 
     // --- This should be 2^4 ---
-    let mle_dataparallel: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+    let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
         None,
@@ -546,7 +546,7 @@ fn test_dataparallel_uneven_add_gate_circuit() {
     let mut rng = test_rng();
     let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
 
-    let mle_dataparallel: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+    let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
         None,
@@ -580,13 +580,13 @@ fn test_dataparallel_mul_add_gate_circuit() {
     let mut rng = test_rng();
     let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
 
-    let mle_1_dataparallel: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+    let mle_1_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
         None,
     );
 
-    let mle_2_dataparallel: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+    let mle_2_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
         None,
@@ -619,13 +619,13 @@ fn test_mul_add_gate_circuit() {
     let mut rng = test_rng();
     let size = 1 << NUM_ITERATED_BITS;
 
-    let mle_1: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+    let mle_1: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
         None,
     );
 
-    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_iter(
+    let mle_2: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
         None,

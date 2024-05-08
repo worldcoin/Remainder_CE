@@ -9,13 +9,13 @@ use remainder::{
 use remainder_shared_types::{FieldExt, Fr};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.
-pub fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr, Fr> {
+pub fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr> {
     let mle_vec = (0..(1 << num_vars)).map(|_| Fr::one()).collect_vec();
     DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
 }
 
 /// Returns an MLE with random elements generated from u64 for testing according to the number of variables.
-pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr, Fr> {
+pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr> {
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
         .collect_vec();
@@ -28,7 +28,7 @@ pub fn get_dummy_random_mle_vec(
     num_vars: usize,
     num_dataparallel_bits: usize,
     rng: &mut impl Rng,
-) -> Vec<DenseMle<Fr, Fr>> {
+) -> Vec<DenseMle<Fr>> {
     (0..(1 << num_dataparallel_bits))
         .map(|_| {
             let mle_vec = (0..(1 << num_vars))
@@ -51,12 +51,12 @@ pub fn get_dummy_random_mle_vec(
 /// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
 /// the size of `inner_sel_mle`
 pub struct TripleNestedSelectorBuilder<F: FieldExt> {
-    inner_inner_sel_mle: DenseMle<F, F>,
-    inner_sel_mle: DenseMle<F, F>,
-    outer_sel_mle: DenseMle<F, F>,
+    inner_inner_sel_mle: DenseMle<F,>,
+    inner_sel_mle: DenseMle<F,>,
+    outer_sel_mle: DenseMle<F,>,
 }
 impl<F: FieldExt> LayerBuilder<F> for TripleNestedSelectorBuilder<F> {
-    type Successor = DenseMle<F, F>;
+    type Successor = DenseMle<F,>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         let inner_inner_sel = Expression::products(vec![
@@ -90,9 +90,9 @@ impl<F: FieldExt> LayerBuilder<F> for TripleNestedSelectorBuilder<F> {
 }
 impl<F: FieldExt> TripleNestedSelectorBuilder<F> {
     pub fn new(
-        inner_inner_sel_mle: DenseMle<F, F>,
-        inner_sel_mle: DenseMle<F, F>,
-        outer_sel_mle: DenseMle<F, F>,
+        inner_inner_sel_mle: DenseMle<F,>,
+        inner_sel_mle: DenseMle<F,>,
+        outer_sel_mle: DenseMle<F,>,
     ) -> Self {
         Self {
             inner_inner_sel_mle,
@@ -109,11 +109,11 @@ impl<F: FieldExt> TripleNestedSelectorBuilder<F> {
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
 pub struct ProductScaledBuilder<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
+    mle_1: DenseMle<F,>,
+    mle_2: DenseMle<F,>,
 }
 impl<F: FieldExt> LayerBuilder<F> for ProductScaledBuilder<F> {
-    type Successor = DenseMle<F, F>;
+    type Successor = DenseMle<F,>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         let prod_expr = Expression::products(vec![self.mle_1.mle_ref(), self.mle_2.mle_ref()]);
@@ -140,7 +140,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductScaledBuilder<F> {
     }
 }
 impl<F: FieldExt> ProductScaledBuilder<F> {
-    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    pub fn new(mle_1: DenseMle<F,>, mle_2: DenseMle<F,>) -> Self {
         Self { mle_1, mle_2 }
     }
 }
@@ -152,11 +152,11 @@ impl<F: FieldExt> ProductScaledBuilder<F> {
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
 pub struct ProductSumBuilder<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
+    mle_1: DenseMle<F,>,
+    mle_2: DenseMle<F,>,
 }
 impl<F: FieldExt> LayerBuilder<F> for ProductSumBuilder<F> {
-    type Successor = DenseMle<F, F>;
+    type Successor = DenseMle<F,>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         let prod_expr = Expression::products(vec![self.mle_1.mle_ref(), self.mle_2.mle_ref()]);
@@ -188,7 +188,7 @@ impl<F: FieldExt> LayerBuilder<F> for ProductSumBuilder<F> {
     }
 }
 impl<F: FieldExt> ProductSumBuilder<F> {
-    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    pub fn new(mle_1: DenseMle<F,>, mle_2: DenseMle<F,>) -> Self {
         Self { mle_1, mle_2 }
     }
 }
@@ -200,11 +200,11 @@ impl<F: FieldExt> ProductSumBuilder<F> {
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values; same size as `mle_1`.
 pub struct ConstantScaledSumBuilder<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
+    mle_1: DenseMle<F,>,
+    mle_2: DenseMle<F,>,
 }
 impl<F: FieldExt> LayerBuilder<F> for ConstantScaledSumBuilder<F> {
-    type Successor = DenseMle<F, F>;
+    type Successor = DenseMle<F,>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         let constant_expr =
@@ -227,7 +227,7 @@ impl<F: FieldExt> LayerBuilder<F> for ConstantScaledSumBuilder<F> {
     }
 }
 impl<F: FieldExt> ConstantScaledSumBuilder<F> {
-    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    pub fn new(mle_1: DenseMle<F,>, mle_2: DenseMle<F,>) -> Self {
         Self { mle_1, mle_2 }
     }
 }

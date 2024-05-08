@@ -17,7 +17,7 @@ use remainder_shared_types::Fr;
 fn test_get_claim() {
     // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
     let expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::one());
-    let mle = DenseMle::<_, Fr>::new_from_raw(
+    let mle = DenseMle::<Fr>::new_from_raw(
         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
         LayerId::Input(0),
         None,
@@ -55,7 +55,7 @@ fn claims_from_expr_and_points(
 /// Builds GKR layer whose MLE is the function whose evaluations
 /// on the boolean hypercube are given by `mle_evals`.
 fn layer_from_evals(mle_evals: Vec<Fr>) -> RegularLayer<Fr> {
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0), None);
+    let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_evals, LayerId::Input(0), None);
 
     let layer = from_mle(
         mle,
@@ -215,12 +215,12 @@ fn test_aggro_claim_4() {
         Fr::from(rng.gen::<u64>()),
     ];
 
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(
         mle1_evals,
         LayerId::Input(0),
         Some(vec![MleIndex::Fixed(false), MleIndex::Fixed(false)]),
     );
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(
         mle2_evals,
         LayerId::Input(0),
         Some(vec![MleIndex::Fixed(true)]),
@@ -280,7 +280,7 @@ fn test_aggro_claim_negative_1() {
         Fr::from(rng.gen::<u64>()),
         Fr::from(rng.gen::<u64>()),
     ];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
     let mle_ref = mle1.mle_ref();
     let expr = Expression::mle(mle_ref);
     let mut expr_copy = expr.clone();
@@ -334,7 +334,7 @@ fn test_aggro_claim_negative_2() {
         Fr::from(rng.gen::<u64>()),
         Fr::from(rng.gen::<u64>()),
     ];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
     let mle_ref = mle1.mle_ref();
     let expr = Expression::mle(mle_ref);
     let mut expr_copy = expr.clone();

@@ -33,7 +33,7 @@ use super::{
 /// ## Arguments
 /// * `mle` - Input MLE. Can be any length.
 struct RandomCircuit<F: FieldExt> {
-    mle: DenseMle<F, F>,
+    mle: DenseMle<F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -72,8 +72,9 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
             |(mle, random)| Expression::products(vec![mle.mle_ref(), random.mle_ref()]),
             |(mle, random), layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
-                    mle.into_iter()
-                        .zip(random.into_iter().cycle())
+                    mle.clone()
+                        .into_iter()
+                        .zip(random.clone().into_iter().cycle())
                         .map(|(item, random)| item * random),
                     layer_id,
                     prefix_bits,
@@ -115,11 +116,11 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 /// ## Arguments
 /// * `mle_1`, `mle_2` - MLEs whose bookkeeping tables are to be added together.
 struct WraparoundAddBuilder<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
-    type Successor = DenseMle<F, F>;
+    type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, crate::expression::prover_expr::ProverExpr> {
         self.mle_1.mle_ref().expression() + self.mle_2.mle_ref().expression()
@@ -147,7 +148,7 @@ impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
     }
 }
 impl<F: FieldExt> WraparoundAddBuilder<F> {
-    fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
         Self { mle_1, mle_2 }
     }
 }
@@ -165,10 +166,10 @@ impl<F: FieldExt> WraparoundAddBuilder<F> {
 /// * `input_layer_2_mle_1`, `input_layer_2_mle_2` - MLEs to be combined in
 ///     the same input layer.
 struct MultiInputLayerCircuit<F: FieldExt> {
-    input_layer_1_mle_1: DenseMle<F, F>,
-    input_layer_1_mle_2: DenseMle<F, F>,
-    input_layer_2_mle_1: DenseMle<F, F>,
-    input_layer_2_mle_2: DenseMle<F, F>,
+    input_layer_1_mle_1: DenseMle<F>,
+    input_layer_1_mle_2: DenseMle<F>,
+    input_layer_2_mle_1: DenseMle<F>,
+    input_layer_2_mle_2: DenseMle<F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -248,10 +249,10 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
 }
 impl<F: FieldExt> MultiInputLayerCircuit<F> {
     pub fn new(
-        input_layer_1_mle_1: DenseMle<F, F>,
-        input_layer_1_mle_2: DenseMle<F, F>,
-        input_layer_2_mle_1: DenseMle<F, F>,
-        input_layer_2_mle_2: DenseMle<F, F>,
+        input_layer_1_mle_1: DenseMle<F>,
+        input_layer_1_mle_2: DenseMle<F>,
+        input_layer_2_mle_1: DenseMle<F>,
+        input_layer_2_mle_2: DenseMle<F>,
     ) -> Self {
         Self {
             input_layer_1_mle_1,
@@ -275,8 +276,8 @@ impl<F: FieldExt> MultiInputLayerCircuit<F> {
 /// ## Arguments
 /// * `mle`, `mle_2` - MLEs of any size.
 struct SimplePrecommitCircuit<F: FieldExt> {
-    mle: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
+    mle: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -330,7 +331,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
     }
 }
 impl<F: FieldExt> SimplePrecommitCircuit<F> {
-    fn new(mle: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    fn new(mle: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
         Self { mle, mle_2 }
     }
 }
@@ -340,8 +341,8 @@ fn test_gkr_circuit_with_precommit() {
     const NUM_ITERATED_BITS: usize = 4;
     let mut rng = test_rng();
 
-    let mle: DenseMle<Fr, Fr> = get_random_mle(NUM_ITERATED_BITS, &mut rng);
-    let mle_2: DenseMle<Fr, Fr> = get_random_mle(NUM_ITERATED_BITS, &mut rng);
+    let mle: DenseMle<Fr> = get_random_mle(NUM_ITERATED_BITS, &mut rng);
+    let mle_2: DenseMle<Fr> = get_random_mle(NUM_ITERATED_BITS, &mut rng);
 
     let circuit: SimplePrecommitCircuit<Fr> = SimplePrecommitCircuit::new(mle, mle_2);
 

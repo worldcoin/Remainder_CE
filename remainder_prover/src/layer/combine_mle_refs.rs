@@ -153,7 +153,7 @@ pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F, F> {
+pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F,> {
     let num_fields = items.len();
 
     // --- All the items within should be the same size ---

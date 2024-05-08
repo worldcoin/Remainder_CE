@@ -34,10 +34,10 @@ pub mod utils;
 ///
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct DataParallelCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F, F>>,
-    mle_2_vec: Vec<DenseMle<F, F>>,
-    mle_3_vec: Vec<DenseMle<F, F>>,
-    mle_4_vec: Vec<DenseMle<F, F>>,
+    mle_1_vec: Vec<DenseMle<F,>>,
+    mle_2_vec: Vec<DenseMle<F,>>,
+    mle_3_vec: Vec<DenseMle<F,>>,
+    mle_4_vec: Vec<DenseMle<F,>>,
     num_dataparallel_bits: usize,
 }
 
@@ -47,10 +47,10 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
-        let mut combined_mle_1 = DenseMle::<F, F>::combine_mle_batch(self.mle_1_vec.clone());
-        let mut combined_mle_2 = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
-        let mut combined_mle_3 = DenseMle::<F, F>::combine_mle_batch(self.mle_3_vec.clone());
-        let mut combined_mle_4 = DenseMle::<F, F>::combine_mle_batch(self.mle_4_vec.clone());
+        let mut combined_mle_1 = DenseMle::<F>::combine_mle_batch(self.mle_1_vec.clone());
+        let mut combined_mle_2 = DenseMle::<F>::combine_mle_batch(self.mle_2_vec.clone());
+        let mut combined_mle_3 = DenseMle::<F>::combine_mle_batch(self.mle_3_vec.clone());
+        let mut combined_mle_4 = DenseMle::<F>::combine_mle_batch(self.mle_4_vec.clone());
         combined_mle_1.layer_id = LayerId::Input(0);
         combined_mle_2.layer_id = LayerId::Input(0);
         combined_mle_3.layer_id = LayerId::Input(0);
@@ -156,10 +156,10 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
 
 impl<F: FieldExt> DataParallelCircuit<F> {
     fn _new(
-        mle_1_vec: Vec<DenseMle<F, F>>,
-        mle_2_vec: Vec<DenseMle<F, F>>,
-        mle_3_vec: Vec<DenseMle<F, F>>,
-        mle_4_vec: Vec<DenseMle<F, F>>,
+        mle_1_vec: Vec<DenseMle<F,>>,
+        mle_2_vec: Vec<DenseMle<F,>>,
+        mle_3_vec: Vec<DenseMle<F,>>,
+        mle_4_vec: Vec<DenseMle<F,>>,
         num_dataparallel_bits: usize,
     ) -> Self {
         assert_eq!(mle_1_vec.len(), mle_2_vec.len());

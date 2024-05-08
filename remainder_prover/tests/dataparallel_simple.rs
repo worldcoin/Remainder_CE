@@ -35,8 +35,8 @@ pub mod utils;
 ///
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct NonSelectorDataparallelCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F, F>>,
-    mle_2_vec: Vec<DenseMle<F, F>>,
+    mle_1_vec: Vec<DenseMle<F,>>,
+    mle_2_vec: Vec<DenseMle<F,>>,
     num_dataparallel_bits: usize,
 }
 
@@ -46,8 +46,8 @@ impl<F: FieldExt> GKRCircuit<F> for NonSelectorDataparallelCircuit<F> {
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
-        let mut combined_mle_1 = DenseMle::<F, F>::combine_mle_batch(self.mle_1_vec.clone());
-        let mut combined_mle_2 = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
+        let mut combined_mle_1 = DenseMle::<F>::combine_mle_batch(self.mle_1_vec.clone());
+        let mut combined_mle_2 = DenseMle::<F>::combine_mle_batch(self.mle_2_vec.clone());
         combined_mle_1.layer_id = LayerId::Input(0);
         combined_mle_2.layer_id = LayerId::Input(0);
 
@@ -113,8 +113,8 @@ impl<F: FieldExt> GKRCircuit<F> for NonSelectorDataparallelCircuit<F> {
 
 impl<F: FieldExt> NonSelectorDataparallelCircuit<F> {
     fn new(
-        mle_1_vec: Vec<DenseMle<F, F>>,
-        mle_2_vec: Vec<DenseMle<F, F>>,
+        mle_1_vec: Vec<DenseMle<F,>>,
+        mle_2_vec: Vec<DenseMle<F,>>,
         num_dataparallel_bits: usize,
     ) -> Self {
         let all_num_vars: Vec<usize> = mle_1_vec

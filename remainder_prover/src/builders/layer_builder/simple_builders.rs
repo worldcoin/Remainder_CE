@@ -11,7 +11,7 @@ use std::cmp::max;
 
 /// takes a DenseMleRef and subtracts it from itself to get all zeroes.
 pub struct ZeroBuilder<F: FieldExt> {
-    mle: DenseMle<F, F>,
+    mle: DenseMle<F>,
 }
 
 impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
@@ -27,7 +27,7 @@ impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
 
 impl<F: FieldExt> ZeroBuilder<F> {
     /// create new leaf node packed
-    pub fn new(mle: DenseMle<F, F>) -> Self {
+    pub fn new(mle: DenseMle<F>) -> Self {
         Self { mle }
     }
 }
@@ -35,8 +35,8 @@ impl<F: FieldExt> ZeroBuilder<F> {
 /// calculates the difference between two mles
 /// and contrains it to be a `ZeroMleRef`
 pub struct EqualityCheck<F: FieldExt> {
-    mle_1: DenseMle<F, F>,
-    mle_2: DenseMle<F, F>,
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
 impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
@@ -57,15 +57,12 @@ impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
 
 impl<F: FieldExt> EqualityCheck<F> {
     /// creates new difference mle
-    pub fn new(mle_1: DenseMle<F, F>, mle_2: DenseMle<F, F>) -> Self {
+    pub fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
         Self { mle_1, mle_2 }
     }
 
     /// creates a batched layer for equality check
-    pub fn new_batched(
-        mle_1: Vec<DenseMle<F, F>>,
-        mle_2: Vec<DenseMle<F, F>>,
-    ) -> BatchedLayer<F, Self> {
+    pub fn new_batched(mle_1: Vec<DenseMle<F>>, mle_2: Vec<DenseMle<F>>) -> BatchedLayer<F, Self> {
         BatchedLayer::new(
             mle_1
                 .into_iter()

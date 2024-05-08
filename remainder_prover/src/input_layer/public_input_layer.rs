@@ -16,7 +16,7 @@ use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLay
 /// An Input Layer in which the data is sent to the verifier
 /// "in the clear" (i.e. without a commitment).
 pub struct PublicInputLayer<F: FieldExt> {
-    mle: DenseMle<F, F>,
+    mle: DenseMle<F>,
     pub(crate) layer_id: LayerId,
 }
 
@@ -72,7 +72,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
         let mut mle_ref =
-            DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
+            DenseMle::<F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_vars() != 0 {
@@ -97,13 +97,13 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         &self.layer_id
     }
 
-    fn get_padded_mle(&self) -> DenseMle<F, F> {
+    fn get_padded_mle(&self) -> DenseMle<F> {
         self.mle.clone()
     }
 }
 
 impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
-    fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
+    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
 }

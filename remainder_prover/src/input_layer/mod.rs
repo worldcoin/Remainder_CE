@@ -106,13 +106,13 @@ pub trait InputLayer<F: FieldExt> {
 
     /// Returns the contents of this `InputLayer` as an
     /// owned `DenseMle`.
-    fn get_padded_mle(&self) -> DenseMle<F, F>;
+    fn get_padded_mle(&self) -> DenseMle<F,>;
 }
 
 /// Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs.
 pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {
     /// Creates a new InputLayer from a flat mle.
-    fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self;
+    fn new(mle: DenseMle<F,>, layer_id: LayerId) -> Self;
 }
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.

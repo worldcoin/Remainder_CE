@@ -27,7 +27,7 @@ use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLay
 /// commitment scheme.
 pub struct LigeroInputLayer<F: FieldExt> {
     /// The MLE which we wish to commit to.
-    pub mle: DenseMle<F, F>,
+    pub mle: DenseMle<F,>,
     /// The ID corresponding to this layer.
     pub(crate) layer_id: LayerId,
     /// The Ligero commitment to `mle`.
@@ -164,13 +164,13 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         &self.layer_id
     }
 
-    fn get_padded_mle(&self) -> DenseMle<F, F> {
+    fn get_padded_mle(&self) -> DenseMle<F,> {
         self.mle.clone()
     }
 }
 
 impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
-    fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
+    fn new(mle: DenseMle<F,>, layer_id: LayerId) -> Self {
         Self {
             mle,
             layer_id,
@@ -187,7 +187,7 @@ impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
 impl<F: FieldExt> LigeroInputLayer<F> {
     /// Creates new Ligero input layer WITH a precomputed Ligero commitment
     pub fn new_with_ligero_commitment(
-        mle: DenseMle<F, F>,
+        mle: DenseMle<F,>,
         layer_id: LayerId,
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
         ligero_aux: LcProofAuxiliaryInfo,
@@ -208,7 +208,7 @@ impl<F: FieldExt> LigeroInputLayer<F> {
 
     /// Creates new Ligero input layer with specified rho inverse
     pub fn new_with_rho_inv_ratio(
-        mle: DenseMle<F, F>,
+        mle: DenseMle<F,>,
         layer_id: LayerId,
         rho_inv: u8,
         ratio: f64,

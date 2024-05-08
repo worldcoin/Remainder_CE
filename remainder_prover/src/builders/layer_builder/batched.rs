@@ -95,7 +95,7 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
 }
 
 ///Helper function for "unbatching" when required by circuit design
-pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
+pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F,>>) -> DenseMle<F,> {
     let old_layer_id = mles[0].layer_id;
     let new_bits = log2(mles.len()) as usize;
     let old_prefix_bits = mles[0]
@@ -117,9 +117,9 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F, F>>) -> DenseMle<F, F> {
 
 /// convert a flattened batch mle to a vector of mles
 pub fn unflatten_mle<F: FieldExt>(
-    flattened_mle: DenseMle<F, F>,
+    flattened_mle: DenseMle<F,>,
     num_dataparallel_bits: usize,
-) -> Vec<DenseMle<F, F>> {
+) -> Vec<DenseMle<F,>> {
     let num_copies = 1 << num_dataparallel_bits;
     let individual_mle_len = 1 << (flattened_mle.num_iterated_vars() - num_dataparallel_bits);
 
@@ -134,7 +134,7 @@ pub fn unflatten_mle<F: FieldExt>(
                     flat_mle_ref.current_mle.f[copy_idx + (mle_idx * num_copies)]
                 })
                 .collect_vec();
-            let individual_mle: DenseMle<F, F> = DenseMle::new_from_raw(
+            let individual_mle: DenseMle<F,> = DenseMle::new_from_raw(
                 individual_mle_table,
                 flattened_mle.layer_id,
                 Some(
@@ -383,13 +383,13 @@ mod tests {
     fn test_batched_layer() {
         let mut rng = test_rng();
         let expression_builder =
-            |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>)| -> Expression<Fr, ProverExpr> {
+            |(mle1, mle2): &(DenseMle<Fr>, DenseMle<Fr>)| -> Expression<Fr, ProverExpr> {
                 mle1.mle_ref().expression() + mle2.mle_ref().expression()
             };
-        let layer_builder = |(mle1, mle2): &(DenseMle<Fr, Fr>, DenseMle<Fr, Fr>),
+        let layer_builder = |(mle1, mle2): &(DenseMle<Fr>, DenseMle<Fr>),
                              layer_id,
                              prefix_bits|
-         -> DenseMle<Fr, Fr> {
+         -> DenseMle<Fr> {
             DenseMle::new_from_iter(
                 mle1.clone()
                     .into_iter()
@@ -399,7 +399,7 @@ mod tests {
                 prefix_bits,
             )
         };
-        let output: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
+        let output: (DenseMle<Fr>, DenseMle<Fr>) = {
             let first = DenseMle::new_from_raw(
                 vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)],
                 LayerId::Input(0),
@@ -414,7 +414,7 @@ mod tests {
         };
         let builder = from_mle(output, expression_builder, layer_builder);
 
-        let output_2: (DenseMle<Fr, Fr>, DenseMle<Fr, Fr>) = {
+        let output_2: (DenseMle<Fr>, DenseMle<Fr>) = {
             let first = DenseMle::new_from_raw(
                 vec![Fr::from(2), Fr::from(0), Fr::from(4), Fr::from(9)],
                 LayerId::Input(0),

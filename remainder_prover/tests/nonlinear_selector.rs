@@ -32,13 +32,13 @@ pub mod utils;
 /// one more variable than `right_sel_mle`.
 
 struct NonlinearSelectorBuilder<F: FieldExt> {
-    left_sel_mle: DenseMle<F, F>,
-    right_sel_mle: DenseMle<F, F>,
-    right_sum_mle_1: DenseMle<F, F>,
-    right_sum_mle_2: DenseMle<F, F>,
+    left_sel_mle: DenseMle<F,>,
+    right_sel_mle: DenseMle<F,>,
+    right_sum_mle_1: DenseMle<F,>,
+    right_sum_mle_2: DenseMle<F,>,
 }
 impl<F: FieldExt> LayerBuilder<F> for NonlinearSelectorBuilder<F> {
-    type Successor = DenseMle<F, F>;
+    type Successor = DenseMle<F,>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         let left_sel_side = Expression::mle(self.left_sel_mle.mle_ref());
@@ -76,10 +76,10 @@ impl<F: FieldExt> LayerBuilder<F> for NonlinearSelectorBuilder<F> {
 }
 impl<F: FieldExt> NonlinearSelectorBuilder<F> {
     fn new(
-        left_sel_mle: DenseMle<F, F>,
-        right_sel_mle: DenseMle<F, F>,
-        right_sum_mle_1: DenseMle<F, F>,
-        right_sum_mle_2: DenseMle<F, F>,
+        left_sel_mle: DenseMle<F,>,
+        right_sel_mle: DenseMle<F,>,
+        right_sum_mle_1: DenseMle<F,>,
+        right_sum_mle_2: DenseMle<F,>,
     ) -> Self {
         assert_eq!(
             right_sum_mle_1.mle_ref().num_vars(),
@@ -111,10 +111,10 @@ impl<F: FieldExt> NonlinearSelectorBuilder<F> {
 /// ## Arguments
 /// See [NonlinearSelectorBuilder].
 struct NonlinearSelectorCircuit<F: FieldExt> {
-    left_sel_mle: DenseMle<F, F>,
-    right_sel_mle: DenseMle<F, F>,
-    right_sum_mle_1: DenseMle<F, F>,
-    right_sum_mle_2: DenseMle<F, F>,
+    left_sel_mle: DenseMle<F,>,
+    right_sel_mle: DenseMle<F,>,
+    right_sum_mle_1: DenseMle<F,>,
+    right_sum_mle_2: DenseMle<F,>,
 }
 impl<F: FieldExt> GKRCircuit<F> for NonlinearSelectorCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -153,10 +153,10 @@ impl<F: FieldExt> GKRCircuit<F> for NonlinearSelectorCircuit<F> {
 
 impl<F: FieldExt> NonlinearSelectorCircuit<F> {
     fn new(
-        left_sel_mle: DenseMle<F, F>,
-        right_sel_mle: DenseMle<F, F>,
-        right_sum_mle_1: DenseMle<F, F>,
-        right_sum_mle_2: DenseMle<F, F>,
+        left_sel_mle: DenseMle<F,>,
+        right_sel_mle: DenseMle<F,>,
+        right_sum_mle_1: DenseMle<F,>,
+        right_sum_mle_2: DenseMle<F,>,
     ) -> Self {
         assert_eq!(
             left_sel_mle.num_iterated_vars(),
