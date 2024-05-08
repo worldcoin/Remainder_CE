@@ -117,7 +117,7 @@ impl<F: FieldExt> Evaluations<F> {
         }
     }
 
-    fn num_vars(&self) -> usize {
+    pub fn num_vars(&self) -> usize {
         self.num_vars
     }
 

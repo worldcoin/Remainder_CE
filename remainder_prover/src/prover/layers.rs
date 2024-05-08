@@ -59,7 +59,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         rhs: DenseMleRef<F>,
         num_dataparallel_bits: Option<usize>,
         gate_operation: BinaryOperation,
-    ) -> DenseMle<F, F>
+    ) -> DenseMle<F,>
     where
         T: From<Gate<F>>,
     {
@@ -104,7 +104,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
                 });
         });
 
-        let res_mle: DenseMle<F, F> = DenseMle::new_from_raw(res_table, id, None);
+        let res_mle: DenseMle<F,> = DenseMle::new_from_raw(res_table, id, None);
 
         res_mle
     }
