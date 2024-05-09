@@ -29,9 +29,6 @@ use remainder_shared_types::FieldExt;
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DenseMle<F> {
-    /// The underlying data.
-    pub mle: Vec<F>,
-
     /// Number of iterated variables.
     pub num_iterated_vars: usize,
 
@@ -67,10 +64,11 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
     }
 
     fn get_padded_evaluations(&self) -> Vec<F> {
-        let size: usize = 1 << log2(self.mle.len());
-        let padding = size - self.mle.len();
+        let size: usize = 1 << self.current_mle.num_vars();
+        let padding = size - self.current_mle.get_evals().len();
 
-        self.mle
+        self.current_mle
+            .get_evals_vector()
             .iter()
             .cloned()
             .chain(repeat_n(F::ZERO, padding))
@@ -284,7 +282,6 @@ impl<F: FieldExt> DenseMle<F> {
         let current_mle =
             MultilinearExtension::new(Evaluations::<F>::new(num_iterated_vars, items.clone()));
         Self {
-            mle: items,
             num_iterated_vars,
             layer_id,
             prefix_bits,
@@ -325,7 +322,6 @@ impl<F: FieldExt> DenseMle<F> {
             MultilinearExtension::new(Evaluations::<F>::new(num_iterated_vars, items.clone()));
 
         Self {
-            mle: items,
             num_iterated_vars,
             layer_id,
             prefix_bits,
@@ -348,7 +344,7 @@ impl<F: FieldExt> IntoIterator for DenseMle<F> {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.mle.into_iter()
+        self.current_mle.get_evals_vector().clone().into_iter()
     }
 }
 
@@ -385,8 +381,19 @@ pub fn get_padded_evaluations_for_list<F: FieldExt, const L: usize>(items: &[Vec
 impl<F: FieldExt> DenseMle<F> {
     /// Splits the MLE into a new MLE with a tuple of size 2 as its element.
     pub fn split(self) -> [DenseMle<F>; 2] {
-        let first_iter = self.mle.clone().into_iter().step_by(2);
-        let second_iter = self.mle.into_iter().skip(1).step_by(2);
+        let first_iter = self
+            .current_mle
+            .get_evals_vector()
+            .clone()
+            .into_iter()
+            .step_by(2);
+        let second_iter = self
+            .current_mle
+            .get_evals_vector()
+            .clone()
+            .into_iter()
+            .skip(1)
+            .step_by(2);
 
         [
             DenseMle::new_from_iter(first_iter, self.layer_id, self.prefix_bits.clone()),
