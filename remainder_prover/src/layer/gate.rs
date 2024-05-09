@@ -22,12 +22,7 @@ use crate::{
         Claim, ClaimError, YieldClaim,
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
-    mle::{
-        betavalues::BetaValues,
-        dense::{DenseMle, DenseMleRef},
-        mle_enum::MleEnum,
-        MleRef,
-    },
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleRef},
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, Evals},
 };
@@ -74,13 +69,13 @@ pub struct Gate<F: FieldExt> {
     /// on gates with labels x and y.
     pub nonzero_gates: Vec<(usize, usize, usize)>,
     /// The left side of the expression, i.e. the mle that makes up the "x" variables.
-    pub lhs: DenseMleRef<F>,
+    pub lhs: DenseMle<F>,
     /// The right side of the expression, i.e. the mle that makes up the "y" variables.
-    pub rhs: DenseMleRef<F>,
+    pub rhs: DenseMle<F>,
     /// The mles that are constructed when initializing phase 1 (binding the x variables).
-    pub phase_1_mles: Option<Vec<Vec<DenseMleRef<F>>>>,
+    pub phase_1_mles: Option<Vec<Vec<DenseMle<F>>>>,
     /// The mles that are constructed when initializing phase 2 (binding the y variables).
-    pub phase_2_mles: Option<Vec<Vec<DenseMleRef<F>>>>,
+    pub phase_2_mles: Option<Vec<Vec<DenseMle<F>>>>,
     /// The gate operation representing the fan-in-two relationship.
     pub gate_operation: BinaryOperation,
 }
@@ -392,8 +387,8 @@ impl<F: FieldExt> Gate<F> {
     pub fn new(
         num_dataparallel_bits: Option<usize>,
         nonzero_gates: Vec<(usize, usize, usize)>,
-        lhs: DenseMleRef<F>,
-        rhs: DenseMleRef<F>,
+        lhs: DenseMle<F>,
+        rhs: DenseMle<F>,
         gate_operation: BinaryOperation,
         layer_id: LayerId,
     ) -> Self {
@@ -409,7 +404,7 @@ impl<F: FieldExt> Gate<F> {
         }
     }
 
-    fn compute_beta_tables(&mut self, challenges: &[F]) -> (DenseMleRef<F>, DenseMleRef<F>) {
+    fn compute_beta_tables(&mut self, challenges: &[F]) -> (DenseMle<F>, DenseMle<F>) {
         let mut g2_challenges = vec![];
         let mut g1_challenges = vec![];
 
@@ -504,7 +499,7 @@ impl<F: FieldExt> Gate<F> {
                 }
             });
 
-        let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0), None).mle_ref();
+        let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0), None);
 
         // The actual mles defer based on whether we are doing a add gate or a mul gate, because
         // in the case of an add gate, we distribute the gate function whereas in the case of the
@@ -513,7 +508,7 @@ impl<F: FieldExt> Gate<F> {
             BinaryOperation::Add => {
                 vec![
                     vec![
-                        DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0), None).mle_ref(),
+                        DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0), None),
                         self.lhs.clone(),
                     ],
                     vec![a_hg_rhs_mle_ref],
@@ -557,7 +552,7 @@ impl<F: FieldExt> Gate<F> {
         &mut self,
         u_claim: Vec<F>,
         f_at_u: F,
-        beta_g1: &DenseMleRef<F>,
+        beta_g1: &DenseMle<F>,
     ) -> Result<Vec<F>, GateError> {
         // Create a beta table according to the challenges used to bind the x variables.
         let beta_u = BetaValues::new_beta_equality_mle(u_claim);
@@ -584,13 +579,13 @@ impl<F: FieldExt> Gate<F> {
                 }
             });
 
-        let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0), None).mle_ref();
+        let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0), None);
         // --- We need to multiply h_g(x) by f_2(x) ---
         let mut phase_2_mles = match self.gate_operation {
             BinaryOperation::Add => {
                 vec![
                     vec![
-                        DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0), None).mle_ref(),
+                        DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0), None),
                         self.rhs.clone(),
                     ],
                     vec![a_f1_lhs_mle_ref],
@@ -632,8 +627,8 @@ impl<F: FieldExt> Gate<F> {
     fn perform_dataparallel_phase(
         &mut self,
         claim: Vec<F>,
-        beta_g1: &mut DenseMleRef<F>,
-        beta_g2: &mut DenseMleRef<F>,
+        beta_g1: &mut DenseMle<F>,
+        beta_g2: &mut DenseMle<F>,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<(SumcheckProof<F>, F), LayerError> {
         // Initialization, first message comes from here.
@@ -759,7 +754,7 @@ impl<F: FieldExt> Gate<F> {
         &mut self,
         f_at_u: F,
         phase_1_challenges: Vec<F>,
-        beta_g1: DenseMleRef<F>,
+        beta_g1: DenseMle<F>,
         beta_g2_fully_bound: F,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<SumcheckProof<F>, LayerError> {
