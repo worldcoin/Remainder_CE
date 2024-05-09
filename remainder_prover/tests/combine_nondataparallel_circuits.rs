@@ -7,7 +7,7 @@ use remainder::{
     },
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleRef},
+    mle::{dense::DenseMle, Mle},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
@@ -31,8 +31,8 @@ pub mod utils;
 /// * `mle_1`  An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
 struct ProductScaledSumCircuit<F: FieldExt> {
-    mle_1: DenseMle<F,>,
-    mle_2: DenseMle<F,>,
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ProductScaledSumCircuit<F> {
@@ -69,8 +69,8 @@ impl<F: FieldExt> GKRCircuit<F> for ProductScaledSumCircuit<F> {
 /// * `mle_1` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1`.
 struct SumConstantCircuit<F: FieldExt> {
-    mle_1: DenseMle<F,>,
-    mle_2: DenseMle<F,>,
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for SumConstantCircuit<F> {
@@ -108,8 +108,8 @@ impl<F: FieldExt> GKRCircuit<F> for SumConstantCircuit<F> {
 /// * `mle_1` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1`.
 struct ConstantScaledCircuit<F: FieldExt> {
-    mle_1: DenseMle<F,>,
-    mle_2: DenseMle<F,>,
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ConstantScaledCircuit<F> {
@@ -145,8 +145,8 @@ impl<F: FieldExt> GKRCircuit<F> for ConstantScaledCircuit<F> {
 /// * `mle_1` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1`.
 struct CombinedCircuit<F: FieldExt> {
-    mle_1: DenseMle<F,>,
-    mle_2: DenseMle<F,>,
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
@@ -208,7 +208,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
 }
 
 impl<F: FieldExt> CombinedCircuit<F> {
-    fn new(mle_1: DenseMle<F,>, mle_2: DenseMle<F,>) -> Self {
+    fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
         assert_eq!(mle_1.num_iterated_vars(), mle_2.num_iterated_vars());
         Self { mle_1, mle_2 }
     }

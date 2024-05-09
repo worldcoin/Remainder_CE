@@ -6,7 +6,7 @@ use crate::mle::{
     dense::DenseMle,
     evals::{Evaluations, MultilinearExtension},
     mle_enum::MleEnum,
-    Mle, MleIndex, MleRef,
+    Mle, MleIndex,
 };
 use ark_std::log2;
 use ark_std::{cfg_into_iter, cfg_iter_mut};

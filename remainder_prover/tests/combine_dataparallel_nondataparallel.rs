@@ -11,7 +11,7 @@ use remainder::{
     },
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
+    mle::{dense::DenseMle, Mle, MleIndex},
     prover::{layers::Layers, proof_system::DefaultProofSystem, GKRCircuit, Witness},
 };
 use remainder_shared_types::FieldExt;
@@ -30,8 +30,8 @@ use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
 /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 struct DataParallelCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F,>>,
-    mle_2_vec: Vec<DenseMle<F,>>,
+    mle_1_vec: Vec<DenseMle<F>>,
+    mle_2_vec: Vec<DenseMle<F>>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
@@ -86,9 +86,9 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
 /// * `outer_sel_mle` - An MLE with arbitrary bookkeeping table values, but double
 /// the size of `inner_sel_mle`
 struct TripleNestedSelectorCircuit<F: FieldExt> {
-    inner_inner_sel_mle: DenseMle<F,>,
-    inner_sel_mle: DenseMle<F,>,
-    outer_sel_mle: DenseMle<F,>,
+    inner_inner_sel_mle: DenseMle<F>,
+    inner_sel_mle: DenseMle<F>,
+    outer_sel_mle: DenseMle<F>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for TripleNestedSelectorCircuit<F> {
@@ -125,8 +125,8 @@ impl<F: FieldExt> GKRCircuit<F> for TripleNestedSelectorCircuit<F> {
 /// * `mle_1` - An MLE with arbitrary bookkeeping table values.
 /// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
 struct ScaledProductCircuit<F: FieldExt> {
-    mle_1: DenseMle<F,>,
-    mle_2: DenseMle<F,>,
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for ScaledProductCircuit<F> {
@@ -164,12 +164,12 @@ impl<F: FieldExt> GKRCircuit<F> for ScaledProductCircuit<F> {
 /// same size.
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct CombinedCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F,>>,
-    mle_2_vec: Vec<DenseMle<F,>>,
-    mle_3: DenseMle<F,>,
-    mle_4: DenseMle<F,>,
-    mle_5: DenseMle<F,>,
-    mle_6: DenseMle<F,>,
+    mle_1_vec: Vec<DenseMle<F>>,
+    mle_2_vec: Vec<DenseMle<F>>,
+    mle_3: DenseMle<F>,
+    mle_4: DenseMle<F>,
+    mle_5: DenseMle<F>,
+    mle_6: DenseMle<F>,
     num_data_parallel_bits: usize,
 }
 
@@ -288,12 +288,12 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
 
 impl<F: FieldExt> CombinedCircuit<F> {
     fn _new(
-        mle_1_vec: Vec<DenseMle<F,>>,
-        mle_2_vec: Vec<DenseMle<F,>>,
-        mle_3: DenseMle<F,>,
-        mle_4: DenseMle<F,>,
-        mle_5: DenseMle<F,>,
-        mle_6: DenseMle<F,>,
+        mle_1_vec: Vec<DenseMle<F>>,
+        mle_2_vec: Vec<DenseMle<F>>,
+        mle_3: DenseMle<F>,
+        mle_4: DenseMle<F>,
+        mle_5: DenseMle<F>,
+        mle_6: DenseMle<F>,
         num_data_parallel_bits: usize,
     ) -> Self {
         assert_eq!(mle_3.num_iterated_vars(), mle_4.num_iterated_vars());

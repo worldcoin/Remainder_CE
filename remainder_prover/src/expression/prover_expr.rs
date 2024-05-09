@@ -4,7 +4,7 @@ use super::{
     verifier_expr::VerifierExpr,
 };
 use crate::mle::Mle;
-use crate::mle::{betavalues::BetaValues, dense::DenseMle, MleIndex, MleRef};
+use crate::mle::{betavalues::BetaValues, dense::DenseMle, MleIndex};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};

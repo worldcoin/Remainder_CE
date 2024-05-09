@@ -15,7 +15,7 @@ use crate::{
     claims::{ClaimAggregator, ClaimAndProof},
     input_layer::{InputLayer, InputLayerError},
     layer::{layer_enum::LayerEnum, Layer, LayerError, LayerId},
-    mle::{MleIndex, MleRef},
+    mle::MleIndex,
     utils::hash_layers,
 };
 use ark_std::{end_timer, start_timer};

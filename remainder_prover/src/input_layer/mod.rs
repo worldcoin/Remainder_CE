@@ -26,7 +26,7 @@ mod tests;
 use crate::{
     claims::{wlx_eval::get_num_wlx_evaluations, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
+    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
 

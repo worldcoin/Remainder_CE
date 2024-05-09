@@ -11,7 +11,7 @@ use crate::{
     },
     expression::generic_expr::Expression,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleRef},
+    mle::{dense::DenseMle, Mle},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, CircuitInputLayer,
         CircuitTranscript, GKRCircuit, GKRError, Witness,

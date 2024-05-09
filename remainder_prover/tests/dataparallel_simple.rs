@@ -11,7 +11,7 @@ use remainder::{
     },
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
+    mle::{dense::DenseMle, Mle, MleIndex},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
@@ -35,8 +35,8 @@ pub mod utils;
 ///
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct NonSelectorDataparallelCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F,>>,
-    mle_2_vec: Vec<DenseMle<F,>>,
+    mle_1_vec: Vec<DenseMle<F>>,
+    mle_2_vec: Vec<DenseMle<F>>,
     num_dataparallel_bits: usize,
 }
 
@@ -113,8 +113,8 @@ impl<F: FieldExt> GKRCircuit<F> for NonSelectorDataparallelCircuit<F> {
 
 impl<F: FieldExt> NonSelectorDataparallelCircuit<F> {
     fn new(
-        mle_1_vec: Vec<DenseMle<F,>>,
-        mle_2_vec: Vec<DenseMle<F,>>,
+        mle_1_vec: Vec<DenseMle<F>>,
+        mle_2_vec: Vec<DenseMle<F>>,
         num_dataparallel_bits: usize,
     ) -> Self {
         let all_num_vars: Vec<usize> = mle_1_vec

@@ -8,7 +8,7 @@ use remainder_shared_types::{
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleRef},
+    mle::{dense::DenseMle, mle_enum::MleEnum},
 };
 
 use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError};

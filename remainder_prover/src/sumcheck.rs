@@ -21,7 +21,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    mle::{betavalues::BetaValues, dense::DenseMle, Mle, MleIndex, MleRef},
+    mle::{betavalues::BetaValues, dense::DenseMle, Mle, MleIndex},
 };
 use remainder_shared_types::FieldExt;
 

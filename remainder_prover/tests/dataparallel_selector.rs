@@ -10,7 +10,7 @@ use remainder::{
     },
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
+    mle::{dense::DenseMle, Mle, MleIndex},
     prover::{layers::Layers, proof_system::DefaultProofSystem, GKRCircuit, Witness},
 };
 use remainder_shared_types::FieldExt;
@@ -34,10 +34,10 @@ pub mod utils;
 ///
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct DataParallelCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F,>>,
-    mle_2_vec: Vec<DenseMle<F,>>,
-    mle_3_vec: Vec<DenseMle<F,>>,
-    mle_4_vec: Vec<DenseMle<F,>>,
+    mle_1_vec: Vec<DenseMle<F>>,
+    mle_2_vec: Vec<DenseMle<F>>,
+    mle_3_vec: Vec<DenseMle<F>>,
+    mle_4_vec: Vec<DenseMle<F>>,
     num_dataparallel_bits: usize,
 }
 
@@ -156,10 +156,10 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
 
 impl<F: FieldExt> DataParallelCircuit<F> {
     fn _new(
-        mle_1_vec: Vec<DenseMle<F,>>,
-        mle_2_vec: Vec<DenseMle<F,>>,
-        mle_3_vec: Vec<DenseMle<F,>>,
-        mle_4_vec: Vec<DenseMle<F,>>,
+        mle_1_vec: Vec<DenseMle<F>>,
+        mle_2_vec: Vec<DenseMle<F>>,
+        mle_3_vec: Vec<DenseMle<F>>,
+        mle_4_vec: Vec<DenseMle<F>>,
         num_dataparallel_bits: usize,
     ) -> Self {
         assert_eq!(mle_1_vec.len(), mle_2_vec.len());

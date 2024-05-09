@@ -10,7 +10,7 @@ use crate::{
 };
 use remainder_shared_types::FieldExt;
 
-use crate::mle::{dense::DenseMle, MleIndex, MleRef};
+use crate::mle::{dense::DenseMle, MleIndex};
 use thiserror::Error;
 
 use super::BinaryOperation;

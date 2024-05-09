@@ -10,7 +10,7 @@ use crate::{
     mle::Mle,
 };
 
-use super::{dense::DenseMle, zero::ZeroMleRef, MleIndex, MleRef};
+use super::{dense::DenseMle, zero::ZeroMle, MleIndex};
 
 /// A wrapper type for various kinds of [MleRef]s.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -18,8 +18,8 @@ use super::{dense::DenseMle, zero::ZeroMleRef, MleIndex, MleRef};
 pub enum MleEnum<F: FieldExt> {
     /// A [DenseMle] variant.
     Dense(DenseMle<F>),
-    /// A [ZeroMleRef] variant.
-    Zero(ZeroMleRef<F>),
+    /// A [ZeroMle] variant.
+    Zero(ZeroMle<F>),
 }
 
 impl<F: FieldExt> Mle<F> for MleEnum<F> {
@@ -118,23 +118,23 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
             MleEnum::Zero(item) => item.push_mle_indices(new_indices),
         }
     }
-    
+
     fn num_iterated_vars(&self) -> usize {
         todo!()
     }
-    
+
     fn get_padded_evaluations(&self) -> Vec<F> {
         todo!()
     }
-    
+
     fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>) {
         todo!()
     }
-    
+
     fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>> {
         todo!()
     }
-    
+
     fn layer_id(&self) -> crate::layer::LayerId {
         todo!()
     }

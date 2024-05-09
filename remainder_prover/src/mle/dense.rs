@@ -12,7 +12,7 @@ use itertools::{repeat_n, Itertools};
 
 use serde::{Deserialize, Serialize};
 
-use super::{mle_enum::MleEnum, Mle, MleAble, MleIndex, MleRef};
+use super::{mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     builders::layer_builder::batched::combine_mles,
     claims::{wlx_eval::ClaimMle, Claim},

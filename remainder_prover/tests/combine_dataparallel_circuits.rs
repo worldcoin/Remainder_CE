@@ -12,7 +12,7 @@ use remainder::{
     },
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
+    mle::{dense::DenseMle, Mle, MleIndex},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
@@ -35,8 +35,8 @@ pub mod utils;
 /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 struct DataParallelProductScaledSumCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F,>>,
-    mle_2_vec: Vec<DenseMle<F,>>,
+    mle_1_vec: Vec<DenseMle<F>>,
+    mle_2_vec: Vec<DenseMle<F>>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelProductScaledSumCircuit<F> {
@@ -88,8 +88,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelProductScaledSumCircuit<F> {
 /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 struct DataParallelSumConstantCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F,>>,
-    mle_2_vec: Vec<DenseMle<F,>>,
+    mle_1_vec: Vec<DenseMle<F>>,
+    mle_2_vec: Vec<DenseMle<F>>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelSumConstantCircuit<F> {
@@ -142,8 +142,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelSumConstantCircuit<F> {
 /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 struct DataParallelConstantScaledCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F,>>,
-    mle_2_vec: Vec<DenseMle<F,>>,
+    mle_1_vec: Vec<DenseMle<F>>,
+    mle_2_vec: Vec<DenseMle<F>>,
 }
 
 impl<F: FieldExt> GKRCircuit<F> for DataParallelConstantScaledCircuit<F> {
@@ -195,8 +195,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelConstantScaledCircuit<F> {
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
 struct DataParallelCombinedCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F,>>,
-    mle_2_vec: Vec<DenseMle<F,>>,
+    mle_1_vec: Vec<DenseMle<F>>,
+    mle_2_vec: Vec<DenseMle<F>>,
     num_dataparallel_bits: usize,
 }
 
@@ -286,8 +286,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuit<F> {
 
 impl<F: FieldExt> DataParallelCombinedCircuit<F> {
     fn new(
-        mle_1_vec: Vec<DenseMle<F,>>,
-        mle_2_vec: Vec<DenseMle<F,>>,
+        mle_1_vec: Vec<DenseMle<F>>,
+        mle_2_vec: Vec<DenseMle<F>>,
         num_dataparallel_bits: usize,
     ) -> Self {
         let all_num_vars: Vec<usize> = mle_1_vec

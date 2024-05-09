@@ -5,7 +5,7 @@ use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
 use crate::layer::LayerId;
 use crate::mle::dense::DenseMle;
-use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
+use crate::mle::{zero::ZeroMle, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
 use std::cmp::max;
 
@@ -15,13 +15,13 @@ pub struct ZeroBuilder<F: FieldExt> {
 }
 
 impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
-    type Successor = ZeroMleRef<F>;
+    type Successor = ZeroMle<F>;
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         Expression::mle(self.mle.clone()) - Expression::mle(self.mle.clone())
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let mle_num_vars = self.mle.num_iterated_vars();
-        ZeroMleRef::new(mle_num_vars, prefix_bits, id)
+        ZeroMle::new(mle_num_vars, prefix_bits, id)
     }
 }
 
@@ -33,14 +33,14 @@ impl<F: FieldExt> ZeroBuilder<F> {
 }
 
 /// calculates the difference between two mles
-/// and contrains it to be a `ZeroMleRef`
+/// and contrains it to be a `ZeroMle`
 pub struct EqualityCheck<F: FieldExt> {
     mle_1: DenseMle<F>,
     mle_2: DenseMle<F>,
 }
 
 impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
-    type Successor = ZeroMleRef<F>;
+    type Successor = ZeroMle<F>;
     // the difference between two mles, should be zero valued
     fn build_expression(&self) -> Expression<F, ProverExpr> {
         Expression::mle(self.mle_1.clone()) - Expression::mle(self.mle_2.clone())
@@ -51,7 +51,7 @@ impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
             self.mle_1.num_iterated_vars(),
             self.mle_2.num_iterated_vars(),
         );
-        ZeroMleRef::new(num_vars, prefix_bits, id)
+        ZeroMle::new(num_vars, prefix_bits, id)
     }
 }
 

@@ -9,7 +9,7 @@ use std::fmt::Debug;
 use crate::{
     claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
     layer::{layer_enum::LayerEnum, Layer},
-    mle::{mle_enum::MleEnum, Mle, MleRef},
+    mle::{mle_enum::MleEnum, Mle},
 };
 
 use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};

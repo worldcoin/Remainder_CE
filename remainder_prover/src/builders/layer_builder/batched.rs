@@ -14,8 +14,8 @@ use crate::{
     mle::{
         dense::DenseMle,
         evals::{Evaluations, MultilinearExtension},
-        zero::ZeroMleRef,
-        Mle, MleIndex, MleRef,
+        zero::ZeroMle,
+        Mle, MleIndex,
     },
 };
 use remainder_shared_types::FieldExt;
@@ -87,11 +87,11 @@ impl<F: FieldExt, A: LayerBuilder<F>> LayerBuilder<F> for BatchedLayer<F, A> {
 }
 
 ///Helper function for "unbatching" when required by the output layer
-pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMleRef<F> {
+pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMle<F>>) -> ZeroMle<F> {
     let new_bits = 0;
     let num_vars = mle_refs[0].mle_indices().len();
     let layer_id = mle_refs[0].get_layer_id();
-    ZeroMleRef::new(num_vars + new_bits, None, layer_id)
+    ZeroMle::new(num_vars + new_bits, None, layer_id)
 }
 
 ///Helper function for "unbatching" when required by circuit design
