@@ -22,7 +22,7 @@ use crate::{
         Claim, ClaimError, YieldClaim,
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleRef},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle},
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, Evals},
 };

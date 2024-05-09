@@ -8,11 +8,12 @@ use crate::claims::{ClaimError, YieldClaim};
 use crate::layer::{LayerError, LayerId};
 use remainder_shared_types::FieldExt;
 
-use super::{mle_enum::MleEnum, MleIndex, MleRef};
+use super::Mle;
+use super::{mle_enum::MleEnum, MleIndex};
 
 /// An [MleRef] that contains only zeros; typically used for the output layer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ZeroMleRef<F> {
+pub struct ZeroMle<F> {
     pub(crate) mle_indices: Vec<MleIndex<F>>,
     pub(crate) original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
@@ -23,8 +24,8 @@ pub struct ZeroMleRef<F> {
     indexed: bool,
 }
 
-impl<F: FieldExt> ZeroMleRef<F> {
-    /// Constructs a new `ZeroMleRef` on `num_vars` variables with the
+impl<F: FieldExt> ZeroMle<F> {
+    /// Constructs a new `ZeroMle` on `num_vars` variables with the
     /// appropriate `prefix_bits` for a layer with ID `layer_id`.
     pub fn new(num_vars: usize, prefix_bits: Option<Vec<MleIndex<F>>>, layer_id: LayerId) -> Self {
         let mle_indices = prefix_bits
@@ -44,10 +45,8 @@ impl<F: FieldExt> ZeroMleRef<F> {
     }
 }
 
-impl<F: FieldExt> MleRef for ZeroMleRef<F> {
-    type F = F;
-
-    fn bookkeeping_table(&self) -> &[Self::F] {
+impl<F: FieldExt> Mle<F> for ZeroMle<F> {
+    fn bookkeeping_table(&self) -> &[F] {
         &self.zero
     }
 
@@ -55,15 +54,15 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.indexed
     }
 
-    fn mle_indices(&self) -> &[MleIndex<Self::F>] {
+    fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.mle_indices
     }
 
-    fn original_mle_indices(&self) -> &Vec<MleIndex<Self::F>> {
+    fn original_mle_indices(&self) -> &Vec<MleIndex<F>> {
         &self.original_mle_indices
     }
 
-    fn original_bookkeeping_table(&self) -> &[Self::F] {
+    fn original_bookkeeping_table(&self) -> &[F] {
         &self.zero
     }
 
@@ -75,7 +74,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.num_vars
     }
 
-    fn fix_variable(&mut self, round_index: usize, challenge: Self::F) -> Option<Claim<Self::F>> {
+    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>> {
         for mle_index in self.mle_indices.iter_mut() {
             if *mle_index == MleIndex::IndexedBit(round_index) {
                 mle_index.bind_index(challenge);
@@ -99,11 +98,7 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         }
     }
 
-    fn fix_variable_at_index(
-        &mut self,
-        indexed_bit_index: usize,
-        point: Self::F,
-    ) -> Option<Claim<Self::F>> {
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<Claim<F>> {
         self.fix_variable(indexed_bit_index, point)
     }
 
@@ -123,16 +118,46 @@ impl<F: FieldExt> MleRef for ZeroMleRef<F> {
         self.layer_id
     }
 
-    fn push_mle_indices(&mut self, new_indices: &[MleIndex<Self::F>]) {
+    fn push_mle_indices(&mut self, new_indices: &[MleIndex<F>]) {
         self.mle_indices.append(&mut new_indices.to_vec());
     }
 
-    fn get_enum(self) -> MleEnum<Self::F> {
+    fn get_enum(self) -> MleEnum<F> {
         MleEnum::Zero(self)
+    }
+
+    #[doc = " Returns the number of iterated variables this Mle is defined on."]
+    #[doc = " Equivalently, this is the log_2 of the size of the *whole* bookkeeping"]
+    #[doc = " table."]
+    fn num_iterated_vars(&self) -> usize {
+        todo!()
+    }
+
+    #[doc = " Get the padded set of evaluations over the boolean hypercube; useful for"]
+    #[doc = " constructing the input layer."]
+    fn get_padded_evaluations(&self) -> Vec<F> {
+        todo!()
+    }
+
+    #[doc = " Mutates the MLE in order to set the prefix bits. This is needed when we"]
+    #[doc = " are working with dataparallel circuits and new bits need to be added."]
+    fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>) {
+        todo!()
+    }
+
+    #[doc = " Gets the prefix bits currently stored in the MLE. This is needed when"]
+    #[doc = " prefix bits are generated after combining MLEs."]
+    fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>> {
+        todo!()
+    }
+
+    #[doc = " Get the layer ID of the associated MLE."]
+    fn layer_id(&self) -> LayerId {
+        todo!()
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for ZeroMleRef<F> {
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for ZeroMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));

@@ -9,7 +9,7 @@ use crate::{
         regular_layer::RegularLayer,
         Layer, LayerId,
     },
-    mle::{dense::DenseMle, MleRef},
+    mle::dense::DenseMle,
 };
 
 use crate::mle::Mle;
