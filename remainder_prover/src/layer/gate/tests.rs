@@ -42,7 +42,7 @@ impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let total_num_elems = 1 << self.mle.mle_ref().num_vars();
+        let total_num_elems = 1 << self.mle.num_vars();
 
         (0..total_num_elems).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -50,8 +50,8 @@ impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
 
         let first_layer_output = layers.add_gate(
             nonzero_gates,
-            self.mle.mle_ref(),
-            self.neg_mle.mle_ref(),
+            self.mle.clone(),
+            self.neg_mle.clone(),
             None,
             BinaryOperation::Add,
         );
@@ -102,8 +102,8 @@ impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
 
         let first_layer_output = layers.add_gate(
             nonzero_gates,
-            self.mle.mle_ref(),
-            self.neg_mle.mle_ref(),
+            self.mle.clone(),
+            self.neg_mle.clone(),
             None,
             BinaryOperation::Add,
         );
@@ -156,7 +156,7 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let total_num_elems = 1 << self.mle_1.mle_ref().num_vars();
+        let total_num_elems = 1 << self.mle_1.num_vars();
 
         (0..total_num_elems).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -164,24 +164,24 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
 
         let pos_mul_output = layers.add_gate(
             nonzero_gates.clone(),
-            self.mle_1.mle_ref(),
-            self.mle_2.mle_ref(),
+            self.mle_1.clone(),
+            self.mle_2.clone(),
             None,
             BinaryOperation::Mul,
         );
 
         let neg_mul_output = layers.add_gate(
             nonzero_gates.clone(),
-            self.mle_1.mle_ref(),
-            self.neg_mle_2.mle_ref(),
+            self.mle_1.clone(),
+            self.neg_mle_2.clone(),
             None,
             BinaryOperation::Mul,
         );
 
         let add_gate_layer_output = layers.add_gate(
             nonzero_gates,
-            pos_mul_output.mle_ref(),
-            neg_mul_output.mle_ref(),
+            pos_mul_output,
+            neg_mul_output,
             None,
             BinaryOperation::Add,
         );
@@ -242,8 +242,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let table_size =
-            1 << (self.neg_mle_2_dataparallel.mle_ref().num_vars() - self.num_dataparallel_bits);
+        let table_size = 1 << (self.neg_mle_2_dataparallel.num_vars() - self.num_dataparallel_bits);
 
         (0..table_size).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -251,24 +250,24 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
 
         let neg_mul_output = layers.add_gate(
             nonzero_gates.clone(),
-            self.mle_1_dataparallel.mle_ref(),
-            self.neg_mle_2_dataparallel.mle_ref(),
+            self.mle_1_dataparallel.clone().clone(),
+            self.neg_mle_2_dataparallel.clone().clone(),
             Some(self.num_dataparallel_bits),
             BinaryOperation::Mul,
         );
 
         let pos_mul_output = layers.add_gate(
             nonzero_gates.clone(),
-            self.mle_1_dataparallel.mle_ref(),
-            self.mle_2_dataparallel.mle_ref(),
+            self.mle_1_dataparallel.clone().clone(),
+            self.mle_2_dataparallel.clone().clone(),
             Some(self.num_dataparallel_bits),
             BinaryOperation::Mul,
         );
 
         let add_gate_layer_output = layers.add_gate(
             nonzero_gates,
-            pos_mul_output.mle_ref(),
-            neg_mul_output.mle_ref(),
+            pos_mul_output,
+            neg_mul_output,
             Some(self.num_dataparallel_bits),
             BinaryOperation::Add,
         );
@@ -338,8 +337,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let table_size =
-            1 << (self.neg_mle_dataparallel.mle_ref().num_vars() - self.num_dataparallel_bits);
+        let table_size = 1 << (self.neg_mle_dataparallel.num_vars() - self.num_dataparallel_bits);
 
         (0..table_size).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -347,8 +345,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
 
         let first_layer_output = layers.add_gate(
             nonzero_gates,
-            self.mle_dataparallel.mle_ref(),
-            self.neg_mle_dataparallel.mle_ref(),
+            self.mle_dataparallel.clone(),
+            self.neg_mle_dataparallel.clone(),
             Some(self.num_dataparallel_bits),
             BinaryOperation::Add,
         );
@@ -412,14 +410,14 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
 
         let mut nonzero_gates = vec![];
         // let table_size =
-        //     1 << (self.neg_mle_dataparallel.mle_ref().num_vars() - self.num_dataparallel_bits);
+        //     1 << (self.neg_mle_dataparallel.num_vars() - self.num_dataparallel_bits);
 
         nonzero_gates.push((0, 0, 0));
 
         let first_layer_output = layers.add_gate(
             nonzero_gates,
-            self.mle_dataparallel.mle_ref(),
-            self.neg_mle_dataparallel.mle_ref(),
+            self.mle_dataparallel.clone(),
+            self.neg_mle_dataparallel.clone(),
             Some(self.num_dataparallel_bits),
             BinaryOperation::Add,
         );
@@ -467,8 +465,7 @@ fn test_add_gate_circuit() {
     );
 
     let neg_mle = DenseMle::new_from_iter(
-        mle.mle_ref()
-            .current_mle
+        mle.current_mle
             .get_evals_vector()
             .clone()
             .into_iter()
@@ -494,7 +491,7 @@ fn test_uneven_add_gate_circuit() {
     );
 
     let neg_mle = DenseMle::new_from_raw(
-        vec![mle.mle_ref().bookkeeping_table()[0].neg()],
+        vec![mle.bookkeeping_table()[0].neg()],
         LayerId::Input(0),
         None,
     );
@@ -520,7 +517,6 @@ fn test_dataparallel_add_gate_circuit() {
 
     let neg_mle_dataparallel = DenseMle::new_from_iter(
         mle_dataparallel
-            .mle_ref()
             .current_mle
             .get_evals_vector()
             .clone()
@@ -554,7 +550,6 @@ fn test_dataparallel_uneven_add_gate_circuit() {
 
     let neg_mle_dataparallel = DenseMle::new_from_iter(
         mle_dataparallel
-            .mle_ref()
             .current_mle
             .get_evals_vector()
             .iter()
@@ -594,7 +589,6 @@ fn test_dataparallel_mul_add_gate_circuit() {
 
     let neg_mle_2_dataparallel = DenseMle::new_from_iter(
         mle_2_dataparallel
-            .mle_ref()
             .bookkeeping_table()
             .into_iter()
             .map(|elem| -elem),
@@ -632,11 +626,7 @@ fn test_mul_add_gate_circuit() {
     );
 
     let neg_mle_2 = DenseMle::new_from_iter(
-        mle_2
-            .mle_ref()
-            .bookkeeping_table()
-            .into_iter()
-            .map(|elem| -elem),
+        mle_2.bookkeeping_table().into_iter().map(|elem| -elem),
         LayerId::Input(0),
         None,
     );

@@ -43,7 +43,7 @@ pub mod circuit_mle;
 /// IntoIterator and FromIterator, this is to ensure that the semantic ordering
 /// within T is always consistent.
 #[clonable]
-pub trait Mle<F: FieldExt>: Clone {
+pub trait Mle<F: FieldExt>: Clone + Debug + Send + Sync {
     /// Returns the number of iterated variables this Mle is defined on.
     /// Equivalently, this is the log_2 of the size of the *whole* bookkeeping
     /// table.
@@ -63,6 +63,63 @@ pub trait Mle<F: FieldExt>: Clone {
 
     /// Get the layer ID of the associated MLE.
     fn layer_id(&self) -> LayerId;
+
+    /// below are methods that belonged to MleRef originally
+
+    /// Gets reference to the current bookkeeping tables.
+    fn bookkeeping_table(&self) -> &[F];
+
+    /// Get the indicies of the `Mle` that this `MleRef` represents.
+    fn mle_indices(&self) -> &[MleIndex<F>];
+
+    /// Gets the original, unmutated MLE indices associated with an MLE
+    /// when it was first created (before any variable binding occured).
+    fn original_mle_indices(&self) -> &Vec<MleIndex<F>>;
+
+    /// Gets the original, unmutated MLE bookkeeping table associated with an MLE
+    /// when it was first created (before any variable binding occured).
+    fn original_bookkeeping_table(&self) -> &[F];
+
+    /// Add new indices at the end of an MLE.
+    fn push_mle_indices(&mut self, new_indices: &[MleIndex<F>]);
+
+    /// Number of variables the [Mle] this is a reference to is over.
+    fn num_vars(&self) -> usize;
+
+    /// Number of original variables, not mutated.
+    fn original_num_vars(&self) -> usize;
+
+    /// Fix the variable at `round_index` at a given `challenge` point. Mutates
+    /// `self` to be the bookeeping table for the new MLE.
+    ///
+    /// If the new MLE becomes fully bound, returns the evaluation of the fully
+    /// bound Mle.
+    fn fix_variable(&mut self, round_index: usize, challenge: F) -> Option<Claim<F>>;
+
+    /// Fix the iterated variable at `indexed_bit_index` with a given challenge
+    /// `point`. Mutates `self`` to be the bookeeping table for the new MLE.  If
+    /// the new MLE becomes fully bound, returns the evaluation of the fully
+    /// bound MLE in the form of a [Claim].
+    ///
+    /// # Panics
+    /// If `indexed_bit_index` does not correspond to a
+    /// `MleIndex::Iterated(indexed_bit_index)` in `mle_indices`.
+    fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<Claim<F>>;
+
+    /// Mutates the `MleIndices` that are `Iterated` and turns them into
+    /// `IndexedBit` with the bit index being determined from `curr_index`.
+    /// Returns the `curr_index + number of IndexedBits now in the
+    /// MleIndices`.
+    fn index_mle_indices(&mut self, curr_index: usize) -> usize;
+
+    /// The layer_id of the layer that this MLE belongs to.
+    fn get_layer_id(&self) -> LayerId;
+
+    /// Whether the MLE has been indexed.
+    fn indexed(&self) -> bool;
+
+    /// Get the associated enum that this MLE is a part of ([MleEnum::Dense] or [MleEnum::Zero]).
+    fn get_enum(self) -> MleEnum<F>;
 }
 
 /// `MleRef` keeps track of an [Mle] and the fixed indices of the `Mle` to be

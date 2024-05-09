@@ -19,6 +19,8 @@ use crate::{
     sumcheck::evaluate_at_a_point,
 };
 
+use crate::mle::Mle;
+
 use super::RegularLayer;
 
 impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {

@@ -3,10 +3,10 @@
 //! `Layer`
 
 use crate::mle::{
-    dense::{DenseMle, DenseMleRef},
+    dense::DenseMle,
     evals::{Evaluations, MultilinearExtension},
     mle_enum::MleEnum,
-    MleIndex, MleRef,
+    Mle, MleIndex, MleRef,
 };
 use ark_std::log2;
 use ark_std::{cfg_into_iter, cfg_iter_mut};
@@ -67,13 +67,16 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
     // go through and create mle refs that have original bookkeeping tables, and index them so that they can be fixed later
     let mle_ref_fix = cfg_into_iter!(mle_refs_split).map(|mle_ref| match mle_ref {
         MleEnum::Dense(dense_mle_ref) => {
-            let mut mle_ref_og = DenseMleRef {
+            let mut mle_ref_og = DenseMle {
                 current_mle: dense_mle_ref.original_mle.clone(),
                 original_mle: dense_mle_ref.original_mle.clone(),
                 mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 layer_id: dense_mle_ref.get_layer_id(),
                 indexed: false,
+                mle: dense_mle_ref.mle.clone(),
+                num_iterated_vars: dense_mle_ref.num_vars(),
+                prefix_bits: dense_mle_ref.get_prefix_bits(),
             };
             mle_ref_og.index_mle_indices(0);
             MleEnum::Dense(mle_ref_og)
@@ -153,7 +156,7 @@ pub fn combine_mle_refs_with_aggregate<F: FieldExt>(
 /// Takes the individual bookkeeping tables from the MleRefs within an MLE
 /// and merges them with padding, using a little-endian representation
 /// merge strategy. Assumes that ALL MleRefs are the same size.
-pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMleRef<F>>) -> DenseMle<F,> {
+pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
     let num_fields = items.len();
 
     // --- All the items within should be the same size ---
@@ -229,7 +232,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
     // depending on whether this is a zero mle ref or dense mle ref, construct the first mle_ref in the pair
     let first_mle_ref = {
         match mle_ref.clone() {
-            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
+            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMle {
                 current_mle: dense_mle_ref.current_mle.clone(),
                 original_mle: MultilinearExtension::new(Evaluations::<F>::new(
                     dense_mle_ref.original_num_vars() - 1,
@@ -245,6 +248,9 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                 original_mle_indices: first_og_indices,
                 layer_id: dense_mle_ref.layer_id,
                 indexed: false,
+                mle: dense_mle_ref.mle.clone(),
+                num_iterated_vars: dense_mle_ref.num_vars(),
+                prefix_bits: dense_mle_ref.get_prefix_bits(),
             }),
             MleEnum::Zero(mut zero_mle_ref) => {
                 zero_mle_ref.original_mle_indices = first_og_indices;
@@ -256,7 +262,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
     // second mle ref in the pair
     let second_mle_ref = {
         match mle_ref {
-            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMleRef {
+            MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMle {
                 current_mle: dense_mle_ref.current_mle.clone(),
                 original_mle: MultilinearExtension::new(Evaluations::<F>::new(
                     dense_mle_ref.original_num_vars() - 1,
@@ -269,10 +275,13 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                         .step_by(2)
                         .collect_vec(),
                 )),
-                mle_indices: dense_mle_ref.mle_indices,
+                mle_indices: dense_mle_ref.mle_indices.clone(),
                 original_mle_indices: second_og_indices,
                 layer_id: dense_mle_ref.layer_id,
                 indexed: false,
+                mle: dense_mle_ref.mle.clone(),
+                num_iterated_vars: dense_mle_ref.num_vars(),
+                prefix_bits: dense_mle_ref.get_prefix_bits(),
             }),
             MleEnum::Zero(mut zero_mle_ref) => {
                 zero_mle_ref.original_mle_indices = second_og_indices;
@@ -366,7 +375,7 @@ fn combine_pair<F: FieldExt>(
     mle_ref_second: Option<MleEnum<F>>,
     lsb_idx: usize,
     chal_point: &[F],
-) -> DenseMleRef<F> {
+) -> DenseMle<F> {
     let mle_ref_first_bt = mle_ref_first.bookkeeping_table().to_vec();
 
     // if the second mle ref is None, we assume its bookkeeping table is all zeros. we are dealing with
@@ -416,7 +425,7 @@ fn combine_pair<F: FieldExt>(
         mle_ref_first.num_vars(),
         new_bt.clone(),
     ));
-    let original_mle = MultilinearExtension::new(Evaluations::<F>::new(0, new_bt));
+    let original_mle = MultilinearExtension::new(Evaluations::<F>::new(0, new_bt.clone()));
 
     // construct the dense mle ref that we return. note that even if we are pairing zero mle refs, we just return a dense mle ref here
     //
@@ -424,13 +433,18 @@ fn combine_pair<F: FieldExt>(
     // it is kind of dumb to recompute it because we don't use it anymore. ideally these would be stored somewhere else so we don't
     // have to keep catering to the fields we don't need ?
 
-    DenseMleRef {
-        current_mle,
+    println!("interleaved_mle_indices {:?}", interleaved_mle_indices);
+
+    DenseMle {
+        current_mle: current_mle.clone(),
         original_mle,
         mle_indices: interleaved_mle_indices,
         original_mle_indices: interleaved_mle_indices_og,
         layer_id: mle_ref_first.get_layer_id(),
         indexed: false,
+        mle: new_bt,
+        num_iterated_vars: current_mle.num_vars(),
+        prefix_bits: Some(mle_ref_first.original_mle_indices()[0..lsb_idx].to_vec()),
     }
 }
 

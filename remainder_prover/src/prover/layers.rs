@@ -9,11 +9,10 @@ use crate::{
         regular_layer::RegularLayer,
         Layer, LayerId,
     },
-    mle::{
-        dense::{DenseMle, DenseMleRef},
-        MleRef,
-    },
+    mle::{dense::DenseMle, MleRef},
 };
+
+use crate::mle::Mle;
 
 /// The list of Layers that make up the GKR circuit
 pub struct Layers<F: FieldExt, T: Layer<F>> {
@@ -55,11 +54,11 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
     pub fn add_gate(
         &mut self,
         nonzero_gates: Vec<(usize, usize, usize)>,
-        lhs: DenseMleRef<F>,
-        rhs: DenseMleRef<F>,
+        lhs: DenseMle<F>,
+        rhs: DenseMle<F>,
         num_dataparallel_bits: Option<usize>,
         gate_operation: BinaryOperation,
-    ) -> DenseMle<F,>
+    ) -> DenseMle<F>
     where
         T: From<Gate<F>>,
     {
@@ -104,7 +103,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
                 });
         });
 
-        let res_mle: DenseMle<F,> = DenseMle::new_from_raw(res_table, id, None);
+        let res_mle: DenseMle<F> = DenseMle::new_from_raw(res_table, id, None);
 
         res_mle
     }

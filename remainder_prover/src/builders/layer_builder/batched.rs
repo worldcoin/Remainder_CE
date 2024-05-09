@@ -12,7 +12,7 @@ use crate::{
         prover_expr::ProverExpr,
     },
     mle::{
-        dense::{DenseMle, DenseMleRef},
+        dense::DenseMle,
         evals::{Evaluations, MultilinearExtension},
         zero::ZeroMleRef,
         Mle, MleIndex, MleRef,
@@ -95,7 +95,7 @@ pub fn combine_zero_mle_ref<F: FieldExt>(mle_refs: Vec<ZeroMleRef<F>>) -> ZeroMl
 }
 
 ///Helper function for "unbatching" when required by circuit design
-pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F,>>) -> DenseMle<F,> {
+pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
     let old_layer_id = mles[0].layer_id;
     let new_bits = log2(mles.len()) as usize;
     let old_prefix_bits = mles[0]
@@ -103,13 +103,10 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F,>>) -> DenseMle<F,> {
         .clone()
         .map(|old_prefix_bits| old_prefix_bits[0..old_prefix_bits.len() - new_bits].to_vec());
     DenseMle::new_from_raw(
-        combine_mles(
-            mles.into_iter().map(|mle| mle.mle_ref()).collect_vec(),
-            new_bits,
-        )
-        .current_mle
-        .get_evals_vector()
-        .clone(),
+        combine_mles(mles.into_iter().map(|mle| mle).collect_vec(), new_bits)
+            .current_mle
+            .get_evals_vector()
+            .clone(),
         old_layer_id,
         old_prefix_bits,
     )
@@ -117,9 +114,9 @@ pub fn unbatch_mles<F: FieldExt>(mles: Vec<DenseMle<F,>>) -> DenseMle<F,> {
 
 /// convert a flattened batch mle to a vector of mles
 pub fn unflatten_mle<F: FieldExt>(
-    flattened_mle: DenseMle<F,>,
+    flattened_mle: DenseMle<F>,
     num_dataparallel_bits: usize,
-) -> Vec<DenseMle<F,>> {
+) -> Vec<DenseMle<F>> {
     let num_copies = 1 << num_dataparallel_bits;
     let individual_mle_len = 1 << (flattened_mle.num_iterated_vars() - num_dataparallel_bits);
 
@@ -129,12 +126,12 @@ pub fn unflatten_mle<F: FieldExt>(
             let copy_idx = idx;
             let individual_mle_table = (0..individual_mle_len)
                 .map(|mle_idx| {
-                    let flat_mle_ref = flattened_mle.mle_ref();
+                    let flat_mle_ref = flattened_mle.clone();
 
                     flat_mle_ref.current_mle.f[copy_idx + (mle_idx * num_copies)]
                 })
                 .collect_vec();
-            let individual_mle: DenseMle<F,> = DenseMle::new_from_raw(
+            let individual_mle: DenseMle<F> = DenseMle::new_from_raw(
                 individual_mle_table,
                 flattened_mle.layer_id,
                 Some(
@@ -158,7 +155,7 @@ fn combine_expressions<F: FieldExt>(
 ) -> Result<Expression<F, ProverExpr>, CombineExpressionError> {
     let new_bits = log2(exprs.len());
 
-    let mut new_mle_vec: Vec<Option<DenseMleRef<F>>> = vec![None; exprs[0].num_mle_ref()];
+    let mut new_mle_vec: Vec<Option<DenseMle<F>>> = vec![None; exprs[0].num_mle_ref()];
     let (expression_nodes, mle_vecs): (Vec<_>, Vec<_>) =
         exprs.into_iter().map(|expr| expr.deconstruct()).unzip();
 
@@ -182,7 +179,7 @@ fn combine_expressions<F: FieldExt>(
 fn combine_expressions_helper<F: FieldExt>(
     expression_nodes: Vec<ExpressionNode<F, ProverExpr>>,
     mle_vecs: &Vec<<ProverExpr as ExpressionType<F>>::MleVec>,
-    new_mle_vec: &mut Vec<Option<DenseMleRef<F>>>,
+    new_mle_vec: &mut Vec<Option<DenseMle<F>>>,
     new_bits: usize,
 ) {
     //Check if all expressions have the same structure, and if they do, combine
@@ -211,7 +208,7 @@ fn combine_expressions_helper<F: FieldExt>(
         }
         ExpressionNode::Mle(_) => {
             let mut mle_vec_index = 0;
-            let mles: Vec<DenseMleRef<F>> = expression_nodes
+            let mles: Vec<DenseMle<F>> = expression_nodes
                 .into_iter()
                 .enumerate()
                 .map(|(idx, expr)| {
@@ -250,7 +247,7 @@ fn combine_expressions_helper<F: FieldExt>(
         }
         ExpressionNode::Product(_) => {
             let mut mle_vec_index = vec![];
-            let mles: Vec<Vec<DenseMleRef<F>>> = expression_nodes
+            let mles: Vec<Vec<DenseMle<F>>> = expression_nodes
                 .into_iter()
                 .enumerate()
                 .map(|(idx, expr)| {
@@ -324,8 +321,8 @@ fn combine_expressions_helper<F: FieldExt>(
 }
 
 /// for batching. Taking m DenseMleRefs of size n and turning them into a single
-/// DenseMleRef of size n*m
-pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> DenseMleRef<F> {
+/// DenseMle of size n*m
+pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMle<F>>, new_bits: usize) -> DenseMle<F> {
     let old_indices = mles[0].mle_indices();
     let old_num_vars = mles[0].num_vars();
     let layer_id = mles[0].get_layer_id();
@@ -351,15 +348,18 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMleRef<F>>, new_bits: usize) -> 
         })
         .collect_vec();
 
-    let mle = MultilinearExtension::new(Evaluations::new(old_num_vars + new_bits, out));
+    let mle = MultilinearExtension::new(Evaluations::new(old_num_vars + new_bits, out.clone()));
 
-    DenseMleRef {
+    DenseMle {
         current_mle: mle.clone(),
-        original_mle: mle,
+        original_mle: mle.clone(),
         mle_indices: old_indices.to_vec(),
         original_mle_indices: old_indices.to_vec(),
         layer_id,
         indexed: false,
+        mle: out,
+        num_iterated_vars: mle.num_vars(),
+        prefix_bits: None,
     }
 }
 
@@ -384,21 +384,19 @@ mod tests {
         let mut rng = test_rng();
         let expression_builder =
             |(mle1, mle2): &(DenseMle<Fr>, DenseMle<Fr>)| -> Expression<Fr, ProverExpr> {
-                mle1.mle_ref().expression() + mle2.mle_ref().expression()
+                mle1.clone().expression() + mle2.clone().expression()
             };
-        let layer_builder = |(mle1, mle2): &(DenseMle<Fr>, DenseMle<Fr>),
-                             layer_id,
-                             prefix_bits|
-         -> DenseMle<Fr> {
-            DenseMle::new_from_iter(
-                mle1.clone()
-                    .into_iter()
-                    .zip(mle2.clone().into_iter())
-                    .map(|(first, second)| first + second),
-                layer_id,
-                prefix_bits,
-            )
-        };
+        let layer_builder =
+            |(mle1, mle2): &(DenseMle<Fr>, DenseMle<Fr>), layer_id, prefix_bits| -> DenseMle<Fr> {
+                DenseMle::new_from_iter(
+                    mle1.clone()
+                        .into_iter()
+                        .zip(mle2.clone().into_iter())
+                        .map(|(first, second)| first + second),
+                    layer_id,
+                    prefix_bits,
+                )
+            };
         let output: (DenseMle<Fr>, DenseMle<Fr>) = {
             let first = DenseMle::new_from_raw(
                 vec![Fr::from(3), Fr::from(7), Fr::from(8), Fr::from(10)],
@@ -445,7 +443,7 @@ mod tests {
             None,
         );
 
-        let layer_claims = get_dummy_claim(output_real.mle_ref(), &mut rng, None);
+        let layer_claims = get_dummy_claim(output_real, &mut rng, None);
 
         let sumcheck = dummy_sumcheck(&mut expr, &mut rng, layer_claims.clone());
         verify_sumcheck_messages(sumcheck, expr, layer_claims, &mut rng).unwrap();

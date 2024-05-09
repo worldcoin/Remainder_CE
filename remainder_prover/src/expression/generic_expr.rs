@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// lift cycle of an expression
 pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
     /// What the expression is over
-    /// for prover expression, it's over DenseMleRef
+    /// for prover expression, it's over DenseMle
     /// for verifier expression, it's over Vec<F>
     /// for abstract expression, it's over [TBD]
     type MLENodeRepr: Clone + Serialize + for<'de> Deserialize<'de>; // either index or F
@@ -14,7 +14,7 @@ pub trait ExpressionType<F: FieldExt>: Serialize + for<'de> Deserialize<'de> {
     /// MleRefs is the optional data array of mle_refs
     /// that can be indexed into by the MleRefIndex defind in the ProverExpr
     /// -- this is either unit type for VerifierExpr or
-    /// -- Vec<DenseMleRef> for ProverExpr
+    /// -- Vec<DenseMle> for ProverExpr
     type MleVec: Serialize + for<'de> Deserialize<'de>;
 }
 
@@ -31,7 +31,7 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
         Box<ExpressionNode<F, E>>,
     ),
     /// This is an MLE node, its repr could be
-    /// for prover: MleVecIndex (which index into a vec of DenseMleRef), or
+    /// for prover: MleVecIndex (which index into a vec of DenseMle), or
     /// for verifier: a constant field element
     Mle(E::MLENodeRepr),
     /// This is a negated expression node
@@ -39,7 +39,7 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
     /// This is the sum of two expression nodes
     Sum(Box<ExpressionNode<F, E>>, Box<ExpressionNode<F, E>>),
     /// This is the product of some MLE nodes, their repr could be
-    /// for prover: a vec of MleVecIndex's (which index into a Vec of DenseMleRef), or
+    /// for prover: a vec of MleVecIndex's (which index into a Vec of DenseMle), or
     /// for verifier: a vec of constant field element
     Product(Vec<E::MLENodeRepr>),
     /// This is a scaled expression node

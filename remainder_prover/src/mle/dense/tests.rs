@@ -11,7 +11,7 @@ fn fix_variable_twovars() {
     let _layer_claims = (vec![Fr::from(3), Fr::from(4)], Fr::one());
     let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.fix_variable(1, Fr::from(1));
 
     let mle_vec_exp = vec![Fr::from(2), Fr::from(3)];
@@ -33,7 +33,7 @@ fn fix_variable_threevars() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.fix_variable(1, Fr::from(3));
 
     let mle_vec_exp = vec![Fr::from(6), Fr::from(6), Fr::from(9), Fr::from(10)];
@@ -56,7 +56,7 @@ fn fix_variable_nested() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.fix_variable(1, Fr::from(3));
     mle_ref.fix_variable(2, Fr::from(2));
 
@@ -80,7 +80,7 @@ fn fix_variable_full() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     let _ = mle_ref.index_mle_indices(0);
     mle_ref.fix_variable(0, Fr::from(3));
     mle_ref.fix_variable(1, Fr::from(2));
@@ -98,7 +98,7 @@ fn fix_variable_full() {
 fn smart_fix_variable_two_vars_forward() {
     let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.index_mle_indices(0);
 
     // Fix 1st variable to 1.
@@ -122,7 +122,7 @@ fn smart_fix_variable_two_vars_forward() {
 fn smart_fix_variable_two_vars_backwards() {
     let mle_vec = vec![Fr::from(5), Fr::from(2), Fr::from(1), Fr::from(3)];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.index_mle_indices(0);
 
     // Fix 2nd variable to 1.
@@ -156,7 +156,7 @@ fn smart_fix_variable_three_vars_123() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.index_mle_indices(0);
 
     // Fix 1st variable to 3.
@@ -198,7 +198,7 @@ fn smart_fix_variable_three_vars_132() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.index_mle_indices(0);
 
     // Fix 1st variable to 3.
@@ -240,7 +240,7 @@ fn smart_fix_variable_three_vars_213() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.index_mle_indices(0);
 
     // Fix 2nd variable to 4.
@@ -282,7 +282,7 @@ fn smart_fix_variable_three_vars_231() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.index_mle_indices(0);
 
     // Fix 2nd variable to 4.
@@ -324,7 +324,7 @@ fn smart_fix_variable_three_vars_312() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.index_mle_indices(0);
 
     // Fix 3rd variable to 5.
@@ -366,7 +366,7 @@ fn smart_fix_variable_three_vars_321() {
         Fr::from(4),
     ];
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
-    let mut mle_ref = mle.mle_ref();
+    let mut mle_ref = mle;
     mle_ref.index_mle_indices(0);
 
     // Fix 3rd variable to 5.
@@ -461,7 +461,7 @@ fn create_dense_mle_ref_from_flat_mle() {
 
     let mle: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec.clone(), LayerId::Input(0), None);
 
-    let mle_ref: DenseMleRef<Fr> = mle.mle_ref();
+    let mle_ref: DenseMle<Fr> = mle;
 
     assert!(
         mle_ref.mle_indices == vec![MleIndex::Iterated, MleIndex::Iterated, MleIndex::Iterated]

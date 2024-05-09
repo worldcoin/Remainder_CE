@@ -9,7 +9,7 @@ use crate::mle::{zero::ZeroMleRef, Mle, MleIndex};
 use remainder_shared_types::FieldExt;
 use std::cmp::max;
 
-/// takes a DenseMleRef and subtracts it from itself to get all zeroes.
+/// takes a DenseMle and subtracts it from itself to get all zeroes.
 pub struct ZeroBuilder<F: FieldExt> {
     mle: DenseMle<F>,
 }
@@ -17,7 +17,7 @@ pub struct ZeroBuilder<F: FieldExt> {
 impl<F: FieldExt> LayerBuilder<F> for ZeroBuilder<F> {
     type Successor = ZeroMleRef<F>;
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.mle.mle_ref()) - Expression::mle(self.mle.mle_ref())
+        Expression::mle(self.mle.clone()) - Expression::mle(self.mle.clone())
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let mle_num_vars = self.mle.num_iterated_vars();
@@ -43,7 +43,7 @@ impl<F: FieldExt> LayerBuilder<F> for EqualityCheck<F> {
     type Successor = ZeroMleRef<F>;
     // the difference between two mles, should be zero valued
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.mle_1.mle_ref()) - Expression::mle(self.mle_2.mle_ref())
+        Expression::mle(self.mle_1.clone()) - Expression::mle(self.mle_2.clone())
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {

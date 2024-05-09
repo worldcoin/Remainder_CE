@@ -69,7 +69,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
         let layer_1 = from_mle(
             (self.mle.clone(), random_mle),
-            |(mle, random)| Expression::products(vec![mle.mle_ref(), random.mle_ref()]),
+            |(mle, random)| Expression::products(vec![mle.clone(), random.clone()]),
             |(mle, random), layer_id, prefix_bits| {
                 DenseMle::new_from_iter(
                     mle.clone()
@@ -123,7 +123,7 @@ impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, crate::expression::prover_expr::ProverExpr> {
-        self.mle_1.mle_ref().expression() + self.mle_2.mle_ref().expression()
+        self.mle_1.clone().expression() + self.mle_2.clone().expression()
     }
 
     fn next_layer(
@@ -131,8 +131,8 @@ impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
         id: LayerId,
         prefix_bits: Option<Vec<crate::mle::MleIndex<F>>>,
     ) -> Self::Successor {
-        let mle_1_mle_ref = self.mle_1.mle_ref();
-        let mle_2_mle_ref = self.mle_2.mle_ref();
+        let mle_1_mle_ref = self.mle_1.clone();
+        let mle_2_mle_ref = self.mle_2.clone();
         let result_num_elems = max(
             1 << self.mle_1.num_iterated_vars(),
             1 << self.mle_2.num_iterated_vars(),

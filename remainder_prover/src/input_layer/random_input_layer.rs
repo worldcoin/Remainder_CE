@@ -12,6 +12,7 @@ use crate::{
 };
 
 use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError};
+use crate::mle::Mle;
 
 /// Represents a random input layer, where we generate random constants in the
 /// form of coefficients of an MLE that we can use for packing constants.
@@ -74,8 +75,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         claim: Claim<F>,
         _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
-        let mut mle_ref =
-            DenseMle::<F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
+        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None);
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_vars() != 0 {

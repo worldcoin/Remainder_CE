@@ -22,7 +22,7 @@ fn test_get_claim() {
         LayerId::Input(0),
         None,
     );
-    let expression3 = Expression::mle(mle.mle_ref());
+    let expression3 = Expression::mle(mle);
     let expression = expression1.clone() + expression3.clone();
     let expression = expression1 - expression;
     let expression = expression * Fr::from(2);
@@ -59,7 +59,7 @@ fn layer_from_evals(mle_evals: Vec<Fr>) -> RegularLayer<Fr> {
 
     let layer = from_mle(
         mle,
-        |mle| mle.mle_ref().expression(),
+        |mle| mle.clone().expression(),
         |_, _, _| unimplemented!(),
     );
 
@@ -225,15 +225,15 @@ fn test_aggro_claim_4() {
         LayerId::Input(0),
         Some(vec![MleIndex::Fixed(true)]),
     );
-    let mle_ref = mle1.mle_ref();
-    let mle_ref2 = mle2.mle_ref();
+    let mle_ref = mle1.clone();
+    let mle_ref2 = mle2.clone();
 
     let expr = Expression::products(vec![mle_ref, mle_ref2]);
     let mut expr_copy = expr.clone();
 
     let layer = from_mle(
         (mle1, mle2),
-        |mle| Expression::products(vec![mle.0.mle_ref(), mle.1.mle_ref()]),
+        |mle| Expression::products(vec![mle.clone().0, mle.clone().1]),
         |_, _, _| unimplemented!(),
     );
     let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
@@ -281,13 +281,13 @@ fn test_aggro_claim_negative_1() {
         Fr::from(rng.gen::<u64>()),
     ];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
-    let mle_ref = mle1.mle_ref();
+    let mle_ref = mle1.clone();
     let expr = Expression::mle(mle_ref);
     let mut expr_copy = expr.clone();
 
     let layer = from_mle(
         mle1,
-        |mle| mle.mle_ref().expression(),
+        |mle| mle.clone().expression(),
         |_, _, _| unimplemented!(),
     );
     let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
@@ -335,13 +335,13 @@ fn test_aggro_claim_negative_2() {
         Fr::from(rng.gen::<u64>()),
     ];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
-    let mle_ref = mle1.mle_ref();
+    let mle_ref = mle1.clone();
     let expr = Expression::mle(mle_ref);
     let mut expr_copy = expr.clone();
 
     let layer = from_mle(
         mle1,
-        |mle| mle.mle_ref().expression(),
+        |mle| mle.clone().expression(),
         |_, _, _| unimplemented!(),
     );
     let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));

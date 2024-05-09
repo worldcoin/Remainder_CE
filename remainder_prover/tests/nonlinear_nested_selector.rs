@@ -33,24 +33,24 @@ pub mod utils;
 /// * `right_sum_mle_1`, `right_sum_mle_2` - MLEs with arbitrary bookkeeping table values, same size,
 /// one more variable than `right_outer_sel_mle`.
 struct NonlinearNestedSelectorBuilder<F: FieldExt> {
-    left_inner_sel_mle: DenseMle<F,>,
-    right_inner_sel_mle: DenseMle<F,>,
-    right_outer_sel_mle: DenseMle<F,>,
-    right_sum_mle_1: DenseMle<F,>,
-    right_sum_mle_2: DenseMle<F,>,
+    left_inner_sel_mle: DenseMle<F>,
+    right_inner_sel_mle: DenseMle<F>,
+    right_outer_sel_mle: DenseMle<F>,
+    right_sum_mle_1: DenseMle<F>,
+    right_sum_mle_2: DenseMle<F>,
 }
 impl<F: FieldExt> LayerBuilder<F> for NonlinearNestedSelectorBuilder<F> {
-    type Successor = DenseMle<F,>;
+    type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let left_inner_sel_side = Expression::mle(self.left_inner_sel_mle.mle_ref());
-        let right_inner_sel_side = Expression::mle(self.right_inner_sel_mle.mle_ref());
+        let left_inner_sel_side = Expression::mle(self.left_inner_sel_mle.clone());
+        let right_inner_sel_side = Expression::mle(self.right_inner_sel_mle.clone());
         let left_outer_sel_side = right_inner_sel_side.concat_expr(left_inner_sel_side);
         let left_sum_side =
-            Expression::mle(self.right_outer_sel_mle.mle_ref()).concat_expr(left_outer_sel_side);
+            Expression::mle(self.right_outer_sel_mle.clone()).concat_expr(left_outer_sel_side);
         let right_sum_side = Expression::products(vec![
-            self.right_sum_mle_1.mle_ref(),
-            self.right_sum_mle_2.mle_ref(),
+            self.right_sum_mle_1.clone(),
+            self.right_sum_mle_2.clone(),
         ]);
         left_sum_side + right_sum_side
     }
@@ -84,27 +84,24 @@ impl<F: FieldExt> LayerBuilder<F> for NonlinearNestedSelectorBuilder<F> {
 }
 impl<F: FieldExt> NonlinearNestedSelectorBuilder<F> {
     fn new(
-        left_inner_sel_mle: DenseMle<F,>,
-        right_inner_sel_mle: DenseMle<F,>,
-        right_outer_sel_mle: DenseMle<F,>,
-        right_sum_mle_1: DenseMle<F,>,
-        right_sum_mle_2: DenseMle<F,>,
+        left_inner_sel_mle: DenseMle<F>,
+        right_inner_sel_mle: DenseMle<F>,
+        right_outer_sel_mle: DenseMle<F>,
+        right_sum_mle_1: DenseMle<F>,
+        right_sum_mle_2: DenseMle<F>,
     ) -> Self {
+        assert_eq!(right_sum_mle_1.num_vars(), right_sum_mle_2.num_vars());
         assert_eq!(
-            right_sum_mle_1.mle_ref().num_vars(),
-            right_sum_mle_2.mle_ref().num_vars()
+            left_inner_sel_mle.num_vars(),
+            right_inner_sel_mle.num_vars()
         );
         assert_eq!(
-            left_inner_sel_mle.mle_ref().num_vars(),
-            right_inner_sel_mle.mle_ref().num_vars()
+            left_inner_sel_mle.num_vars(),
+            right_outer_sel_mle.num_vars() - 1
         );
         assert_eq!(
-            left_inner_sel_mle.mle_ref().num_vars(),
-            right_outer_sel_mle.mle_ref().num_vars() - 1
-        );
-        assert_eq!(
-            right_outer_sel_mle.mle_ref().num_vars(),
-            right_sum_mle_1.mle_ref().num_vars() - 1
+            right_outer_sel_mle.num_vars(),
+            right_sum_mle_1.num_vars() - 1
         );
         Self {
             left_inner_sel_mle,
@@ -125,11 +122,11 @@ impl<F: FieldExt> NonlinearNestedSelectorBuilder<F> {
 /// ## Arguments
 /// See [NonlinearNestedSelectorBuilder].
 struct NonlinearNestedSelectorCircuit<F: FieldExt> {
-    left_inner_sel_mle: DenseMle<F,>,
-    right_inner_sel_mle: DenseMle<F,>,
-    right_outer_sel_mle: DenseMle<F,>,
-    right_sum_mle_1: DenseMle<F,>,
-    right_sum_mle_2: DenseMle<F,>,
+    left_inner_sel_mle: DenseMle<F>,
+    right_inner_sel_mle: DenseMle<F>,
+    right_outer_sel_mle: DenseMle<F>,
+    right_sum_mle_1: DenseMle<F>,
+    right_sum_mle_2: DenseMle<F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for NonlinearNestedSelectorCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -170,11 +167,11 @@ impl<F: FieldExt> GKRCircuit<F> for NonlinearNestedSelectorCircuit<F> {
 
 impl<F: FieldExt> NonlinearNestedSelectorCircuit<F> {
     fn new(
-        left_inner_sel_mle: DenseMle<F,>,
-        right_inner_sel_mle: DenseMle<F,>,
-        right_outer_sel_mle: DenseMle<F,>,
-        right_sum_mle_1: DenseMle<F,>,
-        right_sum_mle_2: DenseMle<F,>,
+        left_inner_sel_mle: DenseMle<F>,
+        right_inner_sel_mle: DenseMle<F>,
+        right_outer_sel_mle: DenseMle<F>,
+        right_sum_mle_1: DenseMle<F>,
+        right_sum_mle_2: DenseMle<F>,
     ) -> Self {
         assert_eq!(
             left_inner_sel_mle.num_iterated_vars(),

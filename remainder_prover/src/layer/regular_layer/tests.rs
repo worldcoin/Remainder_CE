@@ -22,8 +22,8 @@ fn regular_layer_test_prove_verify() {
     let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
     let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
 
-    let mle_ref_1 = mle_new.mle_ref();
-    let mle_ref_2 = mle_2.mle_ref();
+    let mle_ref_1 = mle_new;
+    let mle_ref_2 = mle_2;
 
     let expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
