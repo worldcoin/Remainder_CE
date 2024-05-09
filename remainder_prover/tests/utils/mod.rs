@@ -73,16 +73,17 @@ impl<F: FieldExt> LayerBuilder<F> for TripleNestedSelectorBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let inner_inner_sel_bt = self
             .inner_inner_sel_mle
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
             .flat_map(|elem| vec![*elem, *elem * elem]);
 
         let inner_sel_bt = inner_inner_sel_bt
-            .zip(self.inner_sel_mle.mle.iter())
+            .zip(self.inner_sel_mle.current_mle.get_evals_vector().iter())
             .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2]);
 
         let final_bt = inner_sel_bt
-            .zip(self.outer_sel_mle.mle.iter())
+            .zip(self.outer_sel_mle.current_mle.get_evals_vector().iter())
             .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2])
             .collect_vec();
 
@@ -125,12 +126,18 @@ impl<F: FieldExt> LayerBuilder<F> for ProductScaledBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let prod_bt = self
             .mle_1
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.mle_2.mle.iter())
+            .zip(self.mle_2.current_mle.get_evals_vector().iter())
             .map(|(elem_1, elem_2)| *elem_1 * elem_2);
 
-        let scaled_bt = self.mle_1.mle.iter().map(|elem| F::from(10_u64) * elem);
+        let scaled_bt = self
+            .mle_1
+            .current_mle
+            .get_evals_vector()
+            .iter()
+            .map(|elem| F::from(10_u64) * elem);
 
         let final_bt = prod_bt
             .zip(scaled_bt)
@@ -168,16 +175,18 @@ impl<F: FieldExt> LayerBuilder<F> for ProductSumBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let prod_bt = self
             .mle_1
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.mle_2.mle.iter())
+            .zip(self.mle_2.current_mle.get_evals_vector().iter())
             .map(|(elem_1, elem_2)| *elem_1 * elem_2);
 
         let sum_bt = self
             .mle_1
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.mle_2.mle.iter())
+            .zip(self.mle_2.current_mle.get_evals_vector().iter())
             .map(|(elem_1, elem_2)| *elem_1 + elem_2);
 
         let final_bt = prod_bt
@@ -215,9 +224,19 @@ impl<F: FieldExt> LayerBuilder<F> for ConstantScaledSumBuilder<F> {
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
-        let constant_bt = self.mle_1.mle.iter().map(|elem| *elem + F::from(10_u64));
+        let constant_bt = self
+            .mle_1
+            .current_mle
+            .get_evals_vector()
+            .iter()
+            .map(|elem| *elem + F::from(10_u64));
 
-        let scaled_bt = self.mle_2.mle.iter().map(|elem| F::from(10_u64) * elem);
+        let scaled_bt = self
+            .mle_2
+            .current_mle
+            .get_evals_vector()
+            .iter()
+            .map(|elem| F::from(10_u64) * elem);
 
         let final_bt = constant_bt
             .zip(scaled_bt)

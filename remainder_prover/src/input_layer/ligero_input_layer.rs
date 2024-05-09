@@ -27,7 +27,7 @@ use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLay
 /// commitment scheme.
 pub struct LigeroInputLayer<F: FieldExt> {
     /// The MLE which we wish to commit to.
-    pub mle: DenseMle<F,>,
+    pub mle: DenseMle<F>,
     /// The ID corresponding to this layer.
     pub(crate) layer_id: LayerId,
     /// The Ligero commitment to `mle`.
@@ -71,10 +71,16 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             return Ok(root.clone());
         }
 
-        let (_, _comm, _root, _aux) =
-            remainder_ligero_commit(&self.mle.mle, self.rho_inv.unwrap(), self.ratio.unwrap());
-        let (_, comm, root, aux) =
-            remainder_ligero_commit(&self.mle.mle, self.rho_inv.unwrap(), self.ratio.unwrap());
+        let (_, _comm, _root, _aux) = remainder_ligero_commit(
+            self.mle.current_mle.get_evals_vector(),
+            self.rho_inv.unwrap(),
+            self.ratio.unwrap(),
+        );
+        let (_, comm, root, aux) = remainder_ligero_commit(
+            self.mle.current_mle.get_evals_vector(),
+            self.rho_inv.unwrap(),
+            self.ratio.unwrap(),
+        );
 
         self.comm = Some(comm);
         self.aux = Some(aux);
@@ -125,7 +131,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             .ok_or(InputLayerError::OpeningBeforeCommitment)?;
 
         let ligero_eval_proof: LigeroProof<F> = remainder_ligero_eval_prove(
-            &self.mle.mle,
+            self.mle.current_mle.get_evals_vector(),
             claim.get_point(),
             transcript_writer,
             aux.clone(),
@@ -164,13 +170,13 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         &self.layer_id
     }
 
-    fn get_padded_mle(&self) -> DenseMle<F,> {
+    fn get_padded_mle(&self) -> DenseMle<F> {
         self.mle.clone()
     }
 }
 
 impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
-    fn new(mle: DenseMle<F,>, layer_id: LayerId) -> Self {
+    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self {
         Self {
             mle,
             layer_id,
@@ -187,7 +193,7 @@ impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
 impl<F: FieldExt> LigeroInputLayer<F> {
     /// Creates new Ligero input layer WITH a precomputed Ligero commitment
     pub fn new_with_ligero_commitment(
-        mle: DenseMle<F,>,
+        mle: DenseMle<F>,
         layer_id: LayerId,
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
         ligero_aux: LcProofAuxiliaryInfo,
@@ -208,7 +214,7 @@ impl<F: FieldExt> LigeroInputLayer<F> {
 
     /// Creates new Ligero input layer with specified rho inverse
     pub fn new_with_rho_inv_ratio(
-        mle: DenseMle<F,>,
+        mle: DenseMle<F>,
         layer_id: LayerId,
         rho_inv: u8,
         ratio: f64,

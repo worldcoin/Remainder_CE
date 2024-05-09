@@ -57,21 +57,33 @@ impl<F: FieldExt> LayerBuilder<F> for NonlinearNestedSelectorBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let right_side_product_bt: Vec<F> = self
             .right_sum_mle_1
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.right_sum_mle_2.mle.iter())
+            .zip(self.right_sum_mle_2.current_mle.get_evals_vector().iter())
             .map(|(elem_1, elem_2)| *elem_1 * elem_2)
             .collect();
         let left_side_inner_concat_bt: Vec<F> = self
             .left_inner_sel_mle
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.right_inner_sel_mle.mle.iter())
+            .zip(
+                self.right_inner_sel_mle
+                    .current_mle
+                    .get_evals_vector()
+                    .iter(),
+            )
             .flat_map(|(elem_1, elem_2)| vec![*elem_1, *elem_2])
             .collect();
         let left_side_bt: Vec<F> = left_side_inner_concat_bt
             .iter()
-            .zip(self.right_outer_sel_mle.mle.iter())
+            .zip(
+                self.right_outer_sel_mle
+                    .current_mle
+                    .get_evals_vector()
+                    .iter(),
+            )
             .flat_map(|(elem_1, elem_2)| vec![*elem_1, *elem_2])
             .collect();
         let sum_bt: Vec<F> = left_side_bt

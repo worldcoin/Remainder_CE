@@ -42,14 +42,16 @@ impl<F: FieldExt> LayerBuilder<F> for LastBitLinearBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let sel_bt = self
             .sel_mle
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.sel_mle.mle.iter())
+            .zip(self.sel_mle.current_mle.get_evals_vector().iter())
             .flat_map(|(elem_1, elem_2)| vec![elem_1, elem_2]);
 
         let mut prod_bt = self
             .prod_mle
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
             .map(|elem| *elem * elem)
             .collect_vec();
@@ -91,9 +93,10 @@ impl<F: FieldExt> LayerBuilder<F> for FirstBitLinearBuilder<F> {
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let final_bt = self
             .sel_mle
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.sel_mle.mle.iter())
+            .zip(self.sel_mle.current_mle.get_evals_vector().iter())
             .flat_map(|(elem_1, elem_2)| vec![*elem_1 * elem_1, *elem_2])
             .collect_vec();
 

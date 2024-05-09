@@ -311,7 +311,7 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         let rho_inv = 4;
         let ratio = 1_f64;
         let (_, ligero_comm, ligero_root, ligero_aux) =
-            remainder_ligero_commit(&self.mle.mle, rho_inv, ratio);
+            remainder_ligero_commit(self.mle.current_mle.get_evals_vector(), rho_inv, ratio);
         let precommitted_input_layer: LigeroInputLayer<F> = precommitted_input_layer_builder
             .to_input_layer_with_precommit(ligero_comm, ligero_aux, ligero_root, true);
         let live_committed_input_layer: LigeroInputLayer<F> =

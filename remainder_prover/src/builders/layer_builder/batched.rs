@@ -357,7 +357,6 @@ pub fn combine_mles<F: FieldExt>(mles: Vec<DenseMle<F>>, new_bits: usize) -> Den
         original_mle_indices: old_indices.to_vec(),
         layer_id,
         indexed: false,
-        mle: out,
         num_iterated_vars: mle.num_vars(),
         prefix_bits: None,
     }

@@ -29,7 +29,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     /// Because this is a public input layer, we do not need to commit to the MLE and the
     /// "commitment" is just the MLE itself.
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        Ok(self.mle.mle.clone())
+        Ok(self.mle.current_mle.get_evals_vector().clone())
     }
 
     /// Append the commitment to the Fiat-Shamir transcript.
