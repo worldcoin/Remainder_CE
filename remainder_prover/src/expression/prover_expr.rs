@@ -658,11 +658,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
-                if !mle_ref.indexed() {
-                    mle_ref.index_mle_indices(curr_index)
-                } else {
-                    0
-                } // if it's already indexed, then return 0 (the max number of indexed bit will get propogated up)
+                mle_ref.index_mle_indices(curr_index)
             }
             ExpressionNode::Sum(a, b) => {
                 let a_bits = a.index_mle_indices_node(curr_index, mle_vec);
@@ -673,11 +669,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 .iter_mut()
                 .map(|mle_vec_index| {
                     let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
-                    if !mle_ref.indexed() {
-                        mle_ref.index_mle_indices(curr_index)
-                    } else {
-                        0
-                    }
+                    mle_ref.index_mle_indices(curr_index)
                 })
                 .reduce(max)
                 .unwrap_or(curr_index),

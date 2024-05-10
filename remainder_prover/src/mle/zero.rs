@@ -50,10 +50,6 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
         &self.zero
     }
 
-    fn indexed(&self) -> bool {
-        self.indexed
-    }
-
     fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.mle_indices
     }
