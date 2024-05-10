@@ -53,11 +53,6 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
     independent_variable: bool,
     degree: usize,
 ) -> Result<Evals<F>, MleError> {
-    for mle_ref in mle_refs {
-        if !mle_ref.indexed() {
-            return Err(MleError::NotIndexedError);
-        }
-    }
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
@@ -370,10 +365,6 @@ pub fn libra_giraffe<F: FieldExt>(
         BinaryOperation::Add => 2,
         BinaryOperation::Mul => 3,
     };
-
-    if !beta_g2.indexed() {
-        return Err(GateError::BetaTableNotIndexed);
-    }
 
     // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`.
     let eval_count = degree + 1;

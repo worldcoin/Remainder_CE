@@ -115,9 +115,6 @@ pub trait Mle<F: FieldExt>: Clone + Debug + Send + Sync {
     /// The layer_id of the layer that this MLE belongs to.
     fn get_layer_id(&self) -> LayerId;
 
-    /// Whether the MLE has been indexed.
-    fn indexed(&self) -> bool;
-
     /// Get the associated enum that this MLE is a part of ([MleEnum::Dense] or [MleEnum::Zero]).
     fn get_enum(self) -> MleEnum<F>;
 }

@@ -73,7 +73,6 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
                 mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 layer_id: dense_mle_ref.get_layer_id(),
-                indexed: false,
                 num_iterated_vars: dense_mle_ref.num_vars(),
                 prefix_bits: dense_mle_ref.get_prefix_bits(),
             };
@@ -246,7 +245,6 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                 mle_indices: dense_mle_ref.mle_indices.clone(),
                 original_mle_indices: first_og_indices,
                 layer_id: dense_mle_ref.layer_id,
-                indexed: false,
                 num_iterated_vars: dense_mle_ref.num_vars(),
                 prefix_bits: dense_mle_ref.get_prefix_bits(),
             }),
@@ -276,7 +274,6 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                 mle_indices: dense_mle_ref.mle_indices.clone(),
                 original_mle_indices: second_og_indices,
                 layer_id: dense_mle_ref.layer_id,
-                indexed: false,
                 num_iterated_vars: dense_mle_ref.num_vars(),
                 prefix_bits: dense_mle_ref.get_prefix_bits(),
             }),
@@ -438,7 +435,6 @@ fn combine_pair<F: FieldExt>(
         mle_indices: interleaved_mle_indices,
         original_mle_indices: interleaved_mle_indices_og,
         layer_id: mle_ref_first.get_layer_id(),
-        indexed: false,
         num_iterated_vars: current_mle.num_vars(),
         prefix_bits: Some(mle_ref_first.original_mle_indices()[0..lsb_idx].to_vec()),
     }

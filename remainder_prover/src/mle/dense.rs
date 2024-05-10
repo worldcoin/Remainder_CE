@@ -54,8 +54,6 @@ pub struct DenseMle<F> {
     pub original_mle: MultilinearExtension<F>,
     /// The original mle indices (not modified during fix var)
     pub original_mle_indices: Vec<MleIndex<F>>,
-    /// A marker that keeps track of if this MleRef is indexed.
-    pub indexed: bool,
 }
 
 impl<F: FieldExt> Mle<F> for DenseMle<F> {
@@ -114,10 +112,6 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
 
     fn original_num_vars(&self) -> usize {
         self.original_mle.num_vars()
-    }
-
-    fn indexed(&self) -> bool {
-        self.indexed
     }
 
     fn fix_variable_at_index(&mut self, indexed_bit_index: usize, point: F) -> Option<Claim<F>> {
@@ -211,7 +205,6 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
             }
         }
 
-        self.indexed = true;
         curr_index + new_indices
     }
 
@@ -289,7 +282,6 @@ impl<F: FieldExt> DenseMle<F> {
             mle_indices: mle_indices.clone(),
             original_mle: current_mle,
             original_mle_indices: mle_indices,
-            indexed: false,
         }
     }
 
@@ -329,7 +321,6 @@ impl<F: FieldExt> DenseMle<F> {
             mle_indices: mle_indices.clone(),
             original_mle: current_mle,
             original_mle_indices: mle_indices,
-            indexed: false,
         }
     }
 

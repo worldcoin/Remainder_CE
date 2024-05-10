@@ -101,13 +101,6 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn indexed(&self) -> bool {
-        match self {
-            MleEnum::Dense(item) => item.indexed(),
-            MleEnum::Zero(item) => item.indexed(),
-        }
-    }
-
     fn get_enum(self) -> MleEnum<F> {
         self
     }
