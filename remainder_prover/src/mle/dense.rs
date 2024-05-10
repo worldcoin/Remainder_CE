@@ -29,9 +29,6 @@ use remainder_shared_types::FieldExt;
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DenseMle<F> {
-    /// Number of iterated variables.
-    pub num_iterated_vars: usize,
-
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,
 
@@ -58,7 +55,7 @@ pub struct DenseMle<F> {
 
 impl<F: FieldExt> Mle<F> for DenseMle<F> {
     fn num_iterated_vars(&self) -> usize {
-        self.num_iterated_vars
+        self.current_mle.num_vars()
     }
 
     fn get_padded_evaluations(&self) -> Vec<F> {
@@ -275,7 +272,6 @@ impl<F: FieldExt> DenseMle<F> {
         let current_mle =
             MultilinearExtension::new(Evaluations::<F>::new(num_iterated_vars, items.clone()));
         Self {
-            num_iterated_vars,
             layer_id,
             prefix_bits,
             current_mle: current_mle.clone(),
@@ -314,7 +310,6 @@ impl<F: FieldExt> DenseMle<F> {
             MultilinearExtension::new(Evaluations::<F>::new(num_iterated_vars, items.clone()));
 
         Self {
-            num_iterated_vars,
             layer_id,
             prefix_bits,
             current_mle: current_mle.clone(),
