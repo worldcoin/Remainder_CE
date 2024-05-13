@@ -319,6 +319,14 @@ impl<F: FieldExt> DenseMle<F> {
         }
     }
 
+    pub fn batch_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
+        let layer_id = mles[0].layer_id;
+        let prefix_bits = mles[0].clone().prefix_bits;
+        let mle_flattened = mles.into_iter().map(|mle| mle.into_iter()).flatten();
+
+        Self::new_from_iter(mle_flattened, layer_id, prefix_bits)
+    }
+
     pub fn expression(self) -> Expression<F, ProverExpr> {
         Expression::mle(self)
     }
