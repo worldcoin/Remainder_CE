@@ -424,8 +424,6 @@ fn combine_pair<F: FieldExt>(
     // it is kind of dumb to recompute it because we don't use it anymore. ideally these would be stored somewhere else so we don't
     // have to keep catering to the fields we don't need ?
 
-    println!("interleaved_mle_indices {:?}", interleaved_mle_indices);
-
     DenseMle {
         current_mle: current_mle.clone(),
         original_mle,
