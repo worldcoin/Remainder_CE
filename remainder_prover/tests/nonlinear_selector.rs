@@ -85,9 +85,9 @@ impl<F: FieldExt> NonlinearSelectorBuilder<F> {
         right_sum_mle_1: DenseMle<F>,
         right_sum_mle_2: DenseMle<F>,
     ) -> Self {
-        assert_eq!(right_sum_mle_1.num_vars(), right_sum_mle_2.num_vars());
-        assert_eq!(left_sel_mle.num_vars(), right_sel_mle.num_vars());
-        assert_eq!(left_sel_mle.num_vars(), right_sum_mle_1.num_vars() - 1);
+        assert_eq!(right_sum_mle_1.num_iterated_vars(), right_sum_mle_2.num_iterated_vars());
+        assert_eq!(left_sel_mle.num_iterated_vars(), right_sel_mle.num_iterated_vars());
+        assert_eq!(left_sel_mle.num_iterated_vars(), right_sum_mle_1.num_iterated_vars() - 1);
         Self {
             left_sel_mle,
             right_sel_mle,

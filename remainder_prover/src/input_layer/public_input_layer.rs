@@ -75,7 +75,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), LayerId::Input(0));
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_vars() != 0 {
+        let eval = if mle_ref.num_iterated_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);

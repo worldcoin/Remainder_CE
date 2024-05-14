@@ -56,7 +56,7 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| mle_ref.num_iterated_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -76,14 +76,14 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                     .iter()
                     .map(|mle_ref| {
                         let zero = F::ZERO;
-                        let index = if mle_ref.num_vars() < max_num_vars {
-                            let max = 1 << mle_ref.num_vars();
+                        let index = if mle_ref.num_iterated_vars() < max_num_vars {
+                            let max = 1 << mle_ref.num_iterated_vars();
                             (index * 2) % max
                         } else {
                             index * 2
                         };
                         let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
-                        let second = if mle_ref.num_vars() != 0 {
+                        let second = if mle_ref.num_iterated_vars() != 0 {
                             *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
                         } else {
                             first
@@ -132,8 +132,8 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                     .iter()
                     // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
-                        let index = if mle_ref.num_vars() < max_num_vars {
-                            let max = 1 << mle_ref.num_vars();
+                        let index = if mle_ref.num_iterated_vars() < max_num_vars {
+                            let max = 1 << mle_ref.num_iterated_vars();
                             index % max
                         } else {
                             index
@@ -379,7 +379,7 @@ pub fn libra_giraffe<F: FieldExt>(
             // Compute the beta successors the same way it's done for each mle. Do it outside the loop
             // because it only needs to be done once per product of mles.
             let first = *beta_g2.bookkeeping_table().get(p2_idx * 2).unwrap();
-            let second = if beta_g2.num_vars() != 0 {
+            let second = if beta_g2.num_iterated_vars() != 0 {
                 *beta_g2.bookkeeping_table().get(p2_idx * 2 + 1).unwrap()
             } else {
                 first
@@ -406,7 +406,7 @@ pub fn libra_giraffe<F: FieldExt>(
                         .bookkeeping_table()
                         .get((p2_idx * 2) + x * num_dataparallel_entries)
                         .unwrap();
-                    let f2_1_p2_x = if f2_p2_x.num_vars() != 0 {
+                    let f2_1_p2_x = if f2_p2_x.num_iterated_vars() != 0 {
                         *f2_p2_x
                             .bookkeeping_table()
                             .get((p2_idx * 2 + 1) + x * num_dataparallel_entries)
@@ -428,7 +428,7 @@ pub fn libra_giraffe<F: FieldExt>(
                         .bookkeeping_table()
                         .get((p2_idx * 2) + y * num_dataparallel_entries)
                         .unwrap();
-                    let f3_1_p2_y = if f3_p2_y.num_vars() != 0 {
+                    let f3_1_p2_y = if f3_p2_y.num_iterated_vars() != 0 {
                         *f3_p2_y
                             .bookkeeping_table()
                             .get((p2_idx * 2 + 1) + y * num_dataparallel_entries)

@@ -410,7 +410,7 @@ fn combine_pair<F: FieldExt>(
         vec![bound_coord * mle_ref_first_bt[0] + (F::ONE - bound_coord) * mle_ref_second_bt[0]];
 
     let current_mle = MultilinearExtension::new(Evaluations::<F>::new(
-        mle_ref_first.num_vars(),
+        mle_ref_first.num_iterated_vars(),
         new_bt.clone(),
     ));
     let original_mle = MultilinearExtension::new(Evaluations::<F>::new(0, new_bt.clone()));

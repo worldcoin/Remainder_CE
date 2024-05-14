@@ -79,9 +79,6 @@ pub trait Mle<F: FieldExt>: Clone + Debug + Send + Sync {
     /// Add new indices at the end of an MLE.
     fn push_mle_indices(&mut self, new_indices: &[MleIndex<F>]);
 
-    /// Number of variables the [Mle] this is a reference to is over.
-    fn num_vars(&self) -> usize;
-
     /// Number of original variables, not mutated.
     fn original_num_vars(&self) -> usize;
 

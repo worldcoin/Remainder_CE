@@ -318,7 +318,7 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| mle_ref.num_iterated_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -347,11 +347,11 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
                     // to repeat itself an according number of times when the sum is over a variable
                     // it does not contain. the appropriate index is therefore
                     // determined as follows.
-                    let mle_index = if mle_ref.num_vars() < max_num_vars {
+                    let mle_index = if mle_ref.num_iterated_vars() < max_num_vars {
                         // if we have less than the max number of variables, then we perform this wrap-around
                         // functionality by first rounding to the nearest power of 2, and then taking the mod
                         // of this index as we implicitly pad for powers of 2.
-                        let max = 1 << mle_ref.num_vars();
+                        let max = 1 << mle_ref.num_iterated_vars();
                         (mle_index * 2) % max
                     } else {
                         mle_index * 2
@@ -360,7 +360,7 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
                     // it's [2] and [3], etc. because we are extending a function that was originally defined
                     // over the hypercube, each pair corresponds to two points on a line. we grab these two points here
                     let first = *mle_ref.bookkeeping_table().get(mle_index).unwrap_or(&zero);
-                    let second = if mle_ref.num_vars() != 0 {
+                    let second = if mle_ref.num_iterated_vars() != 0 {
                         *mle_ref
                             .bookkeeping_table()
                             .get(mle_index + 1)
@@ -389,7 +389,7 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
 ) -> Result<Vec<F>, MleError> {
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| mle_ref.num_iterated_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -400,8 +400,8 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
                 .iter()
                 .map(|mle_ref| {
                     let zero = F::ZERO;
-                    let index = if mle_ref.num_vars() < max_num_vars {
-                        let max = 1 << mle_ref.num_vars();
+                    let index = if mle_ref.num_iterated_vars() < max_num_vars {
+                        let max = 1 << mle_ref.num_iterated_vars();
                         (index) % max
                     } else {
                         index
@@ -621,7 +621,7 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| mle_ref.num_iterated_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -640,15 +640,15 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                 .iter()
                 .map(|mle_ref| {
                     let zero = F::ZERO;
-                    let index = if mle_ref.num_vars() < max_num_vars {
-                        let max = 1 << mle_ref.num_vars();
+                    let index = if mle_ref.num_iterated_vars() < max_num_vars {
+                        let max = 1 << mle_ref.num_iterated_vars();
                         (index * 2) % max
                     } else {
                         index * 2
                     };
                     let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
 
-                    let second = if mle_ref.num_vars() != 0 {
+                    let second = if mle_ref.num_iterated_vars() != 0 {
                         *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
                     } else {
                         first
