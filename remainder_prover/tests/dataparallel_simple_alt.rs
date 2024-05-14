@@ -3,11 +3,7 @@ use itertools::Itertools;
 
 use remainder::{
     builders::{
-        combine_input_layers::InputLayerBuilder,
-        layer_builder::{
-            batched::{combine_zero_mle_ref, BatchedLayer},
-            simple_builders::ZeroBuilder,
-        },
+        combine_input_layers::InputLayerBuilder, layer_builder::simple_builders::ZeroBuilder,
     },
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,

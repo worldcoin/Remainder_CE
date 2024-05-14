@@ -1,6 +1,5 @@
 //! A tool for circuit builders to create and combine Layer sub-parts
 
-pub mod batched;
 pub mod simple_builders;
 use std::marker::PhantomData;
 

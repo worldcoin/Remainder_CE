@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
-    builders::layer_builder::batched::combine_mles,
     claims::{wlx_eval::ClaimMle, Claim},
     layer::LayerId,
     mle::evals::{Evaluations, MultilinearExtension},
@@ -393,39 +392,5 @@ impl<F: FieldExt> DenseMle<F> {
             DenseMle::new_from_iter(first_iter, self.layer_id, self.prefix_bits.clone()),
             DenseMle::new_from_iter(second_iter, self.layer_id, self.prefix_bits.clone()),
         ]
-    }
-
-    /// Constructs a `DenseMle` with `mle_len` evaluations, all equal to
-    /// `F::ONE`.
-    pub fn one(
-        mle_len: usize,
-        layer_id: LayerId,
-        prefix_bits: Option<Vec<MleIndex<F>>>,
-    ) -> DenseMle<F> {
-        let ones_vec: Vec<F> = (0..mle_len).map(|_| F::ONE).collect();
-        DenseMle::new_from_raw(ones_vec, layer_id, prefix_bits)
-    }
-
-    /// Combines a batch of `DenseMle<F,>`s into a single `DenseMle<F,>`
-    /// appropriately, such that the bit ordering is
-    /// `(batched_bits, mle_ref_bits, iterated_bits)`.
-    ///
-    /// TODO!(ende): refactor
-    pub fn combine_mle_batch(mle_batch: Vec<DenseMle<F>>) -> DenseMle<F> {
-        let batched_bits = log2(mle_batch.len());
-
-        let mle_batch_ref_combined = mle_batch.into_iter().map(|x| x).collect_vec();
-
-        let mle_batch_ref_combined_ref =
-            combine_mles(mle_batch_ref_combined, batched_bits as usize);
-
-        DenseMle::new_from_raw(
-            mle_batch_ref_combined_ref
-                .current_mle
-                .get_evals_vector()
-                .clone(),
-            LayerId::Input(0),
-            None,
-        )
     }
 }

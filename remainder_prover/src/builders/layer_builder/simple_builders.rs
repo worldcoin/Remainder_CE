@@ -1,6 +1,6 @@
 //! A set of simple re-usable `LayerBuilder`s
 
-use crate::builders::layer_builder::{batched::BatchedLayer, LayerBuilder};
+use crate::builders::layer_builder::LayerBuilder;
 use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
 use crate::layer::LayerId;
@@ -59,16 +59,5 @@ impl<F: FieldExt> EqualityCheck<F> {
     /// creates new difference mle
     pub fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
         Self { mle_1, mle_2 }
-    }
-
-    /// creates a batched layer for equality check
-    pub fn new_batched(mle_1: Vec<DenseMle<F>>, mle_2: Vec<DenseMle<F>>) -> BatchedLayer<F, Self> {
-        BatchedLayer::new(
-            mle_1
-                .into_iter()
-                .zip(mle_2)
-                .map(|(mle_1, mle_2)| Self { mle_1, mle_2 })
-                .collect(),
-        )
     }
 }
