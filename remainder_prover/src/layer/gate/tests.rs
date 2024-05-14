@@ -461,7 +461,6 @@ fn test_add_gate_circuit() {
     let mle: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
-        None,
     );
 
     let neg_mle = DenseMle::new_from_iter(
@@ -471,7 +470,6 @@ fn test_add_gate_circuit() {
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
-        None,
     );
 
     let circuit: AddGateCircuit<Fr> = AddGateCircuit::new(mle, neg_mle);
@@ -487,14 +485,9 @@ fn test_uneven_add_gate_circuit() {
     let mle: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
-        None,
     );
 
-    let neg_mle = DenseMle::new_from_raw(
-        vec![mle.bookkeeping_table()[0].neg()],
-        LayerId::Input(0),
-        None,
-    );
+    let neg_mle = DenseMle::new_from_raw(vec![mle.bookkeeping_table()[0].neg()], LayerId::Input(0));
 
     let circuit: UnevenAddGateCircuit<Fr> = UnevenAddGateCircuit::new(mle, neg_mle);
     test_circuit(circuit, None);
@@ -512,7 +505,6 @@ fn test_dataparallel_add_gate_circuit() {
     let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
-        None,
     );
 
     let neg_mle_dataparallel = DenseMle::new_from_iter(
@@ -523,7 +515,6 @@ fn test_dataparallel_add_gate_circuit() {
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
-        None,
     );
     let circuit: DataparallelAddGateCircuit<Fr> = DataparallelAddGateCircuit::new(
         mle_dataparallel,
@@ -545,7 +536,6 @@ fn test_dataparallel_uneven_add_gate_circuit() {
     let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
-        None,
     );
 
     let neg_mle_dataparallel = DenseMle::new_from_iter(
@@ -555,7 +545,6 @@ fn test_dataparallel_uneven_add_gate_circuit() {
             .iter()
             .map(|elem| -elem),
         LayerId::Input(0),
-        None,
     );
 
     let circuit: DataparallelUnevenAddGateCircuit<Fr> = DataparallelUnevenAddGateCircuit::new(
@@ -578,13 +567,11 @@ fn test_dataparallel_mul_add_gate_circuit() {
     let mle_1_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
-        None,
     );
 
     let mle_2_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
-        None,
     );
 
     let neg_mle_2_dataparallel = DenseMle::new_from_iter(
@@ -593,7 +580,6 @@ fn test_dataparallel_mul_add_gate_circuit() {
             .into_iter()
             .map(|elem| -elem),
         LayerId::Input(0),
-        None,
     );
 
     let circuit: DataparallelMulAddGateCircuit<Fr> = DataparallelMulAddGateCircuit::new(
@@ -616,19 +602,16 @@ fn test_mul_add_gate_circuit() {
     let mle_1: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
-        None,
     );
 
     let mle_2: DenseMle<Fr> = DenseMle::new_from_iter(
         (0..size).map(|_| Fr::from(rng.gen::<u64>())),
         LayerId::Input(0),
-        None,
     );
 
     let neg_mle_2 = DenseMle::new_from_iter(
         mle_2.bookkeeping_table().into_iter().map(|elem| -elem),
         LayerId::Input(0),
-        None,
     );
 
     let circuit: MulAddGateCircuit<Fr> = MulAddGateCircuit::new(mle_1, mle_2, neg_mle_2);

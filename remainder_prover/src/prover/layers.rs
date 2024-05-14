@@ -103,7 +103,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
                 });
         });
 
-        let res_mle: DenseMle<F> = DenseMle::new_from_raw(res_table, id, None);
+        let res_mle: DenseMle<F> = DenseMle::new_from_raw(res_table, id);
 
         res_mle
     }

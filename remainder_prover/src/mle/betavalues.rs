@@ -135,10 +135,10 @@ impl<F: FieldExt> BetaValues<F> {
             }
 
             let cur_table_mle_ref: DenseMle<F> =
-                DenseMle::new_from_raw(cur_table, LayerId::Input(0), None);
+                DenseMle::new_from_raw(cur_table, LayerId::Input(0));
             cur_table_mle_ref
         } else {
-            DenseMle::new_from_raw(vec![F::ONE], LayerId::Input(0), None)
+            DenseMle::new_from_raw(vec![F::ONE], LayerId::Input(0))
         }
     }
 }

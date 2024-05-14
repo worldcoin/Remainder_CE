@@ -73,7 +73,6 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
                 mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 original_mle_indices: dense_mle_ref.original_mle_indices.clone(),
                 layer_id: dense_mle_ref.get_layer_id(),
-                prefix_bits: dense_mle_ref.get_prefix_bits(),
             };
             mle_ref_og.index_mle_indices(0);
             MleEnum::Dense(mle_ref_og)
@@ -181,7 +180,7 @@ pub fn combine_mle_refs<F: FieldExt>(items: Vec<DenseMle<F>>) -> DenseMle<F> {
         .chain(repeat_n(F::ZERO, total_padding))
         .collect_vec();
 
-    DenseMle::new_from_raw(result, LayerId::Input(0), None)
+    DenseMle::new_from_raw(result, LayerId::Input(0))
 }
 
 /// this function takes an mle ref that has an iterated bit in between a bunch of fixed bits
@@ -244,7 +243,6 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                 mle_indices: dense_mle_ref.mle_indices.clone(),
                 original_mle_indices: first_og_indices,
                 layer_id: dense_mle_ref.layer_id,
-                prefix_bits: dense_mle_ref.get_prefix_bits(),
             }),
             MleEnum::Zero(mut zero_mle_ref) => {
                 zero_mle_ref.original_mle_indices = first_og_indices;
@@ -272,7 +270,6 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
                 mle_indices: dense_mle_ref.mle_indices.clone(),
                 original_mle_indices: second_og_indices,
                 layer_id: dense_mle_ref.layer_id,
-                prefix_bits: dense_mle_ref.get_prefix_bits(),
             }),
             MleEnum::Zero(mut zero_mle_ref) => {
                 zero_mle_ref.original_mle_indices = second_og_indices;
@@ -430,7 +427,6 @@ fn combine_pair<F: FieldExt>(
         mle_indices: interleaved_mle_indices,
         original_mle_indices: interleaved_mle_indices_og,
         layer_id: mle_ref_first.get_layer_id(),
-        prefix_bits: Some(mle_ref_first.original_mle_indices()[0..lsb_idx].to_vec()),
     }
 }
 

@@ -71,7 +71,11 @@ impl<F: FieldExt> LayerBuilder<F> for NonlinearSelectorBuilder<F> {
             .zip(right_side_product_bt)
             .map(|(left_sum, right_sum)| *left_sum + right_sum)
             .collect();
-        DenseMle::new_from_raw(sum_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(sum_bt, id);
+        if let Some(prefix_bits) = prefix_bits {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> NonlinearSelectorBuilder<F> {

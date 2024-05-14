@@ -31,9 +31,6 @@ pub struct DenseMle<F> {
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,
 
-    /// Any prefix bits that must be added to any [MleRef]s yielded by this MLE.
-    pub prefix_bits: Option<Vec<MleIndex<F>>>,
-
     /// below are fields originally belonging to DenseMle
 
     /// A representation of the MLE on its current state.
@@ -69,17 +66,10 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
             .collect()
     }
 
-    fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>) {
-        self.prefix_bits = new_bits.clone();
-        if let Some(mut all_bits) = new_bits {
-            all_bits.extend(self.mle_indices.clone());
-            self.mle_indices = all_bits.clone();
-            self.original_mle_indices = all_bits;
-        }
-    }
-
-    fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>> {
-        self.prefix_bits.clone()
+    fn add_prefix_bits(&mut self, mut new_bits: Vec<MleIndex<F>>) {
+        new_bits.extend(self.mle_indices.clone());
+        self.mle_indices = new_bits.clone();
+        self.original_mle_indices = new_bits;
     }
 
     fn layer_id(&self) -> LayerId {
@@ -251,28 +241,19 @@ impl<F: FieldExt> DenseMle<F> {
     ///     use remainder_shared_types::Fr;
     ///     use remainder::mle::dense::DenseMle;
     ///
-    ///     DenseMle::<Fr>::new_from_iter(vec![Fr::one()].into_iter(), LayerId::Input(0), None);
+    ///     DenseMle::<Fr>::new_from_iter(vec![Fr::one()].into_iter(), LayerId::Input(0));
     /// ```
-    pub fn new_from_iter(
-        iter: impl Iterator<Item = F>,
-        layer_id: LayerId,
-        prefix_bits: Option<Vec<MleIndex<F>>>,
-    ) -> Self {
+    pub fn new_from_iter(iter: impl Iterator<Item = F>, layer_id: LayerId) -> Self {
         let items = iter.collect_vec();
         let num_iterated_vars = log2(items.len()) as usize;
 
-        let mle_indices: Vec<MleIndex<F>> = prefix_bits
-            .clone()
-            .into_iter()
-            .flatten()
-            .chain((0..num_iterated_vars).map(|_| MleIndex::Iterated))
-            .collect();
+        let mle_indices: Vec<MleIndex<F>> =
+            ((0..num_iterated_vars).map(|_| MleIndex::Iterated)).collect();
 
         let current_mle =
             MultilinearExtension::new(Evaluations::<F>::new(num_iterated_vars, items.clone()));
         Self {
             layer_id,
-            prefix_bits,
             current_mle: current_mle.clone(),
             mle_indices: mle_indices.clone(),
             original_mle: current_mle,
@@ -289,28 +270,19 @@ impl<F: FieldExt> DenseMle<F> {
     ///     use remainder_shared_types::Fr;
     ///     use remainder::mle::dense::DenseMle;
     ///
-    ///     DenseMle::<Fr>::new_from_raw(vec![Fr::one()], LayerId::Input(0), None);
+    ///     DenseMle::<Fr>::new_from_raw(vec![Fr::one()], LayerId::Input(0));
     /// ```
-    pub fn new_from_raw(
-        items: Vec<F>,
-        layer_id: LayerId,
-        prefix_bits: Option<Vec<MleIndex<F>>>,
-    ) -> Self {
+    pub fn new_from_raw(items: Vec<F>, layer_id: LayerId) -> Self {
         let num_iterated_vars = log2(items.len()) as usize;
 
-        let mle_indices: Vec<MleIndex<F>> = prefix_bits
-            .clone()
-            .into_iter()
-            .flatten()
-            .chain((0..num_iterated_vars).map(|_| MleIndex::Iterated))
-            .collect();
+        let mle_indices: Vec<MleIndex<F>> =
+            ((0..num_iterated_vars).map(|_| MleIndex::Iterated)).collect();
 
         let current_mle =
             MultilinearExtension::new(Evaluations::<F>::new(num_iterated_vars, items.clone()));
 
         Self {
             layer_id,
-            prefix_bits,
             current_mle: current_mle.clone(),
             mle_indices: mle_indices.clone(),
             original_mle: current_mle,
@@ -320,10 +292,9 @@ impl<F: FieldExt> DenseMle<F> {
 
     pub fn batch_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
         let layer_id = mles[0].layer_id;
-        let prefix_bits = mles[0].clone().prefix_bits;
         let mle_flattened = mles.into_iter().map(|mle| mle.into_iter()).flatten();
 
-        Self::new_from_iter(mle_flattened, layer_id, prefix_bits)
+        Self::new_from_iter(mle_flattened, layer_id)
     }
 
     pub fn expression(self) -> Expression<F, ProverExpr> {
@@ -389,8 +360,8 @@ impl<F: FieldExt> DenseMle<F> {
             .step_by(2);
 
         [
-            DenseMle::new_from_iter(first_iter, self.layer_id, self.prefix_bits.clone()),
-            DenseMle::new_from_iter(second_iter, self.layer_id, self.prefix_bits.clone()),
+            DenseMle::new_from_iter(first_iter, self.layer_id),
+            DenseMle::new_from_iter(second_iter, self.layer_id),
         ]
     }
 }

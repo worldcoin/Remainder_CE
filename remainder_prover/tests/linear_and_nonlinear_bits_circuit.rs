@@ -62,7 +62,11 @@ impl<F: FieldExt> LayerBuilder<F> for LastBitLinearBuilder<F> {
             .map(|(elem_1, elem_2)| *elem_1 + elem_2)
             .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(final_bt, id);
+        if let Some(prefix_bits) = prefix_bits.clone() {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> LastBitLinearBuilder<F> {
@@ -100,7 +104,11 @@ impl<F: FieldExt> LayerBuilder<F> for FirstBitLinearBuilder<F> {
             .flat_map(|(elem_1, elem_2)| vec![*elem_1 * elem_1, *elem_2])
             .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(final_bt, id);
+        if let Some(prefix_bits) = prefix_bits {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> FirstBitLinearBuilder<F> {

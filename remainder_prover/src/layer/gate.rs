@@ -499,7 +499,7 @@ impl<F: FieldExt> Gate<F> {
                 }
             });
 
-        let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0), None);
+        let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
 
         // The actual mles defer based on whether we are doing a add gate or a mul gate, because
         // in the case of an add gate, we distribute the gate function whereas in the case of the
@@ -508,7 +508,7 @@ impl<F: FieldExt> Gate<F> {
             BinaryOperation::Add => {
                 vec![
                     vec![
-                        DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0), None),
+                        DenseMle::new_from_raw(a_hg_lhs, LayerId::Input(0)),
                         self.lhs.clone(),
                     ],
                     vec![a_hg_rhs_mle_ref],
@@ -579,13 +579,13 @@ impl<F: FieldExt> Gate<F> {
                 }
             });
 
-        let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0), None);
+        let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
         // --- We need to multiply h_g(x) by f_2(x) ---
         let mut phase_2_mles = match self.gate_operation {
             BinaryOperation::Add => {
                 vec![
                     vec![
-                        DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0), None),
+                        DenseMle::new_from_raw(a_f1_rhs, LayerId::Input(0)),
                         self.rhs.clone(),
                     ],
                     vec![a_f1_lhs_mle_ref],

@@ -71,14 +71,17 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
             (self.mle.clone(), random_mle),
             |(mle, random)| Expression::products(vec![mle.clone(), random.clone()]),
             |(mle, random), layer_id, prefix_bits| {
-                DenseMle::new_from_iter(
+                let mut out = DenseMle::new_from_iter(
                     mle.clone()
                         .into_iter()
                         .zip(random.clone().into_iter().cycle())
                         .map(|(item, random)| item * random),
                     layer_id,
-                    prefix_bits,
-                )
+                );
+                if let Some(prefix_bits) = prefix_bits {
+                    out.add_prefix_bits(prefix_bits);
+                }
+                out
             },
         );
 
@@ -144,7 +147,11 @@ impl<F: FieldExt> LayerBuilder<F> for WraparoundAddBuilder<F> {
             .zip(mle_2_mle_ref.bookkeeping_table().iter().cycle())
             .map(|(elem_1, elem_2)| *elem_1 + *elem_2)
             .take(result_num_elems);
-        DenseMle::new_from_iter(result_bookkeeping_table, id, prefix_bits)
+        let mut out = DenseMle::new_from_iter(result_bookkeeping_table, id);
+        if let Some(prefix_bits) = prefix_bits {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> WraparoundAddBuilder<F> {

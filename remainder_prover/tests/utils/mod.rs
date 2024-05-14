@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use rand::Rng;
+use remainder::mle::Mle;
 use remainder::{
     builders::layer_builder::LayerBuilder,
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
@@ -11,7 +12,7 @@ use remainder_shared_types::{FieldExt, Fr};
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.
 pub fn get_dummy_one_mle(num_vars: usize) -> DenseMle<Fr> {
     let mle_vec = (0..(1 << num_vars)).map(|_| Fr::one()).collect_vec();
-    DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
+    DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
 }
 
 /// Returns an MLE with random elements generated from u64 for testing according to the number of variables.
@@ -19,7 +20,7 @@ pub fn get_dummy_random_mle(num_vars: usize, rng: &mut impl Rng) -> DenseMle<Fr>
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
         .collect_vec();
-    DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
+    DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
 }
 
 /// Returns a vector of MLEs for dataparallel testing according to the number of variables and
@@ -34,7 +35,7 @@ pub fn get_dummy_random_mle_vec(
             let mle_vec = (0..(1 << num_vars))
                 .map(|_| Fr::from(rng.gen::<u64>()))
                 .collect_vec();
-            DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None)
+            DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
         })
         .collect_vec()
 }
@@ -87,7 +88,11 @@ impl<F: FieldExt> LayerBuilder<F> for TripleNestedSelectorBuilder<F> {
             .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2])
             .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(final_bt, id);
+        if let Some(prefix_bits) = prefix_bits {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> TripleNestedSelectorBuilder<F> {
@@ -144,7 +149,11 @@ impl<F: FieldExt> LayerBuilder<F> for ProductScaledBuilder<F> {
             .map(|(elem_1, elem_2)| elem_1 + elem_2)
             .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(final_bt, id);
+        if let Some(prefix_bits) = prefix_bits {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> ProductScaledBuilder<F> {
@@ -194,7 +203,11 @@ impl<F: FieldExt> LayerBuilder<F> for ProductSumBuilder<F> {
             .map(|(elem_1, elem_2)| elem_1 + elem_2)
             .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(final_bt, id);
+        if let Some(prefix_bits) = prefix_bits {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> ProductSumBuilder<F> {
@@ -243,7 +256,11 @@ impl<F: FieldExt> LayerBuilder<F> for ConstantScaledSumBuilder<F> {
             .map(|(elem_1, elem_2)| elem_1 + elem_2)
             .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(final_bt, id);
+        if let Some(prefix_bits) = prefix_bits {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> ConstantScaledSumBuilder<F> {

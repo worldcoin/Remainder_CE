@@ -65,7 +65,13 @@ impl<F: FieldExt, const N: usize> FlatMles<F, N> {
     ) -> Self {
         let mles = data
             .into_iter()
-            .map(|data| DenseMle::new_from_raw(data, layer_id, prefix_bits.clone()))
+            .map(|data| {
+                let mut out = DenseMle::new_from_raw(data, layer_id);
+                if let Some(prefix_bits) = prefix_bits.clone() {
+                    out.add_prefix_bits(prefix_bits);
+                }
+                out
+            })
             .collect_vec()
             .try_into()
             .unwrap();

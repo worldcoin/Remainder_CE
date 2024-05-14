@@ -72,7 +72,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         claim: Claim<F>,
         _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
-        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), LayerId::Input(0), None);
+        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), LayerId::Input(0));
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_vars() != 0 {

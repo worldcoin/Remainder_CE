@@ -55,11 +55,7 @@ pub trait Mle<F: FieldExt>: Clone + Debug + Send + Sync {
 
     /// Mutates the MLE in order to set the prefix bits. This is needed when we
     /// are working with dataparallel circuits and new bits need to be added.
-    fn set_prefix_bits(&mut self, new_bits: Option<Vec<MleIndex<F>>>);
-
-    /// Gets the prefix bits currently stored in the MLE. This is needed when
-    /// prefix bits are generated after combining MLEs.
-    fn get_prefix_bits(&self) -> Option<Vec<MleIndex<F>>>;
+    fn add_prefix_bits(&mut self, new_bits: Vec<MleIndex<F>>);
 
     /// Get the layer ID of the associated MLE.
     fn layer_id(&self) -> LayerId;
