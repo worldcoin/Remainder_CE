@@ -199,7 +199,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         challenges.push(final_chal);
 
         // This belongs in the last challenge bound to y.
-        if self.rhs.num_vars() == 0 {
+        if self.rhs.num_iterated_vars() == 0 {
             first_u_challenges.push(final_chal);
         } else {
             last_v_challenges.push(final_chal);
@@ -476,7 +476,7 @@ impl<F: FieldExt> Gate<F> {
         let beta_g1 = BetaValues::new_beta_equality_mle(challenges);
 
         self.lhs.index_mle_indices(self.num_dataparallel_bits);
-        let num_x = self.lhs.num_vars();
+        let num_x = self.lhs.num_iterated_vars();
 
         // Because we are binding `x` variables after this phase, all bookkeeping tables should have size
         // 2^(number of x variables).
@@ -556,7 +556,7 @@ impl<F: FieldExt> Gate<F> {
     ) -> Result<Vec<F>, GateError> {
         // Create a beta table according to the challenges used to bind the x variables.
         let beta_u = BetaValues::new_beta_equality_mle(u_claim);
-        let num_y = self.rhs.num_vars();
+        let num_y = self.rhs.num_iterated_vars();
 
         // Because we are binding the "y" variables, the size of the bookkeeping tables after this init
         // phase are 2^(number of y variables).
@@ -706,7 +706,7 @@ impl<F: FieldExt> Gate<F> {
 
         let mut challenges: Vec<F> = vec![];
         transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
-        let num_rounds_phase1 = self.lhs.num_vars();
+        let num_rounds_phase1 = self.lhs.num_iterated_vars();
 
         // Sumcheck rounds (binding x).
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
@@ -767,7 +767,7 @@ impl<F: FieldExt> Gate<F> {
 
         let mut challenges: Vec<F> = vec![];
 
-        if self.rhs.num_vars() > 0 {
+        if self.rhs.num_iterated_vars() > 0 {
             let phase_2_mles = self
                 .phase_2_mles
                 .as_mut()
@@ -776,7 +776,7 @@ impl<F: FieldExt> Gate<F> {
 
             transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
 
-            let num_rounds_phase2 = self.rhs.num_vars();
+            let num_rounds_phase2 = self.rhs.num_iterated_vars();
 
             // Bind y, the right side of the sum.
             let sumcheck_rounds_y: Vec<Vec<F>> = std::iter::once(Ok(first_message))

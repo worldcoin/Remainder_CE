@@ -62,7 +62,7 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
         &self.zero
     }
 
-    fn num_vars(&self) -> usize {
+    fn num_iterated_vars(&self) -> usize {
         self.num_vars
     }
 
@@ -120,13 +120,6 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
 
     fn get_enum(self) -> MleEnum<F> {
         MleEnum::Zero(self)
-    }
-
-    #[doc = " Returns the number of iterated variables this Mle is defined on."]
-    #[doc = " Equivalently, this is the log_2 of the size of the *whole* bookkeeping"]
-    #[doc = " table."]
-    fn num_iterated_vars(&self) -> usize {
-        todo!()
     }
 
     #[doc = " Get the padded set of evaluations over the boolean hypercube; useful for"]

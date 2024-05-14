@@ -51,10 +51,10 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn num_vars(&self) -> usize {
+    fn num_iterated_vars(&self) -> usize {
         match self {
-            MleEnum::Dense(item) => item.num_vars(),
-            MleEnum::Zero(item) => item.num_vars(),
+            MleEnum::Dense(item) => item.num_iterated_vars(),
+            MleEnum::Zero(item) => item.num_iterated_vars(),
         }
     }
 
@@ -110,10 +110,6 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
             MleEnum::Dense(item) => item.push_mle_indices(new_indices),
             MleEnum::Zero(item) => item.push_mle_indices(new_indices),
         }
-    }
-
-    fn num_iterated_vars(&self) -> usize {
-        todo!()
     }
 
     fn get_padded_evaluations(&self) -> Vec<F> {

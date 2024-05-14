@@ -92,10 +92,6 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
         &self.original_mle_indices
     }
 
-    fn num_vars(&self) -> usize {
-        self.current_mle.num_vars()
-    }
-
     fn original_num_vars(&self) -> usize {
         self.original_mle.num_vars()
     }
@@ -138,11 +134,11 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
                 });
 
         assert!(index_found);
-        debug_assert!(1 <= bit_count && bit_count <= self.num_vars());
+        debug_assert!(1 <= bit_count && bit_count <= self.num_iterated_vars());
 
         self.current_mle.fix_variable_at_index(bit_count - 1, point);
 
-        if self.num_vars() == 0 {
+        if self.num_iterated_vars() == 0 {
             let fixed_claim_return = Claim::new(
                 self.mle_indices
                     .iter()
@@ -168,7 +164,7 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
 
         self.current_mle.fix_variable(challenge);
 
-        if self.num_vars() == 0 {
+        if self.num_iterated_vars() == 0 {
             let fixed_claim_return = Claim::new(
                 self.mle_indices
                     .iter()
