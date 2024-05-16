@@ -1,7 +1,161 @@
+use crate::mle::evals::DimInfo;
 use crate::{layouter::nodes::ClaimableNode, mle::circuit_mle::CircuitMle};
+use crate::{mle::dense::DenseMle, utils::get_dummy_random_mle_vec};
 
 use super::*;
+use ark_std::test_rng;
+use ndarray::{Array, IxDyn};
 use remainder_shared_types::Fr;
+
+// ======== `dim_info` tests ========
+
+#[test]
+fn create_mle_dim() {
+    let dims = IxDyn(&[4, 2, 2]);
+    let axes_name = ["data", "tree batch", "sample batch"]
+        .map(String::from)
+        .to_vec();
+    let dim_info = DimInfo::new(dims, axes_name);
+    assert!(dim_info.is_ok())
+}
+
+#[test]
+fn create_mle_dim_mismatch_dims() {
+    let dims = IxDyn(&[4, 2, 2, 5]);
+    let dims_name = ["data", "tree batch", "sample batch"]
+        .map(String::from)
+        .to_vec();
+    let dim_info = DimInfo::new(dims, dims_name);
+    assert!(dim_info.is_err())
+}
+
+#[test]
+fn set_mle_dim() {
+    const NUM_VARS: usize = 5;
+    const NUM_DATA_PARALLEL_BITS: usize = 4;
+    let mut rng = test_rng();
+
+    let mles: Vec<DenseMle<Fr>> =
+        get_dummy_random_mle_vec(NUM_VARS, NUM_DATA_PARALLEL_BITS, &mut rng);
+
+    let mle_as_vec = DenseMle::batch_mles(mles).get_padded_evaluations();
+    let ndarray_expected = Array::from_shape_vec(
+        IxDyn(&[1 << NUM_VARS, 1 << NUM_DATA_PARALLEL_BITS]),
+        mle_as_vec.clone(),
+    )
+    .unwrap();
+    let evals = Evaluations::new(NUM_VARS + NUM_DATA_PARALLEL_BITS, mle_as_vec);
+
+    let dims = IxDyn(&[1 << NUM_VARS, 1 << NUM_DATA_PARALLEL_BITS]);
+    let axes_name = ["data", "tree batch"].map(String::from).to_vec();
+    let dim_info = DimInfo::new(dims, axes_name.clone()).unwrap();
+
+    let mut mle = MultilinearExtension::new(evals);
+    assert!(mle.set_dim_info(dim_info).is_ok());
+
+    assert_eq!(mle.get_axes_names().unwrap(), axes_name);
+
+    assert_eq!(mle.get_mle_as_ndarray().unwrap(), ndarray_expected);
+}
+
+#[test]
+fn set_mle_zkdt_dim() {
+    const NUM_VARS: usize = 3;
+    const TREE_BATCH_NUM_VAR: usize = 4;
+    const SAMPLE_BATCH_SIZE_NUM_VAR: usize = 5;
+    let mut rng = test_rng();
+
+    let mles: Vec<DenseMle<Fr>> = get_dummy_random_mle_vec(NUM_VARS, TREE_BATCH_NUM_VAR, &mut rng);
+
+    let mle_as_vec = DenseMle::batch_mles(mles).get_padded_evaluations();
+    let mle_as_vec: Vec<Fr> = repeat_n(mle_as_vec.clone(), 1 << SAMPLE_BATCH_SIZE_NUM_VAR)
+        .flatten()
+        .collect();
+
+    let ndarray_expected = Array::from_shape_vec(
+        IxDyn(&[
+            1 << NUM_VARS,
+            1 << TREE_BATCH_NUM_VAR,
+            1 << SAMPLE_BATCH_SIZE_NUM_VAR,
+        ]),
+        mle_as_vec.clone(),
+    )
+    .unwrap();
+
+    let evals = Evaluations::new(
+        NUM_VARS + TREE_BATCH_NUM_VAR + SAMPLE_BATCH_SIZE_NUM_VAR,
+        mle_as_vec,
+    );
+
+    let dims = IxDyn(&[
+        1 << NUM_VARS,
+        1 << TREE_BATCH_NUM_VAR,
+        1 << SAMPLE_BATCH_SIZE_NUM_VAR,
+    ]);
+    let axes_name = ["data", "tree batch", "sample batch"]
+        .map(String::from)
+        .to_vec();
+    let dim_info = DimInfo::new(dims, axes_name.clone()).unwrap();
+
+    let mut mle = MultilinearExtension::new(evals);
+    assert!(mle.set_dim_info(dim_info).is_ok());
+
+    assert_eq!(mle.get_axes_names().unwrap(), axes_name);
+
+    assert_eq!(mle.get_mle_as_ndarray().unwrap(), ndarray_expected);
+}
+
+#[test]
+fn mle_zkdt_dim_mismatch_with_num_var() {
+    const NUM_VARS: usize = 3;
+    const TREE_BATCH_NUM_VAR: usize = 4;
+    const SAMPLE_BATCH_SIZE_NUM_VAR: usize = 5;
+    let mut rng = test_rng();
+
+    let mles: Vec<DenseMle<Fr>> = get_dummy_random_mle_vec(NUM_VARS, TREE_BATCH_NUM_VAR, &mut rng);
+
+    let mle_as_vec = DenseMle::batch_mles(mles).get_padded_evaluations();
+    let mle_as_vec = repeat_n(mle_as_vec.clone(), SAMPLE_BATCH_SIZE_NUM_VAR)
+        .flatten()
+        .collect();
+    let evals = Evaluations::new(
+        NUM_VARS + TREE_BATCH_NUM_VAR + SAMPLE_BATCH_SIZE_NUM_VAR,
+        mle_as_vec,
+    );
+
+    let dims = IxDyn(&[
+        1 << NUM_VARS,
+        1 << TREE_BATCH_NUM_VAR,
+        1 << (SAMPLE_BATCH_SIZE_NUM_VAR - 1),
+    ]);
+    let axes_name = ["data", "tree batch", "sample batch"]
+        .map(String::from)
+        .to_vec();
+    let dim_info = DimInfo::new(dims, axes_name).unwrap();
+
+    let mut mle = MultilinearExtension::new(evals);
+    assert!(mle.set_dim_info(dim_info).is_err())
+}
+
+#[test]
+fn mle_dim_mismatch_with_num_var() {
+    const NUM_VARS: usize = 4;
+    const NUM_DATA_PARALLEL_BITS: usize = 4;
+    let mut rng = test_rng();
+
+    let mles: Vec<DenseMle<Fr>> =
+        get_dummy_random_mle_vec(NUM_VARS, NUM_DATA_PARALLEL_BITS, &mut rng);
+
+    let mle_as_vec = DenseMle::batch_mles(mles).get_padded_evaluations();
+    let evals = Evaluations::new(NUM_VARS + NUM_DATA_PARALLEL_BITS, mle_as_vec);
+
+    let dims = IxDyn(&[1 << 5, 1 << 4]);
+    let axes_name = ["data", "tree batch"].map(String::from).to_vec();
+    let dim_info = DimInfo::new(dims, axes_name).unwrap();
+
+    let mut mle = MultilinearExtension::new(evals);
+    assert!(mle.set_dim_info(dim_info).is_err())
+}
 
 // ======== `fix_variable` tests ========
 
