@@ -105,13 +105,6 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
         self
     }
 
-    fn push_mle_indices(&mut self, new_indices: &[MleIndex<F>]) {
-        match self {
-            MleEnum::Dense(item) => item.push_mle_indices(new_indices),
-            MleEnum::Zero(item) => item.push_mle_indices(new_indices),
-        }
-    }
-
     fn get_padded_evaluations(&self) -> Vec<F> {
         todo!()
     }

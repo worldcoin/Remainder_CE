@@ -194,10 +194,6 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
         self.layer_id
     }
 
-    fn push_mle_indices(&mut self, new_indices: &[MleIndex<F>]) {
-        self.mle_indices.append(&mut new_indices.to_vec());
-    }
-
     fn get_enum(self) -> MleEnum<F> {
         MleEnum::Dense(self)
     }
