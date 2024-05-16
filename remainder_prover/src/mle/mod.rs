@@ -76,9 +76,6 @@ pub trait Mle<F: FieldExt>: Clone + Debug + Send + Sync {
     /// when it was first created (before any variable binding occured).
     fn original_bookkeeping_table(&self) -> &[F];
 
-    /// Add new indices at the end of an MLE.
-    fn push_mle_indices(&mut self, new_indices: &[MleIndex<F>]);
-
     /// Number of original variables, not mutated.
     fn original_num_vars(&self) -> usize;
 

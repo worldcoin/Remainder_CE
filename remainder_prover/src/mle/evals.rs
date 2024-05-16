@@ -5,7 +5,7 @@ use std::{error::Error, fmt::Display, ops::Index};
 
 use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
-use ndarray::{Array, Dimension, IxDyn, ShapeError};
+use ndarray::{Array, ArrayView, Dimension, IxDyn, ShapeError};
 use rayon::{
     prelude::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSlice,
@@ -362,6 +362,17 @@ impl<F: FieldExt> MultilinearExtension<F> {
         mle
     }
 
+    pub fn new_from_ndarray(
+        ndarray: Array<F, IxDyn>,
+        axes_names: Vec<String>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let dim_info = DimInfo::new(ndarray.raw_dim(), axes_names)?;
+        let evals_vec = ndarray.into_raw_vec();
+        let evals = Evaluations::new(log2(evals_vec.len()) as usize, evals_vec);
+        let mle = Self::new_with_dim_info(evals, dim_info);
+        Ok(mle)
+    }
+
     pub fn set_dim_info(&mut self, dim_info: DimInfo) -> Result<(), DimensionError> {
         let num_var_from_dim: u32 = dim_info
             .dims
@@ -380,14 +391,14 @@ impl<F: FieldExt> MultilinearExtension<F> {
         Ok(())
     }
 
-    pub fn dim_info(&mut self) -> Option<&DimInfo> {
-        self.dim_info.as_ref()
+    pub fn dim_info(&self) -> &Option<DimInfo> {
+        &self.dim_info
     }
 
-    pub fn get_mle_as_ndarray(&mut self) -> Result<Array<F, IxDyn>, Box<dyn Error>> {
+    pub fn get_mle_as_ndarray(&mut self) -> Result<ArrayView<F, IxDyn>, Box<dyn Error>> {
         if let Some(dim_info) = self.dim_info() {
-            let ndarray: Array<F, IxDyn> =
-                Array::from_shape_vec(dim_info.dims.clone(), self.get_evals_vector().clone())?;
+            let ndarray: ArrayView<F, IxDyn> =
+                ArrayView::from_shape(dim_info.dims.clone(), self.get_evals_vector())?;
             Ok(ndarray)
         } else {
             return Err(DimensionError::NoDimensionInfoError().into());
@@ -395,7 +406,9 @@ impl<F: FieldExt> MultilinearExtension<F> {
     }
 
     pub fn get_axes_names(&mut self) -> Option<Vec<String>> {
-        self.dim_info().map(|dim_info| dim_info.axes_names.clone())
+        self.dim_info()
+            .as_ref()
+            .map(|dim_info| dim_info.axes_names.clone())
     }
 
     /// Generates a representation for the MLE of the zero function on zero
