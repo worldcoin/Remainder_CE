@@ -9,7 +9,7 @@ use std::fmt::Debug;
 use crate::{
     claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
     layer::{layer_enum::LayerEnum, Layer},
-    mle::{mle_enum::MleEnum, MleRef},
+    mle::{mle_enum::MleEnum, Mle},
 };
 
 use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
@@ -211,7 +211,7 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F, F>{
+            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F,>{
                 match self {
                     $(
                         Self::$var_name(layer) => layer.get_padded_mle(),
@@ -247,8 +247,10 @@ pub trait ProofSystem<F: FieldExt> {
     type Transcript: TranscriptSponge<F>;
 
     ///The MleRef type that serves as the output layer representation
-    type OutputLayer: MleRef<F = F>
-        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
+    type OutputLayer: Mle<F>
+        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
+        + Serialize
+        + for<'de> Deserialize<'de>;
 
     ///The logic that handles how to aggregate claims
     /// As this trait defines the 'bridge' between layers, some helper traits may be neccessary to implement

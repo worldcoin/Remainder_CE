@@ -9,10 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::layer::LayerId;
 
-use super::{
-    dense::{DenseMle, DenseMleRef},
-    MleIndex,
-};
+use super::{dense::DenseMle, MleIndex};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// A struct that holds the claim and the relevant bound values for the beta
@@ -116,7 +113,7 @@ impl<F: FieldExt> BetaValues<F> {
     /// Returns the full beta equality table as defined in \[Thaler13\], so over
     /// `n` challenge points it returns a table of size `2^n`. This is when we
     /// do still need the entire beta table.
-    pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMleRef<F> {
+    pub fn new_beta_equality_mle(layer_claim_vars: Vec<F>) -> DenseMle<F> {
         if !layer_claim_vars.is_empty() {
             // dynamic programming algorithm where we start from the most significant bit,
             // which is alternating in (1 - r) or (r) as the base case
@@ -137,11 +134,11 @@ impl<F: FieldExt> BetaValues<F> {
                 cur_table = firsthalf;
             }
 
-            let cur_table_mle_ref: DenseMleRef<F> =
-                DenseMle::new_from_raw(cur_table, LayerId::Input(0), None).mle_ref();
+            let cur_table_mle_ref: DenseMle<F> =
+                DenseMle::new_from_raw(cur_table, LayerId::Input(0));
             cur_table_mle_ref
         } else {
-            DenseMle::new_from_raw(vec![F::ONE], LayerId::Input(0), None).mle_ref()
+            DenseMle::new_from_raw(vec![F::ONE], LayerId::Input(0))
         }
     }
 }

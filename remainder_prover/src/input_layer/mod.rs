@@ -2,6 +2,7 @@
 
 use ark_std::cfg_into_iter;
 
+use crate::mle::Mle;
 use rayon::prelude::*;
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
@@ -25,7 +26,7 @@ mod tests;
 use crate::{
     claims::{wlx_eval::get_num_wlx_evaluations, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex, MleRef},
+    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
 
@@ -106,13 +107,13 @@ pub trait InputLayer<F: FieldExt> {
 
     /// Returns the contents of this `InputLayer` as an
     /// owned `DenseMle`.
-    fn get_padded_mle(&self) -> DenseMle<F, F>;
+    fn get_padded_mle(&self) -> DenseMle<F>;
 }
 
 /// Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs.
 pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {
     /// Creates a new InputLayer from a flat mle.
-    fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self;
+    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self;
 }
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.
@@ -125,7 +126,7 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     num_idx: usize,
 ) -> Result<Vec<F>, crate::claims::ClaimError> {
     let prep_timer = start_timer!(|| "Claim wlx prep");
-    let mut mle_ref = layer.get_padded_mle().mle_ref();
+    let mut mle_ref = layer.get_padded_mle();
     end_timer!(prep_timer);
     info!(
         "Wlx MLE len: {}",

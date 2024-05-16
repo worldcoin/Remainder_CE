@@ -39,9 +39,7 @@ fn test_mle_eval_two_variable() {
     let mle = DenseMle::new_from_raw(
         vec![Fr::from(4), Fr::from(2), Fr::from(5), Fr::from(7)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let mut expression = Expression::mle(mle);
     let num_indices = expression.index_mle_indices(0);
@@ -66,9 +64,7 @@ fn test_mle_eval_three_variable() {
             Fr::from(6),
         ],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let mut expression = Expression::mle(mle);
     let num_indices = expression.index_mle_indices(0);
@@ -84,9 +80,7 @@ fn test_mle_eval_sum_w_constant_then_scale() {
     let mle = DenseMle::new_from_raw(
         vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression = Expression::mle(mle);
     let mut expression = (expression + Expression::constant(Fr::from(5))) * Fr::from(2);
@@ -103,18 +97,14 @@ fn test_mle_eval_selector() {
     let mle_1 = DenseMle::new_from_raw(
         vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_1 = Expression::mle(mle_1);
 
     let mle_2 = DenseMle::new_from_raw(
         vec![Fr::from(1), Fr::from(9), Fr::from(8), Fr::from(2)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_2 = Expression::mle(mle_2);
 
@@ -138,9 +128,7 @@ fn test_mle_eval_selector() {
             Fr::from(7),
         ],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref(); // cancat actually prepends
+    ); // cancat actually prepends
 
     let challenge_concat = vec![Fr::from(7), Fr::from(3), Fr::from(2)]; // move the first challenge towards the end
 
@@ -159,9 +147,7 @@ fn test_mle_eval_selector_w_constant() {
     let mle_1 = DenseMle::new_from_raw(
         vec![Fr::from(4), Fr::from(2), Fr::from(1), Fr::from(7)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_1 = Expression::mle(mle_1);
 
@@ -184,9 +170,7 @@ fn test_mle_refs_eval() {
     let mle_1 = DenseMle::new_from_raw(
         vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let mut expression_1 = Expression::mle(mle_1.clone());
     let _ = expression_1.index_mle_indices(0);
@@ -195,9 +179,7 @@ fn test_mle_refs_eval() {
     let mle_2 = DenseMle::new_from_raw(
         vec![Fr::from(1), Fr::from(4), Fr::from(5), Fr::from(2)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let mut expression_2 = Expression::mle(mle_2.clone());
     let _ = expression_2.index_mle_indices(0);
@@ -221,9 +203,7 @@ fn test_mle_different_length_eval() {
     let mle_1 = DenseMle::new_from_raw(
         vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_1 = Expression::mle(mle_1);
 
@@ -239,9 +219,7 @@ fn test_mle_different_length_eval() {
             Fr::from(2),
         ],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_2 = Expression::mle(mle_2);
 
@@ -257,12 +235,10 @@ fn test_mle_different_length_eval() {
 
 #[test]
 fn test_all_mle_indices() {
-    let mle_1: crate::mle::dense::DenseMleRef<Fr> = DenseMle::new_from_raw(
+    let mle_1: crate::mle::dense::DenseMle<Fr> = DenseMle::new_from_raw(
         vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let mle_2 = DenseMle::new_from_raw(
         vec![
@@ -276,9 +252,7 @@ fn test_all_mle_indices() {
             Fr::from(2),
         ],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
     let expression_mle = Expression::mle(mle_2);
@@ -300,12 +274,10 @@ fn test_all_mle_indices() {
 
 #[test]
 fn test_nonlinear_mle_indices() {
-    let mle_1: crate::mle::dense::DenseMleRef<Fr> = DenseMle::new_from_raw(
+    let mle_1: crate::mle::dense::DenseMle<Fr> = DenseMle::new_from_raw(
         vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let mle_2 = DenseMle::new_from_raw(
         vec![
@@ -319,9 +291,7 @@ fn test_nonlinear_mle_indices() {
             Fr::from(2),
         ],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
     let expression_mle = Expression::mle(mle_2);
@@ -345,12 +315,10 @@ fn test_nonlinear_mle_indices() {
 
 #[test]
 fn test_linear_mle_indices() {
-    let mle_1: crate::mle::dense::DenseMleRef<Fr> = DenseMle::new_from_raw(
+    let mle_1: crate::mle::dense::DenseMle<Fr> = DenseMle::new_from_raw(
         vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let mle_2 = DenseMle::new_from_raw(
         vec![
@@ -364,9 +332,7 @@ fn test_linear_mle_indices() {
             Fr::from(2),
         ],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
     let expression_mle = Expression::mle(mle_2);
@@ -388,12 +354,10 @@ fn test_linear_mle_indices() {
 
 #[test]
 fn test_linear_mle_indices_2() {
-    let mle_1: crate::mle::dense::DenseMleRef<Fr> = DenseMle::new_from_raw(
+    let mle_1: crate::mle::dense::DenseMle<Fr> = DenseMle::new_from_raw(
         vec![Fr::from(2), Fr::from(2), Fr::from(1), Fr::from(3)],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let mle_2 = DenseMle::new_from_raw(
         vec![
@@ -407,9 +371,7 @@ fn test_linear_mle_indices_2() {
             Fr::from(2),
         ],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
     let expression_mle = Expression::mle(mle_2);
@@ -441,9 +403,7 @@ fn big_test_eval() {
     let mle = DenseMle::new_from_raw(
         vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::one()],
         LayerId::Input(0),
-        None,
-    )
-    .mle_ref();
+    );
 
     let expression3 = Expression::mle(mle.clone());
 

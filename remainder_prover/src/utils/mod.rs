@@ -60,33 +60,50 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 
 /// Helper function to create random MLE with specific number of vars
 // pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) ->
-// DenseMle<F, F> {
-pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F, F> {
+// DenseMle<F,> {
+pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
         .take(capacity as usize)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
 }
 
 /// Helper function to create random MLE with specific number of vars
-pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F, F> {
+pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F> {
     // let mut rng = test_rng();
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = (0..capacity)
         .map(|idx| F::from(idx as u64 + 1))
         .take(capacity as usize)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
 }
 
 /// Helper function to create random MLE with specific length
-pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F, F> {
+pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F> {
     let mut rng = test_rng();
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
         .take(capacity)
         .collect_vec();
-    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0), None)
+    DenseMle::new_from_raw(bookkeeping_table, LayerId::Input(0))
+}
+
+/// Returns a vector of MLEs for dataparallel testing according to the number of variables and
+/// number of dataparallel bits.
+pub fn get_dummy_random_mle_vec<F: FieldExt>(
+    num_vars: usize,
+    num_dataparallel_bits: usize,
+    rng: &mut impl Rng,
+) -> Vec<DenseMle<F>> {
+    (0..(1 << num_dataparallel_bits))
+        .map(|_| {
+            let mle_vec = (0..(1 << num_vars))
+                .map(|_| F::from(rng.gen::<u64>()))
+                .collect_vec();
+            DenseMle::new_from_raw(mle_vec, LayerId::Input(0))
+        })
+        .collect_vec()
 }
 
 ///returns an iterator that wil give permutations of binary bits of size

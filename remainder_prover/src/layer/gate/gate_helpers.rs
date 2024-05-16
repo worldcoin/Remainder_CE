@@ -4,10 +4,13 @@ use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use std::{cmp::max, fmt::Debug};
 
-use crate::{mle::betavalues::BetaValues, sumcheck::*};
+use crate::{
+    mle::{betavalues::BetaValues, Mle},
+    sumcheck::*,
+};
 use remainder_shared_types::FieldExt;
 
-use crate::mle::{dense::DenseMleRef, MleIndex, MleRef};
+use crate::mle::{dense::DenseMle, MleIndex};
 use thiserror::Error;
 
 use super::BinaryOperation;
@@ -46,19 +49,14 @@ pub enum GateError {
 /// * `independent_variable` - whether the `x` from above resides within at least one of the `mle_refs`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus one!)
 fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
-    mle_refs: &[impl MleRef<F = F>],
+    mle_refs: &[impl Mle<F>],
     independent_variable: bool,
     degree: usize,
 ) -> Result<Evals<F>, MleError> {
-    for mle_ref in mle_refs {
-        if !mle_ref.indexed() {
-            return Err(MleError::NotIndexedError);
-        }
-    }
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| mle_ref.num_iterated_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -78,14 +76,14 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                     .iter()
                     .map(|mle_ref| {
                         let zero = F::ZERO;
-                        let index = if mle_ref.num_vars() < max_num_vars {
-                            let max = 1 << mle_ref.num_vars();
+                        let index = if mle_ref.num_iterated_vars() < max_num_vars {
+                            let max = 1 << mle_ref.num_iterated_vars();
                             (index * 2) % max
                         } else {
                             index * 2
                         };
                         let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
-                        let second = if mle_ref.num_vars() != 0 {
+                        let second = if mle_ref.num_iterated_vars() != 0 {
                             *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
                         } else {
                             first
@@ -134,8 +132,8 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
                     .iter()
                     // Result of this `map()`: A list of evaluations of the MLEs at `index`
                     .map(|mle_ref| {
-                        let index = if mle_ref.num_vars() < max_num_vars {
-                            let max = 1 << mle_ref.num_vars();
+                        let index = if mle_ref.num_iterated_vars() < max_num_vars {
+                            let max = 1 << mle_ref.num_iterated_vars();
                             index % max
                         } else {
                             index
@@ -165,7 +163,7 @@ fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
 
 /// checks whether mle was bound correctly to all the challenge points!!!!!!!!!!
 pub fn check_fully_bound<F: FieldExt>(
-    mle_refs: &mut [impl MleRef<F = F>],
+    mle_refs: &mut [impl Mle<F>],
     challenges: Vec<F>,
 ) -> Result<F, GateError> {
     let mles_bound: Vec<bool> = mle_refs
@@ -200,7 +198,7 @@ pub fn check_fully_bound<F: FieldExt>(
 }
 
 /// Index mle indices for an array of mles.
-pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl MleRef<F = F>], index: usize) {
+pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl Mle<F>], index: usize) {
     mle_refs.iter_mut().for_each(|mle_ref| {
         mle_ref.index_mle_indices(index);
     })
@@ -210,7 +208,7 @@ pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl MleRef<F = F>], 
 pub fn prove_round_gate<F: FieldExt>(
     round_index: usize,
     challenge: F,
-    mle_refs: &mut [Vec<DenseMleRef<F>>],
+    mle_refs: &mut [Vec<DenseMle<F>>],
 ) -> Vec<F> {
     mle_refs.iter_mut().for_each(|mle_ref_vec| {
         mle_ref_vec.iter_mut().for_each(|mle_ref| {
@@ -237,8 +235,8 @@ pub fn prove_round_gate<F: FieldExt>(
 /// Fully evaluates a gate expression (for both the batched and non-batched case, add and mul gates).
 pub fn compute_full_gate<F: FieldExt>(
     challenges: Vec<F>,
-    lhs: &mut DenseMleRef<F>,
-    rhs: &mut DenseMleRef<F>,
+    lhs: &mut DenseMle<F>,
+    rhs: &mut DenseMle<F>,
     nonzero_gates: &[(usize, usize, usize)],
     copy_bits: usize,
 ) -> F {
@@ -300,7 +298,7 @@ pub fn compute_full_gate<F: FieldExt>(
 
 /// Compute sumcheck message without a beta table.
 pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
-    mles: &[impl MleRef<F = F>],
+    mles: &[impl Mle<F>],
     round_index: usize,
     degree: usize,
 ) -> Result<Vec<F>, GateError> {
@@ -324,10 +322,10 @@ pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
 /// Does all the necessary updates when proving a round for batched gate mles.
 #[allow(clippy::too_many_arguments)]
 pub fn prove_round_dataparallel_phase<F: FieldExt>(
-    lhs: &mut DenseMleRef<F>,
-    rhs: &mut DenseMleRef<F>,
-    beta_g1: &DenseMleRef<F>,
-    beta_g2: &mut DenseMleRef<F>,
+    lhs: &mut DenseMle<F>,
+    rhs: &mut DenseMle<F>,
+    beta_g1: &DenseMle<F>,
+    beta_g2: &mut DenseMle<F>,
     round_index: usize,
     challenge: F,
     nonzero_gates: &[(usize, usize, usize)],
@@ -351,10 +349,10 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
 
 /// Get the evals for a batched mul gate.
 pub fn libra_giraffe<F: FieldExt>(
-    f2_p2_x: &DenseMleRef<F>,
-    f3_p2_y: &DenseMleRef<F>,
-    beta_g2: &DenseMleRef<F>,
-    beta_g1: &DenseMleRef<F>,
+    f2_p2_x: &DenseMle<F>,
+    f3_p2_y: &DenseMle<F>,
+    beta_g2: &DenseMle<F>,
+    beta_g1: &DenseMle<F>,
     operation: BinaryOperation,
     nonzero_gates: &[(usize, usize, usize)],
     num_dataparallel_bits: usize,
@@ -367,10 +365,6 @@ pub fn libra_giraffe<F: FieldExt>(
         BinaryOperation::Add => 2,
         BinaryOperation::Mul => 3,
     };
-
-    if !beta_g2.indexed() {
-        return Err(GateError::BetaTableNotIndexed);
-    }
 
     // There is an independent variable, and we must extract `degree` evaluations of it, over `0..degree`.
     let eval_count = degree + 1;
@@ -385,7 +379,7 @@ pub fn libra_giraffe<F: FieldExt>(
             // Compute the beta successors the same way it's done for each mle. Do it outside the loop
             // because it only needs to be done once per product of mles.
             let first = *beta_g2.bookkeeping_table().get(p2_idx * 2).unwrap();
-            let second = if beta_g2.num_vars() != 0 {
+            let second = if beta_g2.num_iterated_vars() != 0 {
                 *beta_g2.bookkeeping_table().get(p2_idx * 2 + 1).unwrap()
             } else {
                 first
@@ -412,7 +406,7 @@ pub fn libra_giraffe<F: FieldExt>(
                         .bookkeeping_table()
                         .get((p2_idx * 2) + x * num_dataparallel_entries)
                         .unwrap();
-                    let f2_1_p2_x = if f2_p2_x.num_vars() != 0 {
+                    let f2_1_p2_x = if f2_p2_x.num_iterated_vars() != 0 {
                         *f2_p2_x
                             .bookkeeping_table()
                             .get((p2_idx * 2 + 1) + x * num_dataparallel_entries)
@@ -434,7 +428,7 @@ pub fn libra_giraffe<F: FieldExt>(
                         .bookkeeping_table()
                         .get((p2_idx * 2) + y * num_dataparallel_entries)
                         .unwrap();
-                    let f3_1_p2_y = if f3_p2_y.num_vars() != 0 {
+                    let f3_1_p2_y = if f3_p2_y.num_iterated_vars() != 0 {
                         *f3_p2_y
                             .bookkeeping_table()
                             .get((p2_idx * 2 + 1) + y * num_dataparallel_entries)

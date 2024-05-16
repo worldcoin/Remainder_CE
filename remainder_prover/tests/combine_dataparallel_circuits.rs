@@ -3,16 +3,12 @@ use itertools::{repeat_n, Itertools};
 
 use remainder::{
     builders::{
-        combine_input_layers::InputLayerBuilder,
-        combine_layers::combine_layers,
-        layer_builder::{
-            batched::{combine_zero_mle_ref, BatchedLayer},
-            simple_builders::ZeroBuilder,
-        },
+        combine_input_layers::InputLayerBuilder, combine_layers::combine_layers,
+        layer_builder::simple_builders::ZeroBuilder,
     },
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
+    mle::{dense::DenseMle, Mle, MleIndex},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
@@ -34,40 +30,25 @@ pub mod utils;
 /// ## Arguments
 /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
-struct DataParallelProductScaledSumCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F, F>>,
-    mle_2_vec: Vec<DenseMle<F, F>>,
+struct DataParallelProductScaledSumCircuitAlt<F: FieldExt> {
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
-impl<F: FieldExt> GKRCircuit<F> for DataParallelProductScaledSumCircuit<F> {
+impl<F: FieldExt> GKRCircuit<F> for DataParallelProductScaledSumCircuitAlt<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
-        let first_layer_builders = self
-            .mle_1_vec
-            .iter()
-            .zip(self.mle_2_vec.iter())
-            .map(|(mle_1, mle_2)| ProductScaledBuilder::new(mle_1.clone(), mle_2.clone()))
-            .collect_vec();
-        let first_layer_outputs = layers.add_gkr(BatchedLayer::new(first_layer_builders));
+        let first_layer_builder = ProductScaledBuilder::new(self.mle_1.clone(), self.mle_2.clone());
+        let first_layer_output = layers.add_gkr(first_layer_builder);
 
-        let second_layer_builders = first_layer_outputs
-            .into_iter()
-            .zip(self.mle_1_vec.iter())
-            .map(|(first_layer_output, mle_1)| {
-                ProductSumBuilder::new(first_layer_output, mle_1.clone())
-            })
-            .collect_vec();
-        let second_layer_outputs = layers.add_gkr(BatchedLayer::new(second_layer_builders));
+        let second_layer_builder = ProductSumBuilder::new(first_layer_output, self.mle_1.clone());
+        let second_layer_output = layers.add_gkr(second_layer_builder);
 
-        let zero_builders = second_layer_outputs
-            .into_iter()
-            .map(|second_layer_output| ZeroBuilder::new(second_layer_output))
-            .collect_vec();
-        let outputs = layers.add_gkr(BatchedLayer::new(zero_builders));
-        let output = combine_zero_mle_ref(outputs);
+        let zero_builder = ZeroBuilder::new(second_layer_output);
+        let output = layers.add_gkr(zero_builder);
 
         Witness {
             layers,
@@ -87,41 +68,27 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelProductScaledSumCircuit<F> {
 /// ## Arguments
 /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
-struct DataParallelSumConstantCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F, F>>,
-    mle_2_vec: Vec<DenseMle<F, F>>,
+struct DataParallelSumConstantCircuitAlt<F: FieldExt> {
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
-impl<F: FieldExt> GKRCircuit<F> for DataParallelSumConstantCircuit<F> {
+impl<F: FieldExt> GKRCircuit<F> for DataParallelSumConstantCircuitAlt<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
-        let first_layer_builders = self
-            .mle_1_vec
-            .iter()
-            .zip(self.mle_2_vec.iter())
-            .map(|(mle_1, mle_2)| ProductSumBuilder::new(mle_1.clone(), mle_2.clone()))
-            .collect_vec();
-        let first_layer_outputs = layers.add_gkr(BatchedLayer::new(first_layer_builders));
+        let first_layer_builder = ProductSumBuilder::new(self.mle_1.clone(), self.mle_2.clone());
+        let first_layer_output = layers.add_gkr(first_layer_builder);
 
-        let second_layer_builders = first_layer_outputs
-            .into_iter()
-            .zip(self.mle_1_vec.iter())
-            .map(|(first_layer_output, mle_1)| {
-                ConstantScaledSumBuilder::new(first_layer_output, mle_1.clone())
-            })
-            .collect_vec();
+        let second_layer_builder =
+            ConstantScaledSumBuilder::new(first_layer_output, self.mle_1.clone());
 
-        let second_layer_outputs = layers.add_gkr(BatchedLayer::new(second_layer_builders));
+        let second_layer_output = layers.add_gkr(second_layer_builder);
 
-        let zero_builders = second_layer_outputs
-            .into_iter()
-            .map(|second_layer_output| ZeroBuilder::new(second_layer_output))
-            .collect_vec();
-        let outputs = layers.add_gkr(BatchedLayer::new(zero_builders));
-        let output = combine_zero_mle_ref(outputs);
+        let zero_builder = ZeroBuilder::new(second_layer_output);
+        let output = layers.add_gkr(zero_builder);
 
         Witness {
             layers,
@@ -141,42 +108,29 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelSumConstantCircuit<F> {
 /// ## Arguments
 /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
-struct DataParallelConstantScaledCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F, F>>,
-    mle_2_vec: Vec<DenseMle<F, F>>,
+struct DataParallelConstantScaledCircuitAlt<F: FieldExt> {
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
-impl<F: FieldExt> GKRCircuit<F> for DataParallelConstantScaledCircuit<F> {
+impl<F: FieldExt> GKRCircuit<F> for DataParallelConstantScaledCircuitAlt<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let mut layers = Layers::new();
 
-        let first_layer_builders = self
-            .mle_1_vec
-            .iter()
-            .zip(self.mle_2_vec.iter())
-            .map(|(mle_1, mle_2)| ConstantScaledSumBuilder::new(mle_1.clone(), mle_2.clone()))
-            .collect_vec();
+        let first_layer_builder =
+            ConstantScaledSumBuilder::new(self.mle_1.clone(), self.mle_2.clone());
 
-        let first_layer_outputs = layers.add_gkr(BatchedLayer::new(first_layer_builders));
+        let first_layer_output = layers.add_gkr(first_layer_builder);
 
-        let second_layer_builders = first_layer_outputs
-            .into_iter()
-            .zip(self.mle_1_vec.iter())
-            .map(|(first_layer_output, mle_1)| {
-                ProductScaledBuilder::new(first_layer_output, mle_1.clone())
-            })
-            .collect_vec();
+        let second_layer_builder =
+            ProductScaledBuilder::new(first_layer_output, self.mle_1.clone());
 
-        let second_layer_outputs = layers.add_gkr(BatchedLayer::new(second_layer_builders));
+        let second_layer_output = layers.add_gkr(second_layer_builder);
 
-        let zero_builders = second_layer_outputs
-            .into_iter()
-            .map(|second_layer_output| ZeroBuilder::new(second_layer_output))
-            .collect_vec();
-        let outputs = layers.add_gkr(BatchedLayer::new(zero_builders));
-        let output = combine_zero_mle_ref(outputs);
+        let zero_builder = ZeroBuilder::new(second_layer_output);
+        let output = layers.add_gkr(zero_builder);
 
         Witness {
             layers,
@@ -194,58 +148,33 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelConstantScaledCircuit<F> {
 /// * `mle_1_vec` - An MLE vec with arbitrary bookkeeping table values.
 /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
-struct DataParallelCombinedCircuit<F: FieldExt> {
-    mle_1_vec: Vec<DenseMle<F, F>>,
-    mle_2_vec: Vec<DenseMle<F, F>>,
-    num_dataparallel_bits: usize,
+struct DataParallelCombinedCircuitAlt<F: FieldExt> {
+    mle_1: DenseMle<F>,
+    mle_2: DenseMle<F>,
 }
 
-impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuit<F> {
+impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuitAlt<F> {
     type ProofSystem = DefaultProofSystem;
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let mut combined_mle_1 = DenseMle::<F, F>::combine_mle_batch(self.mle_1_vec.clone());
-        let mut combined_mle_2 = DenseMle::<F, F>::combine_mle_batch(self.mle_2_vec.clone());
-        combined_mle_1.layer_id = LayerId::Input(0);
-        combined_mle_2.layer_id = LayerId::Input(0);
-        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut combined_mle_1, &mut combined_mle_2];
+        self.mle_1.layer_id = LayerId::Input(0);
+        self.mle_2.layer_id = LayerId::Input(0);
+        let input_mles: Vec<&mut dyn Mle<F>> = vec![&mut self.mle_1, &mut self.mle_2];
         let input_layer = InputLayerBuilder::new(input_mles, None, LayerId::Input(0))
             .to_input_layer::<PublicInputLayer<F>>()
             .into();
 
-        self.mle_1_vec
-            .iter_mut()
-            .zip(self.mle_2_vec.iter_mut())
-            .for_each(|(mle_1, mle_2)| {
-                mle_1.set_prefix_bits(Some(
-                    combined_mle_1
-                        .get_prefix_bits()
-                        .unwrap()
-                        .into_iter()
-                        .chain(repeat_n(MleIndex::Iterated, self.num_dataparallel_bits))
-                        .collect_vec(),
-                ));
-                mle_2.set_prefix_bits(Some(
-                    combined_mle_2
-                        .get_prefix_bits()
-                        .unwrap()
-                        .into_iter()
-                        .chain(repeat_n(MleIndex::Iterated, self.num_dataparallel_bits))
-                        .collect_vec(),
-                ));
-            });
-
-        let mut pss_circuit = DataParallelProductScaledSumCircuit {
-            mle_1_vec: self.mle_1_vec.clone(),
-            mle_2_vec: self.mle_2_vec.clone(),
+        let mut pss_circuit = DataParallelProductScaledSumCircuitAlt {
+            mle_1: self.mle_1.clone(),
+            mle_2: self.mle_2.clone(),
         };
-        let mut sc_circuit = DataParallelSumConstantCircuit {
-            mle_1_vec: self.mle_1_vec.clone(),
-            mle_2_vec: self.mle_2_vec.clone(),
+        let mut sc_circuit = DataParallelSumConstantCircuitAlt {
+            mle_1: self.mle_1.clone(),
+            mle_2: self.mle_2.clone(),
         };
-        let mut cs_circuit = DataParallelConstantScaledCircuit {
-            mle_1_vec: self.mle_1_vec.clone(),
-            mle_2_vec: self.mle_2_vec.clone(),
+        let mut cs_circuit = DataParallelConstantScaledCircuitAlt {
+            mle_1: self.mle_1.clone(),
+            mle_2: self.mle_2.clone(),
         };
 
         let pss_witness = pss_circuit.synthesize();
@@ -284,33 +213,14 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCombinedCircuit<F> {
     }
 }
 
-impl<F: FieldExt> DataParallelCombinedCircuit<F> {
-    fn new(
-        mle_1_vec: Vec<DenseMle<F, F>>,
-        mle_2_vec: Vec<DenseMle<F, F>>,
-        num_dataparallel_bits: usize,
-    ) -> Self {
-        let all_num_vars: Vec<usize> = mle_1_vec
-            .iter()
-            .chain(mle_2_vec.iter())
-            .map(|mle| mle.num_iterated_vars())
-            .collect();
-        let all_vars_same = all_num_vars.iter().fold(true, |acc, elem| {
-            (elem == all_num_vars.first().unwrap()) & acc
-        });
-        assert!(all_vars_same);
-        assert_eq!(mle_1_vec.len(), mle_2_vec.len());
-        assert_eq!(mle_1_vec.len(), 1 << num_dataparallel_bits);
-        Self {
-            mle_1_vec,
-            mle_2_vec,
-            num_dataparallel_bits,
-        }
+impl<F: FieldExt> DataParallelCombinedCircuitAlt<F> {
+    fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>) -> Self {
+        Self { mle_1, mle_2 }
     }
 }
 
 #[test]
-fn test_combined_dataparallel_circuit() {
+fn test_combined_dataparallel_circuit_alt() {
     const NUM_DATAPARALLEL_BITS: usize = 1;
     const VARS_MLE_1_2: usize = 2;
     let mut rng = test_rng();
@@ -318,7 +228,26 @@ fn test_combined_dataparallel_circuit() {
     let mle_1_vec = get_dummy_random_mle_vec(VARS_MLE_1_2, NUM_DATAPARALLEL_BITS, &mut rng);
     let mle_2_vec = get_dummy_random_mle_vec(VARS_MLE_1_2, NUM_DATAPARALLEL_BITS, &mut rng);
 
-    let combined_circuit: DataParallelCombinedCircuit<Fr> =
-        DataParallelCombinedCircuit::new(mle_1_vec, mle_2_vec, NUM_DATAPARALLEL_BITS);
+    // These checks can possibly be done with the newly designed batching bits/system
+    let all_num_vars: Vec<usize> = mle_1_vec
+        .iter()
+        .chain(mle_2_vec.iter())
+        .map(|mle| mle.num_iterated_vars())
+        .collect();
+    let all_vars_same = all_num_vars.iter().fold(true, |acc, elem| {
+        (*elem == mle_1_vec[0].num_iterated_vars()) & acc
+    });
+    assert!(all_vars_same);
+    assert_eq!(mle_1_vec.len(), mle_2_vec.len());
+    assert_eq!(mle_1_vec.len(), 1 << NUM_DATAPARALLEL_BITS);
+    // These checks can possibly be done with the newly designed batching bits/system
+
+    // the batched mle should be able to demonstrate that there's NUM_DATA_PARALLEL_BITS of batch bits
+    let mle_1_vec_batched = DenseMle::batch_mles(mle_1_vec);
+    let mle_2_vec_batched = DenseMle::batch_mles(mle_2_vec);
+    // the batched mle should be able to demonstrate that there's NUM_DATA_PARALLEL_BITS of batch bits
+
+    let combined_circuit: DataParallelCombinedCircuitAlt<Fr> =
+        DataParallelCombinedCircuitAlt::new(mle_1_vec_batched, mle_2_vec_batched);
     test_circuit(combined_circuit, None)
 }

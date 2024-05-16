@@ -1,16 +1,55 @@
 #[cfg(test)]
 mod tests;
 
-use std::ops::Index;
+use std::{error::Error, fmt::Display, ops::Index};
 
-use ark_std::cfg_into_iter;
+use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
+use ndarray::{Array, ArrayView, Dimension, IxDyn, ShapeError};
 use rayon::{
     prelude::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSlice,
 };
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone)]
+pub enum DimensionError {
+    #[error("Dimensions: {0} do not match with number of axes: {1} as indicated by their names.")]
+    DimensionMismatchError(usize, usize),
+    #[error("Dimensions: {0} do not match with the numvar: {1} of the mle.")]
+    DimensionNumVarError(usize, usize),
+    #[error("Trying to get the underlying mle as an ndarray, but there is no dimension info.")]
+    NoDimensionInfoError(),
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct DimInfo {
+    dims: IxDyn,
+    axes_names: Vec<String>,
+}
+
+impl DimInfo {
+    pub fn new(dims: IxDyn, axes_names: Vec<String>) -> Result<Self, DimensionError> {
+        if dims.ndim() != axes_names.len() {
+            return Err(DimensionError::DimensionMismatchError(
+                dims.ndim(),
+                axes_names.len(),
+            ));
+        }
+        Ok(Self { dims, axes_names })
+    }
+}
+
+impl std::fmt::Debug for DimInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DimensionInfo")
+            .field("dim sizes", &self.dims.slice())
+            .field("axes names", &self.axes_names)
+            .finish()
+    }
+}
 
 // -------------- Various Helper Functions -----------------
 
@@ -117,7 +156,7 @@ impl<F: FieldExt> Evaluations<F> {
         }
     }
 
-    fn num_vars(&self) -> usize {
+    pub fn num_vars(&self) -> usize {
         self.num_vars
     }
 
@@ -304,21 +343,79 @@ impl<'a, F: FieldExt> Iterator for EvaluationsPairIterator<'a, F> {
 pub struct MultilinearExtension<F> {
     /// The bookkeeping table with the evaluations of `f` on the hypercube.
     pub f: Evaluations<F>,
+    dim_info: Option<DimInfo>,
 }
 
 impl<F: FieldExt> MultilinearExtension<F> {
     /// Generate a new MultilinearExtension from a representation `evals` of a
     /// function `f`.
     pub fn new(evals: Evaluations<F>) -> Self {
-        Self { f: evals }
+        Self {
+            f: evals,
+            dim_info: None,
+        }
+    }
+
+    pub fn new_with_dim_info(evals: Evaluations<F>, dim_info: DimInfo) -> Self {
+        let mut mle = Self::new(evals);
+        mle.set_dim_info(dim_info).unwrap();
+        mle
+    }
+
+    pub fn new_from_ndarray(
+        ndarray: Array<F, IxDyn>,
+        axes_names: Vec<String>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let dim_info = DimInfo::new(ndarray.raw_dim(), axes_names)?;
+        let evals_vec = ndarray.into_raw_vec();
+        let evals = Evaluations::new(log2(evals_vec.len()) as usize, evals_vec);
+        let mle = Self::new_with_dim_info(evals, dim_info);
+        Ok(mle)
+    }
+
+    pub fn set_dim_info(&mut self, dim_info: DimInfo) -> Result<(), DimensionError> {
+        let num_var_from_dim: u32 = dim_info
+            .dims
+            .slice()
+            .iter()
+            .map(|dim| log2(*dim as usize))
+            .sum();
+        if num_var_from_dim as usize != self.num_vars() {
+            return Err(DimensionError::DimensionNumVarError(
+                num_var_from_dim as usize,
+                self.num_vars(),
+            ));
+        }
+
+        self.dim_info = Some(dim_info);
+        Ok(())
+    }
+
+    pub fn dim_info(&self) -> &Option<DimInfo> {
+        &self.dim_info
+    }
+
+    pub fn get_mle_as_ndarray(&mut self) -> Result<ArrayView<F, IxDyn>, Box<dyn Error>> {
+        if let Some(dim_info) = self.dim_info() {
+            let ndarray: ArrayView<F, IxDyn> =
+                ArrayView::from_shape(dim_info.dims.clone(), self.get_evals_vector())?;
+            Ok(ndarray)
+        } else {
+            return Err(DimensionError::NoDimensionInfoError().into());
+        }
+    }
+
+    pub fn get_axes_names(&mut self) -> Option<Vec<String>> {
+        self.dim_info()
+            .as_ref()
+            .map(|dim_info| dim_info.axes_names.clone())
     }
 
     /// Generates a representation for the MLE of the zero function on zero
     /// variables.
     pub fn new_zero() -> Self {
-        Self {
-            f: Evaluations::new_zero(),
-        }
+        let zero_evals = Evaluations::new_zero();
+        Self::new(zero_evals)
     }
 
     /// Returns `n`, the number of arguments `\tilde{f}` takes.

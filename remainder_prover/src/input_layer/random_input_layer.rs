@@ -8,10 +8,11 @@ use remainder_shared_types::{
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleRef},
+    mle::{dense::DenseMle, mle_enum::MleEnum},
 };
 
 use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError};
+use crate::mle::Mle;
 
 /// Represents a random input layer, where we generate random constants in the
 /// form of coefficients of an MLE that we can use for packing constants.
@@ -74,11 +75,10 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         claim: Claim<F>,
         _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
-        let mut mle_ref =
-            DenseMle::<F, F>::new_from_raw(commitment.to_vec(), LayerId::Input(0), None).mle_ref();
+        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.to_vec(), LayerId::Input(0));
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_vars() != 0 {
+        let eval = if mle_ref.num_iterated_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -99,8 +99,8 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         &self.layer_id
     }
 
-    fn get_padded_mle(&self) -> DenseMle<F, F> {
-        DenseMle::new_from_raw(self.mle.clone(), self.layer_id, None)
+    fn get_padded_mle(&self) -> DenseMle<F> {
+        DenseMle::new_from_raw(self.mle.clone(), self.layer_id)
     }
 }
 
@@ -116,8 +116,8 @@ impl<F: FieldExt> RandomInputLayer<F> {
     }
 
     /// Return the MLE stored in self as a DenseMle with the correct layer ID.
-    pub fn get_mle(&self) -> DenseMle<F, F> {
-        DenseMle::new_from_raw(self.mle.clone(), self.layer_id, None)
+    pub fn get_mle(&self) -> DenseMle<F> {
+        DenseMle::new_from_raw(self.mle.clone(), self.layer_id)
     }
 }
 

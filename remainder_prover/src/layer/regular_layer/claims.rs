@@ -15,9 +15,11 @@ use crate::{
         combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
         Layer, LayerError,
     },
-    mle::{mle_enum::MleEnum, MleRef},
+    mle::mle_enum::MleEnum,
     sumcheck::evaluate_at_a_point,
 };
+
+use crate::mle::Mle;
 
 use super::RegularLayer;
 

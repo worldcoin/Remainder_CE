@@ -134,7 +134,7 @@ pub fn verify_sumcheck_messages<F: FieldExt>(
 }
 
 pub fn get_dummy_claim<F: FieldExt>(
-    mle_ref: DenseMleRef<F>,
+    mle_ref: DenseMle<F>,
     rng: &mut impl Rng,
     challenges: Option<Vec<F>>,
 ) -> Claim<F> {
@@ -250,7 +250,7 @@ fn test_linear_sum() {
     let newbeta = BetaValues::new(vec![]);
 
     let mle_v1 = vec![Fr::from(3), Fr::from(2), Fr::from(2), Fr::from(5)];
-    let mle1: DenseMleRef<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None).mle_ref();
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
     let mut mleexpr = Expression::mle(mle1);
     mleexpr.index_mle_indices(0);
     mleexpr.fix_variable_at_index(0, Fr::from(2));
@@ -267,12 +267,12 @@ fn test_quadratic_sum() {
     let new_beta = BetaValues::new(vec![(0, Fr::from(2)), (1, Fr::from(4))]);
 
     let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mut expression = Expression::products(vec![mle1.mle_ref(), mle2.mle_ref()]);
+    let mut expression = Expression::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
 
     let res = compute_sumcheck_message_beta_cascade(&mut expression, 1, 3, &new_beta);
@@ -301,12 +301,12 @@ fn test_quadratic_sum_differently_sized_mles2() {
         Fr::from(1),
         Fr::from(4),
     ];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mut expression = Expression::products(vec![mle1.mle_ref(), mle2.mle_ref()]);
+    let mut expression = Expression::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
     expression.fix_variable_at_index(2, Fr::from(3));
 
@@ -327,24 +327,24 @@ fn test_dummy_sumcheck_1() {
     let mut rng = test_rng();
     let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
 
-    let mle_new: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0), None);
+    let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
     let mle_v2 = vec![Fr::from(1), Fr::from(5), Fr::from(1), Fr::from(5)];
-    let mle_2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
     let mle_output = DenseMle::new_from_iter(
         mle_new
+            .clone()
             .into_iter()
-            .zip(mle_2.into_iter())
+            .zip(mle_2.clone().into_iter())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
-        None,
     );
-    let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
+    let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
     // dbg!(claimed_claim);
 
-    let mle_ref_1 = mle_new.mle_ref();
-    let mle_ref_2 = mle_2.mle_ref();
+    let mle_ref_1 = mle_new;
+    let mle_ref_2 = mle_2;
 
     let mut expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -358,22 +358,22 @@ fn test_dummy_sumcheck_2() {
     // let layer_claims = (vec![Fr::from(3), Fr::from(4), Fr::from(2)], Fr::one());
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(2), Fr::from(3)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
     let mle_output = DenseMle::new_from_iter(
-        mle1.into_iter()
-            .zip(mle2.into_iter())
+        mle1.clone()
+            .into_iter()
+            .zip(mle2.clone().into_iter())
             .map(|(first, second)| first * second),
         LayerId::Input(0),
-        None,
     );
-    let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
+    let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1;
+    let mle_ref_2 = mle2;
 
     let mut expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -395,22 +395,22 @@ fn test_dummy_sumcheck_3() {
         Fr::from(1),
         Fr::from(4),
     ];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
     let mle_output = DenseMle::new_from_iter(
-        mle1.into_iter()
-            .zip(mle2.into_iter().chain(mle2.into_iter()))
+        mle1.clone()
+            .into_iter()
+            .zip(mle2.clone().into_iter().chain(mle2.clone().into_iter()))
             .map(|(first, second)| first * second),
         LayerId::Input(0),
-        None,
     );
-    let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
+    let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1;
+    let mle_ref_2 = mle2;
 
     let mut expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -423,22 +423,22 @@ fn test_dummy_sumcheck_3() {
 fn test_dummy_sumcheck_sum_small() {
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(0), Fr::from(1), Fr::from(2)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
     let mle_output = DenseMle::new_from_iter(
-        mle1.into_iter()
-            .zip(mle2.into_iter())
+        mle1.clone()
+            .into_iter()
+            .zip(mle2.clone().into_iter())
             .map(|(first, second)| first + second),
         LayerId::Input(0),
-        None,
     );
-    let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
+    let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1;
+    let mle_ref_2 = mle2;
 
     let mut expression = mle_ref_1.expression() + mle_ref_2.expression();
 
@@ -453,21 +453,20 @@ fn test_dummy_sumcheck_concat() {
     // let layer_claims = (vec![Fr::from(3), Fr::from(1), Fr::from(2)], Fr::one());
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(5), Fr::from(2)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(2), Fr::from(3)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let output: DenseMle<Fr, Fr> = DenseMle::new_from_raw(
+    let output: DenseMle<Fr> = DenseMle::new_from_raw(
         vec![Fr::from(5), Fr::from(2), Fr::from(2), Fr::from(3)],
         LayerId::Input(0),
-        None,
     );
 
-    let layer_claims = get_dummy_claim(output.mle_ref(), &mut rng, None);
+    let layer_claims = get_dummy_claim(output, &mut rng, None);
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1;
+    let mle_ref_2 = mle2;
 
     let expression = Expression::mle(mle_ref_1);
     let expr2 = Expression::mle(mle_ref_2);
@@ -487,12 +486,12 @@ fn test_dummy_sumcheck_concat_2() {
     // );
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(1), Fr::from(3), Fr::from(1), Fr::from(6)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_out = DenseMle::<Fr, Fr>::new_from_raw(
+    let mle_out = DenseMle::<Fr>::new_from_raw(
         vec![
             Fr::from(1),
             Fr::from(1),
@@ -504,12 +503,11 @@ fn test_dummy_sumcheck_concat_2() {
             Fr::from(6),
         ],
         LayerId::Input(0),
-        None,
     );
-    let layer_claims = get_dummy_claim(mle_out.mle_ref(), &mut rng, None);
+    let layer_claims = get_dummy_claim(mle_out, &mut rng, None);
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1;
+    let mle_ref_2 = mle2;
 
     let expression = Expression::mle(mle_ref_1);
     let expr2 = Expression::mle(mle_ref_2);
@@ -538,13 +536,13 @@ fn test_dummy_sumcheck_concat_aggro() {
         Fr::from(31),
         Fr::from(4).neg(),
     ];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(1), Fr::from(3), Fr::from(1), Fr::from(6)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1.clone();
+    let mle_ref_2 = mle2.clone();
 
     let mle_output = DenseMle::new_from_iter(
         mle1.into_iter()
@@ -552,9 +550,8 @@ fn test_dummy_sumcheck_concat_aggro() {
             .map(|(first, second)| first * second)
             .flat_map(|x| vec![x, x]),
         LayerId::Input(0),
-        None,
     );
-    let layer_claims = get_dummy_claim(mle_output.mle_ref(), &mut rng, None);
+    let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
     let expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
     let expr2 = expression.clone();
@@ -574,13 +571,13 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     // );
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1), Fr::from(2)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(5), Fr::from(1291)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1;
+    let mle_ref_2 = mle2;
 
     let expression = Expression::mle(mle_ref_1);
     let expr2 = Expression::mle(mle_ref_2);
@@ -599,13 +596,13 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
 fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(1390), Fr::from(222104)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(5), Fr::from(1291)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1;
+    let mle_ref_2 = mle2;
 
     let expression = Expression::mle(mle_ref_1);
     let expr2 = Expression::mle(mle_ref_2);
@@ -625,13 +622,13 @@ fn test_dummy_sumcheck_sum() {
     // let layer_claims = (vec![Fr::from(2), Fr::from(1), Fr::from(10)], Fr::one());
     let mut rng = test_rng();
     let mle_v1 = vec![Fr::from(0), Fr::from(2)];
-    let mle1: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0), None);
+    let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
 
     let mle_v2 = vec![Fr::from(5), Fr::from(1291)];
-    let mle2: DenseMle<Fr, Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0), None);
+    let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mle_ref_1 = mle1.mle_ref();
-    let mle_ref_2 = mle2.mle_ref();
+    let mle_ref_1 = mle1;
+    let mle_ref_2 = mle2;
 
     let expression = Expression::mle(mle_ref_1);
     let expr2 = Expression::mle(mle_ref_2);
@@ -648,8 +645,7 @@ fn test_dummy_sumcheck_sum() {
 #[test]
 fn test_beta_cascade_1() {
     let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
-    let mut mle_ref_1: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
     mle_ref_1.index_mle_indices(0);
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
     let betacascade_evals = beta_cascade(&[&mle_ref_1], 2, 0, &beta_vals, &[]);
@@ -661,10 +657,8 @@ fn test_beta_cascade_1() {
 fn test_beta_cascade_2() {
     let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
     let mle_2_vec = vec![Fr::from(4_u64), Fr::from(2_u64), Fr::from(3_u64), Fr::one()];
-    let mut mle_ref_1: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
-    let mut mle_ref_2: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
+    let mut mle_ref_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0));
     mle_ref_1.index_mle_indices(0);
     mle_ref_2.index_mle_indices(0);
     let beta_vals = vec![Fr::from(2_u64), Fr::from(3_u64)];
@@ -683,12 +677,9 @@ fn test_beta_cascade_3() {
     let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
     let mle_2_vec = vec![Fr::from(4_u64), Fr::from(2_u64), Fr::from(3_u64), Fr::one()];
     let mle_3_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
-    let mut mle_ref_1: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
-    let mut mle_ref_2: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0), None).mle_ref();
-    let mut mle_ref_3: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
+    let mut mle_ref_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0));
+    let mut mle_ref_3: DenseMle<Fr> = DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0));
     mle_ref_1.index_mle_indices(0);
     mle_ref_2.index_mle_indices(0);
     mle_ref_3.index_mle_indices(0);
@@ -711,12 +702,9 @@ fn test_successors_from_mle_ref_product() {
     let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
     let mle_2_vec = vec![Fr::from(4_u64), Fr::from(2_u64), Fr::from(3_u64), Fr::one()];
     let mle_3_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
-    let mut mle_ref_1: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
-    let mut mle_ref_2: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0), None).mle_ref();
-    let mut mle_ref_3: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
+    let mut mle_ref_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0));
+    let mut mle_ref_3: DenseMle<Fr> = DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0));
     mle_ref_1.index_mle_indices(0);
     mle_ref_2.index_mle_indices(0);
     mle_ref_3.index_mle_indices(0);
@@ -743,12 +731,9 @@ fn test_beta_cascade_step() {
     let mle_1_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
     let mle_2_vec = vec![Fr::from(4_u64), Fr::from(2_u64), Fr::from(3_u64), Fr::one()];
     let mle_3_vec = vec![Fr::one(), Fr::from(2_u64), Fr::from(2_u64), Fr::from(3_u64)];
-    let mut mle_ref_1: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0), None).mle_ref();
-    let mut mle_ref_2: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0), None).mle_ref();
-    let mut mle_ref_3: DenseMleRef<Fr> =
-        DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0), None).mle_ref();
+    let mut mle_ref_1: DenseMle<Fr> = DenseMle::new_from_raw(mle_1_vec, LayerId::Input(0));
+    let mut mle_ref_2: DenseMle<Fr> = DenseMle::new_from_raw(mle_2_vec, LayerId::Input(0));
+    let mut mle_ref_3: DenseMle<Fr> = DenseMle::new_from_raw(mle_3_vec, LayerId::Input(0));
     mle_ref_1.index_mle_indices(0);
     mle_ref_2.index_mle_indices(0);
     mle_ref_3.index_mle_indices(0);

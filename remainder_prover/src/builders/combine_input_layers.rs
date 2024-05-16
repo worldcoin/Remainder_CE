@@ -143,7 +143,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
                     total_num_vars,
                     input_mle.num_iterated_vars(),
                 );
-                input_mle.set_prefix_bits(Some(prefix_bits));
+                input_mle.add_prefix_bits(prefix_bits);
                 current_padded_usage += 2_u32.pow(input_mle.num_iterated_vars() as u32);
             } else {
                 let extra_mle_index = input_mles.len() - input_mle_idx;
@@ -174,7 +174,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
     ) -> Result<(), &'static str> {
         let new_bits = self.extra_mle_indices.as_mut().ok_or("Called add_extra_mle too many times compared to the extra_mles that were declared when creating the builder")?;
         let new_bits = new_bits.remove(0);
-        extra_mle.set_prefix_bits(Some(new_bits));
+        extra_mle.add_prefix_bits(new_bits);
         let extra_mle = dyn_clone::clone_box(extra_mle);
         self.mles.push(extra_mle);
         Ok(())
@@ -182,7 +182,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
 
     /// Combines the list of input MLEs in the input layer into one giant MLE by interleaving them
     /// assuming that the indices of the bookkeeping table are stored in little endian.
-    fn combine_input_mles(&self) -> DenseMle<F, F> {
+    fn combine_input_mles(&self) -> DenseMle<F> {
         let input_mles = &self.mles;
         let mle_combine_indices = argsort(
             &input_mles
@@ -219,12 +219,12 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         // --- Convert the final bookkeeping table back to "little-endian" ---
         let re_inverted_final_bookkeeping_table =
             invert_mle_bookkeeping_table(final_bookkeeping_table);
-        DenseMle::new_from_raw(re_inverted_final_bookkeeping_table, self.layer_id, None)
+        DenseMle::new_from_raw(re_inverted_final_bookkeeping_table, self.layer_id)
     }
 
     /// Turn this builder into an input layer.
     pub fn to_input_layer<I: MleInputLayer<F>>(self) -> I {
-        let final_mle: DenseMle<F, F> = self.combine_input_mles();
+        let final_mle: DenseMle<F> = self.combine_input_mles();
         I::new(final_mle, self.layer_id)
     }
 
@@ -236,7 +236,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         ligero_root: LcRoot<LigeroEncoding<F>, F>,
         verifier_is_precommit: bool,
     ) -> LigeroInputLayer<F> {
-        let final_mle: DenseMle<F, F> = self.combine_input_mles();
+        let final_mle: DenseMle<F> = self.combine_input_mles();
         LigeroInputLayer::<F>::new_with_ligero_commitment(
             final_mle,
             self.layer_id,
@@ -249,7 +249,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
 
     /// Turn the builder into input layer with rho inv specified.
     pub fn to_input_layer_with_rho_inv(self, rho_inv: u8, ratio: f64) -> LigeroInputLayer<F> {
-        let final_mle: DenseMle<F, F> = self.combine_input_mles();
+        let final_mle: DenseMle<F> = self.combine_input_mles();
         LigeroInputLayer::<F>::new_with_rho_inv_ratio(final_mle, self.layer_id, rho_inv, ratio)
     }
 }

@@ -21,7 +21,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    mle::{betavalues::BetaValues, dense::DenseMleRef, MleIndex, MleRef},
+    mle::{betavalues::BetaValues, dense::DenseMle, Mle, MleIndex},
 };
 use remainder_shared_types::FieldExt;
 
@@ -242,7 +242,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
 
     // the mle evaluation takes in the mle ref, and the corresponding unbound and bound beta values
     // to pass into the `beta_cascade` function
-    let mle_eval = |mle_ref: &DenseMleRef<F>,
+    let mle_eval = |mle_ref: &DenseMle<F>,
                     unbound_beta_vals: &[F],
                     bound_beta_vals: &[F]|
      -> Result<Evals<F>, ExpressionError> {
@@ -268,7 +268,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
     // when we have a product, the node can only contain mle refs. therefore this is similar to the mle
     // evaluation, but instead we have a list of mle refs, and the corresponding unbound and bound
     // beta values for that node.
-    let product = |mle_refs: &[&DenseMleRef<F>],
+    let product = |mle_refs: &[&DenseMle<F>],
                    unbound_beta_vals: &[F],
                    bound_beta_vals: &[F]|
      -> Result<Evals<F>, ExpressionError> {
@@ -312,13 +312,13 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
 ///
 /// this function assumes that the first variable is an independent variable.
 pub fn successors_from_mle_ref_product<F: FieldExt>(
-    mle_refs: &[&impl MleRef<F = F>],
+    mle_refs: &[&impl Mle<F>],
     degree: usize,
 ) -> Result<Vec<F>, MleError> {
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| mle_ref.num_iterated_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -347,11 +347,11 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
                     // to repeat itself an according number of times when the sum is over a variable
                     // it does not contain. the appropriate index is therefore
                     // determined as follows.
-                    let mle_index = if mle_ref.num_vars() < max_num_vars {
+                    let mle_index = if mle_ref.num_iterated_vars() < max_num_vars {
                         // if we have less than the max number of variables, then we perform this wrap-around
                         // functionality by first rounding to the nearest power of 2, and then taking the mod
                         // of this index as we implicitly pad for powers of 2.
-                        let max = 1 << mle_ref.num_vars();
+                        let max = 1 << mle_ref.num_iterated_vars();
                         (mle_index * 2) % max
                     } else {
                         mle_index * 2
@@ -360,7 +360,7 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
                     // it's [2] and [3], etc. because we are extending a function that was originally defined
                     // over the hypercube, each pair corresponds to two points on a line. we grab these two points here
                     let first = *mle_ref.bookkeeping_table().get(mle_index).unwrap_or(&zero);
-                    let second = if mle_ref.num_vars() != 0 {
+                    let second = if mle_ref.num_iterated_vars() != 0 {
                         *mle_ref
                             .bookkeeping_table()
                             .get(mle_index + 1)
@@ -385,11 +385,11 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
 /// are working with have no independent variable. therefore, we are actually just taking the
 /// sum over all of the variables and do not need evaluations.
 pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
-    mle_refs: &[&impl MleRef<F = F>],
+    mle_refs: &[&impl Mle<F>],
 ) -> Result<Vec<F>, MleError> {
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| mle_ref.num_iterated_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -400,8 +400,8 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
                 .iter()
                 .map(|mle_ref| {
                     let zero = F::ZERO;
-                    let index = if mle_ref.num_vars() < max_num_vars {
-                        let max = 1 << mle_ref.num_vars();
+                    let index = if mle_ref.num_iterated_vars() < max_num_vars {
+                        let max = 1 << mle_ref.num_iterated_vars();
                         (index) % max
                     } else {
                         index
@@ -460,7 +460,7 @@ fn apply_updated_beta_values_to_evals<F: FieldExt>(
 /// regardless of the degree, since there is no independent variable this evaluates to a constant,
 /// so we just repeat this (degree + 1) times.
 fn beta_cascade_no_independent_variable<F: FieldExt>(
-    mle_refs: &[&impl MleRef<F = F>],
+    mle_refs: &[&impl Mle<F>],
     beta_vals: &[F],
     degree: usize,
     beta_updated_vals: &[F],
@@ -488,7 +488,7 @@ fn beta_cascade_no_independent_variable<F: FieldExt>(
 /// there are (degree + 1) evaluations that are returned which are the evaluations of the univariate
 /// polynomial where the "round_index"-th bit is the independent variable.
 pub fn beta_cascade<F: FieldExt>(
-    mle_refs: &[&impl MleRef<F = F>],
+    mle_refs: &[&impl Mle<F>],
     degree: usize,
     round_index: usize,
     beta_vals: &[F],
@@ -615,13 +615,13 @@ pub(crate) fn evaluate_at_a_point<F: FieldExt>(
 /// evaluated at X = 0, 1, ..., degree
 /// note that when one of the mle_refs have less variables, there's a wrap around: % max
 pub fn evaluate_mle_ref_product<F: FieldExt>(
-    mle_refs: &[&impl MleRef<F = F>],
+    mle_refs: &[&impl Mle<F>],
     degree: usize,
 ) -> Result<Evals<F>, MleError> {
     // --- Gets the total number of iterated variables across all MLEs within this product ---
     let max_num_vars = mle_refs
         .iter()
-        .map(|mle_ref| mle_ref.num_vars())
+        .map(|mle_ref| mle_ref.num_iterated_vars())
         .max()
         .ok_or(MleError::EmptyMleList)?;
 
@@ -640,15 +640,15 @@ pub fn evaluate_mle_ref_product<F: FieldExt>(
                 .iter()
                 .map(|mle_ref| {
                     let zero = F::ZERO;
-                    let index = if mle_ref.num_vars() < max_num_vars {
-                        let max = 1 << mle_ref.num_vars();
+                    let index = if mle_ref.num_iterated_vars() < max_num_vars {
+                        let max = 1 << mle_ref.num_iterated_vars();
                         (index * 2) % max
                     } else {
                         index * 2
                     };
                     let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
 
-                    let second = if mle_ref.num_vars() != 0 {
+                    let second = if mle_ref.num_iterated_vars() != 0 {
                         *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
                     } else {
                         first

@@ -9,7 +9,7 @@ use remainder::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex, MleRef},
+    mle::{dense::DenseMle, Mle, MleIndex},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
@@ -29,27 +29,29 @@ pub mod utils;
 /// * `sel_mle` - An MLE with arbitrary bookkeeping table values.
 /// * `prod_mle` - An MLE with arbitrary bookkeeping table values; same size as `sel_mle`.
 struct LastBitLinearBuilder<F: FieldExt> {
-    sel_mle: DenseMle<F, F>,
-    prod_mle: DenseMle<F, F>,
+    sel_mle: DenseMle<F>,
+    prod_mle: DenseMle<F>,
 }
 impl<F: FieldExt> LayerBuilder<F> for LastBitLinearBuilder<F> {
-    type Successor = DenseMle<F, F>;
+    type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.sel_mle.mle_ref()).concat_expr(Expression::mle(self.sel_mle.mle_ref()))
-            + Expression::products(vec![self.prod_mle.mle_ref(), self.prod_mle.mle_ref()])
+        Expression::mle(self.sel_mle.clone()).concat_expr(Expression::mle(self.sel_mle.clone()))
+            + Expression::products(vec![self.prod_mle.clone(), self.prod_mle.clone()])
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let sel_bt = self
             .sel_mle
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.sel_mle.mle.iter())
+            .zip(self.sel_mle.current_mle.get_evals_vector().iter())
             .flat_map(|(elem_1, elem_2)| vec![elem_1, elem_2]);
 
         let mut prod_bt = self
             .prod_mle
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
             .map(|elem| *elem * elem)
             .collect_vec();
@@ -60,11 +62,15 @@ impl<F: FieldExt> LayerBuilder<F> for LastBitLinearBuilder<F> {
             .map(|(elem_1, elem_2)| *elem_1 + elem_2)
             .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(final_bt, id);
+        if let Some(prefix_bits) = prefix_bits.clone() {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> LastBitLinearBuilder<F> {
-    fn new(sel_mle: DenseMle<F, F>, prod_mle: DenseMle<F, F>) -> Self {
+    fn new(sel_mle: DenseMle<F>, prod_mle: DenseMle<F>) -> Self {
         Self { sel_mle, prod_mle }
     }
 }
@@ -77,31 +83,36 @@ impl<F: FieldExt> LastBitLinearBuilder<F> {
 /// ## Arguments
 /// * `sel_mle` - An MLE with arbitrary bookkeeping table values.
 struct FirstBitLinearBuilder<F: FieldExt> {
-    sel_mle: DenseMle<F, F>,
+    sel_mle: DenseMle<F>,
 }
 impl<F: FieldExt> LayerBuilder<F> for FirstBitLinearBuilder<F> {
-    type Successor = DenseMle<F, F>;
+    type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.sel_mle.mle_ref()).concat_expr(Expression::products(vec![
-            self.sel_mle.mle_ref(),
-            self.sel_mle.mle_ref(),
+        Expression::mle(self.sel_mle.clone()).concat_expr(Expression::products(vec![
+            self.sel_mle.clone(),
+            self.sel_mle.clone(),
         ]))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let final_bt = self
             .sel_mle
-            .mle
+            .current_mle
+            .get_evals_vector()
             .iter()
-            .zip(self.sel_mle.mle.iter())
+            .zip(self.sel_mle.current_mle.get_evals_vector().iter())
             .flat_map(|(elem_1, elem_2)| vec![*elem_1 * elem_1, *elem_2])
             .collect_vec();
 
-        DenseMle::new_from_raw(final_bt, id, prefix_bits)
+        let mut out = DenseMle::new_from_raw(final_bt, id);
+        if let Some(prefix_bits) = prefix_bits {
+            out.add_prefix_bits(prefix_bits);
+        }
+        out
     }
 }
 impl<F: FieldExt> FirstBitLinearBuilder<F> {
-    fn new(sel_mle: DenseMle<F, F>) -> Self {
+    fn new(sel_mle: DenseMle<F>) -> Self {
         Self { sel_mle }
     }
 }
@@ -117,8 +128,8 @@ impl<F: FieldExt> FirstBitLinearBuilder<F> {
 /// * `sel_mle`, `prod_mle` both MLEs with arbitrary bookkeeping table values, same size.
 
 struct LinearNonLinearCircuit<F: FieldExt> {
-    sel_mle: DenseMle<F, F>,
-    prod_mle: DenseMle<F, F>,
+    sel_mle: DenseMle<F>,
+    prod_mle: DenseMle<F>,
 }
 impl<F: FieldExt> GKRCircuit<F> for LinearNonLinearCircuit<F> {
     type ProofSystem = DefaultProofSystem;
@@ -150,7 +161,7 @@ impl<F: FieldExt> GKRCircuit<F> for LinearNonLinearCircuit<F> {
 }
 
 impl<F: FieldExt> LinearNonLinearCircuit<F> {
-    fn new(sel_mle: DenseMle<F, F>, prod_mle: DenseMle<F, F>) -> Self {
+    fn new(sel_mle: DenseMle<F>, prod_mle: DenseMle<F>) -> Self {
         assert_eq!(sel_mle.num_iterated_vars(), prod_mle.num_iterated_vars());
         Self { sel_mle, prod_mle }
     }

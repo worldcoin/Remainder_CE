@@ -10,11 +10,12 @@ pub mod proof_system;
 pub mod layers;
 
 use self::{layers::Layers, proof_system::ProofSystem};
+use crate::mle::Mle;
 use crate::{
     claims::{ClaimAggregator, ClaimAndProof},
     input_layer::{InputLayer, InputLayerError},
     layer::{layer_enum::LayerEnum, Layer, LayerError, LayerId},
-    mle::{MleIndex, MleRef},
+    mle::MleIndex,
     utils::hash_layers,
 };
 use ark_std::{end_timer, start_timer};

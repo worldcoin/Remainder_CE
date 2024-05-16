@@ -8,15 +8,16 @@ use remainder_shared_types::{
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleRef},
+    mle::{dense::DenseMle, mle_enum::MleEnum},
 };
 
 use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
+use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
 /// "in the clear" (i.e. without a commitment).
 pub struct PublicInputLayer<F: FieldExt> {
-    mle: DenseMle<F, F>,
+    mle: DenseMle<F>,
     pub(crate) layer_id: LayerId,
 }
 
@@ -28,7 +29,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     /// Because this is a public input layer, we do not need to commit to the MLE and the
     /// "commitment" is just the MLE itself.
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        Ok(self.mle.mle.clone())
+        Ok(self.mle.current_mle.get_evals_vector().clone())
     }
 
     /// Append the commitment to the Fiat-Shamir transcript.
@@ -71,11 +72,10 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         claim: Claim<F>,
         _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
-        let mut mle_ref =
-            DenseMle::<F, F>::new_from_raw(commitment.clone(), LayerId::Input(0), None).mle_ref();
+        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), LayerId::Input(0));
         mle_ref.index_mle_indices(0);
 
-        let eval = if mle_ref.num_vars() != 0 {
+        let eval = if mle_ref.num_iterated_vars() != 0 {
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -97,13 +97,13 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         &self.layer_id
     }
 
-    fn get_padded_mle(&self) -> DenseMle<F, F> {
+    fn get_padded_mle(&self) -> DenseMle<F> {
         self.mle.clone()
     }
 }
 
 impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
-    fn new(mle: DenseMle<F, F>, layer_id: LayerId) -> Self {
+    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
 }

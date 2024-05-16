@@ -3,7 +3,8 @@ use super::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     verifier_expr::VerifierExpr,
 };
-use crate::mle::{betavalues::BetaValues, dense::DenseMleRef, MleIndex, MleRef};
+use crate::mle::Mle;
+use crate::mle::{betavalues::BetaValues, dense::DenseMle, MleIndex};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
@@ -37,18 +38,15 @@ impl MleVecIndex {
     }
 
     /// return the actual mle_ref in the vec within the prover expression
-    pub fn get_mle<'a, F: FieldExt>(
-        &self,
-        mle_ref_vec: &'a [DenseMleRef<F>],
-    ) -> &'a DenseMleRef<F> {
+    pub fn get_mle<'a, F: FieldExt>(&self, mle_ref_vec: &'a [DenseMle<F>]) -> &'a DenseMle<F> {
         &mle_ref_vec[self.0]
     }
 
     /// return the actual mle_ref in the vec within the prover expression
     pub fn get_mle_mut<'a, F: FieldExt>(
         &self,
-        mle_ref_vec: &'a mut [DenseMleRef<F>],
-    ) -> &'a mut DenseMleRef<F> {
+        mle_ref_vec: &'a mut [DenseMle<F>],
+    ) -> &'a mut DenseMle<F> {
         &mut mle_ref_vec[self.0]
     }
 }
@@ -59,7 +57,7 @@ impl MleVecIndex {
 pub struct ProverExpr;
 impl<F: FieldExt> ExpressionType<F> for ProverExpr {
     type MLENodeRepr = MleVecIndex;
-    type MleVec = Vec<DenseMleRef<F>>;
+    type MleVec = Vec<DenseMle<F>>;
 }
 
 /// this is what the prover manipulates to prove the correctness of the computation.
@@ -81,7 +79,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     }
 
     /// Create a product Expression that raises one MLE to a given power
-    pub fn pow(pow: usize, mle: DenseMleRef<F>) -> Self {
+    pub fn pow(pow: usize, mle: DenseMle<F>) -> Self {
         let mle_vec_indices = (0..pow).map(|_index| MleVecIndex::new(0)).collect_vec();
 
         let product_node = ExpressionNode::Product(mle_vec_indices);
@@ -99,7 +97,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     }
 
     /// Create a mle Expression that contains one MLE
-    pub fn mle(mle: DenseMleRef<F>) -> Self {
+    pub fn mle(mle: DenseMle<F>) -> Self {
         let mle_node = ExpressionNode::Mle(MleVecIndex::new(0));
 
         Expression::new(mle_node, [mle].to_vec())
@@ -152,7 +150,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         // define a closure that increments the MleVecIndex by the given amount
         // use traverse_mut
         let mut increment_closure = |expr: &mut ExpressionNode<F, ProverExpr>,
-                                     _mle_vec: &mut Vec<DenseMleRef<F>>|
+                                     _mle_vec: &mut Vec<DenseMle<F>>|
          -> Result<(), ()> {
             match expr {
                 ExpressionNode::Mle(mle_vec_index) => {
@@ -180,7 +178,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     ///
     /// should only be called when the entire expression is fully bound
     ///
-    /// traverses the expression and changes the DenseMleRef to F,
+    /// traverses the expression and changes the DenseMle to F,
     /// by grabbing their bookkeeping table's 1st and only element,
     ///
     /// if the bookkeeping table has more than 1 element, it
@@ -300,10 +298,10 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         &self,
         constant: &impl Fn(F, &BetaValues<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
+        mle_eval: &impl Fn(&DenseMle<F>, &[F], &[F]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T, // changed signature here, note to modify caller's calling code
+        product: &impl Fn(&[&DenseMle<F>], &[F], &[F]) -> T, // changed signature here, note to modify caller's calling code
         scaled: &impl Fn(T, F) -> T,
         beta: &BetaValues<F>,
     ) -> T {
@@ -358,7 +356,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
     /// transforms the expression to a verifier expression
     /// should only be called when the entire expression is fully bound
-    /// traverses the expression and changes the DenseMleRef to F,
+    /// traverses the expression and changes the DenseMle to F,
     /// by grabbing their bookkeeping table's 1st and only element,
     /// if the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
@@ -527,10 +525,10 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         &self,
         constant: &impl Fn(F, &BetaValues<F>) -> T,
         selector_column: &impl Fn(&MleIndex<F>, T, T, &BetaValues<F>) -> T,
-        mle_eval: &impl Fn(&DenseMleRef<F>, &[F], &[F]) -> T,
+        mle_eval: &impl Fn(&DenseMle<F>, &[F], &[F]) -> T,
         negated: &impl Fn(T) -> T,
         sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[&DenseMleRef<F>], &[F], &[F]) -> T,
+        product: &impl Fn(&[&DenseMle<F>], &[F], &[F]) -> T,
         scaled: &impl Fn(T, F) -> T,
         beta: &BetaValues<F>,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
@@ -660,11 +658,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle_ref = mle_vec_idx.get_mle_mut(mle_vec);
-                if !mle_ref.indexed() {
-                    mle_ref.index_mle_indices(curr_index)
-                } else {
-                    0
-                } // if it's already indexed, then return 0 (the max number of indexed bit will get propogated up)
+                mle_ref.index_mle_indices(curr_index)
             }
             ExpressionNode::Sum(a, b) => {
                 let a_bits = a.index_mle_indices_node(curr_index, mle_vec);
@@ -675,11 +669,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 .iter_mut()
                 .map(|mle_vec_index| {
                     let mle_ref = mle_vec_index.get_mle_mut(mle_vec);
-                    if !mle_ref.indexed() {
-                        mle_ref.index_mle_indices(curr_index)
-                    } else {
-                        0
-                    }
+                    mle_ref.index_mle_indices(curr_index)
                 })
                 .reduce(max)
                 .unwrap_or(curr_index),
