@@ -37,11 +37,11 @@ impl<F: FieldExt> Sector<F> {
 
 impl<F: FieldExt> CircuitNode for Sector<F> {
     fn id(&self) -> NodeId {
-        todo!()
+        self.id
     }
 
     fn sources(&self) -> Vec<NodeId> {
-        todo!()
+        self.expr.get_sources()
     }
 }
 
@@ -53,6 +53,6 @@ impl<F: FieldExt> ClaimableNode for Sector<F> {
     }
 
     fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
-        todo!()
+        self.expr.clone()
     }
 }

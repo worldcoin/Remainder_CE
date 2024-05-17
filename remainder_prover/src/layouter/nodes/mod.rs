@@ -6,6 +6,7 @@ use std::{
 };
 
 use remainder_shared_types::FieldExt;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -46,7 +47,7 @@ impl Context {
 }
 
 /// The circuit-unique ID for each node
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Copy, PartialOrd)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Copy, PartialOrd, Serialize, Deserialize)]
 pub struct NodeId(u64);
 
 impl NodeId {

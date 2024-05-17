@@ -17,9 +17,10 @@ use crate::{
 
 #[test]
 fn test_constants_eval() {
-    let expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::one());
+    let expression1: Expression<Fr, ProverExpr> = Expression::<Fr, ProverExpr>::constant(Fr::one());
 
-    let expression2: Expression<Fr, ProverExpr> = Expression::constant(Fr::from(2));
+    let expression2: Expression<Fr, ProverExpr> =
+        Expression::<Fr, ProverExpr>::constant(Fr::from(2));
 
     let expression3 = expression1.clone() + expression2.clone();
 
@@ -41,7 +42,7 @@ fn test_mle_eval_two_variable() {
         LayerId::Input(0),
     );
 
-    let mut expression = Expression::mle(mle);
+    let mut expression = Expression::<Fr, ProverExpr>::mle(mle);
     let num_indices = expression.index_mle_indices(0);
     assert_eq!(num_indices, 2);
 
@@ -66,7 +67,7 @@ fn test_mle_eval_three_variable() {
         LayerId::Input(0),
     );
 
-    let mut expression = Expression::mle(mle);
+    let mut expression = Expression::<Fr, ProverExpr>::mle(mle);
     let num_indices = expression.index_mle_indices(0);
     assert_eq!(num_indices, 3);
 
@@ -82,8 +83,9 @@ fn test_mle_eval_sum_w_constant_then_scale() {
         LayerId::Input(0),
     );
 
-    let expression = Expression::mle(mle);
-    let mut expression = (expression + Expression::constant(Fr::from(5))) * Fr::from(2);
+    let expression = Expression::<Fr, ProverExpr>::mle(mle);
+    let mut expression =
+        (expression + Expression::<Fr, ProverExpr>::constant(Fr::from(5))) * Fr::from(2);
     let num_indices = expression.index_mle_indices(0);
     assert_eq!(num_indices, 2);
 
@@ -99,14 +101,14 @@ fn test_mle_eval_selector() {
         LayerId::Input(0),
     );
 
-    let expression_1 = Expression::mle(mle_1);
+    let expression_1 = Expression::<Fr, ProverExpr>::mle(mle_1);
 
     let mle_2 = DenseMle::new_from_raw(
         vec![Fr::from(1), Fr::from(9), Fr::from(8), Fr::from(2)],
         LayerId::Input(0),
     );
 
-    let expression_2 = Expression::mle(mle_2);
+    let expression_2 = Expression::<Fr, ProverExpr>::mle(mle_2);
 
     let mut expression = expression_1.concat_expr(expression_2);
 
@@ -132,7 +134,7 @@ fn test_mle_eval_selector() {
 
     let challenge_concat = vec![Fr::from(7), Fr::from(3), Fr::from(2)]; // move the first challenge towards the end
 
-    let mut expression_concat = Expression::mle(mle_concat);
+    let mut expression_concat = Expression::<Fr, ProverExpr>::mle(mle_concat);
 
     let num_indices_concat = expression_concat.index_mle_indices(0);
     assert_eq!(num_indices_concat, 3);
@@ -149,9 +151,10 @@ fn test_mle_eval_selector_w_constant() {
         LayerId::Input(0),
     );
 
-    let expression_1 = Expression::mle(mle_1);
+    let expression_1 = Expression::<Fr, ProverExpr>::mle(mle_1);
 
-    let mut expression = expression_1.concat_expr(Expression::constant(Fr::from(5)));
+    let mut expression =
+        expression_1.concat_expr(Expression::<Fr, ProverExpr>::constant(Fr::from(5)));
 
     let num_indices = expression.index_mle_indices(0);
     assert_eq!(num_indices, 3);
@@ -172,7 +175,7 @@ fn test_mle_refs_eval() {
         LayerId::Input(0),
     );
 
-    let mut expression_1 = Expression::mle(mle_1.clone());
+    let mut expression_1 = Expression::<Fr, ProverExpr>::mle(mle_1.clone());
     let _ = expression_1.index_mle_indices(0);
     let eval_1 = expression_1.evaluate_expr(challenge.clone()).unwrap();
 
@@ -181,11 +184,11 @@ fn test_mle_refs_eval() {
         LayerId::Input(0),
     );
 
-    let mut expression_2 = Expression::mle(mle_2.clone());
+    let mut expression_2 = Expression::<Fr, ProverExpr>::mle(mle_2.clone());
     let _ = expression_2.index_mle_indices(0);
     let eval_2 = expression_2.evaluate_expr(challenge.clone()).unwrap();
 
-    let mut expression_product = Expression::products(vec![mle_1, mle_2]);
+    let mut expression_product = Expression::<Fr, ProverExpr>::products(vec![mle_1, mle_2]);
     let num_indices = expression_product.index_mle_indices(0);
     assert_eq!(num_indices, 2);
 
@@ -205,7 +208,7 @@ fn test_mle_different_length_eval() {
         LayerId::Input(0),
     );
 
-    let expression_1 = Expression::mle(mle_1);
+    let expression_1 = Expression::<Fr, ProverExpr>::mle(mle_1);
 
     let mle_2 = DenseMle::new_from_raw(
         vec![
@@ -221,7 +224,7 @@ fn test_mle_different_length_eval() {
         LayerId::Input(0),
     );
 
-    let expression_2 = Expression::mle(mle_2);
+    let expression_2 = Expression::<Fr, ProverExpr>::mle(mle_2);
 
     let mut expression = expression_1 + expression_2;
     let num_indices = expression.index_mle_indices(0);
@@ -254,10 +257,13 @@ fn test_all_mle_indices() {
         LayerId::Input(0),
     );
 
-    let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
-    let expression_mle = Expression::mle(mle_2);
-    let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
-    let mut expression_full = Expression::sum(
+    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(vec![
+        mle_1.clone(),
+        mle_2.clone(),
+    ]));
+    let expression_mle = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
+    let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
         expression_mle.concat_expr(expression_product_2),
     );
@@ -293,10 +299,13 @@ fn test_nonlinear_mle_indices() {
         LayerId::Input(0),
     );
 
-    let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
-    let expression_mle = Expression::mle(mle_2);
-    let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
-    let mut expression_full = Expression::sum(
+    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(vec![
+        mle_1.clone(),
+        mle_2.clone(),
+    ]));
+    let expression_mle = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
+    let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
         expression_mle.concat_expr(expression_product_2),
     );
@@ -334,10 +343,13 @@ fn test_linear_mle_indices() {
         LayerId::Input(0),
     );
 
-    let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
-    let expression_mle = Expression::mle(mle_2);
-    let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
-    let mut expression_full = Expression::sum(
+    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(vec![
+        mle_1.clone(),
+        mle_2.clone(),
+    ]));
+    let expression_mle = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
+    let mut expression_full = Expression::<Fr, ProverExpr>::sum(
         *expression_product,
         expression_mle.concat_expr(expression_product_2),
     );
@@ -373,16 +385,19 @@ fn test_linear_mle_indices_2() {
         LayerId::Input(0),
     );
 
-    let expression_product = Box::new(Expression::products(vec![mle_1.clone(), mle_2.clone()]));
-    let expression_mle = Expression::mle(mle_2);
-    let expression_product_2 = Expression::products(vec![mle_1.clone(), mle_1]);
-    let expression_half = Expression::sum(
+    let expression_product = Box::new(Expression::<Fr, ProverExpr>::products(vec![
+        mle_1.clone(),
+        mle_2.clone(),
+    ]));
+    let expression_mle = Expression::<Fr, ProverExpr>::mle(mle_2);
+    let expression_product_2 = Expression::<Fr, ProverExpr>::products(vec![mle_1.clone(), mle_1]);
+    let expression_half = Expression::<Fr, ProverExpr>::sum(
         *expression_product.clone(),
         expression_mle.concat_expr(expression_product_2.clone()),
     );
-    let expression_other_half = Expression::sum(
+    let expression_other_half = Expression::<Fr, ProverExpr>::sum(
         expression_product_2,
-        Expression::negated(*expression_product),
+        Expression::<Fr, ProverExpr>::negated(*expression_product),
     );
     let mut expression_full = expression_half.concat_expr(expression_other_half);
     expression_full.index_mle_indices(0);
@@ -398,18 +413,18 @@ fn test_linear_mle_indices_2() {
 
 #[test]
 fn big_test_eval() {
-    let expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::one());
+    let expression1: Expression<Fr, ProverExpr> = Expression::<Fr, ProverExpr>::constant(Fr::one());
 
     let mle = DenseMle::new_from_raw(
         vec![Fr::one(), Fr::from(2), Fr::from(3), Fr::one()],
         LayerId::Input(0),
     );
 
-    let expression3 = Expression::mle(mle.clone());
+    let expression3 = Expression::<Fr, ProverExpr>::mle(mle.clone());
 
     let expression = expression1.clone() + expression3.clone();
 
-    let expression_product = Expression::pow(2, mle);
+    let expression_product = Expression::<Fr, ProverExpr>::pow(2, mle);
 
     let expression = expression_product + expression;
 
