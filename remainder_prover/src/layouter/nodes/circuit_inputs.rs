@@ -25,7 +25,11 @@ impl<F: FieldExt> CircuitNode for InputShred<F> {
     }
 
     fn sources(&self) -> Vec<NodeId> {
-        vec![]
+        if let Some(parent) = self.parent {
+            vec![parent]
+        } else {
+            vec![]
+        } // ende: I think this is correct, but I'm not sure
     }
 }
 
@@ -37,7 +41,7 @@ impl<F: FieldExt> ClaimableNode for InputShred<F> {
     }
 
     fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
-        todo!()
+        Expression::<F, AbstractExpr>::mle(self.id)
     }
 }
 
@@ -97,6 +101,8 @@ impl<F: FieldExt> ClaimableNode for InputLayerNode<F> {
 
     fn get_data(&self) -> &MultilinearExtension<Self::F> {
         todo!()
+        // ende's comment here: maybe InputLayerNode also needs a data field?
+        // i.e. after combining the shreds, appending all the necessary prefix bits, etc.
     }
 
     fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
