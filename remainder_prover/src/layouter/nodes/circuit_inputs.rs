@@ -75,7 +75,7 @@ pub enum InputLayerType {
 pub struct InputLayerNode<F> {
     id: NodeId,
     children: Vec<InputShred<F>>,
-    input_layer_type: InputLayerType,
+    pub(in crate::layouter) input_layer_type: InputLayerType,
 }
 
 impl<F: FieldExt> CircuitNode for InputLayerNode<F> {

@@ -5,12 +5,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use remainder_shared_types::FieldExt;
+pub use itertools::Either;
+use remainder_shared_types::{FieldExt, Fr};
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     mle::evals::MultilinearExtension,
 };
+
+use self::{debug::DebugNode, node_enum::NodeEnum};
 
 pub mod circuit_inputs;
 pub mod circuit_outputs;
@@ -118,6 +121,31 @@ macro_rules! node_enum {
                 }
             }
         )*
+
+        $(
+            impl<F: $bound> $crate::layouter::nodes::MaybeInto<$variant> for $type_name<F> {
+                fn maybe_into(self) -> $crate::layouter::nodes::Either<$variant, $type_name<F>> {
+                    match self {
+                        Self::$var_name(node) => $crate::layouter::nodes::Either::Left(node),
+                        _ => $crate::layouter::nodes::Either::Right(self)
+                    }
+                }
+
+                fn maybe_into_ref(&self) -> Option<&$variant> {
+                    match self {
+                        Self::$var_name(node) => Some(node),
+                        _ => None
+                    }
+                }
+
+                fn maybe_into_mut(&mut self) -> Option<&mut $variant> {
+                    match self {
+                        Self::$var_name(node) => Some(node),
+                        _ => None
+                    }
+                }
+            }
+        )*
     }
 }
 
@@ -134,4 +162,33 @@ pub trait ClaimableNode: CircuitNode {
 
     /// An abstract expression node that will make a claim on this node
     fn get_expr(&self) -> Expression<Self::F, AbstractExpr>;
+}
+
+pub trait MaybeInto<T>: Sized {
+    fn maybe_into(self) -> Either<T, Self>;
+    fn maybe_into_ref(&self) -> Option<&T>;
+    fn maybe_into_mut(&mut self) -> Option<&mut T>;
+}
+
+pub trait MaybeFrom<T>: Sized {
+    fn maybe_from(other: T) -> Either<Self, T>;
+    fn maybe_from_ref(other: &T) -> Option<&Self>;
+    fn maybe_from_mut(other: &mut T) -> Option<&mut Self>;
+}
+
+impl<U, T> MaybeFrom<U> for T
+where
+    U: MaybeInto<T>,
+{
+    fn maybe_from(other: U) -> Either<Self, U> {
+        other.maybe_into()
+    }
+
+    fn maybe_from_ref(other: &U) -> Option<&Self> {
+        other.maybe_into_ref()
+    }
+
+    fn maybe_from_mut(other: &mut U) -> Option<&mut Self> {
+        other.maybe_into_mut()
+    }
 }

@@ -8,7 +8,7 @@ use remainder_shared_types::{
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum},
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
 use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
@@ -17,7 +17,7 @@ use crate::mle::Mle;
 /// An Input Layer in which the data is sent to the verifier
 /// "in the clear" (i.e. without a commitment).
 pub struct PublicInputLayer<F: FieldExt> {
-    mle: DenseMle<F>,
+    mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,
 }
 
@@ -29,7 +29,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     /// Because this is a public input layer, we do not need to commit to the MLE and the
     /// "commitment" is just the MLE itself.
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        Ok(self.mle.current_mle.get_evals_vector().clone())
+        Ok(self.mle.get_evals_vector().clone())
     }
 
     /// Append the commitment to the Fiat-Shamir transcript.
@@ -98,12 +98,12 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     }
 
     fn get_padded_mle(&self) -> DenseMle<F> {
-        self.mle.clone()
+        todo!()
     }
 }
 
 impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
-    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self {
+    fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
 }
