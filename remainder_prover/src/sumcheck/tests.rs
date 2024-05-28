@@ -201,7 +201,8 @@ pub(crate) fn get_dummy_expression_eval<F: FieldExt>(
 #[test]
 fn eval_expr_nums() {
     let new_beta = BetaValues::new(vec![(0, Fr::one())]);
-    let mut expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::from(6));
+    let mut expression1: Expression<Fr, ProverExpr> =
+        Expression::<Fr, ProverExpr>::constant(Fr::from(6));
     let res = compute_sumcheck_message_beta_cascade(&mut expression1, 0, 1, &new_beta);
     let exp = Evals(vec![Fr::from(0), Fr::from(6)]);
     assert_eq!(res.unwrap(), exp);
@@ -251,7 +252,7 @@ fn test_linear_sum() {
 
     let mle_v1 = vec![Fr::from(3), Fr::from(2), Fr::from(2), Fr::from(5)];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
-    let mut mleexpr = Expression::mle(mle1);
+    let mut mleexpr = Expression::<Fr, ProverExpr>::mle(mle1);
     mleexpr.index_mle_indices(0);
     mleexpr.fix_variable_at_index(0, Fr::from(2));
     mleexpr.fix_variable_at_index(1, Fr::from(4));
@@ -272,7 +273,7 @@ fn test_quadratic_sum() {
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
     let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mut expression = Expression::products(vec![mle1, mle2]);
+    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
 
     let res = compute_sumcheck_message_beta_cascade(&mut expression, 1, 3, &new_beta);
@@ -306,7 +307,7 @@ fn test_quadratic_sum_differently_sized_mles2() {
     let mle_v2 = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(5)];
     let mle2: DenseMle<Fr> = DenseMle::new_from_raw(mle_v2, LayerId::Input(0));
 
-    let mut expression = Expression::products(vec![mle1, mle2]);
+    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle1, mle2]);
     expression.index_mle_indices(0);
     expression.fix_variable_at_index(2, Fr::from(3));
 
@@ -346,7 +347,7 @@ fn test_dummy_sumcheck_1() {
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;
 
-    let mut expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
+    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -375,7 +376,7 @@ fn test_dummy_sumcheck_2() {
     let mle_ref_1 = mle1;
     let mle_ref_2 = mle2;
 
-    let mut expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
+    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -412,7 +413,7 @@ fn test_dummy_sumcheck_3() {
     let mle_ref_1 = mle1;
     let mle_ref_2 = mle2;
 
-    let mut expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
+    let mut expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
     let verifyres = verify_sumcheck_messages(res_messages, expression, layer_claims, &mut rng);
     assert!(verifyres.is_ok());
@@ -468,8 +469,8 @@ fn test_dummy_sumcheck_concat() {
     let mle_ref_1 = mle1;
     let mle_ref_2 = mle2;
 
-    let expression = Expression::mle(mle_ref_1);
-    let expr2 = Expression::mle(mle_ref_2);
+    let expression = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
+    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
 
     let mut expression = expr2.concat_expr(expression);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -509,8 +510,8 @@ fn test_dummy_sumcheck_concat_2() {
     let mle_ref_1 = mle1;
     let mle_ref_2 = mle2;
 
-    let expression = Expression::mle(mle_ref_1);
-    let expr2 = Expression::mle(mle_ref_2);
+    let expression = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
+    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
 
     let mut expression = expr2.concat_expr(expression);
     let res_messages = dummy_sumcheck(&mut expression, &mut rng, layer_claims.clone());
@@ -553,7 +554,7 @@ fn test_dummy_sumcheck_concat_aggro() {
     );
     let layer_claims = get_dummy_claim(mle_output, &mut rng, None);
 
-    let expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
+    let expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let expr2 = expression.clone();
 
     let mut expression = expr2.concat_expr(expression);
@@ -579,8 +580,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro() {
     let mle_ref_1 = mle1;
     let mle_ref_2 = mle2;
 
-    let expression = Expression::mle(mle_ref_1);
-    let expr2 = Expression::mle(mle_ref_2);
+    let expression = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
+    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
 
     let expression = expr2.clone().concat_expr(expression);
     let mut expression_aggro = expression.concat_expr(expr2);
@@ -604,8 +605,8 @@ fn test_dummy_sumcheck_concat_aggro_aggro_aggro() {
     let mle_ref_1 = mle1;
     let mle_ref_2 = mle2;
 
-    let expression = Expression::mle(mle_ref_1);
-    let expr2 = Expression::mle(mle_ref_2);
+    let expression = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
+    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
 
     let expression = expr2.clone().concat_expr(expression);
     let expression_aggro = expression.concat_expr(expr2.clone());
@@ -630,8 +631,8 @@ fn test_dummy_sumcheck_sum() {
     let mle_ref_1 = mle1;
     let mle_ref_2 = mle2;
 
-    let expression = Expression::mle(mle_ref_1);
-    let expr2 = Expression::mle(mle_ref_2);
+    let expression = Expression::<Fr, ProverExpr>::mle(mle_ref_1);
+    let expr2 = Expression::<Fr, ProverExpr>::mle(mle_ref_2);
 
     let expression = expr2.clone().concat_expr(expression);
     let mut expression_aggro = expression.concat_expr(expr2);

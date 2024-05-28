@@ -9,7 +9,7 @@ use crate::{
         combine_input_layers::InputLayerBuilder,
         layer_builder::{from_mle, simple_builders::EqualityCheck, LayerBuilder},
     },
-    expression::generic_expr::Expression,
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerId,
     mle::{dense::DenseMle, Mle},
     prover::{
@@ -69,7 +69,9 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
         let layer_1 = from_mle(
             (self.mle.clone(), random_mle),
-            |(mle, random)| Expression::products(vec![mle.clone(), random.clone()]),
+            |(mle, random)| {
+                Expression::<F, ProverExpr>::products(vec![mle.clone(), random.clone()])
+            },
             |(mle, random), layer_id, prefix_bits| {
                 let mut out = DenseMle::new_from_iter(
                     mle.clone()

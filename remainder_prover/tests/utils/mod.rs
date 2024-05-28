@@ -60,14 +60,17 @@ impl<F: FieldExt> LayerBuilder<F> for TripleNestedSelectorBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let inner_inner_sel = Expression::products(vec![
+        let inner_inner_sel = Expression::<F, ProverExpr>::products(vec![
             self.inner_inner_sel_mle.clone().clone(),
             self.inner_inner_sel_mle.clone().clone(),
         ])
-        .concat_expr(Expression::mle(self.inner_inner_sel_mle.clone().clone()));
-        let inner_sel =
-            Expression::mle(self.inner_sel_mle.clone().clone()).concat_expr(inner_inner_sel);
-        let outer_sel = Expression::mle(self.outer_sel_mle.clone().clone()).concat_expr(inner_sel);
+        .concat_expr(Expression::<F, ProverExpr>::mle(
+            self.inner_inner_sel_mle.clone().clone(),
+        ));
+        let inner_sel = Expression::<F, ProverExpr>::mle(self.inner_sel_mle.clone().clone())
+            .concat_expr(inner_inner_sel);
+        let outer_sel = Expression::<F, ProverExpr>::mle(self.outer_sel_mle.clone().clone())
+            .concat_expr(inner_sel);
         outer_sel
     }
 
@@ -123,7 +126,8 @@ impl<F: FieldExt> LayerBuilder<F> for ProductScaledBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let prod_expr = Expression::products(vec![self.mle_1.clone(), self.mle_2.clone()]);
+        let prod_expr =
+            Expression::<F, ProverExpr>::products(vec![self.mle_1.clone(), self.mle_2.clone()]);
         let scaled_expr = self.mle_1.clone().expression() * F::from(10_u64);
         prod_expr + scaled_expr
     }
@@ -176,7 +180,8 @@ impl<F: FieldExt> LayerBuilder<F> for ProductSumBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let prod_expr = Expression::products(vec![self.mle_1.clone(), self.mle_2.clone()]);
+        let prod_expr =
+            Expression::<F, ProverExpr>::products(vec![self.mle_1.clone(), self.mle_2.clone()]);
         let sum_expr = self.mle_1.clone().expression() + self.mle_2.clone().expression();
         prod_expr + sum_expr
     }
@@ -230,8 +235,8 @@ impl<F: FieldExt> LayerBuilder<F> for ConstantScaledSumBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let constant_expr =
-            Expression::mle(self.mle_1.clone()) + Expression::constant(F::from(10_u64));
+        let constant_expr = Expression::<F, ProverExpr>::mle(self.mle_1.clone())
+            + Expression::<F, ProverExpr>::constant(F::from(10_u64));
         let scaled_expr = self.mle_2.clone().expression() * F::from(10_u64);
         constant_expr + scaled_expr
     }

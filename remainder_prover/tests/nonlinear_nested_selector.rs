@@ -43,12 +43,13 @@ impl<F: FieldExt> LayerBuilder<F> for NonlinearNestedSelectorBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        let left_inner_sel_side = Expression::mle(self.left_inner_sel_mle.clone());
-        let right_inner_sel_side = Expression::mle(self.right_inner_sel_mle.clone());
+        let left_inner_sel_side = Expression::<F, ProverExpr>::mle(self.left_inner_sel_mle.clone());
+        let right_inner_sel_side =
+            Expression::<F, ProverExpr>::mle(self.right_inner_sel_mle.clone());
         let left_outer_sel_side = right_inner_sel_side.concat_expr(left_inner_sel_side);
-        let left_sum_side =
-            Expression::mle(self.right_outer_sel_mle.clone()).concat_expr(left_outer_sel_side);
-        let right_sum_side = Expression::products(vec![
+        let left_sum_side = Expression::<F, ProverExpr>::mle(self.right_outer_sel_mle.clone())
+            .concat_expr(left_outer_sel_side);
+        let right_sum_side = Expression::<F, ProverExpr>::products(vec![
             self.right_sum_mle_1.clone(),
             self.right_sum_mle_2.clone(),
         ]);
@@ -106,7 +107,10 @@ impl<F: FieldExt> NonlinearNestedSelectorBuilder<F> {
         right_sum_mle_1: DenseMle<F>,
         right_sum_mle_2: DenseMle<F>,
     ) -> Self {
-        assert_eq!(right_sum_mle_1.num_iterated_vars(), right_sum_mle_2.num_iterated_vars());
+        assert_eq!(
+            right_sum_mle_1.num_iterated_vars(),
+            right_sum_mle_2.num_iterated_vars()
+        );
         assert_eq!(
             left_inner_sel_mle.num_iterated_vars(),
             right_inner_sel_mle.num_iterated_vars()

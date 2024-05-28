@@ -955,7 +955,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
 impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn neg(self) -> Self::Output {
-        Expression::negated(self)
+        Expression::<F, ProverExpr>::negated(self)
     }
 }
 
@@ -963,7 +963,7 @@ impl<F: FieldExt> Neg for Expression<F, ProverExpr> {
 impl<F: FieldExt> Add for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn add(self, rhs: Expression<F, ProverExpr>) -> Expression<F, ProverExpr> {
-        Expression::sum(self, rhs)
+        Expression::<F, ProverExpr>::sum(self, rhs)
     }
 }
 
@@ -977,7 +977,7 @@ impl<F: FieldExt> Sub for Expression<F, ProverExpr> {
 impl<F: FieldExt> Mul<F> for Expression<F, ProverExpr> {
     type Output = Expression<F, ProverExpr>;
     fn mul(self, rhs: F) -> Self::Output {
-        Expression::scaled(self, rhs)
+        Expression::<F, ProverExpr>::scaled(self, rhs)
     }
 }
 

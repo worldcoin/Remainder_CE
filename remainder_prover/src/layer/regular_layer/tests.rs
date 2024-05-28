@@ -5,7 +5,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    expression::generic_expr::Expression,
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::{Layer, LayerId},
     mle::dense::DenseMle,
 };
@@ -25,7 +25,7 @@ fn regular_layer_test_prove_verify() {
     let mle_ref_1 = mle_new;
     let mle_ref_2 = mle_2;
 
-    let expression = Expression::products(vec![mle_ref_1, mle_ref_2]);
+    let expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
 
     let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression);
