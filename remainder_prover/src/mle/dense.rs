@@ -290,7 +290,7 @@ impl<F: FieldExt> DenseMle<F> {
     }
 
     pub fn expression(self) -> Expression<F, ProverExpr> {
-        Expression::mle(self)
+        Expression::<F, ProverExpr>::mle(self)
     }
 }
 
