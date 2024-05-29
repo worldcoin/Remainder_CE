@@ -47,12 +47,16 @@ impl Context {
 }
 
 /// The circuit-unique ID for each node
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Copy, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Copy, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct NodeId(u64);
 
 impl NodeId {
     pub fn new(ctx: &Context) -> Self {
         ctx.get_new_id()
+    }
+
+    pub fn new_unsafe(id: u64) -> Self {
+        Self(id)
     }
 }
 
@@ -78,7 +82,7 @@ macro_rules! node_enum {
     ($type_name:ident: $bound:tt, $(($var_name:ident: $variant:ty)),+) => {
         #[derive(Clone, Debug)]
         #[doc = r"Remainder generated trait enum"]
-        pub enum $type_name<F> {
+        pub enum $type_name<F: $bound> {
             $(
                 #[doc = "Remainder generated node variant"]
                 $var_name($variant),
