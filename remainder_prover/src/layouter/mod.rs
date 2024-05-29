@@ -149,6 +149,19 @@ pub mod tests {
 
     #[test]
     fn test_assign_layers() {
+        //    input_layer
+        //         /\
+        //   input_shred_0        input_shred_3        debug_node     sector_0    sector_1->output_0
+        //   input_shred_1        input_shred_4                       sector_2->output_1
+        //   input_shred_2
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
         let ctx = Context::new();
         let dummy_data = MultilinearExtension::new_zero();
 
