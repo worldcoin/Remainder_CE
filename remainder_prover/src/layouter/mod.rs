@@ -3,7 +3,6 @@
 use std::collections::{HashMap, HashSet};
 
 use remainder_shared_types::FieldExt;
-use tracing_subscriber::layer;
 
 use self::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
@@ -15,6 +14,7 @@ use self::nodes::{
 pub mod component;
 pub mod nodes;
 
+/// given a unsorted vector of NodeEnum, returns a topologically sorted vector of NodeEnum
 pub fn topo_sort<F: FieldExt>(nodes: &Vec<NodeEnum<F>>) -> Vec<NodeEnum<F>> {
     let mut children_to_parent_map: HashMap<NodeId, NodeId> = HashMap::new();
     let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();

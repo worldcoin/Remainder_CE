@@ -7,7 +7,6 @@
 
 use std::collections::HashSet;
 
-use rayon::vec;
 use remainder_shared_types::Fr;
 
 use crate::{

@@ -10,6 +10,7 @@ use crate::{
 use super::{CircuitNode, ClaimableNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
+/// A sector node in the circuit DAG, can have multiple inputs, and a single output
 pub struct Sector<F: FieldExt> {
     id: NodeId,
     expr: Expression<F, AbstractExpr>,
@@ -17,6 +18,7 @@ pub struct Sector<F: FieldExt> {
 }
 
 impl<F: FieldExt> Sector<F> {
+    /// creates a new sector node
     pub fn new(
         ctx: &Context,
         inputs: &[&dyn ClaimableNode<F = F>],

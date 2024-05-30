@@ -1,9 +1,6 @@
 //! Module for nodes that can be added to a circuit DAG
 
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
@@ -51,10 +48,12 @@ impl Context {
 pub struct NodeId(u64);
 
 impl NodeId {
+    /// Creates a new NodeId from a Context
     pub fn new(ctx: &Context) -> Self {
         ctx.get_new_id()
     }
 
+    /// Creates a new NodeId from a u64, for testing only
     pub fn new_unsafe(id: u64) -> Self {
         Self(id)
     }
@@ -62,12 +61,14 @@ impl NodeId {
 
 /// A Node that can exist w/ dependencies in the circuit DAG
 pub trait CircuitNode {
+    /// The unique ID of this node
     fn id(&self) -> NodeId;
 
+    /// The children of this node
     fn children(&self) -> Option<Vec<NodeId>> {
         None
     }
-
+    /// The sources of this node in the DAG
     fn sources(&self) -> Vec<NodeId>;
 }
 
