@@ -1,6 +1,6 @@
 //! Module for easily creating Circuits from re-usable components
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use remainder_shared_types::FieldExt;
 use tracing_subscriber::layer;
@@ -14,6 +14,69 @@ use self::nodes::{
 
 pub mod component;
 pub mod nodes;
+
+pub fn topo_sort<F: FieldExt>(nodes: &Vec<NodeEnum<F>>) -> Vec<NodeEnum<F>> {
+    let mut children_to_parent_map: HashMap<NodeId, NodeId> = HashMap::new();
+    let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
+    for (idx, node) in nodes.iter().enumerate() {
+        id_to_index_map.insert(node.id(), idx);
+        if let Some(children) = node.children() {
+            for child in children.into_iter() {
+                children_to_parent_map.insert(child, node.id());
+            }
+        }
+    }
+    let mut edges_out: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
+    let mut edges_in: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
+    let mut starting_nodes = vec![];
+
+    for node in nodes.iter() {
+        let node_id = node.id();
+        if node.sources().len() == 0 {
+            let insert_node = children_to_parent_map.get(&node_id).unwrap_or(&node_id);
+            starting_nodes.push(*insert_node);
+        } else {
+            for source in node.sources().iter() {
+                let insert_source = children_to_parent_map.get(source).unwrap_or(source);
+                let insert_dest = children_to_parent_map.get(&node_id).unwrap_or(&node_id);
+                edges_out
+                    .entry(*insert_source)
+                    .or_insert_with(|| HashSet::new())
+                    .insert(*insert_dest);
+                edges_in
+                    .entry(*insert_dest)
+                    .or_insert_with(|| HashSet::new())
+                    .insert(*insert_source);
+            }
+        }
+    }
+
+    let mut out = vec![];
+
+    while starting_nodes.len() > 0 {
+        let node = starting_nodes.pop().unwrap();
+        out.push(nodes[id_to_index_map[&node]].clone());
+        if let Some(dest_nodes) = edges_out.get(&node) {
+            for dest_node in dest_nodes.iter() {
+                // remove the edge between node and dest_node
+                edges_in.get_mut(dest_node).unwrap().remove(&node);
+
+                // if dest_node has no incoming edges, add it to starting_nodes
+                if edges_in.get(dest_node).unwrap().len() == 0 {
+                    starting_nodes.push(*dest_node);
+                    edges_in.remove(dest_node);
+                }
+            }
+            // remove all outgoing edges from node
+            edges_out.remove(&node);
+        }
+    }
+
+    assert!(edges_in.len() == 0, "Graph has a cycle");
+    assert!(edges_out.len() == 0, "Graph has a cycle");
+
+    out
+}
 
 /// Assigns circuit nodes in the circuit to different layers based on their dependencies
 pub fn assign_layers<'a, F: FieldExt>(
@@ -123,7 +186,7 @@ pub fn assign_layers<'a, F: FieldExt>(
 #[cfg(test)]
 pub mod tests {
 
-    use std::collections::{hash_map::RandomState, HashSet};
+    use std::collections::{hash_map::RandomState, HashMap, HashSet};
 
     use remainder_shared_types::Fr;
 
@@ -145,7 +208,122 @@ pub mod tests {
             sector::Sector,
             Context,
         },
+        topo_sort,
     };
+
+    #[test]
+    fn test_topo_sort() {
+        //    input_layer
+        //         /\
+        //   input_shred_0        input_shred_3        debug_node     sector_0    sector_1->output_0
+        //   input_shred_1        input_shred_4                       sector_2->output_1
+        //   input_shred_2
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        let ctx = Context::new();
+        let dummy_data = MultilinearExtension::new_zero();
+
+        // node ids: [1, 2, 3]
+        let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), None);
+        let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), None);
+        let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), None);
+        let input_shred_vec = vec![
+            input_shred_0.clone(),
+            input_shred_1.clone(),
+            input_shred_2.clone(),
+        ];
+        // node id: [4]
+        let input_layer_node = InputLayerNode::new(
+            &ctx,
+            Some(input_shred_vec),
+            InputLayerType::PublicInputLayer,
+        );
+
+        // node ids: [5, 6]
+        let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), None);
+        let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), None);
+
+        // for now, use debug node as the fake gate layer
+        // node id: [7]
+        let debug_node = DebugNode::new(
+            &ctx,
+            "debug".to_string(),
+            &[&input_layer_node, &input_shred_3_node],
+        );
+
+        // node id: [8]
+        let sector_0_node = Sector::new(
+            &ctx,
+            &[&input_shred_0.clone(), &input_shred_1.clone()],
+            |ids| Expression::<Fr, AbstractExpr>::products(ids),
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        // node id: [9]
+        let sector_1_node = Sector::new(
+            &ctx,
+            &[&input_shred_2, &input_shred_4_node, &sector_0_node],
+            |ids| Expression::<Fr, AbstractExpr>::products(ids),
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        // node id: [10]
+        let output_0_node = OutputNode::new(&ctx, &sector_1_node);
+
+        // node id: [11]
+        let sector_2_node = Sector::new(
+            &ctx,
+            &[&input_shred_0.clone(), &input_shred_1.clone()],
+            |ids| Expression::<Fr, AbstractExpr>::products(ids),
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        // node id: [12]
+        let output_1_node = OutputNode::new(&ctx, &sector_2_node);
+
+        let mut nodes = vec![
+            NodeEnum::InputLayer(input_layer_node),
+            NodeEnum::InputShred(input_shred_3_node),
+            NodeEnum::InputShred(input_shred_4_node),
+            NodeEnum::Debug(debug_node),
+            NodeEnum::Sector(sector_0_node),
+            NodeEnum::Sector(sector_1_node),
+            NodeEnum::Output(output_0_node),
+            NodeEnum::Sector(sector_2_node),
+            NodeEnum::Output(output_1_node),
+        ];
+
+        nodes.reverse();
+
+        let out = topo_sort(&nodes);
+
+        let mut children_to_parent_map: HashMap<NodeId, NodeId> = HashMap::new();
+        let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
+        for (idx, node) in out.iter().enumerate() {
+            id_to_index_map.insert(node.id(), idx);
+            if let Some(children) = node.children() {
+                for child in children.into_iter() {
+                    children_to_parent_map.insert(child, node.id());
+                }
+            }
+        }
+
+        for node in out.iter() {
+            for node_source in node.sources().iter() {
+                let node_source_parent = children_to_parent_map
+                    .get(node_source)
+                    .unwrap_or(node_source);
+
+                assert!(id_to_index_map[node_source_parent] < id_to_index_map[&node.id()]);
+            }
+        }
+    }
 
     #[test]
     fn test_assign_layers() {
