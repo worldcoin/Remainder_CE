@@ -10,12 +10,21 @@ use self::nodes::{
     node_enum::NodeEnum,
     CircuitNode, NodeId,
 };
+use thiserror::Error;
 
 pub mod component;
 pub mod nodes;
 
+#[derive(Error, Debug, Clone)]
+///Errors to do with the DAG, sorting, assigning layers, etc.
+pub enum DAGError {
+    #[error("The DAG has a cycle")]
+    ///The DAG has a cycle
+    DAGCycleError,
+}
+
 /// given a unsorted vector of NodeEnum, returns a topologically sorted vector of NodeEnum
-pub fn topo_sort<F: FieldExt>(nodes: &Vec<NodeEnum<F>>) -> Vec<NodeEnum<F>> {
+pub fn topo_sort<F: FieldExt>(nodes: &Vec<NodeEnum<F>>) -> Result<Vec<NodeEnum<F>>, DAGError> {
     let mut children_to_parent_map: HashMap<NodeId, NodeId> = HashMap::new();
     let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
     for (idx, node) in nodes.iter().enumerate() {
@@ -72,10 +81,11 @@ pub fn topo_sort<F: FieldExt>(nodes: &Vec<NodeEnum<F>>) -> Vec<NodeEnum<F>> {
         }
     }
 
-    assert!(edges_in.len() == 0, "Graph has a cycle");
-    assert!(edges_out.len() == 0, "Graph has a cycle");
+    if edges_in.len() != 0 || edges_out.len() != 0 {
+        return Err(DAGError::DAGCycleError);
+    }
 
-    out
+    Ok(out)
 }
 
 /// Assigns circuit nodes in the circuit to different layers based on their dependencies
@@ -301,7 +311,7 @@ pub mod tests {
 
         nodes.reverse();
 
-        let out = topo_sort(&nodes);
+        let out = topo_sort(&nodes).unwrap();
 
         let mut children_to_parent_map: HashMap<NodeId, NodeId> = HashMap::new();
         let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
