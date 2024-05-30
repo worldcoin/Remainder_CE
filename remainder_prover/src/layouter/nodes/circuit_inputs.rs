@@ -25,11 +25,7 @@ impl<F: FieldExt> CircuitNode for InputShred<F> {
     }
 
     fn sources(&self) -> Vec<NodeId> {
-        if let Some(parent) = self.parent {
-            vec![parent]
-        } else {
-            vec![]
-        } // ende: I think this is correct, but I'm not sure
+        vec![]
     }
 }
 
