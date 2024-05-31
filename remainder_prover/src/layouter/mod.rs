@@ -15,12 +15,15 @@ use thiserror::Error;
 pub mod component;
 pub mod nodes;
 
-#[derive(Error, Debug, Clone)]
 ///Errors to do with the DAG, sorting, assigning layers, etc.
+#[derive(Error, Debug, Clone)]
 pub enum DAGError {
-    #[error("The DAG has a cycle")]
     ///The DAG has a cycle
-    DAGCycleError,
+    #[error("The DAG has a cycle")]
+    DAGCycle,
+    ///node has no parent
+    #[error("Node has no parent")]
+    NodeHasNoParent,
 }
 
 /// given a unsorted vector of NodeEnum, returns a topologically sorted vector of NodeEnum
@@ -82,22 +85,29 @@ pub fn topo_sort<F: FieldExt>(nodes: &Vec<NodeEnum<F>>) -> Result<Vec<NodeEnum<F
     }
 
     if edges_in.len() != 0 || edges_out.len() != 0 {
-        return Err(DAGError::DAGCycleError);
+        return Err(DAGError::DAGCycle);
     }
 
     Ok(out)
 }
 
 /// Assigns circuit nodes in the circuit to different layers based on their dependencies
+/// assumes that the nodes are topologically sorted
+/// this algorithm is greedy and assigns nodes to the first available layer that it can,
+/// without breaking any dependencies, and any restrictions that are imposed by the node type
+/// (such as matmal / gate nodes cannot be combined with other nodes in the same layer)
 pub fn assign_layers<'a, F: FieldExt>(
     nodes: &'a Vec<NodeEnum<F>>,
-) -> (
-    Vec<&'a InputShred<F>>,
-    Vec<&'a InputLayerNode<F>>,
-    Vec<Vec<&'a NodeEnum<F>>>,
-    Vec<&'a OutputNode<F>>,
-    HashMap<NodeId, usize>,
-) {
+) -> Result<
+    (
+        Vec<&'a InputShred<F>>,
+        Vec<&'a InputLayerNode<F>>,
+        Vec<Vec<&'a NodeEnum<F>>>,
+        Vec<&'a OutputNode<F>>,
+        HashMap<NodeId, usize>,
+    ),
+    DAGError,
+> {
     // the input can exist either as a shred or as a layer
     let mut input_shreds = vec![];
     let mut input_layers = vec![];
@@ -168,7 +178,7 @@ pub fn assign_layers<'a, F: FieldExt>(
                 }
                 node_to_layer_id_map.insert(node.id(), curr_layer_id);
             } else {
-                panic!("Sector node has no parents");
+                return Err(DAGError::NodeHasNoParent);
             }
         };
     }
@@ -184,13 +194,13 @@ pub fn assign_layers<'a, F: FieldExt>(
     // }
     // println!("node->id map {:?}", node_to_layer_id_map);
 
-    (
+    Ok((
         input_shreds,
         input_layers,
         intermediate_layers,
         output_layers,
         node_to_layer_id_map,
-    )
+    ))
 }
 
 #[cfg(test)]
@@ -202,7 +212,7 @@ pub mod tests {
 
     use crate::{
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-        layouter::nodes::NodeId,
+        layouter::{nodes::NodeId, DAGError},
         mle::evals::MultilinearExtension,
     };
 
@@ -220,6 +230,112 @@ pub mod tests {
         },
         topo_sort,
     };
+
+    #[test]
+    fn test_topo_sort_with_cycle() {
+        //    input_layer
+        //         /\
+        //   input_shred_0        input_shred_3    ->    debug_node_0 -> debug_node_1 -> debug_node_0
+        //   input_shred_1        input_shred_4
+        //   input_shred_2
+        //
+        //
+        //                                         ->   sector_0 ->   sector_1  ->output_0
+        //                                         ->   sector_2->  output_1
+        //
+        //
+        //
+        //
+        let ctx = Context::new();
+        let dummy_data = MultilinearExtension::new_zero();
+
+        // node ids: [1, 2, 3]
+        let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), None);
+        let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), None);
+        let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), None);
+        let input_shred_vec = vec![
+            input_shred_0.clone(),
+            input_shred_1.clone(),
+            input_shred_2.clone(),
+        ];
+        // node id: [4]
+        let input_layer_node = InputLayerNode::new(
+            &ctx,
+            Some(input_shred_vec),
+            InputLayerType::PublicInputLayer,
+        );
+
+        // node ids: [5, 6]
+        let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), None);
+        let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), None);
+
+        // for now, use debug node as the fake gate layer
+        // node id: [7]
+        let mut debug_node_0 = DebugNode::new(
+            &ctx,
+            "debug".to_string(),
+            &[&input_layer_node, &input_shred_3_node],
+        );
+
+        // node id: [8]
+        let sector_0_node = Sector::new(
+            &ctx,
+            &[&input_shred_0.clone(), &input_shred_1.clone()],
+            |ids| Expression::<Fr, AbstractExpr>::products(ids),
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        // node id: [9]
+        let sector_1_node = Sector::new(
+            &ctx,
+            &[&input_shred_2, &input_shred_4_node, &sector_0_node],
+            |ids| Expression::<Fr, AbstractExpr>::products(ids),
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        // node id: [10]
+        let output_0_node = OutputNode::new(&ctx, &sector_1_node);
+
+        // node id: [11]
+        let sector_2_node = Sector::new(
+            &ctx,
+            &[&input_shred_0.clone(), &input_shred_1.clone()],
+            |ids| Expression::<Fr, AbstractExpr>::products(ids),
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        // node id: [12]
+        let output_1_node = OutputNode::new(&ctx, &sector_2_node);
+
+        // adding a cycle here
+        // node id: [13]
+        let debug_node_1 = DebugNode::new(
+            &ctx,
+            "debug".to_string(),
+            &[&input_layer_node, &debug_node_0],
+        );
+
+        debug_node_0.add_node(&debug_node_1);
+
+        let mut nodes = vec![
+            NodeEnum::InputLayer(input_layer_node),
+            NodeEnum::InputShred(input_shred_3_node),
+            NodeEnum::InputShred(input_shred_4_node),
+            NodeEnum::Debug(debug_node_0),
+            NodeEnum::Debug(debug_node_1),
+            NodeEnum::Sector(sector_0_node),
+            NodeEnum::Sector(sector_1_node),
+            NodeEnum::Output(output_0_node),
+            NodeEnum::Sector(sector_2_node),
+            NodeEnum::Output(output_1_node),
+        ];
+
+        nodes.reverse();
+
+        let out = topo_sort(&nodes);
+
+        assert!(matches!(out, Err(DAGError::DAGCycle)))
+    }
 
     #[test]
     fn test_topo_sort() {
@@ -423,7 +539,7 @@ pub mod tests {
             NodeEnum::Output(output_1_node),
         ];
         let (input_shreds, input_layers, intermediate_layers, output_layers, _node_to_layer_id_map) =
-            assign_layers(&nodes);
+            assign_layers(&nodes).unwrap();
 
         // check input shreds
         assert_eq!(
