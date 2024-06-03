@@ -27,6 +27,11 @@ pub enum DAGError {
 }
 
 /// given a unsorted vector of NodeEnum, returns a topologically sorted vector of NodeEnum
+/// uses the edge deletion algorithm to find the topological sort
+/// possible future improvement: use the DFS algorithm (w/ timestamping) together with the
+/// adjacency list representation of the graph, to avoid hashmaps.
+/// w.r.t the parent/child nodes, we need to decide if children nodes are already exclueded,
+/// or if they are included in the vec of [NodeEnum]
 pub fn topo_sort<F: FieldExt>(nodes: &Vec<NodeEnum<F>>) -> Result<Vec<NodeEnum<F>>, DAGError> {
     let mut children_to_parent_map: HashMap<NodeId, NodeId> = HashMap::new();
     let mut id_to_index_map: HashMap<NodeId, usize> = HashMap::new();
@@ -101,6 +106,11 @@ pub fn topo_sort<F: FieldExt>(nodes: &Vec<NodeEnum<F>>) -> Result<Vec<NodeEnum<F
 /// this algorithm is greedy and assigns nodes to the first available layer that it can,
 /// without breaking any dependencies, and any restrictions that are imposed by the node type
 /// (such as matmal / gate nodes cannot be combined with other nodes in the same layer)
+/// This algorithm currently minimizes the number of layers, and does not account for
+/// specific layer size / its constituent nodes's numvars, etc.
+/// currently it assumes debug nodes are standalone nodes, and sector nodes can be combined with other nodes
+/// w.r.t the parent/child nodes, we need to decide if children nodes are already exclueded,
+/// or if they are included in the vec of [NodeEnum]
 pub fn assign_layers<'a, F: FieldExt>(
     nodes: &'a Vec<NodeEnum<F>>,
 ) -> Result<
