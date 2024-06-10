@@ -1,20 +1,15 @@
 //! Module for nodes that can be added to a circuit DAG
 
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 pub use itertools::Either;
-use remainder_shared_types::{FieldExt, Fr};
+pub use remainder_shared_types::{FieldExt, Fr};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     mle::evals::MultilinearExtension,
 };
-
-use self::{debug::DebugNode, node_enum::NodeEnum};
 
 pub mod circuit_inputs;
 pub mod circuit_outputs;
@@ -90,7 +85,7 @@ macro_rules! node_enum {
 
 
         impl<F: $bound> $crate::layouter::nodes::CircuitNode for $type_name<F> {
-            fn id(&self) -> crate::layouter::nodes::NodeId {
+            fn id(&self) -> $crate::layouter::nodes::NodeId {
                 match self {
                     $(
                         Self::$var_name(node) => node.id(),
@@ -98,7 +93,7 @@ macro_rules! node_enum {
                 }
             }
 
-            fn children(&self) -> Option<Vec<crate::layouter::nodes::NodeId>> {
+            fn children(&self) -> Option<Vec<$crate::layouter::nodes::NodeId>> {
                 match self {
                     $(
                         Self::$var_name(node) => node.children(),
@@ -106,7 +101,7 @@ macro_rules! node_enum {
                 }
             }
 
-            fn sources(&self) -> Vec<crate::layouter::nodes::NodeId> {
+            fn sources(&self) -> Vec<$crate::layouter::nodes::NodeId> {
                 match self {
                     $(
                         Self::$var_name(node) => node.sources(),

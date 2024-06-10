@@ -11,22 +11,10 @@ use crate::{
     prover::{proof_system::ProofSystem, Witness},
 };
 
-use super::nodes::{sector::Sector, CircuitNode, MaybeFrom, MaybeInto, NodeId};
-
-#[derive(Clone, Debug)]
-pub enum WitnessLayer<F: FieldExt, Pf: ProofSystem<F>> {
-    InputLayer(Pf::InputLayer),
-    Layer(Pf::Layer),
-    OutputLayer(Pf::OutputLayer),
-}
-
-pub trait CompilableNode<F: FieldExt, Pf: ProofSystem<F>> {
-    fn compile(self, witness: &mut Witness<F, Pf>);
-}
-
-pub trait LayedoutNode {
-    fn get_child_claim(&self, child_id: NodeId) -> Option<(Vec<bool>, LayerId)>;
-}
+use super::{
+    layouting::CircuitLocation,
+    nodes::{sector::Sector, CircuitNode, MaybeFrom, MaybeInto, NodeId},
+};
 
 #[derive(Clone, Debug)]
 pub struct DAG<N>(Vec<Option<N>>);
