@@ -1,5 +1,4 @@
 use crate::mle::evals::DimInfo;
-use crate::{layouter::nodes::ClaimableNode, mle::circuit_mle::CircuitMle};
 use crate::{mle::dense::DenseMle, utils::get_dummy_random_mle_vec};
 
 use super::*;

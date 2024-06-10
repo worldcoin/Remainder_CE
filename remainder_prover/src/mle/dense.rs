@@ -1,11 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::{
-    fmt::Debug,
-    iter::{Cloned, Map, Zip},
-    marker::PhantomData,
-};
+use std::fmt::Debug;
 
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
@@ -21,7 +17,7 @@ use crate::{
 use crate::{
     claims::{ClaimError, YieldClaim},
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{combine_mle_refs::combine_mle_refs, LayerError},
+    layer::LayerError,
 };
 use remainder_shared_types::FieldExt;
 
@@ -282,6 +278,7 @@ impl<F: FieldExt> DenseMle<F> {
         }
     }
 
+    /// batch merges the MLEs into a single MLE, in a big endian fashion.
     pub fn batch_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
         let layer_id = mles[0].layer_id;
         let mle_flattened = mles.into_iter().map(|mle| mle.into_iter()).flatten();
@@ -289,6 +286,7 @@ impl<F: FieldExt> DenseMle<F> {
         Self::new_from_iter(mle_flattened, layer_id)
     }
 
+    /// creates an expression from the current Mle
     pub fn expression(self) -> Expression<F, ProverExpr> {
         Expression::<F, ProverExpr>::mle(self)
     }
