@@ -7,6 +7,7 @@ use remainder_shared_types::FieldExt;
 use super::{CircuitNode, ClaimableNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
+/// the node that represents the output of a circuit
 pub struct OutputNode<F> {
     id: NodeId,
     source: NodeId,
@@ -24,6 +25,7 @@ impl<F: FieldExt> CircuitNode for OutputNode<F> {
 }
 
 impl<F: FieldExt> OutputNode<F> {
+    /// Creates a new OutputNode from a source
     pub fn new(ctx: &Context, source: &impl ClaimableNode<F = F>) -> Self {
         Self {
             id: ctx.get_new_id(),

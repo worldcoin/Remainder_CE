@@ -3,7 +3,7 @@
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    layouter::nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, Context, NodeId},
+    layouter::nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, Context},
     mle::evals::MultilinearExtension,
 };
 
@@ -24,8 +24,8 @@ impl<F: FieldExt> EqualityComponent<F> {
         let subtraction_sector = Sector::new(
             ctx,
             &[inputs[0], inputs[1]],
-            |ids| todo!(),
-            |data| MultilinearExtension::new_zero(),
+            |_ids| todo!(),
+            |_data| MultilinearExtension::new_zero(),
         );
         let output = OutputNode::new(ctx, &subtraction_sector);
 

@@ -7,10 +7,7 @@ use std::{
 
 use remainder_shared_types::FieldExt;
 
-use crate::{
-    layouter::nodes::NodeId,
-    mle::{dense::DenseMle, MleIndex},
-};
+use crate::{layouter::nodes::NodeId, mle::MleIndex};
 
 use super::generic_expr::{Expression, ExpressionNode, ExpressionType};
 
@@ -27,10 +24,11 @@ impl<F: FieldExt> ExpressionType<F> for AbstractExpr {
 //  will take care of building a prover expression
 //  building the most memory efficient denseMleRefs dictionaries, etc.
 impl<F: FieldExt> Expression<F, AbstractExpr> {
+    /// find all the sources this expression depend on
     pub fn get_sources(&self) -> Vec<NodeId> {
         let mut sources = vec![];
         let mut get_sources_closure = |expr_node: &ExpressionNode<F, AbstractExpr>,
-                                       mle_vec: &<AbstractExpr as ExpressionType<F>>::MleVec|
+                                       _mle_vec: &<AbstractExpr as ExpressionType<F>>::MleVec|
          -> Result<(), ()> {
             if let ExpressionNode::Product(node_id_vec) = expr_node {
                 sources.extend(node_id_vec.iter());
@@ -44,7 +42,7 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
     }
 
     /// Concatenates two expressions together
-    pub fn concat_expr(mut self, lhs: Expression<F, AbstractExpr>) -> Self {
+    pub fn concat_expr(self, lhs: Expression<F, AbstractExpr>) -> Self {
         let (lhs_node, _) = lhs.deconstruct();
         let (rhs_node, _) = self.deconstruct();
 
@@ -94,7 +92,7 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
     }
 
     /// Create a Sum Expression that contains two MLEs
-    pub fn sum(lhs: Self, mut rhs: Self) -> Self {
+    pub fn sum(lhs: Self, rhs: Self) -> Self {
         let (lhs_node, _) = lhs.deconstruct();
         let (rhs_node, _) = rhs.deconstruct();
 
@@ -176,6 +174,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, Abstra
 
 /// describes the circuit given the expression (includes all the info of the data that the expression is instantiated with)
 impl<F: std::fmt::Debug + FieldExt> Expression<F, AbstractExpr> {
+    #[allow(dead_code)]
     pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
         struct CircuitDesc<'a, F: FieldExt>(
             &'a ExpressionNode<F, AbstractExpr>,

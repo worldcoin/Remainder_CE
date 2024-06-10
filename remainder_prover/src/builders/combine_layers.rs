@@ -1,4 +1,4 @@
-//<F, ProverExpr>::! For combining sub-circuits(multiple layers) into a single circuit(layer)
+//! For combining sub-circuits(multiple layers) into a single circuit(layer)
 
 use std::cmp::min;
 

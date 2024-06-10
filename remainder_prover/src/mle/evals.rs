@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests;
 
-use std::{error::Error, fmt::Display, ops::Index};
+use std::{error::Error, ops::Index};
 
 use ark_std::{cfg_into_iter, log2};
 use itertools::{EitherOrBoth::*, Itertools};
-use ndarray::{Array, ArrayView, Dimension, IxDyn, ShapeError};
+use ndarray::{Array, ArrayView, Dimension, IxDyn};
 use rayon::{
     prelude::{IntoParallelIterator, ParallelIterator},
     slice::ParallelSlice,
@@ -15,22 +15,30 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
+/// the errors associated with the dimension of the MLE.
 pub enum DimensionError {
     #[error("Dimensions: {0} do not match with number of axes: {1} as indicated by their names.")]
+    /// The dimensions of the MLE do not match the number of axes.
     DimensionMismatchError(usize, usize),
     #[error("Dimensions: {0} do not match with the numvar: {1} of the mle.")]
+    /// The dimensions of the MLE do not match the number of variables.
     DimensionNumVarError(usize, usize),
     #[error("Trying to get the underlying mle as an ndarray, but there is no dimension info.")]
+    /// No dimension info of the MLE.
     NoDimensionInfoError(),
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
+/// the dimension information of the MLE.
+/// contains the dim: [IxDyn], see ndarray for more detailed documentation
+/// and the names of the axes.
 pub struct DimInfo {
     dims: IxDyn,
     axes_names: Vec<String>,
 }
 
 impl DimInfo {
+    /// Creates a new DimInfo from the dimensions and the axes names.
     pub fn new(dims: IxDyn, axes_names: Vec<String>) -> Result<Self, DimensionError> {
         if dims.ndim() != axes_names.len() {
             return Err(DimensionError::DimensionMismatchError(
@@ -156,6 +164,7 @@ impl<F: FieldExt> Evaluations<F> {
         }
     }
 
+    /// returns the number of variables of the current Evalations.
     pub fn num_vars(&self) -> usize {
         self.num_vars
     }
@@ -356,12 +365,14 @@ impl<F: FieldExt> MultilinearExtension<F> {
         }
     }
 
+    /// Generate a new MultilinearExtension from `evals` and `dim_info`.
     pub fn new_with_dim_info(evals: Evaluations<F>, dim_info: DimInfo) -> Self {
         let mut mle = Self::new(evals);
         mle.set_dim_info(dim_info).unwrap();
         mle
     }
 
+    /// Generate a new MultilinearExtension from a representation of `ndarray`
     pub fn new_from_ndarray(
         ndarray: Array<F, IxDyn>,
         axes_names: Vec<String>,
@@ -373,6 +384,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
         Ok(mle)
     }
 
+    /// Set the dimension information for the MLE.
     pub fn set_dim_info(&mut self, dim_info: DimInfo) -> Result<(), DimensionError> {
         let num_var_from_dim: u32 = dim_info
             .dims
@@ -391,10 +403,12 @@ impl<F: FieldExt> MultilinearExtension<F> {
         Ok(())
     }
 
+    /// Get the dimension information for the MLE.
     pub fn dim_info(&self) -> &Option<DimInfo> {
         &self.dim_info
     }
 
+    /// Set the MLE as an ndarray.
     pub fn get_mle_as_ndarray(&mut self) -> Result<ArrayView<F, IxDyn>, Box<dyn Error>> {
         if let Some(dim_info) = self.dim_info() {
             let ndarray: ArrayView<F, IxDyn> =
@@ -405,6 +419,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
         }
     }
 
+    /// Get the names of the axes of the MLE (multi-dimensional).
     pub fn get_axes_names(&mut self) -> Option<Vec<String>> {
         self.dim_info()
             .as_ref()

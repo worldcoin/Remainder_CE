@@ -17,9 +17,13 @@ use super::{
 
 use itertools::Itertools;
 
+/// A trait for a MLE(s) that are the input(s) to a circuit,
+/// but are bundled together for semantic reasons.
 pub trait CircuitMle<F: FieldExt, const N: usize> {
+    /// returns the references to all the underlying MLEs
     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
+    /// returns all the MLEs as InputShreds
     fn make_input_shreds(
         &self,
         ctx: &Context,
@@ -27,6 +31,7 @@ pub trait CircuitMle<F: FieldExt, const N: usize> {
     ) -> [InputShred<F>; N];
 }
 
+/// A struct that bundles N MLEs together for semantic reasons.
 pub struct FlatMles<F: FieldExt, const N: usize> {
     mles: [DenseMle<F>; N],
 }
@@ -58,6 +63,7 @@ impl<F: FieldExt, const N: usize> CircuitMle<F, N> for FlatMles<F, N> {
 }
 
 impl<F: FieldExt, const N: usize> FlatMles<F, N> {
+    /// Creates a new [FlatMles] from raw data.
     pub fn new_from_raw(
         data: [Vec<F>; N],
         layer_id: LayerId,

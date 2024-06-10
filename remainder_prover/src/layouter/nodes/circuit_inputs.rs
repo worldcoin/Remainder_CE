@@ -1,7 +1,5 @@
 //! Nodes that represent inputs to a circuit in the circuit DAG
 
-use std::marker::PhantomData;
-
 use remainder_shared_types::FieldExt;
 
 use crate::{
@@ -15,6 +13,7 @@ use super::{CircuitNode, ClaimableNode, Context, NodeId};
 #[derive(Debug, Clone)]
 pub struct InputShred<F> {
     id: NodeId,
+    #[allow(dead_code)]
     parent: Option<NodeId>,
     data: MultilinearExtension<F>,
 }
@@ -25,11 +24,7 @@ impl<F: FieldExt> CircuitNode for InputShred<F> {
     }
 
     fn sources(&self) -> Vec<NodeId> {
-        if let Some(parent) = self.parent {
-            vec![parent]
-        } else {
-            vec![]
-        } // ende: I think this is correct, but I'm not sure
+        vec![]
     }
 }
 
@@ -68,7 +63,9 @@ impl<F: FieldExt> InputShred<F> {
 pub enum InputLayerType {
     ///An InputLayer that will be compiled into a `LigeroInputLayer`
     LigeroInputLayer,
+    /// A PublicInputLayer
     PublicInputLayer,
+    /// A default InputLayerType
     Default,
 }
 

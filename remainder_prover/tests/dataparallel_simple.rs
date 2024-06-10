@@ -1,5 +1,4 @@
 use ark_std::test_rng;
-use itertools::Itertools;
 
 use remainder::{
     builders::{
@@ -7,7 +6,7 @@ use remainder::{
     },
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    mle::{dense::DenseMle, Mle, MleIndex},
+    mle::{dense::DenseMle, Mle},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
