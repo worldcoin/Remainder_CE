@@ -9,29 +9,21 @@ use self::nodes::CircuitNode;
 pub mod compiling;
 use std::collections::{HashMap, HashSet};
 
-use remainder_shared_types::FieldExt;
-
 use self::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     node_enum::NodeEnum,
-    CircuitNode, NodeId,
+    NodeId,
 };
 use thiserror::Error;
 
-use remainder_shared_types::FieldExt;
-
-use crate::prover::{proof_system::ProofSystem, Witness};
-
-use self::nodes::CircuitNode;
-
-pub mod compiling;
 pub mod component;
 pub mod layouting;
 pub mod nodes;
 
 pub trait Layouter<F: FieldExt, N: CircuitNode, Pf: ProofSystem<F>> {
     fn layout(input_nodes: Vec<N>) -> Witness<F, Pf>;
+}
 ///Errors to do with the DAG, sorting, assigning layers, etc.
 #[derive(Error, Debug, Clone)]
 pub enum DAGError {
