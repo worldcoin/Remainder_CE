@@ -16,12 +16,12 @@ use remainder_shared_types::Fr;
 #[test]
 fn test_get_claim() {
     // [1, 1, 1, 1] \oplus (1 - (1 * (1 + V[1, 1, 1, 1]))) * 2
-    let expression1: Expression<Fr, ProverExpr> = Expression::constant(Fr::one());
+    let expression1: Expression<Fr, ProverExpr> = Expression::<Fr, ProverExpr>::constant(Fr::one());
     let mle = DenseMle::<Fr>::new_from_raw(
         vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
         LayerId::Input(0),
     );
-    let expression3 = Expression::mle(mle);
+    let expression3 = Expression::<Fr, ProverExpr>::mle(mle);
     let expression = expression1.clone() + expression3.clone();
     let expression = expression1 - expression;
     let expression = expression * Fr::from(2);
@@ -223,12 +223,12 @@ fn test_aggro_claim_4() {
     let mle_ref = mle1.clone();
     let mle_ref2 = mle2.clone();
 
-    let expr = Expression::products(vec![mle_ref, mle_ref2]);
+    let expr = Expression::<Fr, ProverExpr>::products(vec![mle_ref, mle_ref2]);
     let mut expr_copy = expr.clone();
 
     let layer = from_mle(
         (mle1, mle2),
-        |mle| Expression::products(vec![mle.clone().0, mle.clone().1]),
+        |mle| Expression::<Fr, ProverExpr>::products(vec![mle.clone().0, mle.clone().1]),
         |_, _, _| unimplemented!(),
     );
     let layer: RegularLayer<_> = RegularLayer::new(layer, LayerId::Input(0));
@@ -277,7 +277,7 @@ fn test_aggro_claim_negative_1() {
     ];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
     let mle_ref = mle1.clone();
-    let expr = Expression::mle(mle_ref);
+    let expr = Expression::<Fr, ProverExpr>::mle(mle_ref);
     let mut expr_copy = expr.clone();
 
     let layer = from_mle(
@@ -331,7 +331,7 @@ fn test_aggro_claim_negative_2() {
     ];
     let mle1: DenseMle<Fr> = DenseMle::new_from_raw(mle_v1, LayerId::Input(0));
     let mle_ref = mle1.clone();
-    let expr = Expression::mle(mle_ref);
+    let expr = Expression::<Fr, ProverExpr>::mle(mle_ref);
     let mut expr_copy = expr.clone();
 
     let layer = from_mle(

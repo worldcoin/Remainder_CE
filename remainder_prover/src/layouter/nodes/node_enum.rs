@@ -8,6 +8,7 @@ use super::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     debug::DebugNode,
+    sector::Sector,
 };
 
-node_enum!(NodeEnum: FieldExt, (InputShred: InputShred<F>), (InputLayer: InputLayerNode<F>), (Output: OutputNode<F>), (Debug: DebugNode));
+node_enum!(NodeEnum: FieldExt, (InputShred: InputShred<F>), (InputLayer: InputLayerNode<F>), (Output: OutputNode<F>), (Debug: DebugNode), (Sector: Sector<F>));

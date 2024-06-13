@@ -327,7 +327,7 @@ fn add_padding<F: FieldExt>(
     num_padding: usize,
 ) -> Expression<F, ProverExpr> {
     for _ in 0..num_padding {
-        expr = Expression::constant(F::ZERO).concat_expr(expr);
+        expr = Expression::<F, ProverExpr>::constant(F::ZERO).concat_expr(expr);
     }
     expr
 }

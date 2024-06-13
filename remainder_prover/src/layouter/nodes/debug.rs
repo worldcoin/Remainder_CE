@@ -7,6 +7,7 @@ use super::{CircuitNode, Context, NodeId};
 #[derive(Debug, Clone)]
 pub struct DebugNode {
     id: NodeId,
+    #[allow(dead_code)]
     label: String,
     sources: Vec<NodeId>,
 }

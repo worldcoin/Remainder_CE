@@ -9,6 +9,8 @@ use crate::{
 
 use super::{CircuitNode, ClaimableNode, Context, NodeId};
 
+#[derive(Debug, Clone)]
+/// A sector node in the circuit DAG, can have multiple inputs, and a single output
 pub struct Sector<F: FieldExt> {
     id: NodeId,
     expr: Expression<F, AbstractExpr>,
@@ -16,13 +18,14 @@ pub struct Sector<F: FieldExt> {
 }
 
 impl<F: FieldExt> Sector<F> {
+    /// creates a new sector node
     pub fn new(
         ctx: &Context,
         inputs: &[&dyn ClaimableNode<F = F>],
-        expr_builder: impl FnOnce(Vec<Expression<F, AbstractExpr>>) -> Expression<F, AbstractExpr>,
+        expr_builder: impl FnOnce(Vec<NodeId>) -> Expression<F, AbstractExpr>,
         data_builder: impl FnOnce(Vec<&MultilinearExtension<F>>) -> MultilinearExtension<F>,
     ) -> Self {
-        let node_ids = inputs.iter().map(|node| node.get_expr()).collect();
+        let node_ids = inputs.iter().map(|node| node.id()).collect();
         let expr = expr_builder(node_ids);
         let input_data = inputs.iter().map(|node| node.get_data()).collect();
         let data = data_builder(input_data);
@@ -37,11 +40,11 @@ impl<F: FieldExt> Sector<F> {
 
 impl<F: FieldExt> CircuitNode for Sector<F> {
     fn id(&self) -> NodeId {
-        todo!()
+        self.id
     }
 
     fn sources(&self) -> Vec<NodeId> {
-        todo!()
+        self.expr.get_sources()
     }
 }
 
@@ -53,6 +56,6 @@ impl<F: FieldExt> ClaimableNode for Sector<F> {
     }
 
     fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
-        todo!()
+        self.expr.clone()
     }
 }

@@ -36,8 +36,15 @@ impl<F: FieldExt> LayerBuilder<F> for LastBitLinearBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.sel_mle.clone()).concat_expr(Expression::mle(self.sel_mle.clone()))
-            + Expression::products(vec![self.prod_mle.clone(), self.prod_mle.clone()])
+        Expression::<F, ProverExpr>::mle(self.sel_mle.clone()).concat_expr(Expression::<
+            F,
+            ProverExpr,
+        >::mle(
+            self.sel_mle.clone()
+        )) + Expression::<F, ProverExpr>::products(vec![
+            self.prod_mle.clone(),
+            self.prod_mle.clone(),
+        ])
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let sel_bt = self
@@ -89,10 +96,15 @@ impl<F: FieldExt> LayerBuilder<F> for FirstBitLinearBuilder<F> {
     type Successor = DenseMle<F>;
 
     fn build_expression(&self) -> Expression<F, ProverExpr> {
-        Expression::mle(self.sel_mle.clone()).concat_expr(Expression::products(vec![
+        Expression::<F, ProverExpr>::mle(self.sel_mle.clone()).concat_expr(Expression::<
+            F,
+            ProverExpr,
+        >::products(
+            vec![
             self.sel_mle.clone(),
             self.sel_mle.clone(),
-        ]))
+        ]
+        ))
     }
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {
         let final_bt = self

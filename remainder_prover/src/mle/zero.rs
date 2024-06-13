@@ -126,7 +126,7 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
 
     #[doc = " Mutates the MLE in order to set the prefix bits. This is needed when we"]
     #[doc = " are working with dataparallel circuits and new bits need to be added."]
-    fn add_prefix_bits(&mut self, new_bits: Vec<MleIndex<F>>) {
+    fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
         todo!()
     }
 

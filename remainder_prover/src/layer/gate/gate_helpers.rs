@@ -36,6 +36,7 @@ pub enum GateError {
     EvaluateBoundIndicesDontMatch,
     #[error("beta table associated is not indexed")]
     /// The beta table we are working with doesn't have numbered indices but we need labeled bits!
+    #[allow(dead_code)]
     BetaTableNotIndexed,
 }
 

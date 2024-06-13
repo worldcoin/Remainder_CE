@@ -109,7 +109,7 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
         todo!()
     }
 
-    fn add_prefix_bits(&mut self, new_bits: Vec<MleIndex<F>>) {
+    fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
         todo!()
     }
 

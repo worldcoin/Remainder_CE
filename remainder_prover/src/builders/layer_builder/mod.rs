@@ -105,7 +105,8 @@ impl<F: FieldExt, A: LayerBuilder<F>, B: LayerBuilder<F>> LayerBuilder<F> for Co
         let first = self.first.build_expression();
         let second = self.second.build_expression();
 
-        let zero_expression: Expression<F, ProverExpr> = Expression::constant(F::ZERO);
+        let zero_expression: Expression<F, ProverExpr> =
+            Expression::<F, ProverExpr>::constant(F::ZERO);
 
         let first_padded = if let Padding::Left(padding) = self.padding {
             let mut left = first;

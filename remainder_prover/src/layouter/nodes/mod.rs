@@ -1,11 +1,9 @@
 //! Module for nodes that can be added to a circuit DAG
 
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use remainder_shared_types::FieldExt;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -46,23 +44,31 @@ impl Context {
 }
 
 /// The circuit-unique ID for each node
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Copy, PartialOrd)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Copy, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct NodeId(u64);
 
 impl NodeId {
+    /// Creates a new NodeId from a Context
     pub fn new(ctx: &Context) -> Self {
         ctx.get_new_id()
+    }
+
+    /// Creates a new NodeId from a u64, for testing only
+    pub fn new_unsafe(id: u64) -> Self {
+        Self(id)
     }
 }
 
 /// A Node that can exist w/ dependencies in the circuit DAG
 pub trait CircuitNode {
+    /// The unique ID of this node
     fn id(&self) -> NodeId;
 
+    /// The children of this node
     fn children(&self) -> Option<Vec<NodeId>> {
         None
     }
-
+    /// The sources of this node in the DAG
     fn sources(&self) -> Vec<NodeId>;
 }
 
@@ -77,7 +83,7 @@ macro_rules! node_enum {
     ($type_name:ident: $bound:tt, $(($var_name:ident: $variant:ty)),+) => {
         #[derive(Clone, Debug)]
         #[doc = r"Remainder generated trait enum"]
-        pub enum $type_name<F> {
+        pub enum $type_name<F: $bound> {
             $(
                 #[doc = "Remainder generated node variant"]
                 $var_name($variant),
