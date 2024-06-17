@@ -43,10 +43,24 @@ macro_rules! layer_enum {
                     $var_name(<$variant as Layer<F>>::Proof),
                 )*
             }
+
+            #[derive(serde::Serialize, serde::Deserialize, Debug)]
+            #[serde(bound = "F: FieldExt")]
+            #[doc = r"Verfier layer description enum"]
+            pub enum [<$type_name VerifierLayer>]<F: FieldExt> {
+                $(
+                    #[doc = "Verifier layer description variant"]
+                    $var_name(<$variant as Layer<F>>::VerifierLayer),
+                )*
+            }
         }
 
         impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
-            paste::paste! { type Proof = [<$type_name Proof>]<F>;}
+            paste::paste! {
+                type Proof = [<$type_name Proof>]<F>;
+                type VerifierLayer = [<$type_name VerifierLayer>]<F>;
+            }
+
             fn prove_rounds(
                 &mut self,
                 claim: $crate::claims::Claim<F>,
@@ -134,12 +148,23 @@ macro_rules! input_layer_enum {
                     $var_name(<$variant as InputLayer<F>>::OpeningProof),
                 )*
             }
+
+            #[derive(serde::Serialize, serde::Deserialize)]
+            #[serde(bound = "F: FieldExt")]
+            #[doc = r"Verifier layer description enum"]
+            pub enum [<$type_name VerifierInputLayer>]<F: FieldExt> {
+                $(
+                    #[doc = "Verifier layer description variant"]
+                    $var_name(<$variant as InputLayer<F>>::VerifierInputLayer),
+                )*
+            }
         }
 
         impl<F: FieldExt> $crate::input_layer::InputLayer<F> for $type_name<F> {
             paste::paste! {
                 type Commitment = [<$type_name Commitment>]<F>;
                 type OpeningProof = [<$type_name OpeningProof>]<F>;
+                type VerifierInputLayer = [<$type_name VerifierInputLayer>]<F>;
             }
 
             fn commit(&mut self) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {

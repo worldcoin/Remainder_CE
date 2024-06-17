@@ -21,6 +21,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
+    expression::verifier_expr::VerifierMle,
     layer::{Layer, LayerError, LayerId, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle},
     prover::SumcheckProof,
@@ -80,8 +81,38 @@ pub struct Gate<F: FieldExt> {
     pub gate_operation: BinaryOperation,
 }
 
+/// The Verifier's version of a Gate Layer description.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+struct VerifierGateLayer<F: FieldExt> {
+    /// The layer id associated with this gate layer.
+    layer_id: LayerId,
+
+    /// The gate operation representing the fan-in-two relationship.
+    gate_operation: BinaryOperation,
+
+    /// A vector of tuples representing the "nonzero" gates, especially useful
+    /// in the sparse case the format is (z, x, y) where the gate at label z is
+    /// the output of performing an operation on gates with labels x and y.
+    wiring: Vec<(usize, usize, usize)>,
+
+    /// The left side of the expression, i.e. the mle that makes up the "x"
+    /// variables.
+    lhs_mle: VerifierMle<F>,
+
+    /// The mles that are constructed when initializing phase 2 (binding the y
+    /// variables).
+    rhs_mle: VerifierMle<F>,
+
+    /// The number of bits representing the number of "dataparallel" copies of
+    /// the circuit.
+    num_dataparallel_bits: usize,
+}
+
 impl<F: FieldExt> Layer<F> for Gate<F> {
     type Proof = SumcheckProof<F>;
+
+    type VerifierLayer = VerifierGateLayer<F>;
 
     fn prove_rounds(
         &mut self,
