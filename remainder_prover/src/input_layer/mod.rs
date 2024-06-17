@@ -66,6 +66,9 @@ pub trait InputLayer<F: FieldExt> {
     /// The struct that contains the opening proof.
     type OpeningProof: Serialize + for<'a> Deserialize<'a>;
 
+    /// The Verifier Key representation for this input layer.
+    type VerifierInputLayer: Serialize + for<'a> Deserialize<'a>;
+
     /// Generates a commitment
     ///
     /// Can mutate self to cache useful information.

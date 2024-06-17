@@ -1,9 +1,12 @@
 //! An input layer that is sent to the verifier in the clear
 
+use std::marker::PhantomData;
+
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
@@ -21,10 +24,20 @@ pub struct PublicInputLayer<F: FieldExt> {
     pub(crate) layer_id: LayerId,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "F: FieldExt")]
+struct VerifierPublicInputLayer<F: FieldExt> {
+    layer_id: LayerId,
+    num_bits: usize,
+    _marker: PhantomData<F>,
+}
+
 impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     type Commitment = Vec<F>;
 
     type OpeningProof = ();
+
+    type VerifierInputLayer = VerifierPublicInputLayer<F>;
 
     /// Because this is a public input layer, we do not need to commit to the MLE and the
     /// "commitment" is just the MLE itself.

@@ -1,9 +1,12 @@
 //! A part of the input layer that is random and secured through F-S
 
+use std::marker::PhantomData;
+
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
@@ -22,10 +25,25 @@ pub struct RandomInputLayer<F: FieldExt> {
     pub(crate) layer_id: LayerId,
 }
 
+/// Verifier's description of a Random Input Layer.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+struct VerifierRandomInputLayer<F: FieldExt> {
+    /// The ID of this Random Input Layer.
+    layer_id: LayerId,
+
+    /// The number of variables this Random Input Layer is on.
+    num_bits: usize,
+
+    _marker: PhantomData<F>,
+}
+
 impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     type Commitment = Vec<F>;
 
     type OpeningProof = ();
+
+    type VerifierInputLayer = VerifierRandomInputLayer<F>;
 
     /// We do not need to commit to the randomness, so we simply send it in the clear.
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {

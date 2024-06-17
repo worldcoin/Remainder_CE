@@ -91,6 +91,9 @@ pub enum LayerId {
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
 pub trait Layer<F: FieldExt> {
+    /// The associated type that the verifier is using to store this layer.
+    type VerifierLayer: Debug + Serialize + for<'a> Deserialize<'a>;
+
     /// The struct that contains the proof this `Layer` generates
     type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
 

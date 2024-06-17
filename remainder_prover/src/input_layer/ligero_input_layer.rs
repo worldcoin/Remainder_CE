@@ -1,5 +1,7 @@
 //! An InputLayer that will have it's claim proven with a Ligero Opening Proof.
 
+use std::marker::PhantomData;
+
 use remainder_ligero::{
     adapter::{convert_halo_to_lcpc, LigeroProof},
     ligero_commit::{
@@ -59,10 +61,27 @@ pub struct LigeroInputProof<F: FieldExt> {
 /// The Ligero commitment the prover needs to send to the verifier
 pub type LigeroCommitment<F> = LcRoot<LigeroEncoding<F>, F>;
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+struct VerifierLigeroInputLayer<F: FieldExt> {
+    /// The ID of this Ligero Input Layer.
+    layer_id: LayerId,
+
+    /// The number of variables this Ligero Input Layer is on.
+    num_bits: usize,
+
+    rho_inv: u8,
+    ratio: f64,
+
+    _marker: PhantomData<F>,
+}
+
 impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     type Commitment = LigeroCommitment<F>;
 
     type OpeningProof = LigeroInputProof<F>;
+
+    type VerifierInputLayer = VerifierLigeroInputLayer<F>;
 
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
         // --- If we've already generated a commitment (i.e. through `new_with_ligero_commitment()`), ---

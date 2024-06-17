@@ -17,7 +17,7 @@ use tracing::info;
 use crate::{
     builders::layer_builder::LayerBuilder,
     claims::Claim,
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    expression::{generic_expr::Expression, prover_expr::ProverExpr, verifier_expr::VerifierExpr},
     layer::{Layer, LayerError, LayerId, VerificationError},
     mle::betavalues::BetaValues,
     prover::SumcheckProof,
@@ -42,7 +42,17 @@ pub struct RegularLayer<F: FieldExt> {
     beta_vals: Option<BetaValues<F>>,
 }
 
+/// The description of a Regular Layer used by the verifier.
+/// TODO(Makis): Add Debug.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+pub struct VerifierRegularLayer<F: FieldExt> {
+    layer_id: LayerId,
+    expression: Expression<F, VerifierExpr>,
+}
+
 impl<F: FieldExt> Layer<F> for RegularLayer<F> {
+    type VerifierLayer = VerifierRegularLayer<F>;
     type Proof = Option<SumcheckProof<F>>;
 
     fn prove_rounds(

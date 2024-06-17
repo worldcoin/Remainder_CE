@@ -9,7 +9,10 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
+use std::marker::PhantomData;
+
 use self::{layers::Layers, proof_system::ProofSystem};
+use crate::expression::verifier_expr::VerifierMle;
 use crate::mle::Mle;
 use crate::{
     claims::{ClaimAggregator, ClaimAndProof},
@@ -589,4 +592,12 @@ pub trait GKRCircuit<F: FieldExt> {
 where {
         Self::CIRCUIT_HASH.map(|bytes| F::from_repr(bytes).unwrap())
     }
+}
+
+/// The Verifier Key associated with a GKR proof of a [ProofSystem].
+/// It consists of consice GKR Circuit description to be use by the Verifier.
+pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
+    input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer>,
+    intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::VerifierLayer>,
+    output_layers: Vec<VerifierMle<F>>,
 }
