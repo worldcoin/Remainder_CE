@@ -1,5 +1,10 @@
 [workspace]
 
-members = ["remainder_prover", "remainder_shared_types", "remainder_ligero"]
+members = [
+    "remainder_prover",
+    "remainder_shared_types",
+    "remainder_ligero",
+    "remainder_zkdt",
+]
 
 resolver = "2"
