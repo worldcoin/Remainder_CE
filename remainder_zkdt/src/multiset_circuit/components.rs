@@ -22,29 +22,14 @@ pub struct InputExpoComponent<F: FieldExt> {
 impl<F: FieldExt> InputExpoComponent<F> {
     pub fn new(
         ctx: &Context,
-        attr_inputs: [&Sector<F>; 2],
-        random_inputs: [&Sector<F>; 2],
-        bin_decomp_inputs: [&Sector<F>; 16],
+        attr_inputs: [&dyn ClaimableNode<F = F>; 2],
+        random_inputs: [&dyn ClaimableNode<F = F>; 2],
+        bin_decomp_inputs: [&dyn ClaimableNode<F = F>; 16],
     ) -> Self {
-        let inputs_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> = attr_inputs
-            .iter()
-            .map(|&sector| sector as &dyn ClaimableNode<F = F>)
-            .collect();
-
-        let random_inputs_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> = random_inputs
-            .iter()
-            .map(|&sector| sector as &dyn ClaimableNode<F = F>)
-            .collect();
-
-        let bin_decomp_inputs_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> =
-            bin_decomp_inputs
-                .iter()
-                .map(|&sector| sector as &dyn ClaimableNode<F = F>)
-                .collect();
-
-        let mut packing_sector_nodes = Vec::new();
-        packing_sector_nodes.extend(inputs_as_claimable_nodes.iter().cloned());
-        packing_sector_nodes.extend(random_inputs_as_claimable_nodes.iter().cloned());
+        let packing_sector_nodes = attr_inputs
+            .into_iter()
+            .chain(random_inputs.into_iter())
+            .collect_vec();
 
         let input_packing_sector = Sector::new(
             ctx,
@@ -89,7 +74,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
 
             let next_power_secotr = Sector::new(
                 ctx,
-                &[last_power_sector as &dyn ClaimableNode<F = F>],
+                &[last_power_sector],
                 |node| {
                     // inputs [attr_id, attr_val, r, r_packing]
                     // expressions = r - (x.attr_id + r_packing * x.attr_val)
@@ -117,9 +102,8 @@ impl<F: FieldExt> InputExpoComponent<F> {
         // --- computes (r - x)^i * b_ij + (1 - b_ij) ---
         let mut bit_exponentiation_sectors = Vec::new();
         for bit in 0..15 {
-            let r_minus_x_powers_sector =
-                &r_minus_x_powers_sectors[bit] as &dyn ClaimableNode<F = F>;
-            let bin_decomp_sector = bin_decomp_inputs_as_claimable_nodes[bit];
+            let r_minus_x_powers_sector = &r_minus_x_powers_sectors[bit];
+            let bin_decomp_sector = bin_decomp_inputs[bit];
 
             // Takes r_minus_x_power (r-x_i)^j, outputs b_ij * (r-x_i)^j + (1-b_ij)
             let bit_exponentiation_sector = Sector::new(
@@ -161,11 +145,10 @@ impl<F: FieldExt> InputExpoComponent<F> {
             bit_exponentiation_sectors.push(bit_exponentiation_sector);
         }
 
-        let bit_exponentiation_sectors_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> =
-            bit_exponentiation_sectors
-                .iter()
-                .map(|sector| sector as &dyn ClaimableNode<F = F>)
-                .collect();
+        let bit_exponentiation_sectors_as_claimable_nodes = bit_exponentiation_sectors
+            .iter()
+            .map(|sector| sector as &dyn ClaimableNode<F = F>)
+            .collect_vec();
 
         let product_sector = Sector::new(
             ctx,

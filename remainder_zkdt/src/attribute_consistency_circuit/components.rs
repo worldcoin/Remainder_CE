@@ -14,15 +14,14 @@ pub struct AttributeConsistencyComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> AttributeConsistencyComponent<F> {
-    pub fn new(ctx: &Context, inputs: [&Sector<F>; 2]) -> Self {
-        let inputs_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> = inputs
-            .iter()
-            .map(|&sector| sector as &dyn ClaimableNode<F = F>)
-            .collect();
-
+    pub fn new(
+        ctx: &Context,
+        permuted_input: impl ClaimableNode<F = F>,
+        decision_node_paths: impl ClaimableNode<F = F>,
+    ) -> Self {
         let attr_cons_sector = Sector::new(
             ctx,
-            &inputs_as_claimable_nodes,
+            &[&permuted_input, &decision_node_paths],
             |attr_cons_inputs| {
                 assert_eq!(attr_cons_inputs.len(), 2);
 

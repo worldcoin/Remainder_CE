@@ -11,13 +11,11 @@ use remainder::{
     mle::evals::MultilinearExtension,
 };
 
-/// Helper!
-pub fn decision_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
+fn decision_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     (0..(size - 1)).map(|idx| (idx, idx + 1, idx)).collect_vec()
 }
 
-/// Helper!
-pub fn leaf_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
+fn leaf_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     vec![(0, size - 1, 0)]
 }
 
@@ -28,9 +26,9 @@ pub struct PathCheckComponent<F: FieldExt> {
 impl<F: FieldExt> PathCheckComponent<F> {
     pub fn new(
         ctx: &Context,
-        decision_node_ids: [&Sector<F>; 1],
-        leaf_node_ids: [&Sector<F>; 1],
-        bin_decomp_diff_signed_bit: [&Sector<F>; 1],
+        decision_node_ids: impl ClaimableNode<F = F>,
+        leaf_node_ids: impl ClaimableNode<F = F>,
+        bin_decomp_diff_signed_bit: impl ClaimableNode<F = F>,
         num_tree_bits: usize,
         num_dataparallel_bits: usize,
     ) -> Self {
@@ -39,7 +37,7 @@ impl<F: FieldExt> PathCheckComponent<F> {
         // corresponding to either going left or right down the decision tree
         let next_node_id_sector = Sector::new(
             ctx,
-            &[decision_node_ids[0], bin_decomp_diff_signed_bit[0]],
+            &[&decision_node_ids, &bin_decomp_diff_signed_bit],
             |next_node_id_inputs| {
                 assert_eq!(next_node_id_inputs.len(), 2);
 
@@ -72,7 +70,7 @@ impl<F: FieldExt> PathCheckComponent<F> {
             },
         );
 
-        let num_var_gate = decision_node_ids[0].get_data().num_vars();
+        let num_var_gate = decision_node_ids.get_data().num_vars();
 
         let nonzero_gates_add_decision = decision_add_wiring_from_size(
             1 << (num_var_gate - num_dataparallel_bits - num_tree_bits),

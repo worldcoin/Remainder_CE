@@ -16,24 +16,19 @@ pub struct PosBinaryRecompComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> PosBinaryRecompComponent<F> {
-    pub fn new(ctx: &Context, inputs: [&Sector<F>; 15]) -> Self {
-        let inputs_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> = inputs
-            .iter()
-            .map(|&sector| sector as &dyn ClaimableNode<F = F>)
-            .collect();
-
+    pub fn new(ctx: &Context, bin_decomp_wo_sign_bit: [&dyn ClaimableNode<F = F>; 15]) -> Self {
         let bin_recomp_sector = Sector::new(
             ctx,
-            &inputs_as_claimable_nodes,
-            |bits_16_mles| {
+            &bin_decomp_wo_sign_bit,
+            |bin_decomp_mles| {
                 // ignore the signed bit
-                assert_eq!(bits_16_mles.len(), 15);
+                assert_eq!(bin_decomp_mles.len(), 15);
 
                 // --- Let's just do a linear accumulator for now ---
                 // TODO!(ryancao): Rewrite this expression but as a tree
                 let b_s_initial_acc = Expression::<F, AbstractExpr>::constant(F::ZERO);
 
-                bits_16_mles.into_iter().rev().enumerate().fold(
+                bin_decomp_mles.into_iter().rev().enumerate().fold(
                     b_s_initial_acc,
                     |acc_expr, (bit_idx, bin_decomp_mle)| {
                         // --- Coeff MLE ref (i.e. b_i) ---
@@ -87,15 +82,10 @@ pub struct EqualityComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> EqualityComponent<F> {
-    pub fn new(ctx: &Context, inputs: [&Sector<F>; 2]) -> Self {
-        let inputs_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> = inputs
-            .iter()
-            .map(|&sector| sector as &dyn ClaimableNode<F = F>)
-            .collect();
-
+    pub fn new(ctx: &Context, inputs: [&dyn ClaimableNode<F = F>; 2]) -> Self {
         let equality_sector = Sector::new(
             ctx,
-            &inputs_as_claimable_nodes,
+            &inputs,
             |equality_inputs| {
                 assert_eq!(equality_inputs.len(), 2);
 
@@ -131,15 +121,15 @@ pub struct BinRecompCheckerComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> BinRecompCheckerComponent<F> {
-    pub fn new(ctx: &Context, inputs: [&Sector<F>; 3]) -> Self {
-        let inputs_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> = inputs
-            .iter()
-            .map(|&sector| sector as &dyn ClaimableNode<F = F>)
-            .collect();
-
+    pub fn new(
+        ctx: &Context,
+        positive_recomp: impl ClaimableNode<F = F>,
+        signed_bit: impl ClaimableNode<F = F>,
+        diff: impl ClaimableNode<F = F>,
+    ) -> Self {
         let bin_recomp_checker_sector = Sector::new(
             ctx,
-            &inputs_as_claimable_nodes,
+            &[&positive_recomp, &signed_bit, &diff],
             |recomp_checker_inputs| {
                 assert_eq!(recomp_checker_inputs.len(), 3);
 

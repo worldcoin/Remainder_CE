@@ -14,15 +14,10 @@ pub struct BitsAreBinary16BitComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> BitsAreBinary16BitComponent<F> {
-    pub fn new(ctx: &Context, inputs: [&Sector<F>; 1]) -> Self {
-        let inputs_as_claimable_nodes: Vec<&dyn ClaimableNode<F = F>> = inputs
-            .iter()
-            .map(|&sector| sector as &dyn ClaimableNode<F = F>)
-            .collect();
-
+    pub fn new(ctx: &Context, bin_decomp_16_bit: impl ClaimableNode<F = F>) -> Self {
         let bin_decomp_16_bit_is_binary_sector = Sector::new(
             ctx,
-            &inputs_as_claimable_nodes,
+            &[&bin_decomp_16_bit],
             |signed_bin_decomp_mle| {
                 assert_eq!(signed_bin_decomp_mle.len(), 1);
 
