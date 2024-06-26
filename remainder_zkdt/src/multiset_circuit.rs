@@ -4,7 +4,6 @@ use itertools::Itertools;
 use remainder::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layouter::{component::Component, nodes::ClaimableNode},
-    mle::evals::Evaluations,
 };
 use remainder_shared_types::FieldExt;
 
@@ -53,7 +52,6 @@ impl<F: FieldExt> InputExpoComponent<F> {
                 let attr_val = data[1];
                 let r = data[2];
                 let r_packing = data[3];
-                let num_var = data[0].num_vars();
 
                 let result_iter = attr_id
                     .get_evals_vector()
@@ -64,7 +62,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
                     })
                     .collect_vec();
 
-                MultilinearExtension::new(Evaluations::new(num_var, result_iter))
+                MultilinearExtension::new(result_iter)
             },
         );
 
@@ -84,7 +82,6 @@ impl<F: FieldExt> InputExpoComponent<F> {
                 },
                 |data| {
                     assert_eq!(data.len(), 1);
-                    let num_var = data[0].num_vars();
 
                     let result_iter = data[0]
                         .get_evals_vector()
@@ -92,7 +89,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
                         .map(|val| *val * val)
                         .collect_vec();
 
-                    MultilinearExtension::new(Evaluations::new(num_var, result_iter))
+                    MultilinearExtension::new(result_iter)
                 },
             );
 
@@ -126,7 +123,6 @@ impl<F: FieldExt> InputExpoComponent<F> {
                 },
                 |data| {
                     assert_eq!(data.len(), 2);
-                    let num_var = data[0].num_vars();
 
                     let r_minus_x_power = data[0];
                     let bin_decomp = data[1];
@@ -138,7 +134,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
                         .map(|(a, b)| *a * b)
                         .collect_vec();
 
-                    MultilinearExtension::new(Evaluations::new(num_var, result_iter))
+                    MultilinearExtension::new(result_iter)
                 },
             );
 
@@ -160,7 +156,6 @@ impl<F: FieldExt> InputExpoComponent<F> {
             },
             |data| {
                 assert_eq!(data.len(), 16);
-                let num_var = data[0].num_vars();
 
                 let init_vec = vec![F::ZERO; data[0].get_evals_vector().len()];
                 let result_iter = data.into_iter().fold(init_vec, |acc, bit_exponentiation| {
@@ -170,7 +165,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
                         .collect_vec()
                 });
 
-                MultilinearExtension::new(Evaluations::new(num_var, result_iter))
+                MultilinearExtension::new(result_iter)
             },
         );
 

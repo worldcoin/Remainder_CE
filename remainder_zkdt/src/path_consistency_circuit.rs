@@ -2,7 +2,6 @@ use itertools::Itertools;
 use remainder::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layouter::{component::Component, nodes::ClaimableNode},
-    mle::evals::Evaluations,
 };
 use remainder_shared_types::FieldExt;
 
@@ -54,7 +53,6 @@ impl<F: FieldExt> PathCheckComponent<F> {
                 assert_eq!(data.len(), 2);
                 let decision_node_ids = data[0];
                 let bin_decomp_diff_signed_bit = data[1];
-                let num_var = data[0].num_vars();
 
                 let result_iter = decision_node_ids
                     .get_evals_vector()
@@ -66,7 +64,7 @@ impl<F: FieldExt> PathCheckComponent<F> {
                     })
                     .collect_vec();
 
-                MultilinearExtension::new(Evaluations::new(num_var, result_iter))
+                MultilinearExtension::new(result_iter)
             },
         );
 

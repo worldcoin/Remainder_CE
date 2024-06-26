@@ -2,7 +2,6 @@ use itertools::Itertools;
 use remainder::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layouter::{component::Component, nodes::ClaimableNode},
-    mle::evals::Evaluations,
 };
 use remainder_shared_types::FieldExt;
 
@@ -46,7 +45,6 @@ impl<F: FieldExt> PosBinaryRecompComponent<F> {
             },
             |data| {
                 let init_vec = vec![F::ZERO; data[0].get_evals_vector().len()];
-                let bits_num_var = data[0].num_vars();
 
                 let result_iter =
                     data.into_iter()
@@ -60,7 +58,7 @@ impl<F: FieldExt> PosBinaryRecompComponent<F> {
                                 .collect_vec()
                         });
 
-                MultilinearExtension::new(Evaluations::new(bits_num_var, result_iter))
+                MultilinearExtension::new(result_iter)
             },
         );
 
