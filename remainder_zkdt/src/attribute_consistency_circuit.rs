@@ -1,7 +1,4 @@
-use remainder::{
-    expression::abstract_expr::ExprBuilder,
-    layouter::{component::Component, nodes::ClaimableNode},
-};
+use remainder::layouter::{component::Component, nodes::ClaimableNode};
 use remainder_shared_types::FieldExt;
 
 use remainder::{
@@ -27,8 +24,7 @@ impl<F: FieldExt> AttributeConsistencyComponent<F> {
 
                 let permuted_input_data_mle_trees = attr_cons_inputs[0];
                 let decision_node_paths_mle_trees = attr_cons_inputs[1];
-                ExprBuilder::<F>::mle(permuted_input_data_mle_trees)
-                    - ExprBuilder::<F>::mle(decision_node_paths_mle_trees)
+                permuted_input_data_mle_trees.expr() - decision_node_paths_mle_trees.expr()
             },
             |_data| MultilinearExtension::new_zero(),
         );

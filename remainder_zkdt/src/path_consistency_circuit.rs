@@ -43,9 +43,9 @@ impl<F: FieldExt> PathCheckComponent<F> {
                 let decision_node_id = next_node_id_inputs[0];
                 let bin_decomp_id = next_node_id_inputs[1];
 
-                ExprBuilder::<F>::scaled(ExprBuilder::<F>::mle(decision_node_id), F::from(2_u64))
+                ExprBuilder::<F>::scaled(decision_node_id.expr(), F::from(2_u64))
                     + ExprBuilder::<F>::constant(F::from(2_u64))
-                    - ExprBuilder::<F>::mle(bin_decomp_id)
+                    - bin_decomp_id.expr()
             },
             |data| {
                 assert_eq!(data.len(), 2);

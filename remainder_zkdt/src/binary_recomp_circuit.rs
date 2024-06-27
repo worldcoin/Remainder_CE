@@ -31,7 +31,7 @@ impl<F: FieldExt> PosBinaryRecompComponent<F> {
                     b_s_initial_acc,
                     |acc_expr, (bit_idx, bin_decomp_mle)| {
                         // --- Coeff MLE ref (i.e. b_i) ---
-                        let b_i_mle_expression_ptr = ExprBuilder::<F>::mle(bin_decomp_mle);
+                        let b_i_mle_expression_ptr = bin_decomp_mle.expr();
 
                         // --- Compute (coeff) * 2^{14 - bit_idx} ---
                         let base = F::from(2_u64.pow(14 - bit_idx as u32));
@@ -135,8 +135,7 @@ impl<F: FieldExt> BinRecompCheckerComponent<F> {
                 let diff_mle = recomp_checker_inputs[2];
 
                 // --- LHS of addition ---
-                let pos_recomp_minus_diff =
-                    ExprBuilder::<F>::mle(positive_recomp_mle) - ExprBuilder::<F>::mle(diff_mle);
+                let pos_recomp_minus_diff = positive_recomp_mle.expr() - diff_mle.expr();
 
                 // --- RHS of addition ---
                 let sign_bit_times_diff_ptr =

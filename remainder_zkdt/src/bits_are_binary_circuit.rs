@@ -23,7 +23,7 @@ impl<F: FieldExt> BitsAreBinary16BitComponent<F> {
 
                 let bin_decomp_id = signed_bin_decomp_mle[0];
                 ExprBuilder::<F>::products(vec![bin_decomp_id, bin_decomp_id])
-                    - ExprBuilder::<F>::mle(bin_decomp_id)
+                    - bin_decomp_id.expr()
             },
             |_data| MultilinearExtension::new_zero(),
         );

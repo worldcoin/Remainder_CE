@@ -57,6 +57,11 @@ impl NodeId {
     pub fn new_unsafe(id: u64) -> Self {
         Self(id)
     }
+
+    /// creates an [Expression<F, AbstractExpr>] from this NodeId
+    pub fn expr<F: FieldExt>(self) -> Expression<F, AbstractExpr> {
+        Expression::<F, AbstractExpr>::mle(self)
+    }
 }
 
 /// A Node that can exist w/ dependencies in the circuit DAG

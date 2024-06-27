@@ -42,8 +42,8 @@ impl<F: FieldExt> InputExpoComponent<F> {
                 let r = packing_nodes[2];
                 let r_packing = packing_nodes[3];
 
-                ExprBuilder::<F>::mle(r)
-                    - (ExprBuilder::<F>::mle(attr_id)
+                r.expr()
+                    - (attr_id.expr()
                         + ExprBuilder::<F>::products(vec![attr_val, r_packing]))
             },
             |data| {
@@ -114,7 +114,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
 
                     ExprBuilder::<F>::sum(
                         ExprBuilder::<F>::products(vec![r_minus_x_power_node, bin_decomp_node]),
-                        ExprBuilder::<F>::constant(F::ONE) - ExprBuilder::<F>::mle(bin_decomp_node),
+                        ExprBuilder::<F>::constant(F::ONE) - bin_decomp_node.expr(),
                     )
                 },
                 |data| {
