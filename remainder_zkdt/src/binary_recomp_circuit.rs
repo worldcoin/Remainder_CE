@@ -10,6 +10,8 @@ use remainder::{
     mle::evals::MultilinearExtension,
 };
 
+/// compute the value of the positive recomp of the binary decompositions
+/// to check that they are in fact the correct decompositions
 pub struct PosBinaryRecompComponent<F: FieldExt> {
     bin_recomp_sector: Sector<F>,
 }
@@ -74,6 +76,7 @@ where
     }
 }
 
+/// checks that two sectors are indeed the same
 pub struct EqualityComponent<F: FieldExt> {
     equality_sector: Sector<F>,
 }
@@ -110,9 +113,12 @@ where
     }
 }
 
-/// This builder computes the value `pos_recomp` - `diff` + 2 * `sign_bit` * `diff`.
+/// This builder computes the value
+///     (1 - b_s)(`pos_recomp` - `diff`) + `b_s`(`pos_recomp` + `diff`)
 /// Note that this is equivalent to
-/// (1 - b_s)(`pos_recomp` - `diff`) + `b_s`(`pos_recomp` + `diff`)
+///     `pos_recomp` - `diff` + 2 * `sign_bit` * `diff`.
+/// conceptually b_s is the sign bit of the binary decomposition, and
+/// it checks that diff and bin_decomp match each other
 pub struct BinRecompCheckerComponent<F: FieldExt> {
     bin_recomp_checker_sector: Sector<F>,
 }

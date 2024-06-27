@@ -6,6 +6,7 @@ use remainder::{
     mle::evals::MultilinearExtension,
 };
 
+/// this really is an equality component, will need to deduplicate this
 pub struct AttributeConsistencyComponent<F: FieldExt> {
     attr_cons_sector: Sector<F>,
 }

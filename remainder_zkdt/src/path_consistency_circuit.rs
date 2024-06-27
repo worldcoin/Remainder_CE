@@ -10,14 +10,22 @@ use remainder::{
     mle::evals::MultilinearExtension,
 };
 
+// generate the wiring patterns for the gate layer (checking the decision nodes)
+// note that the next_node_id_mle and node_id_mle should be one-off
 fn decision_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     (0..(size - 1)).map(|idx| (idx, idx + 1, idx)).collect_vec()
 }
 
+// generate the wiring patterns for the gate layer (checking the leaf nodes)
+// note that the last element of next_node_id_mle on decision nodes
+// should match the first element of node_id_mle on leaf nodes
 fn leaf_add_wiring_from_size(size: usize) -> Vec<(usize, usize, usize)> {
     vec![(0, size - 1, 0)]
 }
 
+/// checks that the paths that the decision node paths and the leaf node paths
+/// are consistent with the binary decomposition's (signed bit): going left or right
+/// down the decision tree
 pub struct PathCheckComponent<F: FieldExt> {
     next_node_id_sector: Sector<F>,
 }
@@ -34,6 +42,7 @@ impl<F: FieldExt> PathCheckComponent<F> {
         // the next node should be 2*node_id + 1 / 2*node_id + 2,
         // depending on the value of the bin_decomp_diff_signed_bit
         // corresponding to either going left or right down the decision tree
+        // notice it's +1 and +2, because node_id's start with 0
         let next_node_id_sector = Sector::new(
             ctx,
             &[&decision_node_ids, &bin_decomp_diff_signed_bit],

@@ -9,6 +9,7 @@ use remainder::{
     mle::evals::MultilinearExtension,
 };
 
+/// checks that all the claimed binary decompositions are in fact binary numbers
 pub struct BitsAreBinary16BitComponent<F: FieldExt> {
     bin_decomp_16_bit_is_binary_sector: Sector<F>,
 }
