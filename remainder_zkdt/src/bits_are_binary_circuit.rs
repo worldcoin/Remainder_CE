@@ -1,5 +1,5 @@
 use remainder::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    expression::abstract_expr::ExprBuilder,
     layouter::{component::Component, nodes::ClaimableNode},
 };
 use remainder_shared_types::FieldExt;
@@ -22,8 +22,8 @@ impl<F: FieldExt> BitsAreBinary16BitComponent<F> {
                 assert_eq!(signed_bin_decomp_mle.len(), 1);
 
                 let bin_decomp_id = signed_bin_decomp_mle[0];
-                Expression::<F, AbstractExpr>::products(vec![bin_decomp_id, bin_decomp_id])
-                    - Expression::<F, AbstractExpr>::mle(bin_decomp_id)
+                ExprBuilder::<F>::products(vec![bin_decomp_id, bin_decomp_id])
+                    - ExprBuilder::<F>::mle(bin_decomp_id)
             },
             |_data| MultilinearExtension::new_zero(),
         );

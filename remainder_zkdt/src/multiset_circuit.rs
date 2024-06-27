@@ -2,7 +2,7 @@ use std::iter;
 
 use itertools::Itertools;
 use remainder::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    expression::abstract_expr::ExprBuilder,
     layouter::{component::Component, nodes::ClaimableNode},
 };
 use remainder_shared_types::FieldExt;
@@ -42,9 +42,9 @@ impl<F: FieldExt> InputExpoComponent<F> {
                 let r = packing_nodes[2];
                 let r_packing = packing_nodes[3];
 
-                Expression::<F, AbstractExpr>::mle(r)
-                    - (Expression::<F, AbstractExpr>::mle(attr_id)
-                        + Expression::<F, AbstractExpr>::products(vec![attr_val, r_packing]))
+                ExprBuilder::<F>::mle(r)
+                    - (ExprBuilder::<F>::mle(attr_id)
+                        + ExprBuilder::<F>::products(vec![attr_val, r_packing]))
             },
             |data| {
                 assert_eq!(data.len(), 4);
@@ -78,7 +78,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
                     // expressions = r - (x.attr_id + r_packing * x.attr_val)
                     assert_eq!(node.len(), 1);
 
-                    Expression::<F, AbstractExpr>::products(vec![node[0], node[0]])
+                    ExprBuilder::<F>::products(vec![node[0], node[0]])
                 },
                 |data| {
                     assert_eq!(data.len(), 1);
@@ -112,13 +112,9 @@ impl<F: FieldExt> InputExpoComponent<F> {
                     let r_minus_x_power_node = bit_exponentiation_inputs[0];
                     let bin_decomp_node = bit_exponentiation_inputs[1];
 
-                    Expression::<F, AbstractExpr>::sum(
-                        Expression::<F, AbstractExpr>::products(vec![
-                            r_minus_x_power_node,
-                            bin_decomp_node,
-                        ]),
-                        Expression::<F, AbstractExpr>::constant(F::ONE)
-                            - Expression::<F, AbstractExpr>::mle(bin_decomp_node),
+                    ExprBuilder::<F>::sum(
+                        ExprBuilder::<F>::products(vec![r_minus_x_power_node, bin_decomp_node]),
+                        ExprBuilder::<F>::constant(F::ONE) - ExprBuilder::<F>::mle(bin_decomp_node),
                     )
                 },
                 |data| {
@@ -152,7 +148,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
             |product_inputs| {
                 assert_eq!(product_inputs.len(), 16);
 
-                Expression::<F, AbstractExpr>::products(product_inputs)
+                ExprBuilder::<F>::products(product_inputs)
             },
             |data| {
                 assert_eq!(data.len(), 16);

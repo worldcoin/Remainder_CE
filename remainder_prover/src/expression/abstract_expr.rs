@@ -19,6 +19,9 @@ impl<F: FieldExt> ExpressionType<F> for AbstractExpr {
     type MleVec = ();
 }
 
+/// alias for circuit building
+pub type ExprBuilder<F> = Expression<F, AbstractExpr>;
+
 //  comments for Phase II:
 //  This will be the the circuit "pre-data" stage
 //  will take care of building a prover expression

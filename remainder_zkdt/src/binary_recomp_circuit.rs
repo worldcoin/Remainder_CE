@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use remainder::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    expression::abstract_expr::ExprBuilder,
     layouter::{component::Component, nodes::ClaimableNode},
 };
 use remainder_shared_types::FieldExt;
@@ -25,19 +25,18 @@ impl<F: FieldExt> PosBinaryRecompComponent<F> {
 
                 // --- Let's just do a linear accumulator for now ---
                 // TODO!(ryancao): Rewrite this expression but as a tree
-                let b_s_initial_acc = Expression::<F, AbstractExpr>::constant(F::ZERO);
+                let b_s_initial_acc = ExprBuilder::<F>::constant(F::ZERO);
 
                 bin_decomp_mles.into_iter().rev().enumerate().fold(
                     b_s_initial_acc,
                     |acc_expr, (bit_idx, bin_decomp_mle)| {
                         // --- Coeff MLE ref (i.e. b_i) ---
-                        let b_i_mle_expression_ptr =
-                            Expression::<F, AbstractExpr>::mle(bin_decomp_mle);
+                        let b_i_mle_expression_ptr = ExprBuilder::<F>::mle(bin_decomp_mle);
 
                         // --- Compute (coeff) * 2^{14 - bit_idx} ---
                         let base = F::from(2_u64.pow(14 - bit_idx as u32));
                         let b_s_times_coeff_times_base =
-                            Expression::<F, AbstractExpr>::scaled(b_i_mle_expression_ptr, base);
+                            ExprBuilder::<F>::scaled(b_i_mle_expression_ptr, base);
 
                         acc_expr + b_s_times_coeff_times_base
                     },
@@ -89,8 +88,8 @@ impl<F: FieldExt> EqualityComponent<F> {
 
                 // --- Let's just do a linear accumulator for now ---
                 // TODO!(ryancao): Rewrite this expression but as a tree
-                Expression::<F, AbstractExpr>::mle(equality_inputs[0])
-                    - Expression::<F, AbstractExpr>::mle(equality_inputs[1])
+                ExprBuilder::<F>::mle(equality_inputs[0])
+                    - ExprBuilder::<F>::mle(equality_inputs[1])
             },
             |data| {
                 assert_eq!(data.len(), 2);
@@ -136,14 +135,14 @@ impl<F: FieldExt> BinRecompCheckerComponent<F> {
                 let diff_mle = recomp_checker_inputs[2];
 
                 // --- LHS of addition ---
-                let pos_recomp_minus_diff = Expression::<F, AbstractExpr>::mle(positive_recomp_mle)
-                    - Expression::<F, AbstractExpr>::mle(diff_mle);
+                let pos_recomp_minus_diff =
+                    ExprBuilder::<F>::mle(positive_recomp_mle) - ExprBuilder::<F>::mle(diff_mle);
 
                 // --- RHS of addition ---
                 let sign_bit_times_diff_ptr =
-                    Expression::<F, AbstractExpr>::products(vec![signed_bit_mle, diff_mle]);
+                    ExprBuilder::<F>::products(vec![signed_bit_mle, diff_mle]);
                 let two_times_sign_bit_times_diff =
-                    Expression::<F, AbstractExpr>::scaled(sign_bit_times_diff_ptr, F::from(2));
+                    ExprBuilder::<F>::scaled(sign_bit_times_diff_ptr, F::from(2));
 
                 pos_recomp_minus_diff + two_times_sign_bit_times_diff
             },
