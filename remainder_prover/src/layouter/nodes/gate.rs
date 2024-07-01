@@ -135,7 +135,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNod
         );
         let layer_id = witness_builder.next_layer();
         let gate_layer = Gate::new(
-            self.num_dataparallel_bits.clone(),
+            self.num_dataparallel_bits,
             self.nonzero_gates.clone(),
             lhs,
             rhs,

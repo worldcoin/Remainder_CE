@@ -54,7 +54,7 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
     }
 
     /// Computes the num_vars of this expression (how many rounds of sumcheck it would take to prove)
-    pub fn num_vars<'a>(&self, circuit_map: &CircuitMap<'a, F>) -> Result<usize, DAGError> {
+    pub fn num_vars(&self, circuit_map: &CircuitMap<'_, F>) -> Result<usize, DAGError> {
         self.expression_node.get_num_vars(circuit_map)
     }
 
@@ -76,7 +76,7 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
             .into_iter()
             .enumerate()
             .map(|(idx, node_id)| {
-                let (location, ref data) = circuit_map.0.get(&node_id).ok_or(DAGError::DAGCycle)?;
+                let (location, data) = circuit_map.0.get(&node_id).ok_or(DAGError::DAGCycle)?;
 
                 let data = (*data).clone();
 

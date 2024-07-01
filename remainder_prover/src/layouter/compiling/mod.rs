@@ -26,7 +26,7 @@ use super::{
 
 /// An intermediate struct that allows a `Witness` to be built
 /// one layer at a time
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct WitnessBuilder<F: FieldExt, Pf: ProofSystem<F>> {
     input_layers: Vec<Pf::InputLayer>,
     layers: Layers<F, Pf::Layer>,
@@ -109,7 +109,7 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
 
     fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
         let ctx = Context::new();
-        let component = (&mut self.witness_builder)(&ctx);
+        let component = (self.witness_builder)(&ctx);
         let nodes = component.yield_nodes();
         let compiled_nodes = layout(ctx, nodes).unwrap();
 

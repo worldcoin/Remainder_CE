@@ -201,7 +201,7 @@ impl<F: FieldExt> GKRCircuit<F> for CombinedCircuit<F> {
 
         Witness {
             layers,
-            output_layers: output_layers,
+            output_layers,
             input_layers: vec![input_layer],
         }
     }

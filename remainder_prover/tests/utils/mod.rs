@@ -69,9 +69,9 @@ impl<F: FieldExt> LayerBuilder<F> for TripleNestedSelectorBuilder<F> {
         ));
         let inner_sel = Expression::<F, ProverExpr>::mle(self.inner_sel_mle.clone().clone())
             .concat_expr(inner_inner_sel);
-        let outer_sel = Expression::<F, ProverExpr>::mle(self.outer_sel_mle.clone().clone())
-            .concat_expr(inner_sel);
-        outer_sel
+        
+        Expression::<F, ProverExpr>::mle(self.outer_sel_mle.clone().clone())
+            .concat_expr(inner_sel)
     }
 
     fn next_layer(&self, id: LayerId, prefix_bits: Option<Vec<MleIndex<F>>>) -> Self::Successor {

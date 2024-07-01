@@ -33,7 +33,6 @@ impl<F: FieldExt> SplitNode<F> {
         let step = 1 << num_vars;
         let max_num_vars = data.num_vars() - num_vars;
         (0..(1 << num_vars))
-            .into_iter()
             .zip(bits_iter(num_vars))
             .map(|(idx, prefix_bits)| {
                 let data = data
@@ -119,7 +118,7 @@ fn bits_iter(num_bits: usize) -> impl Iterator<Item = Vec<bool>> {
         let mut removed_bits = 0;
         for index in (0..num_bits).rev() {
             let curr = prev.remove(index);
-            if curr == false {
+            if !curr {
                 prev.push(true);
                 break;
             } else {

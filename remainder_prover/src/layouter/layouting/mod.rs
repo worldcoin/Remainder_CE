@@ -106,9 +106,10 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
 
     for node in nodes.iter() {
         let node_id = node.id();
-        let is_source = node.sources().iter().fold(true, |acc, node_id| {
-            acc && !subgraph_nodes.contains(node_id)
-        });
+        let is_source = node
+            .sources()
+            .iter()
+            .all(|node_id| !subgraph_nodes.contains(node_id));
         if is_source {
             let insert_node = children_to_parent_map.get(&node_id).unwrap_or(&node_id);
             starting_nodes.insert(*insert_node);
@@ -122,11 +123,11 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
                 let insert_dest = children_to_parent_map.get(&node_id).unwrap_or(&node_id);
                 edges_out
                     .entry(*insert_source)
-                    .or_insert_with(|| HashSet::new())
+                    .or_default()
                     .insert(*insert_dest);
                 edges_in
                     .entry(*insert_dest)
-                    .or_insert_with(|| HashSet::new())
+                    .or_default()
                     .insert(*insert_source);
             }
         }
@@ -135,8 +136,7 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
     let mut out: Vec<N> = vec![];
 
     let mut starting_nodes = starting_nodes.into_iter().collect::<Vec<NodeId>>();
-    while starting_nodes.len() > 0 {
-        let node = starting_nodes.pop().unwrap();
+    while let Some(node) = starting_nodes.pop() {
         out.push(nodes[id_to_index_map[&node]].take().unwrap());
         if let Some(dest_nodes) = edges_out.get(&node) {
             for dest_node in dest_nodes.iter() {
@@ -144,7 +144,7 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
                 edges_in.get_mut(dest_node).unwrap().remove(&node);
 
                 // if dest_node has no incoming edges, add it to starting_nodes
-                if edges_in.get(dest_node).unwrap().len() == 0 {
+                if edges_in.get(dest_node).unwrap().is_empty() {
                     starting_nodes.push(*dest_node);
                     edges_in.remove(dest_node);
                 }
@@ -154,7 +154,7 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
         }
     }
 
-    if edges_in.len() != 0 || edges_out.len() != 0 {
+    if !edges_in.is_empty() || !edges_out.is_empty() {
         return Err(DAGError::DAGCycle);
     }
 
@@ -303,7 +303,7 @@ pub fn layout<
         if let Some(final_sector_group) = final_sector_group {
             intermediate_nodes.push(Box::new(final_sector_group));
         }
-        out.chain(intermediate_nodes.into_iter())
+        out.chain(intermediate_nodes)
     };
 
     //handle output layers

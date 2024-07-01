@@ -28,7 +28,7 @@ pub mod split_node;
 ///
 /// Contains a consistently incrementing Id to prevent
 /// collisions in node id creation
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct Context(Arc<AtomicU64>);
 
 impl Context {

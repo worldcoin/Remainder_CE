@@ -187,7 +187,7 @@ fn compile_layer<
             Ok((
                 vec![sector.id],
                 sector.expr.clone(),
-                sector.expr.num_vars(&circuit_map)?,
+                sector.expr.num_vars(circuit_map)?,
             ))
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -248,7 +248,7 @@ fn compile_layer<
         //todo! make this less crap
         let data = &children
             .iter()
-            .filter(|item| if item.id == node_id { true } else { false })
+            .filter(|item| item.id == node_id)
             .collect_vec()[0]
             .data;
         circuit_map

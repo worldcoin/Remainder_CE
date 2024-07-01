@@ -64,7 +64,7 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
 
     fn add_prefix_bits(&mut self, mut new_bits: Vec<MleIndex<F>>) {
         new_bits.extend(self.mle_indices.clone());
-        self.mle_indices = new_bits.clone();
+        self.mle_indices.clone_from(&new_bits);
         self.original_mle_indices = new_bits;
     }
 
@@ -303,7 +303,7 @@ impl<F: FieldExt> DenseMle<F> {
     /// batch merges the MLEs into a single MLE, in a big endian fashion.
     pub fn batch_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
         let layer_id = mles[0].layer_id;
-        let mle_flattened = mles.into_iter().map(|mle| mle.into_iter()).flatten();
+        let mle_flattened = mles.into_iter().flat_map(|mle| mle.into_iter());
 
         Self::new_from_iter(mle_flattened, layer_id)
     }

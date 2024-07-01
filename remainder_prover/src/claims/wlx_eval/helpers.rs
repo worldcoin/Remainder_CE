@@ -35,6 +35,7 @@ use super::{claim_group::ClaimGroup, evaluate_at_a_point, YieldWLXEvals};
 ///   return a `GKRError` which is propagated back to the caller of
 ///   `aggregate_claims`.
 /// * `transcript`: is used to post wlx evaluations and generate challenges.
+///
 /// If successful, returns a pair containing the aggregated claim without
 /// from/to layer ID information and a vector of wlx evaluations. The vector
 /// either contains no evaluations (in the trivial case of aggregating a single
@@ -141,10 +142,7 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     // TODO(Makis): Parallelize
     let intermediate_results: Result<Vec<_>, _> = claim_groups
         .into_iter()
-        .enumerate()
-        .map(|(_idx, claim_group)| {
-            verifier_aggregate_claims_in_one_round(&claim_group, transcript_reader)
-        })
+        .map(|claim_group| verifier_aggregate_claims_in_one_round(&claim_group, transcript_reader))
         .collect();
     let intermediate_results = intermediate_results?;
 
@@ -232,6 +230,7 @@ pub fn compute_aggregated_challenges<F: FieldExt>(
 ///   return a `GKRError` which is propagated back to the caller of
 ///   `aggregate_claims_in_one_round`.
 /// * `transcript`: is used to post wlx evaluations and generate challenges.
+///
 /// If successful, returns a pair containing the aggregated claim without
 /// from/to layer ID information and a vector of wlx evaluations. The vector
 /// either contains no evaluations (in the trivial case of aggregating a single

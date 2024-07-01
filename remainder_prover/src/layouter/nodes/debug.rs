@@ -28,7 +28,7 @@ impl DebugNode {
         Self {
             id: ctx.get_new_id(),
             label,
-            sources: nodes.into_iter().map(|node| node.id()).collect(),
+            sources: nodes.iter().map(|node| node.id()).collect(),
         }
     }
 
@@ -39,6 +39,6 @@ impl DebugNode {
 
     /// Appends an additional set of CircuitNodes to the set of Nodes this Debug label applies to
     pub fn add_nodes(&mut self, nodes: &[&dyn CircuitNode]) {
-        self.sources.extend(nodes.into_iter().map(|node| node.id()))
+        self.sources.extend(nodes.iter().map(|node| node.id()))
     }
 }

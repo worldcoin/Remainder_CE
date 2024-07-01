@@ -373,9 +373,11 @@ impl<F: FieldExt> Gate<F> {
     /// Construct a new gate layer
     ///
     /// # Arguments
-    /// * `num_dataparallel_bits`: an optional representing the number of bits representing the circuit copy we are looking at. None
-    /// if this is not dataparallel, otherwise specify the number of bits
+    /// * `num_dataparallel_bits`: an optional representing the number of bits representing the circuit copy we are looking at.
+    ///
+    /// None if this is not dataparallel, otherwise specify the number of bits
     /// * `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
+    ///
     /// x is the label on the batched mle `lhs`, y is the label on the batched mle `rhs`, and z is the label on the next layer, batched
     /// * `lhs`: the flattened mle representing the left side of the summation
     /// * `rhs`: the flattened mle representing the right side of the summation

@@ -12,6 +12,7 @@ pub trait Component<N: CircuitNode> {
 ///
 /// keeps track of an unordered list of nodes,
 /// and can consume other components to add to this list
+#[derive(Clone, Debug, Default)]
 pub struct ComponentSet<N> {
     nodes: Vec<N>,
 }

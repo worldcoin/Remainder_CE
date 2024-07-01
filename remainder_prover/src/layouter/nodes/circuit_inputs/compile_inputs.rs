@@ -181,8 +181,8 @@ where
             InputLayerType::PublicInputLayer => PublicInputLayer::new(mle, layer_id).into(),
             InputLayerType::Default => LigeroInputLayer::new(mle, layer_id).into(),
         };
-        let _ = witness.add_input_layer(out);
-        Ok(children
+        witness.add_input_layer(out);
+        children
             .iter()
             .zip(prefix_bits)
             .for_each(|(input_shred, prefix_bits)| {
@@ -193,6 +193,7 @@ where
                         &input_shred.data,
                     ),
                 );
-            }))
+            });
+        Ok(())
     }
 }
