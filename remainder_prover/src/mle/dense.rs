@@ -220,6 +220,28 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for DenseMle<F> {
 }
 
 impl<F: FieldExt> DenseMle<F> {
+    /// Constructs a new `DenseMle` with specified prefix_bits
+    /// todo: change this to create a DenseMle with already specified IndexedBits
+    pub fn new_with_prefix_bits(
+        data: MultilinearExtension<F>,
+        layer_id: LayerId,
+        prefix_bits: Vec<bool>,
+    ) -> Self {
+        let iterated_bits = data.num_vars();
+
+        let mle_indices: Vec<MleIndex<F>> = prefix_bits
+            .into_iter()
+            .map(|bit| MleIndex::Fixed(bit))
+            .chain((0..iterated_bits).map(|_| MleIndex::Iterated))
+            .collect();
+        Self {
+            layer_id,
+            current_mle: data.clone(),
+            mle_indices: mle_indices.clone(),
+            original_mle: data,
+            original_mle_indices: mle_indices,
+        }
+    }
     /// Constructs a new `DenseMle` from an iterator over items of the [MleAble]
     /// type `T`.
     ///

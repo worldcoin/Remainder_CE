@@ -14,6 +14,7 @@ use crate::{
 
 use crate::mle::Mle;
 
+#[derive(Clone, Debug)]
 /// The list of Layers that make up the GKR circuit
 pub struct Layers<F: FieldExt, T: Layer<F>> {
     /// A Vec of pointers to various layer types

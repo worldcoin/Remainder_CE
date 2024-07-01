@@ -98,7 +98,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     }
 
     fn get_padded_mle(&self) -> DenseMle<F> {
-        todo!()
+        DenseMle::new_with_prefix_bits(self.mle.clone(), self.layer_id, vec![])
     }
 }
 

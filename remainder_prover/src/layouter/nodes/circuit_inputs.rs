@@ -1,20 +1,26 @@
-//! Nodes that represent inputs to a circuit in the circuit DAG
+//! Nodes that represent inputs to a circuit in the circuit DAG\
+
+mod compile_inputs;
 
 use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    input_layer::{
+        ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer,
+    },
+    layouter::{compiling::WitnessBuilder, layouting::CircuitMap},
     mle::evals::MultilinearExtension,
+    prover::proof_system::ProofSystem,
 };
 
-use super::{CircuitNode, ClaimableNode, Context, NodeId};
+use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
 /// A node that represents some Data that will eventually be added to an InputLayer
 #[derive(Debug, Clone)]
 pub struct InputShred<F> {
     id: NodeId,
-    #[allow(dead_code)]
-    parent: Option<NodeId>,
+    pub(crate) parent: Option<NodeId>,
     data: MultilinearExtension<F>,
 }
 
@@ -94,20 +100,6 @@ impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for InputLayerNode<F> {
-    type F = F;
-
-    fn get_data(&self) -> &MultilinearExtension<Self::F> {
-        todo!()
-        // ende's comment here: maybe InputLayerNode also needs a data field?
-        // i.e. after combining the shreds, appending all the necessary prefix bits, etc.
-    }
-
-    fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
-        todo!()
-    }
-}
-
 impl<F: FieldExt> InputLayerNode<F> {
     /// A constructor for an InputLayerNode. Can either be initialized empty
     /// or with some children.
@@ -126,5 +118,44 @@ impl<F: FieldExt> InputLayerNode<F> {
     /// A method to add an InputShred to this InputLayerNode
     pub fn add_shred(&mut self, new_shred: InputShred<F>) {
         self.children.push(new_shred);
+    }
+}
+
+/// An `InputLayerNode` that can't have any InputShreds automatically added to it
+#[derive(Debug, Clone)]
+pub struct SealedInputNode<F>(InputLayerNode<F>);
+
+impl<F: FieldExt> CircuitNode for SealedInputNode<F> {
+    fn id(&self) -> NodeId {
+        self.0.id()
+    }
+
+    fn sources(&self) -> Vec<NodeId> {
+        vec![]
+    }
+
+    fn children(&self) -> Option<Vec<NodeId>> {
+        self.0.children()
+    }
+}
+
+impl<F: FieldExt> SealedInputNode<F> {
+    /// Wraps an `InputLayerNode` to indicate that it is Sealed
+    pub fn new(node: InputLayerNode<F>) -> Self {
+        Self(node)
+    }
+}
+
+impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL>, IL> CompilableNode<F, Pf>
+    for SealedInputNode<F>
+where
+    IL: InputLayer<F> + From<PublicInputLayer<F>> + From<LigeroInputLayer<F>>,
+{
+    fn compile<'a>(
+        &'a self,
+        witness_builder: &mut WitnessBuilder<F, Pf>,
+        circuit_map: &mut CircuitMap<'a, F>,
+    ) -> Result<(), crate::layouter::layouting::DAGError> {
+        self.0.compile(witness_builder, circuit_map)
     }
 }

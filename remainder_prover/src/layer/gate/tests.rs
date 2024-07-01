@@ -242,7 +242,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let table_size = 1 << (self.neg_mle_2_dataparallel.num_iterated_vars() - self.num_dataparallel_bits);
+        let table_size =
+            1 << (self.neg_mle_2_dataparallel.num_iterated_vars() - self.num_dataparallel_bits);
 
         (0..table_size).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -337,7 +338,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let table_size = 1 << (self.neg_mle_dataparallel.num_iterated_vars() - self.num_dataparallel_bits);
+        let table_size =
+            1 << (self.neg_mle_dataparallel.num_iterated_vars() - self.num_dataparallel_bits);
 
         (0..table_size).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));

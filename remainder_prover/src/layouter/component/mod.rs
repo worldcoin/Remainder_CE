@@ -26,6 +26,11 @@ impl<N: CircuitNode> ComponentSet<N> {
     pub fn add_component<C: Component<N>>(&mut self, other: C) {
         self.nodes.append(&mut other.yield_nodes())
     }
+
+    /// Creates a new ComponentSet with some Nodes added explicitely
+    pub fn new_raw(nodes: Vec<N>) -> Self {
+        Self { nodes }
+    }
 }
 
 impl<N: CircuitNode> Component<N> for ComponentSet<N> {
