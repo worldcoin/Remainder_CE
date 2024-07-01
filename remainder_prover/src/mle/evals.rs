@@ -399,12 +399,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
 
     /// Set the dimension information for the MLE.
     pub fn set_dim_info(&mut self, dim_info: DimInfo) -> Result<(), DimensionError> {
-        let num_var_from_dim: u32 = dim_info
-            .dims
-            .slice()
-            .iter()
-            .map(|dim| log2(*dim as usize))
-            .sum();
+        let num_var_from_dim: u32 = dim_info.dims.slice().iter().map(|dim| log2(*dim)).sum();
         if num_var_from_dim as usize != self.num_vars() {
             return Err(DimensionError::DimensionNumVarError(
                 num_var_from_dim as usize,
@@ -428,7 +423,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
                 ArrayView::from_shape(dim_info.dims.clone(), self.get_evals_vector())?;
             Ok(ndarray)
         } else {
-            return Err(DimensionError::NoDimensionInfoError().into());
+            Err(DimensionError::NoDimensionInfoError().into())
         }
     }
 

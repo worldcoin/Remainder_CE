@@ -245,7 +245,7 @@ fn halo2_bn_fft_test() {
     // --- IFFT'd coefficients should match the original ---
     orig_raw_coeffs
         .into_iter()
-        .zip(ifft_raw_coeffs.into_iter())
+        .zip(ifft_raw_coeffs)
         .for_each(|(x, y)| {
             assert_eq!(*x, y);
         });
