@@ -365,6 +365,19 @@ impl<F: FieldExt> MultilinearExtension<F> {
         }
     }
 
+    /// Creates a new mle which is all zeroes of a specific num_vars.
+    /// In this case the size of the evals and the num_vars will not match up
+    pub fn new_sized_zero(num_vars: usize) -> Self {
+        Self {
+            f: Evaluations {
+                evals: vec![],
+                num_vars,
+                zero: F::ZERO,
+            },
+            dim_info: None,
+        }
+    }
+
     /// Generate a new MultilinearExtension from `evals` and `dim_info`.
     pub fn new_with_dim_info(evals: Evaluations<F>, dim_info: DimInfo) -> Self {
         let mut mle = Self::new(evals);
