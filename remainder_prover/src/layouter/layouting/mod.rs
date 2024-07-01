@@ -95,6 +95,9 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
 
     for node in nodes.iter() {
         subgraph_nodes.insert(node.id());
+        for node in node.children().iter().flatten() {
+            subgraph_nodes.insert(*node);
+        }
     }
 
     let mut edges_out: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
