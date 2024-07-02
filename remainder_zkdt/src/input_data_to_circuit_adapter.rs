@@ -58,9 +58,10 @@ pub struct ZKDTCircuitData<F> {
     pub decision_node_paths: Vec<Vec<DecisionNode<F>>>, // Paths (decision node part only)
     pub leaf_node_paths: Vec<LeafNode<F>>,       // Paths (leaf node part only)
     pub binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>, // Binary decomp of differences
-    pub multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>, // Binary decomp of multiplicities
-    pub decision_nodes: Vec<DecisionNode<F>>,    // Actual tree decision nodes
-    pub leaf_nodes: Vec<LeafNode<F>>,            // Actual tree leaf nodes
+    pub multiplicities_bin_decomp_decision: Vec<BinDecomp16Bit<F>>, // Binary decomp of multiplicities for decision nodes
+    pub multiplicities_bin_decomp_leaf: Vec<BinDecomp16Bit<F>>, // Binary decomp of multiplicities for leaf nodes
+    pub decision_nodes: Vec<DecisionNode<F>>,                   // Actual tree decision nodes
+    pub leaf_nodes: Vec<LeafNode<F>>,                           // Actual tree leaf nodes
     pub multiplicities_bin_decomp_input: Vec<Vec<BinDecomp8Bit<F>>>, // Binary decomp of multiplicities, of input
 }
 
@@ -72,7 +73,8 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
         decision_node_paths: Vec<Vec<DecisionNode<F>>>,
         leaf_node_paths: Vec<LeafNode<F>>,
         binary_decomp_diffs: Vec<Vec<BinDecomp16Bit<F>>>,
-        multiplicities_bin_decomp: Vec<BinDecomp16Bit<F>>,
+        multiplicities_bin_decomp_decision: Vec<BinDecomp16Bit<F>>,
+        multiplicities_bin_decomp_leaf: Vec<BinDecomp16Bit<F>>,
         decision_nodes: Vec<DecisionNode<F>>,
         leaf_nodes: Vec<LeafNode<F>>,
         multiplicities_bin_decomp_input: Vec<Vec<BinDecomp8Bit<F>>>,
@@ -83,7 +85,8 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
             decision_node_paths,
             leaf_node_paths,
             binary_decomp_diffs,
-            multiplicities_bin_decomp,
+            multiplicities_bin_decomp_decision,
+            multiplicities_bin_decomp_leaf,
             decision_nodes,
             leaf_nodes,
             multiplicities_bin_decomp_input,
@@ -94,20 +97,20 @@ impl<F: FieldExt> ZKDTCircuitData<F> {
 #[instrument(skip(zkdt_circuit_data))]
 pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
     zkdt_circuit_data: Vec<ZKDTCircuitData<F>>,
-    tree_height: usize,
-    input_len: usize,
-) -> (BatchedZKDTCircuitMlesMultiTree<F>, (usize, usize)) {
+) -> BatchedZKDTCircuitMlesMultiTree<F> {
     let (
         input_data_vec,
         permuted_input_data_vec,
         decision_node_paths_vec,
         leaf_node_paths_vec,
         binary_decomp_diffs_vec,
-        multiplicities_bin_decomp_vec,
+        multiplicities_bin_decomp_decision_vec,
+        multiplicities_bin_decomp_leaf_vec,
         decision_nodes_vec,
         leaf_nodes_vec,
         multiplicities_bin_decomp_input_vec,
     ): (
+        Vec<_>,
         Vec<_>,
         Vec<_>,
         Vec<_>,
@@ -126,7 +129,8 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                 zkdt_circuit_data.decision_node_paths,
                 zkdt_circuit_data.leaf_node_paths,
                 zkdt_circuit_data.binary_decomp_diffs,
-                zkdt_circuit_data.multiplicities_bin_decomp,
+                zkdt_circuit_data.multiplicities_bin_decomp_decision,
+                zkdt_circuit_data.multiplicities_bin_decomp_leaf,
                 zkdt_circuit_data.decision_nodes,
                 zkdt_circuit_data.leaf_nodes,
                 zkdt_circuit_data.multiplicities_bin_decomp_input,
@@ -134,46 +138,42 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
         })
         .multiunzip();
 
-    let decision_len = 2_usize.pow(tree_height as u32 - 1);
-
     // --- Generate MLEs for each ---
-    let (multiplicities_bin_decomp_mle_decision_vec, multiplicities_bin_decomp_mle_leaf_vec): (
-        Vec<BinDecomp16BitMle<F>>,
-        Vec<BinDecomp16BitMle<F>>,
-    ) = multiplicities_bin_decomp_vec
-        .into_iter()
-        .map(|mut multiplicities_bin_decomp| {
-            let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp
-                .split_off(decision_len)
-                .into_iter()
-                .map(|bin_decomp| bin_decomp.bits)
-                .collect_vec();
-            let multiplicities_bin_decomp_decision = multiplicities_bin_decomp
-                .into_iter()
-                .map(|bin_decomp| bin_decomp.bits)
-                .collect_vec();
 
-            // converts a [Vec<F; N>] into a [Vec<F>; N]
-            let multiplicities_bin_decomp_leaf = to_flat_mles(multiplicities_bin_decomp_leaf);
+    let multiplicities_bin_decomp_mle_decision_vec = multiplicities_bin_decomp_decision_vec
+        .into_iter()
+        .map(|multiplicities_bin_decomp_decision| {
+            let multiplicities_bin_decomp_decision = multiplicities_bin_decomp_decision
+                .into_iter()
+                .map(|x| x.bits)
+                .collect_vec();
             let multiplicities_bin_decomp_decision =
                 to_flat_mles(multiplicities_bin_decomp_decision);
 
-            let multiplicities_bin_decomp_mle_leaf = BinDecomp16BitMle::<F>::new_from_raw(
-                multiplicities_bin_decomp_leaf,
-                LayerId::Input(0),
-                None,
-            );
-            let multiplicities_bin_decomp_mle_decision = BinDecomp16BitMle::<F>::new_from_raw(
+            BinDecomp16BitMle::<F>::new_from_raw(
                 multiplicities_bin_decomp_decision,
                 LayerId::Input(0),
                 None,
-            );
-            (
-                multiplicities_bin_decomp_mle_decision,
-                multiplicities_bin_decomp_mle_leaf,
             )
         })
-        .unzip();
+        .collect_vec();
+
+    let multiplicities_bin_decomp_mle_leaf_vec = multiplicities_bin_decomp_leaf_vec
+        .into_iter()
+        .map(|multiplicities_bin_decomp_leaf| {
+            let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp_leaf
+                .into_iter()
+                .map(|x| x.bits)
+                .collect_vec();
+            let multiplicities_bin_decomp_leaf = to_flat_mles(multiplicities_bin_decomp_leaf);
+
+            BinDecomp16BitMle::<F>::new_from_raw(
+                multiplicities_bin_decomp_leaf,
+                LayerId::Input(0),
+                None,
+            )
+        })
+        .collect_vec();
 
     let input_samples_mle_vec: Vec<InputAttributeMle<F>> = input_data_vec[0]
         .clone()
@@ -303,21 +303,18 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
         })
         .collect_vec();
 
-    (
-        BatchedZKDTCircuitMlesMultiTree {
-            input_samples_mle_vec,
-            permuted_input_samples_mle_vec_vec,
-            decision_node_paths_mle_vec_vec,
-            leaf_node_paths_mle_vec_vec,
-            binary_decomp_diffs_mle_vec_vec,
-            multiplicities_bin_decomp_mle_decision_vec,
-            multiplicities_bin_decomp_mle_leaf_vec,
-            decision_nodes_mle_vec,
-            leaf_nodes_mle_vec,
-            multiplicities_bin_decomp_mle_input,
-        },
-        (tree_height, input_len),
-    )
+    BatchedZKDTCircuitMlesMultiTree {
+        input_samples_mle_vec,
+        permuted_input_samples_mle_vec_vec,
+        decision_node_paths_mle_vec_vec,
+        leaf_node_paths_mle_vec_vec,
+        binary_decomp_diffs_mle_vec_vec,
+        multiplicities_bin_decomp_mle_decision_vec,
+        multiplicities_bin_decomp_mle_leaf_vec,
+        decision_nodes_mle_vec,
+        leaf_nodes_mle_vec,
+        multiplicities_bin_decomp_mle_input,
+    }
 }
 
 /// Takes the output from presumably something like [`read_upshot_data_single_tree_branch_from_filepath`]
@@ -335,15 +332,12 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
         decision_node_paths,
         leaf_node_paths,
         binary_decomp_diffs,
-        mut multiplicities_bin_decomp,
+        multiplicities_bin_decomp_decision,
+        multiplicities_bin_decomp_leaf,
         decision_nodes,
         leaf_nodes,
         multiplicities_bin_decomp_input,
     } = zkdt_circuit_data;
-
-    let decision_len = 2_usize.pow(tree_height as u32 - 1);
-    let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
-    let multiplicities_bin_decomp_decision = multiplicities_bin_decomp;
 
     // --- Generate MLEs for each ---
     let input_samples_mle_vec = input_data
@@ -480,6 +474,10 @@ pub struct MinibatchData {
     pub log_sample_minibatch_size: usize,
     /// Minibatch index within the bigger batch
     pub sample_minibatch_number: usize,
+    /// Tree batch size (notice it's not log_2)
+    pub tree_batch_size: usize,
+    /// the index of the tree batch
+    pub tree_batch_number: usize,
 }
 
 /// Gives all batched data associated with tree number `tree_idx`.
@@ -511,7 +509,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     tree_idx: usize,
     raw_trees_model_path: &Path,
     raw_samples_path: &Path,
-) -> (ZKDTCircuitData<F>, (usize, usize), MinibatchData) {
+) -> ZKDTCircuitData<F> {
     // --- Grab trees + raw samples ---
     let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path);
     let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path);
@@ -520,8 +518,10 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     let minibatch_data = match maybe_minibatch_data {
         Some(param_minibatch_data) => param_minibatch_data,
         None => MinibatchData {
-            sample_minibatch_number: 0,
             log_sample_minibatch_size: log2(raw_samples.values.len() as usize) as usize,
+            sample_minibatch_number: 0,
+            tree_batch_size: log2(raw_trees_model.trees.len()) as usize,
+            tree_batch_number: 0,
         },
     };
     let sample_minibatch_size = 2_usize.pow(minibatch_data.log_sample_minibatch_size as u32);
@@ -540,7 +540,7 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     let csamples: CircuitizedSamples<F> = (&samples).into();
     let caux = circuitize_auxiliaries(&samples, &single_tree);
     let tree_height = ctrees.depth;
-    let input_len = csamples[0].len();
+    let decision_len = 2_usize.pow(tree_height as u32 - 1);
 
     // --- Sanitycheck ---
     debug_assert_eq!(caux.attributes_on_paths.len(), 1);
@@ -552,32 +552,31 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     debug_assert_eq!(ctrees.leaf_nodes.len(), 1);
     debug_assert_eq!(caux.attribute_multiplicities.len(), 1);
 
+    let mut multiplicities_bin_decomp = caux.node_multiplicities[0].clone();
+    let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
+    let multiplicities_bin_decomp_decision = multiplicities_bin_decomp;
+
     // --- Grab only the slice of witnesses which are relevant to the target `tree_number` ---
-    (
-        ZKDTCircuitData::new(
-            csamples,
-            caux.attributes_on_paths[0].clone(),
-            caux.decision_paths[0].clone(),
-            caux.path_ends[0].clone(),
-            caux.differences[0].clone(),
-            caux.node_multiplicities[0].clone(),
-            ctrees.decision_nodes[0].clone(),
-            ctrees.leaf_nodes[0].clone(),
-            caux.attribute_multiplicities_per_sample.clone(),
-        ),
-        (tree_height, input_len),
-        minibatch_data,
+    ZKDTCircuitData::new(
+        csamples,
+        caux.attributes_on_paths[0].clone(),
+        caux.decision_paths[0].clone(),
+        caux.path_ends[0].clone(),
+        caux.differences[0].clone(),
+        multiplicities_bin_decomp_decision,
+        multiplicities_bin_decomp_leaf,
+        ctrees.decision_nodes[0].clone(),
+        ctrees.leaf_nodes[0].clone(),
+        caux.attribute_multiplicities_per_sample.clone(),
     )
 }
 
 #[instrument]
 pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
     maybe_minibatch_data: Option<MinibatchData>,
-    tree_batch_size: usize,
-    tree_batch_number: usize,
     raw_trees_model_path: &Path,
     raw_samples_path: &Path,
-) -> (Vec<ZKDTCircuitData<F>>, (usize, usize), MinibatchData) {
+) -> Vec<ZKDTCircuitData<F>> {
     // --- Grab trees + raw samples ---
     let raw_trees_model: RawTreesModel = load_raw_trees_model(raw_trees_model_path);
     let mut raw_samples: RawSamples = load_raw_samples(raw_samples_path);
@@ -586,8 +585,10 @@ pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
     let minibatch_data = match maybe_minibatch_data {
         Some(param_minibatch_data) => param_minibatch_data,
         None => MinibatchData {
-            sample_minibatch_number: 0,
             log_sample_minibatch_size: log2(raw_samples.values.len() as usize) as usize,
+            sample_minibatch_number: 0,
+            tree_batch_size: log2(raw_trees_model.trees.len()) as usize,
+            tree_batch_number: 0,
         },
     };
 
@@ -599,6 +600,9 @@ pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
             [minibatch_start_idx..(minibatch_start_idx + sample_minibatch_size)]
             .to_vec();
     }
+
+    let tree_batch_size = minibatch_data.tree_batch_size;
+    let tree_batch_number = minibatch_data.tree_batch_number;
 
     // --- Conversions ---
     let full_trees_model: TreesModel = (&raw_trees_model).into();
@@ -614,7 +618,7 @@ pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
     let csamples: CircuitizedSamples<F> = (&samples).into();
     let caux = circuitize_auxiliaries(&samples, &tree_batch);
     let tree_height = ctrees.depth;
-    let input_len = csamples[0].len();
+    let decision_len = 2_usize.pow(tree_height as u32 - 1);
 
     // --- Sanitycheck ---
     debug_assert_eq!(caux.attributes_on_paths.len(), tree_batch_size);
@@ -634,18 +638,23 @@ pub fn load_upshot_data_multi_tree_batch<F: FieldExt>(
         .into_iter()
         .enumerate()
         .map(|(idx, _)| {
+            let mut multiplicities_bin_decomp = caux.node_multiplicities[idx].clone();
+            let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
+            let multiplicities_bin_decomp_decision = multiplicities_bin_decomp;
+
             ZKDTCircuitData::new(
                 csamples.clone(),
                 caux.attributes_on_paths[idx].clone(),
                 caux.decision_paths[idx].clone(),
                 caux.path_ends[idx].clone(),
                 caux.differences[idx].clone(),
-                caux.node_multiplicities[idx].clone(),
+                multiplicities_bin_decomp_decision,
+                multiplicities_bin_decomp_leaf,
                 ctrees.decision_nodes[idx].clone(),
                 ctrees.leaf_nodes[idx].clone(),
                 caux.attribute_multiplicities_per_sample.clone(),
             )
         })
         .collect_vec();
-    (circuitdata_vec, (tree_height, input_len), minibatch_data)
+    circuitdata_vec
 }
