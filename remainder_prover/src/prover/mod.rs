@@ -24,7 +24,7 @@ use crate::{
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use remainder_shared_types::transcript::{
-    TranscriptReader, TranscriptReaderError, TranscriptWriter,
+    Transcript, TranscriptReader, TranscriptReaderError, TranscriptWriter,
 };
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
@@ -182,25 +182,24 @@ pub trait GKRCircuit<F: FieldExt> {
         Ok((witness, commitments))
     }
 
-    /// The backwards pass, creating the GKRProof
+    /// The backwards pass, creating the GKRProof.
     #[instrument(skip_all, err)]
     fn prove(
         &mut self,
-        transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<GKRProof<F, Self::ProofSystem>, GKRError>
+        mut transcript_writer: TranscriptWriter<F, CircuitTranscript<F, Self>>,
+    ) -> Result<Transcript<F>, GKRError>
     where
         CircuitTranscript<F, Self>: Sync,
     {
-        let synthesize_commit_timer = start_timer!(|| "synthesize and commit");
-        // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
-        // --- Also commit and add those commitments to the transcript
+        let synthesize_commit_timer = start_timer!(|| "Circuit synthesize and commit");
         info!("Synethesizing circuit...");
 
-        // --- Add circuit hash to transcript, if exists ---
+        // Add circuit hash to transcript, if exists.
         if let Some(circuit_hash) = Self::get_circuit_hash() {
             transcript_writer.append("Circuit Hash", circuit_hash);
         }
 
+        // TODO(Makis): User getter syntax.
         let (
             Witness {
                 input_layers,
@@ -208,234 +207,209 @@ pub trait GKRCircuit<F: FieldExt> {
                 layers,
             },
             commitments,
-        ) = self.synthesize_and_commit(transcript_writer)?;
+        ) = self.synthesize_and_commit(&mut transcript_writer)?;
+
         info!("Circuit synthesized and witness generated.");
         end_timer!(synthesize_commit_timer);
 
-        let claims_timer = start_timer!(|| "output claims generation");
-
-        // --- TRACE: grabbing output claims ---
-        let output_claims_span = span!(Level::DEBUG, "output_claims_span").entered();
-
-        // --- Keep track of GKR-style claims across all layers ---
+        // Claim aggregator to keep track of GKR-style claims across all layers.
         let mut aggregator = <CircuitClaimAggregator<F, Self> as ClaimAggregator<F>>::new();
 
-        // --- Go through circuit output layers and grab claims on each ---
+        // --------- STAGE 1: Output Claim Generation ---------
+        let claims_timer = start_timer!(|| "Output claims generation");
+        let output_claims_span = span!(Level::DEBUG, "output_claims_span").entered();
+
+        // Go through circuit output layers and grab claims on each.
         for output in output_layers.iter_mut() {
-            info!("New Output Layer: {:?}", output.get_layer_id());
+            let layer_id = output.get_layer_id();
+            info!("Output Layer: {:?}", layer_id);
+
             let bits = output.index_mle_indices(0);
 
             if bits != 0 {
                 debug!("Bookkeeping table: {:?}", output.bookkeeping_table());
-                // --- Evaluate each output MLE at a random challenge point ---
+
+                // Evaluate each output MLE at a random challenge point.
                 for bit in 0..bits {
                     let challenge = transcript_writer.get_challenge("Setting Output Layer Claim");
                     output.fix_variable(bit, challenge);
                 }
             }
-            let layer_id = output.get_layer_id();
 
-            // --- Add the claim to either the set of current claims we're proving ---
-            // --- or the global set of claims we need to eventually prove ---
+            // Output MLE should be fully bound now.
+            debug_assert_eq!(output.num_iterated_vars(), 0);
+
+            // Add the claim to either the set of current claims we're proving
+            // or the global set of claims we need to eventually prove.
             aggregator
                 .add_claims(output)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
         }
 
         end_timer!(claims_timer);
-
-        let intermediate_layers_timer = start_timer!(|| "ALL intermediate layers proof generation");
-
-        // --- END TRACE: grabbing output claims ---
         output_claims_span.exit();
 
-        // --- TRACE: Proving intermediate GKR layers ---
+        // --------- STAGE 2: Prove Intermediate Layers ---------
+        let intermediate_layers_timer = start_timer!(|| "ALL intermediate layers proof generation");
         let all_layers_sumcheck_proving_span =
             span!(Level::DEBUG, "all_layers_sumcheck_proving_span").entered();
 
-        // --- Collects all the prover messages for sumchecking over each layer, ---
-        // --- as well as all the prover messages for claim aggregation at the ---
-        // --- beginning of proving each layer ---
-        let layer_sumcheck_proofs = layers
-            .layers
-            .into_iter()
-            .rev()
-            .map(|mut layer| {
-                let layer_timer =
-                    start_timer!(|| format!("proof generation for layer {:?}", *layer.id()));
+        // Collects all the prover messages for sumchecking over each layer, as
+        // well as all the prover messages for claim aggregation at the
+        // beginning of proving each layer.
+        for mut layer in layers.layers.into_iter().rev() {
+            let layer_id = *layer.id();
 
-                // --- TRACE: Proving an individual GKR layer ---
-                let layer_id = *layer.id();
-                info!("New Intermediate Layer: {:?}", layer_id);
+            let layer_timer = start_timer!(|| format!("Generating proof for layer {:?}", layer_id));
+            let layer_id_trace_repr = format!("{}", layer_id);
+            let layer_sumcheck_proving_span = span!(
+                Level::DEBUG,
+                "layer_sumcheck_proving_span",
+                layer_id = layer_id_trace_repr
+            )
+            .entered();
+            info!("Proving Intermediate Layer: {:?}", layer_id);
 
-                let layer_id_trace_repr = format!("{}", layer_id);
-                let _layer_sumcheck_proving_span = span!(
-                    Level::DEBUG,
-                    "layer_sumcheck_proving_span",
-                    layer_id = layer_id_trace_repr
-                )
-                .entered();
+            info!("Starting claim aggregation...");
+            let claim_aggr_timer =
+                start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
 
-                // --- For each layer, get the ID and all the claims on that layer ---
-                let _layer_claims_vec = aggregator
-                    .get_claims(layer_id)
-                    .ok_or(GKRError::NoClaimsForLayer(layer_id))?;
+            let ClaimAndProof {
+                claim: layer_claim,
+                proof: _claim_aggregation_proof,
+            } = aggregator.prover_aggregate_claims(&layer, &mut transcript_writer)?;
 
-                info!("Time for claim aggregation...");
-                let claim_aggr_timer =
-                    start_timer!(|| format!("claim aggregation for layer {:?}", *layer.id()));
+            end_timer!(claim_aggr_timer);
 
-                let ClaimAndProof {
-                    claim: layer_claim,
-                    proof: claim_aggregation_proof,
-                } = aggregator.prover_aggregate_claims(&layer, transcript_writer)?;
+            info!("Prove sumcheck message");
+            let sumcheck_msg_timer =
+                start_timer!(|| format!("Compute sumcheck message for layer {:?}", *layer.id()));
 
-                debug!("Claim Aggregation Proof: {:#?}", claim_aggregation_proof);
-                end_timer!(claim_aggr_timer);
-                let sumcheck_msg_timer = start_timer!(|| format!(
-                    "compute sumcheck message for layer {:?}",
-                    *layer.id()
-                ));
+            // Compute all sumcheck messages across this particular layer.
+            let _prover_sumcheck_messages = layer
+                .prove_rounds(layer_claim, &mut transcript_writer)
+                .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
-                // --- Compute all sumcheck messages across this particular layer ---
-                let prover_sumcheck_messages =
-                    layer
-                        .prove_rounds(layer_claim, transcript_writer)
-                        .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
+            end_timer!(sumcheck_msg_timer);
 
-                debug!("sumcheck_proof: {:#?}", prover_sumcheck_messages);
-                end_timer!(sumcheck_msg_timer);
+            aggregator
+                .add_claims(&layer)
+                .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
-                aggregator
-                    .add_claims(&layer)
-                    .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
-
-                end_timer!(layer_timer);
-
-                Ok(LayerProof {
-                    sumcheck_proof: prover_sumcheck_messages,
-                    layer,
-                    claim_aggregation_proof,
-                })
-            })
-            .try_collect()?;
+            end_timer!(layer_timer);
+            layer_sumcheck_proving_span.exit();
+        }
 
         end_timer!(intermediate_layers_timer);
-        // --- END TRACE: Proving intermediate GKR layers ---
         all_layers_sumcheck_proving_span.exit();
 
+        // --------- STAGE 3: Prove Intermediate Layers ---------
         let input_layers_timer = start_timer!(|| "INPUT layers proof generation");
-
-        // --- TRACE: Proving input layer ---
         let input_layer_proving_span = span!(Level::DEBUG, "input_layer_proving_span").entered();
 
-        let input_layer_proofs = input_layers
-            .into_iter()
-            .zip(commitments)
-            .map(|(input_layer, commitment)| {
-                let layer_timer = start_timer!(|| format!(
-                    "proof generation for INPUT layer {:?}",
-                    input_layer.layer_id()
-                ));
-                let layer_id = input_layer.layer_id();
-                info!("New Input Layer: {:?}", layer_id);
+        for input_layer in input_layers {
+            let layer_id = *input_layer.layer_id();
 
-                let _layer_claims_vec = aggregator
-                    .get_claims(*layer_id)
-                    .ok_or(GKRError::NoClaimsForLayer(*layer_id))?;
+            info!("New Input Layer: {:?}", layer_id);
+            let layer_timer =
+                start_timer!(|| format!("proof generation for INPUT layer {:?}", layer_id));
 
-                let claim_aggr_timer = start_timer!(|| format!(
-                    "claim aggregation for INPUT layer {:?}",
-                    input_layer.layer_id()
-                ));
+            let claim_aggr_timer = start_timer!(|| format!(
+                "claim aggregation for INPUT layer {:?}",
+                input_layer.layer_id()
+            ));
 
-                let ClaimAndProof {
-                    claim: layer_claim,
-                    proof: claim_aggregation_proof,
-                } = aggregator.prover_aggregate_claims_input(&input_layer, transcript_writer)?;
+            let ClaimAndProof {
+                claim: layer_claim,
+                proof: _claim_aggregation_proof,
+            } = aggregator.prover_aggregate_claims_input(&input_layer, &mut transcript_writer)?;
 
-                debug!("Claim Aggregation Proof: {:#?}", claim_aggregation_proof);
-                end_timer!(claim_aggr_timer);
+            end_timer!(claim_aggr_timer);
 
-                let opening_proof_timer = start_timer!(|| format!(
-                    "opening proof for INPUT layer {:?}",
-                    input_layer.layer_id()
-                ));
+            let opening_proof_timer =
+                start_timer!(|| format!("opening proof for INPUT layer {:?}", layer_id));
 
-                let opening_proof = input_layer
-                    .open(transcript_writer, layer_claim)
-                    .map_err(GKRError::InputLayerError)?;
+            let opening_proof = input_layer
+                .open(&mut transcript_writer, layer_claim)
+                .map_err(GKRError::InputLayerError)?;
 
-                end_timer!(opening_proof_timer);
+            end_timer!(opening_proof_timer);
 
-                end_timer!(layer_timer);
+            end_timer!(layer_timer);
+        }
 
-                Ok(InputLayerProof {
-                    layer_id: *layer_id,
-                    input_commitment: commitment,
-                    input_layer_claim_aggregation_proof: claim_aggregation_proof,
-                    input_opening_proof: opening_proof,
-                })
-            })
-            .try_collect()?;
+        // TODO(Makis): What do we do with the input commitments?
+        // Put them into transcript?
 
         end_timer!(input_layers_timer);
-        // --- END TRACE: Proving input layer ---
         input_layer_proving_span.exit();
 
-        let gkr_proof = GKRProof {
-            layer_sumcheck_proofs,
-            output_layers,
-            input_layer_proofs,
-            maybe_circuit_hash: Self::get_circuit_hash(),
-        };
-
-        Ok(gkr_proof)
+        Ok(transcript_writer.get_transcript())
     }
 
-    /// Verifies the GKRProof produced by fn prove
-    ///
-    /// Takes in a transcript for FS and re-generates challenges on its own
+    /// Verifies a GKR proof produced by the `prove` method.
+    /// # Arguments
+    /// * `transcript_reader`: servers as the proof.
+    /// * `gkr_circuit`: a description of the circuit to be verifier (Verifier Key).
     #[instrument(skip_all, err)]
     fn verify(
         &mut self,
         transcript_reader: &mut TranscriptReader<F, CircuitTranscript<F, Self>>,
-        gkr_proof: GKRProof<F, Self::ProofSystem>,
+        gkr_circuit: GKRVerifierKey<F, Self::ProofSystem>,
+        _gkr_proof: GKRProof<F, Self::ProofSystem>,
     ) -> Result<(), GKRError> {
+        let GKRVerifierKey {
+            input_layers,
+            intermediate_layers,
+            output_layers,
+        } = gkr_circuit;
+
         // --- Unpacking GKR proof + adding input commitments to transcript first ---
+        /*
         let GKRProof {
             layer_sumcheck_proofs,
             output_layers,
             input_layer_proofs,
             maybe_circuit_hash,
-        } = gkr_proof;
+        } = _gkr_proof;
+         */
 
-        let input_layers_timer = start_timer!(|| "append INPUT commitments to transcript");
-
+        // TODO(Makis): Add circuit hash to Transcript.
+        /*
         if let Some(circuit_hash) = maybe_circuit_hash {
             let transcript_circuit_hash = transcript_reader
                 .consume_element("Circuit Hash")
                 .map_err(GKRError::ErrorWhenVerifyingCircuitHash)?;
             assert_eq!(transcript_circuit_hash, circuit_hash);
         }
+        */
 
-        for input_layer in input_layer_proofs.iter() {
-            CircuitInputLayer::<F, Self>::verifier_append_commitment_to_transcript(
-                &input_layer.input_commitment,
-                transcript_reader,
-            )
-            .map_err(GKRError::InputLayerError)?;
-        }
-        end_timer!(input_layers_timer);
+        // TODO(Makis): Retrieve Input Layer commitments.
+        /*
+        let input_layer_commitments_timer = start_timer!(|| "Retrieve Input Layer Commitments");
 
-        // --- Verifier keeps track of the claims on its own ---
+        let input_layer_commitments = input_layers
+            .iter()
+            .map(|_| {
+                CircuitInputLayer::<F, Self>::verifier_get_commitment_from_transcript(
+                    transcript_reader,
+                )
+            })
+            .collect();
+
+        end_timer!(input_layer_commitments_timer);
+        */
+
+        // Claim aggregator to keep track of GKR-style claims across all layers.
         let mut aggregator = <CircuitClaimAggregator<F, Self> as ClaimAggregator<F>>::new();
 
-        let claims_timer = start_timer!(|| "output claims generation");
-        // --- TRACE: output claims ---
+        // --------- STAGE 1: Output Claim Generation ---------
+        let claims_timer = start_timer!(|| "Output claims generation");
         let verifier_output_claims_span =
             span!(Level::DEBUG, "verifier_output_claims_span").entered();
 
+        // TODO(Makis): STAGE 1
+        /*
         // --- NOTE that all the `Expression`s and MLEs contained within `gkr_proof` are already bound! ---
         for output in output_layers.iter() {
             let mle_indices = output.mle_indices();
@@ -468,52 +442,44 @@ pub trait GKRCircuit<F: FieldExt> {
         }
 
         end_timer!(claims_timer);
+        verifier_output_claims_span.exit();
+        */
 
+        // --------- STAGE 2: Verify Intermediate Layers ---------
         let intermediate_layers_timer =
             start_timer!(|| "ALL intermediate layers proof verification");
-        // --- END TRACE: output claims ---
-        verifier_output_claims_span.exit();
 
         // --- Go through each of the layers' sumcheck proofs ---
-        for sumcheck_proof_single in layer_sumcheck_proofs {
+        for layer in intermediate_layers {
+            let layer_id = layer.id();
+
+            /*
             let LayerProof {
                 sumcheck_proof,
                 mut layer,
                 claim_aggregation_proof: _,
             } = sumcheck_proof_single;
+            */
 
-            let layer_timer =
-                start_timer!(|| format!("proof verification for layer {:?}", *layer.id()));
-
-            // --- TRACE: Proving an individual GKR layer ---
-            let layer_id = *layer.id();
             info!("Intermediate Layer: {:?}", layer_id);
-            debug!("The LayerEnum: {:#?}", layer);
-            let layer_id = *layer.id();
-            let layer_id_trace_repr = format!("{}", layer_id);
-            let _layer_sumcheck_verification_span = span!(
-                Level::DEBUG,
-                "layer_sumcheck_verification_span",
-                layer_id = layer_id_trace_repr
-            )
-            .entered();
+            let layer_timer =
+                start_timer!(|| format!("Proof verification for layer {:?}", layer_id));
 
             let claim_aggr_timer =
-                start_timer!(|| format!("verify aggregated claim for layer {:?}", *layer.id()));
+                start_timer!(|| format!("Verify aggregated claim for layer {:?}", layer_id));
+
             // --- Perform the claim aggregation verification, first sampling `r` ---
             // --- Note that we ONLY do this if need be! ---
-
             let prev_claim = aggregator.verifier_aggregate_claims(layer_id, transcript_reader)?;
+            debug!("Aggregated claim: {:#?}", prev_claim);
 
             end_timer!(claim_aggr_timer);
 
-            let sumcheck_msg_timer =
-                start_timer!(|| format!("verify sumcheck message for layer {:?}", *layer.id()));
-
-            debug!("Aggregated claim: {:#?}", prev_claim);
             info!("Verifier: about to verify layer");
+            let sumcheck_msg_timer =
+                start_timer!(|| format!("Verify sumcheck message for layer {:?}", layer_id));
 
-            // --- Performs the actual sumcheck verification step ---
+            // Performs the actual sumcheck verification step.
             layer
                 .verify_rounds(prev_claim, sumcheck_proof, transcript_reader)
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;

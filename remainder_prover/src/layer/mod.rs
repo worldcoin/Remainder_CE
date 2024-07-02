@@ -1,11 +1,10 @@
-//! A layer is a combination of multiple MLEs with an expression
+//! A layer is a combination of multiple MLEs with an expression.
 
 pub mod combine_mle_refs;
 
 pub mod gate;
 pub mod layer_enum;
 pub mod regular_layer;
-// mod gkr_layer;
 
 use std::fmt::Debug;
 
@@ -23,8 +22,8 @@ use remainder_shared_types::{
     FieldExt,
 };
 
+/// Errors to do with working with a type implementing [Layer].
 #[derive(Error, Debug, Clone)]
-/// Errors to do with working with a Layer
 pub enum LayerError {
     #[error("Layer isn't ready to prove")]
     /// Layer isn't ready to prove
@@ -49,8 +48,9 @@ pub enum LayerError {
     TranscriptError(#[from] TranscriptReaderError),
 }
 
+/// Errors to do with verifying a layer while working with a type implementing
+/// [VerifierLayer].
 #[derive(Error, Debug, Clone)]
-/// Errors to do with verifying a Layer
 pub enum VerificationError {
     #[error("The sum of the first evaluations do not equal the claim")]
     /// The sum of the first evaluations do not equal the claim
@@ -71,8 +71,8 @@ pub enum VerificationError {
     ChallengeCheckFailed,
 }
 
+/// The location of a layer within the GKR circuit.
 #[derive(Clone, Debug, Display, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, PartialOrd)]
-/// The location of a layer within the GKR circuit
 pub enum LayerId {
     /// A random mle input layer
     ///
@@ -86,32 +86,41 @@ pub enum LayerId {
     Output(usize),
 }
 
+/// A verifier counterpart of the GKR [Layer] trait.
+pub trait VerifierLayer<F: FieldExt> {
+    /// Returns this layer's ID.
+    fn id(&self) -> LayerId;
+
+    /// Tries to verify `claim` for this layer.
+    /// The proof is implicitly included in the `transcript`.
+    fn verify_rounds(
+        &self,
+        claim: Claim<F>,
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), VerificationError>;
+}
+
 /// A layer is the smallest component of the GKR protocol.
 ///
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
 pub trait Layer<F: FieldExt> {
-    /// The associated type that the verifier is using to store this layer.
-    type VerifierLayer: Debug + Serialize + for<'a> Deserialize<'a>;
+    /// The associated type that the verifier is using to store this layer's
+    /// information.
+    type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
 
-    /// The struct that contains the proof this `Layer` generates
-    type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
+    // /// The struct that contains the proof this `Layer` generates
+    // type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
 
-    /// Creates a proof for this Layer
+    /// Gets this layer's ID.
+    fn id(&self) -> LayerId;
+
+    /// Tries to prove `claim` for this layer.
+    /// If successful, the proof is implicitly included in the modified
+    /// transcript.
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
         transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<Self::Proof, LayerError>;
-
-    /// Verifies the `Layer`'s proof
-    fn verify_rounds(
-        &mut self,
-        claim: Claim<F>,
-        proof: Self::Proof,
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError>;
-
-    /// Gets this `Layer`'s `LayerId`
-    fn id(&self) -> &LayerId;
 }

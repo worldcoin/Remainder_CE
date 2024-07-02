@@ -81,10 +81,9 @@ pub trait InputLayer<F: FieldExt> {
     );
 
     /// Appends the commitment to the F-S Transcript.
-    fn verifier_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
+    fn verifier_get_commitment_from_transcript(
         transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), InputLayerError>;
+    ) -> Result<Self::Commitment, InputLayerError>;
 
     /// Generates a proof of polynomial evaluation at the point
     /// in the `Claim`.

@@ -17,7 +17,7 @@ use crate::claims::YieldClaim;
 layer_enum!(LayerEnum, (Gkr: RegularLayer<F>), (Gate: Gate<F>));
 
 impl<F: FieldExt> LayerEnum<F> {
-    ///Gets the size of the Layer as a whole in terms of number of bits
+    /// Returns the size of the Layer as a whole in terms of number of bits.
     pub(crate) fn layer_size(&self) -> usize {
         let expression = match self {
             LayerEnum::Gkr(layer) => &layer.expression,

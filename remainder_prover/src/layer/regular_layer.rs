@@ -26,55 +26,72 @@ use crate::{
     },
 };
 
-/// The most common implementation of `Layer`
+use super::VerifierLayer;
+
+/// The most common implementation of [crate::layer::Layer].
 ///
-/// A `Layer` made up of a structured polynomial relationship between MLEs of previous Layers
+/// A layer is made up of a structured polynomial relationship between MLEs of
+/// previous layers.
 ///
-/// Proofs are generated with the Sumcheck protocol
+/// Proofs are generated with the Sumcheck protocol.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct RegularLayer<F: FieldExt> {
+    /// This layer's ID.
     id: LayerId,
+
+    /// The polynomial expression defining this layer.
+    /// It includes information on how this layer relates to the others.
     pub(crate) expression: Expression<F, ProverExpr>,
-    /// store the nonlinear rounds in a GKR layer so that these are the only rounds we produce sumcheck proofs over.
+
+    /// Stores the indices of the non-linear rounds in this GKR layer so we
+    /// only produce sumcheck proofs over those.
     nonlinear_rounds: Option<Vec<usize>>,
-    /// store the beta values associated with an expression.
+
+    /// Store the beta values associated with an expression.
     beta_vals: Option<BetaValues<F>>,
 }
 
-/// The description of a Regular Layer used by the verifier.
-/// TODO(Makis): Add Debug.
+/// The verifier counterpart of a [RegularLayer].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct VerifierRegularLayer<F: FieldExt> {
-    layer_id: LayerId,
+    /// This layer's ID.
+    id: LayerId,
+
+    /// A structural description of the polynomial expression defining this
+    /// layer. Leaves of the expression describe the MLE characteristics without
+    /// storing any values.
     expression: Expression<F, VerifierExpr>,
 }
 
 impl<F: FieldExt> Layer<F> for RegularLayer<F> {
     type VerifierLayer = VerifierRegularLayer<F>;
-    type Proof = Option<SumcheckProof<F>>;
+
+    fn id(&self) -> LayerId {
+        self.id
+    }
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<Option<SumcheckProof<F>>, LayerError> {
+    ) -> Result<(), LayerError> {
         let val = claim.get_result();
 
-        // --- Initialize tables and compute prover message for first round of sumcheck ---
+        // Initialize tables and compute prover message for first round of sumcheck.
         let first_sumcheck_message = self.start_sumcheck(claim)?;
 
         let nonlinear_rounds = self.nonlinear_rounds.clone().unwrap();
         if nonlinear_rounds.is_empty() {
-            return Ok(None);
+            return Ok(());
         }
 
         info!("Proving GKR Layer");
 
         debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
 
-        // --- Add prover message to the FS transcript ---
+        // Add prover message to the FS transcript.
         transcript_writer.append_elements("Initial Sumcheck evaluations", &first_sumcheck_message);
 
         // Grabs all of the sumcheck messages from all of the rounds within this layer.
@@ -88,19 +105,21 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         //
         // we only have sumcheck messages over the nonlinear rounds, so we iterate just through the nonlinear rounds
         // and compute each of the sumcheck messages since each of the linear rounds are already bound.
-        let all_prover_sumcheck_messages: Vec<Vec<F>> = std::iter::once(Ok(first_sumcheck_message))
-            .chain((nonlinear_rounds.iter().skip(1)).map(|round_index| {
-                // --- Verifier samples a random challenge \in \mathbb{F} to send to prover ---
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+        let _all_prover_sumcheck_messages: Vec<Vec<F>> =
+            std::iter::once(Ok(first_sumcheck_message))
+                .chain((nonlinear_rounds.iter().skip(1)).map(|round_index| {
+                    // --- Verifier samples a random challenge \in \mathbb{F} to send to prover ---
+                    let challenge = transcript_writer.get_challenge("Sumcheck challenge");
 
-                // --- Prover uses that random challenge to compute the next sumcheck message ---
-                // --- We then add the prover message to FS transcript ---
-                let prover_sumcheck_message =
-                    self.prove_nonlinear_round(*round_index, challenge)?;
-                transcript_writer.append_elements("Sumcheck evaluations", &prover_sumcheck_message);
-                Ok::<_, LayerError>(prover_sumcheck_message)
-            }))
-            .collect::<Result<_, _>>()?;
+                    // --- Prover uses that random challenge to compute the next sumcheck message ---
+                    // --- We then add the prover message to FS transcript ---
+                    let prover_sumcheck_message =
+                        self.prove_nonlinear_round(*round_index, challenge)?;
+                    transcript_writer
+                        .append_elements("Sumcheck evaluations", &prover_sumcheck_message);
+                    Ok::<_, LayerError>(prover_sumcheck_message)
+                }))
+                .collect::<Result<_, _>>()?;
 
         // --- For the final round, we need to check that g(r_1, ..., r_n) = g_n(r_n) ---
         // --- Thus we sample r_n and bind b_n to it (via `fix_variable` below) ---
@@ -110,20 +129,28 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 
         self.expression.fix_variable(last_idx, final_chal);
         if let Some(beta) = self.beta_vals.as_mut() {
-            beta.beta_update(last_idx, final_chal)
+            beta.beta_update(last_idx, final_chal);
         }
-        Ok(Some(all_prover_sumcheck_messages.into()))
+        Ok(())
+    }
+}
+
+impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
+    fn id(&self) -> LayerId {
+        self.id
     }
 
     fn verify_rounds(
-        &mut self,
+        &self,
         claim: Claim<F>,
-        sumcheck_prover_messages: Self::Proof,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), LayerError> {
-        // if there are no sumcheck prover messages, this means this was an entirely linear layer. therefore
-        // we can skip the verification for this layer.
-        if sumcheck_prover_messages.is_none() {
+    ) -> Result<(), VerificationError> {
+        let non_linear_rounds = self.expression.get_all_nonlinear_rounds();
+        let num_non_linear_rounds = non_linear_rounds.len();
+
+        // If there are no non-linear indices, this means it is an entirely
+        // linear layer, therefore we can skip the verification.
+        if num_non_linear_rounds == 0 {
             let expr_evaluated_at_challenge_coord = self
                 .expression
                 .clone()
@@ -224,20 +251,18 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 
         Ok(())
     }
-
-    fn id(&self) -> &LayerId {
-        &self.id
-    }
 }
 
 impl<F: FieldExt> RegularLayer<F> {
-    /// initialize all necessary information in order to start sumcheck within a layer of GKR. this includes
-    /// pre-fixing all of the rounds within the layer which are linear,
-    /// and then appropriately initializing the necessary beta values over the nonlinear rounds.
+    /// Initialize all necessary information in order to start sumcheck within a
+    /// layer of GKR. This includes pre-fixing all of the rounds within the
+    /// layer which are linear, and then appropriately initializing the
+    /// necessary beta values over the nonlinear rounds.
     ///
-    /// this function returns the evaluations over the first round of sumcheck, which is over the first
-    /// nonlinear index in the expression we are performing GKR over. if there are no nonlinear rounds
-    /// it returns an empty vector because there is no sumcheck proof for this layer.
+    /// This function returns the evaluations over the first round of sumcheck,
+    /// which is over the first nonlinear index in the expression we are
+    /// performing GKR over. If there are no nonlinear rounds it returns an
+    /// empty vector because there is no sumcheck proof for this layer.
     fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<Vec<F>, LayerError> {
         let first_nonlinear_round = {
             let expression = &mut self.expression;
@@ -247,18 +272,20 @@ impl<F: FieldExt> RegularLayer<F> {
 
             let claim_point = claim.get_point();
 
-            // for each of the linear indices in the expression, we can fix the variable at that index for
-            // the expression, so that now the only unbound indices are the nonlinear indices.
+            // For each of the linear indices in the expression, we can fix the
+            // variable at that index for the expression, so that now the only
+            // unbound indices are the nonlinear indices.
             expression_linear_indices
-                .iter()
+                .into_iter()
                 .sorted()
                 .for_each(|round_idx| {
-                    expression.fix_variable_at_index(*round_idx, claim_point[*round_idx]);
+                    expression.fix_variable_at_index(round_idx, claim_point[round_idx]);
                 });
 
-            // we need the beta values over the nonlinear indices of the expression, so we grab
-            // the claim points that are over these nonlinear indices and then initialize the betavalues
-            // struct over them.
+            // We need the beta values over the nonlinear indices of the
+            // expression, so we grab the claim points that are over these
+            // nonlinear indices and then initialize the betavalues struct over
+            // them.
             let betavec = expression_nonlinear_indices
                 .iter()
                 .map(|idx| (*idx, claim_point[*idx]))
@@ -266,12 +293,13 @@ impl<F: FieldExt> RegularLayer<F> {
             let newbeta = BetaValues::new(betavec);
             self.beta_vals = Some(newbeta);
 
-            // store the nonlinear rounds of the expression within the layer so that we know these are the
-            // rounds we perform sumcheck over.
+            // Store the nonlinear rounds of the expression within the layer so
+            // that we know these are the rounds we perform sumcheck over.
             let first_nonlinear_round = expression_nonlinear_indices.first().cloned();
             self.nonlinear_rounds = Some(expression_nonlinear_indices);
 
-            // if there are no nonlinear indices in the expression we can return an empty vector early.
+            // If there are no nonlinear indices in the expression we can return
+            // an empty vector early.
             if first_nonlinear_round.is_none() {
                 return Ok(vec![]);
             }

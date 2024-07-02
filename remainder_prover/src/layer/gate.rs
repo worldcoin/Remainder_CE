@@ -34,13 +34,17 @@ use self::gate_helpers::{
     GateError,
 };
 
+use super::VerifierLayer;
+
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
-/// Operations that are currently supported by the gate. Binary because these are fan-in-two gates.
+/// Operations that are currently supported by the gate. Binary because these
+/// are fan-in-two gates.
 pub enum BinaryOperation {
-    /// An add gate.
+    /// An addition gate.
     Add,
-    /// A mul gate.
+
+    /// A multiplication gate.
     Mul,
 }
 
@@ -54,15 +58,15 @@ impl BinaryOperation {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
 /// Generic gate struct -- the binary operation performed by the gate is specified by
 /// the `gate_operation` parameter. Additionally, the number of dataparallel variables
 /// is specified by `num_dataparallel_bits` in order to account for batched and un-batched
 /// gates.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
 pub struct Gate<F: FieldExt> {
     /// The layer id associated with this gate layer.
-    pub layer_id: LayerId,
+    pub id: LayerId,
     /// The number of bits representing the number of "dataparallel" copies of the circuit.
     pub num_dataparallel_bits: usize,
     /// A vector of tuples representing the "nonzero" gates, especially useful in the sparse case
@@ -81,12 +85,12 @@ pub struct Gate<F: FieldExt> {
     pub gate_operation: BinaryOperation,
 }
 
-/// The Verifier's version of a Gate Layer description.
+/// The verifier's counterpart of a Gate layer description.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 struct VerifierGateLayer<F: FieldExt> {
     /// The layer id associated with this gate layer.
-    layer_id: LayerId,
+    id: LayerId,
 
     /// The gate operation representing the fan-in-two relationship.
     gate_operation: BinaryOperation,
@@ -110,15 +114,19 @@ struct VerifierGateLayer<F: FieldExt> {
 }
 
 impl<F: FieldExt> Layer<F> for Gate<F> {
-    type Proof = SumcheckProof<F>;
-
+    // type Proof = SumcheckProof<F>;
     type VerifierLayer = VerifierGateLayer<F>;
+
+    /// Gets this layer's id.
+    fn id(&self) -> LayerId {
+        self.id
+    }
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<SumcheckProof<F>, LayerError> {
+    ) -> Result<(), LayerError> {
         let mut sumcheck_rounds = vec![];
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
         let mut beta_g2_fully_bound = F::ONE;
@@ -159,13 +167,19 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         // The concatenation of all of these rounds is the proof resulting from a gate layer.
         Ok(sumcheck_rounds.into())
     }
+}
+
+impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
+    /// Gets this layer's id.
+    fn id(&self) -> LayerId {
+        self.id
+    }
 
     fn verify_rounds(
-        &mut self,
+        &self,
         claim: Claim<F>,
-        sumcheck_rounds: Self::Proof,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), LayerError> {
+    ) -> Result<(), VerificationError> {
         let sumcheck_rounds = sumcheck_rounds.0;
         let mut prev_evals = &sumcheck_rounds[0];
         let mut challenges = vec![];
@@ -298,11 +312,6 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         }
 
         Ok(())
-    }
-
-    /// Gets this layer's id.
-    fn id(&self) -> &LayerId {
-        &self.layer_id
     }
 }
 
