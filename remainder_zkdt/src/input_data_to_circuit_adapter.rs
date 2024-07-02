@@ -324,7 +324,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
     zkdt_circuit_data: ZKDTCircuitData<F>,
     tree_height: usize,
     input_len: usize,
-) -> (BatchedZKDTCircuitMles<F>, (usize, usize)) {
+) -> BatchedZKDTCircuitMles<F> {
     // --- Unpacking ---
     let ZKDTCircuitData {
         input_data,
@@ -450,21 +450,18 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
         })
         .collect_vec();
 
-    (
-        BatchedZKDTCircuitMles {
-            input_samples_mle_vec,
-            permuted_input_samples_mle_vec,
-            decision_node_paths_mle_vec,
-            leaf_node_paths_mle_vec,
-            binary_decomp_diffs_mle_vec,
-            multiplicities_bin_decomp_mle_decision,
-            multiplicities_bin_decomp_mle_leaf,
-            decision_nodes_mle,
-            leaf_nodes_mle,
-            multiplicities_bin_decomp_mle_input,
-        },
-        (tree_height, input_len),
-    )
+    BatchedZKDTCircuitMles {
+        input_samples_mle_vec,
+        permuted_input_samples_mle_vec,
+        decision_node_paths_mle_vec,
+        leaf_node_paths_mle_vec,
+        binary_decomp_diffs_mle_vec,
+        multiplicities_bin_decomp_mle_decision,
+        multiplicities_bin_decomp_mle_leaf,
+        decision_nodes_mle,
+        leaf_nodes_mle,
+        multiplicities_bin_decomp_mle_input,
+    }
 }
 
 /// Specifies exactly which minibatch to use within a sample.
