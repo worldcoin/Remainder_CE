@@ -34,6 +34,7 @@ macro_rules! layer_enum {
         }
 
         paste::paste! {
+            /*
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
             #[serde(bound = "F: FieldExt")]
             #[doc = r"Remainder generated Proof enum"]
@@ -43,59 +44,64 @@ macro_rules! layer_enum {
                     $var_name(<$variant as Layer<F>>::Proof),
                 )*
             }
+            */
 
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
             #[serde(bound = "F: FieldExt")]
             #[doc = r"Verfier layer description enum"]
-            pub enum [<$type_name VerifierLayer>]<F: FieldExt> {
+            pub enum [<Verifier$type_name>]<F: FieldExt> {
                 $(
                     #[doc = "Verifier layer description variant"]
                     $var_name(<$variant as Layer<F>>::VerifierLayer),
                 )*
             }
+
+            impl<F: FieldExt> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
+                fn id(&self) -> super::LayerId {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.id()
+                        )*
+                    }
+                }
+
+                fn verify_rounds(
+                    &self,
+                    claim: $crate::claims::Claim<F>,
+                    transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                ) -> Result<(), super::VerificationError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.verify_rounds(claim, transcript),
+                        )*
+                    }
+                }
+
+            }
         }
 
         impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
             paste::paste! {
-                type Proof = [<$type_name Proof>]<F>;
-                type VerifierLayer = [<$type_name VerifierLayer>]<F>;
+                // type Proof = [<$type_name Proof>]<F>;
+                type VerifierLayer = [<Verifier $type_name>]<F>;
+            }
+
+            fn id(&self) -> super::LayerId {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.id(),
+                    )*
+                }
             }
 
             fn prove_rounds(
                 &mut self,
                 claim: $crate::claims::Claim<F>,
                 transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-            ) -> Result<Self::Proof, super::LayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => Ok(Self::Proof::$var_name(layer.prove_rounds(claim, transcript)?)),
-                    )*
-                }
-            }
-
-            fn verify_rounds(
-                &mut self,
-                claim: $crate::claims::Claim<F>,
-                proof: Self::Proof,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
             ) -> Result<(), super::LayerError> {
                 match self {
                     $(
-                        Self::$var_name(layer) => {
-                            let proof = match proof {
-                                Self::Proof::$var_name(proof) => proof,
-                                _ => unreachable!()
-                            };
-                            layer.verify_rounds(claim, proof, transcript)
-                        },
-                    )*
-                }
-            }
-
-            fn id(&self) -> &super::LayerId {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.id(),
+                        Self::$var_name(layer) => layer.prove_rounds(claim, transcript),
                     )*
                 }
             }
@@ -186,13 +192,12 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn verifier_append_commitment_to_transcript(
-                commitment: &Self::Commitment,
+            fn verifier_get_commitment_from_transcript(
                 transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>
-            ) -> Result<(), $crate::input_layer::InputLayerError> {
+            ) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
                 match commitment {
                     $(
-                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::verifier_append_commitment_to_transcript(commitment, transcript),
+                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::verifier_get_commitment_from_transcript(transcript),
                     )*
                 }
             }
@@ -256,22 +261,23 @@ macro_rules! input_layer_enum {
     }
 }
 
-///A trait for bundling a group of types that define the interfaces that go into a GKR Prover
+/// A trait for bundling a group of types that define the interfaces that go
+/// into a GKR Prover.
 pub trait ProofSystem<F: FieldExt> {
-    ///A trait that defines the allowed Layer for this ProofSystem
+    /// A trait that defines the allowed Layer for this ProofSystem.
     type Layer: Layer<F>
         + Serialize
         + for<'a> Deserialize<'a>
         + Debug
         + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
 
-    ///A trait that defines the allowed InputLayer for this ProofSystem
+    /// A trait that defines the allowed InputLayer for this ProofSystem.
     type InputLayer: InputLayer<F>;
 
-    ///The Transcript this proofsystem uses for F-S
+    /// The Transcript this proofsystem uses for Fiat-Shamir.
     type Transcript: TranscriptSponge<F>;
 
-    ///The MleRef type that serves as the output layer representation
+    /// The MleRef type that serves as the output layer representation
     type OutputLayer: Mle<F>
         + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
         + Serialize

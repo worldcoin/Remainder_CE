@@ -117,10 +117,9 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     }
 
     /// Add the commitment to the verifier transcript for Fiat-Shamir.
-    fn verifier_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
+    fn verifier_get_commitment_from_transcript(
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), InputLayerError> {
+    ) -> Result<Self::Commitment, InputLayerError> {
         let transcript_commitment = transcript_reader
             .consume_element("Ligero Merkle Commitment")
             .map_err(InputLayerError::TranscriptError)?;
