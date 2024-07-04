@@ -6,8 +6,10 @@ use remainder::{
         combine_input_layers::InputLayerBuilder, combine_layers::combine_layers,
         layer_builder::simple_builders::ZeroBuilder,
     },
+    expression::abstract_expr::ExprBuilder,
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
+    layouter::nodes::{sector::Sector, ClaimableNode, Context},
     mle::{dense::DenseMle, Mle},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
@@ -58,6 +60,34 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
             output_layers: vec![output.get_enum()],
             input_layers: vec![],
         }
+    }
+}
+
+struct DataParallelComponent<F: FieldExt> {
+    first_layer_sector: Sector<F>,
+    second_layer_sector: Sector<F>,
+}
+
+impl<F: FieldExt> DataParallelComponent<F> {
+    pub fn new(
+        ctx: &Context,
+        mle_1_input: &dyn ClaimableNode<F = F>,
+        mle_2_input: &dyn ClaimableNode<F = F>,
+    ) -> Self {
+        let product_scaled_nodes = &[mle_1_input, mle_2_input];
+        let product_scaled_sector = Sector::new(
+            ctx,
+            product_scaled_nodes,
+            |product_scaled_nodes| {
+                assert_eq!(product_scaled_nodes.len(), 2);
+                let mle_1 = product_scaled_nodes[0];
+                let mle_2 = product_scaled_nodes[1];
+
+                ExprBuilder::<F>::products(vec![mle_1, mle_2]) + F::from(10_u64) * mle_1.expr()
+            },
+            |data| todo!(),
+        );
+        todo!()
     }
 }
 
@@ -264,6 +294,10 @@ impl<F: FieldExt> CombinedCircuitAlt<F> {
 
 // TODO(vishady): this test fails based off of our current implementation of remainder!! The current problem is the way
 // selector bits are treated when combining expressions.
+
+// (N_1, ..., N_n, C_1, ..., C_n, H_1, ..., H_n, W_1, ..., W_n)
+// MLE(b_1, b_2, c_1, c_2, c_3) --> 5 iterated bits total, 2 dataparallel bits
+// MLE(c_1) --> 4 iterated bits total, 1 dataparallel bit
 
 #[test]
 fn test_combined_dataparallel_nondataparallel_circuit_alt() {
