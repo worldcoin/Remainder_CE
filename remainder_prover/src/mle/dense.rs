@@ -261,7 +261,7 @@ impl<F: FieldExt> DenseMle<F> {
             ((0..num_iterated_vars).map(|_| MleIndex::Iterated)).collect();
 
         let current_mle =
-            MultilinearExtension::new(Evaluations::<F>::new(num_iterated_vars, items.clone()));
+            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_iterated_vars, items.clone()));
         Self {
             layer_id,
             current_mle: current_mle.clone(),
@@ -289,7 +289,7 @@ impl<F: FieldExt> DenseMle<F> {
             ((0..num_iterated_vars).map(|_| MleIndex::Iterated)).collect();
 
         let current_mle =
-            MultilinearExtension::new(Evaluations::<F>::new(num_iterated_vars, items.clone()));
+            MultilinearExtension::new_from_evals(Evaluations::<F>::new(num_iterated_vars, items.clone()));
 
         Self {
             layer_id,
