@@ -110,7 +110,7 @@ fn combine_input_mles<F: FieldExt>(
     let num_vars = log2(final_bookkeeping_table.len()) as usize;
 
     // --- Convert the final bookkeeping table back to "little-endian" ---
-    MultilinearExtension::new(Evaluations::new(
+    MultilinearExtension::new_from_evals(Evaluations::new(
         num_vars,
         invert_mle_bookkeeping_table(final_bookkeeping_table),
     ))

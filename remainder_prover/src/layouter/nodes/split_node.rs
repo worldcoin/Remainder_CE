@@ -43,7 +43,8 @@ impl<F: FieldExt> SplitNode<F> {
                     .cloned()
                     .collect_vec();
 
-                let data = MultilinearExtension::new(Evaluations::new(max_num_vars, data));
+                let data =
+                    MultilinearExtension::new_from_evals(Evaluations::new(max_num_vars, data));
                 Self {
                     id: ctx.get_new_id(),
                     source,

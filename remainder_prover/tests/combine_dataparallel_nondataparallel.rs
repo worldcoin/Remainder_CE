@@ -9,8 +9,11 @@ use remainder::{
     expression::abstract_expr::ExprBuilder,
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
-    layouter::nodes::{sector::Sector, ClaimableNode, Context},
-    mle::{dense::DenseMle, Mle},
+    layouter::{
+        component::Component,
+        nodes::{circuit_outputs::OutputNode, sector::Sector, CircuitNode, ClaimableNode, Context},
+    },
+    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
@@ -66,6 +69,7 @@ impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuit<F> {
 struct DataParallelComponent<F: FieldExt> {
     first_layer_sector: Sector<F>,
     second_layer_sector: Sector<F>,
+    output_sector: Sector<F>,
 }
 
 impl<F: FieldExt> DataParallelComponent<F> {
@@ -83,11 +87,84 @@ impl<F: FieldExt> DataParallelComponent<F> {
                 let mle_1 = product_scaled_nodes[0];
                 let mle_2 = product_scaled_nodes[1];
 
-                ExprBuilder::<F>::products(vec![mle_1, mle_2]) + F::from(10_u64) * mle_1.expr()
+                ExprBuilder::<F>::products(vec![mle_1, mle_2])
+                    + ExprBuilder::<F>::scaled(mle_1.expr(), F::from(10_u64))
             },
-            |data| todo!(),
+            |data| {
+                let mle_1 = data[0];
+                let mle_2 = data[1];
+                let prod_bt = mle_1
+                    .get_evals_vector()
+                    .iter()
+                    .zip(mle_2.get_evals_vector().iter())
+                    .map(|(elem_1, elem_2)| *elem_1 * elem_2);
+
+                let scaled_bt = mle_1
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| F::from(10_u64) * elem);
+
+                let final_bt = prod_bt
+                    .zip(scaled_bt)
+                    .map(|(elem_1, elem_2)| elem_1 + elem_2)
+                    .collect_vec();
+
+                MultilinearExtension::new(final_bt)
+            },
         );
-        todo!()
+
+        let product_scaled_meta_sector = Sector::new(
+            ctx,
+            &[&product_scaled_sector],
+            |prod_scaled_result_vec| {
+                assert_eq!(prod_scaled_result_vec.len(), 1);
+                let prod_scaled_result = prod_scaled_result_vec[0];
+
+                ExprBuilder::<F>::products(vec![prod_scaled_result, prod_scaled_result])
+                    + ExprBuilder::<F>::scaled(prod_scaled_result.expr(), F::from(10_u64))
+            },
+            |data| {
+                let mle_1 = data[0];
+                let final_bt = mle_1
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| *elem * elem + F::from(10_u64) * elem)
+                    .collect_vec();
+
+                MultilinearExtension::new(final_bt)
+            },
+        );
+
+        let zero_output_sector = Sector::new(
+            ctx,
+            &[&product_scaled_meta_sector],
+            |product_meta_vec| {
+                assert_eq!(product_meta_vec.len(), 1);
+                let prod_meta = product_meta_vec[0];
+
+                prod_meta.expr() - prod_meta.expr()
+            },
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        Self {
+            first_layer_sector: product_scaled_sector,
+            second_layer_sector: product_scaled_meta_sector,
+            output_sector: zero_output_sector,
+        }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for DataParallelComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![
+            self.first_layer_sector.into(),
+            self.second_layer_sector.into(),
+            self.output_sector.into(),
+        ]
     }
 }
 
@@ -133,6 +210,84 @@ impl<F: FieldExt> GKRCircuit<F> for TripleNestedSelectorCircuit<F> {
     }
 }
 
+struct TripleNestedSelectorComponent<F: FieldExt> {
+    first_layer_sector: Sector<F>,
+    output_sector: Sector<F>,
+}
+
+impl<F: FieldExt> TripleNestedSelectorComponent<F> {
+    pub fn new(
+        ctx: &Context,
+        inner_inner_sel: &dyn ClaimableNode<F = F>,
+        inner_sel: &dyn ClaimableNode<F = F>,
+        outer_sel: &dyn ClaimableNode<F = F>,
+    ) -> Self {
+        let triple_nested_selector_sector = Sector::new(
+            ctx,
+            &[inner_inner_sel, inner_sel, outer_sel],
+            |triple_sel_nodes| {
+                assert_eq!(triple_sel_nodes.len(), 3);
+                let inner_inner_sel_mle = triple_sel_nodes[0];
+                let inner_sel_mle = triple_sel_nodes[1];
+                let outer_sel_mle = triple_sel_nodes[2];
+
+                let inner_inner_sel =
+                    ExprBuilder::<F>::products(vec![inner_inner_sel_mle, inner_inner_sel_mle])
+                        .concat_expr(inner_inner_sel_mle.expr());
+                let inner_sel = inner_sel_mle.expr().concat_expr(inner_inner_sel);
+
+                outer_sel_mle.expr().concat_expr(inner_sel)
+            },
+            |data| {
+                let inner_inner_sel_data = data[0];
+                let inner_sel_data = data[1];
+                let outer_sel_data = data[2];
+                let inner_inner_sel_bt = inner_inner_sel_data
+                    .get_evals_vector()
+                    .iter()
+                    .flat_map(|elem| vec![*elem, *elem * elem]);
+
+                let inner_sel_bt = inner_inner_sel_bt
+                    .zip(inner_sel_data.get_evals_vector().iter())
+                    .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2]);
+
+                let final_bt = inner_sel_bt
+                    .zip(outer_sel_data.get_evals_vector().iter())
+                    .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2])
+                    .collect_vec();
+
+                MultilinearExtension::new(final_bt)
+            },
+        );
+
+        let zero_output_sector = Sector::new(
+            ctx,
+            &[&triple_nested_selector_sector],
+            |triple_sel_vec| {
+                assert_eq!(triple_sel_vec.len(), 1);
+                let triple_sel_data = triple_sel_vec[0];
+
+                triple_sel_data.expr() - triple_sel_data.expr()
+            },
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        Self {
+            first_layer_sector: triple_nested_selector_sector,
+            output_sector: zero_output_sector,
+        }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for TripleNestedSelectorComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into(), self.output_sector.into()]
+    }
+}
+
 /// A circuit in which:
 /// * Layer 0: [ProductScaledBuilder] with the two inputs
 /// * Layer 1: [ZeroBuilder] with output of Layer 0 and itself.
@@ -166,6 +321,83 @@ impl<F: FieldExt> GKRCircuit<F> for ScaledProductCircuit<F> {
         }
     }
 }
+
+struct ScaledProductComponent<F: FieldExt> {
+    first_layer_sector: Sector<F>,
+    output_sector: Sector<F>,
+}
+
+impl<F: FieldExt> ScaledProductComponent<F> {
+    pub fn new(
+        ctx: &Context,
+        mle_1_input: &dyn ClaimableNode<F = F>,
+        mle_2_input: &dyn ClaimableNode<F = F>,
+    ) -> Self {
+        let product_scaled_nodes = &[mle_1_input, mle_2_input];
+        let product_scaled_sector = Sector::new(
+            ctx,
+            product_scaled_nodes,
+            |product_scaled_nodes| {
+                assert_eq!(product_scaled_nodes.len(), 2);
+                let mle_1 = product_scaled_nodes[0];
+                let mle_2 = product_scaled_nodes[1];
+
+                ExprBuilder::<F>::products(vec![mle_1, mle_2])
+                    + ExprBuilder::<F>::scaled(mle_1.expr(), F::from(10_u64))
+            },
+            |data| {
+                let mle_1 = data[0];
+                let mle_2 = data[1];
+                let prod_bt = mle_1
+                    .get_evals_vector()
+                    .iter()
+                    .zip(mle_2.get_evals_vector().iter())
+                    .map(|(elem_1, elem_2)| *elem_1 * elem_2);
+
+                let scaled_bt = mle_1
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| F::from(10_u64) * elem);
+
+                let final_bt = prod_bt
+                    .zip(scaled_bt)
+                    .map(|(elem_1, elem_2)| elem_1 + elem_2)
+                    .collect_vec();
+
+                MultilinearExtension::new(final_bt)
+            },
+        );
+
+        let zero_output_sector = Sector::new(
+            ctx,
+            &[&product_scaled_sector],
+            |product_scaled_vec| {
+                assert_eq!(product_scaled_vec.len(), 1);
+                let prod_scaled_data = product_scaled_vec[0];
+
+                prod_scaled_data.expr() - prod_scaled_data.expr()
+            },
+            |_data| MultilinearExtension::new_zero(),
+        );
+
+        Self {
+            first_layer_sector: product_scaled_sector,
+            output_sector: zero_output_sector,
+        }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for ScaledProductComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.first_layer_sector.into(), self.output_sector.into()]
+    }
+}
+
+#[test]
+fn test_combined_components_circuit() {}
 
 /// A circuit which combines the [DataParallelCircuit], [TripleNestedSelectorCircuit],
 /// and [ScaledProductCircuit].

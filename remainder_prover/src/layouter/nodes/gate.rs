@@ -81,7 +81,7 @@ impl<F: FieldExt> GateNode<F> {
 
         let num_vars = log2(res_table.len()) as usize;
 
-        let data = MultilinearExtension::new(Evaluations::new(num_vars, res_table));
+        let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, res_table));
 
         Self {
             id: ctx.get_new_id(),

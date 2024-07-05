@@ -51,7 +51,7 @@ impl<F: FieldExt, const N: usize> CircuitMle<F, N> for FlatMles<F, N> {
             .into_iter()
             .map(|mle| {
                 // this part needs changes
-                let mle: MultilinearExtension<F> = MultilinearExtension::new(
+                let mle: MultilinearExtension<F> = MultilinearExtension::new_from_evals(
                     Evaluations::<F>::new(mle.num_iterated_vars(), mle.get_padded_evaluations()),
                 );
                 InputShred::new(ctx, mle, source)

@@ -25,7 +25,7 @@ fn test_basic_circuit() {
 
         let input_shred_1 = InputShred::new(
             ctx,
-            MultilinearExtension::new(Evaluations::new(
+            MultilinearExtension::new_from_evals(Evaluations::new(
                 2,
                 vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
             )),
@@ -34,7 +34,7 @@ fn test_basic_circuit() {
 
         let input_shred_2 = InputShred::new(
             ctx,
-            MultilinearExtension::new(Evaluations::new(
+            MultilinearExtension::new_from_evals(Evaluations::new(
                 2,
                 vec![Fr::from(16), Fr::from(16), Fr::from(16), Fr::from(16)],
             )),
@@ -56,7 +56,7 @@ fn test_basic_circuit() {
                     .map(|(lhs, rhs)| lhs + rhs)
                     .collect();
 
-                MultilinearExtension::new(Evaluations::new(2, data))
+                MultilinearExtension::new_from_evals(Evaluations::new(2, data))
             },
         );
 
@@ -72,7 +72,7 @@ fn test_basic_circuit() {
                     .map(|(lhs, rhs)| lhs * rhs)
                     .collect();
 
-                MultilinearExtension::new(Evaluations::new(2, data))
+                MultilinearExtension::new_from_evals(Evaluations::new(2, data))
             },
         );
 
@@ -88,7 +88,7 @@ fn test_basic_circuit() {
                     .map(|(lhs, rhs)| lhs * rhs)
                     .collect();
 
-                MultilinearExtension::new(Evaluations::new(2, data))
+                MultilinearExtension::new_from_evals(Evaluations::new(2, data))
             },
         );
 
