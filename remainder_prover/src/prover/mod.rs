@@ -449,7 +449,6 @@ pub trait GKRCircuit<F: FieldExt> {
         let intermediate_layers_timer =
             start_timer!(|| "ALL intermediate layers proof verification");
 
-        // --- Go through each of the layers' sumcheck proofs ---
         for layer in intermediate_layers {
             let layer_id = layer.id();
 

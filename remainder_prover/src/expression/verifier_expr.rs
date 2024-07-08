@@ -4,8 +4,12 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
+use thiserror::Error;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge},
+    FieldExt,
+};
 
 use super::{
     expr_errors::ExpressionError,
@@ -25,6 +29,18 @@ pub struct VerifierMle<F: FieldExt> {
     var_indices: Vec<MleIndex<F>>,
 }
 
+#[derive(Error, Debug, Clone)]
+///Error for handling the parsing and evaluation of expressions
+pub enum VerifierExpressionError {
+    /// Transcript Reader Error.
+    #[error("Transcript Reader Error")]
+    TranscriptError(TranscriptReaderError),
+
+    /// Expected selector bit to be bound.
+    #[error("Expected selector bit to be bound")]
+    SelectorBitNotBoundError,
+}
+
 /// Placeholder type for defining `Expression<F, VerifierExpr>`, the type used
 /// for representing expressions on the verifier's circuit description.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -39,21 +55,20 @@ impl<F: FieldExt> ExpressionType<F> for VerifierExpr {
 }
 
 impl<F: FieldExt> Expression<F, VerifierExpr> {
-    /*
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
     #[allow(clippy::too_many_arguments)]
-    pub fn evaluate<T>(
+    pub fn reduce<T>(
         &self,
-        constant: &impl Fn(F) -> T,
-        selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-        mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
-        negated: &impl Fn(T) -> T,
-        sum: &impl Fn(T, T) -> T,
-        product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
-        scaled: &impl Fn(T, F) -> T,
+        constant: &mut impl FnMut(F) -> T,
+        selector_column: &mut impl FnMut(&MleIndex<F>, T, T) -> T,
+        mle_eval: &mut impl FnMut(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
+        negated: &mut impl FnMut(T) -> T,
+        sum: &mut impl FnMut(T, T) -> T,
+        product: &mut impl FnMut(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
+        scaled: &mut impl FnMut(T, F) -> T,
     ) -> T {
-        self.expression_node.evaluate(
+        self.expression_node.reduce(
             constant,
             selector_column,
             mle_eval,
@@ -64,45 +79,49 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
         )
     }
 
-    /// used by `evaluate_expr` to traverse the expression and simply
-    /// gather all of the evaluations, combining them as appropriate.
-    pub fn gather_combine_all_evals(&self) -> Result<F, ExpressionError> {
-        let constant = |c| Ok(c);
-        let selector_column = |idx: &MleIndex<F>,
-                               lhs: Result<F, ExpressionError>,
-                               rhs: Result<F, ExpressionError>| {
+    /// For every MLE at the leaves of `self`, reads the fully bound MLE value
+    /// off of `transcript_reader` and evaluates the whole expression.
+    pub fn read_claims_and_evaluate(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<F, VerifierExpressionError> {
+        let mut constant = |c| Ok(c);
+        let mut selector_column = |idx: &MleIndex<F>,
+                                   lhs: Result<F, VerifierExpressionError>,
+                                   rhs: Result<F, VerifierExpressionError>|
+         -> Result<F, VerifierExpressionError> {
             // --- Selector bit must be bound ---
             if let MleIndex::Bound(val, _) = idx {
                 return Ok(*val * rhs? + (F::ONE - val) * lhs?);
             }
-            Err(ExpressionError::SelectorBitNotBoundError)
+            Err(VerifierExpressionError::SelectorBitNotBoundError)
         };
-        let mle_eval = |mle_ref: & <VerifierExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, ExpressionError> {
-            Ok(*mle_ref)
+        let mut mle_eval = |vmle: &<VerifierExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, VerifierExpressionError> {
+            Ok(transcript_reader.consume_element("Leaf MLE value").map_err(|err| VerifierExpressionError::TranscriptError(err))?)
         };
-        let negated = |a: Result<F, ExpressionError>| match a {
-            Err(e) => Err(e),
-            Ok(val) => Ok(val.neg()),
+        let mut negated = |val: Result<F, VerifierExpressionError>| Ok((val?).neg());
+        let mut sum = |lhs: Result<F, VerifierExpressionError>,
+                       rhs: Result<F, VerifierExpressionError>| {
+            Ok(lhs? + rhs?)
         };
-        let sum =
-            |lhs: Result<F, ExpressionError>, rhs: Result<F, ExpressionError>| Ok(lhs? + rhs?);
-        let product = |mle_refs: & [<VerifierExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, ExpressionError> {
-            mle_refs.iter().try_fold(F::ONE, |acc, new_mle_ref| {
-                Ok(acc * *new_mle_ref)
+        let mut product = |vmles: & [<VerifierExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, VerifierExpressionError> {
+            vmles.iter().try_fold(F::ONE, |acc, _| {
+                let val = transcript_reader.consume_element("Product MLE value").map_err(|err| VerifierExpressionError::TranscriptError(err))?;
+                Ok(acc * val)
             })
         };
-        let scaled = |a: Result<F, ExpressionError>, scalar: F| Ok(a? * scalar);
-        self.evaluate(
-            &constant,
-            &selector_column,
-            &mle_eval,
-            &negated,
-            &sum,
-            &product,
-            &scaled,
+        let mut scaled = |val: Result<F, VerifierExpressionError>, scalar: F| Ok(val? * scalar);
+
+        self.reduce(
+            &mut constant,
+            &mut selector_column,
+            &mut mle_eval,
+            &mut negated,
+            &mut sum,
+            &mut product,
+            &mut scaled,
         )
     }
-    */
 
     /// Traverses the expression tree to get the indices of all the nonlinear
     /// rounds. Returns a sorted vector of indices.
@@ -116,93 +135,91 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
 }
 
 impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
-    /*
-        /// Evaluate the polynomial using the provided closures to perform the
-        /// operations.
-        #[allow(clippy::too_many_arguments)]
-        pub fn evaluate<T>(
-            &self,
-            constant: &impl Fn(F) -> T,
-            selector_column: &impl Fn(&MleIndex<F>, T, T) -> T,
-            mle_eval: &impl Fn(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
-            negated: &impl Fn(T) -> T,
-            sum: &impl Fn(T, T) -> T,
-            product: &impl Fn(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
-            scaled: &impl Fn(T, F) -> T,
-        ) -> T {
-            match self {
-                ExpressionNode::Constant(scalar) => constant(*scalar),
-                ExpressionNode::Selector(index, a, b) => selector_column(
-                    index,
-                    a.evaluate(
-                        constant,
-                        selector_column,
-                        mle_eval,
-                        negated,
-                        sum,
-                        product,
-                        scaled,
-                    ),
-                    b.evaluate(
-                        constant,
-                        selector_column,
-                        mle_eval,
-                        negated,
-                        sum,
-                        product,
-                        scaled,
-                    ),
-                ),
-                ExpressionNode::Mle(query) => mle_eval(query),
-                ExpressionNode::Negated(a) => {
-                    let a = a.evaluate(
-                        constant,
-                        selector_column,
-                        mle_eval,
-                        negated,
-                        sum,
-                        product,
-                        scaled,
-                    );
-                    negated(a)
-                }
-                ExpressionNode::Sum(a, b) => {
-                    let a = a.evaluate(
-                        constant,
-                        selector_column,
-                        mle_eval,
-                        negated,
-                        sum,
-                        product,
-                        scaled,
-                    );
-                    let b = b.evaluate(
-                        constant,
-                        selector_column,
-                        mle_eval,
-                        negated,
-                        sum,
-                        product,
-                        scaled,
-                    );
-                    sum(a, b)
-                }
-                ExpressionNode::Product(queries) => product(queries),
-                ExpressionNode::Scaled(a, f) => {
-                    let a = a.evaluate(
-                        constant,
-                        selector_column,
-                        mle_eval,
-                        negated,
-                        sum,
-                        product,
-                        scaled,
-                    );
-                    scaled(a, *f)
-                }
+    /// Evaluate the polynomial using the provided closures to perform the
+    /// operations.
+    #[allow(clippy::too_many_arguments)]
+    pub fn reduce<T>(
+        &self,
+        constant: &mut impl FnMut(F) -> T,
+        selector_column: &mut impl FnMut(&MleIndex<F>, T, T) -> T,
+        mle_eval: &mut impl FnMut(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
+        negated: &mut impl FnMut(T) -> T,
+        sum: &mut impl FnMut(T, T) -> T,
+        product: &mut impl FnMut(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
+        scaled: &mut impl FnMut(T, F) -> T,
+    ) -> T {
+        match self {
+            ExpressionNode::Constant(scalar) => constant(*scalar),
+            ExpressionNode::Selector(index, a, b) => {
+                let lhs = a.reduce(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                );
+                let rhs = b.reduce(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                );
+                selector_column(index, lhs, rhs)
+            }
+            ExpressionNode::Mle(query) => mle_eval(query),
+            ExpressionNode::Negated(a) => {
+                let a = a.reduce(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                );
+                negated(a)
+            }
+            ExpressionNode::Sum(a, b) => {
+                let a = a.reduce(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                );
+                let b = b.reduce(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                );
+                sum(a, b)
+            }
+            ExpressionNode::Product(queries) => product(queries),
+            ExpressionNode::Scaled(a, f) => {
+                let a = a.reduce(
+                    constant,
+                    selector_column,
+                    mle_eval,
+                    negated,
+                    sum,
+                    product,
+                    scaled,
+                );
+                scaled(a, *f)
             }
         }
-    */
+    }
 
     /// Traverse an expression tree in order and returns a vector of indices of
     /// all the nonlinear rounds in an expression (in no particular order).

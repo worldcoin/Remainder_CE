@@ -9,11 +9,12 @@ pub mod regular_layer;
 use std::fmt::Debug;
 
 use derive_more::Display;
+use regular_layer::RegularLayer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    claims::{Claim, ClaimError},
+    claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator, ClaimError},
     expression::expr_errors::ExpressionError,
     sumcheck::InterpError,
 };
@@ -69,6 +70,10 @@ pub enum VerificationError {
     )]
     ///The Challenges generated during sumcheck don't match the claims in the given expression
     ChallengeCheckFailed,
+
+    // Error while reading the transcript proof.
+    #[error("Error while reading the transcript proof")]
+    TranscriptError(TranscriptReaderError),
 }
 
 /// The location of a layer within the GKR circuit.
