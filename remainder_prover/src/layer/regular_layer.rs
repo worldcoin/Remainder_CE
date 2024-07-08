@@ -16,10 +16,15 @@ use tracing::info;
 
 use crate::{
     builders::layer_builder::LayerBuilder,
-    claims::Claim,
-    expression::{generic_expr::Expression, prover_expr::ProverExpr, verifier_expr::VerifierExpr},
+    claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator},
+    expression::{
+        generic_expr::{Expression, ExpressionNode, ExpressionType},
+        prover_expr::ProverExpr,
+        verifier_expr::VerifierExpr,
+    },
+    input_layer::enum_input_layer::InputLayerEnum,
     layer::{Layer, LayerError, LayerId, VerificationError},
-    mle::betavalues::BetaValues,
+    mle::{betavalues::BetaValues, dense::DenseMle},
     prover::SumcheckProof,
     sumcheck::{
         compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
@@ -77,60 +82,24 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         claim: Claim<F>,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError> {
-        let val = claim.get_result();
+        info!("Proving a GKR Layer.");
 
-        // Initialize tables and compute prover message for first round of sumcheck.
-        let first_sumcheck_message = self.start_sumcheck(claim)?;
+        // Initialize tables and pre-fix variables.
+        self.start_sumcheck(&claim)?;
 
-        let nonlinear_rounds = self.nonlinear_rounds.clone().unwrap();
-        if nonlinear_rounds.is_empty() {
-            return Ok(());
+        let nonlinear_rounds = self.nonlinear_rounds.take().unwrap();
+
+        for round_index in &nonlinear_rounds {
+            self.prove_nonlinear_round(transcript_writer, *round_index)?;
+            // TODO(Makis): Add debug assertion that g_i(0) + g_i(1) == g_{i-1}(r_i).
         }
 
-        info!("Proving GKR Layer");
+        // By now, `self.expression` should be fully bound.
+        // TODO(Makis): Add assertion for that.
 
-        debug_assert_eq!(first_sumcheck_message[0] + first_sumcheck_message[1], val);
+        // Append the values of the leaf MLEs to the transcript.
+        self.append_leaf_mles_to_transcript(transcript_writer);
 
-        // Add prover message to the FS transcript.
-        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_sumcheck_message);
-
-        // Grabs all of the sumcheck messages from all of the rounds within this layer.
-        //
-        // Note that the sumcheck messages are g_1(x), ..., g_n(x) for an expression with
-        // n iterated variables, where g_i(x) = \sum_{b_{i + 1}, ..., b_n} g(r_1, ..., r_{i - 1}, r_i, b_{i + 1}, ..., b_n)
-        // and we always give the evals g_i(0), g_i(1), ..., g_i(d - 1) where `d` is the degree of the ith variable.
-        //
-        // Additionally, each of the `r_i`s is sampled from the FS transcript and the prover messages
-        // (i.e. all of the g_i's) are added to the transcript each time.
-        //
-        // we only have sumcheck messages over the nonlinear rounds, so we iterate just through the nonlinear rounds
-        // and compute each of the sumcheck messages since each of the linear rounds are already bound.
-        let _all_prover_sumcheck_messages: Vec<Vec<F>> =
-            std::iter::once(Ok(first_sumcheck_message))
-                .chain((nonlinear_rounds.iter().skip(1)).map(|round_index| {
-                    // --- Verifier samples a random challenge \in \mathbb{F} to send to prover ---
-                    let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-
-                    // --- Prover uses that random challenge to compute the next sumcheck message ---
-                    // --- We then add the prover message to FS transcript ---
-                    let prover_sumcheck_message =
-                        self.prove_nonlinear_round(*round_index, challenge)?;
-                    transcript_writer
-                        .append_elements("Sumcheck evaluations", &prover_sumcheck_message);
-                    Ok::<_, LayerError>(prover_sumcheck_message)
-                }))
-                .collect::<Result<_, _>>()?;
-
-        // --- For the final round, we need to check that g(r_1, ..., r_n) = g_n(r_n) ---
-        // --- Thus we sample r_n and bind b_n to it (via `fix_variable` below) ---
-        let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge");
-
-        let last_idx = nonlinear_rounds[nonlinear_rounds.len() - 1];
-
-        self.expression.fix_variable(last_idx, final_chal);
-        if let Some(beta) = self.beta_vals.as_mut() {
-            beta.beta_update(last_idx, final_chal);
-        }
         Ok(())
     }
 }
@@ -145,108 +114,85 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), VerificationError> {
-        let non_linear_rounds = self.expression.get_all_nonlinear_rounds();
-        let num_non_linear_rounds = non_linear_rounds.len();
+        let nonlinear_rounds = self.expression.get_all_nonlinear_rounds();
 
-        // If there are no non-linear indices, this means it is an entirely
-        // linear layer, therefore we can skip the verification.
-        if num_non_linear_rounds == 0 {
-            let expr_evaluated_at_challenge_coord = self
-                .expression
-                .clone()
-                .transform_to_verifier_expression()
-                .unwrap()
-                .gather_combine_all_evals()
-                .unwrap();
-            let claim_result = claim.get_result();
-            if expr_evaluated_at_challenge_coord != claim_result {
-                return Err(LayerError::VerificationError(
-                    VerificationError::FinalSumcheckFailed,
-                ));
-            }
-            return Ok(());
-        }
-        let sumcheck_prover_messages = sumcheck_prover_messages.unwrap();
-        // --- Keeps track of challenges u_1, ..., u_n to be bound ---
+        // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
-        let sumcheck_prover_messages: Vec<Vec<F>> = sumcheck_prover_messages.0;
 
-        // --- First verify that g_1(0) + g_1(1) = \sum_{b_1, ..., b_n} g(b_1, ..., b_n) ---
-        // (i.e. the first verification step of sumcheck)
+        // Represents `g_{i-1}(x)` of the previous round.
+        // This is initialized to the constant polynomial `g_0(x)` which evaluates
+        // to the claim result for any `x`.
+        let mut g_prev_round = vec![claim.get_result()];
 
-        // TODO(Makis): Retrieve `num_prev_evals` directly from the transcript.
-        let num_prev_evals = sumcheck_prover_messages[0].len();
-        let mut prev_evals =
-            transcript_reader.consume_elements("Initial Sumcheck evaluations", num_prev_evals)?;
+        // Previous round's challege: r_{i-1}.
+        let mut prev_challenge = F::ZERO;
 
-        if prev_evals[0] + prev_evals[1] != claim.get_result() {
-            return Err(LayerError::VerificationError(
-                VerificationError::SumcheckStartFailed,
-            ));
-        }
+        // For round 1 <= i <= n, perform the check:
+        for round_index in nonlinear_rounds {
+            let degree = get_round_degree_verifier(&self.expression, round_index);
 
-        // --- For round 1 < i < n, perform the check ---
-        // g_{i - 1}(r_i) = g_i(0) + g_i(1)
-        // TODO(Makis): Retrieve `evals.len()`s directly from the transcript.
-        for num_curr_evals in sumcheck_prover_messages
-            .into_iter()
-            .skip(1)
-            .map(|evals| evals.len())
-        {
+            // Receive `g_i(x)` from the Prover.
+            // Since we are using an evaluation representation for polynomials,
+            // the degree check is implicit: the verifier is requesting
+            // `degree + 1` evaluations, ensuring that `g_i` is of degree
+            // at most `degree`. If the prover appended more evaluations,
+            // there will be a transcript read error later on in the proving
+            // process which will result in the proof not verifying.
+            // TODO(Makis):
+            //   1. Modify the Transcript interface to catch any errors sooner.
+            //   2. This line is assuming a representation for the polynomial!
+            //   We should hide that under another function whose job is to take
+            //   the trascript reader and read the polynomial in whatever
+            //   representation is being used.
+            let g_cur_round = transcript_reader
+                .consume_elements("Sumcheck message", degree + 1)
+                .map_err(|err| VerificationError::TranscriptError(err))?;
+
+            // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
 
-            let prev_at_r = evaluate_at_a_point(&prev_evals, challenge)?;
+            // TODO(Makis): After refactoring `SumcheckEvals` to be a
+            // representation of a univariate polynomial, `evaluate_at_a_point`
+            // should just be a method.
+            // Verify that:
+            //       `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
+            let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
+            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
 
-            let curr_evals =
-                transcript_reader.consume_elements("Sumcheck evaluations", num_curr_evals)?;
+            if g_i_zero + g_i_one != g_prev_r_prev {
+                return Err(VerificationError::SumcheckFailed);
+            }
 
-            if prev_at_r != curr_evals[0] + curr_evals[1] {
-                return Err(LayerError::VerificationError(
-                    VerificationError::SumcheckFailed,
-                ));
-            };
-
-            prev_evals = curr_evals;
+            g_prev_round = g_cur_round;
+            prev_challenge = challenge;
             challenges.push(challenge);
         }
 
-        // --- In the final round, we check that g(r_1, ..., r_n) = g_n(r_n) ---
-        // Here, we first sample r_n.
-        let final_chal = transcript_reader.get_challenge("Final Sumcheck challenge")?;
-        challenges.push(final_chal);
+        // Compute `P(r_1, ..., r_n)` over all challenge points (linear and
+        // non-linear).
+        // The MLE values are retrieved from the transcript.
+        let expr_value_at_challenge_point = self.expression.evaluate(challenges, transcript_reader);
 
-        // --- This automatically asserts that the expression is fully bound and simply ---
-        // --- attempts to combine/collect the expression evaluated at the (already bound) challenge coords ---
-        let expr_evaluated_at_challenge_coord = self
-            .expression
-            .clone()
-            .transform_to_verifier_expression()
-            .unwrap()
-            .gather_combine_all_evals()
-            .unwrap();
-
-        // --- Simply computes \beta((g_1, ..., g_n), (u_1, ..., u_n)) for claim coords (g_1, ..., g_n) and ---
-        // --- bound challenges (u_1, ..., u_n) ---
-        let expr_nonlinear_indices = self.nonlinear_rounds.as_ref().unwrap();
-        let claim_nonlinear_vals: Vec<F> = expr_nonlinear_indices
+        // Compute `\beta((r_1, ..., r_n), (u_1, ..., u_n))`.
+        let claim_nonlinear_vals: Vec<F> = nonlinear_rounds
             .iter()
             .map(|idx| (claim.get_point()[*idx]))
             .collect();
+        debug_assert_eq!(claim_nonlinear_vals.len(), challenges.len());
+
         let beta_fn_evaluated_at_challenge_point =
             BetaValues::compute_beta_over_two_challenges(&claim_nonlinear_vals, &challenges);
 
-        // --- The actual value should just be the product of the two ---
-        let mle_evaluated_at_challenge_coord =
-            expr_evaluated_at_challenge_coord * beta_fn_evaluated_at_challenge_point;
+        // Evalute `g_n(r_n)`.
+        // Note: If there were no nonlinear rounds, this value reduces to
+        // `claim.get_result()` due to how we initialized `g_prev_round`.
+        let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge);
 
-        // --- Computing g_n(r_n) ---
-        let g_n_evaluated_at_r_n = evaluate_at_a_point(&prev_evals, final_chal)?;
-
-        // --- Checking the two against one another ---
-        if mle_evaluated_at_challenge_coord != g_n_evaluated_at_r_n {
-            return Err(LayerError::VerificationError(
-                VerificationError::FinalSumcheckFailed,
-            ));
+        // Final check:
+        // `g_n(r_n) == P(r_1, ..., r_n) * \beta(r_1, ..., r_n, g_1, ..., g_n)`.
+        if g_final_r_final != expr_value_at_challenge_point * beta_fn_evaluated_at_challenge_point {
+            return Err(VerificationError::SumcheckFailed);
         }
 
         Ok(())
@@ -258,101 +204,115 @@ impl<F: FieldExt> RegularLayer<F> {
     /// layer of GKR. This includes pre-fixing all of the rounds within the
     /// layer which are linear, and then appropriately initializing the
     /// necessary beta values over the nonlinear rounds.
-    ///
-    /// This function returns the evaluations over the first round of sumcheck,
-    /// which is over the first nonlinear index in the expression we are
-    /// performing GKR over. If there are no nonlinear rounds it returns an
-    /// empty vector because there is no sumcheck proof for this layer.
-    fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<Vec<F>, LayerError> {
-        let first_nonlinear_round = {
-            let expression = &mut self.expression;
-            let _expression_num_indices = expression.index_mle_indices(0);
-            let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
-            let expression_linear_indices = expression.get_all_linear_rounds();
+    fn start_sumcheck(&mut self, claim: &Claim<F>) -> Result<(), LayerError> {
+        let claim_point = claim.get_point();
 
-            let claim_point = claim.get_point();
-
-            // For each of the linear indices in the expression, we can fix the
-            // variable at that index for the expression, so that now the only
-            // unbound indices are the nonlinear indices.
-            expression_linear_indices
-                .into_iter()
-                .sorted()
-                .for_each(|round_idx| {
-                    expression.fix_variable_at_index(round_idx, claim_point[round_idx]);
-                });
-
-            // We need the beta values over the nonlinear indices of the
-            // expression, so we grab the claim points that are over these
-            // nonlinear indices and then initialize the betavalues struct over
-            // them.
-            let betavec = expression_nonlinear_indices
-                .iter()
-                .map(|idx| (*idx, claim_point[*idx]))
-                .collect_vec();
-            let newbeta = BetaValues::new(betavec);
-            self.beta_vals = Some(newbeta);
-
-            // Store the nonlinear rounds of the expression within the layer so
-            // that we know these are the rounds we perform sumcheck over.
-            let first_nonlinear_round = expression_nonlinear_indices.first().cloned();
-            self.nonlinear_rounds = Some(expression_nonlinear_indices);
-
-            // If there are no nonlinear indices in the expression we can return
-            // an empty vector early.
-            if first_nonlinear_round.is_none() {
-                return Ok(vec![]);
-            }
-            // otherwise we know the first nonlinear round is the first value here because these are sorted.
-            first_nonlinear_round.unwrap()
-        };
-
-        // --- Grabs the expression/beta table/variable degree for the first round and executes the sumcheck prover for the first round ---
+        // Grab and index the expression.
         let expression = &mut self.expression;
-        let new_beta = &mut self.beta_vals;
-        let degree = get_round_degree(expression, first_nonlinear_round);
+        let expression_num_indices = expression.index_mle_indices(0);
 
-        // we compute the first sumcheck message which is the evaluations when the independent variable
-        // is the first nonlinear index in the expression.
-        let first_round_message = compute_sumcheck_message_beta_cascade(
-            expression,
-            first_nonlinear_round,
-            degree,
-            new_beta.as_ref().unwrap(),
+        let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
+        let expression_linear_indices = expression.get_all_linear_rounds();
+        debug_assert_eq!(
+            expression_num_indices,
+            expression_nonlinear_indices.len() + expression_linear_indices.len()
         );
 
-        let Evals(out) = first_round_message.unwrap();
+        // For each of the linear indices in the expression, we can fix the
+        // variable at that index for the expression, so that now the only
+        // unbound indices are the nonlinear indices.
+        expression_linear_indices
+            .into_iter()
+            .sorted()
+            .for_each(|round_idx| {
+                expression.fix_variable_at_index(round_idx, claim_point[round_idx]);
+            });
 
-        Ok(out)
+        // We need the beta values over the nonlinear indices of the
+        // expression, so we grab the claim points that are over these
+        // nonlinear indices and then initialize the betavalues struct over
+        // them.
+        let betavec = expression_nonlinear_indices
+            .iter()
+            .map(|idx| (*idx, claim_point[*idx]))
+            .collect_vec();
+        let newbeta = BetaValues::new(betavec);
+        self.beta_vals = Some(newbeta);
+
+        // Store the nonlinear rounds of the expression within the layer so
+        // that we know these are the rounds we perform sumcheck over.
+        self.nonlinear_rounds = Some(expression_nonlinear_indices);
+
+        Ok(())
     }
 
-    /// Computes a round of the sumcheck protocol on this Layer
+    /// Performs a round of the sumcheck protocol on this Layer.
     fn prove_nonlinear_round(
         &mut self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
         round_index: usize,
-        challenge: F,
-    ) -> Result<Vec<F>, LayerError> {
-        // --- Grabs the expression/beta table and updates them with the new challenge ---
-        let expression = &mut self.expression;
-        let newbeta = &mut self.beta_vals;
-        expression.fix_variable(round_index - 1, challenge);
-        newbeta
+    ) -> Result<(), LayerError> {
+        // Grabs the degree of univariate polynomial we are sending over.
+        let degree = get_round_degree(&self.expression, round_index);
+
+        // Compute the sumcheck message for this round.
+        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
+            &self.expression,
+            round_index,
+            degree,
+            self.beta_vals.as_ref().unwrap(),
+        )?
+        .0;
+
+        transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
+
+        let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+
+        self.expression.fix_variable(round_index - 1, challenge);
+        self.beta_vals
             .as_mut()
             .unwrap()
             .beta_update(round_index - 1, challenge);
 
-        // --- Grabs the degree of univariate polynomial we are sending over ---
-        let degree = get_round_degree(expression, round_index);
+        Ok(())
+    }
 
-        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
-            expression,
-            round_index,
-            degree,
-            newbeta.as_ref().unwrap(),
-        )
-        .unwrap();
+    /// Traverse the fully-bound `self.expression` and append all MLE values
+    /// to the trascript.
+    pub fn append_leaf_mles_to_transcript(
+        &self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), LayerError> {
+        let mut observer_fn = |expr_node: &ExpressionNode<F, ProverExpr>,
+                               mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec|
+         -> Result<(), ()> {
+            match expr_node {
+                ExpressionNode::Mle(mle_vec_index) => {
+                    let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
+                    let val = mle.current_mle.value();
+                    transcript_writer.append("Leaf MLE value", val);
+                    Ok(())
+                }
+                ExpressionNode::Product(mle_indices) => {
+                    let val = mle_indices.iter().fold(F::ONE, |prod, mle_vec_index| {
+                        let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
+                        let val = mle.current_mle.value();
+                        prod * val
+                    });
+                    transcript_writer.append("Leaf MLE value", val);
+                    Ok(())
+                }
+                ExpressionNode::Constant(_)
+                | ExpressionNode::Scaled(_, _)
+                | ExpressionNode::Sum(_, _)
+                | ExpressionNode::Negated(_)
+                | ExpressionNode::Selector(_, _, _) => Ok(()),
+            }
+        };
 
-        Ok(prover_sumcheck_message.0)
+        self.expression.traverse(&mut observer_fn);
+
+        Ok(())
     }
 
     ///Gets the expression that this layer is proving
