@@ -17,6 +17,22 @@ use super::{
 
 use itertools::Itertools;
 
+/// helper function for converting Field Elements into FlatMles
+/// essentially
+pub fn to_flat_mles<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>; N] {
+    // converts a [Vec<F; N>] into a [Vec<F>; N]
+    let out: [Vec<F>; N] = {
+        let mut iters = inputs.into_iter().map(|arr| arr.into_iter());
+        std::array::from_fn(|_| {
+            iters
+                .by_ref()
+                .map(|mut iter| iter.next().unwrap())
+                .collect()
+        })
+    };
+    out
+}
+
 /// A trait for a MLE(s) that are the input(s) to a circuit,
 /// but are bundled together for semantic reasons.
 pub trait CircuitMle<F: FieldExt, const N: usize> {
@@ -32,6 +48,7 @@ pub trait CircuitMle<F: FieldExt, const N: usize> {
 }
 
 /// A struct that bundles N MLEs together for semantic reasons.
+#[derive(Debug, Clone)]
 pub struct FlatMles<F: FieldExt, const N: usize> {
     mles: [DenseMle<F>; N],
 }
