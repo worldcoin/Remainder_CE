@@ -66,7 +66,7 @@ impl BinaryOperation {
 #[serde(bound = "F: FieldExt")]
 pub struct Gate<F: FieldExt> {
     /// The layer id associated with this gate layer.
-    pub id: LayerId,
+    pub layer_id: LayerId,
     /// The number of bits representing the number of "dataparallel" copies of the circuit.
     pub num_dataparallel_bits: usize,
     /// A vector of tuples representing the "nonzero" gates, especially useful in the sparse case
@@ -88,7 +88,7 @@ pub struct Gate<F: FieldExt> {
 /// The verifier's counterpart of a Gate layer description.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-struct VerifierGateLayer<F: FieldExt> {
+pub struct VerifierGateLayer<F: FieldExt> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -119,7 +119,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
 
     /// Gets this layer's id.
     fn id(&self) -> LayerId {
-        self.id
+        self.layer_id
     }
 
     fn prove_rounds(
@@ -165,7 +165,8 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         sumcheck_rounds.extend(phase_2_rounds.0);
 
         // The concatenation of all of these rounds is the proof resulting from a gate layer.
-        Ok(sumcheck_rounds.into())
+        //Ok(sumcheck_rounds.into())
+        Ok(())
     }
 }
 
@@ -180,6 +181,8 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), VerificationError> {
+        todo!()
+        /*
         let sumcheck_rounds = sumcheck_rounds.0;
         let mut prev_evals = &sumcheck_rounds[0];
         let mut challenges = vec![];
@@ -312,6 +315,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
         }
 
         Ok(())
+        */
     }
 }
 
@@ -336,7 +340,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
         let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_u,
             val,
-            Some(*self.id()),
+            Some(self.id()),
             Some(self.lhs.get_layer_id()),
             Some(MleEnum::Dense(lhs_reduced)),
         );
@@ -355,7 +359,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
         let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_v,
             val,
-            Some(*self.id()),
+            Some(self.id()),
             Some(self.rhs.get_layer_id()),
             Some(MleEnum::Dense(rhs_reduced)),
         );

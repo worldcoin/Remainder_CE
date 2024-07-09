@@ -126,8 +126,7 @@ pub fn combine_layers<F: FieldExt>(
         // --- For each subcircuit... ---
         .map(|((layers, output_layers), new_bits)| {
             for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
-                if let Some(&effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.id())
-                {
+                if let Some(effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.id()) {
                     add_bits_to_layer_refs(
                         &mut layers.layers[layer_idx..],
                         output_layers,
@@ -151,7 +150,7 @@ pub fn combine_layers<F: FieldExt>(
         })
         .map(|layers| {
             // let new_bits = log2(layers.len()) as usize;
-            let layer_id = *layers[0].id();
+            let layer_id = layers[0].id();
 
             let expressions = layers
                 .into_iter()

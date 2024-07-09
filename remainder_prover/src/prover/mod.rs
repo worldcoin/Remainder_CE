@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 
 use self::{layers::Layers, proof_system::ProofSystem};
 use crate::expression::verifier_expr::VerifierMle;
+use crate::layer::VerifierLayer;
 use crate::mle::Mle;
 use crate::{
     claims::{ClaimAggregator, ClaimAndProof},
@@ -72,18 +73,6 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
     }
 }
 
-/// The proof for an individual GKR layer
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct LayerProof<F: FieldExt, Pf: ProofSystem<F>> {
-    /// The sumcheck proof of each Layer, could either be a RegularLayer or a Gate
-    pub sumcheck_proof: <Pf::Layer as Layer<F>>::Proof,
-    /// The layer we are proving over
-    pub layer: Pf::Layer,
-    /// The proof of the claim aggregation
-    pub claim_aggregation_proof: <Pf::ClaimAggregator as ClaimAggregator<F>>::AggregationProof,
-}
-
 /// Proof for circuit input layer
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
@@ -97,21 +86,6 @@ pub struct InputLayerProof<F: FieldExt, Pf: ProofSystem<F>> {
     pub input_commitment: <Pf::InputLayer as InputLayer<F>>::Commitment,
     /// The opening proof for the commitment
     pub input_opening_proof: <Pf::InputLayer as InputLayer<F>>::OpeningProof,
-}
-
-/// All the elements to be passed to the verifier for the succinct non-interactive sumcheck proof
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct GKRProof<F: FieldExt, Pf: ProofSystem<F>> {
-    /// The sumcheck proof of each GKR Layer, along with the fully bound expression.
-    /// In reverse order (i.e. layer closest to the output layer is first)
-    pub layer_sumcheck_proofs: Vec<LayerProof<F, Pf>>,
-    /// All the output layers that this circuit yields
-    pub output_layers: Vec<Pf::OutputLayer>,
-    /// Proofs for each input layer (e.g. `LigeroInputLayer` or `PublicInputLayer`).
-    pub input_layer_proofs: Vec<InputLayerProof<F, Pf>>,
-    /// Hash of the entire circuit description, to be used in the FS transcript
-    pub maybe_circuit_hash: Option<F>,
 }
 
 /// The witness of a GKR circuit, used to actually prove the circuit
@@ -163,7 +137,13 @@ pub trait GKRCircuit<F: FieldExt> {
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<WitnessAndCommitments<F, Self>, GKRError> {
+    ) -> Result<
+        (
+            WitnessAndCommitments<F, Self>,
+            GKRVerifierKey<F, Self::ProofSystem>,
+        ),
+        GKRError,
+    > {
         let mut witness = self.synthesize();
 
         let commitments = witness
@@ -179,7 +159,7 @@ pub trait GKRCircuit<F: FieldExt> {
             })
             .try_collect()?;
 
-        Ok((witness, commitments))
+        Ok(((witness, commitments), todo!()))
     }
 
     /// The backwards pass, creating the GKRProof.
@@ -187,7 +167,7 @@ pub trait GKRCircuit<F: FieldExt> {
     fn prove(
         &mut self,
         mut transcript_writer: TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<Transcript<F>, GKRError>
+    ) -> Result<(Transcript<F>, GKRVerifierKey<F, Self::ProofSystem>), GKRError>
     where
         CircuitTranscript<F, Self>: Sync,
     {
@@ -201,12 +181,15 @@ pub trait GKRCircuit<F: FieldExt> {
 
         // TODO(Makis): User getter syntax.
         let (
-            Witness {
-                input_layers,
-                mut output_layers,
-                layers,
-            },
-            commitments,
+            (
+                Witness {
+                    input_layers,
+                    mut output_layers,
+                    layers,
+                },
+                commitments,
+            ),
+            verifier_key,
         ) = self.synthesize_and_commit(&mut transcript_writer)?;
 
         info!("Circuit synthesized and witness generated.");
@@ -258,7 +241,7 @@ pub trait GKRCircuit<F: FieldExt> {
         // well as all the prover messages for claim aggregation at the
         // beginning of proving each layer.
         for mut layer in layers.layers.into_iter().rev() {
-            let layer_id = *layer.id();
+            let layer_id = layer.id();
 
             let layer_timer = start_timer!(|| format!("Generating proof for layer {:?}", layer_id));
             let layer_id_trace_repr = format!("{}", layer_id);
@@ -344,7 +327,7 @@ pub trait GKRCircuit<F: FieldExt> {
         end_timer!(input_layers_timer);
         input_layer_proving_span.exit();
 
-        Ok(transcript_writer.get_transcript())
+        Ok((transcript_writer.get_transcript(), verifier_key))
     }
 
     /// Verifies a GKR proof produced by the `prove` method.
@@ -356,8 +339,11 @@ pub trait GKRCircuit<F: FieldExt> {
         &mut self,
         transcript_reader: &mut TranscriptReader<F, CircuitTranscript<F, Self>>,
         gkr_circuit: GKRVerifierKey<F, Self::ProofSystem>,
-        _gkr_proof: GKRProof<F, Self::ProofSystem>,
+        // _gkr_proof: GKRProof<F, Self::ProofSystem>,
     ) -> Result<(), GKRError> {
+        todo!()
+
+        /*
         let GKRVerifierKey {
             input_layers,
             intermediate_layers,
@@ -480,7 +466,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
             // Performs the actual sumcheck verification step.
             layer
-                .verify_rounds(prev_claim, sumcheck_proof, transcript_reader)
+                .verify_rounds(prev_claim, transcript_reader)
                 .map_err(|err| GKRError::ErrorWhenVerifyingLayer(layer_id, err))?;
 
             end_timer!(sumcheck_msg_timer);
@@ -537,6 +523,7 @@ pub trait GKRCircuit<F: FieldExt> {
         end_timer!(input_layers_timer);
 
         Ok(())
+        */
     }
 
     /// Generate the circuit hash
@@ -546,7 +533,7 @@ pub trait GKRCircuit<F: FieldExt> {
     {
         let mut transcript_writer =
             TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
-        let (Witness { layers, .. }, _) =
+        let ((Witness { layers, .. }, _), _) =
             self.synthesize_and_commit(&mut transcript_writer).unwrap();
 
         hash_layers(&layers)

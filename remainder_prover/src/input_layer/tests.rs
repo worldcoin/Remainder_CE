@@ -14,7 +14,7 @@ use crate::{
     mle::{dense::DenseMle, Mle},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, CircuitInputLayer,
-        CircuitTranscript, GKRCircuit, GKRError, Witness,
+        CircuitTranscript, GKRCircuit, GKRError, GKRVerifierKey, Witness,
     },
     utils::get_random_mle,
 };
@@ -47,8 +47,11 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
     ) -> Result<
         (
-            Witness<F, Self::ProofSystem>,
-            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+            (
+                Witness<F, Self::ProofSystem>,
+                Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+            ),
+            GKRVerifierKey<F, Self::ProofSystem>,
         ),
         GKRError,
     > {
@@ -105,12 +108,15 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         let output = layers.add_gkr(layer_2);
 
         Ok((
-            Witness {
-                layers,
-                output_layers: vec![output.get_enum()],
-                input_layers: vec![input, random, input_layer_2],
-            },
-            vec![input_commit, random_commit, input_layer_2_commit],
+            (
+                Witness {
+                    layers,
+                    output_layers: vec![output.get_enum()],
+                    input_layers: vec![input, random, input_layer_2],
+                },
+                vec![input_commit, random_commit, input_layer_2_commit],
+            ),
+            todo!(),
         ))
     }
 }
@@ -192,8 +198,11 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
     ) -> Result<
         (
-            Witness<F, Self::ProofSystem>,
-            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+            (
+                Witness<F, Self::ProofSystem>,
+                Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+            ),
+            GKRVerifierKey<F, Self::ProofSystem>,
         ),
         GKRError,
     > {
@@ -247,12 +256,15 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         let fourth_layer_output = layers.add_gkr(layer_4);
 
         Ok((
-            Witness {
-                layers,
-                output_layers: vec![fourth_layer_output.get_enum()],
-                input_layers: vec![input_layer_1, input_layer_2],
-            },
-            vec![input_layer_1_commitment, input_layer_2_commitment],
+            (
+                Witness {
+                    layers,
+                    output_layers: vec![fourth_layer_output.get_enum()],
+                    input_layers: vec![input_layer_1, input_layer_2],
+                },
+                vec![input_layer_1_commitment, input_layer_2_commitment],
+            ),
+            todo!(),
         ))
     }
 }

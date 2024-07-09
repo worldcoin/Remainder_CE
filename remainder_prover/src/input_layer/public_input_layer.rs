@@ -26,7 +26,7 @@ pub struct PublicInputLayer<F: FieldExt> {
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
-struct VerifierPublicInputLayer<F: FieldExt> {
+pub struct VerifierPublicInputLayer<F: FieldExt> {
     layer_id: LayerId,
     num_bits: usize,
     _marker: PhantomData<F>,
@@ -53,6 +53,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         transcript_writer.append_elements("Public Input Commitment", commitment);
     }
 
+    /*
     /// Append the commitment to the Fiat-Shamir transcript.
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
@@ -65,6 +66,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         debug_assert_eq!(transcript_commitment, *commitment);
         Ok(())
     }
+    */
 
     /// We do not have an opening proof because we did not commit to anything. The MLE
     /// exists in the clear.
@@ -112,6 +114,12 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
 
     fn get_padded_mle(&self) -> DenseMle<F> {
         self.mle.clone()
+    }
+
+    fn verifier_get_commitment_from_transcript(
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::Commitment, InputLayerError> {
+        todo!()
     }
 }
 

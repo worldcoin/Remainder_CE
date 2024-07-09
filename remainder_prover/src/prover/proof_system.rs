@@ -60,7 +60,7 @@ macro_rules! layer_enum {
                 fn id(&self) -> super::LayerId {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.id()
+                            Self::$var_name(layer) => layer.id(),
                         )*
                     }
                 }
@@ -195,11 +195,14 @@ macro_rules! input_layer_enum {
             fn verifier_get_commitment_from_transcript(
                 transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>
             ) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
+                todo!()
+                /*
                 match commitment {
                     $(
                         Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::verifier_get_commitment_from_transcript(transcript),
                     )*
                 }
+                */
             }
 
             fn open(

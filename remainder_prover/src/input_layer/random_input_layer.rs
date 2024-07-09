@@ -28,7 +28,7 @@ pub struct RandomInputLayer<F: FieldExt> {
 /// Verifier's description of a Random Input Layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-struct VerifierRandomInputLayer<F: FieldExt> {
+pub struct VerifierRandomInputLayer<F: FieldExt> {
     /// The ID of this Random Input Layer.
     layer_id: LayerId,
 
@@ -50,6 +50,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         Ok(self.mle.clone())
     }
 
+    /*
     /// Append the commitment to the Fiat-Shamir transcript.
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
@@ -65,6 +66,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         }
         Ok(())
     }
+    */
 
     /// Append the commitment to the Fiat-Shamir transcript.
     fn prover_append_commitment_to_transcript(
@@ -119,6 +121,12 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
 
     fn get_padded_mle(&self) -> DenseMle<F> {
         DenseMle::new_from_raw(self.mle.clone(), self.layer_id)
+    }
+
+    fn verifier_get_commitment_from_transcript(
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::Commitment, InputLayerError> {
+        todo!()
     }
 }
 

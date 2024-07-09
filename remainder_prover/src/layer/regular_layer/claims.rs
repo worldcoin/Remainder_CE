@@ -62,7 +62,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
                         let claim: ClaimMle<F> = ClaimMle::new(
                             fixed_mle_indices,
                             claimed_value,
-                            Some(*self.id()),
+                            Some(self.id()),
                             Some(mle_layer_id),
                             Some(MleEnum::Dense(mle_ref.clone())),
                         );
@@ -95,7 +95,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for RegularLayer<F> {
                             let claim: ClaimMle<F> = ClaimMle::new(
                                 fixed_mle_indices,
                                 claimed_value,
-                                Some(*self.id()),
+                                Some(self.id()),
                                 Some(mle_layer_id),
                                 Some(MleEnum::Dense(mle_ref.clone())),
                             );
