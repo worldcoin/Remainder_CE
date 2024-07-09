@@ -63,7 +63,7 @@ pub type LigeroCommitment<F> = LcRoot<LigeroEncoding<F>, F>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-struct VerifierLigeroInputLayer<F: FieldExt> {
+pub struct VerifierLigeroInputLayer<F: FieldExt> {
     /// The ID of this Ligero Input Layer.
     layer_id: LayerId,
 
@@ -120,11 +120,14 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     fn verifier_get_commitment_from_transcript(
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<Self::Commitment, InputLayerError> {
+        /*
         let transcript_commitment = transcript_reader
             .consume_element("Ligero Merkle Commitment")
             .map_err(InputLayerError::TranscriptError)?;
         debug_assert_eq!(transcript_commitment, commitment.clone().into_raw());
         Ok(())
+        */
+        todo!()
     }
 
     /// "Open" the commitment, in other words, see whether the polynomial evaluated at the
