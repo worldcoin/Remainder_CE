@@ -421,10 +421,16 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     .collect_vec();
 
                 for mle in mles.iter() {
-                    if mle.bookkeeping_table().len() != 1 {
-                        return Err(ExpressionError::EvaluateNotFullyBoundError);
+                    let mle_indices = mle.mle_indices();
+                    let all_indices_indexed = mle_indices.iter().all(|mle_index| match mle_index {
+                        MleIndex::IndexedBit(_) => true,
+                        _ => false,
+                    });
+                    if !all_indices_indexed {
+                        return Err(ExpressionError::EvaluateNotFullyIndexedError);
                     }
                 }
+
                 Ok(ExpressionNode::Product(
                     mles.into_iter()
                         .map(|mle| CircuitMle::new(mle.get_layer_id(), mle.mle_indices()))
