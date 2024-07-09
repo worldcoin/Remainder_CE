@@ -1,4 +1,5 @@
 use crate::{layer::LayerId, mle::MleIndex};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -14,14 +15,16 @@ use remainder_shared_types::{
 use super::{
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
+    prover_expr::ProverExpr,
+    verifier_expr::{VerifierExpr, VerifierMle},
 };
 
-/// The verifier's representation of a [crate::mle::dense::DenseMle]
-/// in the context of the verifier's circuit description.
-/// A [VerifierMle] is used on the leaves of a [VerifierExpr].
+/// A metadata-only version of [crate::mle::dense::DenseMle] used in the Circuit
+/// Descrption.  A [CircuitMle] is stored in the leaves of an `Expression<F,
+/// CircuitExpr>` tree.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct VerifierMle<F: FieldExt> {
+pub struct CircuitMle<F: FieldExt> {
     /// Layer whose data this MLE is a subset of.
     layer_id: LayerId,
 
@@ -29,112 +32,196 @@ pub struct VerifierMle<F: FieldExt> {
     var_indices: Vec<MleIndex<F>>,
 }
 
-#[derive(Error, Debug, Clone)]
-///Error for handling the parsing and evaluation of expressions
-pub enum VerifierExpressionError {
-    /// Transcript Reader Error.
-    #[error("Transcript Reader Error")]
-    TranscriptError(TranscriptReaderError),
+impl<F: FieldExt> CircuitMle<F> {
+    pub fn new(layer_id: LayerId, var_indices: &[MleIndex<F>]) -> Self {
+        Self {
+            layer_id,
+            var_indices: var_indices.to_vec(),
+        }
+    }
 
-    /// Expected selector bit to be bound.
-    #[error("Expected selector bit to be bound")]
-    SelectorBitNotBoundError,
+    pub fn into_verifier_mle(
+        &self,
+        point: &Vec<F>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<VerifierMle<F>, ExpressionError> {
+        let verifier_indices = self
+            .var_indices
+            .iter()
+            .map(|mle_index| match mle_index {
+                MleIndex::IndexedBit(idx) => Ok(MleIndex::Bound(point[*idx], *idx)),
+                _ => Err(ExpressionError::SelectorBitNotBoundError),
+            })
+            .collect::<Result<Vec<MleIndex<F>>, ExpressionError>>()?;
+
+        let eval = transcript_reader
+            .consume_element("MLE evaluation")
+            .map_err(|err| ExpressionError::TranscriptError(err))?;
+
+        Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
+    }
 }
 
-/// Placeholder type for defining `Expression<F, VerifierExpr>`, the type used
-/// for representing expressions on the verifier's circuit description.
+/// Placeholder type for defining `Expression<F, CircuitExpr>`, the type used
+/// for representing expressions in the circuit description.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct VerifierExpr;
+pub struct CircuitExpr;
 
-/// The leaves of an expression contain a [VerifierMle], the verifier's
-/// analogue of a [crate::mle::dense::DenseMle], storing only metadata related
-/// to the MLE, not any evaluations.
-impl<F: FieldExt> ExpressionType<F> for VerifierExpr {
-    type MLENodeRepr = VerifierMle<F>;
+// The leaves of an expression of this type contain a [CircuitMle], an analogue
+// of [crate::mle::dense::DenseMle], storing only metadata related to the MLE,
+// without any evaluations.
+// TODO(Makis): Consider allowing for re-use of MLEs, like in a [ProverExpr]:
+// ```ignore
+//     type MLENodeRepr = usize,
+//     type MleVec = Vec<CircuitMle<F>>,
+// ```
+impl<F: FieldExt> ExpressionType<F> for CircuitExpr {
+    type MLENodeRepr = CircuitMle<F>;
     type MleVec = ();
 }
 
-impl<F: FieldExt> Expression<F, VerifierExpr> {
-    /// Evaluate the polynomial using the provided closures to perform the
-    /// operations.
-    #[allow(clippy::too_many_arguments)]
-    pub fn reduce<T>(
+impl<F: FieldExt> Expression<F, CircuitExpr> {
+    /// Binds the variables of this expression to `point`, and retrieves the
+    /// leaf MLE values from the `transcript_reader`.  Returns a `Expression<F,
+    /// VerifierExpr>` version of `self`.
+    pub fn bind(
         &self,
-        constant: &mut impl FnMut(F) -> T,
-        selector_column: &mut impl FnMut(&MleIndex<F>, T, T) -> T,
-        mle_eval: &mut impl FnMut(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
-        negated: &mut impl FnMut(T) -> T,
-        sum: &mut impl FnMut(T, T) -> T,
-        product: &mut impl FnMut(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
-        scaled: &mut impl FnMut(T, F) -> T,
-    ) -> T {
-        self.expression_node.reduce(
-            constant,
-            selector_column,
-            mle_eval,
-            negated,
-            sum,
-            product,
-            scaled,
-        )
-    }
-
-    /// For every MLE at the leaves of `self`, reads the fully bound MLE value
-    /// off of `transcript_reader` and evaluates the whole expression.
-    pub fn read_claims_and_evaluate(
-        &self,
+        point: &Vec<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<F, VerifierExpressionError> {
+    ) -> Result<Expression<F, VerifierExpr>, ExpressionError> {
+        Ok(Expression::new(
+            self.expression_node
+                .into_verifier_node(point, transcript_reader)?,
+            (),
+        ))
+
+        /*
+        let observer_fn = |expr_node: &mut ExpressionNode<F
         let mut constant = |c| Ok(c);
         let mut selector_column = |idx: &MleIndex<F>,
-                                   lhs: Result<F, VerifierExpressionError>,
-                                   rhs: Result<F, VerifierExpressionError>|
-         -> Result<F, VerifierExpressionError> {
+                                   lhs: Result<F, ExpressionError>,
+                                   rhs: Result<F, ExpressionError>|
+         -> Result<F, ExpressionError> {
             // --- Selector bit must be bound ---
             if let MleIndex::Bound(val, _) = idx {
                 return Ok(*val * rhs? + (F::ONE - val) * lhs?);
             }
-            Err(VerifierExpressionError::SelectorBitNotBoundError)
+            Err(ExpressionError::SelectorBitNotBoundError)
         };
-        let mut mle_eval = |vmle: &<VerifierExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, VerifierExpressionError> {
-            Ok(transcript_reader.consume_element("Leaf MLE value").map_err(|err| VerifierExpressionError::TranscriptError(err))?)
+        let mut mle_eval = |vmle: &<CircuitExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, ExpressionError> {
+            Ok(transcript_reader.consume_element("Leaf MLE value").map_err(|err| ExpressionError::TranscriptError(err))?)
         };
-        let mut negated = |val: Result<F, VerifierExpressionError>| Ok((val?).neg());
-        let mut sum = |lhs: Result<F, VerifierExpressionError>,
-                       rhs: Result<F, VerifierExpressionError>| {
+        let mut negated = |val: Result<F, ExpressionError>| Ok((val?).neg());
+        let mut sum = |lhs: Result<F, ExpressionError>,
+                       rhs: Result<F, ExpressionError>| {
             Ok(lhs? + rhs?)
         };
-        let mut product = |vmles: & [<VerifierExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, VerifierExpressionError> {
+        let mut product = |vmles: & [<CircuitExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, ExpressionError> {
             vmles.iter().try_fold(F::ONE, |acc, _| {
-                let val = transcript_reader.consume_element("Product MLE value").map_err(|err| VerifierExpressionError::TranscriptError(err))?;
+                let val = transcript_reader.consume_element("Product MLE value").map_err(|err| ExpressionError::TranscriptError(err))?;
                 Ok(acc * val)
             })
         };
-        let mut scaled = |val: Result<F, VerifierExpressionError>, scalar: F| Ok(val? * scalar);
+        let mut scaled = |val: Result<F, ExpressionError>, scalar: F| Ok(val? * scalar);
 
-        self.reduce(
-            &mut constant,
-            &mut selector_column,
-            &mut mle_eval,
-            &mut negated,
-            &mut sum,
-            &mut product,
-            &mut scaled,
-        )
+        self.expression_node
+            .traverse_node_mut(&mut observer_fn, &mut self.mle_vec)
+        */
     }
 
     /// Traverses the expression tree to get the indices of all the nonlinear
     /// rounds. Returns a sorted vector of indices.
-    pub fn get_all_nonlinear_rounds(&mut self) -> Vec<usize> {
-        let (expression_node, mle_vec) = self.deconstruct_mut();
-        let mut nonlinear_rounds: Vec<usize> =
-            expression_node.get_all_nonlinear_rounds(&mut vec![], mle_vec);
-        nonlinear_rounds.sort();
-        nonlinear_rounds
+    pub fn get_all_nonlinear_rounds(&self) -> Vec<usize> {
+        self.expression_node
+            .get_all_nonlinear_rounds(&mut vec![], &self.mle_vec)
+            .into_iter()
+            .sorted()
+            .collect()
+    }
+
+    /// Returns the maximum degree of b_{curr_round} within an expression
+    /// (and therefore the number of prover messages we need to send)
+    pub fn get_round_degree(&self, curr_round: usize) -> usize {
+        // --- By default, all rounds have degree at least 2 (beta table included) ---
+        let mut round_degree = 1;
+
+        let mut get_degree_closure = |expr: &ExpressionNode<F, CircuitExpr>,
+                                      mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec|
+         -> Result<(), ()> {
+            let round_degree = &mut round_degree;
+
+            // --- The only exception is within a product of MLEs ---
+            if let ExpressionNode::Product(circuit_mles) = expr {
+                let mut product_round_degree: usize = 0;
+                for circuit_mle in circuit_mles {
+                    let mle_indices = &circuit_mle.var_indices;
+                    for mle_index in mle_indices {
+                        if *mle_index == MleIndex::IndexedBit(curr_round) {
+                            product_round_degree += 1;
+                            break;
+                        }
+                    }
+                }
+                if *round_degree < product_round_degree {
+                    *round_degree = product_round_degree;
+                }
+            }
+            Ok(())
+        };
+
+        self.traverse(&mut get_degree_closure).unwrap();
+        // add 1 cuz beta table but idk if we would ever use this without a beta table
+        round_degree + 1
     }
 }
 
-impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
+// point: [r_1, r_2]
+// V(b_1, b_2) = (1-b_1) * V_1(b_2) + b_1 * V_2(b_2)
+//
+//                Sel(MleIndex::Bound(r_1))
+//         /                                   \
+//        Mle(MleIndex::Bound(r_2)), eval_1      Mle(MleIndex::Bound(r_2))), eval_2
+impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
+    pub fn into_verifier_node(
+        &self,
+        point: &Vec<F>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<ExpressionNode<F, VerifierExpr>, ExpressionError> {
+        match self {
+            ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
+            ExpressionNode::Selector(index, lhs, rhs) => match index {
+                MleIndex::IndexedBit(idx) => Ok(ExpressionNode::Selector(
+                    MleIndex::Bound(point[*idx], *idx),
+                    Box::new(lhs.into_verifier_node(point, transcript_reader)?),
+                    Box::new(rhs.into_verifier_node(point, transcript_reader)?),
+                )),
+                _ => Err(ExpressionError::SelectorBitNotBoundError),
+            },
+            ExpressionNode::Mle(circuit_mle) => Ok(ExpressionNode::Mle(
+                circuit_mle.into_verifier_mle(point, transcript_reader)?,
+            )),
+            ExpressionNode::Negated(a) => Ok(ExpressionNode::Negated(Box::new(
+                a.into_verifier_node(point, transcript_reader)?,
+            ))),
+            ExpressionNode::Sum(lhs, rhs) => Ok(ExpressionNode::Sum(
+                Box::new(lhs.into_verifier_node(point, transcript_reader)?),
+                Box::new(rhs.into_verifier_node(point, transcript_reader)?),
+            )),
+            ExpressionNode::Product(circuit_mles) => {
+                let verifier_mles: Vec<VerifierMle<F>> = circuit_mles
+                    .iter()
+                    .map(|circuit_mle| Ok(circuit_mle.into_verifier_mle(point, transcript_reader)?))
+                    .collect::<Result<Vec<VerifierMle<F>>, ExpressionError>>()?;
+
+                Ok(ExpressionNode::Product(verifier_mles))
+            }
+            ExpressionNode::Scaled(circuit_mle, scalar) => Ok(ExpressionNode::Scaled(
+                Box::new(circuit_mle.into_verifier_node(point, transcript_reader)?),
+                *scalar,
+            )),
+        }
+    }
+
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
     #[allow(clippy::too_many_arguments)]
@@ -142,10 +229,10 @@ impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
         &self,
         constant: &mut impl FnMut(F) -> T,
         selector_column: &mut impl FnMut(&MleIndex<F>, T, T) -> T,
-        mle_eval: &mut impl FnMut(&<VerifierExpr as ExpressionType<F>>::MLENodeRepr) -> T,
+        mle_eval: &mut impl FnMut(&<CircuitExpr as ExpressionType<F>>::MLENodeRepr) -> T,
         negated: &mut impl FnMut(T) -> T,
         sum: &mut impl FnMut(T, T) -> T,
-        product: &mut impl FnMut(&[<VerifierExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
+        product: &mut impl FnMut(&[<CircuitExpr as ExpressionType<F>>::MLENodeRepr]) -> T,
         scaled: &mut impl FnMut(T, F) -> T,
     ) -> T {
         match self {
@@ -226,7 +313,7 @@ impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
     pub fn get_all_nonlinear_rounds(
         &self,
         curr_nonlinear_indices: &mut Vec<usize>,
-        mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+        mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec,
     ) -> Vec<usize> {
         let nonlinear_indices_in_node = {
             match self {
@@ -311,15 +398,15 @@ impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, VerifierExpr> {
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for Expression<F, CircuitExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Expression")
+        f.debug_struct("Circuit Expression")
             .field("Expression_Node", &self.expression_node)
             .finish()
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, VerifierExpr> {
+impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, CircuitExpr> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExpressionNode::Constant(scalar) => f.debug_tuple("Constant").field(scalar).finish(),
@@ -331,7 +418,7 @@ impl<F: std::fmt::Debug + FieldExt> std::fmt::Debug for ExpressionNode<F, Verifi
                 .finish(),
             // Skip enum variant and print query struct directly to maintain backwards compatibility.
             ExpressionNode::Mle(mle_ref) => {
-                f.debug_struct("Mle").field("mle_ref", mle_ref).finish()
+                f.debug_struct("Circuit Mle").field("mle", mle_ref).finish()
             }
             ExpressionNode::Negated(poly) => f.debug_tuple("Negated").field(poly).finish(),
             ExpressionNode::Sum(a, b) => f.debug_tuple("Sum").field(a).field(b).finish(),

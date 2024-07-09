@@ -18,6 +18,7 @@ use crate::{
     builders::layer_builder::LayerBuilder,
     claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator},
     expression::{
+        circuit_expr::CircuitExpr,
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
@@ -67,7 +68,13 @@ pub struct VerifierRegularLayer<F: FieldExt> {
     /// A structural description of the polynomial expression defining this
     /// layer. Leaves of the expression describe the MLE characteristics without
     /// storing any values.
-    expression: Expression<F, VerifierExpr>,
+    expression: Expression<F, CircuitExpr>,
+}
+
+impl<F: FieldExt> VerifierRegularLayer<F> {
+    pub fn new_raw(id: LayerId, expression: Expression<F, CircuitExpr>) -> Self {
+        Self { id, expression }
+    }
 }
 
 impl<F: FieldExt> Layer<F> for RegularLayer<F> {
@@ -109,6 +116,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         self.id
     }
 
+    // claim = [g_1, ..., g_n]
     fn verify_rounds(
         &self,
         claim: Claim<F>,
@@ -128,8 +136,8 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         let mut prev_challenge = F::ZERO;
 
         // For round 1 <= i <= n, perform the check:
-        for round_index in nonlinear_rounds {
-            let degree = get_round_degree_verifier(&self.expression, round_index);
+        for round_index in &nonlinear_rounds {
+            let degree = self.expression.get_round_degree(*round_index);
 
             // Receive `g_i(x)` from the Prover.
             // Since we are using an evaluation representation for polynomials,
@@ -169,10 +177,40 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
             challenges.push(challenge);
         }
 
+        // TODO(Makis): Add check that `expr` is on the same number of total vars.
+        let num_vars = claim.get_num_vars();
+
+        // Build an indicator vector for linear indices.
+        let mut var_is_linear: Vec<bool> = vec![true; num_vars];
+        for idx in &nonlinear_rounds {
+            var_is_linear[*idx] = false;
+        }
+
+        // Build point interlacing linear-round challenges with nonlinear-round
+        // challenges.
+        let mut nonlinear_idx = 0;
+        let point: Vec<F> = (0..num_vars)
+            .map(|idx| {
+                if var_is_linear[idx] {
+                    claim.get_point()[idx]
+                } else {
+                    let r = challenges[nonlinear_idx];
+                    nonlinear_idx += 1;
+                    r
+                }
+            })
+            .collect();
+
+        let verifier_expr = self
+            .expression
+            .bind(&point, transcript_reader)
+            .map_err(|err| VerificationError::ExpressionError(err))?;
+
         // Compute `P(r_1, ..., r_n)` over all challenge points (linear and
         // non-linear).
         // The MLE values are retrieved from the transcript.
-        let expr_value_at_challenge_point = self.expression.evaluate(challenges, transcript_reader);
+        // TODO: FIX!!!!
+        let expr_value_at_challenge_point = verifier_expr.evaluate()?;
 
         // Compute `\beta((r_1, ..., r_n), (u_1, ..., u_n))`.
         let claim_nonlinear_vals: Vec<F> = nonlinear_rounds
@@ -187,9 +225,11 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         // Evalute `g_n(r_n)`.
         // Note: If there were no nonlinear rounds, this value reduces to
         // `claim.get_result()` due to how we initialized `g_prev_round`.
-        let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge);
+        let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
         // Final check:
+        // `\sum_{b_2} \sum_{b_4} P(g_1, b_2, g_3, b_4) * \beta( (b_2, b_4), (g_2, g_4) )`.
+        // P(g_1, challenge[0], g_3, challenge[0]) * \beta( challenge, (g_2, g_4) )
         // `g_n(r_n) == P(r_1, ..., r_n) * \beta(r_1, ..., r_n, g_1, ..., g_n)`.
         if g_final_r_final != expr_value_at_challenge_point * beta_fn_evaluated_at_challenge_point {
             return Err(VerificationError::SumcheckFailed);
