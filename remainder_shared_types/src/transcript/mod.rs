@@ -9,6 +9,8 @@ use crate::FieldExt;
 
 pub mod poseidon_transcript;
 
+pub mod test_transcript;
+
 /// A `TranscriptSponge` provides the basic interface for a cryptographic sponge
 /// operating on field elements. It is typically used for representing the
 /// transcript of an interactive protocol turned non-interactive view

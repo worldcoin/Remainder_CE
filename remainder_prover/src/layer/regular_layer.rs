@@ -25,7 +25,7 @@ use crate::{
     },
     input_layer::enum_input_layer::InputLayerEnum,
     layer::{Layer, LayerError, LayerId, VerificationError},
-    mle::{betavalues::BetaValues, dense::DenseMle},
+    mle::{betavalues::BetaValues, dense::DenseMle, Mle},
     prover::SumcheckProof,
     sumcheck::{
         compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
@@ -105,7 +105,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         // TODO(Makis): Add assertion for that.
 
         // Append the values of the leaf MLEs to the transcript.
-        self.append_leaf_mles_to_transcript(transcript_writer);
+        self.append_leaf_mles_to_transcript(transcript_writer)?;
 
         Ok(())
     }
@@ -131,6 +131,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         // This is initialized to the constant polynomial `g_0(x)` which evaluates
         // to the claim result for any `x`.
         let mut g_prev_round = vec![claim.get_result()];
+        dbg!(&g_prev_round);
 
         // Previous round's challege: r_{i-1}.
         let mut prev_challenge = F::ZERO;
@@ -138,6 +139,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         // For round 1 <= i <= n, perform the check:
         for round_index in &nonlinear_rounds {
             let degree = self.expression.get_round_degree(*round_index);
+            dbg!(&degree);
 
             // Receive `g_i(x)` from the Prover.
             // Since we are using an evaluation representation for polynomials,
@@ -155,9 +157,11 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
             let g_cur_round = transcript_reader
                 .consume_elements("Sumcheck message", degree + 1)
                 .map_err(|err| VerificationError::TranscriptError(err))?;
+            dbg!(&g_cur_round);
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+            dbg!(challenge);
 
             // TODO(Makis): After refactoring `SumcheckEvals` to be a
             // representation of a univariate polynomial, `evaluate_at_a_point`
@@ -165,8 +169,11 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
             // Verify that:
             //       `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
             let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
+            dbg!(&g_i_zero);
             let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            dbg!(&g_i_one);
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
+            dbg!(&g_prev_r_prev);
 
             if g_i_zero + g_i_one != g_prev_r_prev {
                 return Err(VerificationError::SumcheckFailed);
@@ -200,11 +207,13 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
                 }
             })
             .collect();
+        dbg!(&point);
 
         let verifier_expr = self
             .expression
             .bind(&point, transcript_reader)
             .map_err(|err| VerificationError::ExpressionError(err))?;
+        dbg!(&verifier_expr);
 
         // Compute `P(r_1, ..., r_n)` over all challenge points (linear and
         // non-linear).
@@ -227,6 +236,9 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         // `claim.get_result()` due to how we initialized `g_prev_round`.
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
+        dbg!(&g_final_r_final);
+        dbg!(&expr_value_at_challenge_point);
+        dbg!(&beta_fn_evaluated_at_challenge_point);
         // Final check:
         // `\sum_{b_2} \sum_{b_4} P(g_1, b_2, g_3, b_4) * \beta( (b_2, b_4), (g_2, g_4) )`.
         // P(g_1, challenge[0], g_3, challenge[0]) * \beta( challenge, (g_2, g_4) )
@@ -292,8 +304,11 @@ impl<F: FieldExt> RegularLayer<F> {
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
         round_index: usize,
     ) -> Result<(), LayerError> {
+        println!("Proving round: {round_index}");
+
         // Grabs the degree of univariate polynomial we are sending over.
         let degree = get_round_degree(&self.expression, round_index);
+        dbg!(&degree);
 
         // Compute the sumcheck message for this round.
         let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
@@ -303,16 +318,21 @@ impl<F: FieldExt> RegularLayer<F> {
             self.beta_vals.as_ref().unwrap(),
         )?
         .0;
+        dbg!(&prover_sumcheck_message);
 
         transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
 
         let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+        dbg!(&challenge);
 
-        self.expression.fix_variable(round_index - 1, challenge);
+        self.expression.fix_variable(round_index, challenge);
+        dbg!(&self.expression);
+
         self.beta_vals
             .as_mut()
             .unwrap()
-            .beta_update(round_index - 1, challenge);
+            .beta_update(round_index, challenge);
+        dbg!(&self.beta_vals);
 
         Ok(())
     }
@@ -333,13 +353,12 @@ impl<F: FieldExt> RegularLayer<F> {
                     transcript_writer.append("Leaf MLE value", val);
                     Ok(())
                 }
-                ExpressionNode::Product(mle_indices) => {
-                    let val = mle_indices.iter().fold(F::ONE, |prod, mle_vec_index| {
-                        let mle: &DenseMle<F> = &mle_vec[mle_vec_index.index()];
-                        let val = mle.current_mle.value();
-                        prod * val
-                    });
-                    transcript_writer.append("Leaf MLE value", val);
+                ExpressionNode::Product(mle_vec_indices) => {
+                    for mle_vec_index in mle_vec_indices {
+                        let mle = &mle_vec[mle_vec_index.index()];
+                        let eval = mle.bookkeeping_table()[0];
+                        transcript_writer.append("Product MLE value", eval);
+                    }
                     Ok(())
                 }
                 ExpressionNode::Constant(_)

@@ -582,12 +582,12 @@ pub(crate) fn evaluate_at_a_point<F: FieldExt>(
     given_evals: &[F],
     point: F,
 ) -> Result<F, InterpError> {
-    debug_assert!(given_evals.len() > 1);
-
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
         return Ok(given_evals[0]);
     }
+
+    debug_assert!(given_evals.len() > 1);
 
     // Special cases for `point == 0` and `point == 1`.
     // TODO(Makis): Treat as special cases all points in the interval `(0..given_evals.len())`.
