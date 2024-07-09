@@ -26,6 +26,8 @@ pub mod prover_expr;
 /// this is what the verifier manipulates to verify the correctness of the computation.
 /// Methods here include ones to gather and combine (claimed) evaluations of Mles.
 /// The verifier will verfity that these evaluations are correct using the GKR protocol.
+pub mod circuit_expr;
+
 pub mod verifier_expr;
 
 /// where the errors for the expression module are defined

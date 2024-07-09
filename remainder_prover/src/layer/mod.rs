@@ -56,24 +56,36 @@ pub enum VerificationError {
     #[error("The sum of the first evaluations do not equal the claim")]
     /// The sum of the first evaluations do not equal the claim
     SumcheckStartFailed,
+
     #[error("The sum of the current rounds evaluations do not equal the previous round at a random point")]
     /// The sum of the current rounds evaluations do not equal the previous round at a random point
     SumcheckFailed,
+
     #[error("The final rounds evaluations at r do not equal the oracle query")]
     /// The final rounds evaluations at r do not equal the oracle query
     FinalSumcheckFailed,
+
     #[error("The Oracle query does not match the final claim")]
     /// The Oracle query does not match the final claim
     GKRClaimCheckFailed,
+
     #[error(
         "The Challenges generated during sumcheck don't match the claims in the given expression"
     )]
     ///The Challenges generated during sumcheck don't match the claims in the given expression
     ChallengeCheckFailed,
 
+    /// Error with underlying expression: {0}
+    #[error("Error with underlying expression: {0}")]
+    ExpressionError(#[from] ExpressionError),
+
     // Error while reading the transcript proof.
     #[error("Error while reading the transcript proof")]
-    TranscriptError(TranscriptReaderError),
+    TranscriptError(#[from] TranscriptReaderError),
+
+    /// Interpolation Error.
+    #[error("Interpolation Error: {0}")]
+    InterpError(#[from] InterpError),
 }
 
 /// The location of a layer within the GKR circuit.

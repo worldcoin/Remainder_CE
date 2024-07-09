@@ -163,7 +163,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
 }
 
 /// Errors that a `TranscriptReader` may produce.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum TranscriptReaderError {
     #[error("Transcript indices out of bounds")]
     InternalIndicesError,

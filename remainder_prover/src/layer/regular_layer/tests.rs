@@ -5,12 +5,12 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{Layer, LayerId},
+    expression::{circuit_expr::CircuitExpr, generic_expr::Expression, prover_expr::ProverExpr},
+    layer::{Layer, LayerId, VerifierLayer},
     mle::dense::DenseMle,
 };
 
-use super::RegularLayer;
+use super::{RegularLayer, VerifierRegularLayer};
 
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
@@ -28,16 +28,21 @@ fn regular_layer_test_prove_verify() {
     let expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
 
-    let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression);
+    let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression.clone());
 
     let mut transcript = TranscriptWriter::<_, PoseidonSponge<_>>::new("Regular Layer Test");
 
-    let proof = layer.prove_rounds(claim.clone(), &mut transcript).unwrap();
+    layer.prove_rounds(claim.clone(), &mut transcript).unwrap();
 
     let transcript_raw = transcript.get_transcript();
     let mut transcript = TranscriptReader::<_, PoseidonSponge<_>>::new(transcript_raw);
 
-    layer.verify_rounds(claim, proof, &mut transcript).unwrap();
+    let circuit_expression = expression.transform_to_circuit_expression().unwrap();
+    let verifier_layer = VerifierRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+
+    verifier_layer
+        .verify_rounds(claim, &mut transcript)
+        .unwrap();
 }
 
 // #[test]

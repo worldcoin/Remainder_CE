@@ -1,7 +1,8 @@
 use super::{
+    circuit_expr::{CircuitExpr, CircuitMle},
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
-    verifier_expr::VerifierExpr,
+    verifier_expr::{VerifierExpr, VerifierMle},
 };
 use crate::mle::Mle;
 use crate::mle::{betavalues::BetaValues, dense::DenseMle, MleIndex};
@@ -174,14 +175,36 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         self.traverse_mut(&mut increment_closure).unwrap();
     }
 
-    /// transforms the expression to a verifier expression
+    /// Transforms the prover expression to a circuit expression.
     ///
-    /// should only be called when the entire expression is fully bound
+    /// Should only be called for indexed expressions without any bound
+    /// variables.
     ///
-    /// traverses the expression and changes the DenseMle to F,
-    /// by grabbing their bookkeeping table's 1st and only element,
+    /// Traverses the expression and changes the DenseMle to CircuitMle by
+    /// ignoring the MLE evaluations and
     ///
-    /// if the bookkeeping table has more than 1 element, it
+    /// If the bookkeeping table has more than 1 element, it
+    /// throws an ExpressionError::EvaluateNotFullyBoundError
+    pub fn transform_to_circuit_expression(
+        self,
+    ) -> Result<Expression<F, CircuitExpr>, ExpressionError> {
+        let (mut expression_node, mle_vec) = self.deconstruct();
+        Ok(Expression::new(
+            expression_node
+                .transform_to_circuit_expression_node(&mle_vec)
+                .unwrap(),
+            (),
+        ))
+    }
+
+    /// Transforms the prover expression to a verifier expression.
+    ///
+    /// Should only be called when the entire expression is fully bound.
+    ///
+    /// Traverses the expression and changes the DenseMle to VerifierMle,
+    /// by grabbing their bookkeeping table's 1st and only element.
+    ///
+    /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
     pub fn transform_to_verifier_expression(
         self,
@@ -288,7 +311,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
         self.clone()
             .transform_to_verifier_expression()
             .unwrap()
-            .gather_combine_all_evals()
+            .evaluate()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -354,12 +377,70 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
 }
 
 impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
-    /// transforms the expression to a verifier expression
-    /// should only be called when the entire expression is fully bound
-    /// traverses the expression and changes the DenseMle to F,
-    /// by grabbing their bookkeeping table's 1st and only element,
-    /// if the bookkeeping table has more than 1 element, it
-    /// throws an ExpressionError::EvaluateNotFullyBoundError
+    /// Transforms the expression to a circuit expression
+    /// should only be called when no variables are bound in the expression.
+    /// Traverses the expression and changes the DenseMle to CircuitMle.
+    pub fn transform_to_circuit_expression_node(
+        &mut self,
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+    ) -> Result<ExpressionNode<F, CircuitExpr>, ExpressionError> {
+        match self {
+            ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),
+            ExpressionNode::Selector(index, a, b) => Ok(ExpressionNode::Selector(
+                index.clone(),
+                Box::new(a.transform_to_circuit_expression_node(mle_vec)?),
+                Box::new(b.transform_to_circuit_expression_node(mle_vec)?),
+            )),
+            ExpressionNode::Mle(mle_vec_idx) => {
+                let mle = mle_vec_idx.get_mle(mle_vec);
+                let layer_id = mle.get_layer_id();
+                let mle_indices = mle.mle_indices();
+
+                let all_indices_indexed = mle_indices.iter().all(|mle_index| match mle_index {
+                    MleIndex::IndexedBit(_) => true,
+                    _ => false,
+                });
+
+                if !all_indices_indexed {
+                    return Err(ExpressionError::EvaluateNotFullyIndexedError);
+                }
+
+                Ok(ExpressionNode::Mle(CircuitMle::new(layer_id, mle_indices)))
+            }
+            ExpressionNode::Negated(a) => Ok(ExpressionNode::Negated(Box::new(
+                a.transform_to_circuit_expression_node(mle_vec)?,
+            ))),
+            ExpressionNode::Sum(a, b) => Ok(ExpressionNode::Sum(
+                Box::new(a.transform_to_circuit_expression_node(mle_vec)?),
+                Box::new(b.transform_to_circuit_expression_node(mle_vec)?),
+            )),
+            ExpressionNode::Product(mle_vec_indices) => {
+                let mles = mle_vec_indices
+                    .iter_mut()
+                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
+                    .collect_vec();
+
+                for mle in mles.iter() {
+                    if mle.bookkeeping_table().len() != 1 {
+                        return Err(ExpressionError::EvaluateNotFullyBoundError);
+                    }
+                }
+                Ok(ExpressionNode::Product(
+                    mles.into_iter()
+                        .map(|mle| CircuitMle::new(mle.get_layer_id(), mle.mle_indices()))
+                        .collect_vec(),
+                ))
+            }
+            ExpressionNode::Scaled(mle, scalar) => Ok(ExpressionNode::Scaled(
+                Box::new(mle.transform_to_circuit_expression_node(mle_vec)?),
+                *scalar,
+            )),
+        }
+    }
+
+    /// Transforms the expression to a verifier expression
+    /// should only be called when no variables are bound in the expression.
+    /// Traverses the expression and changes the DenseMle to CircuitMle.
     pub fn transform_to_verifier_expression_node(
         &mut self,
         mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
@@ -377,7 +458,16 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 if mle_ref.bookkeeping_table().len() != 1 {
                     return Err(ExpressionError::EvaluateNotFullyBoundError);
                 }
-                Ok(ExpressionNode::Mle(mle_ref.bookkeeping_table()[0]))
+
+                let layer_id = mle_ref.get_layer_id();
+                let mle_indices = mle_ref.mle_indices().to_vec();
+                let eval = mle_ref.bookkeeping_table()[0];
+
+                Ok(ExpressionNode::Mle(VerifierMle::new(
+                    layer_id,
+                    mle_indices,
+                    eval,
+                )))
             }
             ExpressionNode::Negated(a) => Ok(ExpressionNode::Negated(Box::new(
                 a.transform_to_verifier_expression_node(mle_vec)?,
@@ -387,20 +477,26 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 Box::new(b.transform_to_verifier_expression_node(mle_vec)?),
             )),
             ExpressionNode::Product(mle_vec_indices) => {
-                let mle_refs = mle_vec_indices
+                let mles = mle_vec_indices
                     .iter_mut()
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
-                for mle_ref in mle_refs.iter() {
-                    if mle_ref.bookkeeping_table().len() != 1 {
+                for mle in mles.iter() {
+                    if mle.bookkeeping_table().len() != 1 {
                         return Err(ExpressionError::EvaluateNotFullyBoundError);
                     }
                 }
+
                 Ok(ExpressionNode::Product(
-                    mle_refs
-                        .into_iter()
-                        .map(|mle_ref| mle_ref.bookkeeping_table()[0])
+                    mles.into_iter()
+                        .map(|mle| {
+                            VerifierMle::new(
+                                mle.get_layer_id(),
+                                mle.mle_indices().to_vec(),
+                                mle.bookkeeping_table()[0],
+                            )
+                        })
                         .collect_vec(),
                 ))
             }
