@@ -175,8 +175,6 @@ impl<
                 layer_id,
                 LayerError::ClaimError(ClaimError::ClaimAggroError),
             ))?;
-        dbg!(&layer_id);
-        dbg!(&claims);
         let claim_group = ClaimGroup::new(claims.to_vec()).unwrap();
         debug!("Found Layer claims:\n{:#?}", claims);
 

@@ -36,8 +36,8 @@ struct DataParallelComponent<F: FieldExt> {
 
 impl<F: FieldExt> DataParallelComponent<F> {
     /// A circuit which takes in two vectors of MLEs of the same size:
-    /// * Layer 0: [ProductScaledBuilder] with the two inputs
-    /// * Layer 1: [ProductScaledBuilder] with the output of Layer 0 and output of Layer 0.
+    /// * Layer 0: [ProductScaledBuilderComponent] with the two inputs
+    /// * Layer 1: [ProductScaledBuilderComponent] with the output of Layer 0 and output of Layer 0.
     ///
     /// The expected output of this circuit is the zero MLE.
     ///
@@ -203,13 +203,13 @@ fn test_combined_dataparallel_nondataparallel_circuit_newmainder() {
     const VARS_MLE_1_2: usize = 1;
     const VARS_MLE_3: usize = VARS_MLE_1_2 + 1;
     const VARS_MLE_4: usize = VARS_MLE_3 + 1;
-    const NUM_DATA_PARALLEL_BITS: usize = 1;
+    const NUM_DATAPARALLEL_BITS: usize = 1;
     let mut rng = test_rng();
 
-    let mle_1_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
+    let mle_1_vec = (0..1 << NUM_DATAPARALLEL_BITS)
         .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
         .collect_vec();
-    let mle_2_vec = (0..1 << NUM_DATA_PARALLEL_BITS)
+    let mle_2_vec = (0..1 << NUM_DATAPARALLEL_BITS)
         .map(|_| get_dummy_random_mle(VARS_MLE_1_2, &mut rng))
         .collect_vec();
 

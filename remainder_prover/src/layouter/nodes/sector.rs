@@ -237,16 +237,11 @@ fn compile_layer<
     }
     .1;
 
-    dbg!(&new_expr);
-
     let expr = new_expr.build_prover_expr(circuit_map)?;
 
     let layer = RegularLayer::new_raw(layer_id, expr);
 
     witness_builder.add_layer(layer.into());
-    dbg!(&prefix_bits);
-    dbg!(&layer_id);
-    dbg!("oogabooga");
 
     // Add the new sectors to the circuit map
     for (node_id, mut prefix_bits) in prefix_bits {
