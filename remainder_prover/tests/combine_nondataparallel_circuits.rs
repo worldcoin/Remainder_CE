@@ -2,9 +2,6 @@ use ark_std::test_rng;
 
 use itertools::Itertools;
 use remainder::{
-    builders::{combine_input_layers::InputLayerBuilder, combine_layers::combine_layers},
-    input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
     layouter::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
@@ -16,11 +13,7 @@ use remainder::{
             CircuitNode, ClaimableNode, Context,
         },
     },
-    mle::{dense::DenseMle, Mle},
-    prover::{
-        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
-        Witness,
-    },
+    prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
 
@@ -29,7 +22,7 @@ use utils::{
     ProductSumBuilderComponent,
 };
 
-use crate::utils::{get_dummy_input_shred, get_dummy_random_mle};
+use crate::utils::get_dummy_input_shred;
 pub mod utils;
 
 struct ConstantScaledCircuitComponent<F: FieldExt> {

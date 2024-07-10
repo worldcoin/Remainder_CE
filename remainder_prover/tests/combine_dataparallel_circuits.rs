@@ -2,12 +2,6 @@ use ark_std::test_rng;
 
 use itertools::Itertools;
 use remainder::{
-    builders::{
-        combine_input_layers::InputLayerBuilder, combine_layers::combine_layers,
-        layer_builder::simple_builders::ZeroBuilder,
-    },
-    input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
     layouter::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
@@ -20,10 +14,7 @@ use remainder::{
         },
     },
     mle::{dense::DenseMle, Mle},
-    prover::{
-        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
-        Witness,
-    },
+    prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
 use utils::{
@@ -31,9 +22,7 @@ use utils::{
     ProductSumBuilderComponent,
 };
 
-use crate::utils::{
-    get_dummy_input_shred, get_dummy_random_mle, get_dummy_random_mle_vec, get_input_shred_from_vec,
-};
+use crate::utils::{get_dummy_random_mle, get_input_shred_from_vec};
 pub mod utils;
 
 struct DataParallelConstantScaledCircuitAltComponent<F: FieldExt> {

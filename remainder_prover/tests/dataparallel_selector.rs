@@ -2,11 +2,6 @@ use ark_std::test_rng;
 
 use itertools::Itertools;
 use remainder::{
-    builders::{
-        combine_input_layers::InputLayerBuilder, layer_builder::simple_builders::ZeroBuilder,
-    },
-    input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
     layouter::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
@@ -19,10 +14,7 @@ use remainder::{
         },
     },
     mle::{dense::DenseMle, Mle},
-    prover::{
-        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
-        Witness,
-    },
+    prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
 use utils::DifferenceBuilderComponent;

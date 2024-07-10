@@ -1,8 +1,7 @@
 use ark_std::test_rng;
-use itertools::{Itertools, Product};
+use itertools::Itertools;
 
 use remainder::{
-    expression::abstract_expr::ExprBuilder,
     layouter::{
         compiling::LayouterCircuit,
         component::{Component, ComponentSet},
@@ -14,7 +13,7 @@ use remainder::{
             CircuitNode, ClaimableNode, Context,
         },
     },
-    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+    mle::{dense::DenseMle, Mle},
     prover::helpers::test_circuit,
 };
 use remainder_shared_types::{FieldExt, Fr};
