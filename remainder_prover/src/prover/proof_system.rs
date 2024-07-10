@@ -1,5 +1,5 @@
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, TranscriptSponge},
+    transcript::{poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptSponge, TranscriptWriter, VerifierTranscript},
     FieldExt,
 };
 
@@ -50,7 +50,7 @@ macro_rules! layer_enum {
             fn prove_rounds(
                 &mut self,
                 claim: $crate::claims::Claim<F>,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
             ) -> Result<Self::Proof, super::LayerError> {
                 match self {
                     $(
@@ -63,7 +63,7 @@ macro_rules! layer_enum {
                 &mut self,
                 claim: $crate::claims::Claim<F>,
                 proof: Self::Proof,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
             ) -> Result<(), super::LayerError> {
                 match self {
                     $(
@@ -152,7 +152,7 @@ macro_rules! input_layer_enum {
 
             fn prover_append_commitment_to_transcript(
                 commitment: &Self::Commitment,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
             ) {
                 match commitment {
                     $(
@@ -163,7 +163,7 @@ macro_rules! input_layer_enum {
 
             fn verifier_append_commitment_to_transcript(
                 commitment: &Self::Commitment,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>
+                transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>
             ) -> Result<(), $crate::input_layer::InputLayerError> {
                 match commitment {
                     $(
@@ -174,7 +174,7 @@ macro_rules! input_layer_enum {
 
             fn open(
                 &self,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
                 claim: $crate::claims::Claim<F>,
             ) -> Result<Self::OpeningProof, $crate::input_layer::InputLayerError> {
                 match self {
@@ -188,7 +188,7 @@ macro_rules! input_layer_enum {
                 commitment: &Self::Commitment,
                 opening_proof: &Self::OpeningProof,
                 claim: $crate::claims::Claim<F>,
-                transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
             ) -> Result<(), $crate::input_layer::InputLayerError> {
                 match commitment {
                     $(
@@ -238,17 +238,18 @@ pub trait ProofSystem<F: FieldExt> {
         + Serialize
         + for<'a> Deserialize<'a>
         + Debug
-        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
+        + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
 
     ///A trait that defines the allowed InputLayer for this ProofSystem
     type InputLayer: InputLayer<F>;
 
     ///The Transcript this proofsystem uses for F-S
-    type Transcript: TranscriptSponge<F>;
+    type ProverTranscript: ProverTranscript<F>;
+    type VerifierTranscript: VerifierTranscript<F>;
 
     ///The MleRef type that serves as the output layer representation
     type OutputLayer: Mle<F>
-        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
+        + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
         + Serialize
         + for<'de> Deserialize<'de>;
 
@@ -266,7 +267,8 @@ impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
 
     type InputLayer = InputLayerEnum<F>;
 
-    type Transcript = PoseidonSponge<F>;
+    type ProverTranscript = TranscriptWriter<F, PoseidonSponge<F>>;
+    type VerifierTranscript = TranscriptReader<F, PoseidonSponge<F>>;
 
     type OutputLayer = MleEnum<F>;
 

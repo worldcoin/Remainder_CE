@@ -5,8 +5,8 @@ use crate::utils::get_ligero_matrix_dims;
 use crate::FieldExt;
 use crate::{verify, LcProofAuxiliaryInfo};
 use ark_std::log2;
-use remainder_shared_types::transcript::TranscriptSponge;
-use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
+use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
+
 use tracing::instrument;
 
 use super::poseidon_ligero::PoseidonSpongeHasher;
@@ -98,13 +98,13 @@ pub fn poseidon_ml_commit_prove<F: FieldExt>(
 /// // TODO!(ryancao) -- see tests below!
 /// ```
 #[allow(clippy::too_many_arguments)]
-pub fn poseidon_ml_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
+pub fn poseidon_ml_eval_prove<F: FieldExt>(
     coeffs: &[F],
     rho_inv: u8,
     log_num_rows: usize,
     log_orig_num_cols: usize,
     challenge_coord: &[F],
-    transcript: &mut TranscriptWriter<F, T>,
+    transcript: &mut impl ProverTranscript<F>,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
     root: LigeroRoot<F>,
 ) -> (
@@ -209,10 +209,10 @@ pub fn remainder_ligero_commit<F: FieldExt>(
 /// ```
 /// // TODO!(ryancao) -- see tests below!
 /// ```
-pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
+pub fn remainder_ligero_eval_prove<F: FieldExt>(
     input_layer_bookkeeping_table: &[F],
     challenge_coord: &[F],
-    transcript: &mut TranscriptWriter<F, T>,
+    transcript: &mut impl ProverTranscript<F>,
     aux: LcProofAuxiliaryInfo,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
     root: LigeroRoot<F>,
@@ -254,10 +254,10 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
 /// ```
 /// // TODO!(ryancao) -- see tests below!
 /// ```
-pub fn remainder_ligero_verify<F: FieldExt, T: TranscriptSponge<F>>(
+pub fn remainder_ligero_verify<F: FieldExt>(
     proof: &LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
     aux: LcProofAuxiliaryInfo,
-    tr: &mut TranscriptReader<F, T>,
+    tr: &mut impl VerifierTranscript<F>,
     challenge_coord: &[F],
     claimed_value: F,
 ) {
@@ -292,7 +292,9 @@ pub mod tests {
     use itertools::Itertools;
     use rand::Rng;
     use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
-    use remainder_shared_types::transcript::{TranscriptReader, TranscriptWriter};
+    use remainder_shared_types::transcript::{
+        TranscriptReader, TranscriptWriter, VerifierTranscript,
+    };
     use remainder_shared_types::Fr;
     use std::iter::repeat_with;
 
@@ -343,7 +345,7 @@ pub mod tests {
 
         // --- Grab new Poseidon transcript + verify ---
         let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
-        remainder_ligero_verify::<Fr, PoseidonSponge<Fr>>(
+        remainder_ligero_verify::<Fr>(
             &ligero_eval_proof,
             aux,
             &mut transcript_reader,

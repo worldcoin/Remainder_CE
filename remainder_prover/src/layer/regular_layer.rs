@@ -8,7 +8,9 @@ mod tests;
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, VerifierTranscript,
+    },
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -48,7 +50,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Option<SumcheckProof<F>>, LayerError> {
         let val = claim.get_result();
 
@@ -109,7 +111,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         &mut self,
         claim: Claim<F>,
         sumcheck_prover_messages: Self::Proof,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), LayerError> {
         // if there are no sumcheck prover messages, this means this was an entirely linear layer. therefore
         // we can skip the verification for this layer.

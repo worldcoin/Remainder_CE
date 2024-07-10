@@ -1,0 +1,7 @@
+[package]
+name = "remainder_hyrax"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+remainder-shared-types = {path = "../remainder_shared_types"}

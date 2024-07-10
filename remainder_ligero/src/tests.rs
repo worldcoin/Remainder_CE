@@ -22,7 +22,9 @@ use halo2_proofs::poly::EvaluationDomain;
 // --- For BN-254 ---
 use itertools::{iterate, Itertools};
 use rand::Rng;
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
+use remainder_shared_types::transcript::{
+    poseidon_transcript::PoseidonSponge, ProverTranscript, VerifierTranscript,
+};
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptWriter},
     Poseidon,

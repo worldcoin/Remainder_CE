@@ -10,19 +10,13 @@ use remainder_shared_types::{transcript::TranscriptSponge, FieldExt};
 ///
 /// Will return the values in VALUES in order upon each squeeze request.
 /// Once SIZE is reached values will wrap around.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct DummySponge<F: FieldExt, const VALUE: i32> {
     /// The current position in the values list.
     _marker: std::marker::PhantomData<F>,
 }
 
 impl<F: FieldExt, const VALUE: i32> TranscriptSponge<F> for DummySponge<F, VALUE> {
-    fn new() -> Self {
-        Self {
-            _marker: std::marker::PhantomData,
-        }
-    }
-
     fn absorb(&mut self, _: F) {}
 
     fn absorb_elements(&mut self, _: &[F]) {}
