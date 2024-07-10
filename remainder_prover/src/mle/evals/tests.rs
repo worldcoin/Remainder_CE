@@ -390,3 +390,40 @@ fn fix_variable_at_index_3_vars_fix_third() {
 
     assert_eq!(f_tilde.f.evals, expected_output);
 }
+
+#[test]
+fn test_interlace_mles() {
+    let mles = vec![
+        vec![Fr::from(0), Fr::from(4), Fr::from(8), Fr::from(2)],
+        vec![Fr::from(1), Fr::from(5), Fr::from(9), Fr::from(3)],
+        vec![Fr::from(2), Fr::from(6), Fr::from(0), Fr::from(4)],
+        vec![Fr::from(3), Fr::from(7), Fr::from(1), Fr::from(5)],
+    ]
+    .into_iter()
+    .map(|data| MultilinearExtension::new(data))
+    .collect::<Vec<_>>();
+
+    let interlaced_mle = MultilinearExtension::interlace_mles(mles);
+
+    assert_eq!(
+        *interlaced_mle.get_evals_vector(),
+        vec![
+            Fr::from(0),
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(3),
+            Fr::from(4),
+            Fr::from(5),
+            Fr::from(6),
+            Fr::from(7),
+            Fr::from(8),
+            Fr::from(9),
+            Fr::from(0),
+            Fr::from(1),
+            Fr::from(2),
+            Fr::from(3),
+            Fr::from(4),
+            Fr::from(5)
+        ]
+    );
+}

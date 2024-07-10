@@ -668,6 +668,24 @@ impl<F: FieldExt> MultilinearExtension<F> {
         // table here ---
         self.f = Evaluations::<F>::new(self.num_vars() - 1, new.collect());
     }
+
+    /// interlaces the MLEs into a single MLE, in a little endian fashion.
+    pub fn interlace_mles(mles: Vec<MultilinearExtension<F>>) -> MultilinearExtension<F> {
+        let first_len = mles[0].get_evals_vector().len();
+
+        if !mles.iter().all(|v| v.get_evals_vector().len() == first_len) {
+            panic!("All mles's underlying bookkeeping table must have the same length");
+        }
+
+        let out = (0..first_len)
+            .flat_map(|i| {
+                mles.iter()
+                    .map(move |v| v.get_evals_vector().get(i).copied().unwrap())
+            })
+            .collect();
+
+        Self::new(out)
+    }
 }
 
 /// Provides a vector-like interface to MultilinearExtensions;

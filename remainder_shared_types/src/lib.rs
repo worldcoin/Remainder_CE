@@ -16,6 +16,7 @@ pub trait FieldExt:
     + FromUniformBytes<64>
     + WithSmallOrderMulGroup<3>
     + Hash
+    + Ord
     + Serialize
     + for<'de> Deserialize<'de>
 {
@@ -27,6 +28,7 @@ impl<
             + FromUniformBytes<64>
             + WithSmallOrderMulGroup<3>
             + Hash
+            + Ord
             + Serialize
             + for<'de> Deserialize<'de>,
     > FieldExt for F

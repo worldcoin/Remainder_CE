@@ -413,7 +413,8 @@ fn combine_pair<F: FieldExt>(
         mle_ref_first.num_iterated_vars(),
         new_bt.clone(),
     ));
-    let original_mle = MultilinearExtension::new_from_evals(Evaluations::<F>::new(0, new_bt.clone()));
+    let original_mle =
+        MultilinearExtension::new_from_evals(Evaluations::<F>::new(0, new_bt.clone()));
 
     // construct the dense mle ref that we return. note that even if we are pairing zero mle refs, we just return a dense mle ref here
     //
