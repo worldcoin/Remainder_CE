@@ -229,7 +229,6 @@ impl<F: FieldExt> RegularLayer<F> {
     /// nonlinear index in the expression we are performing GKR over. if there are no nonlinear rounds
     /// it returns an empty vector because there is no sumcheck proof for this layer.
     fn start_sumcheck(&mut self, claim: Claim<F>) -> Result<Vec<F>, LayerError> {
-        dbg!(&self.id());
         let first_nonlinear_round = {
             let expression = &mut self.expression;
             let _expression_num_indices = expression.index_mle_indices(0);
