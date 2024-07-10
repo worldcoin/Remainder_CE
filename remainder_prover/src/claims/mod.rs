@@ -4,7 +4,9 @@
 pub mod wlx_eval;
 
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, VerifierTranscript,
+    },
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -112,7 +114,7 @@ pub trait ClaimAggregator<F: FieldExt> {
     fn new() -> Self;
 
     ///Takes in claims to track and later aggregate
-    fn add_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>) -> Result<(), LayerError>;
+    fn add_claims(&mut self, layer: &impl YieldClaim<Self::Claim>) -> Result<(), LayerError>;
 
     ///Retrieves claims for aggregation
     fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]>;
@@ -125,7 +127,7 @@ pub trait ClaimAggregator<F: FieldExt> {
     fn prover_aggregate_claims(
         &self,
         layer: &Self::Layer,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError>;
 
     ///Takes in some claims from the prover and aggregates them into one claim
@@ -136,20 +138,20 @@ pub trait ClaimAggregator<F: FieldExt> {
     fn prover_aggregate_claims_input(
         &self,
         layer: &Self::InputLayer,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError>;
 
     ///Reads an AggregationProof from the Transcript and uses it to verify the aggregation of some claims.
     fn verifier_aggregate_claims(
         &self,
         layer_id: LayerId,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;
 }
 
 ///A trait that allows the type to yield some claims to be added
 /// to the claim tracker
-pub trait YieldClaim<F: FieldExt, Claim> {
+pub trait YieldClaim<Claim> {
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<Claim>, LayerError>;
 }

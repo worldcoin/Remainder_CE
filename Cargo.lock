@@ -777,7 +777,7 @@ dependencies = [
  "rand_chacha",
  "rand_core 0.6.4",
  "rayon",
- "sha3",
+ "sha3 0.9.1",
  "tracing",
 ]
 
@@ -1532,13 +1532,24 @@ name = "remainder-shared-types"
 version = "0.1.0"
 dependencies = [
  "ark-std",
+ "ff 0.13.0",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?tag=v0.6.1)",
  "itertools 0.11.0",
+ "num-bigint",
+ "pasta_curves",
  "poseidon",
  "serde",
  "serde_json",
+ "sha3 0.10.8",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "remainder_hyrax"
+version = "0.1.0"
+dependencies = [
+ "remainder-shared-types",
 ]
 
 [[package]]
@@ -1660,6 +1671,16 @@ dependencies = [
  "digest 0.9.0",
  "keccak",
  "opaque-debug",
+]
+
+[[package]]
+name = "sha3"
+version = "0.10.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75872d278a8f37ef87fa0ddbda7802605cb18344497949862c0d4dcb291eba60"
+dependencies = [
+ "digest 0.10.7",
+ "keccak",
 ]
 
 [[package]]

@@ -11,7 +11,9 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, VerifierTranscript,
+    },
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -86,7 +88,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let mut sumcheck_rounds = vec![];
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
@@ -133,7 +135,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         &mut self,
         claim: Claim<F>,
         sumcheck_rounds: Self::Proof,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), LayerError> {
         let sumcheck_rounds = sumcheck_rounds.0;
         let mut prev_evals = &sumcheck_rounds[0];
@@ -275,7 +277,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
+impl<F: FieldExt> YieldClaim<ClaimMle<F>> for Gate<F> {
     /// Get the claims that this layer makes on other layers.
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
@@ -631,7 +633,7 @@ impl<F: FieldExt> Gate<F> {
         claim: Vec<F>,
         beta_g1: &mut DenseMle<F>,
         beta_g2: &mut DenseMle<F>,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(SumcheckProof<F>, F), LayerError> {
         // Initialization, first message comes from here.
         let mut challenges: Vec<F> = vec![];
@@ -691,7 +693,7 @@ impl<F: FieldExt> Gate<F> {
         &mut self,
         challenge: Vec<F>,
         beta_g2_fully_bound: F,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(SumcheckProof<F>, F, Vec<F>), LayerError> {
         let first_message = self
             .init_phase_1(challenge)
@@ -758,7 +760,7 @@ impl<F: FieldExt> Gate<F> {
         phase_1_challenges: Vec<F>,
         beta_g1: DenseMle<F>,
         beta_g2_fully_bound: F,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<SumcheckProof<F>, LayerError> {
         let first_message = self
             .init_phase_2(phase_1_challenges, f_at_u, &beta_g1)

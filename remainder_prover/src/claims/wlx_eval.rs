@@ -5,7 +5,9 @@ mod helpers;
 
 mod claim_group;
 
-use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
+use remainder_shared_types::transcript::{
+    ProverTranscript, VerifierTranscript,
+};
 use remainder_shared_types::FieldExt;
 
 use crate::claims::wlx_eval::claim_group::ClaimGroup;
@@ -50,7 +52,7 @@ pub struct WLXAggregator<F: FieldExt, L, LI> {
 
 impl<
         F: FieldExt,
-        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>,
+        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > ClaimAggregator<F> for WLXAggregator<F, L, LI>
 {
@@ -64,7 +66,7 @@ impl<
     fn prover_aggregate_claims(
         &self,
         layer: &Self::Layer,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError> {
         let layer_id = layer.id();
         self.prover_aggregate_claims(layer, *layer_id, transcript_writer)
@@ -73,7 +75,7 @@ impl<
     fn prover_aggregate_claims_input(
         &self,
         layer: &Self::InputLayer,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError> {
         let layer_id = layer.layer_id();
         self.prover_aggregate_claims(layer, *layer_id, transcript_writer)
@@ -82,7 +84,7 @@ impl<
     fn verifier_aggregate_claims(
         &self,
         layer_id: LayerId,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
         let claims = self
             .get_claims(layer_id)
@@ -128,7 +130,7 @@ impl<
         }
     }
 
-    fn add_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>) -> Result<(), LayerError> {
+    fn add_claims(&mut self, layer: &impl YieldClaim<Self::Claim>) -> Result<(), LayerError> {
         let claims = layer.get_claims()?;
 
         debug!("Ingesting claims: {:#?}", claims);
@@ -159,7 +161,7 @@ impl<
 
 impl<
         F: FieldExt,
-        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>,
+        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<ClaimMle<F>>,
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > WLXAggregator<F, L, LI>
 {
@@ -167,7 +169,7 @@ impl<
         &self,
         layer: &impl YieldWLXEvals<F>,
         layer_id: LayerId,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, GKRError> {
         let claims = self
             .get_claims(layer_id)

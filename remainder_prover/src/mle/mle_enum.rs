@@ -118,7 +118,7 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MleEnum<F> {
+impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleEnum<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             MleEnum::Dense(layer) => layer.get_claims(),

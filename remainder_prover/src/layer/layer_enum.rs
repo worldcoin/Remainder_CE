@@ -63,7 +63,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
+impl<F: FieldExt> YieldClaim<ClaimMle<F>> for LayerEnum<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),

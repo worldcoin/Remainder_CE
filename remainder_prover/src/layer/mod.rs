@@ -19,7 +19,9 @@ use crate::{
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, TranscriptReaderError, VerifierTranscript,
+    },
     FieldExt,
 };
 
@@ -110,7 +112,7 @@ pub trait Layer<F: FieldExt> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript: &mut impl ProverTranscript<F>,
     ) -> Result<Self::Proof, LayerError>;
 
     /// Verifies the `Layer`'s proof
@@ -118,7 +120,7 @@ pub trait Layer<F: FieldExt> {
         &mut self,
         claim: Claim<F>,
         proof: Self::Proof,
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<(), LayerError>;
 
     /// Gets this `Layer`'s `LayerId`

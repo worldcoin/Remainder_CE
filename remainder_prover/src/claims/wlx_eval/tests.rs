@@ -6,6 +6,7 @@ use crate::mle::dense::DenseMle;
 use crate::mle::{Mle, MleIndex};
 use crate::utils::test_utils::DummySponge;
 use rand::Rng;
+use remainder_shared_types::transcript::{TranscriptSponge, TranscriptWriter};
 
 use self::claim_group::ClaimGroup;
 
@@ -86,7 +87,7 @@ fn compute_claim_wlx<F: FieldExt, Sp: TranscriptSponge<F>>(
     debug_assert_eq!(points_matrix.len(), num_claims);
     debug_assert_eq!(points_matrix[0].len(), num_vars);
 
-    let mut transcript: TranscriptWriter<_, Sp> = TranscriptWriter::new("Claims Test Transcript");
+    let mut transcript: TranscriptWriter<F, Sp> = TranscriptWriter::new("Claims Test Transcript");
 
     let claim_proof = prover_aggregate_claims_helper(claims, layer, &mut transcript).unwrap();
     (claim_proof.claim, claim_proof.proof)

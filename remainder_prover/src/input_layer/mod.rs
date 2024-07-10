@@ -5,7 +5,9 @@ use ark_std::cfg_into_iter;
 use crate::mle::{evals::MultilinearExtension, Mle};
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, TranscriptReaderError, VerifierTranscript,
+    },
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -74,13 +76,13 @@ pub trait InputLayer<F: FieldExt> {
     /// Appends the commitment to the F-S Transcript.
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     );
 
     /// Appends the commitment to the F-S Transcript.
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError>;
 
     /// Generates a proof of polynomial evaluation at the point
@@ -89,7 +91,7 @@ pub trait InputLayer<F: FieldExt> {
     /// Appends any communication to the transcript.
     fn open(
         &self,
-        transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript: &mut impl ProverTranscript<F>,
         claim: Claim<F>,
     ) -> Result<Self::OpeningProof, InputLayerError>;
 
@@ -99,7 +101,7 @@ pub trait InputLayer<F: FieldExt> {
         commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError>;
 
     /// Returns the `LayerId` of this layer.

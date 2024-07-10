@@ -10,7 +10,9 @@ use remainder_ligero::{
     LcCommit, LcProofAuxiliaryInfo, LcRoot,
 };
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, VerifierTranscript,
+    },
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -92,7 +94,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     /// Add the commitment to the prover transcript for Fiat-Shamir.
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) {
         transcript_writer.append("Ligero Merkle Commitment", commitment.clone().into_raw());
     }
@@ -100,7 +102,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     /// Add the commitment to the verifier transcript for Fiat-Shamir.
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError> {
         let transcript_commitment = transcript_reader
             .consume_element("Ligero Merkle Commitment")
@@ -114,7 +116,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     /// the commitment and this random point.
     fn open(
         &self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
         claim: crate::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, InputLayerError> {
         let aux = self
@@ -151,12 +153,12 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         _commitment: &Self::Commitment,
         opening_proof: &Self::OpeningProof,
         claim: crate::claims::Claim<F>,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), super::InputLayerError> {
         let ligero_aux = &opening_proof.aux;
         let (_, ligero_eval_proof, _) =
             convert_halo_to_lcpc(opening_proof.aux.clone(), opening_proof.proof.clone());
-        remainder_ligero_verify::<F, _>(
+        remainder_ligero_verify::<F>(
             &ligero_eval_proof,
             ligero_aux.clone(),
             transcript_reader,

@@ -1,7 +1,9 @@
 //! A part of the input layer that is random and secured through F-S
 
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, TranscriptSponge, TranscriptWriter, VerifierTranscript,
+    },
     FieldExt,
 };
 
@@ -35,7 +37,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     /// Append the commitment to the Fiat-Shamir transcript.
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError> {
         for challenge in commitment {
             let real_chal = transcript_reader
@@ -51,7 +53,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     /// Append the commitment to the Fiat-Shamir transcript.
     fn prover_append_commitment_to_transcript(
         _commitment: &Self::Commitment,
-        _transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        _transcript_writer: &mut impl ProverTranscript<F>,
     ) {
         unimplemented!()
     }
@@ -60,7 +62,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     /// exists in the clear.
     fn open(
         &self,
-        _transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        _transcript: &mut impl ProverTranscript<F>,
         _claim: Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
@@ -73,7 +75,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        _transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<(), super::InputLayerError> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.to_vec(), LayerId::Input(0));
         mle_ref.index_mle_indices(0);

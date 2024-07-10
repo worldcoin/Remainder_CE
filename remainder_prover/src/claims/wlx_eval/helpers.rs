@@ -4,7 +4,9 @@ use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, TranscriptReaderError, VerifierTranscript,
+    },
     FieldExt,
 };
 use tracing::{debug, info};
@@ -41,10 +43,10 @@ use super::{claim_group::ClaimGroup, evaluate_at_a_point, YieldWLXEvals};
 /// either contains no evaluations (in the trivial case of aggregating a single
 /// claim) or contains `k` vectors, the wlx evaluations produced during each of
 /// the `k` naive claim aggregations performed.
-pub fn prover_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
+pub fn prover_aggregate_claims_helper<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
-    transcript_writer: &mut TranscriptWriter<F, Tr>,
+    transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
@@ -114,9 +116,9 @@ pub fn prover_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     })
 }
 
-pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
+pub fn verifier_aggregate_claims_helper<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    transcript_reader: &mut TranscriptReader<F, Tr>,
+    transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, TranscriptReaderError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
@@ -236,11 +238,11 @@ pub fn compute_aggregated_challenges<F: FieldExt>(
 /// either contains no evaluations (in the trivial case of aggregating a single
 /// claim) or contains a single vector of the wlx evaluations produced during
 /// this 1-step claim aggregation.
-fn prover_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<F>>(
+fn prover_aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer_mle_refs: &[MleEnum<F>],
     layer: &impl YieldWLXEvals<F>,
-    transcript_writer: &mut TranscriptWriter<F, Tr>,
+    transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
@@ -302,9 +304,9 @@ fn prover_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<F>>(
     })
 }
 
-fn verifier_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<F>>(
+fn verifier_aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    transcript_reader: &mut TranscriptReader<F, Tr>,
+    transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, TranscriptReaderError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);

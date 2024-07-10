@@ -23,7 +23,7 @@ use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{ProverTranscript, TranscriptReader, TranscriptSponge, VerifierTranscript},
     FieldExt, Poseidon,
 };
 use serde::{Deserialize, Serialize};
@@ -254,7 +254,7 @@ where
         &self,
         outer_tensor: &[F],
         enc: &E,
-        tr: &mut TranscriptWriter<F, T>,
+        tr: &mut impl ProverTranscript<F>,
     ) -> ProverResult<LcEvalProof<D, E, F>, ErrT<E, F>> {
         prove(self, outer_tensor, enc, tr)
     }
@@ -353,7 +353,7 @@ where
         enc: &E,
         tr: &mut TranscriptReader<F, T>,
     ) -> VerifierResult<F, ErrT<E, F>> {
-        verify::<D, E, F, T>(root, outer_tensor, inner_tensor, self, enc, tr)
+        verify::<D, E, F>(root, outer_tensor, inner_tensor, self, enc, tr)
     }
 }
 
@@ -742,17 +742,16 @@ const fn log2(v: usize) -> usize {
 /// * `proof` - Ligero evaluation proof, i.e. columns + Merkle paths
 /// * `enc` - Encoding for computing M --> M'
 /// * `tr` - Fiat-Shamir transcript
-fn verify<D, E, F, T>(
+fn verify<D, E, F>(
     root: &F,
     outer_tensor: &[F],
     inner_tensor: &[F],
     proof: &LcEvalProof<D, E, F>,
     enc: &E,
-    tr: &mut TranscriptReader<F, T>,
+    tr: &mut impl VerifierTranscript<F>,
 ) -> VerifierResult<F, ErrT<E, F>>
 where
     F: FieldExt,
-    T: TranscriptSponge<F>,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
@@ -946,15 +945,14 @@ fn compute_col_idx_from_transcript_challenge<F: FieldExt>(
 /// * `outer_tensor` - b^T
 /// * `enc` - Encoding auxiliary struct containing metadata from FFT
 /// * `tr` - Fiat-Shamir transcript
-fn prove<D, E, F, T>(
+fn prove<D, E, F>(
     comm: &LcCommit<D, E, F>,
     outer_tensor: &[F],
     enc: &E,
-    tr: &mut TranscriptWriter<F, T>,
+    tr: &mut impl ProverTranscript<F>,
 ) -> ProverResult<LcEvalProof<D, E, F>, ErrT<E, F>>
 where
     F: FieldExt,
-    T: TranscriptSponge<F>,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {

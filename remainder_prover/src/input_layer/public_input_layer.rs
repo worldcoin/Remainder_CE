@@ -1,7 +1,9 @@
 //! An input layer that is sent to the verifier in the clear
 
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, VerifierTranscript,
+    },
     FieldExt,
 };
 
@@ -35,7 +37,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     /// Append the commitment to the Fiat-Shamir transcript.
     fn prover_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) {
         transcript_writer.append_elements("Public Input Commitment", commitment);
     }
@@ -43,7 +45,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     /// Append the commitment to the Fiat-Shamir transcript.
     fn verifier_append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError> {
         let num_elements = commitment.len();
         let transcript_commitment = transcript_reader
@@ -57,7 +59,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     /// exists in the clear.
     fn open(
         &self,
-        _: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        _: &mut impl ProverTranscript<F>,
         _: crate::claims::Claim<F>,
     ) -> Result<Self::OpeningProof, super::InputLayerError> {
         Ok(())
@@ -70,7 +72,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         commitment: &Self::Commitment,
         _opening_proof: &Self::OpeningProof,
         claim: Claim<F>,
-        _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        _transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<(), super::InputLayerError> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), LayerId::Input(0));
         mle_ref.index_mle_indices(0);

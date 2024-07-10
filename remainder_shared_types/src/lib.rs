@@ -1,4 +1,5 @@
 pub mod transcript;
+pub mod ec;
 
 use std::hash::Hash;
 

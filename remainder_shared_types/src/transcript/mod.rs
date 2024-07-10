@@ -7,16 +7,15 @@ use tracing::warn;
 
 use crate::FieldExt;
 
+pub mod ec_transcript;
+pub mod keccak_transcript;
 pub mod poseidon_transcript;
 
 /// A `TranscriptSponge` provides the basic interface for a cryptographic sponge
 /// operating on field elements. It is typically used for representing the
 /// transcript of an interactive protocol turned non-interactive view
 /// Fiat-Shamir.
-pub trait TranscriptSponge<F: FieldExt>: Clone + Send + Sync {
-    /// Create an empty transcript sponge.
-    fn new() -> Self;
-
+pub trait TranscriptSponge<F>: Clone + Send + Sync + Default {
     /// Absorb a single field element `elem`.
     fn absorb(&mut self, elem: F);
 
@@ -34,8 +33,7 @@ pub trait TranscriptSponge<F: FieldExt>: Clone + Send + Sync {
 
 /// Describes an elementary operation on a transcript.
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-enum Operation<F: FieldExt> {
+enum Operation<F> {
     /// An append operation consists of a label (used for debugging purposes)
     /// and a vector of field elements to be appended in order to the
     /// transcript.
@@ -52,17 +50,16 @@ enum Operation<F: FieldExt> {
 /// generated proof. The verifier de-serializes the transcript and can access it
 /// through the `TranscriptReader` interface.
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct Transcript<F: FieldExt> {
+pub struct Transcript<T> {
     /// A label used to identify this transcript. Used for debugging purposes.
     label: String,
 
     /// The content of the transcript represented as a sequence of operations
     /// used to generate it.
-    transcript_operations: Vec<Operation<F>>,
+    transcript_operations: Vec<Operation<T>>,
 }
 
-impl<F: FieldExt> Transcript<F> {
+impl<F: Clone> Transcript<F> {
     /// Create an empty transcript with identifier `label`.
     pub fn new(label: &str) -> Self {
         Self {
@@ -88,11 +85,21 @@ impl<F: FieldExt> Transcript<F> {
     }
 }
 
+pub trait ProverTranscript<F> {
+    fn append(&mut self, label: &str, elem: F);
+
+    fn append_elements(&mut self, label: &str, elements: &[F]);
+
+    fn get_challenge(&mut self, label: &str) -> F;
+
+    fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F>;
+}
+
 /// The prover-side interface for interacting with a transcript sponge. A
 /// `TranscriptWriter` acts as a wrapper around a `TranscriptSponge` and
 /// additionally keeps track of all the append/squeeze operations to be able to
 /// generate a serializable `Transcript`.
-pub struct TranscriptWriter<F: FieldExt, T: TranscriptSponge<F>> {
+pub struct TranscriptWriter<F, T> {
     /// The sponge that this writer is using to append/squeeze elements.
     sponge: T,
 
@@ -101,20 +108,11 @@ pub struct TranscriptWriter<F: FieldExt, T: TranscriptSponge<F>> {
     transcript: Transcript<F>,
 }
 
-impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
-    /// Creates an empty sponge.
-    /// `label` is an identifier used for debugging purposes.
-    pub fn new(label: &str) -> Self {
-        Self {
-            sponge: T::new(),
-            transcript: Transcript::<F>::new(label),
-        }
-    }
-
+impl<F: FieldExt, Tr: TranscriptSponge<F>> ProverTranscript<F> for TranscriptWriter<F, Tr> {
     /// Append an element to the sponge and record the operation to the
     /// transcript. `label` is an identifier for this operation and is used for
     /// sanity checking by the `TranscriptReader`.
-    pub fn append(&mut self, label: &str, elem: F) {
+    fn append(&mut self, label: &str, elem: F) {
         self.sponge.absorb(elem);
         self.transcript.append_elements(label, &[elem]);
     }
@@ -124,7 +122,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
     /// operation is *not* recorded.
     /// `label` is an identifier for this operation
     /// and is used for sanity checking by the `TranscriptReader`.
-    pub fn append_elements(&mut self, label: &str, elements: &[F]) {
+    fn append_elements(&mut self, label: &str, elements: &[F]) {
         if !elements.is_empty() {
             self.sponge.absorb_elements(elements);
             self.transcript.append_elements(label, elements);
@@ -134,7 +132,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
     /// Squeezes the sponge once to get an element and records the squeeze
     /// operation on the transcript.
     /// `label` serves as sanity-check identifier by the `TranscriptReader`.
-    pub fn get_challenge(&mut self, label: &str) -> F {
+    fn get_challenge(&mut self, label: &str) -> F {
         let challenge = self.sponge.squeeze();
         self.transcript.squeeze_elements(label, 1);
         challenge
@@ -145,7 +143,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
     /// empty vector is returned and the operation is *not* recorded on the
     /// transcript.
     /// `label` serves as sanity-check identifier by the `TranscriptReader`.
-    pub fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F> {
+    fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F> {
         if num_elements == 0 {
             vec![]
         } else {
@@ -154,12 +152,41 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
             challenges
         }
     }
+}
 
+impl<F: FieldExt, Tr: TranscriptSponge<F>> TranscriptWriter<F, Tr> {
     /// Destructively extract the transcript produced by this writer.
     /// This should be the last operation performed on a `TranscriptWriter`.
     pub fn get_transcript(self) -> Transcript<F> {
         self.transcript
     }
+
+    /// Creates an empty sponge.
+    /// `label` is an identifier used for debugging purposes.
+    pub fn new(label: &str) -> Self {
+        Self {
+            sponge: Tr::default(),
+            transcript: Transcript::new(label),
+        }
+    }
+}
+
+pub trait VerifierTranscript<F> {
+    fn consume_element(&mut self, label: &'static str) -> Result<F, TranscriptReaderError>;
+
+    fn consume_elements(
+        &mut self,
+        label: &'static str,
+        num_elements: usize,
+    ) -> Result<Vec<F>, TranscriptReaderError>;
+
+    fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptReaderError>;
+
+    fn get_challenges(
+        &mut self,
+        label: &'static str,
+        num_elements: usize,
+    ) -> Result<Vec<F>, TranscriptReaderError>;
 }
 
 /// Errors that a `TranscriptReader` may produce.
@@ -189,7 +216,7 @@ pub enum TranscriptReaderError {
 /// unexpected operation is requested. An operation can be unexpected if it
 /// doesn't match the sequence of operations performed by the `TranscriptWriter`
 /// that produced the `Transcript` used in the initialization of the reader.
-pub struct TranscriptReader<F: FieldExt, T: TranscriptSponge<F>> {
+pub struct TranscriptReader<F, T> {
     /// The sponge that this reader is wrapping around.
     sponge: T,
 
@@ -202,42 +229,7 @@ pub struct TranscriptReader<F: FieldExt, T: TranscriptSponge<F>> {
     next_element: (usize, usize),
 }
 
-impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
-    /// Generate a new `TranscriptReader` to operate on a given `transcript`.
-    pub fn new(transcript: Transcript<F>) -> Self {
-        Self {
-            sponge: T::new(),
-            transcript,
-            next_element: (0, 0),
-        }
-    }
-
-    /// Internal method used to advance the internal state to the next
-    /// operation.
-    fn advance_indices(&mut self) -> Result<(), TranscriptReaderError> {
-        let (operation_idx, element_idx) = self.next_element;
-
-        match self.transcript.transcript_operations.get(operation_idx) {
-            None => Err(TranscriptReaderError::InternalIndicesError),
-            Some(Operation::Append(_, v)) => {
-                if element_idx + 1 >= v.len() {
-                    self.next_element = (operation_idx + 1, 0);
-                } else {
-                    self.next_element = (operation_idx, element_idx + 1);
-                }
-                Ok(())
-            }
-            Some(Operation::Squeeze(_, num_elements)) => {
-                if element_idx + 1 >= *num_elements {
-                    self.next_element = (operation_idx + 1, 0);
-                } else {
-                    self.next_element = (operation_idx, element_idx + 1);
-                }
-                Ok(())
-            }
-        }
-    }
-
+impl<F: FieldExt, T: TranscriptSponge<F>> VerifierTranscript<F> for TranscriptReader<F, T> {
     /// Reads off a single element from the transcript and returns it if
     /// successful.
     /// The operation can fail with:
@@ -253,7 +245,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     /// by the `TranscriptWriter` for the corresponding operation. If the labels
     /// don't match, a trace warning message is produced, but the caller is not
     /// otherwise notified of this discrepancy.
-    pub fn consume_element(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
+    fn consume_element(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
         match self.transcript.transcript_operations.get(operation_idx) {
@@ -265,8 +257,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
                 }
                 match v.get(element_idx) {
                     None => Err(TranscriptReaderError::InternalIndicesError),
-                    Some(element) => {
-                        let element = *element;
+                    Some(&element) => {
                         self.advance_indices()?;
                         self.sponge.absorb(element);
                         Ok(element)
@@ -299,7 +290,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     /// labels used on the writer side. If there is a label mismatch for any of
     /// the `num_elements` elements, a trace warning message is produced, but
     /// the caller is not otherwise notified of this discrepancy.
-    pub fn consume_elements(
+    fn consume_elements(
         &mut self,
         label: &'static str,
         num_elements: usize,
@@ -324,7 +315,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     /// by the `TranscriptWriter` for the corresponding operation. If the labels
     /// don't match, a trace warning message is produced, but the caller is not
     /// otherwise notified of this discrepancy.
-    pub fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
+    fn get_challenge(&mut self, label: &'static str) -> Result<F, TranscriptReaderError> {
         let (operation_idx, element_idx) = self.next_element;
 
         match self.transcript.transcript_operations.get(operation_idx) {
@@ -365,7 +356,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     /// labels used on the writer side. If there is a label mismatch for any of
     /// the `num_elements` elements, a trace warning message is produced, but
     /// the caller is not otherwise notified of this discrepancy.
-    pub fn get_challenges(
+    fn get_challenges(
         &mut self,
         label: &'static str,
         num_elements: usize,
@@ -373,6 +364,43 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
         (0..num_elements)
             .map(|_| self.get_challenge(label))
             .collect()
+    }
+}
+
+impl<F, T: Default> TranscriptReader<F, T> {
+    /// Generate a new `TranscriptReader` to operate on a given `transcript`.
+    pub fn new(transcript: Transcript<F>) -> Self {
+        Self {
+            sponge: T::default(),
+            transcript,
+            next_element: (0, 0),
+        }
+    }
+
+    /// Internal method used to advance the internal state to the next
+    /// operation.
+    fn advance_indices(&mut self) -> Result<(), TranscriptReaderError> {
+        let (operation_idx, element_idx) = self.next_element;
+
+        match self.transcript.transcript_operations.get(operation_idx) {
+            None => Err(TranscriptReaderError::InternalIndicesError),
+            Some(Operation::Append(_, v)) => {
+                if element_idx + 1 >= v.len() {
+                    self.next_element = (operation_idx + 1, 0);
+                } else {
+                    self.next_element = (operation_idx, element_idx + 1);
+                }
+                Ok(())
+            }
+            Some(Operation::Squeeze(_, num_elements)) => {
+                if element_idx + 1 >= *num_elements {
+                    self.next_element = (operation_idx + 1, 0);
+                } else {
+                    self.next_element = (operation_idx, element_idx + 1);
+                }
+                Ok(())
+            }
+        }
     }
 }
 

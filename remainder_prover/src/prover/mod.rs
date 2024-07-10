@@ -21,7 +21,8 @@ use crate::{
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use remainder_shared_types::transcript::{
-    TranscriptReader, TranscriptReaderError, TranscriptWriter,
+    ProverTranscript, TranscriptReaderError, TranscriptSponge, TranscriptWriter,
+    VerifierTranscript,
 };
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
@@ -124,10 +125,6 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
-/// A helper type for easier reference to a circuit's Transcript
-pub type CircuitTranscript<F, C> =
-    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Transcript;
-
 /// A helper type alias for easier reference to a circuits Layer
 pub type CircuitLayer<F, C> = <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Layer;
 
@@ -138,6 +135,13 @@ pub type CircuitInputLayer<F, C> =
 /// A helper type alias for easier reference to a circuits ClaimAggregator
 pub type CircuitClaimAggregator<F, C> =
     <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::ClaimAggregator;
+
+/// A helper type alias for easier reference to a circuits ProverTranscript
+pub type CircuitProverTranscript<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::ProverTranscript;
+/// A helper type alias for easier reference to a circuits VerifierTranscript
+pub type CircuitVerifierTranscript<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::VerifierTranscript;
 
 type WitnessAndCommitments<F, C> = (
     Witness<F, <C as GKRCircuit<F>>::ProofSystem>,
@@ -159,7 +163,7 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn synthesize_and_commit(
         &mut self,
-        transcript: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
+        transcript: &mut <Self::ProofSystem as ProofSystem<F>>::ProverTranscript,
     ) -> Result<WitnessAndCommitments<F, Self>, GKRError> {
         let mut witness = self.synthesize();
 
@@ -183,11 +187,8 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn prove(
         &mut self,
-        transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<GKRProof<F, Self::ProofSystem>, GKRError>
-    where
-        CircuitTranscript<F, Self>: Sync,
-    {
+        transcript_writer: &mut <Self::ProofSystem as ProofSystem<F>>::ProverTranscript,
+    ) -> Result<GKRProof<F, Self::ProofSystem>, GKRError> {
         let synthesize_commit_timer = start_timer!(|| "synthesize and commit");
         // --- Synthesize the circuit, using LayerBuilders to create internal, output, and input layers ---
         // --- Also commit and add those commitments to the transcript
@@ -396,7 +397,7 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn verify(
         &mut self,
-        transcript_reader: &mut TranscriptReader<F, CircuitTranscript<F, Self>>,
+        transcript_reader: &mut <Self::ProofSystem as ProofSystem<F>>::VerifierTranscript,
         gkr_proof: GKRProof<F, Self::ProofSystem>,
     ) -> Result<(), GKRError> {
         // --- Unpacking GKR proof + adding input commitments to transcript first ---
@@ -572,12 +573,13 @@ pub trait GKRCircuit<F: FieldExt> {
     }
 
     /// Generate the circuit hash
-    fn gen_circuit_hash(&mut self) -> F
+    fn gen_circuit_hash<Sp>(&mut self) -> F
     where
-        Self::ProofSystem: ProofSystem<F, Layer = LayerEnum<F>>,
+        Self::ProofSystem:
+            ProofSystem<F, Layer = LayerEnum<F>, ProverTranscript = TranscriptWriter<F, Sp>>,
+        Sp: TranscriptSponge<F>,
     {
-        let mut transcript_writer =
-            TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
+        let mut transcript_writer = TranscriptWriter::<_, _>::new("Circuit Hash");
         let (Witness { layers, .. }, _) =
             self.synthesize_and_commit(&mut transcript_writer).unwrap();
 
