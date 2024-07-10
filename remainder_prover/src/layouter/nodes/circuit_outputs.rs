@@ -61,6 +61,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, OutputLayer = O>, O: From<DenseMle<F>> + Fr
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
+        dbg!(&circuit_map.0.get(&self.source));
         let (circuit_location, data) = circuit_map
             .0
             .get(&self.source)

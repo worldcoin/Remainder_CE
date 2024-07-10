@@ -27,6 +27,7 @@ use super::nodes::{
 };
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield
+#[derive(Debug)]
 pub struct CircuitMap<'a, F>(
     pub(crate) HashMap<NodeId, (CircuitLocation, &'a MultilinearExtension<F>)>,
 );
@@ -211,34 +212,55 @@ pub fn layout<
     ctx: Context,
     nodes: Vec<NodeEnum<F>>,
 ) -> Result<Vec<Box<dyn CompilableNode<F, Pf>>>, DAGError> {
+    nodes.iter().for_each(|node| {
+        dbg!(node.id());
+        dbg!(node.children());
+        dbg!(node.sources());
+    });
+    dbg!("checkpoint 0");
+
     let mut dag = NodeEnumGroup::new(nodes);
 
+    dbg!("checkpoint 1");
     //handle input_layers
     let out = {
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
         let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
         let sealed_inputs: Vec<SealedInputNode<F>> = dag.get_nodes();
+        dbg!("checkpoint 2");
 
         let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode<F>> = HashMap::new();
         let default_input_layer = input_layers[0].id();
+
+        dbg!("checkpoint 3");
 
         for layer in input_layers.iter_mut() {
             input_layer_map.insert(layer.id(), layer);
         }
 
+        dbg!("checkpoint 4");
+
         // Add InputShreds to specified parents
         for input_shred in input_shreds {
             if let Some(input_layer_id) = input_shred.parent {
+                dbg!("checkpoint 5");
+                dbg!(&input_shred);
                 let input_layer = input_layer_map
                     .get_mut(&input_layer_id)
                     .ok_or(DAGError::DanglingNodeId(input_layer_id))?;
+                dbg!("checkpoint 6a");
+
                 input_layer.add_shred(input_shred);
             } else {
+                dbg!("checkpoint 6b");
                 // This probably sucks (rethink default inputlayers)
                 let input_layer = input_layer_map.get_mut(&default_input_layer).unwrap();
                 input_layer.add_shred(input_shred);
             }
         }
+        dbg!("checkpoint 7");
+
+        dbg!(&input_layers[0].children());
 
         sealed_inputs
             .into_iter()
