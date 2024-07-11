@@ -29,11 +29,10 @@ use crate::{
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Used to represent a matrix, along with its optional prefix bits (in circuit)
-/// todo!(ende): change the mle_ref: DenseMle<F> to be MultilinearExtension<F> instead
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct Matrix<F: FieldExt> {
-    mle_ref: DenseMle<F>,
+    mle: MultilinearExtension<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
     prefix_bits: Option<Vec<bool>>,
@@ -43,18 +42,18 @@ impl<F: FieldExt> Matrix<F> {
     /// Create a new matrix, note that we require num_rows, and later converts this
     /// parameter to log(num_rows). This is necessary to check all dims are powers of 2
     pub fn new(
-        mle_ref: DenseMle<F>,
+        mle: MultilinearExtension<F>,
         num_rows: usize,
         num_cols: usize,
         prefix_bits: Option<Vec<bool>>,
     ) -> Matrix<F> {
-        assert_eq!(mle_ref.bookkeeping_table().len(), num_rows * num_cols);
+        assert_eq!(mle.get_evals_vector().len(), num_rows * num_cols);
 
         let mut new_bookkeeping_table = Vec::new();
         // pad the columns
         if 1 << log2(num_cols) != num_cols {
             let num_to_pad_each_row = (1 << log2(num_cols) as usize) - num_cols;
-            for chunk in mle_ref.bookkeeping_table().chunks(num_cols) {
+            for chunk in mle.get_evals_vector().chunks(num_cols) {
                 new_bookkeeping_table.extend(
                     [chunk.to_vec(), vec![F::ZERO; num_to_pad_each_row]]
                         .into_iter()
@@ -62,7 +61,7 @@ impl<F: FieldExt> Matrix<F> {
                 )
             }
         } else {
-            new_bookkeeping_table = mle_ref.bookkeeping_table().to_vec();
+            new_bookkeeping_table = mle.get_evals_vector().to_vec();
         }
 
         // pad the rows
@@ -74,12 +73,12 @@ impl<F: FieldExt> Matrix<F> {
                 .concat()
         }
 
-        let mle_ref = DenseMle::new_from_raw(new_bookkeeping_table, mle_ref.layer_id);
+        let mle = MultilinearExtension::new(new_bookkeeping_table);
 
-        assert_eq!(padded_matrix_len, mle_ref.bookkeeping_table().len());
+        assert_eq!(padded_matrix_len, mle.get_evals_vector().len());
 
         Matrix {
-            mle_ref,
+            mle,
             num_rows_vars: log2(num_rows) as usize,
             num_cols_vars: log2(num_cols) as usize,
             prefix_bits,
@@ -93,7 +92,9 @@ impl<F: FieldExt> Matrix<F> {
 pub struct MatMult<F: FieldExt> {
     layer_id: LayerId,
     matrix_a: Matrix<F>,
+    mle_a: Option<DenseMle<F>>,
     matrix_b: Matrix<F>,
+    mle_b: Option<DenseMle<F>>,
     num_vars_middle_ab: Option<usize>,
 }
 
@@ -103,43 +104,51 @@ impl<F: FieldExt> MatMult<F> {
         MatMult {
             layer_id,
             matrix_a,
+            mle_a: None,
             matrix_b,
+            mle_b: None,
             num_vars_middle_ab: None,
         }
     }
 
     fn pre_processing_step(&mut self, claim_a: Vec<F>, claim_b: Vec<F>) {
-        let matrix_a_mle_ref = &mut self.matrix_a.mle_ref;
-        let matrix_b_mle_ref = &mut self.matrix_b.mle_ref;
+        let matrix_a_mle = &mut self.matrix_a.mle;
+        let matrix_b_mle = &mut self.matrix_b.mle;
 
         // check that both matrices are padded
         assert_eq!(
             (1 << self.matrix_a.num_cols_vars) * (1 << self.matrix_a.num_rows_vars),
-            matrix_a_mle_ref.bookkeeping_table().len()
+            matrix_a_mle.get_evals_vector().len()
         );
         assert_eq!(
             (1 << self.matrix_b.num_cols_vars) * (1 << self.matrix_b.num_rows_vars),
-            matrix_b_mle_ref.bookkeeping_table().len()
+            matrix_b_mle.get_evals_vector().len()
         );
 
         // check to make sure the dimensions match
         if self.matrix_a.num_cols_vars == self.matrix_b.num_rows_vars {
             self.num_vars_middle_ab = Some(self.matrix_a.num_cols_vars);
         } else {
-            // TODO: raise error
+            panic!("Matrix dimensions do not match")
         }
 
         let transpose_timer = start_timer!(|| "transpose matrix");
-        let mut matrix_a_transp = gen_transpose_matrix(
-            &matrix_a_mle_ref,
-            self.matrix_a.num_rows_vars,
-            self.matrix_a.num_cols_vars,
-            self.matrix_a.prefix_bits.clone(),
-        );
+        let matrix_a_transp = gen_transpose_matrix(&self.matrix_a);
         end_timer!(transpose_timer);
 
+        let mut matrix_a_transp = DenseMle::new_with_prefix_bits(
+            matrix_a_transp.mle,
+            self.layer_id,
+            matrix_a_transp.prefix_bits.unwrap_or(vec![]),
+        );
+        let mut matrix_b_mle = DenseMle::new_with_prefix_bits(
+            self.matrix_b.mle.clone(),
+            self.layer_id,
+            self.matrix_b.prefix_bits.clone().unwrap_or(vec![]),
+        );
+
         matrix_a_transp.index_mle_indices(0);
-        matrix_b_mle_ref.index_mle_indices(0);
+        matrix_b_mle.index_mle_indices(0);
 
         // bind the row indices of matrix a to relevant claim point
         claim_a.into_iter().enumerate().for_each(|(idx, chal)| {
@@ -163,21 +172,24 @@ impl<F: FieldExt> MatMult<F> {
             })
             .collect_vec();
 
-        self.matrix_a.mle_ref = DenseMle::new_from_raw(
+        let mut mle_a = DenseMle::new_from_raw(
             matrix_a_transp.bookkeeping_table().to_vec(),
             matrix_a_transp.layer_id,
         );
-        self.matrix_a.mle_ref.mle_indices = new_a_indices
+
+        mle_a.mle_indices = new_a_indices
             .into_iter()
             .chain(bound_indices_a.into_iter())
             .collect_vec();
-        self.matrix_a.mle_ref.index_mle_indices(0);
+        mle_a.index_mle_indices(0);
+
+        self.mle_a = Some(mle_a);
 
         // bind the column indices of matrix b to relevant claim point
         claim_b.into_iter().enumerate().for_each(|(idx, chal)| {
-            matrix_b_mle_ref.fix_variable(idx, chal);
+            matrix_b_mle.fix_variable(idx, chal);
         });
-        let new_b_indices = matrix_b_mle_ref
+        let new_b_indices = matrix_b_mle
             .clone()
             .mle_indices
             .into_iter()
@@ -189,8 +201,10 @@ impl<F: FieldExt> MatMult<F> {
                 }
             })
             .collect_vec();
-        matrix_b_mle_ref.mle_indices = new_b_indices;
-        matrix_b_mle_ref.index_mle_indices(0);
+        matrix_b_mle.mle_indices = new_b_indices;
+        matrix_b_mle.index_mle_indices(0);
+
+        self.mle_b = Some(matrix_b_mle)
     }
 
     /// dummy sumcheck prover for this, testing purposes
@@ -210,7 +224,7 @@ impl<F: FieldExt> MatMult<F> {
         let mut challenge: Option<F> = None;
 
         let first_message = compute_sumcheck_message_no_beta_table(
-            &[self.matrix_a.mle_ref.clone(), self.matrix_b.mle_ref.clone()],
+            &[self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()],
             0,
             2,
         )
@@ -224,14 +238,16 @@ impl<F: FieldExt> MatMult<F> {
             challenge = Some(F::from(rng.gen::<u64>()));
             let chal = challenge.unwrap();
             challenges.push(chal);
-            self.matrix_a
-                .mle_ref
+            self.mle_a
+                .as_mut()
+                .unwrap()
                 .fix_variable(round - 1, challenge.clone().unwrap());
-            self.matrix_b
-                .mle_ref
+            self.mle_b
+                .as_mut()
+                .unwrap()
                 .fix_variable(round - 1, challenge.clone().unwrap());
             let next_message = compute_sumcheck_message_no_beta_table(
-                &[self.matrix_a.mle_ref.clone(), self.matrix_b.mle_ref.clone()],
+                &[self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()],
                 round,
                 2,
             )
@@ -288,11 +304,13 @@ impl<F: FieldExt> MatMult<F> {
 
         let final_chal = F::from(rng.gen::<u64>());
         challenges.push(final_chal);
-        self.matrix_a
-            .mle_ref
+        self.mle_a
+            .as_mut()
+            .unwrap()
             .fix_variable(num_vars_middle - 1, final_chal);
-        self.matrix_b
-            .mle_ref
+        self.mle_b
+            .as_mut()
+            .unwrap()
             .fix_variable(num_vars_middle - 1, final_chal);
 
         let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
@@ -308,9 +326,9 @@ impl<F: FieldExt> MatMult<F> {
             .collect_vec();
 
         let fully_bound_a =
-            check_fully_bound(&mut [self.matrix_a.mle_ref.clone()], full_claim_chals_a).unwrap();
+            check_fully_bound(&mut [self.mle_a.clone().unwrap()], full_claim_chals_a).unwrap();
         let fully_bound_b =
-            check_fully_bound(&mut [self.matrix_b.mle_ref.clone()], full_claim_chals_b).unwrap();
+            check_fully_bound(&mut [self.mle_b.clone().unwrap()], full_claim_chals_b).unwrap();
         let matrix_product = fully_bound_a * fully_bound_b;
 
         if prev_at_r != matrix_product {
@@ -339,7 +357,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
         let mut challenges: Vec<F> = vec![];
 
         let first_message = compute_sumcheck_message_no_beta_table(
-            &[self.matrix_a.mle_ref.clone(), self.matrix_b.mle_ref.clone()],
+            &[self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()],
             0,
             2,
         )
@@ -358,10 +376,16 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
             .chain((1..num_vars_middle).map(|round| {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                 challenges.push(challenge);
-                self.matrix_a.mle_ref.fix_variable(round - 1, challenge);
-                self.matrix_b.mle_ref.fix_variable(round - 1, challenge);
+                self.mle_a
+                    .as_mut()
+                    .unwrap()
+                    .fix_variable(round - 1, challenge);
+                self.mle_b
+                    .as_mut()
+                    .unwrap()
+                    .fix_variable(round - 1, challenge);
                 let next_message = compute_sumcheck_message_no_beta_table(
-                    &[self.matrix_a.mle_ref.clone(), self.matrix_b.mle_ref.clone()],
+                    &[self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()],
                     round,
                     2,
                 )
@@ -374,11 +398,13 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 
         let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge for binding x");
         challenges.push(final_chal);
-        self.matrix_a
-            .mle_ref
+        self.mle_a
+            .as_mut()
+            .unwrap()
             .fix_variable(num_vars_middle - 1, final_chal);
-        self.matrix_b
-            .mle_ref
+        self.mle_b
+            .as_mut()
+            .unwrap()
             .fix_variable(num_vars_middle - 1, final_chal);
 
         Ok(Some(sumcheck_rounds.into()))
@@ -456,9 +482,9 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
             .chain(challenges.into_iter())
             .collect_vec();
         let fully_bound_a =
-            check_fully_bound(&mut [self.matrix_a.mle_ref.clone()], full_claim_chals_a).unwrap();
+            check_fully_bound(&mut [self.mle_a.clone().unwrap()], full_claim_chals_a).unwrap();
         let fully_bound_b =
-            check_fully_bound(&mut [self.matrix_b.mle_ref.clone()], full_claim_chals_b).unwrap();
+            check_fully_bound(&mut [self.mle_b.clone().unwrap()], full_claim_chals_b).unwrap();
         let matrix_product = fully_bound_a * fully_bound_b;
 
         if prev_at_r != matrix_product {
@@ -479,11 +505,12 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MatMult<F> {
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        let claims = vec![&self.matrix_a, &self.matrix_b]
+        let claims = vec![&self.mle_a, &self.mle_b]
             .into_iter()
             .map(|matrix| {
                 let matrix_fixed_indices = matrix
-                    .mle_ref
+                    .as_ref()
+                    .unwrap()
                     .mle_indices()
                     .into_iter()
                     .map(|index| {
@@ -494,13 +521,13 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MatMult<F> {
                     })
                     .collect_vec();
 
-                let matrix_val = matrix.mle_ref.bookkeeping_table()[0];
+                let matrix_val = matrix.as_ref().unwrap().bookkeeping_table()[0];
                 let claim: ClaimMle<F> = ClaimMle::new(
                     matrix_fixed_indices,
                     matrix_val,
                     Some(self.id().clone()),
-                    Some(matrix.mle_ref.layer_id),
-                    Some(MleEnum::Dense(matrix.mle_ref.clone())),
+                    Some(matrix.as_ref().unwrap().layer_id),
+                    Some(MleEnum::Dense(matrix.clone().unwrap())),
                 );
                 claim
             })
@@ -515,17 +542,17 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
         &self,
         claim_vecs: &[Vec<F>],
         claimed_vals: &[F],
-        claim_mle_refs: Vec<MleEnum<F>>,
+        claim_mles: Vec<MleEnum<F>>,
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
         let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
 
-        let mut claim_mle_refs = claim_mle_refs.clone();
+        let mut claim_mles = claim_mles.clone();
 
         if let Some(common_idx) = common_idx {
-            pre_fix_mle_refs(&mut claim_mle_refs, &claim_vecs[0], common_idx);
+            pre_fix_mle_refs(&mut claim_mles, &claim_vecs[0], common_idx);
         }
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
@@ -541,8 +568,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
                     })
                     .collect();
 
-                let wlx_eval_on_mle_ref =
-                    combine_mle_refs_with_aggregate(&claim_mle_refs, &new_chal);
+                let wlx_eval_on_mle_ref = combine_mle_refs_with_aggregate(&claim_mles, &new_chal);
                 wlx_eval_on_mle_ref.unwrap()
             })
             .collect();
@@ -568,12 +594,12 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
 //         {
 //             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //                 f.debug_struct("MatMult")
-//                     .field("matrix_a_layer_id", &self.0.matrix_a.mle_ref.layer_id)
-//                     .field("matrix_a_mle_indices", &self.0.matrix_a.mle_ref.mle_indices)
-//                     .field("matrix_b_layer_id", &self.0.matrix_b.mle_ref.layer_id)
+//                     .field("matrix_a_layer_id", &self.0.mle_a.as_mut().unwrap().layer_id)
+//                     .field("matrix_a_mle_indices", &self.0.mle_a.as_mut().unwrap().mle_indices)
+//                     .field("matrix_b_layer_id", &self.0.mle_b.as_mut().unwrap().layer_id)
 //                     .field(
 //                         "matrix_b_mle_indices",
-//                         &self.0.matrix_b.mle_ref.mle_indices(),
+//                         &self.0.mle_b.as_mut().unwrap().mle_indices(),
 //                     )
 //                     .field("num_vars_middle_ab", &self.0.matrix_a.num_cols_vars)
 //                     .finish()
@@ -584,60 +610,39 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
 // }
 
 /// Generate the transpose of a matrix, uses Array2 from ndarray
-pub fn gen_transpose_matrix<F: FieldExt>(
-    matrix: &DenseMle<F>,
-    num_rows_vars: usize,
-    num_cols_vars: usize,
-    prefix_bits: Option<Vec<bool>>,
-) -> DenseMle<F> {
-    let num_rows = 1 << num_rows_vars;
-    let num_cols = 1 << num_cols_vars;
-
-    println!("matrix {:?}", matrix);
+pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
+    let num_rows = 1 << matrix.num_rows_vars;
+    let num_cols = 1 << matrix.num_cols_vars;
 
     let matrix_array_2 =
-        Array2::from_shape_vec((num_rows, num_cols), matrix.bookkeeping_table().to_vec()).unwrap();
+        Array2::from_shape_vec((num_rows, num_cols), matrix.mle.get_evals_vector().to_vec())
+            .unwrap();
     let matrix_transpose = matrix_array_2.reversed_axes();
     let matrix_transp_vec = matrix_transpose
         .outer_iter()
         .map(|x| x.to_vec())
         .flat_map(|row| row)
         .collect_vec();
-    println!("matrix_transp_vec {:?}", matrix_transp_vec);
-    if let Some(prefix_bits) = prefix_bits {
-        DenseMle::new_with_prefix_bits(
-            MultilinearExtension::new(matrix_transp_vec),
-            matrix.layer_id,
-            prefix_bits,
-        )
-    } else {
-        DenseMle::new_from_raw(matrix_transp_vec, matrix.layer_id)
-    }
+
+    let mle = MultilinearExtension::new(matrix_transp_vec);
+
+    Matrix::new(mle, num_rows, num_cols, matrix.prefix_bits.clone())
 }
 
 /// Multiply two matrices together, with a transposed matrix_b
 pub fn product_two_matrices<F: FieldExt>(matrix_a: Matrix<F>, matrix_b: Matrix<F>) -> Vec<F> {
     let num_middle_ab = 1 << matrix_a.num_cols_vars;
 
-    println!("matrix_b.mle_ref {:?}", matrix_b.mle_ref);
+    let matrix_b_transpose = gen_transpose_matrix(&matrix_b);
 
-    let matrix_b_transpose = gen_transpose_matrix(
-        &matrix_b.mle_ref,
-        matrix_b.num_rows_vars,
-        matrix_b.num_cols_vars,
-        matrix_b.prefix_bits,
-    );
-    println!(
-        "transposed matrix {:?}",
-        matrix_b_transpose.bookkeeping_table()
-    );
     let product_matrix = matrix_a
-        .mle_ref
-        .bookkeeping_table()
+        .mle
+        .get_evals_vector()
         .chunks(num_middle_ab as usize)
         .flat_map(|chunk_a| {
             matrix_b_transpose
-                .bookkeeping_table()
+                .mle
+                .get_evals_vector()
                 .chunks(num_middle_ab)
                 .map(|chunk_b| {
                     chunk_a
@@ -663,7 +668,7 @@ mod test {
             matmult::{product_two_matrices, MatMult, Matrix},
             LayerId,
         },
-        mle::{dense::DenseMle, Mle},
+        mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     };
 
     #[test]
@@ -679,11 +684,9 @@ mod test {
             Fr::from(10),
         ];
         let mle_vec_b = vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)];
-        let mle_a: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_a, LayerId::Input(0));
-        let mle_b: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_b, LayerId::Input(0));
 
-        let matrix_a = Matrix::new(mle_a, 4, 2, None);
-        let matrix_b = Matrix::new(mle_b, 2, 2, None);
+        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 4, 2, None);
+        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 2, 2, None);
 
         let res_product = product_two_matrices(matrix_a, matrix_b);
 
@@ -747,11 +750,9 @@ mod test {
             Fr::from(7),
             Fr::from(4),
         ];
-        let mle_a: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_a, LayerId::Input(0));
-        let mle_b: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_b, LayerId::Input(0));
 
-        let matrix_a = Matrix::new(mle_a, 8, 4, None);
-        let matrix_b = Matrix::new(mle_b, 4, 2, None);
+        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 8, 4, None);
+        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 4, 2, None);
 
         let res_product = product_two_matrices(matrix_a, matrix_b);
 
@@ -808,11 +809,8 @@ mod test {
             Fr::from(3),
         ];
 
-        let mle_a: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_a, LayerId::Input(0));
-        let mle_b: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_b, LayerId::Input(0));
-
-        let matrix_a = Matrix::new(mle_a, 5, 3, None);
-        let matrix_b = Matrix::new(mle_b, 3, 3, None);
+        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 5, 3, None);
+        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 3, 3, None);
 
         let res_product = product_two_matrices(matrix_a, matrix_b);
 
@@ -840,10 +838,9 @@ mod test {
             Fr::from(3 * 9 + 10 * 9 + 2 * 3),
         ];
 
-        let mle_out: DenseMle<Fr> = DenseMle::new_from_raw(exp_product, LayerId::Input(0));
-        let matrix_out = Matrix::new(mle_out, 5, 3, None);
+        let matrix_out = Matrix::new(MultilinearExtension::new(exp_product), 5, 3, None);
 
-        assert_eq!(res_product, matrix_out.mle_ref.bookkeeping_table());
+        assert_eq!(res_product, matrix_out.mle.get_evals_vector().clone());
     }
 
     #[test]
@@ -854,11 +851,9 @@ mod test {
 
         let matrix_a_vec = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(1)];
         let matrix_b_vec = vec![Fr::from(1), Fr::from(1), Fr::from(1), Fr::from(1)];
-        let matrix_a_mle: DenseMle<Fr> = DenseMle::new_from_raw(matrix_a_vec, LayerId::Input(0));
-        let matrix_b_mle: DenseMle<Fr> = DenseMle::new_from_raw(matrix_b_vec, LayerId::Input(0));
 
-        let matrix_a: Matrix<Fr> = Matrix::new(matrix_a_mle, 2, 2, None);
-        let matrix_b: Matrix<Fr> = Matrix::new(matrix_b_mle, 2, 2, None);
+        let matrix_a: Matrix<Fr> = Matrix::new(MultilinearExtension::new(matrix_a_vec), 2, 2, None);
+        let matrix_b: Matrix<Fr> = Matrix::new(MultilinearExtension::new(matrix_b_vec), 2, 2, None);
 
         let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
 
@@ -885,11 +880,9 @@ mod test {
             Fr::from(2),
         ];
         let matrix_b_vec = vec![Fr::from(1), Fr::from(2), Fr::from(1), Fr::from(1)];
-        let matrix_a_mle: DenseMle<Fr> = DenseMle::new_from_raw(matrix_a_vec, LayerId::Input(0));
-        let matrix_b_mle: DenseMle<Fr> = DenseMle::new_from_raw(matrix_b_vec, LayerId::Input(0));
 
-        let matrix_a: Matrix<Fr> = Matrix::new(matrix_a_mle, 2, 4, None);
-        let matrix_b: Matrix<Fr> = Matrix::new(matrix_b_mle, 4, 1, None);
+        let matrix_a: Matrix<Fr> = Matrix::new(MultilinearExtension::new(matrix_a_vec), 2, 4, None);
+        let matrix_b: Matrix<Fr> = Matrix::new(MultilinearExtension::new(matrix_b_vec), 4, 1, None);
 
         let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
 
@@ -932,11 +925,8 @@ mod test {
             Fr::from(3),
         ];
 
-        let mle_a: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_a, LayerId::Input(0));
-        let mle_b: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec_b, LayerId::Input(0));
-
-        let matrix_a = Matrix::new(mle_a, 5, 3, None);
-        let matrix_b = Matrix::new(mle_b, 3, 3, None);
+        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 5, 3, None);
+        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 3, 3, None);
 
         let res_product = product_two_matrices(matrix_a.clone(), matrix_b.clone());
         let mut mle_product_ref = DenseMle::new_from_raw(res_product, LayerId::Input(0));
