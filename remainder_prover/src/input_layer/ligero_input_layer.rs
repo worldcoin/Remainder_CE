@@ -135,7 +135,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             .clone()
             .ok_or(InputLayerError::OpeningBeforeCommitment)?;
 
-        let ligero_eval_proof: LigeroProof<F> = remainder_ligero_eval_prove(
+        remainder_ligero_eval_prove(
             self.mle.current_mle.get_evals_vector(),
             claim.get_point(),
             transcript_writer,
