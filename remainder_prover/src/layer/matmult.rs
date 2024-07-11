@@ -84,6 +84,11 @@ impl<F: FieldExt> Matrix<F> {
             prefix_bits,
         }
     }
+
+    /// get the dimension of this matrix
+    pub fn num_vars_rows_cols(&self) -> (usize, usize) {
+        (self.num_rows_vars, self.num_cols_vars)
+    }
 }
 
 /// Used to represent a matrix multiplication layer
@@ -581,33 +586,38 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
     }
 }
 
-// impl<F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> MatMult<F, Tr> {
-//     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
-//         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
-//         // --- so that it can be returned as an `impl std::fmt::Display` ---
-//         struct MatMultCircuitDesc<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>>(
-//             &'a MatMult<F, Tr>,
-//         );
+impl<F: std::fmt::Debug + FieldExt> MatMult<F> {
+    pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
+        // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
+        // --- so that it can be returned as an `impl std::fmt::Display` ---
+        struct MatMultCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a MatMult<F>);
 
-//         impl<'a, F: std::fmt::Debug + FieldExt, Tr: Transcript<F>> std::fmt::Display
-//             for MatMultCircuitDesc<'a, F, Tr>
-//         {
-//             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//                 f.debug_struct("MatMult")
-//                     .field("matrix_a_layer_id", &self.0.mle_a.as_mut().unwrap().layer_id)
-//                     .field("matrix_a_mle_indices", &self.0.mle_a.as_mut().unwrap().mle_indices)
-//                     .field("matrix_b_layer_id", &self.0.mle_b.as_mut().unwrap().layer_id)
-//                     .field(
-//                         "matrix_b_mle_indices",
-//                         &self.0.mle_b.as_mut().unwrap().mle_indices(),
-//                     )
-//                     .field("num_vars_middle_ab", &self.0.matrix_a.num_cols_vars)
-//                     .finish()
-//             }
-//         }
-//         MatMultCircuitDesc(self)
-//     }
-// }
+        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for MatMultCircuitDesc<'a, F> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("MatMult")
+                    .field(
+                        "matrix_a_layer_id",
+                        &self.0.mle_a.as_ref().unwrap().layer_id,
+                    )
+                    .field(
+                        "matrix_a_mle_indices",
+                        &self.0.mle_a.as_ref().unwrap().mle_indices,
+                    )
+                    .field(
+                        "matrix_b_layer_id",
+                        &self.0.mle_b.as_ref().unwrap().layer_id,
+                    )
+                    .field(
+                        "matrix_b_mle_indices",
+                        &self.0.mle_b.as_ref().unwrap().mle_indices,
+                    )
+                    .field("num_vars_middle_ab", &self.0.matrix_a.num_cols_vars)
+                    .finish()
+            }
+        }
+        MatMultCircuitDesc(self)
+    }
+}
 
 /// Generate the transpose of a matrix, uses Array2 from ndarray
 pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
@@ -630,10 +640,10 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
 }
 
 /// Multiply two matrices together, with a transposed matrix_b
-pub fn product_two_matrices<F: FieldExt>(matrix_a: Matrix<F>, matrix_b: Matrix<F>) -> Vec<F> {
+pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>) -> Vec<F> {
     let num_middle_ab = 1 << matrix_a.num_cols_vars;
 
-    let matrix_b_transpose = gen_transpose_matrix(&matrix_b);
+    let matrix_b_transpose = gen_transpose_matrix(matrix_b);
 
     let product_matrix = matrix_a
         .mle
@@ -688,7 +698,7 @@ mod test {
         let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 4, 2, None);
         let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 2, 2, None);
 
-        let res_product = product_two_matrices(matrix_a, matrix_b);
+        let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
         let exp_product = vec![
             Fr::from(1 * 3 + 2 * 9),
@@ -754,7 +764,7 @@ mod test {
         let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 8, 4, None);
         let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 4, 2, None);
 
-        let res_product = product_two_matrices(matrix_a, matrix_b);
+        let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
         let exp_product = vec![
             Fr::from(58),
@@ -812,7 +822,7 @@ mod test {
         let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 5, 3, None);
         let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 3, 3, None);
 
-        let res_product = product_two_matrices(matrix_a, matrix_b);
+        let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
         // 1  2  9
         // 10 13 1       3  5  9
@@ -928,7 +938,7 @@ mod test {
         let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 5, 3, None);
         let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 3, 3, None);
 
-        let res_product = product_two_matrices(matrix_a.clone(), matrix_b.clone());
+        let res_product = product_two_matrices(&matrix_a, &matrix_b);
         let mut mle_product_ref = DenseMle::new_from_raw(res_product, LayerId::Input(0));
 
         let _ = mle_product_ref.index_mle_indices(0);
