@@ -29,6 +29,7 @@ use crate::{
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Used to represent a matrix, along with its optional prefix bits (in circuit)
+/// basically an equivalence of DenseMle<F>, but uninstantiated, until preprocessing
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct Matrix<F: FieldExt> {
@@ -36,6 +37,7 @@ pub struct Matrix<F: FieldExt> {
     num_rows_vars: usize,
     num_cols_vars: usize,
     prefix_bits: Option<Vec<bool>>,
+    layer_id: Option<LayerId>,
 }
 
 impl<F: FieldExt> Matrix<F> {
@@ -46,6 +48,7 @@ impl<F: FieldExt> Matrix<F> {
         num_rows: usize,
         num_cols: usize,
         prefix_bits: Option<Vec<bool>>,
+        layer_id: Option<LayerId>,
     ) -> Matrix<F> {
         assert_eq!(mle.get_evals_vector().len(), num_rows * num_cols);
 
@@ -82,6 +85,7 @@ impl<F: FieldExt> Matrix<F> {
             num_rows_vars: log2(num_rows) as usize,
             num_cols_vars: log2(num_cols) as usize,
             prefix_bits,
+            layer_id,
         }
     }
 
@@ -143,12 +147,12 @@ impl<F: FieldExt> MatMult<F> {
 
         let mut matrix_a_transp = DenseMle::new_with_prefix_bits(
             matrix_a_transp.mle,
-            self.layer_id,
+            matrix_a_transp.layer_id.unwrap(),
             matrix_a_transp.prefix_bits.unwrap_or(vec![]),
         );
         let mut matrix_b_mle = DenseMle::new_with_prefix_bits(
             self.matrix_b.mle.clone(),
-            self.layer_id,
+            self.matrix_b.layer_id.unwrap(),
             self.matrix_b.prefix_bits.clone().unwrap_or(vec![]),
         );
 
@@ -636,7 +640,13 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
 
     let mle = MultilinearExtension::new(matrix_transp_vec);
 
-    Matrix::new(mle, num_rows, num_cols, matrix.prefix_bits.clone())
+    Matrix::new(
+        mle,
+        num_rows,
+        num_cols,
+        matrix.prefix_bits.clone(),
+        matrix.layer_id.clone(),
+    )
 }
 
 /// Multiply two matrices together, with a transposed matrix_b
@@ -695,8 +705,8 @@ mod test {
         ];
         let mle_vec_b = vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)];
 
-        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 4, 2, None);
-        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 2, 2, None);
+        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 4, 2, None, None);
+        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 2, 2, None, None);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -761,8 +771,8 @@ mod test {
             Fr::from(4),
         ];
 
-        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 8, 4, None);
-        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 4, 2, None);
+        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 8, 4, None, None);
+        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 4, 2, None, None);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -819,8 +829,8 @@ mod test {
             Fr::from(3),
         ];
 
-        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 5, 3, None);
-        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 3, 3, None);
+        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 5, 3, None, None);
+        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 3, 3, None, None);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -848,7 +858,7 @@ mod test {
             Fr::from(3 * 9 + 10 * 9 + 2 * 3),
         ];
 
-        let matrix_out = Matrix::new(MultilinearExtension::new(exp_product), 5, 3, None);
+        let matrix_out = Matrix::new(MultilinearExtension::new(exp_product), 5, 3, None, None);
 
         assert_eq!(res_product, matrix_out.mle.get_evals_vector().clone());
     }
@@ -862,8 +872,20 @@ mod test {
         let matrix_a_vec = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(1)];
         let matrix_b_vec = vec![Fr::from(1), Fr::from(1), Fr::from(1), Fr::from(1)];
 
-        let matrix_a: Matrix<Fr> = Matrix::new(MultilinearExtension::new(matrix_a_vec), 2, 2, None);
-        let matrix_b: Matrix<Fr> = Matrix::new(MultilinearExtension::new(matrix_b_vec), 2, 2, None);
+        let matrix_a: Matrix<Fr> = Matrix::new(
+            MultilinearExtension::new(matrix_a_vec),
+            2,
+            2,
+            None,
+            Some(LayerId::Input(0)),
+        );
+        let matrix_b: Matrix<Fr> = Matrix::new(
+            MultilinearExtension::new(matrix_b_vec),
+            2,
+            2,
+            None,
+            Some(LayerId::Input(0)),
+        );
 
         let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
 
@@ -891,8 +913,20 @@ mod test {
         ];
         let matrix_b_vec = vec![Fr::from(1), Fr::from(2), Fr::from(1), Fr::from(1)];
 
-        let matrix_a: Matrix<Fr> = Matrix::new(MultilinearExtension::new(matrix_a_vec), 2, 4, None);
-        let matrix_b: Matrix<Fr> = Matrix::new(MultilinearExtension::new(matrix_b_vec), 4, 1, None);
+        let matrix_a: Matrix<Fr> = Matrix::new(
+            MultilinearExtension::new(matrix_a_vec),
+            2,
+            4,
+            None,
+            Some(LayerId::Input(0)),
+        );
+        let matrix_b: Matrix<Fr> = Matrix::new(
+            MultilinearExtension::new(matrix_b_vec),
+            4,
+            1,
+            None,
+            Some(LayerId::Input(0)),
+        );
 
         let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
 
@@ -935,8 +969,20 @@ mod test {
             Fr::from(3),
         ];
 
-        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 5, 3, None);
-        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 3, 3, None);
+        let matrix_a = Matrix::new(
+            MultilinearExtension::new(mle_vec_a),
+            5,
+            3,
+            None,
+            Some(LayerId::Input(0)),
+        );
+        let matrix_b = Matrix::new(
+            MultilinearExtension::new(mle_vec_b),
+            3,
+            3,
+            None,
+            Some(LayerId::Input(0)),
+        );
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
         let mut mle_product_ref = DenseMle::new_from_raw(res_product, LayerId::Input(0));

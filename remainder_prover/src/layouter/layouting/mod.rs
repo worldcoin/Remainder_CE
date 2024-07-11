@@ -21,6 +21,7 @@ use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred, SealedInputNode},
     circuit_outputs::OutputNode,
     gate::GateNode,
+    matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
     split_node::SplitNode,
     CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
@@ -257,11 +258,13 @@ pub fn layout<
         let sectors: Vec<Sector<F>> = dag.get_nodes();
         let gates: Vec<GateNode<F>> = dag.get_nodes();
         let splits: Vec<SplitNode<F>> = dag.get_nodes();
+        let matmults: Vec<MatMultNode<F>> = dag.get_nodes();
         let other_layers = sector_groups
             .into_iter()
             .map(|node| IntermediateNode::new(node))
             .chain(gates.into_iter().map(|node| IntermediateNode::new(node)))
-            .chain(splits.into_iter().map(|node| IntermediateNode::new(node)));
+            .chain(splits.into_iter().map(|node| IntermediateNode::new(node)))
+            .chain(matmults.into_iter().map(|node| IntermediateNode::new(node)));
 
         let intermediate_nodes = other_layers
             .chain(
