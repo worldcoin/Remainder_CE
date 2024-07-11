@@ -216,7 +216,8 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
     aux: LcProofAuxiliaryInfo,
     comm: LigeroCommit<PoseidonSpongeHasher<F>, F>,
     root: LigeroRoot<F>,
-) -> LigeroProof<F> {
+) // -> LigeroProof<F> {
+{
     // --- Sanitycheck ---
     assert!(input_layer_bookkeeping_table.len().is_power_of_two());
 
