@@ -14,7 +14,7 @@ use crate::{
     mle::{dense::DenseMle, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError};
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, VerifierInputLayer};
 use crate::mle::Mle;
 
 /// Represents a random input layer, where we generate random constants in the
@@ -41,61 +41,61 @@ pub struct VerifierRandomInputLayer<F: FieldExt> {
 impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     type Commitment = Vec<F>;
 
-    type OpeningProof = ();
-
     type VerifierInputLayer = VerifierRandomInputLayer<F>;
 
-    /// We do not need to commit to the randomness, so we simply send it in the clear.
-    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        Ok(self.mle.clone())
+    fn commit(&mut self) -> Result<&Self::Commitment, super::InputLayerError> {
+        // We do not need to commit to the randomness, so we simply send it in
+        // the clear.
+        Ok(&self.mle)
     }
 
-    /*
-    /// Append the commitment to the Fiat-Shamir transcript.
-    fn verifier_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), InputLayerError> {
-        for challenge in commitment {
-            let real_chal = transcript_reader
-                .get_challenge("Getting RandomInput")
-                .map_err(InputLayerError::TranscriptError)?;
-            if *challenge != real_chal {
-                return Err(InputLayerError::TranscriptMatchError);
-            }
-        }
-        Ok(())
-    }
-    */
-
-    /// Append the commitment to the Fiat-Shamir transcript.
-    fn prover_append_commitment_to_transcript(
-        _commitment: &Self::Commitment,
+    fn append_commitment_to_transcript(
+        &self,
         _transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
+        // Should never be called. Nothing to commit to here.
         unimplemented!()
     }
 
-    /// We do not have an opening proof because we did not commit to anything. The MLE
-    /// exists in the clear.
     fn open(
         &self,
         _transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
         _claim: Claim<F>,
-    ) -> Result<Self::OpeningProof, super::InputLayerError> {
+    ) -> Result<(), super::InputLayerError> {
+        // We do not have an opening proof because we did not commit to
+        // anything. The MLE exists in the clear.
         Ok(())
     }
 
-    /// In order to verify, simply fix variable on each of the variables for the point
-    /// in `claim`. Check whether the single element left in the bookkeeping table is
-    /// equal to the claimed value in `claim`.
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    fn get_padded_mle(&self) -> DenseMle<F> {
+        DenseMle::new_from_raw(self.mle.clone(), self.layer_id)
+    }
+}
+
+impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
+    type Commitment = ();
+
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
     fn verify(
-        commitment: &Self::Commitment,
-        _opening_proof: &Self::OpeningProof,
+        &self,
         claim: Claim<F>,
-        _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), super::InputLayerError> {
-        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.to_vec(), LayerId::Input(0));
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), InputLayerError> {
+        // In order to verify, simply fix variable on each of the variables for
+        // the point in `claim`. Check whether the single element left in the
+        // bookkeeping table is equal to the claimed value in `claim`.
+
+        let num_evals = 1 << self.num_bits;
+        let commitment = transcript.get_challenges("Random Input Layer Challenges", num_evals)?;
+
+        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment, self.layer_id);
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_iterated_vars() != 0 {
@@ -114,20 +114,6 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
             Err(InputLayerError::RandomInputVerificationFailed)
         }
     }
-
-    fn layer_id(&self) -> &LayerId {
-        &self.layer_id
-    }
-
-    fn get_padded_mle(&self) -> DenseMle<F> {
-        DenseMle::new_from_raw(self.mle.clone(), self.layer_id)
-    }
-
-    fn verifier_get_commitment_from_transcript(
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<Self::Commitment, InputLayerError> {
-        todo!()
-    }
 }
 
 impl<F: FieldExt> RandomInputLayer<F> {
@@ -137,7 +123,7 @@ impl<F: FieldExt> RandomInputLayer<F> {
         size: usize,
         layer_id: LayerId,
     ) -> Self {
-        let mle = transcript.get_challenges("Getting Random Challenges", size);
+        let mle = transcript.get_challenges("Random Input Layer Challenges", size);
         Self { mle, layer_id }
     }
 

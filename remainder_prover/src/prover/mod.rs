@@ -151,7 +151,7 @@ pub trait GKRCircuit<F: FieldExt> {
             .iter_mut()
             .map(|input_layer| {
                 let commitment = input_layer.commit().map_err(GKRError::InputLayerError)?;
-                CircuitInputLayer::<F, Self>::prover_append_commitment_to_transcript(
+                CircuitInputLayer::<F, Self>::append_commitment_to_transcript(
                     &commitment,
                     transcript,
                 );

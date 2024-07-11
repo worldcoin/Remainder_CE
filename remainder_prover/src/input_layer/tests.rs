@@ -60,7 +60,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         let mut input: CircuitInputLayer<F, Self> = input.into();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::prover_append_commitment_to_transcript(&input_commit, transcript_writer);
+        InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript_writer);
 
         // TODO!(ryancao): Fix the `RandomInputLayer::new()` argument to make it less confusing
         let random = RandomInputLayer::new(transcript_writer, 1, LayerId::Input(1));
@@ -99,10 +99,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
                 .to_input_layer::<PublicInputLayer<F>>()
                 .into();
         let input_layer_2_commit = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::prover_append_commitment_to_transcript(
-            &input_layer_2_commit,
-            transcript_writer,
-        );
+        InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commit, transcript_writer);
 
         let layer_2 = EqualityCheck::new(output, output_input);
         let output = layers.add_gkr(layer_2);
@@ -215,7 +212,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         .to_input_layer::<PublicInputLayer<F>>()
         .into();
         let input_layer_1_commitment = input_layer_1.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::prover_append_commitment_to_transcript(
+        InputLayerEnum::append_commitment_to_transcript(
             &input_layer_1_commitment,
             transcript_writer,
         );
@@ -229,7 +226,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         .to_input_layer::<PublicInputLayer<F>>()
         .into();
         let input_layer_2_commitment = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::prover_append_commitment_to_transcript(
+        InputLayerEnum::append_commitment_to_transcript(
             &input_layer_2_commitment,
             transcript_writer,
         );

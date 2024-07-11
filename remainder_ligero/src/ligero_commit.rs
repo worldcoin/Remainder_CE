@@ -255,8 +255,8 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
 /// // TODO!(ryancao) -- see tests below!
 /// ```
 pub fn remainder_ligero_verify<F: FieldExt, T: TranscriptSponge<F>>(
-    proof: &LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-    aux: LcProofAuxiliaryInfo,
+    // proof: &LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+    // aux: LcProofAuxiliaryInfo,
     tr: &mut TranscriptReader<F, T>,
     challenge_coord: &[F],
     claimed_value: F,

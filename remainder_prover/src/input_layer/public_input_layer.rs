@@ -14,7 +14,9 @@ use crate::{
     mle::{dense::DenseMle, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
+use super::{
+    get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer, VerifierInputLayer,
+};
 use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
@@ -35,59 +37,69 @@ pub struct VerifierPublicInputLayer<F: FieldExt> {
 impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     type Commitment = Vec<F>;
 
-    type OpeningProof = ();
-
     type VerifierInputLayer = VerifierPublicInputLayer<F>;
 
-    /// Because this is a public input layer, we do not need to commit to the MLE and the
-    /// "commitment" is just the MLE itself.
-    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        Ok(self.mle.current_mle.get_evals_vector().clone())
+    /// Because this is a public input layer, we do not need to commit to the
+    /// MLE and the "commitment" is just the MLE evaluations themselves.
+    fn commit(&mut self) -> Result<&Self::Commitment, super::InputLayerError> {
+        Ok(self.mle.current_mle.get_evals_vector())
     }
 
     /// Append the commitment to the Fiat-Shamir transcript.
-    fn prover_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
+    fn append_commitment_to_transcript(
+        &self,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
-        transcript_writer.append_elements("Public Input Commitment", commitment);
+        transcript_writer.append_elements(
+            "Public Input Commitment",
+            self.mle.current_mle.get_evals_vector(),
+        );
     }
 
-    /*
-    /// Append the commitment to the Fiat-Shamir transcript.
-    fn verifier_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), InputLayerError> {
-        let num_elements = commitment.len();
-        let transcript_commitment = transcript_reader
-            .consume_elements("Public Input Commitment", num_elements)
-            .map_err(InputLayerError::TranscriptError)?;
-        debug_assert_eq!(transcript_commitment, *commitment);
-        Ok(())
-    }
-    */
-
-    /// We do not have an opening proof because we did not commit to anything. The MLE
-    /// exists in the clear.
+    /// We do not have an opening proof because we did not commit to anything.
+    /// The MLE exists in the clear.
     fn open(
         &self,
         _: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
         _: crate::claims::Claim<F>,
-    ) -> Result<Self::OpeningProof, super::InputLayerError> {
+    ) -> Result<(), super::InputLayerError> {
         Ok(())
+    }
+
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    fn get_padded_mle(&self) -> DenseMle<F> {
+        self.mle.clone()
+    }
+}
+
+impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
+    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self {
+        Self { mle, layer_id }
+    }
+}
+
+impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
+    type Commitment = Vec<F>;
+
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
     }
 
     /// In order to verify, simply fix variable on each of the variables for the point
     /// in `claim`. Check whether the single element left in the bookkeeping table is
     /// equal to the claimed value in `claim`.
     fn verify(
-        commitment: &Self::Commitment,
-        _opening_proof: &Self::OpeningProof,
+        &self,
         claim: Claim<F>,
-        _transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
-        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), LayerId::Input(0));
+        let num_evals = 1 << self.num_bits;
+        let commitment = transcript.consume_elements("Public Input Commitment", num_evals)?;
+
+        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_iterated_vars() != 0 {
@@ -106,26 +118,6 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         } else {
             Err(InputLayerError::PublicInputVerificationFailed)
         }
-    }
-
-    fn layer_id(&self) -> &LayerId {
-        &self.layer_id
-    }
-
-    fn get_padded_mle(&self) -> DenseMle<F> {
-        self.mle.clone()
-    }
-
-    fn verifier_get_commitment_from_transcript(
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<Self::Commitment, InputLayerError> {
-        todo!()
-    }
-}
-
-impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
-    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self {
-        Self { mle, layer_id }
     }
 }
 
