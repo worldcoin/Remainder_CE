@@ -27,7 +27,7 @@ pub struct SplitNode<F: FieldExt> {
 
 impl<F: FieldExt> SplitNode<F> {
     /// Creates 2^num_vars `SplitNodes` from a single ClaimableNode
-    pub fn new(ctx: &Context, node: impl ClaimableNode<F = F>, num_vars: usize) -> Vec<Self> {
+    pub fn new(ctx: &Context, node: &impl ClaimableNode<F = F>, num_vars: usize) -> Vec<Self> {
         let data = node.get_data();
         let source = node.id();
         let step = 1 << num_vars;
@@ -43,7 +43,8 @@ impl<F: FieldExt> SplitNode<F> {
                     .cloned()
                     .collect_vec();
 
-                let data = MultilinearExtension::new(Evaluations::new(max_num_vars, data));
+                let data =
+                    MultilinearExtension::new_from_evals(Evaluations::new(max_num_vars, data));
                 Self {
                     id: ctx.get_new_id(),
                     source,
@@ -135,4 +136,101 @@ fn bits_iter(num_bits: usize) -> impl Iterator<Item = Vec<bool>> {
             )
         }
     })
+}
+
+#[cfg(test)]
+mod test {
+
+    use itertools::Itertools;
+    use remainder_shared_types::Fr;
+
+    use crate::{
+        expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+        layouter::{
+            compiling::LayouterCircuit,
+            component::ComponentSet,
+            nodes::{
+                circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+                circuit_outputs::OutputNode,
+                node_enum::NodeEnum,
+                sector::Sector,
+            },
+        },
+        mle::evals::MultilinearExtension,
+        prover::helpers::test_circuit,
+    };
+
+    use super::SplitNode;
+
+    #[test]
+    fn test_split_node_in_circuit() {
+        let circuit = LayouterCircuit::new(|ctx| {
+            let mle = MultilinearExtension::<Fr>::interlace_mles(vec![
+                MultilinearExtension::new(vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
+                MultilinearExtension::new(vec![Fr::from(5), Fr::from(6), Fr::from(7), Fr::from(8)]),
+            ]);
+            // the mle_out = [1*5, 2*6, 3*7, 4*8], the product between the two split nodes
+            let mle_out = MultilinearExtension::new(vec![
+                Fr::from(1 * 5),
+                Fr::from(2 * 6),
+                Fr::from(3 * 7),
+                Fr::from(4 * 8),
+            ]);
+
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+
+            let input_shred = InputShred::new(ctx, mle, Some(&input_layer));
+            let input_shred_out = InputShred::new(ctx, mle_out, Some(&input_layer));
+
+            let split_sectors = SplitNode::new(ctx, &input_shred, 1);
+            let sector_prod = Sector::new(
+                ctx,
+                &[&split_sectors[0], &split_sectors[1]],
+                |inputs| Expression::<_, AbstractExpr>::products(vec![inputs[0], inputs[1]]),
+                |inputs| {
+                    let data: Vec<Fr> = inputs[0]
+                        .get_evals_vector()
+                        .iter()
+                        .zip(inputs[1].get_evals_vector().iter())
+                        .map(|(lhs, rhs)| *lhs * *rhs)
+                        .collect();
+
+                    MultilinearExtension::new(data)
+                },
+            );
+
+            let final_sector = Sector::new(
+                ctx,
+                &[&sector_prod, &input_shred_out],
+                |inputs| {
+                    Expression::<Fr, AbstractExpr>::mle(inputs[0])
+                        - Expression::<Fr, AbstractExpr>::mle(inputs[1])
+                },
+                |_| MultilinearExtension::new_sized_zero(2),
+            );
+
+            let output = OutputNode::new_zero(ctx, &final_sector);
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(
+                vec![
+                    input_layer.into(),
+                    input_shred.into(),
+                    input_shred_out.into(),
+                    sector_prod.into(),
+                    final_sector.into(),
+                    output.into(),
+                ]
+                .into_iter()
+                .chain(
+                    split_sectors
+                        .into_iter()
+                        .map(|split_node| split_node.into())
+                        .collect_vec(),
+                )
+                .collect_vec(),
+            )
+        });
+
+        test_circuit(circuit, None);
+    }
 }

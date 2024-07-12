@@ -35,16 +35,18 @@ fn get_prefix_bits_from_capacity(
         .collect()
 }
 
-fn index_input_mles<F: FieldExt>(input_mles: &[&MultilinearExtension<F>]) -> Vec<Vec<bool>> {
+fn index_input_mles<F: FieldExt>(
+    input_mles: &[&MultilinearExtension<F>],
+) -> (Vec<Vec<bool>>, Vec<usize>) {
     let input_mle_num_vars = input_mles
         .iter()
         .map(|input_mle| input_mle.num_vars())
         .collect_vec();
 
-    // --- Add input-output MLE length if needed ---
+    // Add input-output MLE length if needed
     let mle_combine_indices = argsort(&input_mle_num_vars, true);
 
-    // --- Get the total needed capacity by rounding the raw capacity up to the nearest power of 2 ---
+    // Get the total needed capacity by rounding the raw capacity up to the nearest power of 2
     let raw_needed_capacity = input_mle_num_vars
         .into_iter()
         .fold(0, |prev, input_mle_num_vars| {
@@ -53,15 +55,14 @@ fn index_input_mles<F: FieldExt>(input_mles: &[&MultilinearExtension<F>]) -> Vec
     let padded_needed_capacity = (1 << log2(raw_needed_capacity)) as usize;
     let total_num_vars = log2(padded_needed_capacity) as usize;
 
-    // --- Go through individual MLEs and add prefix bits ---
+    // Go through individual MLEs and collect the prefix bits that need to be added to each one
     let mut current_padded_usage: u32 = 0;
-    mle_combine_indices
-        .into_iter()
+    let res = mle_combine_indices
+        .iter()
         .map(|input_mle_idx| {
-            // --- Only add prefix bits to the non-input-output MLEs ---
-            let input_mle = &input_mles[input_mle_idx];
+            let input_mle = &input_mles[*input_mle_idx];
 
-            // --- Grab the prefix bits and add them to the individual MLEs ---
+            // Collect the prefix bits for each MLE
             let prefix_bits: Vec<_> = get_prefix_bits_from_capacity(
                 current_padded_usage,
                 total_num_vars,
@@ -70,7 +71,8 @@ fn index_input_mles<F: FieldExt>(input_mles: &[&MultilinearExtension<F>]) -> Vec
             current_padded_usage += 2_u32.pow(input_mle.num_vars() as u32);
             prefix_bits
         })
-        .collect()
+        .collect();
+    (res, mle_combine_indices)
 }
 
 /// Combines the list of input MLEs in the input layer into one giant MLE by interleaving them
@@ -110,7 +112,7 @@ fn combine_input_mles<F: FieldExt>(
     let num_vars = log2(final_bookkeeping_table.len()) as usize;
 
     // --- Convert the final bookkeeping table back to "little-endian" ---
-    MultilinearExtension::new(Evaluations::new(
+    MultilinearExtension::new_from_evals(Evaluations::new(
         num_vars,
         invert_mle_bookkeeping_table(final_bookkeeping_table),
     ))
@@ -174,18 +176,21 @@ where
             .map(|input_shred| &input_shred.data)
             .collect_vec();
         let mle = combine_input_mles(&input_mles);
-        let prefix_bits = index_input_mles(&input_mles);
+        let (prefix_bits, input_shred_indices) = index_input_mles(&input_mles);
+        debug_assert_eq!(input_shred_indices.len(), children.len());
 
         let out: IL = match input_layer_type {
             InputLayerType::LigeroInputLayer => LigeroInputLayer::new(mle, layer_id).into(),
             InputLayerType::PublicInputLayer => PublicInputLayer::new(mle, layer_id).into(),
             InputLayerType::Default => LigeroInputLayer::new(mle, layer_id).into(),
         };
+
         witness.add_input_layer(out);
-        children
+        input_shred_indices
             .iter()
             .zip(prefix_bits)
-            .for_each(|(input_shred, prefix_bits)| {
+            .for_each(|(input_shred_index, prefix_bits)| {
+                let input_shred = &children[*input_shred_index];
                 circuit_map.0.insert(
                     input_shred.id,
                     (

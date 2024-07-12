@@ -242,6 +242,7 @@ fn compile_layer<
     let layer = RegularLayer::new_raw(layer_id, expr);
 
     witness_builder.add_layer(layer.into());
+
     // Add the new sectors to the circuit map
     for (node_id, mut prefix_bits) in prefix_bits {
         prefix_bits.reverse();
@@ -255,6 +256,7 @@ fn compile_layer<
             .0
             .insert(node_id, (CircuitLocation::new(layer_id, prefix_bits), data));
     }
+
     Ok(())
 }
 
