@@ -7,6 +7,7 @@ use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::layer_enum;
 
 use super::gate::Gate;
+use super::matmult::MatMult;
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
@@ -14,7 +15,7 @@ use super::{regular_layer::RegularLayer, Layer};
 
 use crate::claims::YieldClaim;
 
-layer_enum!(LayerEnum, (Gkr: RegularLayer<F>), (Gate: Gate<F>));
+layer_enum!(LayerEnum, (Gkr: RegularLayer<F>), (Gate: Gate<F>), (MatMult: MatMult<F>));
 
 impl<F: FieldExt> LayerEnum<F> {
     ///Gets the size of the Layer as a whole in terms of number of bits
@@ -22,6 +23,7 @@ impl<F: FieldExt> LayerEnum<F> {
         let expression = match self {
             LayerEnum::Gkr(layer) => &layer.expression,
             LayerEnum::Gate(_) => unimplemented!(),
+            LayerEnum::MatMult(_) => unimplemented!(),
         };
 
         expression.get_expression_size(0)
@@ -31,6 +33,9 @@ impl<F: FieldExt> LayerEnum<F> {
         match self {
             LayerEnum::Gkr(layer) => Box::new(layer.expression().circuit_description_fmt()),
             LayerEnum::Gate(gate_layer) => Box::new(gate_layer.circuit_description_fmt()),
+            LayerEnum::MatMult(mat_mult_layer) => {
+                Box::new(mat_mult_layer.circuit_description_fmt())
+            }
         }
     }
 }
@@ -59,6 +64,13 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
                 num_claims,
                 num_idx,
             ),
+            LayerEnum::MatMult(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
         }
     }
 }
@@ -68,6 +80,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for LayerEnum<F> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
             LayerEnum::Gate(layer) => layer.get_claims(),
+            LayerEnum::MatMult(layer) => layer.get_claims(),
         }
     }
 }
