@@ -3,7 +3,7 @@ use remainder_shared_types::{
     input_layer::InputLayer,
     layer::Layer,
     transcript::{
-        poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptSponge,
+        poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader,
         TranscriptWriter, VerifierTranscript,
     },
     FieldExt,

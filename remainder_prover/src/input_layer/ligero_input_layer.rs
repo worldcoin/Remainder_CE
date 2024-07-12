@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::wlx_eval::YieldWLXEvals,
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
+    mle::{evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
 use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
