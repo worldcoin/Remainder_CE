@@ -148,7 +148,7 @@ macro_rules! input_layer_enum {
             #[derive(serde::Serialize, serde::Deserialize)]
             #[serde(bound = "F: FieldExt")]
             #[doc = r"Verifier layer description enum"]
-            pub enum [<$type_name VerifierInputLayer>]<F: FieldExt> {
+            pub enum [<Verifier $type_name>]<F: FieldExt> {
                 $(
                     #[doc = "Verifier layer description variant"]
                     $var_name(<$variant as InputLayer<F>>::VerifierInputLayer),
@@ -159,24 +159,26 @@ macro_rules! input_layer_enum {
         impl<F: FieldExt> $crate::input_layer::InputLayer<F> for $type_name<F> {
             paste::paste! {
                 type Commitment = [<$type_name Commitment>]<F>;
-                type VerifierInputLayer = [<$type_name VerifierInputLayer>]<F>;
+                type VerifierInputLayer = [<Verifier $type_name>]<F>;
             }
 
-            fn commit(&mut self) -> Result<&Self::Commitment, $crate::input_layer::InputLayerError> {
+            fn commit(&mut self) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
                 match self {
                     $(
-                        Self::$var_name(layer) => layer.commit(),
+                        Self::$var_name(layer) => {
+                            Ok(Self::Commitment::$var_name(layer.commit()?))
+                        }
                     )*
                 }
             }
 
             fn append_commitment_to_transcript(
-                &self,
+                commitment: &Self::Commitment,
                 transcript_writer: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
             ) {
-                match self {
+                match commitment {
                     $(
-                        Self::$var_name(layer) => layer.append_commitment_to_transcript(transcript_writer),
+                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::append_commitment_to_transcript(commitment, transcript_writer),
                     )*
                 }
             }
@@ -211,28 +213,49 @@ macro_rules! input_layer_enum {
 
         }
 
-        impl<F: FieldExt> $crate::input_layer::VerifierInputLayer<F> for $type_name<F> {
-            paste::paste! {
+        paste::paste! {
+            impl<F: FieldExt> $crate::input_layer::VerifierInputLayer<F> for [<Verifier $type_name>]<F> {
                 type Commitment = [<$type_name Commitment>]<F>;
-            }
 
-            fn layer_id(&self) -> $crate::layer::LayerId {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.layer_id(),
-                    )*
+                fn layer_id(&self) -> $crate::layer::LayerId {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.layer_id(),
+                        )*
+                    }
                 }
-            }
 
-            fn verify(
-                &self,
-                claim: $crate::claims::Claim<F>,
-                transcript_reader: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-            ) -> Result<(), $crate::input_layer::InputLayerError> {
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.verify(claim, transcript_reader),
-                    )*
+                fn get_commitment_from_transcript(
+                    &self,
+                    transcript_reader: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>
+                )  -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => {
+                                let commitment = layer.get_commitment_from_transcript(transcript_reader)?;
+                                Ok(Self::Commitment::$var_name(commitment))
+                            }
+                        )*
+                    }
+                }
+
+                fn verify(
+                    &self,
+                    commitment: &Self::Commitment,
+                    claim: $crate::claims::Claim<F>,
+                    transcript_reader: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                ) -> Result<(), $crate::input_layer::InputLayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => {
+                                if let Self::Commitment::$var_name(commitment) = commitment {
+                                    layer.verify(commitment, claim, transcript_reader)
+                                } else {
+                                    unreachable!()
+                                }
+                            }
+                        )*
+                    }
                 }
             }
         }
