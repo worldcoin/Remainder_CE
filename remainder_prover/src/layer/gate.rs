@@ -27,7 +27,7 @@ use crate::{
     sumcheck::{evaluate_at_a_point, Evals},
 };
 
-use self::gate_helpers::{
+pub use self::gate_helpers::{
     check_fully_bound, compute_full_gate, compute_sumcheck_message_no_beta_table,
     index_mle_indices_gate, libra_giraffe, prove_round_dataparallel_phase, prove_round_gate,
     GateError,

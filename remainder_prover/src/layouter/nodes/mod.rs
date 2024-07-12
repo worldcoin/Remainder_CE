@@ -20,6 +20,7 @@ pub mod circuit_inputs;
 pub mod circuit_outputs;
 pub mod debug;
 pub mod gate;
+pub mod matmult;
 pub mod node_enum;
 pub mod sector;
 pub mod split_node;
