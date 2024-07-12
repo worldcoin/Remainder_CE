@@ -229,8 +229,10 @@ fn test_combined_dataparallel_circuit_alt_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let dataparallel_input_mle_1 = get_input_shred_from_vec(mle_1_vec_raw.to_vec(), ctx);
-        let dataparallel_input_mle_2 = get_input_shred_from_vec(mle_2_vec_raw.to_vec(), ctx);
+        let dataparallel_input_mle_1 =
+            get_input_shred_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
+        let dataparallel_input_mle_2 =
+            get_input_shred_from_vec(mle_2_vec_raw.to_vec(), ctx, &input_layer);
 
         let component_1 = DataParallelProductScaledSumCircuitAltComponent::new(
             ctx,

@@ -226,11 +226,12 @@ fn test_batching_wraparound_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let input_shred_1 = get_input_shred_from_vec(vecs_vec[0].clone(), ctx);
-        let input_shred_2 = get_input_shred_from_vec(vecs_vec[1].clone(), ctx);
-        let input_shred_3 = get_input_shred_from_vec(vecs_vec[2].clone(), ctx);
-        let input_shred_4 = get_input_shred_from_vec(vecs_vec[3].clone(), ctx);
-        let dataparallel_shred = get_input_shred_from_vec(combined_mle_vec.to_vec(), ctx);
+        let input_shred_1 = get_input_shred_from_vec(vecs_vec[0].clone(), ctx, &input_layer);
+        let input_shred_2 = get_input_shred_from_vec(vecs_vec[1].clone(), ctx, &input_layer);
+        let input_shred_3 = get_input_shred_from_vec(vecs_vec[2].clone(), ctx, &input_layer);
+        let input_shred_4 = get_input_shred_from_vec(vecs_vec[3].clone(), ctx, &input_layer);
+        let dataparallel_shred =
+            get_input_shred_from_vec(combined_mle_vec.to_vec(), ctx, &input_layer);
 
         // Stack currently fails at layer 0, because expr and witgen for the first component is inconsistent.
         // But if you change from stack to interleave, then it fails at layer 1, because the subtraction of the dataparallel

@@ -69,6 +69,7 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
         self,
         circuit_map: &CircuitMap<'_, F>,
     ) -> Result<Expression<F, ProverExpr>, DAGError> {
+        // First we get all the mles that this expression will need to store
         let mut nodes = self.expression_node.get_node_ids(vec![]);
         nodes.sort();
         nodes.dedup();
@@ -79,7 +80,7 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
             .into_iter()
             .enumerate()
             .map(|(idx, node_id)| {
-                let (location, data) = circuit_map.0.get(&node_id).ok_or(DAGError::DAGCycle)?;
+                let (location, data) = circuit_map.get_node(&node_id)?;
 
                 let data = (*data).clone();
 
@@ -94,6 +95,8 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
             })
             .collect();
         let mle_vec = mle_vec?;
+
+        // Then we replace the NodeIds in the AbstractExpr w/ indices of our stored MLEs
 
         let expression_node = self.expression_node.build_prover_node(&node_map)?;
 
@@ -172,10 +175,12 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
 }
 
 impl<F: FieldExt> ExpressionNode<F, AbstractExpr> {
+    /// Map the node_ids in the AbstractExpr to the resolved list of MLEs stored by the ProverExpr
     fn build_prover_node(
         self,
         node_map: &HashMap<NodeId, usize>,
     ) -> Result<ExpressionNode<F, ProverExpr>, DAGError> {
+        // Note that the node_map is the map of node_ids to the internal vec of MLEs, not the circuit_map
         match self {
             ExpressionNode::Constant(val) => Ok(ExpressionNode::Constant(val)),
             ExpressionNode::Selector(mle_index, lhs, rhs) => {
@@ -251,12 +256,7 @@ impl<F: FieldExt> ExpressionNode<F, AbstractExpr> {
                 lhs.get_num_vars(circuit_map)? + 1,
                 rhs.get_num_vars(circuit_map)? + 1,
             )),
-            ExpressionNode::Mle(node_id) => Ok(circuit_map
-                .0
-                .get(node_id)
-                .ok_or(DAGError::DanglingNodeId(*node_id))?
-                .1
-                .num_vars()),
+            ExpressionNode::Mle(node_id) => Ok(circuit_map.get_node(node_id)?.1.num_vars()),
             ExpressionNode::Negated(expr) => expr.get_num_vars(circuit_map),
             ExpressionNode::Sum(lhs, rhs) => Ok(max(
                 lhs.get_num_vars(circuit_map)?,
@@ -264,16 +264,7 @@ impl<F: FieldExt> ExpressionNode<F, AbstractExpr> {
             )),
             ExpressionNode::Product(nodes) => Ok(nodes
                 .iter()
-                .map(|node_id| {
-                    Ok(Some(
-                        circuit_map
-                            .0
-                            .get(node_id)
-                            .ok_or(DAGError::DanglingNodeId(*node_id))?
-                            .1
-                            .num_vars(),
-                    ))
-                })
+                .map(|node_id| Ok(Some(circuit_map.get_node(node_id)?.1.num_vars())))
                 .fold_ok(None, max)?
                 .unwrap_or(0)),
             ExpressionNode::Scaled(expr, _) => expr.get_num_vars(circuit_map),

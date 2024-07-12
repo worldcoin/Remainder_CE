@@ -20,7 +20,7 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 #[derive(Debug, Clone)]
 pub struct InputShred<F> {
     id: NodeId,
-    pub parent: Option<NodeId>,
+    parent: NodeId,
     data: MultilinearExtension<F>,
 }
 
@@ -51,15 +51,15 @@ impl<F: FieldExt> InputShred<F> {
     ///
     /// Specifying a source indicates to the layouter that this
     /// InputShred should be appended to the source when laying out
-    pub fn new(
-        ctx: &Context,
-        data: MultilinearExtension<F>,
-        source: Option<&InputLayerNode<F>>,
-    ) -> Self {
+    pub fn new(ctx: &Context, data: MultilinearExtension<F>, source: &InputLayerNode<F>) -> Self {
         let id = ctx.get_new_id();
-        let parent = source.map(CircuitNode::id);
+        let parent = source.id();
 
         InputShred { id, parent, data }
+    }
+
+    pub fn get_parent(&self) -> NodeId {
+        self.parent
     }
 }
 
@@ -118,44 +118,5 @@ impl<F: FieldExt> InputLayerNode<F> {
     /// A method to add an InputShred to this InputLayerNode
     pub fn add_shred(&mut self, new_shred: InputShred<F>) {
         self.children.push(new_shred);
-    }
-}
-
-/// An `InputLayerNode` that can't have any InputShreds automatically added to it
-#[derive(Debug, Clone)]
-pub struct SealedInputNode<F>(InputLayerNode<F>);
-
-impl<F: FieldExt> CircuitNode for SealedInputNode<F> {
-    fn id(&self) -> NodeId {
-        self.0.id()
-    }
-
-    fn sources(&self) -> Vec<NodeId> {
-        vec![]
-    }
-
-    fn children(&self) -> Option<Vec<NodeId>> {
-        self.0.children()
-    }
-}
-
-impl<F: FieldExt> SealedInputNode<F> {
-    /// Wraps an `InputLayerNode` to indicate that it is Sealed
-    pub fn new(node: InputLayerNode<F>) -> Self {
-        Self(node)
-    }
-}
-
-impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL>, IL> CompilableNode<F, Pf>
-    for SealedInputNode<F>
-where
-    IL: InputLayer<F> + From<PublicInputLayer<F>> + From<LigeroInputLayer<F>>,
-{
-    fn compile<'a>(
-        &'a self,
-        witness_builder: &mut WitnessBuilder<F, Pf>,
-        circuit_map: &mut CircuitMap<'a, F>,
-    ) -> Result<(), crate::layouter::layouting::DAGError> {
-        self.0.compile(witness_builder, circuit_map)
     }
 }

@@ -115,19 +115,13 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNod
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
-        let (lhs_location, lhs_data) = circuit_map
-            .0
-            .get(&self.lhs)
-            .ok_or(DAGError::DanglingNodeId(self.lhs))?;
+        let (lhs_location, lhs_data) = circuit_map.get_node(&self.lhs)?;
         let lhs = DenseMle::new_with_prefix_bits(
             (*lhs_data).clone(),
             lhs_location.layer_id,
             lhs_location.prefix_bits.clone(),
         );
-        let (rhs_location, rhs_data) = circuit_map
-            .0
-            .get(&self.rhs)
-            .ok_or(DAGError::DanglingNodeId(self.rhs))?;
+        let (rhs_location, rhs_data) = circuit_map.get_node(&self.rhs)?;
         let rhs = DenseMle::new_with_prefix_bits(
             (*rhs_data).clone(),
             rhs_location.layer_id,
@@ -143,7 +137,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNod
             layer_id,
         );
         witness_builder.add_layer(gate_layer.into());
-        circuit_map.0.insert(
+        circuit_map.add_node(
             self.id,
             (CircuitLocation::new(layer_id, vec![]), &self.data),
         );
@@ -203,8 +197,8 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-            let input_shred_pos = InputShred::new(ctx, mle, Some(&input_layer));
-            let input_shred_neg = InputShred::new(ctx, neg_mle, Some(&input_layer));
+            let input_shred_pos = InputShred::new(ctx, mle, &input_layer);
+            let input_shred_neg = InputShred::new(ctx, neg_mle, &input_layer);
 
             let gate_sector = GateNode::new(
                 ctx,
@@ -258,8 +252,8 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-            let input_shred_pos = InputShred::new(ctx, mle, Some(&input_layer));
-            let input_shred_neg = InputShred::new(ctx, neg_mle, Some(&input_layer));
+            let input_shred_pos = InputShred::new(ctx, mle, &input_layer);
+            let input_shred_neg = InputShred::new(ctx, neg_mle, &input_layer);
 
             let gate_sector = GateNode::new(
                 ctx,

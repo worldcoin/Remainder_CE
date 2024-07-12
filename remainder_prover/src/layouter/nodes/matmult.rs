@@ -95,10 +95,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
-        let (matrix_a_location, matrix_a_data) = circuit_map
-            .0
-            .get(&self.matrix_a)
-            .ok_or(DAGError::DanglingNodeId(self.matrix_a))?;
+        let (matrix_a_location, matrix_a_data) = circuit_map.get_node(&self.matrix_a)?;
 
         // should already been padded
         let matrix_a = Matrix::new(
@@ -109,10 +106,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
             Some(matrix_a_location.layer_id.clone()),
         );
 
-        let (matrix_b_location, matrix_b_data) = circuit_map
-            .0
-            .get(&self.matrix_b)
-            .ok_or(DAGError::DanglingNodeId(self.matrix_b))?;
+        let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
 
         // should already been padded
         let matrix_b = Matrix::new(
@@ -126,7 +120,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
         let layer_id = witness_builder.next_layer();
         let matmult_layer = MatMult::new(layer_id, matrix_a, matrix_b);
         witness_builder.add_layer(matmult_layer.into());
-        circuit_map.0.insert(
+        circuit_map.add_node(
             self.id,
             (CircuitLocation::new(layer_id, vec![]), &self.data),
         );
@@ -188,9 +182,9 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-            let input_matrix_a = InputShred::new(ctx, mle_vec_a, Some(&input_layer));
-            let input_matrix_b = InputShred::new(ctx, mle_vec_b, Some(&input_layer));
-            let input_matrix_product = InputShred::new(ctx, exp_product, Some(&input_layer));
+            let input_matrix_a = InputShred::new(ctx, mle_vec_a, &input_layer);
+            let input_matrix_b = InputShred::new(ctx, mle_vec_b, &input_layer);
+            let input_matrix_product = InputShred::new(ctx, exp_product, &input_layer);
 
             let matmult_sector =
                 MatMultNode::new(ctx, &input_matrix_a, (4, 2), &input_matrix_b, (2, 2));
