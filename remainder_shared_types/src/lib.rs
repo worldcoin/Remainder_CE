@@ -1,5 +1,7 @@
-pub mod transcript;
+pub mod claims;
 pub mod ec;
+pub mod layer;
+pub mod transcript;
 
 use std::hash::Hash;
 

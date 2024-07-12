@@ -1,12 +1,12 @@
 use ark_std::test_rng;
 use remainder_shared_types::{
+    layer::{Layer, LayerId},
     transcript::{poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptWriter},
     Fr,
 };
 
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{Layer, LayerId},
     mle::dense::DenseMle,
 };
 
@@ -28,7 +28,7 @@ fn regular_layer_test_prove_verify() {
     let expression = Expression::<Fr, ProverExpr>::products(vec![mle_ref_1, mle_ref_2]);
     let claim = crate::sumcheck::tests::get_dummy_expression_eval(&expression, &mut rng);
 
-    let mut layer = RegularLayer::new_raw(crate::layer::LayerId::Layer(0), expression);
+    let mut layer = RegularLayer::new_raw(LayerId::Layer(0), expression);
 
     let mut transcript = TranscriptWriter::<_, PoseidonSponge<_>>::new("Regular Layer Test");
 
