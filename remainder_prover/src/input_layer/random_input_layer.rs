@@ -1,6 +1,5 @@
 //! A part of the input layer that is random and secured through F-S
 
-use ark_std::log2;
 use remainder_shared_types::{
     layer::LayerId,
     transcript::{ProverTranscript, TranscriptSponge, TranscriptWriter, VerifierTranscript},
@@ -9,14 +8,10 @@ use remainder_shared_types::{
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
-    mle::{
-        dense::DenseMle,
-        evals::{Evaluations, MultilinearExtension},
-        mle_enum::MleEnum,
-    },
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError};
 use crate::mle::Mle;
 
 /// Represents a random input layer, where we generate random constants in the

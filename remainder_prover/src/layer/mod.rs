@@ -10,18 +10,15 @@ pub mod regular_layer;
 
 use std::fmt::Debug;
 
-use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    claims::{Claim, ClaimError},
+    claims::{ClaimError},
     expression::expr_errors::ExpressionError,
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
-    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
-    FieldExt,
+    transcript::{TranscriptReaderError},
 };
 
 #[derive(Error, Debug, Clone)]

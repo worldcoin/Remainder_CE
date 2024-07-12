@@ -2,15 +2,11 @@
 
 use ark_std::cfg_into_iter;
 
-use crate::mle::{evals::MultilinearExtension, Mle};
+use crate::mle::evals::MultilinearExtension;
 use rayon::prelude::*;
 use remainder_shared_types::{
-    input_layer::InputLayer,
-    layer::LayerId,
-    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
-    FieldExt,
+    input_layer::InputLayer, layer::LayerId, transcript::TranscriptReaderError, FieldExt,
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// An enum which represents which type of input layer we are working with.
@@ -26,8 +22,7 @@ pub mod random_input_layer;
 mod tests;
 
 use crate::{
-    claims::{wlx_eval::get_num_wlx_evaluations, Claim},
-    mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex},
+    claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,
     sumcheck::evaluate_at_a_point,
 };
 

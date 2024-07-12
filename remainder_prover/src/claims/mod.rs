@@ -3,13 +3,9 @@
 ///The claim aggregator that uses wlx evaluations
 pub mod wlx_eval;
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    layer::{combine_mle_refs::CombineMleRefError, LayerError},
-    prover::GKRError,
-};
+use crate::layer::combine_mle_refs::CombineMleRefError;
 
 #[derive(Error, Debug, Clone)]
 ///Errors to do with aggregating and collecting claims

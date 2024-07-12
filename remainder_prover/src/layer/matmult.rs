@@ -10,7 +10,7 @@ use remainder_shared_types::{
     claims::YieldClaim,
     layer::{Layer, LayerId},
     transcript::{
-        ProverTranscript, TranscriptReader, TranscriptSponge, TranscriptWriter, VerifierTranscript,
+        ProverTranscript, VerifierTranscript,
     },
     FieldExt,
 };
