@@ -5,6 +5,7 @@ use ark_std::cfg_into_iter;
 use crate::mle::{evals::MultilinearExtension, Mle};
 use rayon::prelude::*;
 use remainder_shared_types::{
+    input_layer::InputLayer,
     layer::LayerId,
     transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     FieldExt,
@@ -57,58 +58,6 @@ pub enum InputLayerError {
 }
 
 use log::{debug, info};
-/// The InputLayer trait in which the evaluation proof, commitment, and proof/verification
-/// process takes place for input layers.
-pub trait InputLayer<F: FieldExt> {
-    /// The struct that contains the commitment to the contents of the input_layer.
-    type Commitment: Serialize + for<'a> Deserialize<'a>;
-
-    /// The struct that contains the opening proof.
-    type OpeningProof: Serialize + for<'a> Deserialize<'a>;
-
-    /// Generates a commitment
-    ///
-    /// Can mutate self to cache useful information.
-    fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
-
-    /// Appends the commitment to the F-S Transcript.
-    fn prover_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    );
-
-    /// Appends the commitment to the F-S Transcript.
-    fn verifier_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), InputLayerError>;
-
-    /// Generates a proof of polynomial evaluation at the point
-    /// in the `Claim`.
-    ///
-    /// Appends any communication to the transcript.
-    fn open(
-        &self,
-        transcript: &mut impl ProverTranscript<F>,
-        claim: Claim<F>,
-    ) -> Result<Self::OpeningProof, InputLayerError>;
-
-    /// Verifies the evaluation at the point in the `Claim` relative to the
-    /// polynomial commitment using the opening proof.
-    fn verify(
-        commitment: &Self::Commitment,
-        opening_proof: &Self::OpeningProof,
-        claim: Claim<F>,
-        transcript: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), InputLayerError>;
-
-    /// Returns the `LayerId` of this layer.
-    fn layer_id(&self) -> &LayerId;
-
-    /// Returns the contents of this `InputLayer` as an
-    /// owned `DenseMle`.
-    fn get_padded_mle(&self) -> DenseMle<F>;
-}
 
 /// Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs.
 pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {
@@ -118,7 +67,7 @@ pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.
 fn get_wlx_evaluations_helper<F: FieldExt>(
-    layer: &impl InputLayer<F>,
+    mut mle_ref: MultilinearExtension<F>,
     claim_vecs: &[Vec<F>],
     claimed_vals: &[F],
     _claimed_mles: Vec<MleEnum<F>>,
@@ -126,23 +75,15 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     num_idx: usize,
 ) -> Result<Vec<F>, crate::claims::ClaimError> {
     let prep_timer = start_timer!(|| "Claim wlx prep");
-    let mut mle_ref = layer.get_padded_mle();
     end_timer!(prep_timer);
-    info!(
-        "Wlx MLE len: {}",
-        mle_ref.current_mle.get_evals_vector().len()
-    );
-
-    mle_ref.index_mle_indices(0);
+    info!("Wlx MLE len: {}", mle_ref.get_evals_vector().len());
     // Get the number of evaluations needed depending on the claim vectors.
     let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
     let chal_point = &claim_vecs[0];
 
     if let Some(common_idx) = common_idx {
         common_idx.iter().for_each(|chal_idx| {
-            if let MleIndex::IndexedBit(idx_bit_num) = mle_ref.mle_indices()[*chal_idx] {
-                mle_ref.fix_variable_at_index(idx_bit_num, chal_point[*chal_idx]);
-            }
+            mle_ref.fix_variable_at_index(*chal_idx, chal_point[*chal_idx]);
         });
     }
 
@@ -163,12 +104,10 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
 
             let mut fix_mle = mle_ref.clone();
             {
-                new_chal.into_iter().enumerate().for_each(|(idx, chal)| {
-                    if let MleIndex::IndexedBit(idx_num) = fix_mle.mle_indices()[idx] {
-                        fix_mle.fix_variable(idx_num, chal);
-                    }
+                new_chal.into_iter().for_each(|chal| {
+                    fix_mle.fix_variable(chal);
                 });
-                fix_mle.current_mle[0]
+                fix_mle.get_evals()[0]
             }
         })
         .collect();

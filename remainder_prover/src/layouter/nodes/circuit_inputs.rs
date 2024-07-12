@@ -2,13 +2,11 @@
 
 mod compile_inputs;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{input_layer::InputLayer, FieldExt};
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    input_layer::{
-        ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer,
-    },
+    input_layer::{ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer},
     layouter::{compiling::WitnessBuilder, layouting::CircuitMap},
     mle::evals::MultilinearExtension,
     prover::proof_system::ProofSystem,

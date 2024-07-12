@@ -10,15 +10,15 @@ use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
-    claims::{wlx_eval::ClaimMle, Claim},
-    mle::evals::{Evaluations, MultilinearExtension},
-};
-use crate::{
-    claims::{ClaimError, YieldClaim},
+    claims::ClaimError,
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerError,
 };
-use remainder_shared_types::{layer::LayerId, FieldExt};
+use crate::{
+    claims::{wlx_eval::ClaimMle, Claim},
+    mle::evals::{Evaluations, MultilinearExtension},
+};
+use remainder_shared_types::{claims::YieldClaim, layer::LayerId, FieldExt};
 
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -195,6 +195,7 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for DenseMle<F> {
+    type Error = LayerError;
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));

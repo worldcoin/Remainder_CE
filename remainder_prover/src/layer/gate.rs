@@ -11,6 +11,7 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
+    claims::YieldClaim,
     layer::{Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
@@ -20,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError, YieldClaim,
+        Claim, ClaimError,
     },
     layer::{LayerError, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle},
@@ -278,6 +279,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for Gate<F> {
+    type Error = LayerError;
     /// Get the claims that this layer makes on other layers.
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();

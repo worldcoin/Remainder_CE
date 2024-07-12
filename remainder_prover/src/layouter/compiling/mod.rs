@@ -6,12 +6,12 @@ mod tests;
 use std::marker::PhantomData;
 
 use remainder_shared_types::{
+    input_layer::InputLayer,
     layer::{Layer, LayerId},
     FieldExt,
 };
 
 use crate::{
-    input_layer::InputLayer,
     layouter::layouting::layout,
     prover::{
         layers::Layers,

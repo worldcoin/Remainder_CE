@@ -4,6 +4,7 @@
 pub mod wlx_eval;
 
 use remainder_shared_types::{
+    input_layer::InputLayer,
     layer::{Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
@@ -12,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    input_layer::InputLayer,
     layer::{combine_mle_refs::CombineMleRefError, LayerError},
     prover::GKRError,
 };
@@ -50,75 +50,4 @@ pub enum ClaimError {
 }
 
 pub use remainder_shared_types::claims::Claim;
-
-/// A wrapper struct that represents the `Claim` a `ClaimAggregator`
-/// generates and the proof that this claim is correct
-#[derive(Clone, Debug)]
-pub struct ClaimAndProof<F: FieldExt, P> {
-    /// The `Claim` that was proven
-    pub claim: Claim<F>,
-    /// The proof that the `Claim` is correct
-    pub proof: P,
-}
-
-/// A trait that defines a protocol for the tracking/aggregation of many claims
-pub trait ClaimAggregator<F: FieldExt> {
-    ///The struct the claim aggregator takes in.
-    ///
-    /// Is typically composed of the `Claim` struct and additional information
-    type Claim: std::fmt::Debug + Clone + Serialize + for<'a> Deserialize<'a>;
-
-    ///The proof that a verifier can use to check that the aggregation was done correctly
-    type AggregationProof: std::fmt::Debug + Clone + Serialize + for<'a> Deserialize<'a>;
-
-    ///The Layer this claim aggregator takes claims from, and aggregates claims for
-    type Layer: Layer<F>;
-
-    ///The InputLayer this claim aggregator aggregates claims for
-    type InputLayer: InputLayer<F>;
-
-    ///Creates an empty ClaimAggregator, ready to track claims
-    fn new() -> Self;
-
-    ///Takes in claims to track and later aggregate
-    fn add_claims(&mut self, layer: &impl YieldClaim<Self::Claim>) -> Result<(), LayerError>;
-
-    ///Retrieves claims for aggregation
-    fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]>;
-
-    ///Takes in some claims from the prover and aggregates them into one claim
-    ///
-    /// Extracts additional information from the `Layer` the claims are made on if neccessary.
-    ///
-    /// Adds any communication to the F-S Transcript
-    fn prover_aggregate_claims(
-        &self,
-        layer: &Self::Layer,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError>;
-
-    ///Takes in some claims from the prover and aggregates them into one claim
-    ///
-    /// Extracts additional information from the `InputLayer` the claims are made on if neccessary.
-    ///
-    /// Adds any communication to the F-S Transcript
-    fn prover_aggregate_claims_input(
-        &self,
-        layer: &Self::InputLayer,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError>;
-
-    ///Reads an AggregationProof from the Transcript and uses it to verify the aggregation of some claims.
-    fn verifier_aggregate_claims(
-        &self,
-        layer_id: LayerId,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Claim<F>, GKRError>;
-}
-
-///A trait that allows the type to yield some claims to be added
-/// to the claim tracker
-pub trait YieldClaim<Claim> {
-    /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<Claim>, LayerError>;
-}
+pub use remainder_shared_types::claims::ClaimAndProof;

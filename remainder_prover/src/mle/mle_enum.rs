@@ -2,13 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use remainder_shared_types::{layer::LayerId, FieldExt};
+use remainder_shared_types::{claims::YieldClaim, layer::LayerId, FieldExt};
 
-use crate::{
-    claims::{wlx_eval::ClaimMle, YieldClaim},
-    layer::LayerError,
-    mle::Mle,
-};
+use crate::{claims::wlx_eval::ClaimMle, layer::LayerError, mle::Mle};
 
 use super::{dense::DenseMle, zero::ZeroMle, MleIndex};
 
@@ -119,6 +115,7 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleEnum<F> {
+    type Error = LayerError;
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             MleEnum::Dense(layer) => layer.get_claims(),
