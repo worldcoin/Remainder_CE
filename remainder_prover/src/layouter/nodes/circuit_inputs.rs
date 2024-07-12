@@ -2,7 +2,7 @@
 
 mod compile_inputs;
 
-use remainder_shared_types::{input_layer::InputLayer, FieldExt};
+use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
