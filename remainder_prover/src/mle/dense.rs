@@ -306,10 +306,42 @@ impl<F: FieldExt> DenseMle<F> {
 
     /// batch merges the MLEs into a single MLE, in a big endian fashion.
     pub fn batch_mles(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
+        let first_mle_num_vars = mles[0].num_iterated_vars();
+        let all_same_num_vars = mles.iter().fold(true, |acc, mle| {
+            acc && mle.num_iterated_vars() == first_mle_num_vars
+        });
+        assert!(all_same_num_vars);
         let layer_id = mles[0].layer_id;
         let mle_flattened = mles.into_iter().flat_map(|mle| mle.into_iter());
 
         Self::new_from_iter(mle_flattened, layer_id)
+    }
+
+    /// batch merges the MLEs into a single MLE, in a lil endian fashion.
+    pub fn batch_mles_lil(mles: Vec<DenseMle<F>>) -> DenseMle<F> {
+        let first_mle_num_vars = mles[0].num_iterated_vars();
+        let all_same_num_vars = mles.iter().fold(true, |acc, mle| {
+            acc && mle.num_iterated_vars() == first_mle_num_vars
+        });
+        assert!(all_same_num_vars);
+
+        let super_big_endian_vector = mles
+            .iter()
+            .flat_map(|mle| {
+                let mle_vec = mle.bookkeeping_table();
+                let evals = Evaluations::new_from_big_endian(mle.num_iterated_vars(), mle_vec);
+                evals.to_vec()
+            })
+            .collect_vec();
+
+        let layer_id = mles[0].layer_id;
+
+        let evals = Evaluations::new_from_big_endian(
+            log2(super_big_endian_vector.len()) as usize,
+            &super_big_endian_vector,
+        );
+
+        Self::new_from_raw(evals.to_vec(), layer_id)
     }
 
     /// creates an expression from the current Mle
