@@ -1,6 +1,6 @@
 use ark_std::cfg_into_iter;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::Layer, FieldExt};
 
 use crate::{
     claims::{
@@ -13,7 +13,7 @@ use crate::{
     },
     layer::{
         combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
-        Layer, LayerError,
+        LayerError,
     },
     mle::mle_enum::MleEnum,
     sumcheck::evaluate_at_a_point,

@@ -5,11 +5,13 @@ mod tests;
 
 use std::marker::PhantomData;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    layer::{Layer, LayerId},
+    FieldExt,
+};
 
 use crate::{
     input_layer::InputLayer,
-    layer::{Layer, LayerId},
     layouter::layouting::layout,
     prover::{
         layers::Layers,

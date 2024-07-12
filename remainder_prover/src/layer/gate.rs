@@ -11,9 +11,8 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, VerifierTranscript,
-    },
+    layer::{Layer, LayerId},
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -23,7 +22,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    layer::{Layer, LayerError, LayerId, VerificationError},
+    layer::{LayerError, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle},
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, Evals},
@@ -84,6 +83,7 @@ pub struct Gate<F: FieldExt> {
 
 impl<F: FieldExt> Layer<F> for Gate<F> {
     type Proof = SumcheckProof<F>;
+    type Error = LayerError;
 
     fn prove_rounds(
         &mut self,

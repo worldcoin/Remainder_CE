@@ -8,9 +8,8 @@ mod tests;
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, VerifierTranscript,
-    },
+    layer::{Layer, LayerId},
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -20,7 +19,7 @@ use crate::{
     builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{Layer, LayerError, LayerId, VerificationError},
+    layer::{LayerError, VerificationError},
     mle::betavalues::BetaValues,
     prover::SumcheckProof,
     sumcheck::{
@@ -46,6 +45,7 @@ pub struct RegularLayer<F: FieldExt> {
 
 impl<F: FieldExt> Layer<F> for RegularLayer<F> {
     type Proof = Option<SumcheckProof<F>>;
+    type Error = LayerError;
 
     fn prove_rounds(
         &mut self,

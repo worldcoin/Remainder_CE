@@ -1,11 +1,12 @@
 //! A space-efficient implementation of an [MleRef] which contains only zeros.
 
 use itertools::{repeat_n, Itertools};
+use remainder_shared_types::layer::LayerId;
 use serde::{Deserialize, Serialize};
 
 use crate::claims::{wlx_eval::ClaimMle, Claim};
 use crate::claims::{ClaimError, YieldClaim};
-use crate::layer::{LayerError, LayerId};
+use crate::layer::LayerError;
 use remainder_shared_types::FieldExt;
 
 use super::Mle;

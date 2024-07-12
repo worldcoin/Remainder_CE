@@ -1,7 +1,6 @@
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 
 use crate::{
-    layer::LayerId,
     layouter::nodes::{
         circuit_inputs::{InputLayerNode, InputShred},
         Context,
@@ -89,11 +88,12 @@ impl<F: FieldExt, const N: usize> FlatMles<F, N> {
 #[cfg(test)]
 mod tests {
 
+    use remainder_shared_types::layer::LayerId;
     use remainder_shared_types::Fr;
 
     use crate::mle::circuit_mle::CircuitMle;
+    use crate::mle::circuit_mle::FlatMles;
     use crate::mle::Mle;
-    use crate::{layer::LayerId, mle::circuit_mle::FlatMles};
 
     #[test]
     fn create_dense_tuple_mle_from_vec() {

@@ -7,14 +7,13 @@ use remainder::{
         layer_builder::simple_builders::ZeroBuilder,
     },
     input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
     mle::{dense::DenseMle, Mle},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
     },
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 
 pub mod utils;
 

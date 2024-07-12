@@ -7,7 +7,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::{regular_layer::RegularLayer, Layer},
+    layer::regular_layer::RegularLayer,
     layouter::{
         compiling::WitnessBuilder,
         layouting::{topo_sort, CircuitLocation, CircuitMap, DAGError},
@@ -124,7 +124,7 @@ impl<F: FieldExt> CircuitNode for SectorGroup<F> {
 
 impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L> CompilableNode<F, Pf> for SectorGroup<F>
 where
-    L: Layer<F> + From<RegularLayer<F>>,
+    L: From<RegularLayer<F>>,
 {
     fn compile<'a>(
         &'a self,
@@ -170,12 +170,7 @@ where
 
 /// Takes some sectors that all belong in a single layer and
 /// builds the layer/adds their locations to the circuit map
-fn compile_layer<
-    'a,
-    F: FieldExt,
-    Pf: ProofSystem<F, Layer = L>,
-    L: Layer<F> + From<RegularLayer<F>>,
->(
+fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<RegularLayer<F>>>(
     children: &[&'a Sector<F>],
     witness_builder: &mut WitnessBuilder<F, Pf>,
     circuit_map: &mut CircuitMap<'a, F>,
@@ -260,11 +255,10 @@ fn compile_layer<
 
 #[cfg(test)]
 mod tests {
-    use remainder_shared_types::Fr;
+    use remainder_shared_types::{layer::LayerId, Fr};
 
     use crate::{
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-        layer::LayerId,
         layouter::{
             compiling::WitnessBuilder,
             layouting::{CircuitLocation, CircuitMap},

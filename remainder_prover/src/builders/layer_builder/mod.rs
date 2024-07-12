@@ -4,14 +4,12 @@ pub mod simple_builders;
 use std::marker::PhantomData;
 
 use itertools::repeat_n;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     mle::MleIndex,
 };
-
-use crate::layer::LayerId;
 
 /// The builder type for a Layer
 ///

@@ -4,9 +4,9 @@ use remainder::mle::Mle;
 use remainder::{
     builders::layer_builder::LayerBuilder,
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::LayerId,
     mle::{dense::DenseMle, MleIndex},
 };
+use remainder_shared_types::layer::LayerId;
 use remainder_shared_types::{FieldExt, Fr};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.

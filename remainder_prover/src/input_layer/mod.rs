@@ -5,9 +5,8 @@ use ark_std::cfg_into_iter;
 use crate::mle::{evals::MultilinearExtension, Mle};
 use rayon::prelude::*;
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, TranscriptReaderError, VerifierTranscript,
-    },
+    layer::LayerId,
+    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -27,7 +26,6 @@ mod tests;
 
 use crate::{
     claims::{wlx_eval::get_num_wlx_evaluations, Claim},
-    layer::LayerId,
     mle::{dense::DenseMle, mle_enum::MleEnum, MleIndex},
     sumcheck::evaluate_at_a_point,
 };

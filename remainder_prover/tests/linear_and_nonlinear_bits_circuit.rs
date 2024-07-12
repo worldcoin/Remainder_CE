@@ -8,14 +8,13 @@ use remainder::{
     },
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex},
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
     },
 };
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{layer::LayerId, FieldExt, Fr};
 
 use crate::utils::get_dummy_random_mle;
 pub mod utils;

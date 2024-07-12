@@ -1,5 +1,9 @@
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptSponge, TranscriptWriter, VerifierTranscript},
+    layer::Layer,
+    transcript::{
+        poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptSponge,
+        TranscriptWriter, VerifierTranscript,
+    },
     FieldExt,
 };
 
@@ -8,7 +12,7 @@ use std::fmt::Debug;
 
 use crate::{
     claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
-    layer::{layer_enum::LayerEnum, Layer},
+    layer::{layer_enum::LayerEnum, LayerError},
     mle::{mle_enum::MleEnum, Mle},
 };
 
@@ -40,16 +44,17 @@ macro_rules! layer_enum {
             pub enum [<$type_name Proof>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Proof variant"]
-                    $var_name(<$variant as Layer<F>>::Proof),
+                    $var_name(<$variant as $crate::remainder_shared_types::layer::Layer<F>>::Proof),
                 )*
             }
         }
 
-        impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
+        impl<F: FieldExt> $crate::remainder_shared_types::layer::Layer<F> for $type_name<F> {
             paste::paste! { type Proof = [<$type_name Proof>]<F>;}
+            type Error = LayerError;
             fn prove_rounds(
                 &mut self,
-                claim: $crate::claims::Claim<F>,
+                claim: $crate::remainder_shared_types::claims::Claim<F>,
                 transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
             ) -> Result<Self::Proof, super::LayerError> {
                 match self {
@@ -61,7 +66,7 @@ macro_rules! layer_enum {
 
             fn verify_rounds(
                 &mut self,
-                claim: $crate::claims::Claim<F>,
+                claim: $crate::remainder_shared_types::claims::Claim<F>,
                 proof: Self::Proof,
                 transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
             ) -> Result<(), super::LayerError> {
@@ -78,7 +83,7 @@ macro_rules! layer_enum {
                 }
             }
 
-            fn id(&self) -> &super::LayerId {
+            fn id(&self) -> &$crate::remainder_shared_types::layer::LayerId {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.id(),
@@ -203,7 +208,7 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn layer_id(&self) -> &$crate::layer::LayerId {
+            fn layer_id(&self) -> &$crate::remainder_shared_types::layer::LayerId {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.layer_id(),
@@ -234,7 +239,7 @@ macro_rules! input_layer_enum {
 ///A trait for bundling a group of types that define the interfaces that go into a GKR Prover
 pub trait ProofSystem<F: FieldExt> {
     ///A trait that defines the allowed Layer for this ProofSystem
-    type Layer: Layer<F>
+    type Layer: Layer<F, Error = LayerError>
         + Serialize
         + for<'a> Deserialize<'a>
         + Debug

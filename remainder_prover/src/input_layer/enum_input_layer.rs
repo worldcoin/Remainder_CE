@@ -1,8 +1,8 @@
 //! A wrapper type that makes working with variants of InputLayer easier.
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 
-use crate::{claims::wlx_eval::YieldWLXEvals, input_layer_enum, layer::LayerId};
+use crate::{claims::wlx_eval::YieldWLXEvals, input_layer_enum};
 
 use super::{
     ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,

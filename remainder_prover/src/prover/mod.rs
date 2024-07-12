@@ -14,15 +14,15 @@ use crate::mle::Mle;
 use crate::{
     claims::{ClaimAggregator, ClaimAndProof},
     input_layer::{InputLayer, InputLayerError},
-    layer::{layer_enum::LayerEnum, Layer, LayerError, LayerId},
+    layer::{layer_enum::LayerEnum, LayerError},
     mle::MleIndex,
     utils::hash_layers,
 };
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
+use remainder_shared_types::layer::{Layer, LayerId};
 use remainder_shared_types::transcript::{
-    ProverTranscript, TranscriptReaderError, TranscriptSponge, TranscriptWriter,
-    VerifierTranscript,
+    ProverTranscript, TranscriptReaderError, TranscriptSponge, TranscriptWriter, VerifierTranscript,
 };
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
@@ -266,7 +266,7 @@ pub trait GKRCircuit<F: FieldExt> {
                 let layer_id = *layer.id();
                 info!("New Intermediate Layer: {:?}", layer_id);
 
-                let layer_id_trace_repr = format!("{}", layer_id);
+                let layer_id_trace_repr = format!("{:?}", layer_id);
                 let _layer_sumcheck_proving_span = span!(
                     Level::DEBUG,
                     "layer_sumcheck_proving_span",
@@ -488,7 +488,7 @@ pub trait GKRCircuit<F: FieldExt> {
             info!("Intermediate Layer: {:?}", layer_id);
             debug!("The LayerEnum: {:#?}", layer);
             let layer_id = *layer.id();
-            let layer_id_trace_repr = format!("{}", layer_id);
+            let layer_id_trace_repr = format!("{:?}", layer_id);
             let _layer_sumcheck_verification_span = span!(
                 Level::DEBUG,
                 "layer_sumcheck_verification_span",

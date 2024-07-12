@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 
 use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
@@ -94,7 +94,7 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
         }
     }
 
-    fn get_layer_id(&self) -> crate::layer::LayerId {
+    fn get_layer_id(&self) -> LayerId {
         match self {
             MleEnum::Dense(item) => item.get_layer_id(),
             MleEnum::Zero(item) => item.get_layer_id(),
@@ -113,7 +113,7 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
         todo!()
     }
 
-    fn layer_id(&self) -> crate::layer::LayerId {
+    fn layer_id(&self) -> LayerId {
         todo!()
     }
 }

@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use super::{mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
     claims::{wlx_eval::ClaimMle, Claim},
-    layer::LayerId,
     mle::evals::{Evaluations, MultilinearExtension},
 };
 use crate::{
@@ -19,7 +18,7 @@ use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerError,
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize)]

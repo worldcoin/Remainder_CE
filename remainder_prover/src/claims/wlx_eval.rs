@@ -5,9 +5,8 @@ mod helpers;
 
 mod claim_group;
 
-use remainder_shared_types::transcript::{
-    ProverTranscript, VerifierTranscript,
-};
+use remainder_shared_types::layer::{Layer, LayerId};
+use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 use remainder_shared_types::FieldExt;
 
 use crate::claims::wlx_eval::claim_group::ClaimGroup;
@@ -21,8 +20,7 @@ use crate::input_layer::InputLayer;
 use crate::prover::GKRError;
 use crate::sumcheck::*;
 
-use crate::layer::LayerId;
-use crate::layer::{Layer, LayerError};
+use crate::layer::LayerError;
 
 use serde::{Deserialize, Serialize};
 
@@ -225,7 +223,7 @@ impl<F: FieldExt> ClaimMle<F> {
     /// Generate new raw claim without any origin/destination information.
     pub fn new_raw(point: Vec<F>, result: F) -> Self {
         Self {
-            claim: Claim { point, result },
+            claim: Claim::new(point, result),
             from_layer_id: None,
             to_layer_id: None,
             mle_ref: None,
@@ -241,7 +239,7 @@ impl<F: FieldExt> ClaimMle<F> {
         mle_ref: Option<MleEnum<F>>,
     ) -> Self {
         Self {
-            claim: Claim { point, result },
+            claim: Claim::new(point, result),
             from_layer_id,
             to_layer_id,
             mle_ref,
@@ -250,17 +248,17 @@ impl<F: FieldExt> ClaimMle<F> {
 
     /// Returns the length of the `point` vector.
     pub fn get_num_vars(&self) -> usize {
-        self.claim.point.len()
+        self.claim.get_num_vars()
     }
 
     /// Returns the point vector in F^n.
     pub fn get_point(&self) -> &Vec<F> {
-        &self.claim.point
+        &self.claim.get_point()
     }
 
     /// Returns the expected result.
     pub fn get_result(&self) -> F {
-        self.claim.result
+        self.claim.get_result()
     }
 
     /// Returns the source Layer ID.
@@ -282,8 +280,8 @@ impl<F: FieldExt> ClaimMle<F> {
 impl<F: fmt::Debug + FieldExt> fmt::Debug for ClaimMle<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Claim")
-            .field("point", &self.claim.point)
-            .field("result", &self.claim.result)
+            .field("point", self.claim.get_point())
+            .field("result", &self.claim.get_result())
             .field("from_layer_id", &self.from_layer_id)
             .field("to_layer_id", &self.to_layer_id)
             .finish()
