@@ -43,17 +43,16 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
 
     type VerifierInputLayer = VerifierRandomInputLayer<F>;
 
-    fn commit(&mut self) -> Result<&Self::Commitment, super::InputLayerError> {
+    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
         // We do not need to commit to the randomness, so we simply send it in
         // the clear.
-        Ok(&self.mle)
+        Ok(self.mle.clone())
     }
 
     fn append_commitment_to_transcript(
-        &self,
+        _commitment: &Self::Commitment,
         _transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
-        // Should never be called. Nothing to commit to here.
         unimplemented!()
     }
 
@@ -77,25 +76,32 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
 }
 
 impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
-    type Commitment = ();
+    type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
+    fn get_commitment_from_transcript(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::Commitment, InputLayerError> {
+        let num_evals = 1 << self.num_bits;
+        Ok(transcript_reader.consume_elements("Random Layer Commitment", num_evals)?)
+    }
+
     fn verify(
         &self,
+        _: &Self::Commitment,
         claim: Claim<F>,
         transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError> {
         // In order to verify, simply fix variable on each of the variables for
         // the point in `claim`. Check whether the single element left in the
         // bookkeeping table is equal to the claimed value in `claim`.
-
         let num_evals = 1 << self.num_bits;
-        let commitment = transcript.get_challenges("Random Input Layer Challenges", num_evals)?;
-
-        let mut mle_ref = DenseMle::<F>::new_from_raw(commitment, self.layer_id);
+        let mle_evals = transcript.get_challenges("Random Input Layer Challenges", num_evals)?;
+        let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_iterated_vars() != 0 {

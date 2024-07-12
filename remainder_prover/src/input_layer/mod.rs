@@ -66,13 +66,13 @@ pub trait InputLayer<F: FieldExt> {
     /// The Verifier Key representation for this input layer.
     type VerifierInputLayer: Serialize + for<'a> Deserialize<'a>;
 
-    /// Generates and stores internally a commitment.
-    /// A reference to the commitment is returned.
-    fn commit(&mut self) -> Result<&Self::Commitment, InputLayerError>;
+    /// Generates and returns a commitment.
+    /// May also store it internally.
+    fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
 
     /// Appends the commitment to the F-S Transcript.
     fn append_commitment_to_transcript(
-        &self,
+        commitment: &Self::Commitment,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     );
 
@@ -101,10 +101,17 @@ pub trait VerifierInputLayer<F: FieldExt> {
     /// Returns the `LayerId` of this layer.
     fn layer_id(&self) -> LayerId;
 
+    /// Read the commitment off of the transcript.
+    fn get_commitment_from_transcript(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::Commitment, InputLayerError>;
+
     /// Verifies the evaluation at the point in the `Claim` relative to the
     /// polynomial commitment using the opening proof in the transcript.
     fn verify(
         &self,
+        commitment: &Self::Commitment,
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError>;

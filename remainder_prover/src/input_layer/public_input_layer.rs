@@ -39,21 +39,18 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
 
     type VerifierInputLayer = VerifierPublicInputLayer<F>;
 
-    /// Because this is a public input layer, we do not need to commit to the
-    /// MLE and the "commitment" is just the MLE evaluations themselves.
-    fn commit(&mut self) -> Result<&Self::Commitment, super::InputLayerError> {
-        Ok(self.mle.current_mle.get_evals_vector())
+    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
+        // Because this is a public input layer, we do not need to commit to the
+        // MLE and the "commitment" is just the MLE evaluations themselves.
+        Ok(self.mle.current_mle.get_evals_vector().clone())
     }
 
     /// Append the commitment to the Fiat-Shamir transcript.
     fn append_commitment_to_transcript(
-        &self,
+        commitment: &Self::Commitment,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
-        transcript_writer.append_elements(
-            "Public Input Commitment",
-            self.mle.current_mle.get_evals_vector(),
-        );
+        transcript_writer.append_elements("Public Input Commitment", commitment);
     }
 
     /// We do not have an opening proof because we did not commit to anything.
@@ -88,17 +85,23 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
         self.layer_id
     }
 
+    fn get_commitment_from_transcript(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::Commitment, InputLayerError> {
+        let num_evals = 1 << self.num_bits;
+        Ok(transcript_reader.consume_elements("Public Input Commitment", num_evals)?)
+    }
+
     /// In order to verify, simply fix variable on each of the variables for the point
     /// in `claim`. Check whether the single element left in the bookkeeping table is
     /// equal to the claimed value in `claim`.
     fn verify(
         &self,
+        commitment: &Self::Commitment,
         claim: Claim<F>,
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        _: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), super::InputLayerError> {
-        let num_evals = 1 << self.num_bits;
-        let commitment = transcript.consume_elements("Public Input Commitment", num_evals)?;
-
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
         mle_ref.index_mle_indices(0);
 

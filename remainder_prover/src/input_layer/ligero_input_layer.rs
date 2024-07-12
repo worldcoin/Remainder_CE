@@ -83,11 +83,11 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
 
     type VerifierInputLayer = VerifierLigeroInputLayer<F>;
 
-    fn commit(&mut self) -> Result<&Self::Commitment, super::InputLayerError> {
+    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
         // If we've already generated a commitment (i.e. through `new_with_ligero_commitment()`),
         // there is no need to regenerate it.
-        if let (Some(_), Some(_), Some(_)) = (&self.comm, &self.aux, &self.root) {
-            return Ok(self.root.as_ref().unwrap());
+        if let (Some(_), Some(_), Some(root)) = (&self.comm, &self.aux, &self.root) {
+            return Ok(root.clone());
         }
 
         let (_, comm, root, aux) = remainder_ligero_commit(
@@ -98,20 +98,17 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
 
         self.comm = Some(comm);
         self.aux = Some(aux);
-        self.root = Some(root);
+        self.root = Some(root.clone());
 
-        Ok(self.root.as_ref().unwrap())
+        Ok(root)
     }
 
     /// Add the commitment to the prover transcript for Fiat-Shamir.
     fn append_commitment_to_transcript(
-        &self,
+        commitment: &Self::Commitment,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
-        transcript_writer.append(
-            "Ligero Merkle Commitment",
-            self.root.clone().unwrap().into_raw(),
-        );
+        transcript_writer.append("Ligero Merkle Commitment", commitment.clone().into_raw());
     }
 
     /// "Open" the commitment, in other words, see whether the polynomial evaluated at the
@@ -163,9 +160,17 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
         self.layer_id
     }
 
+    fn get_commitment_from_transcript(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::Commitment, InputLayerError> {
+        todo!()
+    }
+
     /// Verify the evaluation proof generated from the `open()` function.
     fn verify(
         &self,
+        commitment: &Self::Commitment,
         claim: crate::claims::Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError> {

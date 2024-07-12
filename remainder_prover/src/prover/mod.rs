@@ -286,12 +286,12 @@ pub trait GKRCircuit<F: FieldExt> {
         end_timer!(intermediate_layers_timer);
         all_layers_sumcheck_proving_span.exit();
 
-        // --------- STAGE 3: Prove Intermediate Layers ---------
+        // --------- STAGE 3: Prove Input Layers ---------
         let input_layers_timer = start_timer!(|| "INPUT layers proof generation");
         let input_layer_proving_span = span!(Level::DEBUG, "input_layer_proving_span").entered();
 
         for input_layer in input_layers {
-            let layer_id = *input_layer.layer_id();
+            let layer_id = input_layer.layer_id();
 
             info!("New Input Layer: {:?}", layer_id);
             let layer_timer =
@@ -341,9 +341,6 @@ pub trait GKRCircuit<F: FieldExt> {
         gkr_circuit: GKRVerifierKey<F, Self::ProofSystem>,
         // _gkr_proof: GKRProof<F, Self::ProofSystem>,
     ) -> Result<(), GKRError> {
-        todo!()
-
-        /*
         let GKRVerifierKey {
             input_layers,
             intermediate_layers,
@@ -371,20 +368,14 @@ pub trait GKRCircuit<F: FieldExt> {
         */
 
         // TODO(Makis): Retrieve Input Layer commitments.
-        /*
         let input_layer_commitments_timer = start_timer!(|| "Retrieve Input Layer Commitments");
 
         let input_layer_commitments = input_layers
             .iter()
-            .map(|_| {
-                CircuitInputLayer::<F, Self>::verifier_get_commitment_from_transcript(
-                    transcript_reader,
-                )
-            })
-            .collect();
+            .map(|input_layer| input_layer.get_commitment_from_transcript(transcript_reader)?)
+            .collect()?;
 
         end_timer!(input_layer_commitments_timer);
-        */
 
         // Claim aggregator to keep track of GKR-style claims across all layers.
         let mut aggregator = <CircuitClaimAggregator<F, Self> as ClaimAggregator<F>>::new();
@@ -438,14 +429,6 @@ pub trait GKRCircuit<F: FieldExt> {
         for layer in intermediate_layers {
             let layer_id = layer.id();
 
-            /*
-            let LayerProof {
-                sumcheck_proof,
-                mut layer,
-                claim_aggregation_proof: _,
-            } = sumcheck_proof_single;
-            */
-
             info!("Intermediate Layer: {:?}", layer_id);
             let layer_timer =
                 start_timer!(|| format!("Proof verification for layer {:?}", layer_id));
@@ -453,8 +436,6 @@ pub trait GKRCircuit<F: FieldExt> {
             let claim_aggr_timer =
                 start_timer!(|| format!("Verify aggregated claim for layer {:?}", layer_id));
 
-            // --- Perform the claim aggregation verification, first sampling `r` ---
-            // --- Note that we ONLY do this if need be! ---
             let prev_claim = aggregator.verifier_aggregate_claims(layer_id, transcript_reader)?;
             debug!("Aggregated claim: {:#?}", prev_claim);
 
@@ -480,6 +461,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
         end_timer!(intermediate_layers_timer);
 
+        // --------- STAGE 2: Verify Input Layers ---------
         let input_layers_timer = start_timer!(|| "INPUT layers proof verification");
 
         for input_layer in input_layer_proofs {
@@ -523,7 +505,6 @@ pub trait GKRCircuit<F: FieldExt> {
         end_timer!(input_layers_timer);
 
         Ok(())
-        */
     }
 
     /// Generate the circuit hash
