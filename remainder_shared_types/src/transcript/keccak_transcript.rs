@@ -1,12 +1,9 @@
-use halo2curves::{
-    ff::{FromUniformBytes, PrimeField},
-};
 use itertools::Itertools;
 use sha3::{Digest, Keccak512};
 
 use crate::FieldExt;
 
-use super::{TranscriptSponge};
+use super::TranscriptSponge;
 
 #[derive(Clone, Debug, Default)]
 pub struct KeccakTranscript {
@@ -29,7 +26,6 @@ where
     fn squeeze(&mut self) -> F {
         let out = self.hasher.finalize_reset();
         self.hasher.update(out);
-
 
         F::from_uniform_bytes(out.as_slice().try_into().unwrap())
     }
