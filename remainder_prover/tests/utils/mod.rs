@@ -3,18 +3,13 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder::expression::abstract_expr::ExprBuilder;
 use remainder::layouter::component::Component;
-use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType, InputShred};
+use remainder::layouter::nodes::circuit_inputs::InputShred;
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
-use remainder::mle::Mle;
-use remainder::{
-    builders::layer_builder::LayerBuilder,
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::LayerId,
-    mle::{dense::DenseMle, MleIndex},
-};
+
+use remainder::{layer::LayerId, mle::dense::DenseMle};
 use remainder_shared_types::{FieldExt, Fr};
 
 /// Returns an MLE with all Fr::one() for testing according to the number of variables.
