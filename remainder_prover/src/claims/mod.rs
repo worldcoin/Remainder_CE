@@ -47,6 +47,10 @@ pub enum ClaimError {
     #[error("Error while combining mle refs in order to evaluate challenge point")]
     ///Error while combining mle refs in order to evaluate challenge point
     MleRefCombineError(CombineMleRefError),
+
+    /// Zero MLE refs cannot be used as intermediate values within a circuit!
+    #[error("Zero MLE refs cannot be used as intermediate values within a circuit")]
+    IntermediateZeroMLERefError,
 }
 
 pub use remainder_shared_types::claims::Claim;

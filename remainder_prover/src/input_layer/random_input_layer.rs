@@ -134,9 +134,8 @@ impl<F: FieldExt> YieldWLXEvals<F> for RandomInputLayer<F> {
         num_claims: usize,
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
-        let num_vars = log2(self.mle.len()) as usize;
         get_wlx_evaluations_helper(
-            MultilinearExtension::new(Evaluations::new(num_vars, self.mle.clone())),
+            MultilinearExtension::new(self.mle.clone()),
             claim_vecs,
             claimed_vals,
             claimed_mles,

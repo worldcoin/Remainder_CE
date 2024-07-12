@@ -42,8 +42,8 @@ impl<F: FieldExt> GateNode<F> {
     /// Constructs a new GateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        lhs: impl ClaimableNode<F = F>,
-        rhs: impl ClaimableNode<F = F>,
+        lhs: &impl ClaimableNode<F = F>,
+        rhs: &impl ClaimableNode<F = F>,
         nonzero_gates: Vec<(usize, usize, usize)>,
         gate_operation: BinaryOperation,
         num_dataparallel_bits: Option<usize>,
@@ -81,7 +81,7 @@ impl<F: FieldExt> GateNode<F> {
 
         let num_vars = log2(res_table.len()) as usize;
 
-        let data = MultilinearExtension::new(Evaluations::new(num_vars, res_table));
+        let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, res_table));
 
         Self {
             id: ctx.get_new_id(),
@@ -126,8 +126,8 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNod
         );
         let (rhs_location, rhs_data) = circuit_map
             .0
-            .get(&self.lhs)
-            .ok_or(DAGError::DanglingNodeId(self.lhs))?;
+            .get(&self.rhs)
+            .ok_or(DAGError::DanglingNodeId(self.rhs))?;
         let rhs = DenseMle::new_with_prefix_bits(
             (*rhs_data).clone(),
             rhs_location.layer_id,
@@ -149,5 +149,138 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNod
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use ark_std::test_rng;
+    use itertools::Itertools;
+    use rand::Rng;
+    use remainder_shared_types::Fr;
+
+    use crate::{
+        layer::gate::BinaryOperation,
+        layouter::{
+            compiling::LayouterCircuit,
+            component::ComponentSet,
+            nodes::{
+                circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+                circuit_outputs::OutputNode,
+                gate::GateNode,
+                node_enum::NodeEnum,
+            },
+        },
+        mle::evals::MultilinearExtension,
+        prover::helpers::test_circuit,
+    };
+
+    #[test]
+    fn test_gate_node_in_circuit() {
+        let circuit = LayouterCircuit::new(|ctx| {
+            const NUM_ITERATED_BITS: usize = 4;
+
+            let mut rng = test_rng();
+            let size = 1 << NUM_ITERATED_BITS;
+
+            let mle =
+                MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
+
+            let neg_mle = MultilinearExtension::new(
+                mle.get_evals_vector()
+                    .clone()
+                    .into_iter()
+                    .map(|elem| -elem)
+                    .collect_vec(),
+            );
+
+            let mut nonzero_gates = vec![];
+
+            (0..size).for_each(|idx| {
+                nonzero_gates.push((idx, idx, idx));
+            });
+
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+
+            let input_shred_pos = InputShred::new(ctx, mle, Some(&input_layer));
+            let input_shred_neg = InputShred::new(ctx, neg_mle, Some(&input_layer));
+
+            let gate_sector = GateNode::new(
+                ctx,
+                &input_shred_pos,
+                &input_shred_neg,
+                nonzero_gates,
+                BinaryOperation::Add,
+                None,
+            );
+
+            let output = OutputNode::new_zero(ctx, &gate_sector);
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                input_layer.into(),
+                input_shred_pos.into(),
+                input_shred_neg.into(),
+                gate_sector.into(),
+                output.into(),
+            ])
+        });
+
+        test_circuit(circuit, None);
+    }
+
+    #[test]
+    fn test_data_parallel_gate_node_in_circuit() {
+        let circuit = LayouterCircuit::new(|ctx| {
+            const NUM_DATAPARALLEL_BITS: usize = 3;
+            const NUM_ITERATED_BITS: usize = 4;
+
+            let mut rng = test_rng();
+            let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
+
+            let mle =
+                MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
+
+            let neg_mle = MultilinearExtension::new(
+                mle.get_evals_vector()
+                    .clone()
+                    .into_iter()
+                    .map(|elem| -elem)
+                    .collect_vec(),
+            );
+
+            let mut nonzero_gates = vec![];
+            let table_size = 1 << NUM_ITERATED_BITS;
+
+            (0..table_size).for_each(|idx| {
+                nonzero_gates.push((idx, idx, idx));
+            });
+
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+
+            let input_shred_pos = InputShred::new(ctx, mle, Some(&input_layer));
+            let input_shred_neg = InputShred::new(ctx, neg_mle, Some(&input_layer));
+
+            let gate_sector = GateNode::new(
+                ctx,
+                &input_shred_pos,
+                &input_shred_neg,
+                nonzero_gates,
+                BinaryOperation::Add,
+                Some(NUM_DATAPARALLEL_BITS),
+            );
+
+            let output = OutputNode::new_zero(ctx, &gate_sector);
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                input_layer.into(),
+                input_shred_pos.into(),
+                input_shred_neg.into(),
+                gate_sector.into(),
+                output.into(),
+            ])
+        });
+
+        test_circuit(circuit, None);
     }
 }

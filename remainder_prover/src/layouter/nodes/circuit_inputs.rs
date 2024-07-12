@@ -18,7 +18,7 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 #[derive(Debug, Clone)]
 pub struct InputShred<F> {
     id: NodeId,
-    pub(crate) parent: Option<NodeId>,
+    pub parent: Option<NodeId>,
     data: MultilinearExtension<F>,
 }
 

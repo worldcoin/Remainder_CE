@@ -356,9 +356,16 @@ pub struct MultilinearExtension<F> {
 }
 
 impl<F: FieldExt> MultilinearExtension<F> {
+    /// create a new MultilinearExtension from a [Vec<F>] of evaluations.
+    pub fn new(evals_vec: Vec<F>) -> Self {
+        let num_vars = log2(evals_vec.len()) as usize;
+        let evals = Evaluations::new(num_vars, evals_vec);
+        MultilinearExtension::new_from_evals(evals)
+    }
+
     /// Generate a new MultilinearExtension from a representation `evals` of a
     /// function `f`.
-    pub fn new(evals: Evaluations<F>) -> Self {
+    pub fn new_from_evals(evals: Evaluations<F>) -> Self {
         Self {
             f: evals,
             dim_info: None,
@@ -380,7 +387,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
 
     /// Generate a new MultilinearExtension from `evals` and `dim_info`.
     pub fn new_with_dim_info(evals: Evaluations<F>, dim_info: DimInfo) -> Self {
-        let mut mle = Self::new(evals);
+        let mut mle = Self::new_from_evals(evals);
         mle.set_dim_info(dim_info).unwrap();
         mle
     }
@@ -438,7 +445,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
     /// variables.
     pub fn new_zero() -> Self {
         let zero_evals = Evaluations::new_zero();
-        Self::new(zero_evals)
+        Self::new_from_evals(zero_evals)
     }
 
     /// Returns `n`, the number of arguments `\tilde{f}` takes.
@@ -660,6 +667,24 @@ impl<F: FieldExt> MultilinearExtension<F> {
         // --- Note that MLE is destructively modified into the new bookkeeping
         // table here ---
         self.f = Evaluations::<F>::new(self.num_vars() - 1, new.collect());
+    }
+
+    /// interlaces the MLEs into a single MLE, in a little endian fashion.
+    pub fn interlace_mles(mles: Vec<MultilinearExtension<F>>) -> MultilinearExtension<F> {
+        let first_len = mles[0].get_evals_vector().len();
+
+        if !mles.iter().all(|v| v.get_evals_vector().len() == first_len) {
+            panic!("All mles's underlying bookkeeping table must have the same length");
+        }
+
+        let out = (0..first_len)
+            .flat_map(|i| {
+                mles.iter()
+                    .map(move |v| v.get_evals_vector().get(i).copied().unwrap())
+            })
+            .collect();
+
+        Self::new(out)
     }
 }
 

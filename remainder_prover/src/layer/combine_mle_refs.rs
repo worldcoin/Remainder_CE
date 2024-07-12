@@ -228,7 +228,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
         match mle_ref.clone() {
             MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMle {
                 current_mle: dense_mle_ref.current_mle.clone(),
-                original_mle: MultilinearExtension::new(Evaluations::<F>::new(
+                original_mle: MultilinearExtension::new_from_evals(Evaluations::<F>::new(
                     dense_mle_ref.original_num_vars() - 1,
                     dense_mle_ref
                         .original_mle
@@ -254,7 +254,7 @@ fn split_mle_ref<F: FieldExt>(mle_ref: MleEnum<F>) -> Vec<MleEnum<F>> {
         match mle_ref {
             MleEnum::Dense(dense_mle_ref) => MleEnum::Dense(DenseMle {
                 current_mle: dense_mle_ref.current_mle.clone(),
-                original_mle: MultilinearExtension::new(Evaluations::<F>::new(
+                original_mle: MultilinearExtension::new_from_evals(Evaluations::<F>::new(
                     dense_mle_ref.original_num_vars() - 1,
                     dense_mle_ref
                         .original_mle
@@ -407,11 +407,12 @@ fn combine_pair<F: FieldExt>(
     let new_bt =
         vec![bound_coord * mle_ref_first_bt[0] + (F::ONE - bound_coord) * mle_ref_second_bt[0]];
 
-    let current_mle = MultilinearExtension::new(Evaluations::<F>::new(
+    let current_mle = MultilinearExtension::new_from_evals(Evaluations::<F>::new(
         mle_ref_first.num_iterated_vars(),
         new_bt.clone(),
     ));
-    let original_mle = MultilinearExtension::new(Evaluations::<F>::new(0, new_bt.clone()));
+    let original_mle =
+        MultilinearExtension::new_from_evals(Evaluations::<F>::new(0, new_bt.clone()));
 
     // construct the dense mle ref that we return. note that even if we are pairing zero mle refs, we just return a dense mle ref here
     //

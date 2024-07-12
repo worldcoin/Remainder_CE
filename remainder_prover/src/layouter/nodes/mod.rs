@@ -20,6 +20,7 @@ pub mod circuit_inputs;
 pub mod circuit_outputs;
 pub mod debug;
 pub mod gate;
+pub mod matmult;
 pub mod node_enum;
 pub mod sector;
 pub mod split_node;
@@ -59,6 +60,11 @@ impl NodeId {
     #[cfg(test)]
     pub fn new_unsafe(id: u64) -> Self {
         Self(id)
+    }
+
+    /// creates an [Expression<F, AbstractExpr>] from this NodeId
+    pub fn expr<F: FieldExt>(self) -> Expression<F, AbstractExpr> {
+        Expression::<F, AbstractExpr>::mle(self)
     }
 }
 

@@ -9,6 +9,7 @@ use super::{
     circuit_outputs::OutputNode,
     debug::DebugNode,
     gate::GateNode,
+    matmult::MatMultNode,
     sector::{Sector, SectorGroup},
     split_node::SplitNode,
     NodeGroup, YieldNode,
@@ -23,7 +24,8 @@ node_enum!(NodeEnum: FieldExt,
     (SealedInput: SealedInputNode<F>),
     (SectorGroup: SectorGroup<F>),
     (GateNode: GateNode<F>),
-    (SplitNode: SplitNode<F>)
+    (SplitNode: SplitNode<F>),
+    (MatMultNode: MatMultNode<F>)
 );
 
 /// Organizational wrapper for a vec of `NodeEnum`s
@@ -37,6 +39,7 @@ pub struct NodeEnumGroup<F: FieldExt> {
     sector_groups: Option<Vec<SectorGroup<F>>>,
     gate_node: Option<Vec<GateNode<F>>>,
     split_nodes: Option<Vec<SplitNode<F>>>,
+    matmult_nodes: Option<Vec<MatMultNode<F>>>,
 }
 
 impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
@@ -53,6 +56,7 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
             sector_groups: Some(vec![]),
             gate_node: Some(vec![]),
             split_nodes: Some(vec![]),
+            matmult_nodes: Some(vec![]),
         };
 
         for node in nodes {
@@ -66,6 +70,7 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
                 NodeEnum::SectorGroup(node) => out.sector_groups.as_mut().unwrap().push(node),
                 NodeEnum::GateNode(node) => out.gate_node.as_mut().unwrap().push(node),
                 NodeEnum::SplitNode(node) => out.split_nodes.as_mut().unwrap().push(node),
+                NodeEnum::MatMultNode(node) => out.matmult_nodes.as_mut().unwrap().push(node),
             }
         }
         out
@@ -118,5 +123,11 @@ impl<F: FieldExt> YieldNode<GateNode<F>> for NodeEnumGroup<F> {
 impl<F: FieldExt> YieldNode<SplitNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<SplitNode<F>> {
         self.split_nodes.take().unwrap_or_default()
+    }
+}
+
+impl<F: FieldExt> YieldNode<MatMultNode<F>> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<MatMultNode<F>> {
+        self.matmult_nodes.take().unwrap_or_default()
     }
 }

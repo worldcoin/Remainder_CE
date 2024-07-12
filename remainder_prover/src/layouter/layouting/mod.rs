@@ -21,12 +21,14 @@ use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred, SealedInputNode},
     circuit_outputs::OutputNode,
     gate::GateNode,
+    matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
     split_node::SplitNode,
     CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
 };
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield
+#[derive(Debug)]
 pub struct CircuitMap<'a, F>(
     pub(crate) HashMap<NodeId, (CircuitLocation, &'a MultilinearExtension<F>)>,
 );
@@ -213,7 +215,6 @@ pub fn layout<
 ) -> Result<Vec<Box<dyn CompilableNode<F, Pf>>>, DAGError> {
     let mut dag = NodeEnumGroup::new(nodes);
 
-    //handle input_layers
     let out = {
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
         let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
@@ -232,6 +233,7 @@ pub fn layout<
                 let input_layer = input_layer_map
                     .get_mut(&input_layer_id)
                     .ok_or(DAGError::DanglingNodeId(input_layer_id))?;
+
                 input_layer.add_shred(input_shred);
             } else {
                 // This probably sucks (rethink default inputlayers)
@@ -256,11 +258,13 @@ pub fn layout<
         let sectors: Vec<Sector<F>> = dag.get_nodes();
         let gates: Vec<GateNode<F>> = dag.get_nodes();
         let splits: Vec<SplitNode<F>> = dag.get_nodes();
+        let matmults: Vec<MatMultNode<F>> = dag.get_nodes();
         let other_layers = sector_groups
             .into_iter()
             .map(|node| IntermediateNode::new(node))
             .chain(gates.into_iter().map(|node| IntermediateNode::new(node)))
-            .chain(splits.into_iter().map(|node| IntermediateNode::new(node)));
+            .chain(splits.into_iter().map(|node| IntermediateNode::new(node)))
+            .chain(matmults.into_iter().map(|node| IntermediateNode::new(node)));
 
         let intermediate_nodes = other_layers
             .chain(
