@@ -3,12 +3,6 @@
 ///The claim aggregator that uses wlx evaluations
 pub mod wlx_eval;
 
-use remainder_shared_types::{
-    input_layer::InputLayer,
-    layer::{Layer, LayerId},
-    transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
-};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
