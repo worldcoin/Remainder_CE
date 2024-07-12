@@ -5,7 +5,7 @@ use remainder_shared_types::FieldExt;
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layer::matmult::{product_two_matrices, MatMult, Matrix},
-    layouter::layouting::{CircuitLocation, DAGError},
+    layouter::layouting::CircuitLocation,
     mle::evals::MultilinearExtension,
     prover::proof_system::ProofSystem,
 };

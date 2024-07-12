@@ -5,7 +5,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layouter::layouting::{CircuitLocation, DAGError},
+    layouter::layouting::CircuitLocation,
     mle::evals::{Evaluations, MultilinearExtension},
     prover::proof_system::ProofSystem,
 };
