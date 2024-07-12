@@ -49,7 +49,7 @@ pub enum GateError {
 /// * `mle_refs` - MLEs pointing to the actual bookkeeping tables for the above
 /// * `independent_variable` - whether the `x` from above resides within at least one of the `mle_refs`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus one!)
-fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
+pub fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
     mle_refs: &[impl Mle<F>],
     independent_variable: bool,
     degree: usize,
@@ -205,7 +205,7 @@ pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl Mle<F>], index: 
     })
 }
 
-/// Computes a round of the sumcheck protocol on this Layer.
+/// Computes a round of the sumcheck protocol on a binary gate layer.
 pub fn prove_round_gate<F: FieldExt>(
     round_index: usize,
     challenge: F,
@@ -231,6 +231,33 @@ pub fn prove_round_gate<F: FieldExt>(
         .fold(Evals(evals_vec[0].clone()), |acc, elem| acc + Evals(elem));
     let Evals(final_vec_evals) = final_evals;
     final_vec_evals
+}
+
+/// Computes a round of sumcheck protocol on a unary gate layer.
+pub fn prove_round_identity<F: FieldExt>(
+    round_index: usize,
+    challenge: F,
+    mle_refs: &mut [DenseMle<F>],
+) -> Result<Vec<F>, GateError> {
+    mle_refs.iter_mut().for_each(|mle_ref_vec| {
+        mle_ref_vec.iter_mut().for_each(|mle_ref| {
+            mle_ref.fix_variable(round_index - 1, challenge);
+        })
+    });
+    let independent_variable = mle_refs
+        .iter()
+        .map(|mle_ref| {
+            mle_ref
+                .mle_indices()
+                .contains(&MleIndex::IndexedBit(round_index))
+        })
+        .reduce(|acc, item| acc | item)
+        .ok_or(GateError::EmptyMleList)?;
+    let evals =
+        evaluate_mle_ref_product_no_beta_table(mle_refs, independent_variable, mle_refs.len())
+            .unwrap();
+    let Evals(evaluations) = evals;
+    Ok(evaluations)
 }
 
 /// Fully evaluates a gate expression (for both the batched and non-batched case, add and mul gates).
@@ -295,6 +322,29 @@ pub fn compute_full_gate<F: FieldExt>(
             })
         }
     }
+}
+
+pub fn compute_full_gate_identity<F: FieldExt>(
+    challenges: Vec<F>,
+    mle_ref: &mut DenseMle<F>,
+    nonzero_gates: &Vec<(usize, usize)>,
+) -> F {
+    // if the gate looks like f1(z, x)(f2(p2, x)) then this is the beta table for the challenges on z
+    let beta_g = BetaValues::new_beta_equality_mle(challenges).unwrap();
+    let zero = F::zero();
+
+    nonzero_gates
+        .clone()
+        .into_iter()
+        .fold(F::zero(), |acc, (z_ind, x_ind)| {
+            let gz = *beta_g
+                .table
+                .bookkeeping_table()
+                .get(z_ind)
+                .unwrap_or(&F::zero());
+            let ux = mle_ref.bookkeeping_table().get(x_ind).unwrap_or(&zero);
+            acc + gz * (*ux)
+        })
 }
 
 /// Compute sumcheck message without a beta table.

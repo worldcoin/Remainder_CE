@@ -1,7 +1,7 @@
 //! module for defining the gate layer, uses the libra trick
 //! to reduce the number of rounds for gate layers (with binary operations)
 
-mod gate_helpers;
+pub mod gate_helpers;
 #[cfg(test)]
 mod tests;
 
@@ -11,9 +11,7 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, VerifierTranscript,
-    },
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};

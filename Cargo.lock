@@ -1624,13 +1624,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "remainder_hyrax"
-version = "0.1.0"
-dependencies = [
- "remainder-shared-types",
-]
-
-[[package]]
 name = "remainder-zkdt"
 version = "0.1.0"
 dependencies = [
@@ -1668,6 +1661,13 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber 0.3.17",
+]
+
+[[package]]
+name = "remainder_hyrax"
+version = "0.1.0"
+dependencies = [
+ "remainder-shared-types",
 ]
 
 [[package]]
