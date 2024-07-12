@@ -190,7 +190,7 @@ where
             .zip(prefix_bits)
             .for_each(|(input_shred_index, prefix_bits)| {
                 let input_shred = &children[*input_shred_index];
-                circuit_map.0.insert(
+                circuit_map.add_node(
                     input_shred.id,
                     (
                         CircuitLocation::new(layer_id, prefix_bits),

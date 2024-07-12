@@ -130,10 +130,10 @@ fn test_nonlinear_sel_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let left_sel_mle = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx);
-        let right_sel_mle = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx);
-        let right_sum_mle_1 = get_dummy_input_shred(VARS_PRODUCT_SIDE, &mut rng, ctx);
-        let right_sum_mle_2 = get_dummy_input_shred(VARS_PRODUCT_SIDE, &mut rng, ctx);
+        let left_sel_mle = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let right_sel_mle = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let right_sum_mle_1 = get_dummy_input_shred(VARS_PRODUCT_SIDE, &mut rng, ctx, &input_layer);
+        let right_sum_mle_2 = get_dummy_input_shred(VARS_PRODUCT_SIDE, &mut rng, ctx, &input_layer);
 
         let component_1 = NonlinearSelectorBuilderComponent::new(
             ctx,

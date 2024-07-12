@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use itertools::Itertools;
 use remainder_shared_types::{layer::LayerId, FieldExt};
@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::nodes::{
-    circuit_inputs::{InputLayerNode, InputShred, SealedInputNode},
+    circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     gate::GateNode,
     matmult::MatMultNode,
@@ -36,6 +36,23 @@ pub struct CircuitMap<'a, F>(
 impl<'a, F> CircuitMap<'a, F> {
     pub(crate) fn new() -> Self {
         Self(HashMap::new())
+    }
+
+    /// Gets the details of a Node in the CircuitMap
+    pub fn get_node(
+        &self,
+        node: &NodeId,
+    ) -> Result<&(CircuitLocation, &MultilinearExtension<F>), DAGError> {
+        self.0.get(node).ok_or(DAGError::DanglingNodeId(*node))
+    }
+
+    /// Adds a new node to the CircuitMap
+    pub fn add_node(
+        &mut self,
+        node: NodeId,
+        value: (CircuitLocation, &'a MultilinearExtension<F>),
+    ) {
+        self.0.insert(node, value);
     }
 }
 
@@ -104,7 +121,7 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
 
     let mut edges_out: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
     let mut edges_in: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
-    let mut starting_nodes = HashSet::new();
+    let mut starting_nodes = BTreeSet::new();
 
     for node in nodes.iter() {
         let node_id = node.id();
@@ -218,10 +235,8 @@ pub fn layout<
     let out = {
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
         let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
-        let sealed_inputs: Vec<SealedInputNode<F>> = dag.get_nodes();
 
         let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode<F>> = HashMap::new();
-        let default_input_layer = input_layers[0].id();
 
         for layer in input_layers.iter_mut() {
             input_layer_map.insert(layer.id(), layer);
@@ -229,27 +244,17 @@ pub fn layout<
 
         // Add InputShreds to specified parents
         for input_shred in input_shreds {
-            if let Some(input_layer_id) = input_shred.parent {
-                let input_layer = input_layer_map
-                    .get_mut(&input_layer_id)
-                    .ok_or(DAGError::DanglingNodeId(input_layer_id))?;
+            let input_layer_id = input_shred.get_parent();
+            let input_layer = input_layer_map
+                .get_mut(&input_layer_id)
+                .ok_or(DAGError::DanglingNodeId(input_layer_id))?;
 
-                input_layer.add_shred(input_shred);
-            } else {
-                // This probably sucks (rethink default inputlayers)
-                let input_layer = input_layer_map.get_mut(&default_input_layer).unwrap();
-                input_layer.add_shred(input_shred);
-            }
+            input_layer.add_shred(input_shred);
         }
 
-        sealed_inputs
+        input_layers
             .into_iter()
             .map(|input| Box::new(input) as Box<dyn CompilableNode<F, Pf>>)
-            .chain(
-                input_layers
-                    .into_iter()
-                    .map(|input| Box::new(input) as Box<dyn CompilableNode<F, Pf>>),
-            )
     };
 
     //handle intermediate layers

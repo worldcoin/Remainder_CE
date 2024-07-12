@@ -3,7 +3,7 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder::expression::abstract_expr::ExprBuilder;
 use remainder::layouter::component::Component;
-use remainder::layouter::nodes::circuit_inputs::InputShred;
+use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputShred};
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, ClaimableNode, Context};
@@ -35,7 +35,12 @@ pub fn get_dummy_random_vec(num_vars: usize, rng: &mut impl Rng) -> Vec<Fr> {
 }
 
 /// Returns an [InputShred] with the appropriate [MultilinearExtension] as the data generated from random u64
-pub fn get_dummy_input_shred(num_vars: usize, rng: &mut impl Rng, ctx: &Context) -> InputShred<Fr> {
+pub fn get_dummy_input_shred(
+    num_vars: usize,
+    rng: &mut impl Rng,
+    ctx: &Context,
+    input_node: &InputLayerNode<Fr>,
+) -> InputShred<Fr> {
     // let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
     let mle_vec = (0..(1 << num_vars))
         .map(|_| Fr::from(rng.gen::<u64>()))
@@ -43,12 +48,16 @@ pub fn get_dummy_input_shred(num_vars: usize, rng: &mut impl Rng, ctx: &Context)
     InputShred::new(
         ctx,
         MultilinearExtension::new_from_evals(Evaluations::new(num_vars, mle_vec)),
-        None,
+        input_node,
     )
 }
 
 /// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
-pub fn get_input_shred_from_vec(mle_vec: Vec<Fr>, ctx: &Context) -> InputShred<Fr> {
+pub fn get_input_shred_from_vec(
+    mle_vec: Vec<Fr>,
+    ctx: &Context,
+    input_node: &InputLayerNode<Fr>,
+) -> InputShred<Fr> {
     assert!(mle_vec.len().is_power_of_two());
     InputShred::new(
         ctx,
@@ -56,7 +65,7 @@ pub fn get_input_shred_from_vec(mle_vec: Vec<Fr>, ctx: &Context) -> InputShred<F
             log2(mle_vec.len()) as usize,
             mle_vec,
         )),
-        None,
+        input_node,
     )
 }
 

@@ -166,9 +166,12 @@ fn test_batching_wraparound_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let input_shred_1 = get_input_shred_from_vec(smaller_combined_mle_vec.to_vec(), ctx);
-        let input_shred_2 = get_input_shred_from_vec(bigger_combined_mle_vec.to_vec(), ctx);
-        let input_shred_3 = get_input_shred_from_vec(combined_prod_mle_expected_vec.to_vec(), ctx);
+        let input_shred_1 =
+            get_input_shred_from_vec(smaller_combined_mle_vec.to_vec(), ctx, &input_layer);
+        let input_shred_2 =
+            get_input_shred_from_vec(bigger_combined_mle_vec.to_vec(), ctx, &input_layer);
+        let input_shred_3 =
+            get_input_shred_from_vec(combined_prod_mle_expected_vec.to_vec(), ctx, &input_layer);
 
         let component_1 =
             DataparallelDistributedMultiplication::new(ctx, &input_shred_1, &input_shred_2);

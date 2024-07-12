@@ -39,11 +39,7 @@ pub trait CircuitMle<F: FieldExt, const N: usize> {
     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
     /// returns all the MLEs as InputShreds
-    fn make_input_shreds(
-        &self,
-        ctx: &Context,
-        source: Option<&InputLayerNode<F>>,
-    ) -> [InputShred<F>; N];
+    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode<F>) -> [InputShred<F>; N];
 }
 
 /// A struct that bundles N MLEs together for semantic reasons.
@@ -57,11 +53,7 @@ impl<F: FieldExt, const N: usize> CircuitMle<F, N> for FlatMles<F, N> {
         &self.mles
     }
 
-    fn make_input_shreds(
-        &self,
-        ctx: &Context,
-        source: Option<&InputLayerNode<F>>,
-    ) -> [InputShred<F>; N] {
+    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode<F>) -> [InputShred<F>; N] {
         self.mles
             .clone()
             .into_iter()

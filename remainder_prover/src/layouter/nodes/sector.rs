@@ -176,6 +176,8 @@ fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Regular
     circuit_map: &mut CircuitMap<'a, F>,
 ) -> Result<(), DAGError> {
     let layer_id = witness_builder.next_layer();
+
+    // This will store all the expression yet to be merged
     let mut expression = children
         .iter()
         .map(|sector| {
@@ -193,10 +195,12 @@ fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Regular
         prefix_bits.insert(child, vec![]);
     }
 
+    // We loop until all the expressions are merged
     let new_expr = loop {
         if expression.len() == 1 {
             break expression.pop().unwrap();
         }
+        // We merge smallest first
         expression.sort_by(|rhs, lhs| rhs.2.cmp(&lhs.2).reverse());
 
         let (smallest_ids, mut smallest, smallest_num_vars) = expression.pop().unwrap();
@@ -204,6 +208,7 @@ fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Regular
 
         let padding_bits = next_num_vars - smallest_num_vars;
 
+        // Add any new selector nodes that are needed for padding
         for _ in 0..padding_bits {
             smallest = smallest.concat_expr(Expression::<_, AbstractExpr>::constant(F::ZERO));
             for node_id in &smallest_ids {
@@ -212,8 +217,10 @@ fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Regular
             }
         }
 
+        // Merge the two expressions
         smallest = smallest.concat_expr(next);
 
+        // Track the prefix bits we're creating so they can be added to the circuit_map; each concat operation pushes a new prefix_bit
         for node_id in &smallest_ids {
             let prefix_bits = prefix_bits.get_mut(node_id).unwrap();
             prefix_bits.push(true);
@@ -247,9 +254,7 @@ fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Regular
             .filter(|item| item.id == node_id)
             .collect_vec()[0]
             .data;
-        circuit_map
-            .0
-            .insert(node_id, (CircuitLocation::new(layer_id, prefix_bits), data));
+        circuit_map.add_node(node_id, (CircuitLocation::new(layer_id, prefix_bits), data));
     }
 
     Ok(())
@@ -265,7 +270,8 @@ mod tests {
             compiling::WitnessBuilder,
             layouting::{CircuitLocation, CircuitMap},
             nodes::{
-                circuit_inputs::InputShred, CircuitNode, ClaimableNode, CompilableNode, Context,
+                circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+                CircuitNode, ClaimableNode, CompilableNode, Context,
             },
         },
         mle::evals::MultilinearExtension,
@@ -277,9 +283,10 @@ mod tests {
     #[test]
     fn test_sector_group_compile() {
         let ctx = Context::new();
+        let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
         let input_shred_1: InputShred<Fr> =
-            InputShred::new(&ctx, MultilinearExtension::new_zero(), None);
-        let input_shred_2 = InputShred::new(&ctx, MultilinearExtension::new_zero(), None);
+            InputShred::new(&ctx, MultilinearExtension::new_zero(), &input_node);
+        let input_shred_2 = InputShred::new(&ctx, MultilinearExtension::new_zero(), &input_node);
 
         let sector_1 = Sector::new(
             &ctx,
@@ -310,14 +317,14 @@ mod tests {
         let sector_group = SectorGroup::new(&ctx, vec![sector_1, sector_2, sector_out]);
         let mut witness_builder: WitnessBuilder<Fr, DefaultProofSystem> = WitnessBuilder::new();
         let mut circuit_map = CircuitMap::new();
-        circuit_map.0.insert(
+        circuit_map.add_node(
             input_shred_1.id(),
             (
                 CircuitLocation::new(LayerId::Input(0), vec![]),
                 input_shred_1.get_data(),
             ),
         );
-        circuit_map.0.insert(
+        circuit_map.add_node(
             input_shred_2.id(),
             (
                 CircuitLocation::new(LayerId::Input(1), vec![]),

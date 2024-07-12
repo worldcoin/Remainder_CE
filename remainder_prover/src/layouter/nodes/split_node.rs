@@ -5,7 +5,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layouter::layouting::{CircuitLocation, DAGError},
+    layouter::layouting::CircuitLocation,
     mle::evals::{Evaluations, MultilinearExtension},
     prover::proof_system::ProofSystem,
 };
@@ -90,10 +90,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for SplitNode<F> {
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
         let data = &self.data;
-        let (source_location, _) = circuit_map
-            .0
-            .get(&self.source)
-            .ok_or(DAGError::DanglingNodeId(self.source))?;
+        let (source_location, _) = circuit_map.get_node(&self.source)?;
 
         let prefix_bits = source_location
             .prefix_bits
@@ -104,7 +101,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for SplitNode<F> {
 
         let location = CircuitLocation::new(source_location.layer_id, prefix_bits);
 
-        circuit_map.0.insert(self.id, (location, data));
+        circuit_map.add_node(self.id, (location, data));
         Ok(())
     }
 }
@@ -179,8 +176,8 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-            let input_shred = InputShred::new(ctx, mle, Some(&input_layer));
-            let input_shred_out = InputShred::new(ctx, mle_out, Some(&input_layer));
+            let input_shred = InputShred::new(ctx, mle, &input_layer);
+            let input_shred_out = InputShred::new(ctx, mle_out, &input_layer);
 
             let split_sectors = SplitNode::new(ctx, &input_shred, 1);
             let sector_prod = Sector::new(

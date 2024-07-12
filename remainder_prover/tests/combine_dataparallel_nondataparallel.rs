@@ -219,12 +219,12 @@ fn test_combined_dataparallel_nondataparallel_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let input_shred_1 = get_input_shred_from_vec(mle_1_vec_raw.to_vec(), ctx);
-        let input_shred_2 = get_input_shred_from_vec(mle_2_vec_raw.to_vec(), ctx);
-        let input_shred_3 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx);
-        let input_shred_4 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx);
-        let input_shred_5 = get_dummy_input_shred(VARS_MLE_3, &mut rng, ctx);
-        let input_shred_6 = get_dummy_input_shred(VARS_MLE_4, &mut rng, ctx);
+        let input_shred_1 = get_input_shred_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
+        let input_shred_2 = get_input_shred_from_vec(mle_2_vec_raw.to_vec(), ctx, &input_layer);
+        let input_shred_3 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
+        let input_shred_4 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
+        let input_shred_5 = get_dummy_input_shred(VARS_MLE_3, &mut rng, ctx, &input_layer);
+        let input_shred_6 = get_dummy_input_shred(VARS_MLE_4, &mut rng, ctx, &input_layer);
 
         let component_1 = DataParallelComponent::new(ctx, &input_shred_1, &input_shred_2);
         let component_2 =

@@ -138,14 +138,26 @@ fn test_dataparallel_selector_alt_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let dataparallel_input_mle_1 =
-            get_input_shred_from_vec(dataparallel_mle_1.bookkeeping_table().to_vec(), ctx);
-        let dataparallel_input_mle_2 =
-            get_input_shred_from_vec(dataparallel_mle_2.bookkeeping_table().to_vec(), ctx);
-        let dataparallel_input_mle_3 =
-            get_input_shred_from_vec(dataparallel_mle_3.bookkeeping_table().to_vec(), ctx);
-        let dataparallel_input_mle_4 =
-            get_input_shred_from_vec(dataparallel_mle_4.bookkeeping_table().to_vec(), ctx);
+        let dataparallel_input_mle_1 = get_input_shred_from_vec(
+            dataparallel_mle_1.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+        let dataparallel_input_mle_2 = get_input_shred_from_vec(
+            dataparallel_mle_2.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+        let dataparallel_input_mle_3 = get_input_shred_from_vec(
+            dataparallel_mle_3.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+        let dataparallel_input_mle_4 = get_input_shred_from_vec(
+            dataparallel_mle_4.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
 
         let component_1 = ProductScaledBuilderComponent::new(
             ctx,
