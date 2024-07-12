@@ -511,7 +511,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MatMult<F> {
+impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MatMult<F> {
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let claims = vec![&self.mle_a, &self.mle_b]

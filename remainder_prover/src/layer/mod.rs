@@ -3,6 +3,7 @@
 pub mod combine_mle_refs;
 
 pub mod gate;
+pub mod identity_gate;
 pub mod layer_enum;
 pub mod matmult;
 pub mod regular_layer;
@@ -20,9 +21,7 @@ use crate::{
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, TranscriptReaderError, VerifierTranscript,
-    },
+    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     FieldExt,
 };
 
