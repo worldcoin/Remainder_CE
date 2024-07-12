@@ -1,11 +1,12 @@
 //! A space-efficient implementation of an [MleRef] which contains only zeros.
 
 use itertools::{repeat_n, Itertools};
+use remainder_shared_types::claims::YieldClaim;
 use remainder_shared_types::layer::LayerId;
 use serde::{Deserialize, Serialize};
 
+use crate::claims::ClaimError;
 use crate::claims::{wlx_eval::ClaimMle, Claim};
-use crate::claims::{ClaimError, YieldClaim};
 use crate::layer::LayerError;
 use remainder_shared_types::FieldExt;
 
@@ -138,6 +139,7 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
+    type Error = LayerError;
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
