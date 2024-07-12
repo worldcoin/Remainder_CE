@@ -6,7 +6,7 @@ use remainder_shared_types::FieldExt;
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layer::gate::{BinaryOperation, Gate},
-    layouter::layouting::{CircuitLocation, DAGError},
+    layouter::layouting::CircuitLocation,
     mle::{
         dense::DenseMle,
         evals::{Evaluations, MultilinearExtension},

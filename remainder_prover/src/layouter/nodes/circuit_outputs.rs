@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    layouter::layouting::{CircuitLocation, DAGError},
+    layouter::layouting::CircuitLocation,
     mle::{dense::DenseMle, zero::ZeroMle, MleIndex},
     prover::proof_system::ProofSystem,
 };

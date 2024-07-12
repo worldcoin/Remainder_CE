@@ -6,15 +6,10 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    input_layer::{
-        ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer,
-    },
-    layouter::{compiling::WitnessBuilder, layouting::CircuitMap},
     mle::evals::MultilinearExtension,
-    prover::proof_system::ProofSystem,
 };
 
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, ClaimableNode, Context, NodeId};
 
 /// A node that represents some Data that will eventually be added to an InputLayer
 #[derive(Debug, Clone)]
@@ -58,6 +53,7 @@ impl<F: FieldExt> InputShred<F> {
         InputShred { id, parent, data }
     }
 
+    /// Gets the parent NodeId of this InputShred. The InputLayerNode this InputShred will eventually be added to
     pub fn get_parent(&self) -> NodeId {
         self.parent
     }
