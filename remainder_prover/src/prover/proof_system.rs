@@ -1,14 +1,18 @@
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptSponge, TranscriptWriter, VerifierTranscript},
+    transcript::{
+        poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptSponge,
+        TranscriptWriter, VerifierTranscript,
+    },
     FieldExt,
 };
 
+use crate::layer::Layer;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 use crate::{
     claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
-    layer::{layer_enum::LayerEnum, Layer},
+    layer::layer_enum::LayerEnum,
     mle::{mle_enum::MleEnum, Mle},
 };
 
@@ -40,7 +44,7 @@ macro_rules! layer_enum {
             pub enum [<$type_name Proof>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Proof variant"]
-                    $var_name(<$variant as Layer<F>>::Proof),
+                    $var_name(<$variant as crate::layer::Layer<F>>::Proof),
                 )*
             }
         }

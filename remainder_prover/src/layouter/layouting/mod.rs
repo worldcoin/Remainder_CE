@@ -21,6 +21,7 @@ use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred, SealedInputNode},
     circuit_outputs::OutputNode,
     gate::GateNode,
+    identity_gate::IdentityGateNode,
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
     split_node::SplitNode,
@@ -230,6 +231,8 @@ pub fn layout<
         // Add InputShreds to specified parents
         for input_shred in input_shreds {
             if let Some(input_layer_id) = input_shred.parent {
+                dbg!("HIIIIIIIII");
+                dbg!(&input_layer_id);
                 let input_layer = input_layer_map
                     .get_mut(&input_layer_id)
                     .ok_or(DAGError::DanglingNodeId(input_layer_id))?;
@@ -257,12 +260,14 @@ pub fn layout<
         let sector_groups: Vec<SectorGroup<F>> = dag.get_nodes();
         let sectors: Vec<Sector<F>> = dag.get_nodes();
         let gates: Vec<GateNode<F>> = dag.get_nodes();
+        let id_gates: Vec<IdentityGateNode<F>> = dag.get_nodes();
         let splits: Vec<SplitNode<F>> = dag.get_nodes();
         let matmults: Vec<MatMultNode<F>> = dag.get_nodes();
         let other_layers = sector_groups
             .into_iter()
             .map(|node| IntermediateNode::new(node))
             .chain(gates.into_iter().map(|node| IntermediateNode::new(node)))
+            .chain(id_gates.into_iter().map(|node| IntermediateNode::new(node)))
             .chain(splits.into_iter().map(|node| IntermediateNode::new(node)))
             .chain(matmults.into_iter().map(|node| IntermediateNode::new(node)));
 

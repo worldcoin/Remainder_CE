@@ -5,7 +5,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::gate::{BinaryOperation, Gate},
+    layer::identity_gate::IdentityGate,
     layouter::layouting::{CircuitLocation, DAGError},
     mle::{
         dense::DenseMle,
@@ -20,7 +20,6 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 #[derive(Clone, Debug)]
 pub struct IdentityGateNode<F: FieldExt> {
     id: NodeId,
-    num_dataparallel_bits: Option<usize>,
     nonzero_gates: Vec<(usize, usize)>,
     pre_routed_data: NodeId,
     data: MultilinearExtension<F>,
@@ -42,56 +41,35 @@ impl<F: FieldExt> IdentityGateNode<F> {
         ctx: &Context,
         pre_routed_data: &impl ClaimableNode<F = F>,
         nonzero_gates: Vec<(usize, usize)>,
-        num_dataparallel_bits: Option<usize>,
     ) -> Self {
         let max_gate_val = nonzero_gates
             .clone()
             .into_iter()
-            .fold(0, |acc, (z, _, _)| std::cmp::max(acc, z));
+            .fold(0, |acc, (z, _)| std::cmp::max(acc, z));
 
-        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
-        // evaluating over all values in the boolean hypercube which includes dataparallel bits
-        let num_dataparallel_vals = 1 << (num_dataparallel_bits.unwrap_or(0));
-        let res_table_num_entries = (max_gate_val + 1) * num_dataparallel_vals;
-
-        let mut res_table = vec![F::ZERO; res_table_num_entries];
-        (0..num_dataparallel_vals).for_each(|idx| {
-            nonzero_gates
-                .clone()
-                .into_iter()
-                .for_each(|(z_ind, x_ind, y_ind)| {
-                    let f2_val = *lhs
-                        .get_data()
-                        .get_evals()
-                        .get(idx + (x_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::ZERO);
-                    let f3_val = *rhs
-                        .get_data()
-                        .get_evals()
-                        .get(idx + (y_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::ZERO);
-                    res_table[idx + (z_ind * num_dataparallel_vals)] =
-                        gate_operation.perform_operation(f2_val, f3_val);
-                });
+        let mut remap_table = vec![F::ZERO; max_gate_val + 1];
+        nonzero_gates.iter().for_each(|(z, x)| {
+            let id_val = *pre_routed_data
+                .get_data()
+                .get_evals()
+                .get(*x)
+                .unwrap_or(&F::ZERO);
+            remap_table[*z] = id_val;
         });
+        let num_vars = log2(remap_table.len()) as usize;
 
-        let num_vars = log2(res_table.len()) as usize;
-
-        let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, res_table));
+        let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, remap_table));
 
         Self {
             id: ctx.get_new_id(),
-            num_dataparallel_bits,
             nonzero_gates,
-            gate_operation,
-            lhs: lhs.id(),
-            rhs: rhs.id(),
+            pre_routed_data: pre_routed_data.id(),
             data,
         }
     }
 }
 
-impl<F: FieldExt> ClaimableNode for GateNode<F> {
+impl<F: FieldExt> ClaimableNode for IdentityGateNode<F> {
     type F = F;
 
     fn get_data(&self) -> &MultilinearExtension<Self::F> {
@@ -103,42 +81,29 @@ impl<F: FieldExt> ClaimableNode for GateNode<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNode<F, Pf>
-    for GateNode<F>
+impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<IdentityGate<F>>> CompilableNode<F, Pf>
+    for IdentityGateNode<F>
 {
     fn compile<'a>(
         &'a self,
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
-        let (lhs_location, lhs_data) = circuit_map
+        dbg!(&self.pre_routed_data);
+        dbg!("HIIII");
+        let (pre_routed_data_location, pre_routed_data) = circuit_map
             .0
-            .get(&self.lhs)
-            .ok_or(DAGError::DanglingNodeId(self.lhs))?;
-        let lhs = DenseMle::new_with_prefix_bits(
-            (*lhs_data).clone(),
-            lhs_location.layer_id,
-            lhs_location.prefix_bits.clone(),
+            .get(&self.pre_routed_data)
+            .ok_or(DAGError::DanglingNodeId(self.pre_routed_data))?;
+        let pre_routed_mle = DenseMle::new_with_prefix_bits(
+            (*pre_routed_data).clone(),
+            pre_routed_data_location.layer_id,
+            pre_routed_data_location.prefix_bits.clone(),
         );
-        let (rhs_location, rhs_data) = circuit_map
-            .0
-            .get(&self.rhs)
-            .ok_or(DAGError::DanglingNodeId(self.rhs))?;
-        let rhs = DenseMle::new_with_prefix_bits(
-            (*rhs_data).clone(),
-            rhs_location.layer_id,
-            rhs_location.prefix_bits.clone(),
-        );
+
         let layer_id = witness_builder.next_layer();
-        let gate_layer = Gate::new(
-            self.num_dataparallel_bits,
-            self.nonzero_gates.clone(),
-            lhs,
-            rhs,
-            self.gate_operation,
-            layer_id,
-        );
-        witness_builder.add_layer(gate_layer.into());
+        let id_gate_layer = IdentityGate::new(layer_id, self.nonzero_gates.clone(), pre_routed_mle);
+        witness_builder.add_layer(id_gate_layer.into());
         circuit_map.0.insert(
             self.id,
             (CircuitLocation::new(layer_id, vec![]), &self.data),
@@ -165,7 +130,10 @@ mod test {
                 circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
                 circuit_outputs::OutputNode,
                 gate::GateNode,
+                identity_gate::IdentityGateNode,
                 node_enum::NodeEnum,
+                sector::Sector,
+                CircuitNode,
             },
         },
         mle::evals::MultilinearExtension,
@@ -173,106 +141,59 @@ mod test {
     };
 
     #[test]
-    fn test_gate_node_in_circuit() {
+    fn test_identity_gate_node_in_circuit() {
         let circuit = LayouterCircuit::new(|ctx| {
             const NUM_ITERATED_BITS: usize = 4;
 
             let mut rng = test_rng();
             let size = 1 << NUM_ITERATED_BITS;
 
-            let mle =
-                MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
-
-            let neg_mle = MultilinearExtension::new(
-                mle.get_evals_vector()
-                    .clone()
-                    .into_iter()
-                    .map(|elem| -elem)
-                    .collect_vec(),
-            );
+            let mle_vec: Vec<Fr> = (0..size).map(|_| Fr::from(rng.gen::<u64>())).collect();
+            let mle = MultilinearExtension::new(mle_vec.clone());
+            let shifted_mle_vec = std::iter::once(Fr::zero())
+                .chain(mle_vec.into_iter().take(size - 1))
+                .collect();
+            let shifted_mle = MultilinearExtension::new(shifted_mle_vec);
 
             let mut nonzero_gates = vec![];
 
-            (0..size).for_each(|idx| {
-                nonzero_gates.push((idx, idx, idx));
+            (1..size).for_each(|idx| {
+                nonzero_gates.push((idx, idx - 1));
             });
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            dbg!(&input_layer.id());
+            let input_shred_pre_routed = InputShred::new(ctx, mle, Some(&input_layer));
+            dbg!(&input_shred_pre_routed.id());
+            let input_shred_expected = InputShred::new(ctx, shifted_mle, Some(&input_layer));
+            dbg!(&input_shred_expected.id());
 
-            let input_shred_pos = InputShred::new(ctx, mle, Some(&input_layer));
-            let input_shred_neg = InputShred::new(ctx, neg_mle, Some(&input_layer));
-
-            let gate_sector = GateNode::new(
+            let gate_sector = IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates);
+            dbg!(&gate_sector.id());
+            let diff_sector = Sector::new(
                 ctx,
-                &input_shred_pos,
-                &input_shred_neg,
-                nonzero_gates,
-                BinaryOperation::Add,
-                None,
+                &[&gate_sector, &input_shred_expected],
+                |input_nodes| {
+                    assert_eq!(input_nodes.len(), 2);
+                    let mle_1_id = input_nodes[0];
+                    let mle_2_id = input_nodes[1];
+
+                    mle_1_id.expr() - mle_2_id.expr()
+                },
+                |data| {
+                    let mle_1_data = data[0];
+                    MultilinearExtension::new_sized_zero(mle_1_data.num_vars())
+                },
             );
 
-            let output = OutputNode::new_zero(ctx, &gate_sector);
+            let output = OutputNode::new_zero(ctx, &diff_sector);
 
             ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
                 input_layer.into(),
-                input_shred_pos.into(),
-                input_shred_neg.into(),
+                input_shred_pre_routed.into(),
+                input_shred_expected.into(),
                 gate_sector.into(),
-                output.into(),
-            ])
-        });
-
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    fn test_data_parallel_gate_node_in_circuit() {
-        let circuit = LayouterCircuit::new(|ctx| {
-            const NUM_DATAPARALLEL_BITS: usize = 3;
-            const NUM_ITERATED_BITS: usize = 4;
-
-            let mut rng = test_rng();
-            let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
-
-            let mle =
-                MultilinearExtension::new((0..size).map(|_| Fr::from(rng.gen::<u64>())).collect());
-
-            let neg_mle = MultilinearExtension::new(
-                mle.get_evals_vector()
-                    .clone()
-                    .into_iter()
-                    .map(|elem| -elem)
-                    .collect_vec(),
-            );
-
-            let mut nonzero_gates = vec![];
-            let table_size = 1 << NUM_ITERATED_BITS;
-
-            (0..table_size).for_each(|idx| {
-                nonzero_gates.push((idx, idx, idx));
-            });
-
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-
-            let input_shred_pos = InputShred::new(ctx, mle, Some(&input_layer));
-            let input_shred_neg = InputShred::new(ctx, neg_mle, Some(&input_layer));
-
-            let gate_sector = GateNode::new(
-                ctx,
-                &input_shred_pos,
-                &input_shred_neg,
-                nonzero_gates,
-                BinaryOperation::Add,
-                Some(NUM_DATAPARALLEL_BITS),
-            );
-
-            let output = OutputNode::new_zero(ctx, &gate_sector);
-
-            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-                input_layer.into(),
-                input_shred_pos.into(),
-                input_shred_neg.into(),
-                gate_sector.into(),
+                diff_sector.into(),
                 output.into(),
             ])
         });
