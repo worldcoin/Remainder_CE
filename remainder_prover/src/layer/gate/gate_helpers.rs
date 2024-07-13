@@ -239,10 +239,8 @@ pub fn prove_round_identity<F: FieldExt>(
     challenge: F,
     mle_refs: &mut [DenseMle<F>],
 ) -> Result<Vec<F>, GateError> {
-    mle_refs.iter_mut().for_each(|mle_ref_vec| {
-        mle_ref_vec.iter_mut().for_each(|mle_ref| {
-            mle_ref.fix_variable(round_index - 1, challenge);
-        })
+    mle_refs.iter_mut().for_each(|mle_ref| {
+        mle_ref.fix_variable(round_index - 1, challenge);
     });
     let independent_variable = mle_refs
         .iter()
@@ -330,18 +328,14 @@ pub fn compute_full_gate_identity<F: FieldExt>(
     nonzero_gates: &Vec<(usize, usize)>,
 ) -> F {
     // if the gate looks like f1(z, x)(f2(p2, x)) then this is the beta table for the challenges on z
-    let beta_g = BetaValues::new_beta_equality_mle(challenges).unwrap();
-    let zero = F::zero();
+    let beta_g = BetaValues::new_beta_equality_mle(challenges);
+    let zero = F::ZERO;
 
     nonzero_gates
         .clone()
         .into_iter()
-        .fold(F::zero(), |acc, (z_ind, x_ind)| {
-            let gz = *beta_g
-                .table
-                .bookkeeping_table()
-                .get(z_ind)
-                .unwrap_or(&F::zero());
+        .fold(F::ZERO, |acc, (z_ind, x_ind)| {
+            let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
             let ux = mle_ref.bookkeeping_table().get(x_ind).unwrap_or(&zero);
             acc + gz * (*ux)
         })

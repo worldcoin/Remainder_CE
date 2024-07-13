@@ -7,7 +7,9 @@ use log::debug;
 use ndarray::Array2;
 use rand::Rng;
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, TranscriptReader, TranscriptSponge, TranscriptWriter, VerifierTranscript,
+    },
     FieldExt,
 };
 
@@ -354,7 +356,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Option<SumcheckProof<F>>, LayerError> {
         let mut claim_b = claim.get_point().clone();
         let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
@@ -424,7 +426,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
         &mut self,
         claim: Claim<F>,
         sumcheck_prover_messages: Self::Proof,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), LayerError> {
         let sumcheck_prover_messages = sumcheck_prover_messages.unwrap().0;
         let mut challenges = vec![];
