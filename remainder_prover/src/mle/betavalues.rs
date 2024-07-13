@@ -4,10 +4,8 @@ use std::{collections::HashMap, fmt::Debug};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 use serde::{Deserialize, Serialize};
-
-use crate::layer::LayerId;
 
 use super::{dense::DenseMle, MleIndex};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};

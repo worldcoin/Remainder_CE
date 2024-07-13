@@ -1,11 +1,9 @@
 use super::*;
-use crate::{
-    claims::Claim, expression::generic_expr::ExpressionNode, layer::LayerId, mle::dense::DenseMle,
-};
+use crate::{claims::Claim, expression::generic_expr::ExpressionNode, mle::dense::DenseMle};
 
 use ark_std::test_rng;
 use rand::Rng;
-use remainder_shared_types::Fr;
+use remainder_shared_types::{layer::LayerId, Fr};
 
 /// Does a dummy version of sumcheck with a testing RNG
 pub fn dummy_sumcheck<F: FieldExt>(

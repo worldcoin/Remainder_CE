@@ -1,6 +1,7 @@
 //! Helper struct that combines multiple `Layer` implementations into
 //! a single struct that can represent many types of `Layer`
 
+use remainder_shared_types::claims::YieldClaim;
 use remainder_shared_types::FieldExt;
 use tracing_subscriber::fmt::Layer;
 
@@ -12,7 +13,6 @@ use super::identity_gate::IdentityGate;
 use super::matmult::MatMult;
 use crate::mle::mle_enum::MleEnum;
 
-use super::regular_layer::RegularLayer;
 use super::LayerError;
 
 use crate::claims::YieldClaim;
@@ -89,6 +89,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for LayerEnum<F> {
+    type Error = LayerError;
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
