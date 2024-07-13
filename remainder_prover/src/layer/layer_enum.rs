@@ -11,11 +11,10 @@ use crate::layer_enum;
 use super::gate::Gate;
 use super::identity_gate::IdentityGate;
 use super::matmult::MatMult;
+use super::regular_layer::RegularLayer;
 use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
-
-use crate::claims::YieldClaim;
 
 layer_enum!(LayerEnum, (Gkr: RegularLayer<F>), (Gate: Gate<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
 

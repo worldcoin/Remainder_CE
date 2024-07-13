@@ -163,9 +163,9 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             dbg!(&input_layer.id());
-            let input_shred_pre_routed = InputShred::new(ctx, mle, Some(&input_layer));
+            let input_shred_pre_routed = InputShred::new(ctx, mle, &input_layer);
             dbg!(&input_shred_pre_routed.id());
-            let input_shred_expected = InputShred::new(ctx, shifted_mle, Some(&input_layer));
+            let input_shred_expected = InputShred::new(ctx, shifted_mle, &input_layer);
             dbg!(&input_shred_expected.id());
 
             let gate_sector = IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates);
