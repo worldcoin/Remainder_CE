@@ -56,11 +56,11 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         GKRError,
     > {
         let input = InputLayerBuilder::new(vec![&mut self.mle], None, LayerId::Input(0))
-            .to_input_layer_with_rho_inv(4, 1.);
+            .to_ligero_input_layer_with_rho_inv(4, 1.);
         let mut input: CircuitInputLayer<F, Self> = input.into();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript_writer);
+        InputLayerEnum::append_commitment_to_transcript(input_commit, transcript_writer);
 
         // TODO!(ryancao): Fix the `RandomInputLayer::new()` argument to make it less confusing
         let random = RandomInputLayer::new(transcript_writer, 1, LayerId::Input(1));
@@ -328,12 +328,16 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         // --- We should have two input layers: a single pre-committed and a single regular Ligero layer ---
         let rho_inv = 4;
         let ratio = 1_f64;
-        let (_, ligero_comm, ligero_root, ligero_aux) =
-            remainder_ligero_commit(self.mle.current_mle.get_evals_vector(), rho_inv, ratio);
+        let (ligero_aux, ligero_comm, ligero_root) = remainder_ligero_commit(
+            self.mle.current_mle.get_evals_vector(),
+            rho_inv,
+            ratio,
+            None,
+        );
         let precommitted_input_layer: LigeroInputLayer<F> = precommitted_input_layer_builder
             .to_input_layer_with_precommit(ligero_comm, ligero_aux, ligero_root, true);
         let live_committed_input_layer: LigeroInputLayer<F> =
-            live_committed_input_layer_builder.to_input_layer_with_rho_inv(4, 1.);
+            live_committed_input_layer_builder.to_ligero_input_layer_with_rho_inv(4, 1.);
 
         Witness {
             layers,

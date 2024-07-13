@@ -76,7 +76,7 @@ impl<F: FieldExt> Transcript<F> {
     /// Record the operation of appending `elements` in the sponge.
     /// `label` is an identifier for this operation that can be used for sanity
     /// checking by the verifier.
-    pub fn append_elements(&mut self, label: &str, elements: &[F]) {
+    pub fn append_elements(&mut self, label: &'static str, elements: &[F]) {
         self.transcript_operations
             .push(Operation::Append(String::from(label), elements.to_vec()));
     }
@@ -84,7 +84,7 @@ impl<F: FieldExt> Transcript<F> {
     /// Record the operation of squeezing `num_elements` from the sponge.
     /// `label` is an identifier for this operation that can be used for sanity
     /// checking by the verifier.
-    pub fn squeeze_elements(&mut self, label: &str, num_elements: usize) {
+    pub fn squeeze_elements(&mut self, label: &'static str, num_elements: usize) {
         self.transcript_operations
             .push(Operation::Squeeze(String::from(label), num_elements));
     }
@@ -116,7 +116,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
     /// Append an element to the sponge and record the operation to the
     /// transcript. `label` is an identifier for this operation and is used for
     /// sanity checking by the `TranscriptReader`.
-    pub fn append(&mut self, label: &str, elem: F) {
+    pub fn append(&mut self, label: &'static str, elem: F) {
         self.sponge.absorb(elem);
         self.transcript.append_elements(label, &[elem]);
     }
@@ -126,7 +126,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
     /// operation is *not* recorded.
     /// `label` is an identifier for this operation
     /// and is used for sanity checking by the `TranscriptReader`.
-    pub fn append_elements(&mut self, label: &str, elements: &[F]) {
+    pub fn append_elements(&mut self, label: &'static str, elements: &[F]) {
         if !elements.is_empty() {
             self.sponge.absorb_elements(elements);
             self.transcript.append_elements(label, elements);
@@ -136,7 +136,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
     /// Squeezes the sponge once to get an element and records the squeeze
     /// operation on the transcript.
     /// `label` serves as sanity-check identifier by the `TranscriptReader`.
-    pub fn get_challenge(&mut self, label: &str) -> F {
+    pub fn get_challenge(&mut self, label: &'static str) -> F {
         let challenge = self.sponge.squeeze();
         self.transcript.squeeze_elements(label, 1);
         challenge
@@ -147,7 +147,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptWriter<F, T> {
     /// empty vector is returned and the operation is *not* recorded on the
     /// transcript.
     /// `label` serves as sanity-check identifier by the `TranscriptReader`.
-    pub fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F> {
+    pub fn get_challenges(&mut self, label: &'static str, num_elements: usize) -> Vec<F> {
         if num_elements == 0 {
             vec![]
         } else {
