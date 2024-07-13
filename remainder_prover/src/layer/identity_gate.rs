@@ -6,14 +6,16 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError, YieldClaim,
+        Claim, ClaimError,
     },
-    layer::{Layer, LayerError, LayerId, VerificationError},
+    layer::{LayerError, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     prover::SumcheckProof,
     sumcheck::*,
 };
 use remainder_shared_types::{
+    claims::YieldClaim,
+    layer::{Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -25,11 +27,12 @@ use thiserror::Error;
 use super::gate::{
     check_fully_bound,
     gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
-    index_mle_indices_gate, GateError,
+    index_mle_indices_gate, Gate, GateError,
 };
 
 /// implement the layer trait for identitygate struct
 impl<F: FieldExt> Layer<F> for IdentityGate<F> {
+    type Error = LayerError;
     type Proof = SumcheckProof<F>;
 
     fn prove_rounds(
@@ -171,6 +174,7 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
+    type Error = LayerError;
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let mut claims = vec![];

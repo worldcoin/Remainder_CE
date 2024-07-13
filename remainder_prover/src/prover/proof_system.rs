@@ -9,7 +9,6 @@ use remainder_shared_types::{
     FieldExt,
 };
 
-use crate::layer::Layer;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
