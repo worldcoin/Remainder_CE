@@ -1,19 +1,18 @@
 //! An input layer that is sent to the verifier in the clear
 
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, VerifierTranscript,
-    },
+    input_layer::InputLayer,
+    layer::LayerId,
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
-    layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
+use super::{get_wlx_evaluations_helper, InputLayerError, MleInputLayer};
 use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
@@ -27,6 +26,8 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     type Commitment = Vec<F>;
 
     type OpeningProof = ();
+
+    type Error = InputLayerError;
 
     /// Because this is a public input layer, we do not need to commit to the MLE and the
     /// "commitment" is just the MLE itself.
@@ -98,10 +99,6 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     fn layer_id(&self) -> &LayerId {
         &self.layer_id
     }
-
-    fn get_padded_mle(&self) -> DenseMle<F> {
-        DenseMle::new_with_prefix_bits(self.mle.clone(), self.layer_id, vec![])
-    }
 }
 
 impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
@@ -121,7 +118,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
         get_wlx_evaluations_helper(
-            self,
+            self.mle.clone(),
             claim_vecs,
             claimed_vals,
             claimed_mles,

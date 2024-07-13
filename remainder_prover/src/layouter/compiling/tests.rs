@@ -29,7 +29,7 @@ fn test_basic_circuit() {
                 2,
                 vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
             )),
-            Some(&input_layer),
+            &input_layer,
         );
 
         let input_shred_2 = InputShred::new(
@@ -38,7 +38,7 @@ fn test_basic_circuit() {
                 2,
                 vec![Fr::from(16), Fr::from(16), Fr::from(16), Fr::from(16)],
             )),
-            Some(&input_layer),
+            &input_layer,
         );
 
         let sector_1 = Sector::new(
@@ -92,7 +92,7 @@ fn test_basic_circuit() {
             },
         );
 
-        let output_input = InputShred::new(ctx, out_sector.get_data().clone(), Some(&input_layer));
+        let output_input = InputShred::new(ctx, out_sector.get_data().clone(), &input_layer);
 
         let final_sector = Sector::new(
             ctx,

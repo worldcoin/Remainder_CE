@@ -1,13 +1,15 @@
 use std::marker::PhantomData;
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    layer::{Layer, LayerId},
+    FieldExt,
+};
 
 use crate::{
     builders::layer_builder::LayerBuilder,
     layer::{
         gate::{BinaryOperation, Gate},
         regular_layer::RegularLayer,
-        Layer, LayerId,
     },
     mle::dense::DenseMle,
 };

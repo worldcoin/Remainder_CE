@@ -3,9 +3,9 @@
 use crate::builders::layer_builder::LayerBuilder;
 use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
-use crate::layer::LayerId;
 use crate::mle::dense::DenseMle;
 use crate::mle::{zero::ZeroMle, Mle, MleIndex};
+use remainder_shared_types::layer::LayerId;
 use remainder_shared_types::FieldExt;
 use std::cmp::max;
 

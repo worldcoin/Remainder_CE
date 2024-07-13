@@ -1,11 +1,12 @@
 use crate::builders::layer_builder::from_mle;
 use crate::expression::generic_expr::Expression;
 use crate::expression::prover_expr::ProverExpr;
-use crate::layer::{regular_layer::RegularLayer, LayerId};
+use crate::layer::regular_layer::RegularLayer;
 use crate::mle::dense::DenseMle;
 use crate::mle::{Mle, MleIndex};
 use crate::utils::test_utils::DummySponge;
 use rand::Rng;
+use remainder_shared_types::layer::LayerId;
 use remainder_shared_types::transcript::{TranscriptSponge, TranscriptWriter};
 
 use self::claim_group::ClaimGroup;
@@ -296,7 +297,14 @@ fn test_aggro_claim_negative_1() {
     let rchal = Fr::from(76);
 
     let mut claim_group = claims_from_expr_and_points(&layer.expression, &chals);
-    claim_group.claims[0].claim.result -= Fr::one();
+    let test_claim = &claim_group.claims[0];
+    claim_group.claims[0] = ClaimMle::new(
+        test_claim.get_point().clone(),
+        test_claim.get_result() - Fr::one(),
+        test_claim.from_layer_id,
+        test_claim.to_layer_id,
+        test_claim.mle_ref.clone(),
+    );
     let res = claim_aggregation_back_end_wrapper::<DummySponge<_, 76>>(&layer, &claim_group);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];
@@ -350,7 +358,14 @@ fn test_aggro_claim_negative_2() {
     let rchal = Fr::from(76);
 
     let mut claim_group = claims_from_expr_and_points(&layer.expression, &chals);
-    claim_group.claims[2].claim.result += Fr::one();
+    let test_claim = &claim_group.claims[2];
+    claim_group.claims[2] = ClaimMle::new(
+        test_claim.get_point().clone(),
+        test_claim.get_result() + Fr::one(),
+        test_claim.from_layer_id,
+        test_claim.to_layer_id,
+        test_claim.mle_ref.clone(),
+    );
     let res = claim_aggregation_back_end_wrapper::<DummySponge<_, 40>>(&layer, &claim_group);
 
     let transpose1 = vec![Fr::from(2).neg(), Fr::from(123), Fr::from(92108)];

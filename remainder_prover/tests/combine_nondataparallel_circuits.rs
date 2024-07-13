@@ -199,8 +199,8 @@ fn test_combined_nondataparallel_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let input_mle_1 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx);
-        let input_mle_2 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx);
+        let input_mle_1 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
+        let input_mle_2 = get_dummy_input_shred(VARS_MLE_1_2, &mut rng, ctx, &input_layer);
 
         let component_1 = ProductScaledSumCircuitComponent::new(ctx, &input_mle_1, &input_mle_2);
         let component_2 = SumConstantCircuitComponent::new(ctx, &input_mle_1, &input_mle_2);

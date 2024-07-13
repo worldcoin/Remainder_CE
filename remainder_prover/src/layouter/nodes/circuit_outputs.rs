@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    layouter::layouting::{CircuitLocation, DAGError},
+    layouter::layouting::CircuitLocation,
     mle::{dense::DenseMle, zero::ZeroMle, MleIndex},
     prover::proof_system::ProofSystem,
 };
@@ -61,12 +61,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, OutputLayer = O>, O: From<DenseMle<F>> + Fr
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
-        dbg!("HIIIIIbyebyeIIII");
-        dbg!(&self.source);
-        let (circuit_location, data) = circuit_map
-            .0
-            .get(&self.source)
-            .ok_or(DAGError::DanglingNodeId(self.source))?;
+        let (circuit_location, data) = circuit_map.get_node(&self.source)?;
 
         let CircuitLocation {
             prefix_bits,

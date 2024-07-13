@@ -7,21 +7,21 @@ use log::debug;
 use ndarray::Array2;
 use rand::Rng;
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, TranscriptReader, TranscriptSponge, TranscriptWriter, VerifierTranscript,
-    },
+    claims::YieldClaim,
+    layer::{Layer, LayerId},
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::{check_fully_bound, compute_sumcheck_message_no_beta_table},
-    Layer, LayerError, LayerId,
+    LayerError,
 };
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError, YieldClaim,
+        Claim, ClaimError,
     },
     layer::VerificationError,
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
@@ -352,6 +352,7 @@ impl<F: FieldExt> MatMult<F> {
 
 impl<F: FieldExt> Layer<F> for MatMult<F> {
     type Proof = Option<SumcheckProof<F>>;
+    type Error = LayerError;
 
     fn prove_rounds(
         &mut self,
@@ -514,6 +515,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MatMult<F> {
+    type Error = LayerError;
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let claims = vec![&self.mle_a, &self.mle_b]
@@ -682,14 +684,11 @@ pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix
 #[cfg(test)]
 mod test {
     use ark_std::test_rng;
-    use remainder_shared_types::Fr;
+    use remainder_shared_types::{layer::LayerId, Fr};
 
     use crate::{
         claims::Claim,
-        layer::{
-            matmult::{product_two_matrices, MatMult, Matrix},
-            LayerId,
-        },
+        layer::matmult::{product_two_matrices, MatMult, Matrix},
         mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     };
 

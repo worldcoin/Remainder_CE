@@ -6,8 +6,7 @@ use core::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 use crate::claims::Claim;
-use crate::layer::LayerId;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 
 use self::mle_enum::MleEnum;
 use dyn_clonable::*;

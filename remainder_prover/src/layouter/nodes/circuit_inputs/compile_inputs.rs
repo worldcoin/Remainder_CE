@@ -1,11 +1,10 @@
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{input_layer::InputLayer, FieldExt};
 
 use crate::{
     input_layer::{
-        ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer,
-        MleInputLayer,
+        ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, MleInputLayer,
     },
     layouter::{
         compiling::WitnessBuilder,
@@ -191,7 +190,7 @@ where
             .zip(prefix_bits)
             .for_each(|(input_shred_index, prefix_bits)| {
                 let input_shred = &children[*input_shred_index];
-                circuit_map.0.insert(
+                circuit_map.add_node(
                     input_shred.id,
                     (
                         CircuitLocation::new(layer_id, prefix_bits),

@@ -4,7 +4,10 @@ use std::cmp::min;
 
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    layer::{Layer, LayerId},
+    FieldExt,
+};
 use thiserror::Error;
 
 use crate::{
@@ -12,7 +15,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
+    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer},
     mle::{mle_enum::MleEnum, MleIndex},
     utils::{argsort, bits_iter},
 };

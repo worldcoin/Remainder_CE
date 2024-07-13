@@ -170,8 +170,8 @@ fn test_linear_and_nonlinear_bits_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let sel_input = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx);
-        let prod_input = get_dummy_input_shred(VARS_PROD_SIDE, &mut rng, ctx);
+        let sel_input = get_dummy_input_shred(VARS_SEL_SIDE, &mut rng, ctx, &input_layer);
+        let prod_input = get_dummy_input_shred(VARS_PROD_SIDE, &mut rng, ctx, &input_layer);
 
         let component_1 = LastBitLinearBuilderComponent::new(ctx, &sel_input, &prod_input);
         let component_2 = FirstBitLinearBuilderComponent::new(ctx, component_1.get_output_sector());

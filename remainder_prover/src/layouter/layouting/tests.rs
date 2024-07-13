@@ -40,10 +40,12 @@ fn test_topo_sort_with_cycle_include_children() {
     let ctx = Context::new();
     let dummy_data = MultilinearExtension::new_zero();
 
+    let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+
     // node ids: [1, 2, 3]
-    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), None);
+    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
     let input_shred_vec = vec![
         input_shred_0.clone(),
         input_shred_1.clone(),
@@ -57,8 +59,8 @@ fn test_topo_sort_with_cycle_include_children() {
     );
 
     // node ids: [5, 6]
-    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), None);
+    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), &input_node);
 
     // for now, use debug node as the fake gate layer
     // node id: [7]
@@ -146,10 +148,12 @@ fn test_topo_sort_with_cycle_no_children() {
     let ctx = Context::new();
     let dummy_data = MultilinearExtension::new_zero();
 
+    let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+
     // node ids: [1, 2, 3]
-    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), None);
+    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
     let input_shred_vec = vec![
         input_shred_0.clone(),
         input_shred_1.clone(),
@@ -163,8 +167,8 @@ fn test_topo_sort_with_cycle_no_children() {
     );
 
     // node ids: [5, 6]
-    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), None);
+    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), &input_node);
 
     // for now, use debug node as the fake gate layer
     // node id: [7]
@@ -255,10 +259,12 @@ fn test_topo_sort_without_cycle_no_children() {
     let ctx = Context::new();
     let dummy_data = MultilinearExtension::new_zero();
 
+    let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+
     // node ids: [1, 2, 3]
-    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), None);
+    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
     let input_shred_vec = vec![
         input_shred_0.clone(),
         input_shred_1.clone(),
@@ -272,8 +278,8 @@ fn test_topo_sort_without_cycle_no_children() {
     );
 
     // node ids: [5, 6]
-    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), None);
+    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), &input_node);
 
     // for now, use debug node as the fake gate layer
     // node id: [7]
@@ -369,10 +375,12 @@ fn test_topo_sort_without_cycle_include_children() {
     let ctx = Context::new();
     let dummy_data = MultilinearExtension::new_zero();
 
+    let input_node = InputLayerNode::new(&ctx, None, InputLayerType::PublicInputLayer);
+
     // node ids: [1, 2, 3]
-    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), None);
+    let input_shred_0 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_1 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_2 = InputShred::new(&ctx, dummy_data.clone(), &input_node);
     let input_shred_vec = vec![
         input_shred_0.clone(),
         input_shred_1.clone(),
@@ -386,8 +394,8 @@ fn test_topo_sort_without_cycle_include_children() {
     );
 
     // node ids: [5, 6]
-    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), None);
-    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), None);
+    let input_shred_3_node = InputShred::new(&ctx, dummy_data.clone(), &input_node);
+    let input_shred_4_node = InputShred::new(&ctx, dummy_data.clone(), &input_node);
 
     // for now, use debug node as the fake gate layer
     // node id: [7]

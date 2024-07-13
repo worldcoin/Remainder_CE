@@ -2,7 +2,7 @@ use std::cmp::max;
 
 use ark_std::test_rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{layer::LayerId, FieldExt, Fr};
 
 use crate::{
     builders::{
@@ -10,7 +10,6 @@ use crate::{
         layer_builder::{from_mle, simple_builders::EqualityCheck, LayerBuilder},
     },
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::LayerId,
     mle::{dense::DenseMle, Mle},
     prover::{
         helpers::test_circuit,

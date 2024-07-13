@@ -10,17 +10,15 @@ use remainder_ligero::{
     LcCommit, LcProofAuxiliaryInfo, LcRoot,
 };
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, VerifierTranscript,
-    },
+    layer::LayerId,
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::wlx_eval::YieldWLXEvals,
-    layer::LayerId,
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
+    mle::{evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
 use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
@@ -65,6 +63,8 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     type Commitment = LigeroCommitment<F>;
 
     type OpeningProof = LigeroInputProof<F>;
+
+    type Error = InputLayerError;
 
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
         // --- If we've already generated a commitment (i.e. through `new_with_ligero_commitment()`), ---
@@ -171,10 +171,6 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     fn layer_id(&self) -> &LayerId {
         &self.layer_id
     }
-
-    fn get_padded_mle(&self) -> DenseMle<F> {
-        todo!()
-    }
 }
 
 impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
@@ -245,7 +241,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for LigeroInputLayer<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
         get_wlx_evaluations_helper(
-            self,
+            self.mle.clone(),
             claim_vecs,
             claimed_vals,
             claimed_mles,

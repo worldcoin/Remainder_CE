@@ -1,7 +1,10 @@
 use remainder_shared_types::{
+    claims::{ClaimAggregator, YieldClaim},
+    input_layer::InputLayer,
+    layer::Layer,
     transcript::{
-        poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptSponge,
-        TranscriptWriter, VerifierTranscript,
+        poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptWriter,
+        VerifierTranscript,
     },
     FieldExt,
 };
@@ -11,12 +14,15 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 use crate::{
-    claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
-    layer::layer_enum::LayerEnum,
+    claims::wlx_eval::WLXAggregator,
+    input_layer::InputLayerError,
+    layer::{layer_enum::LayerEnum, LayerError},
     mle::{mle_enum::MleEnum, Mle},
 };
 
-use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
+use crate::input_layer::enum_input_layer::InputLayerEnum;
+
+use super::GKRError;
 
 #[macro_export]
 ///This macro generates a layer enum that represents all the possible layers
@@ -44,16 +50,17 @@ macro_rules! layer_enum {
             pub enum [<$type_name Proof>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Proof variant"]
-                    $var_name(<$variant as crate::layer::Layer<F>>::Proof),
+                    $var_name(<$variant as $crate::remainder_shared_types::layer::Layer<F>>::Proof),
                 )*
             }
         }
 
-        impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
+        impl<F: FieldExt> $crate::remainder_shared_types::layer::Layer<F> for $type_name<F> {
             paste::paste! { type Proof = [<$type_name Proof>]<F>;}
+            type Error = LayerError;
             fn prove_rounds(
                 &mut self,
-                claim: $crate::claims::Claim<F>,
+                claim: $crate::remainder_shared_types::claims::Claim<F>,
                 transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
             ) -> Result<Self::Proof, super::LayerError> {
                 match self {
@@ -65,7 +72,7 @@ macro_rules! layer_enum {
 
             fn verify_rounds(
                 &mut self,
-                claim: $crate::claims::Claim<F>,
+                claim: $crate::remainder_shared_types::claims::Claim<F>,
                 proof: Self::Proof,
                 transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
             ) -> Result<(), super::LayerError> {
@@ -82,7 +89,7 @@ macro_rules! layer_enum {
                 }
             }
 
-            fn id(&self) -> &super::LayerId {
+            fn id(&self) -> &$crate::remainder_shared_types::layer::LayerId {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.id(),
@@ -140,11 +147,12 @@ macro_rules! input_layer_enum {
             }
         }
 
-        impl<F: FieldExt> $crate::input_layer::InputLayer<F> for $type_name<F> {
+        impl<F: FieldExt> $crate::remainder_shared_types::input_layer::InputLayer<F> for $type_name<F> {
             paste::paste! {
                 type Commitment = [<$type_name Commitment>]<F>;
                 type OpeningProof = [<$type_name OpeningProof>]<F>;
             }
+            type Error = $crate::input_layer::InputLayerError;
 
             fn commit(&mut self) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
                 match self {
@@ -207,18 +215,10 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn layer_id(&self) -> &$crate::layer::LayerId {
+            fn layer_id(&self) -> &$crate::remainder_shared_types::layer::LayerId {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.layer_id(),
-                    )*
-                }
-            }
-
-            fn get_padded_mle(&self) -> $crate::mle::dense::DenseMle<F,>{
-                match self {
-                    $(
-                        Self::$var_name(layer) => layer.get_padded_mle(),
                     )*
                 }
             }
@@ -238,14 +238,14 @@ macro_rules! input_layer_enum {
 ///A trait for bundling a group of types that define the interfaces that go into a GKR Prover
 pub trait ProofSystem<F: FieldExt> {
     ///A trait that defines the allowed Layer for this ProofSystem
-    type Layer: Layer<F>
+    type Layer: Layer<F, Error = LayerError>
         + Serialize
         + for<'a> Deserialize<'a>
         + Debug
-        + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
+        + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim, Error = LayerError>;
 
     ///A trait that defines the allowed InputLayer for this ProofSystem
-    type InputLayer: InputLayer<F>;
+    type InputLayer: InputLayer<F, Error = InputLayerError>;
 
     ///The Transcript this proofsystem uses for F-S
     type ProverTranscript: ProverTranscript<F>;
@@ -253,14 +253,19 @@ pub trait ProofSystem<F: FieldExt> {
 
     ///The MleRef type that serves as the output layer representation
     type OutputLayer: Mle<F>
-        + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
+        + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim, Error = LayerError>
         + Serialize
         + for<'de> Deserialize<'de>;
 
     ///The logic that handles how to aggregate claims
     /// As this trait defines the 'bridge' between layers, some helper traits may be neccessary to implement
     /// on the other layer types
-    type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>;
+    type ClaimAggregator: ClaimAggregator<
+        F,
+        Layer = Self::Layer,
+        InputLayer = Self::InputLayer,
+        Error = GKRError,
+    >;
 }
 
 /// The default proof system for the remainder prover

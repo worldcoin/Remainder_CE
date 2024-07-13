@@ -4,9 +4,8 @@ use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, TranscriptReaderError, VerifierTranscript,
-    },
+    claims::ClaimAndProof,
+    transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     FieldExt,
 };
 use tracing::{debug, info};
@@ -14,7 +13,7 @@ use tracing::{debug, info};
 use crate::{
     claims::{
         wlx_eval::{claim_group::form_claim_groups, get_num_wlx_evaluations, ClaimMle},
-        Claim, ClaimAndProof, ClaimError,
+        Claim, ClaimError,
     },
     layer::combine_mle_refs::get_og_mle_refs,
     mle::mle_enum::MleEnum,
@@ -84,7 +83,9 @@ pub fn prover_aggregate_claims_helper<F: FieldExt>(
     let intermediate_claims = intermediate_results
         .clone()
         .into_iter()
-        .map(|result| ClaimMle::new_raw(result.claim.point, result.claim.result))
+        .map(|result| {
+            ClaimMle::new_raw(result.claim.get_point().clone(), result.claim.get_result())
+        })
         .collect();
     let intermediate_wlx_evals: Vec<Vec<F>> = intermediate_results
         .into_iter()
@@ -151,7 +152,9 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt>(
     let intermediate_claims = intermediate_results
         .clone()
         .into_iter()
-        .map(|result| ClaimMle::new_raw(result.claim.point, result.claim.result))
+        .map(|result| {
+            ClaimMle::new_raw(result.claim.get_point().clone(), result.claim.get_result())
+        })
         .collect();
     let intermediate_wlx_evals: Vec<Vec<F>> = intermediate_results
         .into_iter()

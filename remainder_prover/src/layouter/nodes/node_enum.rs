@@ -5,7 +5,7 @@ use remainder_shared_types::FieldExt;
 use crate::node_enum;
 
 use super::{
-    circuit_inputs::{InputLayerNode, InputShred, SealedInputNode},
+    circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     debug::DebugNode,
     gate::GateNode,
@@ -22,7 +22,6 @@ node_enum!(NodeEnum: FieldExt,
     (Output: OutputNode<F>),
     (Debug: DebugNode),
     (Sector: Sector<F>),
-    (SealedInput: SealedInputNode<F>),
     (SectorGroup: SectorGroup<F>),
     (GateNode: GateNode<F>),
     (IdentityGateNode: IdentityGateNode<F>),
@@ -37,7 +36,6 @@ pub struct NodeEnumGroup<F: FieldExt> {
     output: Option<Vec<OutputNode<F>>>,
     debugs: Option<Vec<DebugNode>>,
     sectors: Option<Vec<Sector<F>>>,
-    sealed_inputs: Option<Vec<SealedInputNode<F>>>,
     sector_groups: Option<Vec<SectorGroup<F>>>,
     gate_nodes: Option<Vec<GateNode<F>>>,
     identity_gate_nodes: Option<Vec<IdentityGateNode<F>>>,
@@ -55,7 +53,6 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
             output: Some(vec![]),
             debugs: Some(vec![]),
             sectors: Some(vec![]),
-            sealed_inputs: Some(vec![]),
             sector_groups: Some(vec![]),
             gate_nodes: Some(vec![]),
             identity_gate_nodes: Some(vec![]),
@@ -70,7 +67,6 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
                 NodeEnum::Output(node) => out.output.as_mut().unwrap().push(node),
                 NodeEnum::Debug(node) => out.debugs.as_mut().unwrap().push(node),
                 NodeEnum::Sector(node) => out.sectors.as_mut().unwrap().push(node),
-                NodeEnum::SealedInput(node) => out.sealed_inputs.as_mut().unwrap().push(node),
                 NodeEnum::SectorGroup(node) => out.sector_groups.as_mut().unwrap().push(node),
                 NodeEnum::GateNode(node) => out.gate_nodes.as_mut().unwrap().push(node),
                 NodeEnum::IdentityGateNode(node) => {
@@ -108,11 +104,6 @@ impl<F: FieldExt> YieldNode<DebugNode> for NodeEnumGroup<F> {
 impl<F: FieldExt> YieldNode<Sector<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<Sector<F>> {
         self.sectors.take().unwrap_or_default()
-    }
-}
-impl<F: FieldExt> YieldNode<SealedInputNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<SealedInputNode<F>> {
-        self.sealed_inputs.take().unwrap_or_default()
     }
 }
 impl<F: FieldExt> YieldNode<SectorGroup<F>> for NodeEnumGroup<F> {

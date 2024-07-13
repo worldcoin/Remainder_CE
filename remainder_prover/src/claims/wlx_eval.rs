@@ -5,9 +5,10 @@ mod helpers;
 
 mod claim_group;
 
-use remainder_shared_types::transcript::{
-    ProverTranscript, VerifierTranscript,
-};
+use remainder_shared_types::claims::{Claim, ClaimAggregator, ClaimAndProof, YieldClaim};
+use remainder_shared_types::input_layer::InputLayer;
+use remainder_shared_types::layer::{Layer, LayerId};
+use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 use remainder_shared_types::FieldExt;
 
 use crate::claims::wlx_eval::claim_group::ClaimGroup;
@@ -15,14 +16,13 @@ use crate::claims::wlx_eval::helpers::{
     prover_aggregate_claims_helper, verifier_aggregate_claims_helper,
 };
 
+use crate::claims::ClaimError;
 use crate::mle::mle_enum::MleEnum;
 
-use crate::input_layer::InputLayer;
 use crate::prover::GKRError;
 use crate::sumcheck::*;
 
-use crate::layer::LayerId;
-use crate::layer::{Layer, LayerError};
+use crate::layer::LayerError;
 
 use serde::{Deserialize, Serialize};
 
@@ -32,8 +32,6 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use log::debug;
-
-use super::{Claim, ClaimAggregator, ClaimAndProof, ClaimError, YieldClaim};
 
 ///The basic ClaimAggregator
 ///
@@ -56,6 +54,7 @@ impl<
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > ClaimAggregator<F> for WLXAggregator<F, L, LI>
 {
+    type Error = GKRError;
     type Claim = ClaimMle<F>;
 
     type AggregationProof = Vec<Vec<F>>;
@@ -130,7 +129,7 @@ impl<
         }
     }
 
-    fn add_claims(&mut self, layer: &impl YieldClaim<Self::Claim>) -> Result<(), LayerError> {
+    fn add_claims<S: YieldClaim<Self::Claim>>(&mut self, layer: &S) -> Result<(), S::Error> {
         let claims = layer.get_claims()?;
 
         debug!("Ingesting claims: {:#?}", claims);
@@ -225,7 +224,7 @@ impl<F: FieldExt> ClaimMle<F> {
     /// Generate new raw claim without any origin/destination information.
     pub fn new_raw(point: Vec<F>, result: F) -> Self {
         Self {
-            claim: Claim { point, result },
+            claim: Claim::new(point, result),
             from_layer_id: None,
             to_layer_id: None,
             mle_ref: None,
@@ -241,7 +240,7 @@ impl<F: FieldExt> ClaimMle<F> {
         mle_ref: Option<MleEnum<F>>,
     ) -> Self {
         Self {
-            claim: Claim { point, result },
+            claim: Claim::new(point, result),
             from_layer_id,
             to_layer_id,
             mle_ref,
@@ -250,17 +249,17 @@ impl<F: FieldExt> ClaimMle<F> {
 
     /// Returns the length of the `point` vector.
     pub fn get_num_vars(&self) -> usize {
-        self.claim.point.len()
+        self.claim.get_num_vars()
     }
 
     /// Returns the point vector in F^n.
     pub fn get_point(&self) -> &Vec<F> {
-        &self.claim.point
+        &self.claim.get_point()
     }
 
     /// Returns the expected result.
     pub fn get_result(&self) -> F {
-        self.claim.result
+        self.claim.get_result()
     }
 
     /// Returns the source Layer ID.
@@ -282,8 +281,8 @@ impl<F: FieldExt> ClaimMle<F> {
 impl<F: fmt::Debug + FieldExt> fmt::Debug for ClaimMle<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Claim")
-            .field("point", &self.claim.point)
-            .field("result", &self.claim.result)
+            .field("point", self.claim.get_point())
+            .field("result", &self.claim.get_result())
             .field("from_layer_id", &self.from_layer_id)
             .field("to_layer_id", &self.to_layer_id)
             .finish()

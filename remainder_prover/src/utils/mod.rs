@@ -6,10 +6,10 @@ use std::{fs, iter::repeat_with};
 use ark_std::test_rng;
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
-use remainder_shared_types::{FieldExt, Poseidon};
+use remainder_shared_types::{layer::LayerId, FieldExt, Poseidon};
 
 use crate::{
-    layer::{layer_enum::LayerEnum, LayerId},
+    layer::layer_enum::LayerEnum,
     mle::{dense::DenseMle, MleIndex},
     prover::layers::Layers,
 };

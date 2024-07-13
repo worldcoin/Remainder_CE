@@ -1,7 +1,6 @@
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{layer::LayerId, FieldExt};
 
 use crate::{
-    layer::LayerId,
     layouter::nodes::{
         circuit_inputs::{InputLayerNode, InputShred},
         Context,
@@ -40,11 +39,7 @@ pub trait CircuitMle<F: FieldExt, const N: usize> {
     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
     /// returns all the MLEs as InputShreds
-    fn make_input_shreds(
-        &self,
-        ctx: &Context,
-        source: Option<&InputLayerNode<F>>,
-    ) -> [InputShred<F>; N];
+    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode<F>) -> [InputShred<F>; N];
 }
 
 /// A struct that bundles N MLEs together for semantic reasons.
@@ -58,11 +53,7 @@ impl<F: FieldExt, const N: usize> CircuitMle<F, N> for FlatMles<F, N> {
         &self.mles
     }
 
-    fn make_input_shreds(
-        &self,
-        ctx: &Context,
-        source: Option<&InputLayerNode<F>>,
-    ) -> [InputShred<F>; N] {
+    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode<F>) -> [InputShred<F>; N] {
         self.mles
             .clone()
             .into_iter()
@@ -106,11 +97,12 @@ impl<F: FieldExt, const N: usize> FlatMles<F, N> {
 #[cfg(test)]
 mod tests {
 
+    use remainder_shared_types::layer::LayerId;
     use remainder_shared_types::Fr;
 
     use crate::mle::circuit_mle::CircuitMle;
+    use crate::mle::circuit_mle::FlatMles;
     use crate::mle::Mle;
-    use crate::{layer::LayerId, mle::circuit_mle::FlatMles};
 
     #[test]
     fn create_dense_tuple_mle_from_vec() {

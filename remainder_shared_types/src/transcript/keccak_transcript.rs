@@ -1,15 +1,9 @@
-use halo2curves::{
-    ff::{Field, FromUniformBytes, PrimeField},
-    CurveAffine,
-};
 use itertools::Itertools;
-use num_bigint::BigUint;
-use sha3::{Digest, Keccak256, Keccak512};
-use std::ops::Neg;
+use sha3::{Digest, Keccak512};
 
 use crate::FieldExt;
 
-use super::{ec_transcript::ECTranscriptSponge, TranscriptSponge};
+use super::TranscriptSponge;
 
 #[derive(Clone, Debug, Default)]
 pub struct KeccakTranscript {
@@ -33,7 +27,6 @@ where
         let out = self.hasher.finalize_reset();
         self.hasher.update(out);
 
-
         F::from_uniform_bytes(out.as_slice().try_into().unwrap())
     }
 
@@ -54,8 +47,8 @@ mod tests {
     use halo2curves::bn256::{Fq, Fr};
 
     use crate::transcript::{
-        ec_transcript::{ECProverTranscript, ECTranscriptSponge, ECTranscriptWriter},
-        ProverTranscript, TranscriptSponge,
+        ec_transcript::{ECProverTranscript, ECTranscriptWriter},
+        ProverTranscript,
     };
 
     use super::KeccakTranscript;
