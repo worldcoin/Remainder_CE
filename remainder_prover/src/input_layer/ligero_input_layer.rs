@@ -3,13 +3,13 @@
 use std::marker::PhantomData;
 
 use remainder_ligero::{
-    adapter::{convert_halo_to_lcpc, LigeroProof},
+    adapter::LigeroProof,
     ligero_commit::{
         remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
     },
-    ligero_structs::LigeroEncoding,
+    ligero_structs::LigeroAuxInfo,
     poseidon_ligero::PoseidonSpongeHasher,
-    LcCommit, LcProofAuxiliaryInfo, LcRoot,
+    LcCommit, LcRoot,
 };
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
@@ -35,11 +35,11 @@ pub struct LigeroInputLayer<F: FieldExt> {
     /// The ID corresponding to this layer.
     pub(crate) layer_id: LayerId,
     /// The Ligero commitment to `mle`.
-    comm: Option<LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>>,
+    comm: Option<LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>>,
     /// The auxiliary information needed in order to perform an opening proof.
-    aux: Option<LcProofAuxiliaryInfo>,
+    aux: Option<LigeroAuxInfo<F>>,
     /// The Merkle root corresponding to the commitment.
-    root: Option<LcRoot<LigeroEncoding<F>, F>>,
+    root: Option<LcRoot<LigeroAuxInfo<F>, F>>,
     /// Whether this layer has already been committed to.
     is_precommit: bool,
     /// The rho inverse for the Reed Solomon encoding.
@@ -55,13 +55,13 @@ pub struct LigeroInputProof<F: FieldExt> {
     /// The proof itself, see [LigeroProof].
     pub proof: LigeroProof<F>,
     /// The auxiliary information needed to verify the above proof.
-    pub aux: LcProofAuxiliaryInfo,
+    pub aux: LigeroAuxInfo<F>,
     /// Whether this is a pre-committed (true) or live-committed Ligero input layer
     pub is_precommit: bool,
 }
 
 /// The Ligero commitment the prover needs to send to the verifier
-pub type LigeroCommitment<F> = LcRoot<LigeroEncoding<F>, F>;
+pub type LigeroCommitment<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
@@ -90,10 +90,11 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             return Ok(root.clone());
         }
 
-        let (_, comm, root, aux) = remainder_ligero_commit(
+        let (aux, comm, root) = remainder_ligero_commit(
             self.mle.current_mle.get_evals_vector(),
             self.rho_inv.unwrap(),
             self.ratio.unwrap(),
+            None,
         );
 
         self.comm = Some(comm);
@@ -127,7 +128,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             .comm
             .clone()
             .ok_or(InputLayerError::OpeningBeforeCommitment)?;
-        let root = self
+        let _root = self
             .root
             .clone()
             .ok_or(InputLayerError::OpeningBeforeCommitment)?;
@@ -136,9 +137,8 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             self.mle.current_mle.get_evals_vector(),
             claim.get_point(),
             transcript_writer,
-            aux.clone(),
+            &aux,
             comm,
-            root,
         );
 
         Ok(())
@@ -174,12 +174,10 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
         claim: crate::claims::Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError> {
-        // let ligero_aux = &opening_proof.aux;
-        // let (_, ligero_eval_proof, _) =
-        //     convert_halo_to_lcpc(opening_proof.aux.clone(), opening_proof.proof.clone());
+        let num_coeffs = 2_usize.pow(claim.get_num_vars() as u32);
+        let ligero_aux = LigeroAuxInfo::new(num_coeffs, self.rho_inv, self.ratio, None);
         remainder_ligero_verify::<F, _>(
-            // &ligero_eval_proof,
-            // ligero_aux.clone(),
+            &ligero_aux,
             transcript_reader,
             claim.get_point(),
             claim.get_result(),
@@ -208,9 +206,9 @@ impl<F: FieldExt> LigeroInputLayer<F> {
     pub fn new_with_ligero_commitment(
         mle: DenseMle<F>,
         layer_id: LayerId,
-        ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
-        ligero_aux: LcProofAuxiliaryInfo,
-        ligero_root: LcRoot<LigeroEncoding<F>, F>,
+        ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>,
+        ligero_aux: LigeroAuxInfo<F>,
+        ligero_root: LcRoot<LigeroAuxInfo<F>, F>,
         verifier_is_precommit: bool,
     ) -> Self {
         Self {
