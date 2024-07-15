@@ -19,6 +19,7 @@ to the codebase.
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
 use ark_std::{end_timer, start_timer};
+use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
 use rayon::prelude::*;
@@ -76,6 +77,8 @@ impl<F: FieldExt> PoseidonFieldHash for F {
 /// encoding provides the metadata around e.g. the dimensions of the unencoded
 /// and encoded matrices, as well as other information e.g. the number of
 /// degree tests required (in the multilinear GKR + Ligero PCS case, none!)
+///
+/// Additionally, provides metadata around
 pub trait LcEncoding<F: FieldExt>: Clone + std::fmt::Debug + Sync {
     /// Domain separation label - degree test (see def_labels!())
     const LABEL_DT: &'static [u8];
@@ -93,7 +96,10 @@ pub trait LcEncoding<F: FieldExt>: Clone + std::fmt::Debug + Sync {
     fn encode(&self, inp: &mut [F]) -> Result<(), Self::Err>;
 
     /// Get dimensions for this encoding instance on an input vector of length `len`
-    fn get_dims(&self, len: usize) -> (usize, usize, usize);
+    fn get_dims_for_input_len(&self, len: usize) -> (usize, usize, usize);
+
+    /// Gets encoding dimensions given the state stored within the encoding.
+    fn get_dims(&self) -> (usize, usize, usize);
 
     /// Get the number of column openings required for this encoding
     fn get_n_col_opens(&self) -> usize;
@@ -164,20 +170,6 @@ where
     /// error encoding a vector
     #[error("encoding error: {:?}", _0)]
     Encode(#[from] ErrT),
-}
-
-/// For encoding the matrix size and other information necessary to compute
-/// a Ligero commitment / verify a Ligero PCS proof
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct LcProofAuxiliaryInfo {
-    /// Inverse of the encoding rate rho
-    pub rho_inv: u8,
-    /// Number of columns of the encoded matrix
-    pub encoded_num_cols: usize,
-    /// Number of columns of the original matrix
-    pub orig_num_cols: usize,
-    /// Number of rows of the matrix
-    pub num_rows: usize,
 }
 
 /// result of a verifier operation
@@ -255,7 +247,7 @@ where
         outer_tensor: &[F],
         enc: &E,
         tr: &mut TranscriptWriter<F, T>,
-    ) -> ProverResult<LcEvalProof<D, E, F>, ErrT<E, F>> {
+    ) -> ProverResult<(), ErrT<E, F>> {
         prove(self, outer_tensor, enc, tr)
     }
 }
@@ -344,17 +336,17 @@ where
         self.p_eval.len()
     }
 
-    /// Verify an evaluation proof and return the resulting evaluation
-    pub fn verify<T: TranscriptSponge<F>>(
-        &self,
-        root: &F,
-        outer_tensor: &[F],
-        inner_tensor: &[F],
-        enc: &E,
-        tr: &mut TranscriptReader<F, T>,
-    ) -> VerifierResult<F, ErrT<E, F>> {
-        verify::<D, E, F, T>(root, outer_tensor, inner_tensor, self, enc, tr)
-    }
+    // Verify an evaluation proof and return the resulting evaluation
+    // pub fn verify<T: TranscriptSponge<F>>(
+    //     &self,
+    //     root: &F,
+    //     outer_tensor: &[F],
+    //     inner_tensor: &[F],
+    //     enc: &E,
+    //     tr: &mut TranscriptReader<F, T>,
+    // ) -> VerifierResult<F, ErrT<E, F>> {
+    //     verify::<D, E, F, T>(root, outer_tensor, inner_tensor, self, enc, tr)
+    // }
 }
 
 /// Compute number of degree tests required for `lambda`-bit security
@@ -388,7 +380,7 @@ where
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Matrix size params ---
-    let (n_rows, orig_num_cols, encoded_num_cols) = enc.get_dims(coeffs_in.len());
+    let (n_rows, orig_num_cols, encoded_num_cols) = enc.get_dims_for_input_len(coeffs_in.len());
 
     // check that parameters are ok
     assert!(n_rows * orig_num_cols >= coeffs_in.len());
@@ -670,13 +662,18 @@ fn merkle_layer<D, F>(
 /// * Sending the Merkle path to the Merkle root from that column's corresponding
 ///     leaf node hash
 ///
+/// Additionally, appends each of the column values *and* each of the Merkle
+/// paths to the transcript writer, to match the transcript reader of the
+/// verifier.
+///
 /// ## Arguments
 /// * `comm` - actual Ligero commitment
 /// * `column` - the index of the column to open
 ///
 /// ## Returns
 /// * `column_pf` - the column opening proof to be sent to the verifier
-fn open_column<D, E, F>(
+fn open_column<D, E, F, T>(
+    transcript_writer: &mut TranscriptWriter<F, T>,
     comm: &LcCommit<D, E, F>,
     mut column: usize,
 ) -> ProverResult<LcColumn<E, F>, ErrT<E, F>>
@@ -684,6 +681,7 @@ where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
+    T: TranscriptSponge<F>,
 {
     // make sure arguments are well formed
     if column >= comm.encoded_num_cols {
@@ -699,7 +697,11 @@ where
         // --- Skip num_cols (i.e. row length) number of elements to grab each column value ---
         .step_by(comm.encoded_num_cols)
         .cloned()
-        .collect();
+        .collect_vec();
+
+    // --- Append column values to transcript ---
+    // let label = format!("Column elements: idx {}", column);
+    transcript_writer.append_elements("Column elements", &col);
 
     // Merkle path
     let mut hashes = &comm.hashes[..];
@@ -715,6 +717,10 @@ where
         column >>= 1;
     }
     assert_eq!(column, 0);
+
+    // --- Append Merkle path to transcript ---
+    // let label = format!("Merkle path: idx {}", column);
+    transcript_writer.append_elements("Merkle path", &path);
 
     Ok(LcColumn {
         col,
@@ -742,18 +748,16 @@ const fn log2(v: usize) -> usize {
 /// * `proof` - Ligero evaluation proof, i.e. columns + Merkle paths
 /// * `enc` - Encoding for computing M --> M'
 /// * `tr` - Fiat-Shamir transcript
-fn verify<D, E, F, T>(
+fn verify<E, F, T>(
     root: &F,
     outer_tensor: &[F],
     inner_tensor: &[F],
-    proof: &LcEvalProof<D, E, F>,
-    enc: &E,
-    tr: &mut TranscriptReader<F, T>,
+    aux: &E,
+    transcript_reader: &mut TranscriptReader<F, T>,
 ) -> VerifierResult<F, ErrT<E, F>>
 where
     F: FieldExt,
     T: TranscriptSponge<F>,
-    D: FieldHashFnDigest<F> + Send + Sync,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Grab ONE global copy of Merkle + column hashing Poseidon ---
@@ -761,32 +765,30 @@ where
     let master_default_poseidon_column_hasher = Poseidon::<F, 3, 2>::new(8, 57);
 
     // make sure arguments are well formed
-    let n_col_opens = enc.get_n_col_opens();
-    if n_col_opens != proof.columns.len() || n_col_opens == 0 {
+    let (num_rows, orig_num_cols, encoded_num_cols) = aux.get_dims();
+    if aux.get_n_col_opens() == 0 {
         return Err(VerifierError::NumColOpens);
     }
-    let n_rows = proof.columns[0].col.len();
-    let encoded_num_cols = proof.get_encoded_num_cols();
-    let orig_num_cols = proof.get_orig_num_cols();
     if inner_tensor.len() != orig_num_cols {
         return Err(VerifierError::InnerTensor);
     }
-    if outer_tensor.len() != n_rows {
+    if outer_tensor.len() != num_rows {
         return Err(VerifierError::OuterTensor);
     }
-    if !enc.dims_ok(orig_num_cols, encoded_num_cols) {
+    if !aux.dims_ok(orig_num_cols, encoded_num_cols) {
         return Err(VerifierError::EncodingDims);
     }
 
-    // Retrieve length of `p_eval` vector and request that number of elements
-    // from the trascript reader.
-    let num_p_evals = proof.p_eval.len();
-    let p_eval = tr.consume_elements("LABEL_PE", num_p_evals).unwrap();
+    // The prover first sends over the claimed value of b^T M, i.e. `p_eval`
+    let p_eval = transcript_reader
+        .consume_elements("LABEL_PE", orig_num_cols)
+        .unwrap();
 
     // step 1d: extract columns to open
     // --- The verifier does this independently as well ---
     let cols_to_open: Vec<usize> = {
-        tr.get_challenges("Column openings", n_col_opens)
+        transcript_reader
+            .get_challenges("Column openings", aux.get_n_col_opens())
             .unwrap()
             .into_iter()
             .map(|challenge| compute_col_idx_from_transcript_challenge(challenge, encoded_num_cols))
@@ -799,33 +801,48 @@ where
         let mut tmp = Vec::with_capacity(encoded_num_cols);
         tmp.extend_from_slice(&p_eval[..]);
         tmp.resize(encoded_num_cols, F::from(0));
-        enc.encode(&mut tmp)?;
+        aux.encode(&mut tmp).unwrap(); // TOOD(ryancao): Change this back to error propagation
         tmp
     };
 
     // step 3: check p_random, p_eval, and col paths
-    cols_to_open
-        .par_iter()
-        .zip(&proof.columns[..])
-        .try_for_each(|(&col_num, column)| {
-            // --- Does the RLC evaluation check for b^T as well ---
-            let eval = verify_column_value::<E, F>(column, outer_tensor, &p_eval_fft[col_num]);
+    cols_to_open.iter().try_for_each(|col_idx| {
+        // --- Read all column values + Merkle path values from transcript for given column index ---
+        // let column_label = format!("Column elements: idx {}", col_idx);
+        let column_vals = transcript_reader
+            .consume_elements("Column elements", num_rows)
+            .unwrap();
+        // let merkle_label = format!("Merkle path: idx {}", col_idx)
+        let merkle_path_vals = transcript_reader
+            .consume_elements("Merkle path", log2(encoded_num_cols))
+            .unwrap();
 
-            // --- Merkle path verification: Does hashing for each column, then Merkle tree hashes ---
-            let path = verify_column_path::<E, F>(
-                column,
-                col_num,
-                root,
-                &master_default_poseidon_merkle_hasher,
-                &master_default_poseidon_column_hasher,
-            );
+        // --- Construct `LcColumn` struct for column value + path verification ---
+        let column = LcColumn {
+            col_idx: *col_idx,
+            col: column_vals,
+            path: merkle_path_vals,
+            phantom_data: PhantomData,
+        };
 
-            match (eval, path) {
-                (false, _) => Err(VerifierError::ColumnEval),
-                (_, false) => Err(VerifierError::ColumnPath),
-                _ => Ok(()),
-            }
-        })?;
+        // --- Does the RLC evaluation check for b^T as well ---
+        let eval = verify_column_value::<E, F>(&column, outer_tensor, &p_eval_fft[*col_idx]);
+
+        // --- Merkle path verification: Does hashing for each column, then Merkle tree hashes ---
+        let path = verify_column_path::<E, F>(
+            &column,
+            *col_idx,
+            root,
+            &master_default_poseidon_merkle_hasher,
+            &master_default_poseidon_column_hasher,
+        );
+
+        match (eval, path) {
+            (false, _) => Err(VerifierError::ColumnEval),
+            (_, false) => Err(VerifierError::ColumnPath),
+            _ => Ok(()),
+        }
+    })?;
 
     // step 4: evaluate and return
     // --- Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M) ---
@@ -951,7 +968,7 @@ fn prove<D, E, F, T>(
     outer_tensor: &[F],
     enc: &E,
     tr: &mut TranscriptWriter<F, T>,
-) -> ProverResult<LcEvalProof<D, E, F>, ErrT<E, F>>
+) -> ProverResult<(), ErrT<E, F>>
 where
     F: FieldExt,
     T: TranscriptSponge<F>,
@@ -971,6 +988,7 @@ where
         collapse_columns::<E, F>(&comm.coeffs, outer_tensor, &mut tmp, comm.orig_num_cols, 0);
         tmp
     };
+
     // add p_eval to the transcript
     p_eval
         .iter()
@@ -990,17 +1008,13 @@ where
 
         // --- Send columns + Merkle paths to verifier ---
         cols_to_open
-            .par_iter()
-            .map(|&col| open_column(comm, col))
+            // .par_iter()
+            .iter()
+            .map(|&col| open_column(tr, comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
     };
 
-    Ok(LcEvalProof {
-        encoded_num_cols: comm.encoded_num_cols, // Number of columns
-        p_eval,                                  // Actual b^T M value
-        columns,                                 // Columns plus necessary opening proof content
-        phantom_data: PhantomData,
-    })
+    Ok(())
 }
 
 /// This takes the product b^T M, and stores the result in `poly`.

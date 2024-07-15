@@ -76,7 +76,7 @@ impl<
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError> {
         let layer_id = layer.layer_id();
-        self.prover_aggregate_claims(layer, *layer_id, transcript_writer)
+        self.prover_aggregate_claims(layer, layer_id, transcript_writer)
     }
 
     fn verifier_aggregate_claims(
