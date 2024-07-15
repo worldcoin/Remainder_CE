@@ -64,7 +64,9 @@ pub trait InputLayer<F: FieldExt> {
     type Commitment: Serialize + for<'a> Deserialize<'a>;
 
     /// The Verifier Key representation for this input layer.
-    type VerifierInputLayer: Serialize + for<'a> Deserialize<'a>;
+    type VerifierInputLayer: VerifierInputLayer<F, Commitment = Self::Commitment>
+        + Serialize
+        + for<'a> Deserialize<'a>;
 
     /// Generates and returns a commitment.
     /// May also store it internally.

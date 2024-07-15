@@ -274,7 +274,7 @@ macro_rules! input_layer_enum {
 /// into a GKR Prover.
 pub trait ProofSystem<F: FieldExt> {
     /// A trait that defines the allowed Layer for this ProofSystem.
-    type Layer: Layer<F>
+    type Layer: Layer<F, VerifierLayer: YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>>
         + Serialize
         + for<'a> Deserialize<'a>
         + Debug

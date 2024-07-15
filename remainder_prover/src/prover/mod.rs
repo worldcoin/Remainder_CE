@@ -84,8 +84,6 @@ pub struct InputLayerProof<F: FieldExt, Pf: ProofSystem<F>> {
         <Pf::ClaimAggregator as ClaimAggregator<F>>::AggregationProof,
     /// The commitment to the input layer
     pub input_commitment: <Pf::InputLayer as InputLayer<F>>::Commitment,
-    /// The opening proof for the commitment
-    pub input_opening_proof: <Pf::InputLayer as InputLayer<F>>::OpeningProof,
 }
 
 /// The witness of a GKR circuit, used to actually prove the circuit
