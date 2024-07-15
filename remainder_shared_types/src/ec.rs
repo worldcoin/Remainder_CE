@@ -1,7 +1,20 @@
-pub trait CurveExt: pasta_curves::arithmetic::CurveExt {}
+use crate::FieldExt;
 
-impl<C: pasta_curves::arithmetic::CurveExt> CurveExt for C {}
+pub trait CurveExt
+where
+    Self: pasta_curves::arithmetic::CurveExt<Scalar: FieldExt, Base: FieldExt, Affine: CurveAffine>,
+{
+}
 
-pub trait CurveAffine: pasta_curves::arithmetic::CurveAffine {}
+impl<
+        C: pasta_curves::arithmetic::CurveExt<Scalar: FieldExt, Base: FieldExt, Affine: CurveAffine>,
+    > CurveExt for C
+{
+}
 
-impl<C: pasta_curves::arithmetic::CurveAffine> CurveAffine for C {}
+pub trait CurveAffine:
+    pasta_curves::arithmetic::CurveAffine<Scalar: FieldExt, Base: FieldExt>
+{
+}
+
+impl<C: pasta_curves::arithmetic::CurveAffine<Scalar: FieldExt, Base: FieldExt>> CurveAffine for C {}
