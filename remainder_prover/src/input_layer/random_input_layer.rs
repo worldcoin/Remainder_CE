@@ -50,10 +50,10 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     }
 
     fn append_commitment_to_transcript(
-        _commitment: &Self::Commitment,
-        _transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        commitment: &Self::Commitment,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) {
-        unimplemented!()
+        transcript_writer.append_elements("Random Layer Evaluations", commitment);
     }
 
     fn open(
@@ -73,6 +73,10 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     fn get_padded_mle(&self) -> DenseMle<F> {
         DenseMle::new_from_raw(self.mle.clone(), self.layer_id)
     }
+
+    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
@@ -87,7 +91,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<Self::Commitment, InputLayerError> {
         let num_evals = 1 << self.num_bits;
-        Ok(transcript_reader.consume_elements("Random Layer Commitment", num_evals)?)
+        Ok(transcript_reader.consume_elements("Random Layer Evaluations", num_evals)?)
     }
 
     fn verify(

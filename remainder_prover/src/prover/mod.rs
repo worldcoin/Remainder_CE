@@ -26,6 +26,7 @@ use crate::{
 };
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
+use proof_system::DefaultProofSystem;
 use remainder_shared_types::transcript::{
     Transcript, TranscriptReader, TranscriptReaderError, TranscriptWriter,
 };
@@ -103,6 +104,37 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
     pub input_layers: Vec<Pf::InputLayer>,
 }
 
+impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
+    /// Returns the circuit description associated with this Witness to be used
+    /// by the verifier.
+    fn generate_verifier_key(&self) -> GKRVerifierKey<F, Pf> {
+        let input_layers: Vec<_> = self
+            .input_layers
+            .iter()
+            .map(|input_layer| input_layer.into_verifier_input_layer())
+            .collect();
+
+        let intermediate_layers: Vec<_> = self
+            .layers
+            .layers
+            .iter()
+            .map(|layer| layer.into_verifier_layer())
+            .collect();
+
+        let output_layers: Vec<_> = self
+            .output_layers
+            .iter()
+            .map(|output_layer| output_layer.into_verifier_output_layer())
+            .collect();
+
+        GKRVerifierKey::<F, Pf> {
+            input_layers,
+            intermediate_layers,
+            output_layers,
+        }
+    }
+}
+
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
@@ -164,7 +196,9 @@ pub trait GKRCircuit<F: FieldExt> {
             })
             .try_collect()?;
 
-        Ok(((witness, commitments), todo!()))
+        let verifier_key = witness.generate_verifier_key();
+
+        Ok(((witness, commitments), verifier_key))
     }
 
     /// The backwards pass, creating the GKRProof.
@@ -349,7 +383,8 @@ where {
 pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
     input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer>,
     intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::VerifierLayer>,
-    output_layers: Vec<VerifierMle<F>>,
+    output_layers:
+        Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::VerifierOutputLayer>,
 }
 
 impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {

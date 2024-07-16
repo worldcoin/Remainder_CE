@@ -109,6 +109,10 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 
         Ok(())
     }
+
+    fn into_verifier_layer(&self) -> Self::VerifierLayer {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {

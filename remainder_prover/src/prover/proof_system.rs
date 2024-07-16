@@ -88,6 +88,14 @@ macro_rules! layer_enum {
                 type VerifierLayer = [<Verifier $type_name>]<F>;
             }
 
+            fn into_verifier_layer(&self) -> Self::VerifierLayer {
+                match self {
+                    $(
+                        Self::$var_name(layer) => Self::VerifierLayer::$var_name(layer.into_verifier_layer()),
+                    )*
+                }
+            }
+
             fn id(&self) -> super::LayerId {
                 match self {
                     $(
@@ -162,6 +170,14 @@ macro_rules! input_layer_enum {
             paste::paste! {
                 type Commitment = [<$type_name Commitment>]<F>;
                 type VerifierInputLayer = [<Verifier $type_name>]<F>;
+            }
+
+            fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+                match self {
+                    $(
+                        Self::$var_name(layer) => Self::VerifierInputLayer::$var_name(layer.into_verifier_input_layer()),
+                    )*
+                }
             }
 
             fn commit(&mut self) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {

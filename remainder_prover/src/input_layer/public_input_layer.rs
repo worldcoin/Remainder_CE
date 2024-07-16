@@ -70,6 +70,10 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     fn get_padded_mle(&self) -> DenseMle<F> {
         self.mle.clone()
     }
+
+    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {

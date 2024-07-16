@@ -68,6 +68,9 @@ pub trait InputLayer<F: FieldExt> {
         + Serialize
         + for<'a> Deserialize<'a>;
 
+    /// Returns the circuit description of this layer for the verifier.
+    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer;
+
     /// Generates and returns a commitment.
     /// May also store it internally.
     fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
