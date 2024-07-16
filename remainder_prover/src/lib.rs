@@ -21,6 +21,9 @@ pub mod expression;
 // which we prove/verify over
 pub mod layer;
 
+// For the various output layers to the GKR circuit
+pub mod output_layer;
+
 // For the various input layers to the GKR circuit
 pub mod input_layer;
 

@@ -15,11 +15,14 @@ use crate::{
     mle::evals::{Evaluations, MultilinearExtension},
 };
 use crate::{
-    claims::{ClaimError, YieldClaim},
+    claims::{ClaimError, ProverYieldClaim},
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerError,
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    transcript::{TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -195,8 +198,11 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for DenseMle<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
+impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for DenseMle<F> {
+    fn get_claims(
+        &self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
@@ -209,9 +215,12 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for DenseMle<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
             })
             .collect();
+        let claim_value = self.bookkeeping_table()[0];
+        transcript_writer.append("DenseMle claim result", claim_value);
+
         Ok(vec![ClaimMle::new(
             mle_indices?,
-            self.bookkeeping_table()[0],
+            claim_value,
             None,
             Some(self.layer_id),
             Some(self.clone().get_enum()),

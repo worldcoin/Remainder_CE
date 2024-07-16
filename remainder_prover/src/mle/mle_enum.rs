@@ -2,10 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    transcript::{TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 
 use crate::{
-    claims::{wlx_eval::ClaimMle, YieldClaim},
+    claims::{wlx_eval::ClaimMle, ProverYieldClaim},
     layer::LayerError,
     mle::Mle,
 };
@@ -118,11 +121,14 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MleEnum<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for MleEnum<F> {
+    fn get_claims(
+        &self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
-            MleEnum::Dense(layer) => layer.get_claims(),
-            MleEnum::Zero(layer) => layer.get_claims(),
+            MleEnum::Dense(layer) => layer.get_claims(transcript_writer),
+            MleEnum::Zero(layer) => layer.get_claims(transcript_writer),
         }
     }
 }

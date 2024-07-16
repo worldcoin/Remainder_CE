@@ -1,10 +1,11 @@
 //! A space-efficient implementation of an [MleRef] which contains only zeros.
 
 use itertools::{repeat_n, Itertools};
+use remainder_shared_types::transcript::{TranscriptSponge, TranscriptWriter};
 use serde::{Deserialize, Serialize};
 
 use crate::claims::{wlx_eval::ClaimMle, Claim};
-use crate::claims::{ClaimError, YieldClaim};
+use crate::claims::{ClaimError, ProverYieldClaim};
 use crate::layer::{LayerError, LayerId};
 use remainder_shared_types::FieldExt;
 
@@ -136,8 +137,11 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for ZeroMle<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
+impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for ZeroMle<F> {
+    fn get_claims(
+        &self,
+        _: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
@@ -150,6 +154,9 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for ZeroMle<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
             })
             .collect();
+
+        // Note: Claim result is always zero. No need to append to transcript.
+
         Ok(vec![ClaimMle::new(
             mle_indices?,
             F::ZERO,

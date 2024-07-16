@@ -1,6 +1,7 @@
 //! Helper struct that combines multiple `Layer` implementations into
 //! a single struct that can represent many types of `Layer`
 
+use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
 use remainder_shared_types::FieldExt;
 
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
@@ -12,7 +13,7 @@ use crate::mle::mle_enum::MleEnum;
 use super::LayerError;
 use super::{regular_layer::RegularLayer, Layer};
 
-use crate::claims::YieldClaim;
+use crate::claims::{ProverYieldClaim, VerifierYieldClaim};
 
 layer_enum!(LayerEnum, (Gkr: RegularLayer<F>), (Gate: Gate<F>));
 
@@ -63,11 +64,26 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
+    fn get_claims(
+        &self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
-            LayerEnum::Gkr(layer) => layer.get_claims(),
-            LayerEnum::Gate(layer) => layer.get_claims(),
+            LayerEnum::Gkr(layer) => layer.get_claims(transcript_writer),
+            LayerEnum::Gate(layer) => layer.get_claims(transcript_writer),
+        }
+    }
+}
+
+impl<F: FieldExt> VerifierYieldClaim<F, ClaimMle<F>> for VerifierLayerEnum<F> {
+    fn get_claims(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        match self {
+            VerifierLayerEnum::Gkr(layer) => layer.get_claims(transcript_reader),
+            VerifierLayerEnum::Gate(layer) => layer.get_claims(transcript_reader),
         }
     }
 }
