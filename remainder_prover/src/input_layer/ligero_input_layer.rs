@@ -151,6 +151,10 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     fn get_padded_mle(&self) -> DenseMle<F> {
         self.mle.clone()
     }
+
+    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
