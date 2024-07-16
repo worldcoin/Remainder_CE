@@ -4,7 +4,7 @@
 pub mod wlx_eval;
 
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
+    transcript::{Transcript, TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -111,8 +111,21 @@ pub trait ClaimAggregator<F: FieldExt> {
     ///Creates an empty ClaimAggregator, ready to track claims
     fn new() -> Self;
 
-    ///Takes in claims to track and later aggregate
-    fn add_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>) -> Result<(), LayerError>;
+    /// Takes in claims to track and later aggregate.
+    /// Appends claims in the transcript as needed.
+    fn prover_add_claims(
+        &mut self,
+        layer: &impl ProverYieldClaim<F, Self::Claim>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), LayerError>;
+
+    /// Takes in claims to track and later aggregate.
+    ///
+    fn verifier_add_claims(
+        &mut self,
+        layer: &impl VerifierYieldClaim<F, Self::Claim>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), LayerError>;
 
     ///Retrieves claims for aggregation
     fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]>;
@@ -149,7 +162,19 @@ pub trait ClaimAggregator<F: FieldExt> {
 
 ///A trait that allows the type to yield some claims to be added
 /// to the claim tracker
-pub trait YieldClaim<F: FieldExt, Claim> {
-    /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<Claim>, LayerError>;
+pub trait ProverYieldClaim<F: FieldExt, Claim> {
+    /// Get the claims that this layer makes on other layers and append them
+    /// to the transcript.
+    fn get_claims(
+        &self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<Claim>, LayerError>;
+}
+
+pub trait VerifierYieldClaim<F: FieldExt, Claim> {
+    /// Use the Get the claims that this layer makes on other layers
+    fn get_claims(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<Claim>, LayerError>;
 }

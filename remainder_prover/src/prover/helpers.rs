@@ -20,7 +20,7 @@ where
     let prover_timer = start_timer!(|| "Proof generation");
 
     match circuit.prove(transcript_writer) {
-        Ok((transcript, gkr_circuit)) => {
+        Ok((transcript, mut gkr_circuit)) => {
             end_timer!(prover_timer);
             if let Some(path) = path {
                 let write_out_timer = start_timer!(|| "Writing out proof");
@@ -45,7 +45,7 @@ where
                 TranscriptReader::<_, CircuitTranscript<F, C>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
-            match circuit.verify(&mut transcript_reader, gkr_circuit) {
+            match gkr_circuit.verify(&mut transcript_reader) {
                 Ok(_) => {
                     end_timer!(verifier_timer);
                 }

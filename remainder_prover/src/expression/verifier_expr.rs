@@ -42,6 +42,10 @@ impl<F: FieldExt> VerifierMle<F> {
             eval,
         }
     }
+
+    pub fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
 }
 
 /// Placeholder type for defining `Expression<F, VerifierExpr>`, the type used

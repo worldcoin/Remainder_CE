@@ -6,6 +6,7 @@ use crate::mle::dense::DenseMle;
 use crate::mle::{Mle, MleIndex};
 use crate::utils::test_utils::DummySponge;
 use rand::Rng;
+use remainder_shared_types::transcript::test_transcript::TestSponge;
 
 use self::claim_group::ClaimGroup;
 
@@ -36,6 +37,9 @@ fn claims_from_expr_and_points(
     expr: &Expression<Fr, ProverExpr>,
     points: &Vec<Vec<Fr>>,
 ) -> ClaimGroup<Fr> {
+    let mut transcript_writer =
+        TranscriptWriter::<Fr, TestSponge<Fr>>::new("Test Transcript Writer");
+
     let claims_vector: Vec<ClaimMle<Fr>> = points
         .iter()
         .flat_map(|point| {
@@ -44,7 +48,7 @@ fn claims_from_expr_and_points(
             exp.evaluate_expr(point.clone()).unwrap();
             // ClaimMle::new_raw(point.clone(), result)
             RegularLayer::new_raw(LayerId::Layer(0), exp)
-                .get_claims()
+                .get_claims(&mut transcript_writer)
                 .unwrap()
         })
         .collect();

@@ -9,6 +9,7 @@ use crate::{
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
     mle::{dense::DenseMle, Mle},
+    output_layer::mle_output_layer::MleOutputLayer,
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
@@ -60,9 +61,11 @@ impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -112,9 +115,11 @@ impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -190,9 +195,11 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -242,7 +249,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let table_size = 1 << (self.neg_mle_2_dataparallel.num_iterated_vars() - self.num_dataparallel_bits);
+        let table_size =
+            1 << (self.neg_mle_2_dataparallel.num_iterated_vars() - self.num_dataparallel_bits);
 
         (0..table_size).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -276,9 +284,11 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -337,7 +347,8 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
         let mut layers = Layers::new();
 
         let mut nonzero_gates = vec![];
-        let table_size = 1 << (self.neg_mle_dataparallel.num_iterated_vars() - self.num_dataparallel_bits);
+        let table_size =
+            1 << (self.neg_mle_dataparallel.num_iterated_vars() - self.num_dataparallel_bits);
 
         (0..table_size).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
@@ -354,9 +365,11 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -425,9 +438,11 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }

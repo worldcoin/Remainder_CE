@@ -31,7 +31,9 @@ use std::marker::PhantomData;
 
 use log::debug;
 
-use super::{Claim, ClaimAggregator, ClaimAndProof, ClaimError, YieldClaim};
+use super::{
+    Claim, ClaimAggregator, ClaimAndProof, ClaimError, ProverYieldClaim, VerifierYieldClaim,
+};
 
 ///The basic ClaimAggregator
 ///
@@ -50,7 +52,7 @@ pub struct WLXAggregator<F: FieldExt, L, LI> {
 
 impl<
         F: FieldExt,
-        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>,
+        L: Layer<F> + YieldWLXEvals<F> + ProverYieldClaim<F, ClaimMle<F>>,
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > ClaimAggregator<F> for WLXAggregator<F, L, LI>
 {
@@ -128,8 +130,12 @@ impl<
         }
     }
 
-    fn add_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>) -> Result<(), LayerError> {
-        let claims = layer.get_claims()?;
+    fn prover_add_claims(
+        &mut self,
+        layer: &impl ProverYieldClaim<F, Self::Claim>,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), LayerError> {
+        let claims = layer.get_claims(transcript_writer)?;
 
         debug!("Ingesting claims: {:#?}", claims);
 
@@ -155,11 +161,19 @@ impl<
             _marker: PhantomData,
         }
     }
+
+    fn verifier_add_claims(
+        &mut self,
+        layer: &impl VerifierYieldClaim<F, Self::Claim>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), LayerError> {
+        todo!()
+    }
 }
 
 impl<
         F: FieldExt,
-        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>,
+        L: Layer<F> + YieldWLXEvals<F> + ProverYieldClaim<F, ClaimMle<F>>,
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > WLXAggregator<F, L, LI>
 {

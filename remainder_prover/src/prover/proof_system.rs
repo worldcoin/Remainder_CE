@@ -7,9 +7,11 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 use crate::{
-    claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
+    claims::{wlx_eval::WLXAggregator, ClaimAggregator, ProverYieldClaim, VerifierYieldClaim},
+    input_layer::VerifierInputLayer,
     layer::{layer_enum::LayerEnum, Layer},
     mle::{mle_enum::MleEnum, Mle},
+    output_layer::{mle_output_layer::MleOutputLayer, OutputLayer, VerifierOutputLayer},
 };
 
 use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
@@ -274,21 +276,26 @@ macro_rules! input_layer_enum {
 /// into a GKR Prover.
 pub trait ProofSystem<F: FieldExt> {
     /// A trait that defines the allowed Layer for this ProofSystem.
-    type Layer: Layer<F, VerifierLayer: YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>>
-        + Serialize
+    type Layer: Layer<
+            F,
+            VerifierLayer: VerifierYieldClaim<
+                F,
+                <Self::ClaimAggregator as ClaimAggregator<F>>::Claim,
+            >,
+        > + Serialize
         + for<'a> Deserialize<'a>
         + Debug
-        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
+        + ProverYieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
 
     /// A trait that defines the allowed InputLayer for this ProofSystem.
-    type InputLayer: InputLayer<F>;
+    type InputLayer: InputLayer<F, VerifierInputLayer: VerifierInputLayer<F>>;
 
     /// The Transcript this proofsystem uses for Fiat-Shamir.
     type Transcript: TranscriptSponge<F>;
 
     /// The MleRef type that serves as the output layer representation
-    type OutputLayer: Mle<F>
-        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
+    type OutputLayer: OutputLayer<F, VerifierOutputLayer: VerifierOutputLayer<F>>
+        + ProverYieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
         + Serialize
         + for<'de> Deserialize<'de>;
 
@@ -308,7 +315,7 @@ impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
 
     type Transcript = PoseidonSponge<F>;
 
-    type OutputLayer = MleEnum<F>;
+    type OutputLayer = MleOutputLayer<F>;
 
     type ClaimAggregator = WLXAggregator<F, Self::Layer, Self::InputLayer>;
 }

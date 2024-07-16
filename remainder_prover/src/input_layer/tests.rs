@@ -12,6 +12,7 @@ use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerId,
     mle::{dense::DenseMle, Mle},
+    output_layer::mle_output_layer::MleOutputLayer,
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, CircuitInputLayer,
         CircuitTranscript, GKRCircuit, GKRError, GKRVerifierKey, Witness,
@@ -60,7 +61,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         let mut input: CircuitInputLayer<F, Self> = input.into();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::append_commitment_to_transcript(input_commit, transcript_writer);
+        InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript_writer);
 
         // TODO!(ryancao): Fix the `RandomInputLayer::new()` argument to make it less confusing
         let random = RandomInputLayer::new(transcript_writer, 1, LayerId::Input(1));
@@ -104,11 +105,13 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         let layer_2 = EqualityCheck::new(output, output_input);
         let output = layers.add_gkr(layer_2);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output)];
+
         Ok((
             (
                 Witness {
                     layers,
-                    output_layers: vec![output.get_enum()],
+                    output_layers,
                     input_layers: vec![input, random, input_layer_2],
                 },
                 vec![input_commit, random_commit, input_layer_2_commit],
@@ -252,11 +255,13 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         let layer_4 = EqualityCheck::new(third_layer_output.clone(), third_layer_output);
         let fourth_layer_output = layers.add_gkr(layer_4);
 
+        let output_layers = vec![MleOutputLayer::new_zero(fourth_layer_output)];
+
         Ok((
             (
                 Witness {
                     layers,
-                    output_layers: vec![fourth_layer_output.get_enum()],
+                    output_layers,
                     input_layers: vec![input_layer_1, input_layer_2],
                 },
                 vec![input_layer_1_commitment, input_layer_2_commitment],
@@ -339,12 +344,14 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         let live_committed_input_layer: LigeroInputLayer<F> =
             live_committed_input_layer_builder.to_ligero_input_layer_with_rho_inv(4, 1.);
 
+        let output_layers = vec![
+            MleOutputLayer::new_zero(first_layer_output_1),
+            MleOutputLayer::new_zero(first_layer_output_2),
+        ];
+
         Witness {
             layers,
-            output_layers: vec![
-                first_layer_output_1.get_enum(),
-                first_layer_output_2.get_enum(),
-            ],
+            output_layers,
             input_layers: vec![
                 precommitted_input_layer.into(),
                 live_committed_input_layer.into(),

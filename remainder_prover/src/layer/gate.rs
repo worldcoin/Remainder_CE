@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError, YieldClaim,
+        Claim, ClaimError, ProverYieldClaim, VerifierYieldClaim,
     },
     expression::verifier_expr::VerifierMle,
     layer::{Layer, LayerError, LayerId, VerificationError},
@@ -319,9 +319,12 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
+impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for Gate<F> {
     /// Get the claims that this layer makes on other layers.
-    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+    fn get_claims(
+        &self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
         let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
 
@@ -366,6 +369,15 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
         claims.push(claim);
 
         Ok(claims)
+    }
+}
+
+impl<F: FieldExt> VerifierYieldClaim<F, ClaimMle<F>> for VerifierGateLayer<F> {
+    fn get_claims(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        todo!()
     }
 }
 
