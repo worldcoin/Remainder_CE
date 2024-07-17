@@ -1,7 +1,7 @@
 pub mod sumcheck_layer;
 
 use serde::{Deserialize, Serialize};
-use std::fmt::{Debug};
+use std::fmt::Debug;
 
 use crate::{
     claims::Claim,

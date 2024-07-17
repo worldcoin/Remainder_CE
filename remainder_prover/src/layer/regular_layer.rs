@@ -8,7 +8,8 @@ mod tests;
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    layer::{Layer, LayerId},
+    ec::CurveExt,
+    layer::{sumcheck_layer::SumcheckLayer, Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -344,5 +345,32 @@ impl<F: FieldExt> RegularLayer<F> {
             nonlinear_rounds: None,
             beta_vals: None,
         }
+    }
+}
+
+impl<F: FieldExt> SumcheckLayer<F> for RegularLayer<F> {
+    fn initialize_sumcheck(
+        &mut self,
+        transcript: impl ProverTranscript<F>,
+        claim: &[F],
+    ) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    fn prove_sumcheck_round(
+        &mut self,
+        transcript: impl ProverTranscript<F>,
+        round_index: usize,
+        challenge: F,
+    ) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    fn finish_sumcheck(&mut self, transcript: impl ProverTranscript<F>) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    fn num_vars(&self) -> usize {
+        todo!()
     }
 }

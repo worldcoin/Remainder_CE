@@ -2,16 +2,16 @@ use ff::PrimeField;
 use itertools::Itertools;
 use tracing::warn;
 
-use crate::FieldExt;
 use crate::ec::CurveAffine;
+use crate::{curves::PrimeOrderCurve, FieldExt};
 
 use super::{
     Operation, ProverTranscript, Transcript, TranscriptReaderError, TranscriptSponge,
     VerifierTranscript,
 };
 
-pub trait ECTranscriptSponge<C: CurveAffine>:
-    TranscriptSponge<C::Base> + TranscriptSponge<C::ScalarExt>
+pub trait ECTranscriptSponge<C: PrimeOrderCurve>:
+    TranscriptSponge<C::Base> + TranscriptSponge<C::Scalar>
 {
     /// Absorb a single field element `elem`.
     fn absorb_ec_point(&mut self, elem: C);
@@ -22,22 +22,20 @@ pub trait ECTranscriptSponge<C: CurveAffine>:
 
 impl<C, Tr> ECTranscriptSponge<C> for Tr
 where
-    C: CurveAffine,
-    Tr: TranscriptSponge<C::Base> + TranscriptSponge<C::ScalarExt>,
-    C::Base: FieldExt,
-    C::ScalarExt: FieldExt,
+    C: PrimeOrderCurve,
+    Tr: TranscriptSponge<C::Base> + TranscriptSponge<C::Scalar>,
 {
     fn absorb_ec_point(&mut self, elem: C) {
-        let coords = elem.coordinates().unwrap();
-        self.absorb(*coords.x());
-        self.absorb(*coords.y());
+        let (x, y) = elem.affine_coordinates().unwrap();
+        self.absorb(x);
+        self.absorb(y);
     }
 
     fn absorb_ec_points(&mut self, elements: &[C]) {
         elements.iter().for_each(|elem| {
-            let coords = elem.coordinates().unwrap();
-            self.absorb(*coords.x());
-            self.absorb(*coords.y());
+            let (x, y) = elem.affine_coordinates().unwrap();
+            self.absorb(x);
+            self.absorb(y);
         });
     }
 }
@@ -72,7 +70,7 @@ where
 /// `ECTranscriptWriter` acts as a wrapper around a `ECTranscriptSponge` and
 /// additionally keeps track of all the append/squeeze operations to be able to
 /// generate a serializable `Transcript`.
-pub struct ECTranscriptWriter<C: CurveAffine, T> {
+pub struct ECTranscriptWriter<C: PrimeOrderCurve, T> {
     /// The sponge that this writer is using to append/squeeze elements.
     sponge: T,
 
@@ -82,7 +80,7 @@ pub struct ECTranscriptWriter<C: CurveAffine, T> {
 }
 
 impl<
-        C: CurveAffine,
+        C: PrimeOrderCurve,
         F: FieldExt<Repr = <C::Base as PrimeField>::Repr>,
         Sp: TranscriptSponge<F>,
     > ProverTranscript<F> for ECTranscriptWriter<C, Sp>
@@ -117,7 +115,7 @@ impl<
     }
 }
 
-impl<C: CurveAffine, Tr: ECTranscriptSponge<C>> ECTranscriptWriter<C, Tr> {
+impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C>> ECTranscriptWriter<C, Tr> {
     /// Destructively extract the transcript produced by this writer.
     /// This should be the last operation performed on a `TranscriptWriter`.
     pub fn get_transcript(self) -> Transcript<<C::Base as PrimeField>::Repr> {
@@ -134,9 +132,9 @@ impl<C: CurveAffine, Tr: ECTranscriptSponge<C>> ECTranscriptWriter<C, Tr> {
     }
 }
 
-pub trait ECVerifierTranscript<C: CurveAffine>
+pub trait ECVerifierTranscript<C: PrimeOrderCurve>
 where
-    Self: VerifierTranscript<C::Base> + VerifierTranscript<C::ScalarExt>,
+    Self: VerifierTranscript<C::Base> + VerifierTranscript<C::Scalar>,
 {
     fn consume_ec_point(&mut self, label: &'static str) -> Result<C, TranscriptReaderError>;
 
@@ -147,13 +145,13 @@ where
     ) -> Result<Vec<C>, TranscriptReaderError>;
 }
 
-impl<C: CurveAffine, Tr> ECVerifierTranscript<C> for Tr
+impl<C: PrimeOrderCurve, Tr> ECVerifierTranscript<C> for Tr
 where
-    Tr: VerifierTranscript<C::Base> + VerifierTranscript<C::ScalarExt>,
+    Tr: VerifierTranscript<C::Base> + VerifierTranscript<C::Scalar>,
 {
     fn consume_ec_point(&mut self, label: &'static str) -> Result<C, TranscriptReaderError> {
         let points = self.consume_elements(label, 2)?;
-        Ok(C::from_xy(points[0], points[1]).unwrap())
+        Ok(C::from_xy(points[0], points[1]))
     }
 
     fn consume_ec_points(
@@ -164,7 +162,7 @@ where
         let points = self.consume_elements(label, 2 * num_elements)?;
         Ok(points
             .chunks(2)
-            .map(|points| C::from_xy(points[0], points[1]).unwrap())
+            .map(|points| C::from_xy(points[0], points[1]))
             .collect())
     }
 }

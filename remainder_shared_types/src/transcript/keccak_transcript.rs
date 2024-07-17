@@ -56,9 +56,7 @@ mod tests {
     #[test]
     fn test_keccak() {
         let mut transcript =
-            ECTranscriptWriter::<halo2curves::bn256::G1Affine, KeccakTranscript>::new(
-                "new transcript",
-            );
+            ECTranscriptWriter::<halo2curves::bn256::G1, KeccakTranscript>::new("new transcript");
         transcript.append("test", Fr::from(3));
         transcript.append("test2", Fq::one());
         let one = halo2curves::bn256::G1Affine::generator();

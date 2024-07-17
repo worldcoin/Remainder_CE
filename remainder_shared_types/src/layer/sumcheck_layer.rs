@@ -4,8 +4,8 @@ use super::Layer;
 
 /// A trait for defining an interface for Layers that implement the Sumcheck protocol
 pub trait SumcheckLayer<F: FieldExt>: Layer<F> {
-    /// Start the sumcheck and do any internal prep that needs to be done
-    fn start_sumcheck(
+    /// Initialize the sumcheck round by setting the beta table, computing the number of rounds, etc.
+    fn initialize_sumcheck(
         &mut self,
         transcript: impl ProverTranscript<F>,
         claim: &[F],
