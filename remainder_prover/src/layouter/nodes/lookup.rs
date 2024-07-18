@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
 
-use crate::{mle::evals::MultilinearExtension, prover::proof_system::ProofSystem};
+use crate::{expression::abstract_expr::{self, ExprBuilder}, layer::regular_layer::RegularLayer, mle::evals::MultilinearExtension, prover::proof_system::ProofSystem};
 
 use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
@@ -66,7 +66,6 @@ impl<F: FieldExt> LookupNode<F> {
     pub fn new(
         ctx: &Context,
         table: NodeId,
-        table_data: MultilinearExtension<F>,
     ) -> Self {
         let id = ctx.get_new_id();
 
@@ -101,16 +100,40 @@ impl<F: FieldExt> CircuitNode for LookupNode<F> {
 impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for LookupNode<F> {
     fn compile<'a>(
         &'a self,
-        _: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
+        witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
+        // FIXME: make this work for multiple shreds
+        assert_eq!(self.shreds.len(), 1, "LookupNode should have exactly one shred (for now)");
+        let shred = &self.shreds[0];
+        let constrained = shred.constrained_node_id;
 
-        // todo: check the SectorGroup code
+        // TODO (future) get the MLEs of the constrained nodes and concatenate them
+        let (_, constrained_mle) = circuit_map.0[shred.constrained_node_id];
 
-        // add the table data to an input layer?
+        // TODO (future) get the MLEs of the multiplicities and add them all together
+        let multiplicities = shred.multiplicities.get_data();
 
-        // get the MLEs of the constrained nodes and concatenate them
+        // TODO (future) Draw a random value from the transcript
+        let r = F::from(1u64); // FIXME
+        let r_mle = MultilinearExtension::<F>::new(vec![r]);
+        let r_layer_id = witness_builder.next_input_layer();
+        witness_builder.add_input_layer(PublicInputLayer::new(r_mle, r_layer_id).into());
 
-        todo!();
+        // Form r - constrained
+        // How do we get the expr() of an inputlayer?
+        let expr = (r_layer_id.expr() - constrained.expr()).build_prover_expr(circuit_map)?;
+        let layer = RegularLayer::new_raw(witness_builder.next_layer(), expr);
+        witness_builder.add_layer(layer.into());
+        let r_minus_constrained = MultilinearExtension::new(
+            contrained_mle
+                .iter()
+                .map(|val| r - val)
+                .collect()
+        );
+
+        let witness_numerators = ExprBuilder<F>::constant(F::one());
+
+        Ok(())
     }
 }
