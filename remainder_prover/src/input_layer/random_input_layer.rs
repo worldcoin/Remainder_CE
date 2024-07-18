@@ -26,7 +26,7 @@ pub struct RandomInputLayer<F: FieldExt> {
 }
 
 /// Verifier's description of a Random Input Layer.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct VerifierRandomInputLayer<F: FieldExt> {
     /// The ID of this Random Input Layer.
@@ -36,6 +36,20 @@ pub struct VerifierRandomInputLayer<F: FieldExt> {
     num_bits: usize,
 
     _marker: PhantomData<F>,
+}
+
+impl<F: FieldExt> VerifierRandomInputLayer<F> {
+    /// To be used only for internal testing!
+    /// Generates a [VerifierRandomInputLayer] with the give raw data.
+    /// Normally, a [VerifierRandomInputLayer] is generate through
+    /// the `RandomInputLayer::into_verifier_input_layer()` method.
+    pub(crate) fn new_raw(layer_id: LayerId, num_bits: usize) -> Self {
+        Self {
+            layer_id,
+            num_bits,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
@@ -98,20 +112,19 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<Self::Commitment, InputLayerError> {
         let num_evals = 1 << self.num_bits;
-        Ok(transcript_reader.consume_elements("Random Layer Evaluations", num_evals)?)
+        Ok(transcript_reader.get_challenges("Random Layer Evaluations", num_evals)?)
     }
 
     fn verify(
         &self,
-        _: &Self::Commitment,
+        commitment: &Self::Commitment,
         claim: Claim<F>,
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        _transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError> {
         // In order to verify, simply fix variable on each of the variables for
         // the point in `claim`. Check whether the single element left in the
         // bookkeeping table is equal to the claimed value in `claim`.
-        let num_evals = 1 << self.num_bits;
-        let mle_evals = transcript.get_challenges("Random Input Layer Challenges", num_evals)?;
+        let mle_evals = commitment.clone();
         let mut mle_ref = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle_ref.index_mle_indices(0);
 
@@ -168,5 +181,94 @@ impl<F: FieldExt> YieldWLXEvals<F> for RandomInputLayer<F> {
             num_claims,
             num_idx,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use remainder_shared_types::{
+        halo2curves::ff::Field, transcript::test_transcript::TestSponge, Fr,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_into_verifier_random_input_layer() {
+        let layer_id = LayerId::Input(0);
+
+        let num_vars = 2;
+        let num_evals = (1 << num_vars);
+
+        // Transcript writer with test sponge that always returns `1`.
+        let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
+            TranscriptWriter::new("Test Transcript Writer");
+
+        let random_input_layer = RandomInputLayer::new(&mut transcript_writer, num_evals, layer_id);
+        let verifier_random_input_layer = random_input_layer.into_verifier_input_layer();
+
+        let expected_verifier_random_input_layer =
+            VerifierRandomInputLayer::new_raw(layer_id, num_vars);
+
+        assert_eq!(
+            verifier_random_input_layer,
+            expected_verifier_random_input_layer
+        );
+    }
+
+    #[test]
+    fn test_random_input_layer() {
+        // Setup phase.
+        let layer_id = LayerId::Input(0);
+
+        // MLE on 2 variables.
+        let num_vars = 2;
+        let num_evals = (1 << num_vars);
+
+        // Transcript writer with test sponge that always returns `1`.
+        let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
+            TranscriptWriter::new("Test Transcript Writer");
+
+        let claim_point = vec![Fr::ONE, Fr::ZERO];
+        let claim_result = Fr::from(1);
+        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
+
+        let mut random_input_layer =
+            RandomInputLayer::new(&mut transcript_writer, num_evals, layer_id);
+        let verifier_random_input_layer = random_input_layer.into_verifier_input_layer();
+
+        // Prover phase.
+        // 1. Commit to the input layer.
+        let commitment = random_input_layer.commit().unwrap();
+
+        // 2. Add commitment to transcript.
+        RandomInputLayer::<Fr>::append_commitment_to_transcript(
+            &commitment,
+            &mut transcript_writer,
+        );
+
+        // 3. ... [skip] proving other layers ...
+
+        // 4. Open commitment (no-op for Public Layers).
+        random_input_layer
+            .open(&mut transcript_writer, claim.clone())
+            .unwrap();
+
+        // Verifier phase.
+        // 1. Retrieve proof/transcript.
+        let transcript = transcript_writer.get_transcript();
+        let mut transcript_reader: TranscriptReader<Fr, TestSponge<Fr>> =
+            TranscriptReader::new(transcript);
+
+        // 2. Get commitment from transcript.
+        let commitment = verifier_random_input_layer
+            .get_commitment_from_transcript(&mut transcript_reader)
+            .unwrap();
+
+        // 3. ... [skip] verify other layers.
+
+        // 4. Verify this layer's commitment.
+        verifier_random_input_layer
+            .verify(&commitment, claim, &mut transcript_reader)
+            .unwrap();
     }
 }

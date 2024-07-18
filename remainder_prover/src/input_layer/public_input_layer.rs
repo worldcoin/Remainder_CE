@@ -26,12 +26,26 @@ pub struct PublicInputLayer<F: FieldExt> {
     pub(crate) layer_id: LayerId,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct VerifierPublicInputLayer<F: FieldExt> {
     layer_id: LayerId,
     num_bits: usize,
     _marker: PhantomData<F>,
+}
+
+impl<F: FieldExt> VerifierPublicInputLayer<F> {
+    /// To be used only for internal testing!
+    /// Generates a new [VerifierPublicInputLayer] from given raw data.
+    /// Normally, such a layer would be produced through the
+    /// `PublicInputLayer::into_verifier_public_input_layer()` method.
+    pub(crate) fn new_raw(layer_id: LayerId, num_bits: usize) -> Self {
+        Self {
+            layer_id,
+            num_bits,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
@@ -153,5 +167,90 @@ impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
             num_claims,
             num_idx,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use remainder_shared_types::{
+        halo2curves::ff::Field, transcript::test_transcript::TestSponge, Fr,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_into_verifier_public_input_layer() {
+        let layer_id = LayerId::Input(0);
+
+        let num_vars = 2;
+        let evals = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
+        let dense_mle = DenseMle::new_from_raw(evals, layer_id);
+
+        let public_input_layer = PublicInputLayer::new(dense_mle, layer_id);
+        let verifier_public_input_layer = public_input_layer.into_verifier_input_layer();
+
+        let expected_verifier_public_input_layer =
+            VerifierPublicInputLayer::new_raw(layer_id, num_vars);
+
+        assert_eq!(
+            verifier_public_input_layer,
+            expected_verifier_public_input_layer
+        );
+    }
+
+    #[test]
+    fn test_public_input_layer() {
+        // Setup phase.
+        let layer_id = LayerId::Input(0);
+
+        // MLE on 2 variables.
+        let evals = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
+        let dense_mle = DenseMle::new_from_raw(evals, layer_id);
+
+        let claim_point = vec![Fr::ONE, Fr::ZERO];
+        let claim_result = Fr::from(2);
+        let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
+
+        let mut public_input_layer = PublicInputLayer::new(dense_mle, layer_id);
+        let verifier_public_input_layer = public_input_layer.into_verifier_input_layer();
+
+        // Transcript writer with test sponge that always returns `1`.
+        let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
+            TranscriptWriter::new("Test Transcript Writer");
+
+        // Prover phase.
+        // 1. Commit to the input layer.
+        let commitment = public_input_layer.commit().unwrap();
+
+        // 2. Add commitment to transcript.
+        PublicInputLayer::<Fr>::append_commitment_to_transcript(
+            &commitment,
+            &mut transcript_writer,
+        );
+
+        // 3. ... [skip] proving other layers ...
+
+        // 4. Open commitment (no-op for Public Layers).
+        public_input_layer
+            .open(&mut transcript_writer, claim.clone())
+            .unwrap();
+
+        // Verifier phase.
+        // 1. Retrieve proof/transcript.
+        let transcript = transcript_writer.get_transcript();
+        let mut transcript_reader: TranscriptReader<Fr, TestSponge<Fr>> =
+            TranscriptReader::new(transcript);
+
+        // 2. Get commitment from transcript.
+        let commitment = verifier_public_input_layer
+            .get_commitment_from_transcript(&mut transcript_reader)
+            .unwrap();
+
+        // 3. ... [skip] verify other layers.
+
+        // 4. Verify this layer's commitment.
+        verifier_public_input_layer
+            .verify(&commitment, claim, &mut transcript_reader)
+            .unwrap();
     }
 }
