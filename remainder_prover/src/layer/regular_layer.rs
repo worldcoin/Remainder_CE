@@ -28,6 +28,8 @@ use crate::{
     },
 };
 
+use super::product::PostSumcheckLayer;
+
 /// The most common implementation of `Layer`
 ///
 /// A `Layer` made up of a structured polynomial relationship between MLEs of previous Layers
@@ -346,31 +348,83 @@ impl<F: FieldExt> RegularLayer<F> {
             beta_vals: None,
         }
     }
+
+    /// Get the [PostSumcheckLayer] for a regular layer, which represents the fully bound expression.
+    pub fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
+        let fully_bound_beta =
+            BetaValues::compute_beta_over_two_challenges(round_challenges, claim_challenges);
+        self.expression.get_post_sumcheck_layer(fully_bound_beta)
+    }
 }
 
 impl<F: FieldExt> SumcheckLayer<F> for RegularLayer<F> {
-    fn initialize_sumcheck(
-        &mut self,
-        transcript: impl ProverTranscript<F>,
-        claim: &[F],
-    ) -> Result<(), Self::Error> {
-        todo!()
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), Self::Error> {
+        let expression = &mut self.expression;
+        let _expression_num_indices = expression.index_mle_indices(0);
+        let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
+        let expression_linear_indices = expression.get_all_linear_rounds();
+
+        // for each of the linear indices in the expression, we can fix the variable at that index for
+        // the expression, so that now the only unbound indices are the nonlinear indices.
+        expression_linear_indices
+            .iter()
+            .sorted()
+            .for_each(|round_idx| {
+                expression.fix_variable_at_index(*round_idx, claim_point[*round_idx]);
+            });
+
+        // we need the beta values over the nonlinear indices of the expression, so we grab
+        // the claim points that are over these nonlinear indices and then initialize the betavalues
+        // struct over them.
+        let betavec = expression_nonlinear_indices
+            .iter()
+            .map(|idx| (*idx, claim_point[*idx]))
+            .collect_vec();
+        let newbeta = BetaValues::new(betavec);
+        self.beta_vals = Some(newbeta);
+
+        // store the nonlinear rounds of the expression within the layer so that we know these are the
+        // rounds we perform sumcheck over.
+        self.nonlinear_rounds = Some(expression_nonlinear_indices);
+        Ok(())
     }
 
     fn prove_sumcheck_round(
         &mut self,
-        transcript: impl ProverTranscript<F>,
         round_index: usize,
         challenge: F,
-    ) -> Result<(), Self::Error> {
-        todo!()
+    ) -> Result<Vec<F>, Self::Error> {
+        // Grabs the expression/beta table.
+        let expression = &mut self.expression;
+        let newbeta = &mut self.beta_vals;
+
+        // Grabs the degree of univariate polynomial we are sending over.
+        let degree = get_round_degree(expression, round_index);
+
+        // Computes the sumcheck message using the beta cascade algorithm.
+        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
+            expression,
+            round_index,
+            degree,
+            newbeta.as_ref().unwrap(),
+        )
+        .unwrap();
+
+        // Update the bookkeeping tables as necessary.
+        expression.fix_variable(round_index, challenge);
+        newbeta
+            .as_mut()
+            .unwrap()
+            .beta_update(round_index, challenge);
+
+        Ok(prover_sumcheck_message.0)
     }
 
-    fn finish_sumcheck(&mut self, transcript: impl ProverTranscript<F>) -> Result<(), Self::Error> {
-        todo!()
-    }
-
-    fn num_vars(&self) -> usize {
-        todo!()
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.nonlinear_rounds.as_ref().unwrap().len()
     }
 }

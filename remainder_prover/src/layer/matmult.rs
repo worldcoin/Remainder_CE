@@ -8,7 +8,7 @@ use ndarray::Array2;
 use rand::Rng;
 use remainder_shared_types::{
     claims::YieldClaim,
-    layer::{Layer, LayerId},
+    layer::{sumcheck_layer::SumcheckLayer, Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -16,6 +16,7 @@ use remainder_shared_types::{
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::{check_fully_bound, compute_sumcheck_message_no_beta_table},
+    product::{PostSumcheckLayer, Product},
     LayerError,
 };
 use crate::{
@@ -218,6 +219,19 @@ impl<F: FieldExt> MatMult<F> {
         self.mle_b = Some(matrix_b_mle)
     }
 
+    /// Return evaluations of the univariate for one round of sumcheck with the matmult protocol, and then
+    /// mutate the underlying bookkeeping tables with the current challenge.
+    fn prove_round_matmul(&mut self, round: usize, challenge: F) -> Vec<F> {
+        let mle_a = self.mle_a.as_mut().unwrap();
+        let mle_b = self.mle_b.as_mut().unwrap();
+        mle_a.fix_variable(round, challenge);
+        mle_b.fix_variable(round, challenge);
+        let next_message =
+            compute_sumcheck_message_no_beta_table(&[mle_a.clone(), mle_b.clone()], 2, round)
+                .unwrap();
+        next_message
+    }
+
     /// dummy sumcheck prover for this, testing purposes
     #[allow(dead_code)]
     fn dummy_prove_rounds(
@@ -347,6 +361,12 @@ impl<F: FieldExt> MatMult<F> {
         }
 
         Ok(())
+    }
+
+    /// Return the PostSumcheckLayer, panicking if either of the MLE refs is not fully bound.
+    pub fn get_post_sumcheck_layer(&self) -> PostSumcheckLayer<F, F> {
+        let mle_refs = vec![self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()];
+        PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
     }
 }
 
@@ -511,6 +531,27 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     ///Gets this layers id
     fn id(&self) -> &LayerId {
         &self.layer_id
+    }
+}
+
+impl<F: FieldExt> SumcheckLayer<F> for MatMult<F> {
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), Self::Error> {
+        let mut claim_b = claim_point.to_vec();
+        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+        self.pre_processing_step(claim_a, claim_b);
+        Ok(())
+    }
+
+    fn prove_sumcheck_round(
+        &mut self,
+        round_index: usize,
+        challenge: F,
+    ) -> Result<Vec<F>, Self::Error> {
+        Ok(self.prove_round_matmul(round_index, challenge))
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.num_vars_middle_ab.unwrap()
     }
 }
 

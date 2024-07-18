@@ -15,7 +15,7 @@ use crate::{
 };
 use remainder_shared_types::{
     claims::YieldClaim,
-    layer::{Layer, LayerId},
+    layer::{sumcheck_layer::SumcheckLayer, Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -24,10 +24,13 @@ use crate::layer::gate::gate_helpers::prove_round_identity;
 
 use thiserror::Error;
 
-use super::gate::{
-    check_fully_bound,
-    gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
-    index_mle_indices_gate, Gate, GateError,
+use super::{
+    gate::{
+        check_fully_bound,
+        gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
+        index_mle_indices_gate, Gate, GateError,
+    },
+    product::{PostSumcheckLayer, Product},
 };
 
 /// implement the layer trait for identitygate struct
@@ -170,6 +173,65 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
     /// Gets this layer's id.
     fn id(&self) -> &LayerId {
         &self.layer_id
+    }
+}
+
+impl<F: FieldExt> SumcheckLayer<F> for IdentityGate<F> {
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), Self::Error> {
+        let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
+        self.set_beta_g(beta_g.clone());
+
+        self.mle_ref.index_mle_indices(0);
+        let num_vars = self.mle_ref.num_iterated_vars();
+
+        let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
+
+        self.nonzero_gates
+            .clone()
+            .into_iter()
+            .for_each(|(z_ind, x_ind)| {
+                let beta_g_at_z = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                a_hg_mle_ref[x_ind] += beta_g_at_z;
+            });
+
+        let mut phase_1 = [
+            DenseMle::new_from_raw(a_hg_mle_ref, LayerId::Input(0)),
+            self.mle_ref.clone(),
+        ];
+
+        index_mle_indices_gate(&mut phase_1, 0);
+        self.set_phase_1(phase_1.clone());
+
+        Ok(())
+    }
+
+    fn prove_sumcheck_round(
+        &mut self,
+        round_index: usize,
+        challenge: F,
+    ) -> Result<Vec<F>, Self::Error> {
+        let mle_refs = self.phase_1_mles.as_mut().unwrap();
+        mle_refs.iter_mut().for_each(|mle_ref| {
+            mle_ref.fix_variable(round_index - 1, challenge);
+        });
+        let independent_variable = mle_refs
+            .iter()
+            .map(|mle_ref| {
+                mle_ref
+                    .mle_indices()
+                    .contains(&MleIndex::IndexedBit(round_index))
+            })
+            .reduce(|acc, item| acc | item)
+            .unwrap();
+        let evals =
+            evaluate_mle_ref_product_no_beta_table(mle_refs, independent_variable, mle_refs.len())
+                .unwrap();
+        let Evals(evaluations) = evals;
+        Ok(evaluations)
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.mle_ref.num_iterated_vars()
     }
 }
 
@@ -326,6 +388,31 @@ impl<F: FieldExt> IdentityGate<F> {
 
         let Evals(evaluations) = evals;
         Ok(evaluations)
+    }
+
+    /// Get the [PostSumcheckLayer], the fully bound representation of an identity gate layer.
+    pub fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
+        let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
+        let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
+
+        let beta_g = BetaValues::new_beta_equality_mle(claim_challenges.to_vec());
+
+        let f_1_uv = self
+            .nonzero_gates
+            .clone()
+            .into_iter()
+            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
+                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+
+                acc + gz * ux
+            });
+
+        PostSumcheckLayer(vec![Product::<F, F>::new(&vec![mle_ref.clone()], f_1_uv)])
     }
 }
 
