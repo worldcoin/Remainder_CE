@@ -12,7 +12,7 @@ use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
     claims::YieldClaim,
-    layer::{Layer, LayerId},
+    layer::{sumcheck_layer::SumcheckLayer, Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -819,6 +819,24 @@ impl<F: FieldExt> Gate<F> {
         } else {
             Ok(vec![].into())
         }
+    }
+}
+
+impl<F: FieldExt> SumcheckLayer<F> for Gate<F> {
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    fn prove_sumcheck_round(
+        &mut self,
+        round_index: usize,
+        challenge: F,
+    ) -> Result<Vec<F>, Self::Error> {
+        todo!()
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        todo!()
     }
 }
 
