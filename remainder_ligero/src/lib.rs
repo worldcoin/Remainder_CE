@@ -274,6 +274,14 @@ where
     pub fn into_raw(self) -> F {
         self.root
     }
+
+    /// Generate a new [LcRoot] with the give root.
+    pub fn new(root: F) -> Self {
+        Self {
+            root,
+            _p: Default::default(),
+        }
+    }
 }
 
 impl<E, F> AsRef<F> for LcRoot<E, F>

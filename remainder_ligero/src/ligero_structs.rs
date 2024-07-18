@@ -9,7 +9,7 @@ use crate::{def_labels, LcCommit, LcEncoding, LcEvalProof, LcRoot};
 
 /// Auxiliary struct which simply keeps track of Ligero hyperparameters, e.g.
 /// the matrix width and code rate.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct LigeroAuxInfo<F: FieldExt> {
     /// Width of the M matrix representing the original polynomial's coeffs
     pub orig_num_cols: usize,
