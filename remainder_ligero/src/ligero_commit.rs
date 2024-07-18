@@ -115,7 +115,7 @@ pub fn remainder_ligero_eval_prove<F: FieldExt, T: TranscriptSponge<F>>(
 /// // TODO!(ryancao) -- see tests below!
 /// ```
 pub fn remainder_ligero_verify<F: FieldExt, T: TranscriptSponge<F>>(
-    // proof: &LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+    commit_root: F,
     aux: &LigeroAuxInfo<F>,
     tr: &mut TranscriptReader<F, T>,
     challenge_coord: &[F],
@@ -128,10 +128,7 @@ pub fn remainder_ligero_verify<F: FieldExt, T: TranscriptSponge<F>>(
     let (inner_tensor, outer_tensor) =
         get_ml_inner_outer_tensors(challenge_coord, aux.num_rows, aux.orig_num_cols);
 
-    // --- Consume the root from the transcript ---
-    let root = tr.consume_element("root").unwrap();
-
-    let result = verify(&root, &outer_tensor[..], &inner_tensor[..], aux, tr).unwrap();
+    let result = verify(&commit_root, &outer_tensor[..], &inner_tensor[..], aux, tr).unwrap();
 
     assert_eq!(result, claimed_value);
 }
@@ -200,7 +197,10 @@ pub mod tests {
 
         // --- Grab new Poseidon transcript + verify ---
         let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
+        let transcript_commit_result = transcript_reader.consume_element("root").unwrap();
+
         remainder_ligero_verify::<Fr, PoseidonSponge<Fr>>(
+            transcript_commit_result,
             &aux,
             &mut transcript_reader,
             &challenge_coord,
