@@ -44,6 +44,7 @@ derive_more = "0.99.17"
 enum_dispatch = "0.3.13"
 
 [dev-dependencies]
+pretty_assertions = "1.4.0"
 
 [features]
 default = ["parallel"]

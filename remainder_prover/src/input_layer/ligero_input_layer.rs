@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::wlx_eval::YieldWLXEvals,
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum},
+    mle::{dense::DenseMle, mle_enum::MleEnum, Mle},
 };
 
 use super::{
@@ -32,18 +32,25 @@ use super::{
 pub struct LigeroInputLayer<F: FieldExt> {
     /// The MLE which we wish to commit to.
     pub mle: DenseMle<F>,
+
     /// The ID corresponding to this layer.
     pub(crate) layer_id: LayerId,
+
     /// The Ligero commitment to `mle`.
     comm: Option<LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>>,
+
     /// The auxiliary information needed in order to perform an opening proof.
     aux: Option<LigeroAuxInfo<F>>,
+
     /// The Merkle root corresponding to the commitment.
     root: Option<LcRoot<LigeroAuxInfo<F>, F>>,
+
     /// Whether this layer has already been committed to.
     is_precommit: bool,
+
     /// The rho inverse for the Reed Solomon encoding.
     rho_inv: Option<u8>,
+
     /// The ratio of the number of rows : number of columns of the matrix.
     ratio: Option<f64>,
 }
@@ -52,11 +59,11 @@ pub struct LigeroInputLayer<F: FieldExt> {
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "F: FieldExt")]
 pub struct LigeroInputProof<F: FieldExt> {
-    /// The proof itself, see [LigeroProof].
-    pub proof: LigeroProof<F>,
-    /// The auxiliary information needed to verify the above proof.
+    /// The auxiliary information required to generate a Ligero proof.
     pub aux: LigeroAuxInfo<F>,
-    /// Whether this is a pre-committed (true) or live-committed Ligero input layer
+
+    /// Whether this is a pre-committed (true) or live-committed Ligero input
+    /// layer.
     pub is_precommit: bool,
 }
 
@@ -72,8 +79,8 @@ pub struct VerifierLigeroInputLayer<F: FieldExt> {
     /// The number of variables this Ligero Input Layer is on.
     num_bits: usize,
 
-    rho_inv: u8,
-    ratio: f64,
+    /// The auxiliary information needed to verify the proof.
+    aux: LigeroAuxInfo<F>,
 
     _marker: PhantomData<F>,
 }
@@ -153,7 +160,16 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     }
 
     fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
-        todo!()
+        let layer_id = self.layer_id();
+        let num_bits = self.mle.original_num_vars();
+        let aux = self.aux.clone().unwrap();
+
+        Self::VerifierInputLayer {
+            layer_id,
+            num_bits,
+            aux,
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -179,9 +195,9 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), InputLayerError> {
         let num_coeffs = 2_usize.pow(claim.get_num_vars() as u32);
-        let ligero_aux = LigeroAuxInfo::new(num_coeffs, self.rho_inv, self.ratio, None);
+        let ligero_aux = &self.aux;
         remainder_ligero_verify::<F, _>(
-            &ligero_aux,
+            ligero_aux,
             transcript_reader,
             claim.get_point(),
             claim.get_result(),

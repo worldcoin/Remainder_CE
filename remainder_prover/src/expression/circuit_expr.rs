@@ -22,7 +22,7 @@ use super::{
 /// A metadata-only version of [crate::mle::dense::DenseMle] used in the Circuit
 /// Descrption.  A [CircuitMle] is stored in the leaves of an `Expression<F,
 /// CircuitExpr>` tree.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct CircuitMle<F: FieldExt> {
     /// Layer whose data this MLE is a subset of.
@@ -30,6 +30,9 @@ pub struct CircuitMle<F: FieldExt> {
 
     /// A list of indices where the free variables have been assigned an index.
     var_indices: Vec<MleIndex<F>>,
+
+    /// Whether this is a `ZeroMle`.
+    is_zero: bool,
 }
 
 impl<F: FieldExt> CircuitMle<F> {
@@ -37,6 +40,45 @@ impl<F: FieldExt> CircuitMle<F> {
         Self {
             layer_id,
             var_indices: var_indices.to_vec(),
+            is_zero: false,
+        }
+    }
+
+    pub fn new_zero(layer_id: LayerId, var_indices: &[MleIndex<F>]) -> Self {
+        Self {
+            layer_id,
+            var_indices: var_indices.to_vec(),
+            is_zero: true,
+        }
+    }
+
+    pub fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.is_zero
+    }
+
+    pub fn mle_indices(&self) -> &[MleIndex<F>] {
+        &self.var_indices
+    }
+
+    pub fn num_iterated_vars(&self) -> usize {
+        self.var_indices.iter().fold(0, |acc, idx| {
+            acc + match idx {
+                MleIndex::IndexedBit(_) => 1,
+                _ => 0,
+            }
+        })
+    }
+
+    // Bind the variable with index `var_index` to `value`.
+    pub fn fix_variable(&mut self, var_index: usize, value: F) {
+        for mle_index in self.var_indices.iter_mut() {
+            if *mle_index == MleIndex::IndexedBit(var_index) {
+                mle_index.bind_index(value);
+            }
         }
     }
 
@@ -57,6 +99,12 @@ impl<F: FieldExt> CircuitMle<F> {
         let eval = transcript_reader
             .consume_element("MLE evaluation")
             .map_err(|err| ExpressionError::TranscriptError(err))?;
+
+        if self.is_zero && eval != F::ZERO {
+            return Err(ExpressionError::EvaluationError(
+                "Zero MLE did not evaluate to zero",
+            ));
+        }
 
         Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
     }

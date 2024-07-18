@@ -13,14 +13,14 @@ use super::Mle;
 use super::{mle_enum::MleEnum, MleIndex};
 
 /// An [MleRef] that contains only zeros; typically used for the output layer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZeroMle<F> {
     pub(crate) mle_indices: Vec<MleIndex<F>>,
     pub(crate) original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck).
     num_vars: usize,
-    pub(crate) layer_id: LayerId,
+    layer_id: LayerId,
     zero: [F; 1],
     indexed: bool,
 }
@@ -42,6 +42,25 @@ impl<F: FieldExt> ZeroMle<F> {
             layer_id,
             zero: [F::ZERO],
             indexed: false,
+        }
+    }
+
+    /// To be used internally for testing.
+    pub(crate) fn new_raw(
+        mle_indices: Vec<MleIndex<F>>,
+        original_mle_indices: Vec<MleIndex<F>>,
+        num_vars: usize,
+        layer_id: LayerId,
+        zero: [F; 1],
+        indexed: bool,
+    ) -> Self {
+        Self {
+            mle_indices,
+            original_mle_indices,
+            num_vars,
+            layer_id,
+            zero,
+            indexed,
         }
     }
 }
@@ -133,7 +152,7 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
 
     #[doc = " Get the layer ID of the associated MLE."]
     fn layer_id(&self) -> LayerId {
-        todo!()
+        self.layer_id
     }
 }
 

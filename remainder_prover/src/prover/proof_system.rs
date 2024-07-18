@@ -88,10 +88,10 @@ macro_rules! layer_enum {
                 type VerifierLayer = [<Verifier $type_name>]<F>;
             }
 
-            fn into_verifier_layer(&self) -> Self::VerifierLayer {
+            fn into_verifier_layer(&self) -> Result<VerifierLayerEnum<F>, LayerError> {
                 match self {
                     $(
-                        Self::$var_name(layer) => Self::VerifierLayer::$var_name(layer.into_verifier_layer()),
+                        Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.into_verifier_layer()?)),
                     )*
                 }
             }

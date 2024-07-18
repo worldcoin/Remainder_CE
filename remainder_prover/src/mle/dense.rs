@@ -25,7 +25,7 @@ use remainder_shared_types::{
 };
 
 /// An implementation of an [Mle] using a dense representation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DenseMle<F> {
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,

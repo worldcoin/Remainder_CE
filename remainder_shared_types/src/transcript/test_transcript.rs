@@ -7,7 +7,7 @@ use super::TranscriptSponge;
 use crate::FieldExt;
 use itertools::Itertools;
 
-/// A Poseidon implementation of a transcript sponge.
+/// An implementation of a transcript sponge that always returns 1.
 #[derive(Clone)]
 pub struct TestSponge<F: FieldExt> {
     _marker: PhantomData<F>,
