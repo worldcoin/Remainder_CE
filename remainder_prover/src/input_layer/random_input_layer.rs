@@ -75,7 +75,14 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     }
 
     fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
-        todo!()
+        let layer_id = self.layer_id();
+        let num_bits = self.get_mle().original_num_vars();
+
+        Self::VerifierInputLayer {
+            layer_id,
+            num_bits,
+            _marker: PhantomData,
+        }
     }
 }
 

@@ -129,7 +129,8 @@ pub trait Layer<F: FieldExt> {
     // /// The struct that contains the proof this `Layer` generates
     // type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
 
-    fn into_verifier_layer(&self) -> Self::VerifierLayer;
+    /// Generateas the Verifier analogue of this item.
+    fn into_verifier_layer(&self) -> Result<Self::VerifierLayer, LayerError>;
 
     /// Gets this layer's ID.
     fn id(&self) -> LayerId;

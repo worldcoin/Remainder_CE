@@ -169,7 +169,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         Ok(())
     }
 
-    fn into_verifier_layer(&self) -> Self::VerifierLayer {
+    fn into_verifier_layer(&self) -> Result<VerifierGateLayer<F>, LayerError> {
         todo!()
     }
 }

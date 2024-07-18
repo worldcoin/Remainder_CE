@@ -110,8 +110,11 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
-    fn into_verifier_layer(&self) -> Self::VerifierLayer {
-        todo!()
+    fn into_verifier_layer(&self) -> Result<Self::VerifierLayer, LayerError> {
+        let id = self.id();
+        let expression = self.expression.clone().transform_to_circuit_expression()?;
+
+        Ok(Self::VerifierLayer { id, expression })
     }
 }
 

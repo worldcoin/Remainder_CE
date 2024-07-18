@@ -13,7 +13,7 @@ use crate::{
         prover_expr::ProverExpr,
     },
     layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
-    mle::{mle_enum::MleEnum, MleIndex},
+    mle::{mle_enum::MleEnum, Mle, MleIndex},
     utils::{argsort, bits_iter},
 };
 
@@ -253,7 +253,7 @@ fn add_bits_to_layer_refs<F: FieldExt>(
                 }
             }
             MleEnum::Zero(mle) => {
-                if mle.layer_id == effected_layer {
+                if mle.get_layer_id() == effected_layer {
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())

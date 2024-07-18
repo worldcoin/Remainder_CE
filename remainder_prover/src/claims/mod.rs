@@ -51,7 +51,7 @@ pub enum ClaimError {
 /// A claim contains a `point` \in F^n along with the `result` \in F that an
 /// associated layer MLE is expected to evaluate to. In other words, if `W : F^n
 /// -> F` is the MLE, then the claim asserts: `W(point) == result`
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct Claim<F: FieldExt> {
     /// The point in F^n where the layer MLE is to be evaluated on.

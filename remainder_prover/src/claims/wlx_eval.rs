@@ -218,7 +218,7 @@ pub trait YieldWLXEvals<F: FieldExt> {
 /// A claim that can optionally maintain additional source/destination layer information through
 /// `from_layer_id` and `to_layer_id`. This information can be used to speed up
 /// claim aggregation.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct ClaimMle<F: FieldExt> {
     ///The underlying raw Claim
@@ -293,11 +293,12 @@ impl<F: FieldExt> ClaimMle<F> {
 
 impl<F: fmt::Debug + FieldExt> fmt::Debug for ClaimMle<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Claim")
+        f.debug_struct("ClaimMle")
             .field("point", &self.claim.point)
             .field("result", &self.claim.result)
             .field("from_layer_id", &self.from_layer_id)
             .field("to_layer_id", &self.to_layer_id)
+            .field("mle_ref", &self.mle_ref)
             .finish()
     }
 }

@@ -16,7 +16,7 @@ use crate::{
 use super::{dense::DenseMle, zero::ZeroMle, MleIndex};
 
 /// A wrapper type for various kinds of [MleRef]s.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub enum MleEnum<F: FieldExt> {
     /// A [DenseMle] variant.
@@ -117,7 +117,10 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
     }
 
     fn layer_id(&self) -> crate::layer::LayerId {
-        todo!()
+        match self {
+            MleEnum::Dense(dense_mle) => dense_mle.layer_id(),
+            MleEnum::Zero(zero_mle) => zero_mle.layer_id(),
+        }
     }
 }
 

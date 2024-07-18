@@ -68,6 +68,10 @@ pub enum GKRError {
     #[error("Error when verifying circuit hash.")]
     /// Error when verifying circuit hash
     ErrorWhenVerifyingCircuitHash(TranscriptReaderError),
+
+    /// Error generating the Verifier Key.
+    #[error("Error generating the Verifier Key")]
+    ErrorGeneratingVerifierKey,
 }
 
 /// A proof of the sumcheck protocol; Outer vec is rounds, inner vec is evaluations
@@ -107,7 +111,7 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
 impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
     /// Returns the circuit description associated with this Witness to be used
     /// by the verifier.
-    fn generate_verifier_key(&self) -> GKRVerifierKey<F, Pf> {
+    fn generate_verifier_key(&self) -> Result<GKRVerifierKey<F, Pf>, GKRError> {
         let input_layers: Vec<_> = self
             .input_layers
             .iter()
@@ -118,8 +122,12 @@ impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
             .layers
             .layers
             .iter()
-            .map(|layer| layer.into_verifier_layer())
-            .collect();
+            .map(|layer| {
+                layer
+                    .into_verifier_layer()
+                    .map_err(|_| GKRError::ErrorGeneratingVerifierKey)
+            })
+            .collect::<Result<Vec<_>, GKRError>>()?;
 
         let output_layers: Vec<_> = self
             .output_layers
@@ -127,11 +135,11 @@ impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
             .map(|output_layer| output_layer.into_verifier_output_layer())
             .collect();
 
-        GKRVerifierKey::<F, Pf> {
+        Ok(GKRVerifierKey::<F, Pf> {
             input_layers,
             intermediate_layers,
             output_layers,
-        }
+        })
     }
 }
 
@@ -196,7 +204,7 @@ pub trait GKRCircuit<F: FieldExt> {
             })
             .try_collect()?;
 
-        let verifier_key = witness.generate_verifier_key();
+        let verifier_key = witness.generate_verifier_key()?;
 
         Ok(((witness, commitments), verifier_key))
     }
