@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
 
-use crate::{expression::abstract_expr::{self, ExprBuilder}, layer::regular_layer::RegularLayer, mle::evals::MultilinearExtension, prover::proof_system::ProofSystem};
+use crate::{expression::{abstract_expr::{self, ExprBuilder}, generic_expr::Expression}, layer::regular_layer::RegularLayer, mle::evals::MultilinearExtension, prover::proof_system::ProofSystem};
 
 use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
@@ -122,15 +122,17 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for LookupNode<F> {
 
         // Form r - constrained
         // How do we get the expr() of an inputlayer?
-        let expr = (r_layer_id.expr() - constrained.expr()).build_prover_expr(circuit_map)?;
+        let r_expr = ExprBuilder::constant(r); // r_layer_id.expr(); // FIXME
+        let expr = (r_expr - constrained.expr()).build_prover_expr(circuit_map)?;
         let layer = RegularLayer::new_raw(witness_builder.next_layer(), expr);
         witness_builder.add_layer(layer.into());
-        let r_minus_constrained = MultilinearExtension::new(
+        let denominator = MultilinearExtension::new(
             contrained_mle
                 .iter()
                 .map(|val| r - val)
                 .collect()
         );
+        let numerator = 
 
         let witness_numerators = ExprBuilder<F>::constant(F::one());
 
