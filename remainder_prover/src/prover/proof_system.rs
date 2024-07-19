@@ -157,6 +157,7 @@ macro_rules! layer_enum {
 #[macro_export]
 macro_rules! input_layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
+        #[derive(Debug)]
         #[doc = r"Remainder generated trait enum"]
         pub enum $type_name<F: FieldExt> {
             $(
@@ -166,7 +167,7 @@ macro_rules! input_layer_enum {
         }
 
         paste::paste! {
-            #[derive(serde::Serialize, serde::Deserialize)]
+            #[derive(serde::Serialize, serde::Deserialize, Debug)]
             #[serde(bound = "F: FieldExt")]
             #[doc = r"Remainder generated commitment enum"]
             pub enum [<$type_name Commitment>]<F: FieldExt> {
@@ -176,7 +177,7 @@ macro_rules! input_layer_enum {
                 )*
             }
 
-            #[derive(serde::Serialize, serde::Deserialize)]
+            #[derive(serde::Serialize, serde::Deserialize, Debug)]
             #[serde(bound = "F: FieldExt")]
             #[doc = r"Verifier layer description enum"]
             pub enum [<Verifier $type_name>]<F: FieldExt> {
@@ -325,7 +326,7 @@ pub trait ProofSystem<F: FieldExt> {
         + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
 
     /// A trait that defines the allowed InputLayer for this ProofSystem.
-    type InputLayer: InputLayer<F, VerifierInputLayer: VerifierInputLayer<F>>;
+    type InputLayer: InputLayer<F, VerifierInputLayer: VerifierInputLayer<F>> + Debug;
 
     /// The Transcript this proofsystem uses for Fiat-Shamir.
     type Transcript: TranscriptSponge<F>;
@@ -342,15 +343,18 @@ pub trait ProofSystem<F: FieldExt> {
             >,
         > + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
         + Serialize
-        + for<'de> Deserialize<'de>;
+        + for<'de> Deserialize<'de>
+        + Debug;
 
     ///The logic that handles how to aggregate claims
     /// As this trait defines the 'bridge' between layers, some helper traits may be neccessary to implement
     /// on the other layer types
-    type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>;
+    type ClaimAggregator: ClaimAggregator<F, Layer = Self::Layer, InputLayer = Self::InputLayer>
+        + Debug;
 }
 
 /// The default proof system for the remainder prover
+#[derive(Clone, Debug, PartialEq)]
 pub struct DefaultProofSystem;
 
 impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
