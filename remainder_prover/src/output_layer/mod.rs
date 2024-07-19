@@ -7,7 +7,10 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::layer::{LayerError, LayerId};
+use crate::{
+    expression::{generic_expr::Expression, verifier_expr::VerifierExpr},
+    layer::{LayerError, LayerId},
+};
 
 // The default implementation of an Output layer which is an MLE.
 pub mod mle_output_layer;
@@ -83,5 +86,5 @@ pub trait VerifierOutputLayer<F: FieldExt> {
     fn fix_layer(
         &mut self,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), VerifierOutputLayerError>;
+    ) -> Result<Expression<F, VerifierExpr>, VerifierOutputLayerError>;
 }

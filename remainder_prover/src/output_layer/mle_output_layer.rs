@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::{wlx_eval::ClaimMle, ClaimError, ProverYieldClaim, VerifierYieldClaim},
-    expression::circuit_expr::CircuitMle,
+    expression::{
+        circuit_expr::CircuitMle,
+        generic_expr::Expression,
+        verifier_expr::{VerifierExpr, VerifierMle},
+    },
     layer::{LayerError, LayerId},
     mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
 };
@@ -145,7 +149,7 @@ impl<F: FieldExt> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
             F,
             impl remainder_shared_types::transcript::TranscriptSponge<F>,
         >,
-    ) -> Result<(), VerifierOutputLayerError> {
+    ) -> Result<Expression<F, VerifierExpr>, VerifierOutputLayerError> {
         let bits = self.mle.num_iterated_vars();
         dbg!(bits);
 
@@ -157,7 +161,14 @@ impl<F: FieldExt> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
 
         debug_assert_eq!(self.mle.num_iterated_vars(), 0);
 
-        Ok(())
+        // ******* Hacky! *********
+        let verifier_mle = VerifierMle::new(
+            self.mle.layer_id(),
+            self.mle.mle_indices().to_vec(),
+            F::ZERO,
+        );
+        let expr = Expression::<F, VerifierExpr>::mle(verifier_mle);
+        Ok(expr)
     }
 
     fn retrieve_mle_from_transcript(
@@ -188,13 +199,7 @@ impl<F: FieldExt> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
 }
 
 impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for MleOutputLayer<F> {
-    fn get_claims(
-        &self,
-        transcript_writer: &mut remainder_shared_types::transcript::TranscriptWriter<
-            F,
-            impl remainder_shared_types::transcript::TranscriptSponge<F>,
-        >,
-    ) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.mle.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
@@ -211,7 +216,6 @@ impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for MleOutputLayer<F> {
             .collect();
 
         let claim_value = self.mle.bookkeeping_table()[0];
-        transcript_writer.append("MleOutputLayer claim result", claim_value);
 
         Ok(vec![ClaimMle::new(
             mle_indices?,
@@ -226,10 +230,7 @@ impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for MleOutputLayer<F> {
 impl<F: FieldExt> VerifierYieldClaim<F, ClaimMle<F>> for VerifierMleOutputLayer<F> {
     fn get_claims(
         &self,
-        transcript_reader: &mut remainder_shared_types::transcript::TranscriptReader<
-            F,
-            impl remainder_shared_types::transcript::TranscriptSponge<F>,
-        >,
+        expr: &Expression<F, VerifierExpr>,
     ) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         let layer_id = self.layer_id();
 
@@ -245,7 +246,8 @@ impl<F: FieldExt> VerifierYieldClaim<F, ClaimMle<F>> for VerifierMleOutputLayer<
             .collect::<Result<Vec<_>, _>>()?;
         let num_vars = mle_indices.len();
 
-        let claim_value = transcript_reader.consume_element("MleOutputLayer claim result")?;
+        // Hack!
+        let claim_value = expr.evaluate()?;
 
         // We do not yet handle the [DenseMle] case.
         if !self.mle.is_zero() {

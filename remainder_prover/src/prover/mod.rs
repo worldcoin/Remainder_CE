@@ -18,7 +18,7 @@ use crate::layer::VerifierLayer;
 use crate::mle::Mle;
 use crate::output_layer::OutputLayer;
 use crate::{
-    claims::{ClaimAggregator, ClaimAndProof},
+    claims::ClaimAggregator,
     input_layer::{InputLayer, InputLayerError},
     layer::{layer_enum::LayerEnum, Layer, LayerError, LayerId},
     mle::MleIndex,
@@ -83,19 +83,6 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
     fn from(value: Vec<Vec<F>>) -> Self {
         Self(value)
     }
-}
-
-/// Proof for circuit input layer
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "F: FieldExt")]
-pub struct InputLayerProof<F: FieldExt, Pf: ProofSystem<F>> {
-    /// the layer id of the input layer
-    pub layer_id: LayerId,
-    /// The proof of the claim aggregation for this input layer
-    pub input_layer_claim_aggregation_proof:
-        <Pf::ClaimAggregator as ClaimAggregator<F>>::AggregationProof,
-    /// The commitment to the input layer
-    pub input_commitment: <Pf::InputLayer as InputLayer<F>>::Commitment,
 }
 
 /// The witness of a GKR circuit, used to actually prove the circuit
@@ -261,7 +248,7 @@ pub trait GKRCircuit<F: FieldExt> {
             // Add the claim to either the set of current claims we're proving
             // or the global set of claims we need to eventually prove.
             aggregator
-                .prover_add_claims(output, &mut transcript_writer)
+                .prover_extract_claims(output, &mut transcript_writer)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
         }
 
@@ -277,7 +264,7 @@ pub trait GKRCircuit<F: FieldExt> {
         // well as all the prover messages for claim aggregation at the
         // beginning of proving each layer.
         for mut layer in layers.layers.into_iter().rev() {
-            let layer_id = layer.id();
+            let layer_id = layer.layer_id();
 
             let layer_timer = start_timer!(|| format!("Generating proof for layer {:?}", layer_id));
             let layer_id_trace_repr = format!("{}", layer_id);
@@ -293,10 +280,7 @@ pub trait GKRCircuit<F: FieldExt> {
             let claim_aggr_timer =
                 start_timer!(|| format!("Claim aggregation for layer {:?}", layer_id));
 
-            let ClaimAndProof {
-                claim: layer_claim,
-                proof: _claim_aggregation_proof,
-            } = aggregator.prover_aggregate_claims(&layer, &mut transcript_writer)?;
+            let layer_claim = aggregator.prover_aggregate_claims(&layer, &mut transcript_writer)?;
 
             end_timer!(claim_aggr_timer);
 
@@ -312,7 +296,7 @@ pub trait GKRCircuit<F: FieldExt> {
             end_timer!(sumcheck_msg_timer);
 
             aggregator
-                .prover_add_claims(&layer, &mut transcript_writer)
+                .prover_extract_claims(&layer, &mut transcript_writer)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
             end_timer!(layer_timer);
@@ -338,10 +322,8 @@ pub trait GKRCircuit<F: FieldExt> {
                 input_layer.layer_id()
             ));
 
-            let ClaimAndProof {
-                claim: layer_claim,
-                proof: _claim_aggregation_proof,
-            } = aggregator.prover_aggregate_claims_input(&input_layer, &mut transcript_writer)?;
+            let layer_claim =
+                aggregator.prover_aggregate_claims_input(&input_layer, &mut transcript_writer)?;
 
             end_timer!(claim_aggr_timer);
 
@@ -483,7 +465,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
             start_timer!(|| "ALL intermediate layers proof verification");
 
         for layer in &self.intermediate_layers {
-            let layer_id = layer.id();
+            let layer_id = layer.layer_id();
 
             info!("Intermediate Layer: {:?}", layer_id);
             let layer_timer =
@@ -502,16 +484,20 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
                 start_timer!(|| format!("Verify sumcheck message for layer {:?}", layer_id));
 
             // Performs the actual sumcheck verification step.
-            layer
-                .verify_rounds(prev_claim, transcript_reader)
-                .map_err(|err| {
-                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::VerificationError(err))
-                })?;
+            let verifier_expr =
+                layer
+                    .verify_rounds(prev_claim, transcript_reader)
+                    .map_err(|err| {
+                        GKRError::ErrorWhenVerifyingLayer(
+                            layer_id,
+                            LayerError::VerificationError(err),
+                        )
+                    })?;
 
             end_timer!(sumcheck_msg_timer);
 
             aggregator
-                .verifier_add_claims(layer, transcript_reader)
+                .verifier_extract_claims(layer, &verifier_expr, transcript_reader)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
 
             end_timer!(layer_timer);

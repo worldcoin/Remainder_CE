@@ -5,6 +5,8 @@ use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, Tra
 use remainder_shared_types::FieldExt;
 
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
+use crate::expression::generic_expr::Expression;
+use crate::expression::verifier_expr::VerifierExpr;
 use crate::layer_enum;
 
 use super::gate::Gate;
@@ -65,13 +67,10 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
 }
 
 impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
-    fn get_claims(
-        &self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
-            LayerEnum::Gkr(layer) => layer.get_claims(transcript_writer),
-            LayerEnum::Gate(layer) => layer.get_claims(transcript_writer),
+            LayerEnum::Gkr(layer) => layer.get_claims(),
+            LayerEnum::Gate(layer) => layer.get_claims(),
         }
     }
 }
@@ -79,11 +78,11 @@ impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
 impl<F: FieldExt> VerifierYieldClaim<F, ClaimMle<F>> for VerifierLayerEnum<F> {
     fn get_claims(
         &self,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        expr: &Expression<F, VerifierExpr>,
     ) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
-            VerifierLayerEnum::Gkr(layer) => layer.get_claims(transcript_reader),
-            VerifierLayerEnum::Gate(layer) => layer.get_claims(transcript_reader),
+            VerifierLayerEnum::Gkr(layer) => layer.get_claims(expr),
+            VerifierLayerEnum::Gate(layer) => layer.get_claims(expr),
         }
     }
 }

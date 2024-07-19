@@ -15,7 +15,9 @@ use thiserror::Error;
 
 use crate::{
     claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator, ClaimError},
-    expression::expr_errors::ExpressionError,
+    expression::{
+        expr_errors::ExpressionError, generic_expr::Expression, verifier_expr::VerifierExpr,
+    },
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
@@ -106,15 +108,17 @@ pub enum LayerId {
 /// A verifier counterpart of the GKR [Layer] trait.
 pub trait VerifierLayer<F: FieldExt> {
     /// Returns this layer's ID.
-    fn id(&self) -> LayerId;
+    fn layer_id(&self) -> LayerId;
 
     /// Tries to verify `claim` for this layer.
     /// The proof is implicitly included in the `transcript`.
+    ///
+    /// If sucessful, returns the fully bound expression for this layer.
     fn verify_rounds(
         &self,
         claim: Claim<F>,
         transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), VerificationError>;
+    ) -> Result<Expression<F, VerifierExpr>, VerificationError>;
 }
 
 /// A layer is the smallest component of the GKR protocol.
@@ -133,7 +137,7 @@ pub trait Layer<F: FieldExt> {
     fn into_verifier_layer(&self) -> Result<Self::VerifierLayer, LayerError>;
 
     /// Gets this layer's ID.
-    fn id(&self) -> LayerId;
+    fn layer_id(&self) -> LayerId;
 
     /// Tries to prove `claim` for this layer.
     /// If successful, the proof is implicitly included in the modified

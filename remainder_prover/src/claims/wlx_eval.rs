@@ -13,6 +13,8 @@ use crate::claims::wlx_eval::helpers::{
     prover_aggregate_claims_helper, verifier_aggregate_claims_helper,
 };
 
+use crate::expression::generic_expr::Expression;
+use crate::expression::verifier_expr::VerifierExpr;
 use crate::mle::mle_enum::MleEnum;
 
 use crate::input_layer::InputLayer;
@@ -31,20 +33,16 @@ use std::marker::PhantomData;
 
 use log::debug;
 
-use super::{
-    Claim, ClaimAggregator, ClaimAndProof, ClaimError, ProverYieldClaim, VerifierYieldClaim,
-};
+use super::{Claim, ClaimAggregator, ClaimError, ProverYieldClaim, VerifierYieldClaim};
 
-///The basic ClaimAggregator
+/// The basic ClaimAggregator
 ///
-/// Keeps tracks of claims using a hashmap with
-/// the layerid as the key
+/// Keeps tracks of claims using a hashmap with the layerid as the key.
 ///
-/// Aggregates claims using univariate polynomial interpolation
+/// Aggregates claims using univariate polynomial interpolation.
 ///
-/// Collects additional information in the `ClaimMle` struct
-/// to make computation of evaluations easier, most importantly
-/// the 'original_bookkeeping_table'
+/// Collects additional information in the `ClaimMle` struct to make computation
+/// of evaluations easier, most importantly the 'original_bookkeeping_table`.
 pub struct WLXAggregator<F: FieldExt, L, LI> {
     claims: HashMap<LayerId, Vec<ClaimMle<F>>>,
     _marker: std::marker::PhantomData<(L, LI)>,
@@ -58,8 +56,6 @@ impl<
 {
     type Claim = ClaimMle<F>;
 
-    type AggregationProof = Vec<Vec<F>>;
-
     type Layer = L;
     type InputLayer = LI;
 
@@ -67,8 +63,8 @@ impl<
         &self,
         layer: &Self::Layer,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError> {
-        let layer_id = layer.id();
+    ) -> Result<Claim<F>, GKRError> {
+        let layer_id = layer.layer_id();
         self.prover_aggregate_claims(layer, layer_id, transcript_writer)
     }
 
@@ -76,7 +72,7 @@ impl<
         &self,
         layer: &Self::InputLayer,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError> {
+    ) -> Result<Claim<F>, GKRError> {
         let layer_id = layer.layer_id();
         self.prover_aggregate_claims(layer, layer_id, transcript_writer)
     }
@@ -118,11 +114,10 @@ impl<
         }
 
         if claims.len() > 1 {
-            let ClaimAndProof {
-                claim: prev_claim, ..
-            } = verifier_aggregate_claims_helper(&claim_group, transcript_reader).map_err(
-                |err| GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err)),
-            )?;
+            let prev_claim = verifier_aggregate_claims_helper(&claim_group, transcript_reader)
+                .map_err(|err| {
+                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
+                })?;
 
             Ok(prev_claim)
         } else {
@@ -130,15 +125,18 @@ impl<
         }
     }
 
-    fn prover_add_claims(
+    fn prover_extract_claims(
         &mut self,
         layer: &impl ProverYieldClaim<F, Self::Claim>,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError> {
-        let claims = layer.get_claims(transcript_writer)?;
+        // Ask `layer` to generate claims for other layers.
+        let claims = layer.get_claims()?;
 
         debug!("Ingesting claims: {:#?}", claims);
 
+        // Assign each claim to the appropriate layer based on the `to_layer_id`
+        // field.
         for claim in claims {
             let layer_id = claim.get_to_layer_id().unwrap();
             if let Some(claims) = self.claims.get_mut(&layer_id) {
@@ -162,12 +160,26 @@ impl<
         }
     }
 
-    fn verifier_add_claims(
+    fn verifier_extract_claims(
         &mut self,
         layer: &impl VerifierYieldClaim<F, Self::Claim>,
+        expr: &Expression<F, VerifierExpr>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError> {
-        todo!()
+        // Ask `layer` to generate claims for other layers.
+        let claims = layer.get_claims(expr)?;
+
+        // Assign each claim to the appropriate layer based on the `to_layer_id`
+        // field.
+        for claim in claims {
+            let layer_id = claim.get_to_layer_id().unwrap();
+            if let Some(claims) = self.claims.get_mut(&layer_id) {
+                claims.push(claim);
+            } else {
+                self.claims.insert(layer_id, vec![claim]);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -182,7 +194,7 @@ impl<
         layer: &impl YieldWLXEvals<F>,
         layer_id: LayerId,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, GKRError> {
+    ) -> Result<Claim<F>, GKRError> {
         let claims = self
             .get_claims(layer_id)
             .ok_or(GKRError::ErrorWhenVerifyingLayer(

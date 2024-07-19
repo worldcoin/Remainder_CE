@@ -21,7 +21,10 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, ProverYieldClaim, VerifierYieldClaim,
     },
-    expression::verifier_expr::VerifierMle,
+    expression::{
+        generic_expr::Expression,
+        verifier_expr::{VerifierExpr, VerifierMle},
+    },
     layer::{Layer, LayerError, LayerId, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle},
     prover::SumcheckProof,
@@ -118,7 +121,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
     type VerifierLayer = VerifierGateLayer<F>;
 
     /// Gets this layer's id.
-    fn id(&self) -> LayerId {
+    fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 
@@ -176,7 +179,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
 
 impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
     /// Gets this layer's id.
-    fn id(&self) -> LayerId {
+    fn layer_id(&self) -> LayerId {
         self.id
     }
 
@@ -184,7 +187,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
         &self,
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), VerificationError> {
+    ) -> Result<Expression<F, VerifierExpr>, VerificationError> {
         todo!()
         /*
         let sumcheck_rounds = sumcheck_rounds.0;
@@ -325,10 +328,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
 
 impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for Gate<F> {
     /// Get the claims that this layer makes on other layers.
-    fn get_claims(
-        &self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
         let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
 
@@ -347,7 +347,7 @@ impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for Gate<F> {
         let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_u,
             val,
-            Some(self.id()),
+            Some(self.layer_id()),
             Some(self.lhs.get_layer_id()),
             Some(MleEnum::Dense(lhs_reduced)),
         );
@@ -366,7 +366,7 @@ impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for Gate<F> {
         let claim: ClaimMle<F> = ClaimMle::new(
             fixed_mle_indices_v,
             val,
-            Some(self.id()),
+            Some(self.layer_id()),
             Some(self.rhs.get_layer_id()),
             Some(MleEnum::Dense(rhs_reduced)),
         );
@@ -379,7 +379,7 @@ impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for Gate<F> {
 impl<F: FieldExt> VerifierYieldClaim<F, ClaimMle<F>> for VerifierGateLayer<F> {
     fn get_claims(
         &self,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        expr: &Expression<F, VerifierExpr>,
     ) -> Result<Vec<ClaimMle<F>>, LayerError> {
         todo!()
     }
