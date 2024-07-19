@@ -121,9 +121,11 @@ where
 
         // TODO (future) get the MLEs of the constrained nodes and concatenate them
         let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
+        let num_vars = constrained_mle.num_vars();
 
+        // RHS of equation (todo)
         // TODO (future) get the MLEs of the multiplicities and add them all together
-        let (_, multiplicities) = circuit_map.0[&shred.multiplicities_node_id];
+        //let (_, multiplicities) = circuit_map.0[&shred.multiplicities_node_id];
 
         // TODO (future) Draw a random value from the transcript
         let r = F::from(1u64); // FIXME
@@ -137,14 +139,13 @@ where
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
-        // FIXME check with Nick if there isn't a better way of doing this
         let mle = MultilinearExtension::new(
             constrained_mle.get_evals_vector()
                 .iter()
                 .map(|_val| F::from(1u64))
                 .collect()
         );
-        let numerators = build_split_dense_mles(&mle, &layer_id);
+        let mut numerators = build_split_dense_mles(&mle, &layer_id);
 
         // Form the denominator r - constrained
         let expr = r_densemle.expression() - constrained.expr().build_prover_expr(circuit_map)?;
@@ -157,39 +158,40 @@ where
                 .map(|val| r - val)
                 .collect()
         );
-        let denominators = build_split_dense_mles(&mle, &layer_id);
+        let mut denominators = build_split_dense_mles(&mle, &layer_id);
 
         type PE<F> = Expression::<F, ProverExpr>;
+        for _ in 0..num_vars {
+            // TODO v2: presently we are creating two layers per loop - what is the correct way to concatenate them in Newmainder?
 
-        // TODO v2: combine these two layers into a single layer
+            // Calculate the new numerator
+            let expr = PE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()]) + PE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
+            let layer_id = witness_builder.next_layer();
+            let layer = RegularLayer::new_raw(layer_id, expr);
+            witness_builder.add_layer(layer.into());
+            let mle = MultilinearExtension::new(
+                numerators.0.clone().into_iter().zip(numerators.1.clone().into_iter())
+                .zip(denominators.0.clone().into_iter().zip(denominators.1.clone().into_iter()))
+                .map(|((num1, num2), (denom1, denom2))| {
+                    num1 * denom2 + num2 * denom1
+                }).collect()
+            );
+            numerators = build_split_dense_mles(&mle, &layer_id);
 
-        // Calculate the new numerator
-        let expr = PE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()]) + PE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
-        let layer_id = witness_builder.next_layer();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
-        let mle = MultilinearExtension::new(
-            numerators.0.clone().into_iter().zip(numerators.1.clone().into_iter())
-            .zip(denominators.0.clone().into_iter().zip(denominators.1.clone().into_iter()))
-            .map(|((num1, num2), (denom1, denom2))| {
-                num1 * denom2 + num2 * denom1
-            }).collect()
-        );
-        let numerators = build_split_dense_mles(&mle, &layer_id);
-
-        // Calculate the new denominator
-        let expr = PE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
-        let layer_id = witness_builder.next_layer();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
-        let mle = MultilinearExtension::new(
-            denominators.0.clone().into_iter()
-            .zip(denominators.1.clone().into_iter())
-            .map(|(denom1, denom2)| {
-                denom1 * denom2
-            }).collect()
-        );
-        let denominators = build_split_dense_mles(&mle, &layer_id);
+            // Calculate the new denominator
+            let expr = PE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
+            let layer_id = witness_builder.next_layer();
+            let layer = RegularLayer::new_raw(layer_id, expr);
+            witness_builder.add_layer(layer.into());
+            let mle = MultilinearExtension::new(
+                denominators.0.clone().into_iter()
+                .zip(denominators.1.clone().into_iter())
+                .map(|(denom1, denom2)| {
+                    denom1 * denom2
+                }).collect()
+            );
+            denominators = build_split_dense_mles(&mle, &layer_id);
+        }
 
         Ok(())
     }
@@ -217,23 +219,3 @@ pub fn build_split_dense_mles<F: FieldExt>(
     let right_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)), layer_id.clone(), vec![true]);
     (left_dense, right_dense)
 }
-
-// /// Split a MultilinearExtension into two, with the left half containing the even-indexed elements and the right half containing the odd-indexed elements.
-// pub fn split_mle<F: FieldExt>(
-//     data: &MultilinearExtension<F>,
-// ) -> (MultilinearExtension<F>, MultilinearExtension<F>) {
-//     let left: Vec<F> = data
-//         .get_evals_vector()
-//         .iter()
-//         .step_by(2)
-//         .cloned()
-//         .collect();
-//     let right: Vec<F> = data
-//         .get_evals_vector()
-//         .iter()
-//         .skip(1)
-//         .step_by(2)
-//         .cloned()
-//         .collect();
-//     (MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, left)), MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)))
-// }
