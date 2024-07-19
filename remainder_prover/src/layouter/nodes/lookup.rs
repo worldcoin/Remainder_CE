@@ -10,6 +10,7 @@ use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
 use serde::de;
+use tracing_subscriber::field::debug;
 
 use crate::{expression::{abstract_expr::ExprBuilder, generic_expr::Expression}, layer::regular_layer::RegularLayer, mle::{dense::DenseMle, evals::MultilinearExtension}, prover::proof_system::ProofSystem};
 
@@ -103,18 +104,18 @@ impl<F: FieldExt> CircuitNode for LookupNode<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L>, L, IL> CompilableNode<F, Pf>
+impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = OL>, IL, L, OL> CompilableNode<F, Pf>
     for LookupNode<F> 
 where
     IL: From<PublicInputLayer<F>>,
-    L: From<RegularLayer<F>>
+    L: From<RegularLayer<F>>,
+    OL: From<RegularLayer<F>>,
 {
     fn compile<'a>(
         &'a self,
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError>
-    //where <Pf as ProofSystem<F>>::Layer: From<RegularLayer<F>>, <Pf as ProofSystem<F>>::InputLayer: From<PublicInputLayer<F>>
      {
         // FIXME: make this work for multiple shreds
         assert_eq!(self.shreds.len(), 1, "LookupNode should have exactly one shred (for now)");
@@ -123,7 +124,6 @@ where
 
         // TODO (future) get the MLEs of the constrained nodes and concatenate them
         let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
-        let num_vars = constrained_mle.num_vars();
 
         // RHS of equation (todo)
         // TODO (future) get the MLEs of the multiplicities and add them all together
@@ -163,6 +163,22 @@ where
         let denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
         let (numerator, denominator) = build_fractional_sum(numerator, denominator, witness_builder);
+        debug_assert_eq!(numerator.num_iterated_vars(), 0);
+        debug_assert_eq!(denominator.num_iterated_vars(), 0);
+
+        type PE<F> = Expression::<F, ProverExpr>;
+
+        // Add an input layer for the inverse of the denominator
+        let mle = MultilinearExtension::new(vec![denominator.current_mle.value().invert().unwrap()]);
+        let layer_id = witness_builder.next_input_layer();
+        witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
+        let inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+
+        // Add an output layer that checks that the product of the denominator and the inverse is 1
+        let expr = PE::<F>::products(vec![denominator.clone(), inverse_densemle.clone()]) - PE::<F>::constant(F::from(1u64));
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, expr);
+        witness_builder.add_output_layer(layer.into());
 
 
         Ok(())
