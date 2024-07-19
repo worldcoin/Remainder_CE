@@ -16,7 +16,7 @@ use crate::expression::verifier_expr::VerifierMle;
 use crate::input_layer::VerifierInputLayer;
 use crate::layer::CircuitLayer;
 use crate::mle::Mle;
-use crate::output_layer::OutputLayer;
+use crate::output_layer::{CircuitOutputLayer, OutputLayer};
 use crate::{
     claims::ClaimAggregator,
     input_layer::{InputLayer, InputLayerError},
@@ -412,42 +412,21 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
         let verifier_output_claims_span =
             span!(Level::DEBUG, "verifier_output_claims_span").entered();
 
-        // TODO(Makis): STAGE 1
-        /*
-        // --- NOTE that all the `Expression`s and MLEs contained within `gkr_proof` are already bound! ---
-        for output in output_layers.iter() {
-            let mle_indices = output.mle_indices();
-            let mut claim_chal: Vec<F> = vec![];
-            debug!("Bookkeeping table: {:#?}", output.bookkeeping_table());
-            for (bit, index) in mle_indices
-                .iter()
-                .filter(|index| !matches!(index, &&MleIndex::Fixed(_)))
-                .enumerate()
-            {
-                let challenge = transcript_reader
-                    .get_challenge("Setting Output Layer Claim")
-                    .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
+        for circuit_output_layer in self.output_layers.iter() {
+            let layer_id = circuit_output_layer.layer_id();
+            info!("Verifying Output Layer: {:?}", layer_id);
 
-                // We assume that all the outputs are zero-valued for now. We should be
-                // doing the initial step of evaluating V_1'(z) as specified in Thaler 13 page 14,
-                // but given the assumption we have that V_1'(z) = 0 for all z if the prover is honest.
-                if MleIndex::Bound(challenge, bit) != *index {
-                    return Err(GKRError::ErrorWhenVerifyingOutputLayer);
-                }
-                claim_chal.push(challenge);
-            }
-            let layer_id = output.get_layer_id();
-            info!("New Output Layer {:?}", layer_id);
+            let verifier_output_layer = circuit_output_layer
+                .retrieve_mle_from_transcript_and_fix_layer(transcript_reader)
+                .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
 
-            // --- Append claims to either the claim tracking map OR the first (sumchecked) layer's list of claims ---
             aggregator
-                .add_claims(output)
+                .extract_claims(&verifier_output_layer)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
         }
 
         end_timer!(claims_timer);
         verifier_output_claims_span.exit();
-        */
 
         // --------- STAGE 2: Verify Intermediate Layers ---------
         let intermediate_layers_timer =
@@ -494,7 +473,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
 
         end_timer!(intermediate_layers_timer);
 
-        // --------- STAGE 2: Verify Input Layers ---------
+        // --------- STAGE 3: Verify Input Layers ---------
         let input_layers_timer = start_timer!(|| "INPUT layers proof verification");
 
         for (input_layer, commitment) in

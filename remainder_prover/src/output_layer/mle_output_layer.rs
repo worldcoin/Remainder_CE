@@ -156,7 +156,7 @@ impl<F: FieldExt> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
     }
 
     fn retrieve_mle_from_transcript_and_fix_layer(
-        self,
+        &self,
         transcript_reader: &mut remainder_shared_types::transcript::TranscriptReader<
             F,
             impl remainder_shared_types::transcript::TranscriptSponge<F>,

@@ -94,7 +94,6 @@ macro_rules! layer_enum {
 
         impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
             paste::paste! {
-                type VerifierLayer = [<Verifier $type_name>]<F>;
                 type CircuitLayer = [<Circuit $type_name>]<F>;
             }
 
@@ -314,8 +313,13 @@ macro_rules! input_layer_enum {
 /// into a GKR Prover.
 pub trait ProofSystem<F: FieldExt> {
     /// A trait that defines the allowed Layer for this ProofSystem.
-    type Layer: Layer<F, VerifierLayer: YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>>
-        + Serialize
+    type Layer: Layer<
+            F,
+            CircuitLayer: CircuitLayer<
+                F,
+                VerifierLayer: YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>,
+            >,
+        > + Serialize
         + for<'a> Deserialize<'a>
         + Debug
         + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
@@ -327,8 +331,16 @@ pub trait ProofSystem<F: FieldExt> {
     type Transcript: TranscriptSponge<F>;
 
     /// The MleRef type that serves as the output layer representation
-    type OutputLayer: OutputLayer<F, CircuitOutputLayer: CircuitOutputLayer<F>>
-        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
+    type OutputLayer: OutputLayer<
+            F,
+            CircuitOutputLayer: CircuitOutputLayer<
+                F,
+                VerifierOutputLayer: YieldClaim<
+                    F,
+                    <Self::ClaimAggregator as ClaimAggregator<F>>::Claim,
+                >,
+            >,
+        > + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
         + Serialize
         + for<'de> Deserialize<'de>;
 

@@ -93,7 +93,7 @@ pub trait CircuitOutputLayer<F: FieldExt> {
     /// of this output layer to random challenges sampled from the transcript.
     /// Returns a description of the layer ready to be used by the verifier.
     fn retrieve_mle_from_transcript_and_fix_layer(
-        self,
+        &self,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<Self::VerifierOutputLayer, VerifierOutputLayerError>;
 }

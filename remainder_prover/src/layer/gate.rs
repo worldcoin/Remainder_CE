@@ -90,7 +90,6 @@ pub struct Gate<F: FieldExt> {
 }
 
 impl<F: FieldExt> Layer<F> for Gate<F> {
-    type VerifierLayer = VerifierGateLayer<F>;
     type CircuitLayer = CircuitGateLayer<F>;
 
     /// Gets this layer's id.

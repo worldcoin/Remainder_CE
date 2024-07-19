@@ -110,14 +110,11 @@ pub enum LayerId {
 /// that the `Claim` is correct
 pub trait Layer<F: FieldExt> {
     /// TEMP
-    type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
+    // type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
 
     /// The associated type used to store a description of this layer as part
     /// of a [GKRVerifierKey].
-    type CircuitLayer: CircuitLayer<F, VerifierLayer = Self::VerifierLayer>
-        + Debug
-        + Serialize
-        + for<'a> Deserialize<'a>;
+    type CircuitLayer: CircuitLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
 
     /// Generates a description of this layer.
     fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError>;
