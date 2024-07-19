@@ -47,6 +47,10 @@ impl<F: FieldExt> VerifierMle<F> {
         self.layer_id
     }
 
+    pub fn num_vars(&self) -> usize {
+        self.var_indices.len()
+    }
+
     pub fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.var_indices
     }

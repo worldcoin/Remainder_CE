@@ -225,6 +225,10 @@ impl<F: FieldExt> VerifierMleOutputLayer<F> {
     pub fn is_zero(&self) -> bool {
         self.is_zero
     }
+
+    pub fn num_vars(&self) -> usize {
+        self.mle.num_vars()
+    }
 }
 
 impl<F: FieldExt> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
@@ -269,7 +273,18 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierMleOutputLayer<F> {
 
         let layer_id = self.layer_id();
 
-        let mle_indices: Vec<F> = self
+        let prefix_bits: Vec<MleIndex<F>> = self
+            .mle
+            .mle_indices()
+            .iter()
+            .filter(|index| match index {
+                MleIndex::Fixed(b) => true,
+                _ => false,
+            })
+            .map(|index| index.clone())
+            .collect();
+
+        let claim_point: Vec<F> = self
             .mle
             .mle_indices()
             .iter()
@@ -279,20 +294,27 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierMleOutputLayer<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let num_vars = mle_indices.len();
+
+        let num_vars = self.num_vars();
+        let num_prefix_bits = prefix_bits.len();
+        let num_iterated_vars = num_vars - num_prefix_bits;
 
         let claim_value = self.mle.value();
 
         // The verifier is expecting to receive a fully-bound [MleRef].
         // Start with an iterated MLE, index it, and then bound its variables.
-        let mut claim_mle = MleEnum::Zero(ZeroMle::new(num_vars, None, layer_id));
+        let mut claim_mle =
+            MleEnum::Zero(ZeroMle::new(num_iterated_vars, Some(prefix_bits), layer_id));
         claim_mle.index_mle_indices(0);
-        for (idx, val) in mle_indices.iter().enumerate() {
-            claim_mle.fix_variable(idx, *val);
+
+        for mle_index in self.mle.mle_indices().iter() {
+            if let MleIndex::Bound(val, idx) = mle_index {
+                claim_mle.fix_variable(*idx, *val);
+            }
         }
 
         Ok(vec![ClaimMle::new(
-            mle_indices,
+            claim_point,
             claim_value,
             None,
             Some(self.mle.layer_id()),
