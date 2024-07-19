@@ -15,7 +15,7 @@ use crate::{
     mle::evals::{Evaluations, MultilinearExtension},
 };
 use crate::{
-    claims::{ClaimError, ProverYieldClaim},
+    claims::{ClaimError, YieldClaim},
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerError,
 };
@@ -198,7 +198,7 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
     }
 }
 
-impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for DenseMle<F> {
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for DenseMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));

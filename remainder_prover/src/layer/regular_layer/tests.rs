@@ -10,11 +10,11 @@ use remainder_shared_types::{
 use crate::{
     claims::Claim,
     expression::{circuit_expr::CircuitExpr, generic_expr::Expression, prover_expr::ProverExpr},
-    layer::{Layer, LayerId, VerifierLayer},
+    layer::{CircuitLayer, Layer, LayerId},
     mle::dense::DenseMle,
 };
 
-use super::{RegularLayer, VerifierRegularLayer};
+use super::{CircuitRegularLayer, RegularLayer};
 
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
@@ -46,7 +46,7 @@ fn regular_layer_test_prove_verify_product() {
     expression.index_mle_indices(0);
     let circuit_expression = expression.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
-    let verifier_layer = VerifierRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let mut verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -86,7 +86,7 @@ fn regular_layer_test_prove_verify_sum() {
     expression.index_mle_indices(0);
     let circuit_expression = expression.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
-    let verifier_layer = VerifierRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let mut verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -126,7 +126,7 @@ fn regular_layer_test_prove_verify_selector() {
     expression.index_mle_indices(0);
     let circuit_expression = expression.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
-    let verifier_layer = VerifierRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let mut verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -170,7 +170,7 @@ fn regular_layer_test_prove_verify_complex() {
     root.index_mle_indices(0);
     let circuit_expression = root.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
-    let verifier_layer = VerifierRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let mut verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)

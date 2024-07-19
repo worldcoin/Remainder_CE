@@ -15,7 +15,7 @@ use crate::mle::mle_enum::MleEnum;
 use super::LayerError;
 use super::{regular_layer::RegularLayer, Layer};
 
-use crate::claims::{ProverYieldClaim, VerifierYieldClaim};
+use crate::claims::YieldClaim;
 
 layer_enum!(LayerEnum, (Gkr: RegularLayer<F>), (Gate: Gate<F>));
 
@@ -66,23 +66,11 @@ impl<F: FieldExt> YieldWLXEvals<F> for LayerEnum<F> {
     }
 }
 
-impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for LayerEnum<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             LayerEnum::Gkr(layer) => layer.get_claims(),
             LayerEnum::Gate(layer) => layer.get_claims(),
-        }
-    }
-}
-
-impl<F: FieldExt> VerifierYieldClaim<F, ClaimMle<F>> for VerifierLayerEnum<F> {
-    fn get_claims(
-        &self,
-        expr: &Expression<F, VerifierExpr>,
-    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        match self {
-            VerifierLayerEnum::Gkr(layer) => layer.get_claims(expr),
-            VerifierLayerEnum::Gate(layer) => layer.get_claims(expr),
         }
     }
 }

@@ -9,7 +9,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    claims::{wlx_eval::ClaimMle, ProverYieldClaim, VerifierYieldClaim},
+    claims::{wlx_eval::ClaimMle, YieldClaim},
     expression::{generic_expr::Expression, verifier_expr::VerifierExpr},
     layer::LayerId,
     mle::{
@@ -19,7 +19,7 @@ use crate::{
         zero::ZeroMle,
         Mle, MleIndex,
     },
-    output_layer::{mle_output_layer::VerifierMleOutputLayer, VerifierOutputLayer},
+    output_layer::{mle_output_layer::CircuitMleOutputLayer, CircuitOutputLayer},
 };
 
 use super::{mle_output_layer::MleOutputLayer, OutputLayer};
@@ -46,7 +46,7 @@ fn test_fix_layer() {
 }
 
 #[test]
-fn test_into_verifier_output_layer() {
+fn test_into_circuit_output_layer() {
     let layer_id = LayerId::Layer(0);
     let num_vars = 2;
 
@@ -54,14 +54,14 @@ fn test_into_verifier_output_layer() {
 
     let output_layer = MleOutputLayer::new_zero(mle);
 
-    let verifier_output_layer = output_layer.into_verifier_output_layer();
+    let circuit_output_layer = output_layer.into_circuit_output_layer();
 
     let expected_mle_indices: Vec<MleIndex<Fr>> =
         (0..num_vars).map(|i| MleIndex::IndexedBit(i)).collect();
-    let expected_verifier_output_layer =
-        VerifierMleOutputLayer::new_zero(layer_id, &expected_mle_indices);
+    let expected_circuit_output_layer =
+        CircuitMleOutputLayer::new_zero(layer_id, &expected_mle_indices);
 
-    assert_eq!(verifier_output_layer, expected_verifier_output_layer);
+    assert_eq!(circuit_output_layer, expected_circuit_output_layer);
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn test_output_layer_get_claims() {
     let mle = ZeroMle::new(num_vars, None, layer_id);
 
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
-    let mut verifier_output_layer = output_layer.into_verifier_output_layer();
+    let circuit_output_layer = output_layer.into_circuit_output_layer();
 
     // ---- Part 2: Fix output layer and generate claims.
 
@@ -110,14 +110,11 @@ fn test_output_layer_get_claims() {
     let transcript = transcript_writer.get_transcript();
     let mut transcript_reader = TranscriptReader::<Fr, TestSponge<Fr>>::new(transcript);
 
-    verifier_output_layer
-        .retrieve_mle_from_transcript(&mut transcript_reader)
-        .unwrap();
-    let verifier_expr = verifier_output_layer
-        .fix_layer(&mut transcript_reader)
+    let verifier_output_layer = circuit_output_layer
+        .retrieve_mle_from_transcript_and_fix_layer(&mut transcript_reader)
         .unwrap();
 
-    let claims = verifier_output_layer.get_claims(&verifier_expr).unwrap();
+    let claims = verifier_output_layer.get_claims().unwrap();
 
     assert_eq!(claims, expected_claims);
 }
@@ -132,7 +129,7 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     let mle = ZeroMle::new(num_iterated_vars, Some(prefix_bits), layer_id);
 
     let mut output_layer = MleOutputLayer::new_zero(mle.clone());
-    let mut verifier_output_layer = output_layer.into_verifier_output_layer();
+    let circuit_output_layer = output_layer.into_circuit_output_layer();
 
     // ---- Part 2: Fix output layer and generate claims.
 
@@ -174,14 +171,11 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     let transcript = transcript_writer.get_transcript();
     let mut transcript_reader = TranscriptReader::<Fr, TestSponge<Fr>>::new(transcript);
 
-    verifier_output_layer
-        .retrieve_mle_from_transcript(&mut transcript_reader)
-        .unwrap();
-    let verifier_expr = verifier_output_layer
-        .fix_layer(&mut transcript_reader)
+    let verifier_output_layer = circuit_output_layer
+        .retrieve_mle_from_transcript_and_fix_layer(&mut transcript_reader)
         .unwrap();
 
-    let claims = verifier_output_layer.get_claims(&verifier_expr).unwrap();
+    let claims = verifier_output_layer.get_claims().unwrap();
 
     // TODO(Makis): This still fails because the verifier doesn't know about
     // the prefix bits. I think we should pass this information to the verifier

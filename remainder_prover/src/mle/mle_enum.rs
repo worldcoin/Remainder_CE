@@ -8,7 +8,7 @@ use remainder_shared_types::{
 };
 
 use crate::{
-    claims::{wlx_eval::ClaimMle, ProverYieldClaim},
+    claims::{wlx_eval::ClaimMle, YieldClaim},
     layer::LayerError,
     mle::Mle,
 };
@@ -124,7 +124,7 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
     }
 }
 
-impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for MleEnum<F> {
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MleEnum<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             MleEnum::Dense(layer) => layer.get_claims(),

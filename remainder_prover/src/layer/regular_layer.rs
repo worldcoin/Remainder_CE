@@ -32,7 +32,7 @@ use crate::{
     },
 };
 
-use super::VerifierLayer;
+use super::{CircuitLayer, VerifierLayer};
 
 /// The most common implementation of [crate::layer::Layer].
 ///
@@ -58,10 +58,10 @@ pub struct RegularLayer<F: FieldExt> {
     beta_vals: Option<BetaValues<F>>,
 }
 
-/// The verifier counterpart of a [RegularLayer].
+/// The circuit description counterpart of a [RegularLayer].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct VerifierRegularLayer<F: FieldExt> {
+pub struct CircuitRegularLayer<F: FieldExt> {
     /// This layer's ID.
     id: LayerId,
 
@@ -71,14 +71,36 @@ pub struct VerifierRegularLayer<F: FieldExt> {
     expression: Expression<F, CircuitExpr>,
 }
 
+impl<F: FieldExt> CircuitRegularLayer<F> {
+    /// To be used internally only!
+    /// Generates a new [CircuitRegularLayer] given raw data.
+    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, CircuitExpr>) -> Self {
+        Self { id, expression }
+    }
+}
+
+/// The verifier counterpart of a [RegularLayer].
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+pub struct VerifierRegularLayer<F: FieldExt> {
+    /// This layer's ID.
+    id: LayerId,
+
+    /// A fully-bound expression defining the layer.
+    expression: Expression<F, VerifierExpr>,
+}
+
 impl<F: FieldExt> VerifierRegularLayer<F> {
-    pub fn new_raw(id: LayerId, expression: Expression<F, CircuitExpr>) -> Self {
+    /// To be used internally only!
+    /// Generates a new [VerifierRegularLayer] given raw data.
+    pub(crate) fn new_raw(id: LayerId, expression: Expression<F, VerifierExpr>) -> Self {
         Self { id, expression }
     }
 }
 
 impl<F: FieldExt> Layer<F> for RegularLayer<F> {
     type VerifierLayer = VerifierRegularLayer<F>;
+    type CircuitLayer = CircuitRegularLayer<F>;
 
     fn layer_id(&self) -> LayerId {
         self.id
@@ -110,15 +132,17 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
-    fn into_verifier_layer(&self) -> Result<Self::VerifierLayer, LayerError> {
+    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
         let id = self.layer_id();
         let expression = self.expression.clone().transform_to_circuit_expression()?;
 
-        Ok(Self::VerifierLayer { id, expression })
+        Ok(Self::CircuitLayer { id, expression })
     }
 }
 
-impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
+impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
+    type VerifierLayer = VerifierRegularLayer<F>;
+
     fn layer_id(&self) -> LayerId {
         self.id
     }
@@ -127,7 +151,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         &self,
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<Expression<F, VerifierExpr>, VerificationError> {
+    ) -> Result<Self::VerifierLayer, VerificationError> {
         let nonlinear_rounds = self.expression.get_all_nonlinear_rounds();
 
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
@@ -137,7 +161,6 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         // This is initialized to the constant polynomial `g_0(x)` which evaluates
         // to the claim result for any `x`.
         let mut g_prev_round = vec![claim.get_result()];
-        dbg!(&g_prev_round);
 
         // Previous round's challege: r_{i-1}.
         let mut prev_challenge = F::ZERO;
@@ -145,7 +168,6 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
         // For round 1 <= i <= n, perform the check:
         for round_index in &nonlinear_rounds {
             let degree = self.expression.get_round_degree(*round_index);
-            dbg!(&degree);
 
             // Receive `g_i(x)` from the Prover.
             // Since we are using an evaluation representation for polynomials,
@@ -163,11 +185,9 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
             let g_cur_round = transcript_reader
                 .consume_elements("Sumcheck message", degree + 1)
                 .map_err(|err| VerificationError::TranscriptError(err))?;
-            dbg!(&g_cur_round);
 
             // Sample random challenge `r_i`.
             let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
-            dbg!(challenge);
 
             // TODO(Makis): After refactoring `SumcheckEvals` to be a
             // representation of a univariate polynomial, `evaluate_at_a_point`
@@ -175,11 +195,8 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
             // Verify that:
             //       `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
             let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
-            dbg!(&g_i_zero);
             let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
-            dbg!(&g_i_one);
             let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
-            dbg!(&g_prev_r_prev);
 
             if g_i_zero + g_i_one != g_prev_r_prev {
                 return Err(VerificationError::SumcheckFailed);
@@ -221,11 +238,12 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
             .map_err(|err| VerificationError::ExpressionError(err))?;
         dbg!(&verifier_expr);
 
+        let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
+
         // Compute `P(r_1, ..., r_n)` over all challenge points (linear and
         // non-linear).
         // The MLE values are retrieved from the transcript.
-        // TODO: FIX!!!!
-        let expr_value_at_challenge_point = verifier_expr.evaluate()?;
+        let expr_value_at_challenge_point = verifier_layer.expression.evaluate()?;
 
         // Compute `\beta((r_1, ..., r_n), (u_1, ..., u_n))`.
         let claim_nonlinear_vals: Vec<F> = nonlinear_rounds
@@ -253,7 +271,13 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
             return Err(VerificationError::SumcheckFailed);
         }
 
-        Ok(verifier_expr)
+        Ok(verifier_layer)
+    }
+}
+
+impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
+    fn layer_id(&self) -> LayerId {
+        self.id
     }
 }
 
