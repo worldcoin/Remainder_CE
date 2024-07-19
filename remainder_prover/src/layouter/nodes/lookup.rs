@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
 
-use crate::{expression::{abstract_expr::{self, ExprBuilder}, generic_expr::Expression}, layer::regular_layer::RegularLayer, mle::evals::MultilinearExtension, prover::proof_system::ProofSystem};
+use crate::{expression::{abstract_expr::{self, ExprBuilder}, generic_expr::Expression}, layer::regular_layer::RegularLayer, mle::{dense::DenseMle, evals::MultilinearExtension}, prover::proof_system::ProofSystem};
 
 use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
@@ -119,23 +119,87 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for LookupNode<F> {
         let r_mle = MultilinearExtension::<F>::new(vec![r]);
         let r_layer_id = witness_builder.next_input_layer();
         witness_builder.add_input_layer(PublicInputLayer::new(r_mle, r_layer_id).into());
+        let r_densemle = DenseMle::new_with_prefix_bits(r_mle, r_layer_id, vec![]);
 
         // Form r - constrained
-        // How do we get the expr() of an inputlayer?
-        let r_expr = ExprBuilder::constant(r); // r_layer_id.expr(); // FIXME
-        let expr = (r_expr - constrained.expr()).build_prover_expr(circuit_map)?;
-        let layer = RegularLayer::new_raw(witness_builder.next_layer(), expr);
+        let expr = r_densemle.expression() - constrained.expr().build_prover_expr(circuit_map)?;
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
-        let denominator = MultilinearExtension::new(
+        let denom_mle = MultilinearExtension::new(
             contrained_mle
                 .iter()
                 .map(|val| r - val)
                 .collect()
         );
-        let numerator = 
+        // FIXME not sure if we actually need this guy
+        //let denom_densemle = DenseMle::new_with_prefix_bits(denom_mle, layer.id(), vec![]);
+        let (denom_left, denom_right) = build_split_dense_mles(&denom_mle, &layer_id);
+
+        // Add the two split MLEs to one another
+        let expr = denom_left.expression() + denom_right.expression();
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, expr);
+        witness_builder.add_layer(layer.into());
+        let mle = MultilinearExtension::new(
+            denom_left
+                .get_evals_vector()
+                .iter()
+                .zip(denom_right.get_evals_vector())
+                .map(|(l, r)| l + r)
+                .collect()
+        );
+        
+        // and so we continue!
+
+
+
 
         let witness_numerators = ExprBuilder<F>::constant(F::one());
 
         Ok(())
     }
+}
+
+/// Split a MultilinearExtension into two DenseMles, with the left half containing the even-indexed elements and the right half containing the odd-indexed elements, setting the prefix bits accordingly (and using the supplied LayerId).
+pub fn build_split_dense_mles<F: FieldExt>(
+    data: &MultilinearExtension<F>,
+    layer_id: &LayerId
+) -> (DenseMle<F>, DenseMle<F>) {
+    let left: Vec<F> = data
+        .get_evals_vector()
+        .iter()
+        .step_by(2)
+        .cloned()
+        .collect();
+    let right: Vec<F> = data
+        .get_evals_vector()
+        .iter()
+        .skip(1)
+        .step_by(2)
+        .cloned()
+        .collect();
+    let left_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, left)), layer_id, vec![false]);
+    let right_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)), layer_id, vec![true]);
+    (left_dense, right_dense)
+}
+
+/// Split a MultilinearExtension into two, with the left half containing the even-indexed elements and the right half containing the odd-indexed elements.
+pub fn split_mle<F: FieldExt>(
+    data: &MultilinearExtension<F>,
+) -> (MultilinearExtension<F>, MultilinearExtension<F>) {
+    let left: Vec<F> = data
+        .get_evals_vector()
+        .iter()
+        .step_by(2)
+        .cloned()
+        .collect();
+    let right: Vec<F> = data
+        .get_evals_vector()
+        .iter()
+        .skip(1)
+        .step_by(2)
+        .cloned()
+        .collect();
+    (MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, left)), MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)))
 }
