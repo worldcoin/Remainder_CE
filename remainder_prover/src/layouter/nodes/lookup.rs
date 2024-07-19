@@ -4,6 +4,7 @@ use crate::layer::LayerId;
 use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::public_input_layer::PublicInputLayer;
 use crate::input_layer::MleInputLayer;
+use crate::input_layer::InputLayer;
 use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
@@ -100,12 +101,18 @@ impl<F: FieldExt> CircuitNode for LookupNode<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for LookupNode<F> {
+impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL>, IL> CompilableNode<F, Pf>
+    for LookupNode<F> 
+where
+    IL: InputLayer<F> + From<PublicInputLayer<F>>
+{
     fn compile<'a>(
         &'a self,
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<(), crate::layouter::layouting::DAGError> where <Pf as ProofSystem<F>>::Layer: From<RegularLayer<F>>, <Pf as ProofSystem<F>>::InputLayer: From<PublicInputLayer<F>> {
+    ) -> Result<(), crate::layouter::layouting::DAGError>
+    //where <Pf as ProofSystem<F>>::Layer: From<RegularLayer<F>>, <Pf as ProofSystem<F>>::InputLayer: From<PublicInputLayer<F>>
+     {
         // FIXME: make this work for multiple shreds
         assert_eq!(self.shreds.len(), 1, "LookupNode should have exactly one shred (for now)");
         let shred = &self.shreds[0];
@@ -121,14 +128,14 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for LookupNode<F> {
         let r = F::from(1u64); // FIXME
         let r_mle = MultilinearExtension::<F>::new(vec![r]);
         let r_layer_id = witness_builder.next_input_layer();
-        witness_builder.add_input_layer(PublicInputLayer::new(r_mle, r_layer_id).into());
+        witness_builder.add_input_layer(PublicInputLayer::new(r_mle.clone(), r_layer_id).into());
         let r_densemle = DenseMle::new_with_prefix_bits(r_mle, r_layer_id, vec![]);
 
         // Form the numerator: is all ones (create explicitly since don't want to pad with zeros)
         let expr = ExprBuilder::<F>::constant(F::from(1u64)).build_prover_expr(circuit_map)?;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
+        //FIXME witness_builder.add_layer(layer.into());
         // FIXME check with Nick if there isn't a better way of doing this
         let mle = MultilinearExtension::new(
             constrained_mle.get_evals_vector()
@@ -142,7 +149,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for LookupNode<F> {
         let expr = r_densemle.expression() - constrained.expr().build_prover_expr(circuit_map)?;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
+        //FIXME witness_builder.add_layer(layer.into());
         let mle = MultilinearExtension::new(
             constrained_mle.get_evals_vector()
                 .iter()
