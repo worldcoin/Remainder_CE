@@ -105,15 +105,16 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
         let output_layers = vec![MleOutputLayer::new_zero(output)];
 
-        Ok((
-            Witness {
-                layers,
-                output_layers,
-                input_layers: vec![input, random, input_layer_2],
-            },
-            vec![input_commit, random_commit, input_layer_2_commit],
-            todo!(),
-        ))
+        let witness = Witness {
+            layers,
+            output_layers,
+            input_layers: vec![input, random, input_layer_2],
+        };
+        let commitments = vec![input_commit, random_commit, input_layer_2_commit];
+        let verifier_key = witness.generate_verifier_key().unwrap();
+        // dbg!(&verifier_key);
+
+        Ok((witness, commitments, verifier_key))
     }
 }
 
@@ -251,17 +252,19 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
 
         let output_layers = vec![MleOutputLayer::new_zero(fourth_layer_output)];
 
-        Ok((
-            Witness {
-                layers,
-                output_layers,
-                input_layers: vec![input_layer_1, input_layer_2],
-            },
-            vec![input_layer_1_commitment, input_layer_2_commitment],
-            todo!(),
-        ))
+        let witness = Witness {
+            layers,
+            output_layers,
+            input_layers: vec![input_layer_1, input_layer_2],
+        };
+        dbg!(&witness);
+        let commitments = vec![input_layer_1_commitment, input_layer_2_commitment];
+        let verifier_key = witness.generate_verifier_key().unwrap();
+
+        Ok((witness, commitments, verifier_key))
     }
 }
+
 impl<F: FieldExt> MultiInputLayerCircuit<F> {
     pub fn new(
         input_layer_1_mle_1: DenseMle<F>,

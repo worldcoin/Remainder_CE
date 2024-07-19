@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 /// Wrapper around [Poseidon] sponge which provides an implementation
 /// for [FieldHashFnDigest] (the trait whose implementation is necessary for
 /// usage within the column hashing/Merkle hashing within Ligero).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PoseidonSpongeHasher<F: FieldExt> {
     halo2_sponge: Poseidon<F, 3, 2>,
     phantom_data: PhantomData<F>,

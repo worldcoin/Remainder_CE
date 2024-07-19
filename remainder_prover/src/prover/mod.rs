@@ -86,6 +86,7 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 }
 
 /// The witness of a GKR circuit, used to actually prove the circuit
+#[derive(Debug)]
 pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
     /// The intermediate layers of the circuit, as defined by the ProofSystem
     pub layers: Layers<F, Pf::Layer>,
@@ -98,7 +99,7 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
 impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
     /// Returns the circuit description associated with this Witness to be used
     /// by the verifier.
-    fn generate_verifier_key(&self) -> Result<GKRVerifierKey<F, Pf>, GKRError> {
+    pub fn generate_verifier_key(&self) -> Result<GKRVerifierKey<F, Pf>, GKRError> {
         let input_layers: Vec<_> = self
             .input_layers
             .iter()
@@ -231,6 +232,8 @@ pub trait GKRCircuit<F: FieldExt> {
             let layer_id = output.layer_id();
             info!("Output Layer: {:?}", layer_id);
 
+            output.append_mle_to_transcript(&mut transcript_writer);
+
             output
                 .fix_layer(&mut transcript_writer)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
@@ -360,6 +363,7 @@ where {
 
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
+#[derive(Debug)]
 pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
     input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer>,
     intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
@@ -425,6 +429,8 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
         }
 
+        // dbg!(&aggregator);
+
         end_timer!(claims_timer);
         verifier_output_claims_span.exit();
 
@@ -432,7 +438,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
         let intermediate_layers_timer =
             start_timer!(|| "ALL intermediate layers proof verification");
 
-        for layer in &self.intermediate_layers {
+        for layer in self.intermediate_layers.iter().rev() {
             let layer_id = layer.layer_id();
 
             info!("Intermediate Layer: {:?}", layer_id);

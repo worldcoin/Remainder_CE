@@ -186,15 +186,19 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
     pub fn transform_to_circuit_expression(
-        self,
+        mut self,
     ) -> Result<Expression<F, CircuitExpr>, ExpressionError> {
+        self.index_mle_indices(0);
+
         let (mut expression_node, mle_vec) = self.deconstruct();
-        Ok(Expression::new(
+        let expression = Expression::new(
             expression_node
                 .transform_to_circuit_expression_node(&mle_vec)
                 .unwrap(),
             (),
-        ))
+        );
+
+        Ok(expression)
     }
 
     /// Transforms the prover expression to a verifier expression.
@@ -404,6 +408,19 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 if !all_indices_indexed {
                     return Err(ExpressionError::EvaluateNotFullyIndexedError);
                 }
+
+                /*
+                let all_indices_fixed_or_iterated =
+                    mle_indices.iter().all(|mle_index| match mle_index {
+                        MleIndex::Fixed(_) => true,
+                        MleIndex::Iterated => true,
+                        _ => false,
+                    });
+
+                if !all_indices_fixed_or_iterated {
+                    return Err(ExpressionError::EvaluateNotFullyIndexedError);
+                }
+                */
 
                 Ok(ExpressionNode::Mle(CircuitMle::new(layer_id, mle_indices)))
             }

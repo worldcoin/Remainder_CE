@@ -41,6 +41,7 @@ use super::{Claim, ClaimAggregator, ClaimError, YieldClaim};
 ///
 /// Collects additional information in the [ClaimMle] struct to make computation
 /// of evaluations easier, most importantly the `original_bookkeeping_table`.
+#[derive(Debug)]
 pub struct WLXAggregator<F: FieldExt, L, LI> {
     claims: HashMap<LayerId, Vec<ClaimMle<F>>>,
     _marker: std::marker::PhantomData<(L, LI)>,

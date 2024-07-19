@@ -61,12 +61,13 @@ use log::{debug, info};
 /// process takes place for input layers.
 pub trait InputLayer<F: FieldExt> {
     /// The struct that contains the commitment to the contents of the input_layer.
-    type Commitment: Serialize + for<'a> Deserialize<'a>;
+    type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
     /// The Verifier Key representation for this input layer.
     type VerifierInputLayer: VerifierInputLayer<F, Commitment = Self::Commitment>
         + Serialize
-        + for<'a> Deserialize<'a>;
+        + for<'a> Deserialize<'a>
+        + core::fmt::Debug;
 
     /// Returns the circuit description of this layer for the verifier.
     fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer;
@@ -101,7 +102,7 @@ pub trait InputLayer<F: FieldExt> {
 
 pub trait VerifierInputLayer<F: FieldExt> {
     /// The struct that contains the commitment to the contents of the input_layer.
-    type Commitment: Serialize + for<'a> Deserialize<'a>;
+    type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
     /// Returns the `LayerId` of this layer.
     fn layer_id(&self) -> LayerId;

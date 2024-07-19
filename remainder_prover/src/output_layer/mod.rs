@@ -46,7 +46,10 @@ pub enum VerifierOutputLayerError {
 pub trait OutputLayer<F: FieldExt> {
     /// The associated type for the circuit-description analogue of this Ouput
     /// Layer.
-    type CircuitOutputLayer: CircuitOutputLayer<F> + Serialize + for<'a> Deserialize<'a>;
+    type CircuitOutputLayer: CircuitOutputLayer<F>
+        + Serialize
+        + for<'a> Deserialize<'a>
+        + core::fmt::Debug;
 
     /// Returns the [LayerId] of the intermediate/input layer that this output
     /// layer is associated with.
