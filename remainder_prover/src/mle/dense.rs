@@ -199,10 +199,7 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
 }
 
 impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for DenseMle<F> {
-    fn get_claims(
-        &self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
@@ -216,7 +213,6 @@ impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for DenseMle<F> {
             })
             .collect();
         let claim_value = self.bookkeeping_table()[0];
-        transcript_writer.append("DenseMle claim result", claim_value);
 
         Ok(vec![ClaimMle::new(
             mle_indices?,

@@ -59,10 +59,10 @@ macro_rules! layer_enum {
             }
 
             impl<F: FieldExt> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
-                fn id(&self) -> super::LayerId {
+                fn layer_id(&self) -> super::LayerId {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.id(),
+                            Self::$var_name(layer) => layer.layer_id(),
                         )*
                     }
                 }
@@ -71,7 +71,7 @@ macro_rules! layer_enum {
                     &self,
                     claim: $crate::claims::Claim<F>,
                     transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-                ) -> Result<(), super::VerificationError> {
+                ) -> Result<Expression<F, VerifierExpr>, super::VerificationError> {
                     match self {
                         $(
                             Self::$var_name(layer) => layer.verify_rounds(claim, transcript),
@@ -96,10 +96,10 @@ macro_rules! layer_enum {
                 }
             }
 
-            fn id(&self) -> super::LayerId {
+            fn layer_id(&self) -> super::LayerId {
                 match self {
                     $(
-                        Self::$var_name(layer) => layer.id(),
+                        Self::$var_name(layer) => layer.layer_id(),
                     )*
                 }
             }

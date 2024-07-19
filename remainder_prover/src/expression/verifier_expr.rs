@@ -46,6 +46,14 @@ impl<F: FieldExt> VerifierMle<F> {
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
     }
+
+    pub fn mle_indices(&self) -> &[MleIndex<F>] {
+        &self.var_indices
+    }
+
+    pub fn value(&self) -> F {
+        self.eval
+    }
 }
 
 /// Placeholder type for defining `Expression<F, VerifierExpr>`, the type used
@@ -66,6 +74,13 @@ impl<F: FieldExt> ExpressionType<F> for VerifierExpr {
 }
 
 impl<F: FieldExt> Expression<F, VerifierExpr> {
+    /// Create a mle Expression that contains one MLE
+    pub fn mle(mle: VerifierMle<F>) -> Self {
+        let mle_node = ExpressionNode::Mle(mle);
+
+        Expression::new(mle_node, ())
+    }
+
     /// Evaluate this fully bound expression.
     pub fn evaluate(&self) -> Result<F, ExpressionError> {
         let constant = |c| Ok(c);

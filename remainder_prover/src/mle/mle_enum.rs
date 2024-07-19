@@ -125,13 +125,10 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
 }
 
 impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for MleEnum<F> {
-    fn get_claims(
-        &self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
-            MleEnum::Dense(layer) => layer.get_claims(transcript_writer),
-            MleEnum::Zero(layer) => layer.get_claims(transcript_writer),
+            MleEnum::Dense(layer) => layer.get_claims(),
+            MleEnum::Zero(layer) => layer.get_claims(),
         }
     }
 }

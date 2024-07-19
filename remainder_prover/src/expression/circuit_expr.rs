@@ -223,12 +223,6 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
     }
 }
 
-// point: [r_1, r_2]
-// V(b_1, b_2) = (1-b_1) * V_1(b_2) + b_1 * V_2(b_2)
-//
-//                Sel(MleIndex::Bound(r_1))
-//         /                                   \
-//        Mle(MleIndex::Bound(r_2)), eval_1      Mle(MleIndex::Bound(r_2))), eval_2
 impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
     pub fn into_verifier_node(
         &self,

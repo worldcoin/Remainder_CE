@@ -10,6 +10,7 @@ use remainder_shared_types::{
 
 use crate::{
     claims::{wlx_eval::ClaimMle, ProverYieldClaim, VerifierYieldClaim},
+    expression::{generic_expr::Expression, verifier_expr::VerifierExpr},
     layer::LayerId,
     mle::{
         dense::DenseMle,
@@ -82,7 +83,7 @@ fn test_output_layer_get_claims() {
 
     output_layer.append_mle_to_transcript(&mut transcript_writer);
     output_layer.fix_layer(&mut transcript_writer).unwrap();
-    let claims = output_layer.get_claims(&mut transcript_writer).unwrap();
+    let claims = output_layer.get_claims().unwrap();
 
     let expected_point = vec![Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
@@ -112,13 +113,11 @@ fn test_output_layer_get_claims() {
     verifier_output_layer
         .retrieve_mle_from_transcript(&mut transcript_reader)
         .unwrap();
-    verifier_output_layer
+    let verifier_expr = verifier_output_layer
         .fix_layer(&mut transcript_reader)
         .unwrap();
 
-    let claims = verifier_output_layer
-        .get_claims(&mut transcript_reader)
-        .unwrap();
+    let claims = verifier_output_layer.get_claims(&verifier_expr).unwrap();
 
     assert_eq!(claims, expected_claims);
 }
@@ -143,15 +142,15 @@ fn test_output_layer_get_claims_with_prefix_bits() {
 
     output_layer.append_mle_to_transcript(&mut transcript_writer);
     output_layer.fix_layer(&mut transcript_writer).unwrap();
-    let claims = output_layer.get_claims(&mut transcript_writer).unwrap();
+    let claims = output_layer.get_claims().unwrap();
 
     let expected_point = vec![Fr::ONE, Fr::ZERO, Fr::ONE, Fr::ONE];
     let expected_result = Fr::from(0);
     let expected_indices = vec![
-        MleIndex::Bound(Fr::ONE, 0),  // Do we expect this to be bound or fixed?
-        MleIndex::Bound(Fr::ZERO, 1), // Same here.
-        MleIndex::Bound(Fr::ONE, 2),
-        MleIndex::Bound(Fr::ONE, 3),
+        MleIndex::Fixed(true),
+        MleIndex::Fixed(false),
+        MleIndex::Bound(Fr::ONE, 0),
+        MleIndex::Bound(Fr::ONE, 1),
     ];
     let expected_zero_mle = ZeroMle::new_raw(
         expected_indices,
@@ -178,13 +177,14 @@ fn test_output_layer_get_claims_with_prefix_bits() {
     verifier_output_layer
         .retrieve_mle_from_transcript(&mut transcript_reader)
         .unwrap();
-    verifier_output_layer
+    let verifier_expr = verifier_output_layer
         .fix_layer(&mut transcript_reader)
         .unwrap();
 
-    let claims = verifier_output_layer
-        .get_claims(&mut transcript_reader)
-        .unwrap();
+    let claims = verifier_output_layer.get_claims(&verifier_expr).unwrap();
 
-    assert_eq!(claims, expected_claims);
+    // TODO(Makis): This still fails because the verifier doesn't know about
+    // the prefix bits. I think we should pass this information to the verifier
+    // key.
+    assert_eq!(claims, expected_claims)
 }

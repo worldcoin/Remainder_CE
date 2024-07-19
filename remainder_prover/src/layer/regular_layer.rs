@@ -80,7 +80,7 @@ impl<F: FieldExt> VerifierRegularLayer<F> {
 impl<F: FieldExt> Layer<F> for RegularLayer<F> {
     type VerifierLayer = VerifierRegularLayer<F>;
 
-    fn id(&self) -> LayerId {
+    fn layer_id(&self) -> LayerId {
         self.id
     }
 
@@ -111,7 +111,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
     }
 
     fn into_verifier_layer(&self) -> Result<Self::VerifierLayer, LayerError> {
-        let id = self.id();
+        let id = self.layer_id();
         let expression = self.expression.clone().transform_to_circuit_expression()?;
 
         Ok(Self::VerifierLayer { id, expression })
@@ -119,16 +119,15 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 }
 
 impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
-    fn id(&self) -> LayerId {
+    fn layer_id(&self) -> LayerId {
         self.id
     }
 
-    // claim = [g_1, ..., g_n]
     fn verify_rounds(
         &self,
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), VerificationError> {
+    ) -> Result<Expression<F, VerifierExpr>, VerificationError> {
         let nonlinear_rounds = self.expression.get_all_nonlinear_rounds();
 
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
@@ -254,7 +253,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
             return Err(VerificationError::SumcheckFailed);
         }
 
-        Ok(())
+        Ok(verifier_expr)
     }
 }
 
