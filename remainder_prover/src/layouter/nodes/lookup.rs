@@ -64,7 +64,7 @@ pub struct LookupNode<F: FieldExt> {
     /// The lookups that are performed on this table (will be populated by calls to add_shred).
     shreds: Vec<LookupShred<F>>,
     /// The id of the node providing the table entries.
-    table: NodeId,
+    table_node_id: NodeId,
 }
 
 impl<F: FieldExt> LookupNode<F> {
@@ -79,7 +79,7 @@ impl<F: FieldExt> LookupNode<F> {
         LookupNode {
             id,
             shreds: vec![],
-            table,
+            table_node_id: table,
         }
     }
 
@@ -117,17 +117,16 @@ where
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError>
      {
+        type PE<F> = Expression::<F, ProverExpr>;
         // FIXME: make this work for multiple shreds
         assert_eq!(self.shreds.len(), 1, "LookupNode should have exactly one shred (for now)");
         let shred = &self.shreds[0];
         let constrained = shred.constrained_node_id;
 
+        // Build the LHS of the equation
+
         // TODO (future) get the MLEs of the constrained nodes and concatenate them
         let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
-
-        // RHS of equation (todo)
-        // TODO (future) get the MLEs of the multiplicities and add them all together
-        //let (_, multiplicities) = circuit_map.0[&shred.multiplicities_node_id];
 
         // TODO (future) Draw a random value from the transcript
         let r = F::from(1u64); // FIXME
@@ -136,7 +135,7 @@ where
         witness_builder.add_input_layer(PublicInputLayer::new(r_mle.clone(), r_layer_id).into());
         let r_densemle = DenseMle::new_with_prefix_bits(r_mle, r_layer_id, vec![]);
 
-        // Form the numerator: is all ones (create explicitly since don't want to pad with zeros)
+        // Build the numerator: is all ones (create explicitly since don't want to pad with zeros)
         let expr = ExprBuilder::<F>::constant(F::from(1u64)).build_prover_expr(circuit_map)?;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
@@ -147,10 +146,10 @@ where
                 .map(|_val| F::from(1u64))
                 .collect()
         );
-        let numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+        let lhs_numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
-        // Form the denominator r - constrained
-        let expr = r_densemle.expression() - constrained.expr().build_prover_expr(circuit_map)?;
+        // Build the denominator r - constrained
+        let expr = r_densemle.clone().expression() - constrained.expr().build_prover_expr(circuit_map)?;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
@@ -160,22 +159,51 @@ where
                 .map(|val| r - val)
                 .collect()
         );
-        let denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+        let lhs_denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
-        let (numerator, denominator) = build_fractional_sum(numerator, denominator, witness_builder);
-        debug_assert_eq!(numerator.num_iterated_vars(), 0);
-        debug_assert_eq!(denominator.num_iterated_vars(), 0);
+        // Build the numerator and denominator of the sum of the fractions
+        let (lhs_numerator, lhs_denominator) = build_fractional_sum(lhs_numerator, lhs_denominator, witness_builder);
 
-        type PE<F> = Expression::<F, ProverExpr>;
+        // Build the RHS of the equation
+        // TODO (future) get the MLEs of the multiplicities and add them all together
+        let (multiplicities_location, multiplicities) = &circuit_map.0[&shred.multiplicities_node_id];
+        let (_, table) = circuit_map.0[&self.table_node_id];
 
-        // Add an input layer for the inverse of the denominator
-        let mle = MultilinearExtension::new(vec![denominator.current_mle.value().invert().unwrap()]);
+        // Build the numerator
+        let rhs_numerator = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
+
+        // Build the denominator r - table
+        let expr = r_densemle.expression() - self.table_node_id.expr().build_prover_expr(circuit_map)?;
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, expr);
+        witness_builder.add_layer(layer.into());
+        let mle = MultilinearExtension::new(
+            table.get_evals_vector()
+                .iter()
+                .map(|val| r - val)
+                .collect()
+        );
+        let rhs_denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+
+        // Build the numerator and denominator of the sum of the fractions
+        let (rhs_numerator, rhs_denominator) = build_fractional_sum(rhs_numerator, rhs_denominator, witness_builder);
+
+        // Add an input layer for the inverse of the denominators of the LHS
+        let mle = MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
         witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
-        let inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+        let lhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
-        // Add an output layer that checks that the product of the denominator and the inverse is 1
-        let expr = PE::<F>::products(vec![denominator.clone(), inverse_densemle.clone()]) - PE::<F>::constant(F::from(1u64));
+        // Same, but for the RHS
+        let mle = MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
+        let layer_id = witness_builder.next_input_layer();
+        witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
+        let rhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+
+        // Add an output layer that checks that the product of the denominator and the inverse is 1 (for both LHS and RHS)
+        let lhs_expr = PE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_densemle.clone()]);
+        let rhs_expr = PE::<F>::products(vec![rhs_denominator.clone(), rhs_inverse_densemle.clone()]);
+        let expr = lhs_expr.concat_expr(rhs_expr) - PE::<F>::constant(F::from(1u64));
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_output_layer(layer.into());
@@ -256,5 +284,7 @@ pub fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
         );
         denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
     }
+    debug_assert_eq!(numerator.num_iterated_vars(), 0);
+    debug_assert_eq!(denominator.num_iterated_vars(), 0);
     (numerator, denominator)
 }
