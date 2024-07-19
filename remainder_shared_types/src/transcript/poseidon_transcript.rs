@@ -42,3 +42,32 @@ impl<F: FieldExt> TranscriptSponge<F> for PoseidonSponge<F> {
         // (0..num_elements).map(|_| F::ONE).collect_vec()
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use halo2curves::bn256::Fq as Base;
+    use halo2curves::bn256::Fr as Scalar;
+    use halo2curves::bn256::G1 as Bn256Point;
+
+    use crate::{
+        curves::PrimeOrderCurve,
+        transcript::{
+            ec_transcript::{ECProverTranscript, ECTranscriptWriter},
+            ProverTranscript,
+        },
+    };
+
+    use super::PoseidonSponge;
+
+    #[test]
+    fn test_poseidon() {
+        let mut transcript =
+            ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new("new transcript");
+        transcript.append("test2", Base::one());
+        let one = halo2curves::bn256::G1::generator();
+        transcript.append_ec_point("ec_test", one);
+        // let _: Fr = transcript.get_challenge("test_challenge");
+        let _: Base = transcript.get_challenge("test_challenge_2");
+    }
+}
