@@ -48,10 +48,8 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
     ) -> Result<
         (
-            (
-                Witness<F, Self::ProofSystem>,
-                Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
-            ),
+            Witness<F, Self::ProofSystem>,
+            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
             GKRVerifierKey<F, Self::ProofSystem>,
         ),
         GKRError,
@@ -108,14 +106,12 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         let output_layers = vec![MleOutputLayer::new_zero(output)];
 
         Ok((
-            (
-                Witness {
-                    layers,
-                    output_layers,
-                    input_layers: vec![input, random, input_layer_2],
-                },
-                vec![input_commit, random_commit, input_layer_2_commit],
-            ),
+            Witness {
+                layers,
+                output_layers,
+                input_layers: vec![input, random, input_layer_2],
+            },
+            vec![input_commit, random_commit, input_layer_2_commit],
             todo!(),
         ))
     }
@@ -198,10 +194,8 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         transcript_writer: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
     ) -> Result<
         (
-            (
-                Witness<F, Self::ProofSystem>,
-                Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
-            ),
+            Witness<F, Self::ProofSystem>,
+            Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
             GKRVerifierKey<F, Self::ProofSystem>,
         ),
         GKRError,
@@ -258,14 +252,12 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         let output_layers = vec![MleOutputLayer::new_zero(fourth_layer_output)];
 
         Ok((
-            (
-                Witness {
-                    layers,
-                    output_layers,
-                    input_layers: vec![input_layer_1, input_layer_2],
-                },
-                vec![input_layer_1_commitment, input_layer_2_commitment],
-            ),
+            Witness {
+                layers,
+                output_layers,
+                input_layers: vec![input_layer_1, input_layer_2],
+            },
+            vec![input_layer_1_commitment, input_layer_2_commitment],
             todo!(),
         ))
     }

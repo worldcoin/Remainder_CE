@@ -145,9 +145,10 @@ pub type CircuitInputLayer<F, C> =
 pub type CircuitClaimAggregator<F, C> =
     <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::ClaimAggregator;
 
-type WitnessAndCommitments<F, C> = (
+type WitnessCommitmentsKey<F, C> = (
     Witness<F, <C as GKRCircuit<F>>::ProofSystem>,
     Vec<<CircuitInputLayer<F, C> as InputLayer<F>>::Commitment>,
+    GKRVerifierKey<F, <C as GKRCircuit<F>>::ProofSystem>,
 );
 
 /// A GKRCircuit ready to be proven
@@ -166,14 +167,10 @@ pub trait GKRCircuit<F: FieldExt> {
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<
-        (
-            WitnessAndCommitments<F, Self>,
-            GKRVerifierKey<F, Self::ProofSystem>,
-        ),
-        GKRError,
-    > {
+    ) -> Result<WitnessCommitmentsKey<F, Self>, GKRError> {
         let mut witness = self.synthesize();
+
+        let verifier_key = witness.generate_verifier_key()?;
 
         let commitments = witness
             .input_layers
@@ -188,9 +185,7 @@ pub trait GKRCircuit<F: FieldExt> {
             })
             .try_collect()?;
 
-        let verifier_key = witness.generate_verifier_key()?;
-
-        Ok(((witness, commitments), verifier_key))
+        Ok((witness, commitments, verifier_key))
     }
 
     /// The backwards pass, creating the GKRProof.
@@ -212,14 +207,12 @@ pub trait GKRCircuit<F: FieldExt> {
 
         // TODO(Makis): User getter syntax.
         let (
-            (
-                Witness {
-                    input_layers,
-                    mut output_layers,
-                    layers,
-                },
-                commitments,
-            ),
+            Witness {
+                input_layers,
+                mut output_layers,
+                layers,
+            },
+            commitments,
             verifier_key,
         ) = self.synthesize_and_commit(&mut transcript_writer)?;
 
@@ -352,7 +345,7 @@ pub trait GKRCircuit<F: FieldExt> {
     {
         let mut transcript_writer =
             TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
-        let ((Witness { layers, .. }, _), _) =
+        let (Witness { layers, .. }, _, _) =
             self.synthesize_and_commit(&mut transcript_writer).unwrap();
 
         hash_layers(&layers)
