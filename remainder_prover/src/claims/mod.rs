@@ -1,6 +1,6 @@
 //! Utilities involving the claims a layer makes.
 
-/// The claim aggregator that uses wlx evaluations.
+/// The default claim aggregator that uses wlx evaluations.
 pub mod wlx_eval;
 
 use remainder_shared_types::{
@@ -54,12 +54,13 @@ pub enum ClaimError {
 
     /// Error while combining mle refs in order to evaluate challenge point.
     #[error("Error while combining mle refs in order to evaluate challenge point")]
-    MleRefCombineError(CombineMleRefError),
+    MleRefCombineError(#[from] CombineMleRefError),
 }
 
 /// A claim contains a `point \in F^n` along with the `result \in F` that an
-/// associated layer MLE is expected to evaluate to. In other words, if `W : F^n
-/// -> F` is the MLE, then the claim asserts: `W(point) == result`
+/// associated layer MLE is expected to evaluate to. In other words, if
+/// `\tilde{V} : F^n -> F` is the MLE of a layer, then this claim asserts:
+/// `\tilde{V}(point) == result`.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct Claim<F: FieldExt> {
@@ -93,6 +94,9 @@ impl<F: FieldExt> Claim<F> {
 }
 
 /// A trait that defines a protocol for the tracking/aggregation of many claims.
+/// TODO(Makis): We are currently using the same trait for both the prover and
+/// the verifier.  I think it's more appropriate to separate it out into two
+/// different traits.
 pub trait ClaimAggregator<F: FieldExt> {
     /// The struct the claim aggregator takes in.
     /// Is typically composed of the `Claim` struct and additional information.
