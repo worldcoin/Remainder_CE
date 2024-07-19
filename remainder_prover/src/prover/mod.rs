@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 use self::{layers::Layers, proof_system::ProofSystem};
 use crate::expression::verifier_expr::VerifierMle;
 use crate::input_layer::VerifierInputLayer;
-use crate::layer::VerifierLayer;
+use crate::layer::CircuitLayer;
 use crate::mle::Mle;
 use crate::output_layer::OutputLayer;
 use crate::{
@@ -111,7 +111,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
             .iter()
             .map(|layer| {
                 layer
-                    .into_verifier_layer()
+                    .into_circuit_layer()
                     .map_err(|_| GKRError::ErrorGeneratingVerifierKey)
             })
             .collect::<Result<Vec<_>, GKRError>>()?;
@@ -119,7 +119,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
         let output_layers: Vec<_> = self
             .output_layers
             .iter()
-            .map(|output_layer| output_layer.into_verifier_output_layer())
+            .map(|output_layer| output_layer.into_circuit_output_layer())
             .collect();
 
         Ok(GKRVerifierKey::<F, Pf> {
@@ -136,9 +136,6 @@ pub const ENABLE_OPTIMIZATION: bool = true;
 /// A helper type for easier reference to a circuit's Transcript
 pub type CircuitTranscript<F, C> =
     <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Transcript;
-
-/// A helper type alias for easier reference to a circuits Layer
-pub type CircuitLayer<F, C> = <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Layer;
 
 /// A helper type alias for easier reference to a circuits InputLayer
 pub type CircuitInputLayer<F, C> =
@@ -248,7 +245,7 @@ pub trait GKRCircuit<F: FieldExt> {
             // Add the claim to either the set of current claims we're proving
             // or the global set of claims we need to eventually prove.
             aggregator
-                .prover_extract_claims(output, &mut transcript_writer)
+                .extract_claims(output)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
         }
 
@@ -296,7 +293,7 @@ pub trait GKRCircuit<F: FieldExt> {
             end_timer!(sumcheck_msg_timer);
 
             aggregator
-                .prover_extract_claims(&layer, &mut transcript_writer)
+                .extract_claims(&layer)
                 .map_err(|err| GKRError::ErrorWhenProvingLayer(layer_id, err))?;
 
             end_timer!(layer_timer);
@@ -372,9 +369,8 @@ where {
 /// It consists of consice GKR Circuit description to be use by the Verifier.
 pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
     input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer>,
-    intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::VerifierLayer>,
-    output_layers:
-        Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::VerifierOutputLayer>,
+    intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
+    output_layers: Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer>,
 }
 
 impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
@@ -484,7 +480,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
                 start_timer!(|| format!("Verify sumcheck message for layer {:?}", layer_id));
 
             // Performs the actual sumcheck verification step.
-            let verifier_expr =
+            let verifier_layer =
                 layer
                     .verify_rounds(prev_claim, transcript_reader)
                     .map_err(|err| {
@@ -497,7 +493,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
             end_timer!(sumcheck_msg_timer);
 
             aggregator
-                .verifier_extract_claims(layer, &verifier_expr, transcript_reader)
+                .extract_claims(&verifier_layer)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
 
             end_timer!(layer_timer);

@@ -19,9 +19,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError, ProverYieldClaim, VerifierYieldClaim,
+        Claim, ClaimError, YieldClaim,
     },
     expression::{
+        circuit_expr::CircuitMle,
         generic_expr::Expression,
         verifier_expr::{VerifierExpr, VerifierMle},
     },
@@ -37,7 +38,7 @@ use self::gate_helpers::{
     GateError,
 };
 
-use super::VerifierLayer;
+use super::{CircuitLayer, VerifierLayer};
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
@@ -88,37 +89,9 @@ pub struct Gate<F: FieldExt> {
     pub gate_operation: BinaryOperation,
 }
 
-/// The verifier's counterpart of a Gate layer description.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierGateLayer<F: FieldExt> {
-    /// The layer id associated with this gate layer.
-    id: LayerId,
-
-    /// The gate operation representing the fan-in-two relationship.
-    gate_operation: BinaryOperation,
-
-    /// A vector of tuples representing the "nonzero" gates, especially useful
-    /// in the sparse case the format is (z, x, y) where the gate at label z is
-    /// the output of performing an operation on gates with labels x and y.
-    wiring: Vec<(usize, usize, usize)>,
-
-    /// The left side of the expression, i.e. the mle that makes up the "x"
-    /// variables.
-    lhs_mle: VerifierMle<F>,
-
-    /// The mles that are constructed when initializing phase 2 (binding the y
-    /// variables).
-    rhs_mle: VerifierMle<F>,
-
-    /// The number of bits representing the number of "dataparallel" copies of
-    /// the circuit.
-    num_dataparallel_bits: usize,
-}
-
 impl<F: FieldExt> Layer<F> for Gate<F> {
-    // type Proof = SumcheckProof<F>;
     type VerifierLayer = VerifierGateLayer<F>;
+    type CircuitLayer = CircuitGateLayer<F>;
 
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
@@ -172,12 +145,42 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         Ok(())
     }
 
-    fn into_verifier_layer(&self) -> Result<VerifierGateLayer<F>, LayerError> {
+    fn into_circuit_layer(&self) -> Result<CircuitGateLayer<F>, LayerError> {
         todo!()
     }
 }
 
-impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
+/// The circuit-description counterpart of a Gate layer description.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+pub struct CircuitGateLayer<F: FieldExt> {
+    /// The layer id associated with this gate layer.
+    id: LayerId,
+
+    /// The gate operation representing the fan-in-two relationship.
+    gate_operation: BinaryOperation,
+
+    /// A vector of tuples representing the "nonzero" gates, especially useful
+    /// in the sparse case the format is (z, x, y) where the gate at label z is
+    /// the output of performing an operation on gates with labels x and y.
+    wiring: Vec<(usize, usize, usize)>,
+
+    /// The left side of the expression, i.e. the mle that makes up the "x"
+    /// variables.
+    lhs_mle: CircuitMle<F>,
+
+    /// The mles that are constructed when initializing phase 2 (binding the y
+    /// variables).
+    rhs_mle: CircuitMle<F>,
+
+    /// The number of bits representing the number of "dataparallel" copies of
+    /// the circuit.
+    num_dataparallel_bits: usize,
+}
+
+impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
+    type VerifierLayer = VerifierGateLayer<F>;
+
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
         self.id
@@ -187,7 +190,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
         &self,
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<Expression<F, VerifierExpr>, VerificationError> {
+    ) -> Result<Self::VerifierLayer, VerificationError> {
         todo!()
         /*
         let sumcheck_rounds = sumcheck_rounds.0;
@@ -326,7 +329,41 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
     }
 }
 
-impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for Gate<F> {
+/// The verifier's counterpart of a Gate layer.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+pub struct VerifierGateLayer<F: FieldExt> {
+    /// The layer id associated with this gate layer.
+    layer_id: LayerId,
+
+    /// The gate operation representing the fan-in-two relationship.
+    gate_operation: BinaryOperation,
+
+    /// A vector of tuples representing the "nonzero" gates, especially useful
+    /// in the sparse case the format is (z, x, y) where the gate at label z is
+    /// the output of performing an operation on gates with labels x and y.
+    wiring: Vec<(usize, usize, usize)>,
+
+    /// The left side of the expression, i.e. the mle that makes up the "x"
+    /// variables.
+    lhs_mle: VerifierMle<F>,
+
+    /// The mles that are constructed when initializing phase 2 (binding the y
+    /// variables).
+    rhs_mle: VerifierMle<F>,
+
+    /// The number of bits representing the number of "dataparallel" copies of
+    /// the circuit.
+    num_dataparallel_bits: usize,
+}
+
+impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
     /// Get the claims that this layer makes on other layers.
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
@@ -376,11 +413,8 @@ impl<F: FieldExt> ProverYieldClaim<F, ClaimMle<F>> for Gate<F> {
     }
 }
 
-impl<F: FieldExt> VerifierYieldClaim<F, ClaimMle<F>> for VerifierGateLayer<F> {
-    fn get_claims(
-        &self,
-        expr: &Expression<F, VerifierExpr>,
-    ) -> Result<Vec<ClaimMle<F>>, LayerError> {
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierGateLayer<F> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         todo!()
     }
 }

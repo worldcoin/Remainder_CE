@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    expression::{generic_expr::Expression, verifier_expr::VerifierExpr},
     input_layer::InputLayer,
     layer::{combine_mle_refs::CombineMleRefError, Layer, LayerError, LayerId},
     prover::GKRError,
@@ -94,9 +93,6 @@ impl<F: FieldExt> Claim<F> {
 }
 
 /// A trait that defines a protocol for the tracking/aggregation of many claims.
-/// TODO(Makis): We are currently using the same trait for both the prover and
-/// the verifier.  I think it's more appropriate to separate it out into two
-/// different traits.
 pub trait ClaimAggregator<F: FieldExt> {
     /// The struct the claim aggregator takes in.
     /// Is typically composed of the `Claim` struct and additional information.
@@ -112,52 +108,23 @@ pub trait ClaimAggregator<F: FieldExt> {
     /// Creates an empty [ClaimAggregator], ready to track claims.
     fn new() -> Self;
 
-    /// Retrieves claims from `layer` to keep track and later aggregate.
-    /// Passes the `transcript_writer` to the `layer` which in turn is
-    /// responsible for adding any necessary information to the transcript as
-    /// claims are generated.
-    ///
-    /// # WARNING
-    /// The "prover" variants of these methods should never be used in
-    /// conjunction with the "verifier" variants!
-    /// TODO(Makis): Separate this out to a `ProverClaimAggregator` trait.
-    fn prover_extract_claims(
-        &mut self,
-        layer: &impl ProverYieldClaim<F, Self::Claim>,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), LayerError>;
-
-    /// Retrieves claims from `layer` (using the `transcript_reader` as needed)
-    /// to track and later aggregate them.
-    ///
-    /// `expr` is the fully-bound expression corresponding to `layer`.  This is
-    /// temporary. We should separate the concept of a `VerifierLayer` from that
-    /// of a `CircuitLayer` to avoid the need to pass the expression here.
-    ///
-    /// # WARNING
-    /// The "verifier" variants of these methods should never be used in
-    /// conjunction with the "prover" variants!
-    /// TODO(Makis): Separate this out to a `VerifierClaimAggregator` trait.
-    fn verifier_extract_claims(
-        &mut self,
-        layer: &impl VerifierYieldClaim<F, Self::Claim>,
-        expr: &Expression<F, VerifierExpr>,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), LayerError>;
+    /// Retrieves claims from `layer` to keep track internally and later
+    /// aggregate.
+    fn extract_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>)
+        -> Result<(), LayerError>;
 
     /// Returns the claims made to layer with ID `layer_id` (if any).
     /// The claims must have already been retrieved using
-    /// `prover_retrieve_claims` or `verifier_retrieve_claims`.
-    /// This method is safe to use by either the prover or the verifier.
+    /// `extract_claims`.
     ///
     /// TODO(Makis): Do we need to expose this method to the public interface?
     /// It seems it is only used by the `aggregate_claim` variants internally.
     fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]>;
 
     /// Aggregates all the claims made on `layer` and returns a single claim.
-    ///
-    /// Should be called only after all claims for `layer` have been retrieved
-    /// using `prover_retrieve_claims`/`verifier_retrieve_claims`.
+    //
+    /// Should be called only after all claims for `input_layer` have been
+    /// retrieved using `extract_claims`.
     ///
     /// Adds any communication to the F-S Transcript as needed.
     fn prover_aggregate_claims(
@@ -172,7 +139,7 @@ pub trait ClaimAggregator<F: FieldExt> {
     /// claim.
     ///
     /// Should be called only after all claims for `input_layer` have been
-    /// retrieved using `prover_retrieve_claims`/`verifier_retrieve_claims`.
+    /// retrieved using `extract_claims`.
     ///
     /// Adds any communication to the F-S Transcript as needed.
     fn prover_aggregate_claims_input(
@@ -187,7 +154,7 @@ pub trait ClaimAggregator<F: FieldExt> {
     /// either an intermediate or input layer) and returns a single claim.
     ///
     /// Should be called only after all claims for this layer have been
-    /// retrieved using `verifier_retrieve_claims`.
+    /// retrieved using `extract_claims`.
     ///
     /// Uses the `transcript_reader` to retrieve any necessary information.
     ///
@@ -203,27 +170,9 @@ pub trait ClaimAggregator<F: FieldExt> {
 }
 
 /// A trait that allows a layer-like type to yield claims for other layers.
-/// Typically, a [ClaimAggregator] uses this trait's method to retrieve
+/// Typically, a [ClaimAggregator] uses this trait's method to extract
 /// and keep track of claims.
-pub trait ProverYieldClaim<F: FieldExt, Claim> {
+pub trait YieldClaim<F: FieldExt, Claim> {
     /// Generate and return the claims that this layer makes onto other layers.
     fn get_claims(&self) -> Result<Vec<Claim>, LayerError>;
-}
-
-/// A verifier variant of the [ProverYieldClaim] trait.
-/// It allows a layer-like type to yield claims for other layers.
-/// Typically, a [ClaimAggregator] uses this trait's method to retrieve
-/// and keep track of claims.
-pub trait VerifierYieldClaim<F: FieldExt, Claim> {
-    /// Generates and returns the claims that this layer makes onto other
-    /// layers.
-    ///
-    /// `expr` is the expression associated with the current layer with all bits
-    /// bound. We're passing this instead of using relying entirely on `self`
-    /// because, at this point, the [crate::layer::VerifierLayer]
-    /// implementations maintain an `Expression<F, CircuitExpr>` without any
-    /// bound bits or evaluations, which are needed to generate the claims.
-    /// TODO(Makis): Introduce a separate `CircuitLayer` to avoid the need
-    /// for passing the expression here.
-    fn get_claims(&self, expr: &Expression<F, VerifierExpr>) -> Result<Vec<Claim>, LayerError>;
 }

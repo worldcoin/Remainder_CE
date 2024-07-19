@@ -44,8 +44,9 @@ pub enum VerifierOutputLayerError {
 /// separate [LayerId]. Instead they are associated with the ID of an existing
 /// intermediate/input layer on which they generate claims for.
 pub trait OutputLayer<F: FieldExt> {
-    /// The associated type for the verifier analogue of this Ouput Layer.
-    type VerifierOutputLayer: VerifierOutputLayer<F> + Serialize + for<'a> Deserialize<'a>;
+    /// The associated type for the circuit-description analogue of this Ouput
+    /// Layer.
+    type CircuitOutputLayer: CircuitOutputLayer<F> + Serialize + for<'a> Deserialize<'a>;
 
     /// Returns the [LayerId] of the intermediate/input layer that this output
     /// layer is associated with.
@@ -66,25 +67,41 @@ pub trait OutputLayer<F: FieldExt> {
 
     /// Return the Circuit description for this Output Layer to be used
     /// by the verifier.
-    fn into_verifier_output_layer(&self) -> Self::VerifierOutputLayer;
+    /// Should be called before any other method that mutates `self`!
+    fn into_circuit_output_layer(&self) -> Self::CircuitOutputLayer;
 }
 
-/// The interface of a Verifier's Output Layer.
-pub trait VerifierOutputLayer<F: FieldExt> {
+/// The interface for the circuit description counterpart of an Output Layer.
+pub trait CircuitOutputLayer<F: FieldExt> {
+    /// The associated type used by the verifier for manipulating an Ouput
+    /// Layer.
+    type VerifierOutputLayer: VerifierOutputLayer<F> + Serialize + for<'a> Deserialize<'a>;
+
     /// Returns the [LayerId] of the intermediate/input layer that his output
     /// layer is associated with.
     fn layer_id(&self) -> LayerId;
 
+    /*
     /// Retrieve the original MLE representation from the transcript.
     fn retrieve_mle_from_transcript(
         &mut self,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<(), VerifierOutputLayerError>;
+    */
 
-    /// Fix the variables of this output layer to random challenges sampled
-    /// from the transcript.
-    fn fix_layer(
-        &mut self,
+    /// Retrieve the MLE evaluations from the transcript and fix the variables
+    /// of this output layer to random challenges sampled from the transcript.
+    /// Returns a description of the layer ready to be used by the verifier.
+    fn retrieve_mle_from_transcript_and_fix_layer(
+        self,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<Expression<F, VerifierExpr>, VerifierOutputLayerError>;
+    ) -> Result<Self::VerifierOutputLayer, VerifierOutputLayerError>;
+}
+
+/// The interface for the verifier's counterpart of an Output Layer.
+/// This trait should be able to yield claims!
+pub trait VerifierOutputLayer<F: FieldExt> {
+    /// Returns the [LayerId] of the intermediate/input layer that his output
+    /// layer is associated with.
+    fn layer_id(&self) -> LayerId;
 }

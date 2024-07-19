@@ -7,22 +7,22 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 use crate::{
-    claims::{wlx_eval::WLXAggregator, ClaimAggregator, ProverYieldClaim, VerifierYieldClaim},
+    claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
     input_layer::VerifierInputLayer,
-    layer::{layer_enum::LayerEnum, Layer},
+    layer::{layer_enum::LayerEnum, CircuitLayer, Layer},
     mle::{mle_enum::MleEnum, Mle},
-    output_layer::{mle_output_layer::MleOutputLayer, OutputLayer, VerifierOutputLayer},
+    output_layer::{mle_output_layer::MleOutputLayer, CircuitOutputLayer, OutputLayer},
 };
 
 use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
 
-#[macro_export]
 ///This macro generates a layer enum that represents all the possible layers
 /// Every layer variant of the enum needs to implement Layer, and the enum will also implement Layer and pass methods to it's variants
 ///
 /// Usage:
 ///
 /// layer_enum(EnumName, (FirstVariant: LayerType), (SecondVariant: SecondLayerType), ..)
+#[macro_export]
 macro_rules! layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -36,29 +36,30 @@ macro_rules! layer_enum {
         }
 
         paste::paste! {
-            /*
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
             #[serde(bound = "F: FieldExt")]
-            #[doc = r"Remainder generated Proof enum"]
-            pub enum [<$type_name Proof>]<F: FieldExt> {
+            #[doc = r"Circuit layer description enum"]
+            pub enum [<Circuit $type_name>]<F: FieldExt> {
                 $(
-                    #[doc = "Remainder generated Proof variant"]
-                    $var_name(<$variant as Layer<F>>::Proof),
+                    #[doc = "Circuit layer description variant"]
+                    $var_name(<$variant as Layer<F>>::CircuitLayer),
                 )*
             }
-            */
 
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
             #[serde(bound = "F: FieldExt")]
             #[doc = r"Verfier layer description enum"]
-            pub enum [<Verifier$type_name>]<F: FieldExt> {
+            pub enum [<Verifier $type_name>]<F: FieldExt> {
                 $(
                     #[doc = "Verifier layer description variant"]
-                    $var_name(<$variant as Layer<F>>::VerifierLayer),
+                    $var_name(<<$variant as crate::layer::Layer<F>>::CircuitLayer as crate::layer::CircuitLayer<F>>::VerifierLayer),
                 )*
             }
 
-            impl<F: FieldExt> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
+
+            impl<F: FieldExt> $crate::layer::CircuitLayer<F> for [<Circuit$type_name>]<F> {
+                type VerifierLayer = [<Verifier $type_name>]<F>;
+
                 fn layer_id(&self) -> super::LayerId {
                     match self {
                         $(
@@ -71,27 +72,36 @@ macro_rules! layer_enum {
                     &self,
                     claim: $crate::claims::Claim<F>,
                     transcript: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
-                ) -> Result<Expression<F, VerifierExpr>, super::VerificationError> {
+                ) -> Result<Self::VerifierLayer, super::VerificationError> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.verify_rounds(claim, transcript),
+                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.verify_rounds(claim, transcript)?)),
                         )*
                     }
                 }
+            }
 
+            impl<F: FieldExt> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
+                fn layer_id(&self) -> super::LayerId {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.layer_id(),
+                        )*
+                    }
+                }
             }
         }
 
         impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
             paste::paste! {
-                // type Proof = [<$type_name Proof>]<F>;
                 type VerifierLayer = [<Verifier $type_name>]<F>;
+                type CircuitLayer = [<Circuit $type_name>]<F>;
             }
 
-            fn into_verifier_layer(&self) -> Result<VerifierLayerEnum<F>, LayerError> {
+            fn into_circuit_layer(&self) -> Result<CircuitLayerEnum<F>, LayerError> {
                 match self {
                     $(
-                        Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.into_verifier_layer()?)),
+                        Self::$var_name(layer) => Ok(Self::CircuitLayer::$var_name(layer.into_circuit_layer()?)),
                     )*
                 }
             }
@@ -124,16 +134,28 @@ macro_rules! layer_enum {
                 }
             }
         )*
+
+        paste::paste! {
+            impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for [<Verifier $type_name>]<F> {
+                fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_claims(),
+                        )*
+                    }
+                }
+            }
+        }
     }
 }
 
-#[macro_export]
 ///This macro generates an inputlayer enum that represents all the possible layers
 /// Every layer variant of the enum needs to implement InputLayer, and the enum will also implement InputLayer and pass methods to it's variants
 ///
 /// Usage:
 ///
 /// input_layer_enum(EnumName, (FirstVariant: InputLayerType), (SecondVariant: SecondInputLayerType), ..)
+#[macro_export]
 macro_rules! input_layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[doc = r"Remainder generated trait enum"]
@@ -292,16 +314,11 @@ macro_rules! input_layer_enum {
 /// into a GKR Prover.
 pub trait ProofSystem<F: FieldExt> {
     /// A trait that defines the allowed Layer for this ProofSystem.
-    type Layer: Layer<
-            F,
-            VerifierLayer: VerifierYieldClaim<
-                F,
-                <Self::ClaimAggregator as ClaimAggregator<F>>::Claim,
-            >,
-        > + Serialize
+    type Layer: Layer<F, VerifierLayer: YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>>
+        + Serialize
         + for<'a> Deserialize<'a>
         + Debug
-        + ProverYieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
+        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
 
     /// A trait that defines the allowed InputLayer for this ProofSystem.
     type InputLayer: InputLayer<F, VerifierInputLayer: VerifierInputLayer<F>>;
@@ -310,8 +327,8 @@ pub trait ProofSystem<F: FieldExt> {
     type Transcript: TranscriptSponge<F>;
 
     /// The MleRef type that serves as the output layer representation
-    type OutputLayer: OutputLayer<F, VerifierOutputLayer: VerifierOutputLayer<F>>
-        + ProverYieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
+    type OutputLayer: OutputLayer<F, CircuitOutputLayer: CircuitOutputLayer<F>>
+        + YieldClaim<F, <Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
         + Serialize
         + for<'de> Deserialize<'de>;
 

@@ -13,8 +13,6 @@ use crate::claims::wlx_eval::helpers::{
     prover_aggregate_claims_helper, verifier_aggregate_claims_helper,
 };
 
-use crate::expression::generic_expr::Expression;
-use crate::expression::verifier_expr::VerifierExpr;
 use crate::mle::mle_enum::MleEnum;
 
 use crate::input_layer::InputLayer;
@@ -33,16 +31,16 @@ use std::marker::PhantomData;
 
 use log::debug;
 
-use super::{Claim, ClaimAggregator, ClaimError, ProverYieldClaim, VerifierYieldClaim};
+use super::{Claim, ClaimAggregator, ClaimError, YieldClaim};
 
-/// The basic ClaimAggregator
+/// The default ClaimAggregator.
 ///
-/// Keeps tracks of claims using a hashmap with the layerid as the key.
+/// Keeps tracks of claims using a hashmap with the [LayerId] as the key.
 ///
 /// Aggregates claims using univariate polynomial interpolation.
 ///
-/// Collects additional information in the `ClaimMle` struct to make computation
-/// of evaluations easier, most importantly the 'original_bookkeeping_table`.
+/// Collects additional information in the [ClaimMle] struct to make computation
+/// of evaluations easier, most importantly the `original_bookkeeping_table`.
 pub struct WLXAggregator<F: FieldExt, L, LI> {
     claims: HashMap<LayerId, Vec<ClaimMle<F>>>,
     _marker: std::marker::PhantomData<(L, LI)>,
@@ -50,7 +48,7 @@ pub struct WLXAggregator<F: FieldExt, L, LI> {
 
 impl<
         F: FieldExt,
-        L: Layer<F> + YieldWLXEvals<F> + ProverYieldClaim<F, ClaimMle<F>>,
+        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>,
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > ClaimAggregator<F> for WLXAggregator<F, L, LI>
 {
@@ -58,6 +56,38 @@ impl<
 
     type Layer = L;
     type InputLayer = LI;
+
+    fn new() -> Self {
+        Self {
+            claims: HashMap::new(),
+            _marker: PhantomData,
+        }
+    }
+
+    fn extract_claims(
+        &mut self,
+        layer: &impl YieldClaim<F, Self::Claim>,
+    ) -> Result<(), LayerError> {
+        // Ask `layer` to generate claims for other layers.
+        let claims = layer.get_claims()?;
+
+        // Assign each claim to the appropriate layer based on the `to_layer_id`
+        // field.
+        for claim in claims {
+            let layer_id = claim.get_to_layer_id().unwrap();
+            if let Some(claims) = self.claims.get_mut(&layer_id) {
+                claims.push(claim);
+            } else {
+                self.claims.insert(layer_id, vec![claim]);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]> {
+        self.claims.get(&layer_id).map(|claims| claims.as_slice())
+    }
 
     fn prover_aggregate_claims(
         &self,
@@ -124,68 +154,11 @@ impl<
             Ok(claims[0].get_claim().clone())
         }
     }
-
-    fn prover_extract_claims(
-        &mut self,
-        layer: &impl ProverYieldClaim<F, Self::Claim>,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), LayerError> {
-        // Ask `layer` to generate claims for other layers.
-        let claims = layer.get_claims()?;
-
-        debug!("Ingesting claims: {:#?}", claims);
-
-        // Assign each claim to the appropriate layer based on the `to_layer_id`
-        // field.
-        for claim in claims {
-            let layer_id = claim.get_to_layer_id().unwrap();
-            if let Some(claims) = self.claims.get_mut(&layer_id) {
-                claims.push(claim);
-            } else {
-                self.claims.insert(layer_id, vec![claim]);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]> {
-        self.claims.get(&layer_id).map(|claims| claims.as_slice())
-    }
-
-    fn new() -> Self {
-        Self {
-            claims: HashMap::new(),
-            _marker: PhantomData,
-        }
-    }
-
-    fn verifier_extract_claims(
-        &mut self,
-        layer: &impl VerifierYieldClaim<F, Self::Claim>,
-        expr: &Expression<F, VerifierExpr>,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), LayerError> {
-        // Ask `layer` to generate claims for other layers.
-        let claims = layer.get_claims(expr)?;
-
-        // Assign each claim to the appropriate layer based on the `to_layer_id`
-        // field.
-        for claim in claims {
-            let layer_id = claim.get_to_layer_id().unwrap();
-            if let Some(claims) = self.claims.get_mut(&layer_id) {
-                claims.push(claim);
-            } else {
-                self.claims.insert(layer_id, vec![claim]);
-            }
-        }
-        Ok(())
-    }
 }
 
 impl<
         F: FieldExt,
-        L: Layer<F> + YieldWLXEvals<F> + ProverYieldClaim<F, ClaimMle<F>>,
+        L: Layer<F> + YieldWLXEvals<F> + YieldClaim<F, ClaimMle<F>>,
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > WLXAggregator<F, L, LI>
 {
@@ -227,27 +200,31 @@ pub trait YieldWLXEvals<F: FieldExt> {
     ) -> Result<Vec<F>, crate::claims::ClaimError>;
 }
 
-/// A claim that can optionally maintain additional source/destination layer information through
-/// `from_layer_id` and `to_layer_id`. This information can be used to speed up
-/// claim aggregation.
+/// A claim that can optionally maintain additional source/destination layer
+/// information through `from_layer_id` and `to_layer_id`. This information can
+/// be used to speed up claim aggregation.
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct ClaimMle<F: FieldExt> {
-    ///The underlying raw Claim
+    /// The underlying raw Claim.
     claim: Claim<F>,
+
     /// The layer ID of the layer that produced this claim (if present); origin
     /// layer.
     pub from_layer_id: Option<LayerId>,
+
     /// The layer ID of the layer containing the MLE this claim refers to (if
     /// present); destination layer.
     pub to_layer_id: Option<LayerId>,
-    /// the mle ref associated with the claim
+
+    /// The mle ref associated with the claim.
     pub mle_ref: Option<MleEnum<F>>,
 }
 
 impl<F: FieldExt> ClaimMle<F> {
+    /// To be used internally only!
     /// Generate new raw claim without any origin/destination information.
-    pub fn new_raw(point: Vec<F>, result: F) -> Self {
+    pub(crate) fn new_raw(point: Vec<F>, result: F) -> Self {
         Self {
             claim: Claim { point, result },
             from_layer_id: None,
@@ -315,7 +292,7 @@ impl<F: fmt::Debug + FieldExt> fmt::Debug for ClaimMle<F> {
     }
 }
 
-/// Helper functions for types implementing `YieldWlxEvals`
+/// Helper function for types implementing `YieldWlxEvals`.
 ///
 ///
 /// Returns an upper bound on the number of evaluations needed to represent the

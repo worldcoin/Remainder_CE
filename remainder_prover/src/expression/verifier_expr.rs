@@ -20,7 +20,7 @@ use super::{
 /// A version of [crate::mle::dense::DenseMle] used by the Verifier.
 /// A [VerifierMle] stores a fully bound MLE along with its evaluation.
 /// It is used to represent the leaves of an `Expression<F, VerifierExpr>`.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct VerifierMle<F: FieldExt> {
     /// Layer whose data this MLE is a subset of.

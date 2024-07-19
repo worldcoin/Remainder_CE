@@ -9,7 +9,6 @@ pub mod regular_layer;
 use std::fmt::Debug;
 
 use derive_more::Display;
-use regular_layer::RegularLayer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -105,41 +104,32 @@ pub enum LayerId {
     Output(usize),
 }
 
-/// A verifier counterpart of the GKR [Layer] trait.
-pub trait VerifierLayer<F: FieldExt> {
-    /// Returns this layer's ID.
-    fn layer_id(&self) -> LayerId;
-
-    /// Tries to verify `claim` for this layer.
-    /// The proof is implicitly included in the `transcript`.
-    ///
-    /// If sucessful, returns the fully bound expression for this layer.
-    fn verify_rounds(
-        &self,
-        claim: Claim<F>,
-        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<Expression<F, VerifierExpr>, VerificationError>;
-}
-
 /// A layer is the smallest component of the GKR protocol.
 ///
 /// Each `Layer` is a sub-protocol that takes in some `Claim` and creates a proof
 /// that the `Claim` is correct
 pub trait Layer<F: FieldExt> {
-    /// The associated type that the verifier is using to store this layer's
-    /// information.
+    /// TEMP
     type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
 
-    // /// The struct that contains the proof this `Layer` generates
-    // type Proof: Debug + Serialize + for<'a> Deserialize<'a>;
+    /// The associated type used to store a description of this layer as part
+    /// of a [GKRVerifierKey].
+    type CircuitLayer: CircuitLayer<F, VerifierLayer = Self::VerifierLayer>
+        + Debug
+        + Serialize
+        + for<'a> Deserialize<'a>;
 
-    /// Generateas the Verifier analogue of this item.
-    fn into_verifier_layer(&self) -> Result<Self::VerifierLayer, LayerError>;
+    /// Generates a description of this layer.
+    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError>;
 
     /// Gets this layer's ID.
     fn layer_id(&self) -> LayerId;
 
     /// Tries to prove `claim` for this layer.
+    ///
+    /// In the process of proving, it mutates itself binding the variables
+    /// of the expression that define the layer.
+    ///
     /// If successful, the proof is implicitly included in the modified
     /// transcript.
     fn prove_rounds(
@@ -147,4 +137,30 @@ pub trait Layer<F: FieldExt> {
         claim: Claim<F>,
         transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
     ) -> Result<(), LayerError>;
+}
+
+/// A circuit-description counterpart of the GKR [Layer] trait.
+pub trait CircuitLayer<F: FieldExt> {
+    /// The associated type that the verifier uses to work with a layer of this
+    /// kind.
+    type VerifierLayer: VerifierLayer<F> + Debug + Serialize + for<'a> Deserialize<'a>;
+
+    /// Returns this layer's ID.
+    fn layer_id(&self) -> LayerId;
+
+    /// Tries to verify `claim` for this layer and returns a [VerifierLayer]
+    /// with a fully bound and evaluated expression.
+    ///
+    /// The proof is implicitly included in the `transcript`.
+    fn verify_rounds(
+        &self,
+        claim: Claim<F>,
+        transcript: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::VerifierLayer, VerificationError>;
+}
+
+/// A verifier counterpart of a GKR [Layer] trait.
+pub trait VerifierLayer<F: FieldExt> {
+    /// Returns this layer's ID.
+    fn layer_id(&self) -> LayerId;
 }
