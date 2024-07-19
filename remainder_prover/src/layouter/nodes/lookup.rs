@@ -193,7 +193,6 @@ where
         let layer_id = witness_builder.next_input_layer();
         witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
         let lhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
-
         // Same, but for the RHS
         let mle = MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
@@ -208,6 +207,11 @@ where
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_output_layer(layer.into());
 
+        // Add an output layer that checks that the fractions of the LHS and RHS are equal
+        let expr = PE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()]) - PE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()]);
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, expr);
+        witness_builder.add_output_layer(layer.into());
 
         Ok(())
     }
