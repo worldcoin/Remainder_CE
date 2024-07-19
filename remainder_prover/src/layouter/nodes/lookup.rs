@@ -5,9 +5,11 @@ use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::public_input_layer::PublicInputLayer;
 use crate::input_layer::MleInputLayer;
 use crate::input_layer::InputLayer;
+use crate::mle::Mle;
 use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
+use serde::de;
 
 use crate::{expression::{abstract_expr::ExprBuilder, generic_expr::Expression}, layer::regular_layer::RegularLayer, mle::{dense::DenseMle, evals::MultilinearExtension}, prover::proof_system::ProofSystem};
 
@@ -145,7 +147,7 @@ where
                 .map(|_val| F::from(1u64))
                 .collect()
         );
-        let mut numerators = build_split_dense_mles(&mle, &layer_id);
+        let numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
         // Form the denominator r - constrained
         let expr = r_densemle.expression() - constrained.expr().build_prover_expr(circuit_map)?;
@@ -158,50 +160,20 @@ where
                 .map(|val| r - val)
                 .collect()
         );
-        let mut denominators = build_split_dense_mles(&mle, &layer_id);
+        let denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
-        type PE<F> = Expression::<F, ProverExpr>;
-        for _ in 0..num_vars {
-            // TODO v2: presently we are creating two layers per loop - what is the correct way to concatenate them in Newmainder?
+        let (numerator, denominator) = build_fractional_sum(numerator, denominator, witness_builder);
 
-            // Calculate the new numerator
-            let expr = PE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()]) + PE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
-            let layer_id = witness_builder.next_layer();
-            let layer = RegularLayer::new_raw(layer_id, expr);
-            witness_builder.add_layer(layer.into());
-            let mle = MultilinearExtension::new(
-                numerators.0.clone().into_iter().zip(numerators.1.clone().into_iter())
-                .zip(denominators.0.clone().into_iter().zip(denominators.1.clone().into_iter()))
-                .map(|((num1, num2), (denom1, denom2))| {
-                    num1 * denom2 + num2 * denom1
-                }).collect()
-            );
-            numerators = build_split_dense_mles(&mle, &layer_id);
-
-            // Calculate the new denominator
-            let expr = PE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
-            let layer_id = witness_builder.next_layer();
-            let layer = RegularLayer::new_raw(layer_id, expr);
-            witness_builder.add_layer(layer.into());
-            let mle = MultilinearExtension::new(
-                denominators.0.clone().into_iter()
-                .zip(denominators.1.clone().into_iter())
-                .map(|(denom1, denom2)| {
-                    denom1 * denom2
-                }).collect()
-            );
-            denominators = build_split_dense_mles(&mle, &layer_id);
-        }
 
         Ok(())
     }
 }
 
-/// Split a MultilinearExtension into two DenseMles, with the left half containing the even-indexed elements and the right half containing the odd-indexed elements, setting the prefix bits accordingly (and using the supplied LayerId).
-pub fn build_split_dense_mles<F: FieldExt>(
-    data: &MultilinearExtension<F>,
-    layer_id: &LayerId
+/// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and the right half containing the odd-indexed elements, setting the prefix bits accordingly.
+pub fn split_dense_mle<F: FieldExt>(
+    mle: &DenseMle<F>,
 ) -> (DenseMle<F>, DenseMle<F>) {
+    let data = mle.current_mle.clone();
     let left: Vec<F> = data
         .get_evals_vector()
         .iter()
@@ -215,7 +187,58 @@ pub fn build_split_dense_mles<F: FieldExt>(
         .step_by(2)
         .cloned()
         .collect();
-    let left_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, left)), layer_id.clone(), vec![false]);
-    let right_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)), layer_id.clone(), vec![true]);
+    let left_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, left)), mle.layer_id, vec![false]);
+    let right_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)), mle.layer_id, vec![true]);
     (left_dense, right_dense)
+}
+
+/// Given two Mles of the same length representing the numerators and denominators of a sequence of
+/// fractions, add layers that perform a sum of the fractions, return a new pair of Mles
+/// representing the numerator and denominator of the (unreduced) sum.
+pub fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
+    numerator: DenseMle<F>,
+    denominator: DenseMle<F>,
+   witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
+) -> (DenseMle<F>, DenseMle<F>) where
+    L: From<RegularLayer<F>>
+{
+    type PE<F> = Expression::<F, ProverExpr>;
+    assert_eq!(numerator.num_iterated_vars(), denominator.num_iterated_vars());
+    let mut numerator = numerator;
+    let mut denominator = denominator;
+
+    for _ in 0..numerator.num_iterated_vars() {
+        let numerators = split_dense_mle(&numerator);
+        let denominators = split_dense_mle(&denominator);
+        // TODO v2: presently we are creating two layers per loop - what is the correct way to concatenate them in Newmainder?
+
+        // Calculate the new numerator
+        let expr = PE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()]) + PE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, expr);
+        witness_builder.add_layer(layer.into());
+        let mle = MultilinearExtension::new(
+            numerators.0.clone().into_iter().zip(numerators.1.clone().into_iter())
+            .zip(denominators.0.clone().into_iter().zip(denominators.1.clone().into_iter()))
+            .map(|((num1, num2), (denom1, denom2))| {
+                num1 * denom2 + num2 * denom1
+            }).collect()
+        );
+        numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+
+        // Calculate the new denominator
+        let expr = PE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, expr);
+        witness_builder.add_layer(layer.into());
+        let mle = MultilinearExtension::new(
+            denominators.0.clone().into_iter()
+            .zip(denominators.1.clone().into_iter())
+            .map(|(denom1, denom2)| {
+                denom1 * denom2
+            }).collect()
+        );
+        denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+    }
+    (numerator, denominator)
 }
