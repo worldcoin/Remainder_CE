@@ -99,7 +99,6 @@ impl<F: FieldExt> VerifierRegularLayer<F> {
 }
 
 impl<F: FieldExt> Layer<F> for RegularLayer<F> {
-    type VerifierLayer = VerifierRegularLayer<F>;
     type CircuitLayer = CircuitRegularLayer<F>;
 
     fn layer_id(&self) -> LayerId {
