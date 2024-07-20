@@ -402,6 +402,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
 
                 let all_indices_indexed = mle_indices.iter().all(|mle_index| match mle_index {
                     MleIndex::IndexedBit(_) => true,
+                    MleIndex::Fixed(_) => true,
                     _ => false,
                 });
 
