@@ -175,11 +175,10 @@ where
         let mut rhs_numerator = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
         if self.shreds.len() > 1 {
             // insert an extra layer that aggregates the multiplicities
-            let mut expr = rhs_numerator.expression();
-            self.shreds.iter().skip(1).for_each(|shred| {
+            let expr = self.shreds.iter().skip(1).fold(rhs_numerator.expression(), |acc, shred| {
                 let (multiplicities_location, multiplicities) = &circuit_map.0[&shred.multiplicities_node_id];
                 let mult_shred_mle = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
-                expr = expr + mult_shred_mle.expression();
+                acc + mult_shred_mle.expression()
             });
             let layer_id = witness_builder.next_layer();
             let layer = RegularLayer::new_raw(layer_id, expr);
