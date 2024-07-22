@@ -1,4 +1,5 @@
 //! Nodes that implement LogUp.
+use crate::layouter::nodes::circuit_inputs::InputShred;
 use crate::mle::evals::Evaluations;
 use crate::layer::LayerId;
 use crate::expression::prover_expr::ProverExpr;
@@ -6,14 +7,14 @@ use crate::input_layer::public_input_layer::PublicInputLayer;
 use crate::input_layer::MleInputLayer;
 use crate::input_layer::InputLayer;
 use crate::mle::Mle;
+use crate::prover::helpers::test_circuit;
 use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
-use serde::de;
-use tracing_subscriber::field::debug;
 
 use crate::{expression::{abstract_expr::ExprBuilder, generic_expr::Expression}, layer::regular_layer::RegularLayer, mle::{dense::DenseMle, evals::MultilinearExtension}, prover::proof_system::ProofSystem};
 
+use super::node_enum::NodeEnum;
 use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupNode).
@@ -34,14 +35,14 @@ impl<F: FieldExt> LookupShred<F> {
     /// data in `table` with multiplicities given by `multiplicities`.
     pub fn new(
         ctx: &Context,
-        table: &LookupNode<F>,
+        lookup_node: &LookupNode<F>,
         constrained: &dyn ClaimableNode<F = F>,
         multiplicities: &dyn ClaimableNode<F=F>,
     ) -> Self {
         let id = ctx.get_new_id();
         LookupShred {
             id,
-            table_node_id: table.id(),
+            table_node_id: lookup_node.id(),
             constrained_node_id: constrained.id(),
             multiplicities_node_id: multiplicities.id(),
             _data: PhantomData,
