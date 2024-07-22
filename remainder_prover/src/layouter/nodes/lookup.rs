@@ -60,6 +60,7 @@ impl<F: FieldExt> CircuitNode for LookupShred<F> {
     }
 }
 
+/// Represents a table of data that can be looked up into, e.g. for a range check.
 pub struct LookupNode<F: FieldExt> {
     id: NodeId,
     /// The lookups that are performed on this table (will be populated by calls to add_shred).
@@ -171,7 +172,27 @@ where
         let (_, table) = circuit_map.0[&self.table_node_id];
 
         // Build the numerator
-        let rhs_numerator = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
+        let mut rhs_numerator = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
+        if self.shreds.len() > 1 {
+            // insert an extra layer that aggregates the multiplicities
+            let mut expr = rhs_numerator.expression();
+            self.shreds.iter().skip(1).for_each(|shred| {
+                let (multiplicities_location, multiplicities) = &circuit_map.0[&shred.multiplicities_node_id];
+                let mult_shred_mle = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
+                expr = expr + mult_shred_mle.expression();
+            });
+            let layer_id = witness_builder.next_layer();
+            let layer = RegularLayer::new_raw(layer_id, expr);
+            witness_builder.add_layer(layer.into());
+            let eval_vecs: Vec<_> = self.shreds.iter().map(|shred| {
+                let (_, multiplicities) = circuit_map.0[&shred.multiplicities_node_id];
+                multiplicities.get_evals_vector()
+            }).collect();
+            let agg_evals = eval_vecs.iter().fold(vec![F::from(0u64); eval_vecs[0].len()], |acc, evals| {
+                acc.iter().zip(evals.iter()).map(|(a, b)| *a + *b).collect()
+            });
+            rhs_numerator = DenseMle::new_with_prefix_bits(MultilinearExtension::new(agg_evals), layer_id, vec![]);
+        }
 
         // Build the denominator r - table
         let expr = r_densemle.expression() - self.table_node_id.expr().build_prover_expr(circuit_map)?;
