@@ -260,6 +260,11 @@ pub fn layout<
                     .into_iter()
                     .map(|input| Box::new(input) as Box<dyn CompilableNode<F, Pf>>),
             )
+            .chain(
+                lookup_nodes
+                    .into_iter()
+                    .map(|node| Box::new(node) as Box<dyn CompilableNode<F, Pf>>),
+            )
     };
 
     //handle intermediate layers

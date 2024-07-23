@@ -6,6 +6,7 @@ use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::public_input_layer::PublicInputLayer;
 use crate::input_layer::MleInputLayer;
 use crate::input_layer::InputLayer;
+use crate::mle::zero::ZeroMle;
 use crate::mle::Mle;
 use crate::prover::helpers::test_circuit;
 use std::marker::PhantomData;
@@ -113,7 +114,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = O
 where
     IL: From<PublicInputLayer<F>>,
     L: From<RegularLayer<F>>,
-    OL: From<RegularLayer<F>>,
+    OL: From<ZeroMle<F>>,
 {
     fn compile<'a>(
         &'a self,
@@ -222,19 +223,25 @@ where
         witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
         let rhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
-        // Add an output layer that checks that the product of the denominator and the inverse is 1 (for both LHS and RHS)
+        // Add a layer that calculates the product of the denominator and the inverse and subtracts 1 (for both LHS and RHS)
         let lhs_expr = PE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_densemle.clone()]);
         let rhs_expr = PE::<F>::products(vec![rhs_denominator.clone(), rhs_inverse_densemle.clone()]);
         let expr = lhs_expr.concat_expr(rhs_expr) - PE::<F>::constant(F::from(1u64));
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_output_layer(layer.into());
+        witness_builder.add_layer(layer.into());
+        // Add an output layer that checks that the result is zero
+        let mle = ZeroMle::new(1, None, layer_id);
+        witness_builder.add_output_layer(mle.into());
 
-        // Add an output layer that checks that the fractions of the LHS and RHS are equal
+        // Add a layer that calculates the difference between the fractions on the LHS and RHS
         let expr = PE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()]) - PE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()]);
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_output_layer(layer.into());
+        witness_builder.add_layer(layer.into());
+        // Add an output layer that checks that the result is zero
+        let mle = ZeroMle::new(0, None, layer_id);
+        witness_builder.add_output_layer(mle.into());
 
         Ok(())
     }
