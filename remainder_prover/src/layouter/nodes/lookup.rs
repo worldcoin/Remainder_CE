@@ -123,8 +123,6 @@ where
     ) -> Result<(), crate::layouter::layouting::DAGError>
      {
         type PE<F> = Expression::<F, ProverExpr>;
-        // FIXME: make this work for multiple shreds
-        assert_eq!(self.shreds.len(), 1, "LookupNode should have exactly one shred (for now)");
 
         // Ensure that number of LookupShreds is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
@@ -137,13 +135,27 @@ where
         let (_, table) = circuit_map.0[&self.table_node_id];
         assert_eq!(table.get_evals_vector().len().count_ones(), 1, "Table length should be a power of two");
 
-        let shred = &self.shreds[0];
-        let constrained = shred.constrained_node_id;
-
         // Build the LHS of the equation (defined by the constrained values)
-
-        // TODO (future) get the MLEs of the constrained nodes and concatenate them
-        let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
+        let constrained_node_id = &self.shreds[0].constrained_node_id;
+        let mut constrained_expr = constrained_node_id.expr().build_prover_expr(circuit_map)?;
+        if self.shreds.len() > 1 {
+            // FIXME consider performing this where the denominator layer is constructed, i.e. use a sub-expression
+            // There is one more than shred, so insert an extra layer to concat the constrained values
+            constrained_expr = self.shreds.iter()
+                .fold(constrained_expr, |acc, shred| {
+                    let node_id = shred.constrained_node_id;
+                    let expr = node_id.expr().build_prover_expr(circuit_map).unwrap();
+                    acc.concat_expr(expr)
+                }
+            );
+            let layer_id = witness_builder.next_layer();
+            let layer = RegularLayer::new_raw(layer_id, constrained_expr.clone());
+            witness_builder.add_layer(layer.into());
+        }
+        let constrained_values: Vec<_> = self.shreds.iter().map(|shred| {
+            let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
+            constrained_mle.get_evals_vector()
+        }).flat_map(|vec| vec.into_iter()).collect();
 
         // TODO (future) Draw a random value from the transcript
         let r = F::from(1u64); // FIXME
@@ -158,7 +170,7 @@ where
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
         let mle = MultilinearExtension::new(
-            constrained_mle.get_evals_vector()
+            constrained_values
                 .iter()
                 .map(|_val| F::from(1u64))
                 .collect()
@@ -166,13 +178,13 @@ where
         let lhs_numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
         // Build the denominator r - constrained
-        let expr = r_densemle.clone().expression() - constrained.expr().build_prover_expr(circuit_map)?;
+        let expr = r_densemle.clone().expression() - constrained_expr;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
         let mle = MultilinearExtension::new(
-            constrained_mle.get_evals_vector()
-                .iter()
+            constrained_values
+                .into_iter()
                 .map(|val| r - val)
                 .collect()
         );
@@ -182,10 +194,9 @@ where
         let (lhs_numerator, lhs_denominator) = build_fractional_sum(lhs_numerator, lhs_denominator, witness_builder);
 
         // Build the RHS of the equation (defined by the table values and multiplicities)
-        // TODO (future) get the MLEs of the multiplicities and add them all together
-        let (multiplicities_location, multiplicities) = &circuit_map.0[&shred.multiplicities_node_id];
 
-        // Build the numerator
+        // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one shred)
+        let (multiplicities_location, multiplicities) = &circuit_map.0[&self.shreds[0].multiplicities_node_id];
         let mut rhs_numerator = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
         if self.shreds.len() > 1 {
             // insert an extra layer that aggregates the multiplicities
