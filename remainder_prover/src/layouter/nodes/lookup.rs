@@ -1,21 +1,16 @@
 //! Nodes that implement LogUp.
-use crate::layouter::nodes::circuit_inputs::InputShred;
 use crate::mle::evals::Evaluations;
-use crate::layer::LayerId;
 use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::public_input_layer::PublicInputLayer;
 use crate::input_layer::MleInputLayer;
-use crate::input_layer::InputLayer;
 use crate::mle::zero::ZeroMle;
 use crate::mle::Mle;
-use crate::prover::helpers::test_circuit;
 use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
 
 use crate::{expression::{abstract_expr::ExprBuilder, generic_expr::Expression}, layer::regular_layer::RegularLayer, mle::{dense::DenseMle, evals::MultilinearExtension}, prover::proof_system::ProofSystem};
 
-use super::node_enum::NodeEnum;
 use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupNode).
@@ -138,7 +133,7 @@ where
         // Build the LHS of the equation (defined by the constrained values)
 
         // TODO (future) Draw a random value from the transcript
-        let r = F::from(1u64); // FIXME
+        let r = F::from(11111111u64); // FIXME
         let r_mle = MultilinearExtension::<F>::new(vec![r]);
         let r_layer_id = witness_builder.next_input_layer();
         witness_builder.add_input_layer(PublicInputLayer::new(r_mle.clone(), r_layer_id).into());
