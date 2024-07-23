@@ -125,10 +125,22 @@ where
         type PE<F> = Expression::<F, ProverExpr>;
         // FIXME: make this work for multiple shreds
         assert_eq!(self.shreds.len(), 1, "LookupNode should have exactly one shred (for now)");
+
+        // Ensure that number of LookupShreds is a power of two (otherwise when we concat the
+        // constrained nodes, there will be padding, and the padding value is potentially not in the
+        // table
+        assert_eq!(self.shreds.len().count_ones(), 1, "Number of LookupShreds should be a power of two");
+
+        // Ensure that the table length is a power of two (otherwise 0 will be added implicitly,
+        // which is potentially unwanted and moreover the padding of the denominators with zeros
+        // will cause failure)
+        let (_, table) = circuit_map.0[&self.table_node_id];
+        assert_eq!(table.get_evals_vector().len().count_ones(), 1, "Table length should be a power of two");
+
         let shred = &self.shreds[0];
         let constrained = shred.constrained_node_id;
 
-        // Build the LHS of the equation
+        // Build the LHS of the equation (defined by the constrained values)
 
         // TODO (future) get the MLEs of the constrained nodes and concatenate them
         let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
@@ -169,10 +181,9 @@ where
         // Build the numerator and denominator of the sum of the fractions
         let (lhs_numerator, lhs_denominator) = build_fractional_sum(lhs_numerator, lhs_denominator, witness_builder);
 
-        // Build the RHS of the equation
+        // Build the RHS of the equation (defined by the table values and multiplicities)
         // TODO (future) get the MLEs of the multiplicities and add them all together
         let (multiplicities_location, multiplicities) = &circuit_map.0[&shred.multiplicities_node_id];
-        let (_, table) = circuit_map.0[&self.table_node_id];
 
         // Build the numerator
         let mut rhs_numerator = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
