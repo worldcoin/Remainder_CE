@@ -136,26 +136,6 @@ where
         assert_eq!(table.get_evals_vector().len().count_ones(), 1, "Table length should be a power of two");
 
         // Build the LHS of the equation (defined by the constrained values)
-        let constrained_node_id = &self.shreds[0].constrained_node_id;
-        let mut constrained_expr = constrained_node_id.expr().build_prover_expr(circuit_map)?;
-        if self.shreds.len() > 1 {
-            // FIXME consider performing this where the denominator layer is constructed, i.e. use a sub-expression
-            // There is one more than shred, so insert an extra layer to concat the constrained values
-            constrained_expr = self.shreds.iter()
-                .fold(constrained_expr, |acc, shred| {
-                    let node_id = shred.constrained_node_id;
-                    let expr = node_id.expr().build_prover_expr(circuit_map).unwrap();
-                    acc.concat_expr(expr)
-                }
-            );
-            let layer_id = witness_builder.next_layer();
-            let layer = RegularLayer::new_raw(layer_id, constrained_expr.clone());
-            witness_builder.add_layer(layer.into());
-        }
-        let constrained_values: Vec<_> = self.shreds.iter().map(|shred| {
-            let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
-            constrained_mle.get_evals_vector()
-        }).flat_map(|vec| vec.into_iter()).collect();
 
         // TODO (future) Draw a random value from the transcript
         let r = F::from(1u64); // FIXME
@@ -164,31 +144,42 @@ where
         witness_builder.add_input_layer(PublicInputLayer::new(r_mle.clone(), r_layer_id).into());
         let r_densemle = DenseMle::new_with_prefix_bits(r_mle, r_layer_id, vec![]);
 
-        // Build the numerator: is all ones (create explicitly since don't want to pad with zeros)
-        let expr = ExprBuilder::<F>::constant(F::from(1u64)).build_prover_expr(circuit_map)?;
-        let layer_id = witness_builder.next_layer();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
-        let mle = MultilinearExtension::new(
-            constrained_values
-                .iter()
-                .map(|_val| F::from(1u64))
-                .collect()
-        );
-        let lhs_numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
-
         // Build the denominator r - constrained
-        let expr = r_densemle.clone().expression() - constrained_expr;
+        let mut constrained_expr = self.shreds[0].constrained_node_id.expr();
+        // There may be more than one shred, so concat the constrained expressions
+        constrained_expr = self.shreds.iter()
+            .skip(1)
+            .fold(constrained_expr, |acc, shred| {
+                let node_id = shred.constrained_node_id;
+                let expr = node_id.expr();
+                acc.concat_expr(expr)
+            }
+        );
+        let expr = r_densemle.clone().expression() - constrained_expr.build_prover_expr(circuit_map)?;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
+        // Create the MLE for the denominator
+        let constrained_values: Vec<_> = self.shreds.iter().map(|shred| {
+            let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
+            constrained_mle.get_evals_vector()
+        }).flat_map(|vec| vec.into_iter()).collect();
         let mle = MultilinearExtension::new(
             constrained_values
                 .into_iter()
                 .map(|val| r - val)
                 .collect()
         );
+        let denominator_length = mle.get_evals_vector().len();
         let lhs_denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+
+        // Build the numerator: is all ones (create explicitly since don't want to pad with zeros)
+        let expr = ExprBuilder::<F>::constant(F::from(1u64)).build_prover_expr(circuit_map)?;
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, expr);
+        witness_builder.add_layer(layer.into());
+        let mle = MultilinearExtension::new(vec![F::from(1u64); denominator_length]);
+        let lhs_numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
         // Build the numerator and denominator of the sum of the fractions
         let (lhs_numerator, lhs_denominator) = build_fractional_sum(lhs_numerator, lhs_denominator, witness_builder);
