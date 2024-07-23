@@ -1,5 +1,5 @@
 //! Nodes that implement LogUp.
-use crate::mle::evals::Evaluations;
+use crate::mle::{evals::Evaluations, MleIndex};
 use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::public_input_layer::PublicInputLayer;
 use crate::input_layer::MleInputLayer;
@@ -188,6 +188,7 @@ where
 
         // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one shred)
         let (multiplicities_location, multiplicities) = &circuit_map.0[&self.shreds[0].multiplicities_node_id];
+        println!("Multiplicities location: {:?}", multiplicities_location);
         let mut rhs_numerator = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
         if self.shreds.len() > 1 {
             // insert an extra layer that aggregates the multiplicities
@@ -266,11 +267,25 @@ where
     }
 }
 
+/// Extract the prefix bits from a DenseMle
+pub fn extract_prefix_bits<F: FieldExt>(mle: &DenseMle<F>) -> Vec<bool> {
+    mle.mle_indices().iter()
+        .map(|mle_index| {
+            match mle_index {
+                MleIndex::Fixed(b) => Some(*b),
+                _ => None
+            }
+        })
+        .filter_map(|opt| opt)
+        .collect()
+}
+
 /// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and the right half containing the odd-indexed elements, setting the prefix bits accordingly.
 pub fn split_dense_mle<F: FieldExt>(
     mle: &DenseMle<F>,
 ) -> (DenseMle<F>, DenseMle<F>) {
     let data = mle.current_mle.clone();
+    let prefix_bits = extract_prefix_bits(mle);
     let left: Vec<F> = data
         .get_evals_vector()
         .iter()
@@ -284,8 +299,16 @@ pub fn split_dense_mle<F: FieldExt>(
         .step_by(2)
         .cloned()
         .collect();
-    let left_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, left)), mle.layer_id, vec![false]);
-    let right_dense = DenseMle::new_with_prefix_bits(MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)), mle.layer_id, vec![true]);
+    let left_dense = DenseMle::new_with_prefix_bits(
+        MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, left)),
+        mle.layer_id,
+        prefix_bits.iter().cloned().chain(vec![false]).collect()
+    );
+    let right_dense = DenseMle::new_with_prefix_bits(
+        MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)),
+        mle.layer_id,
+        prefix_bits.iter().cloned().chain(vec![true]).collect()
+    );
     (left_dense, right_dense)
 }
 
