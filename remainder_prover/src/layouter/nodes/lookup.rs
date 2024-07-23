@@ -131,6 +131,7 @@ where
         assert_eq!(table.get_evals_vector().len().count_ones(), 1, "Table length should be a power of two");
 
         // Build the LHS of the equation (defined by the constrained values)
+        println!("Build the LHS of the equation (defined by the constrained values)");
 
         // TODO (future) Draw a random value from the transcript
         let r = F::from(11111111u64); // FIXME
@@ -138,6 +139,7 @@ where
         let r_layer_id = witness_builder.next_input_layer();
         witness_builder.add_input_layer(PublicInputLayer::new(r_mle.clone(), r_layer_id).into());
         let r_densemle = DenseMle::new_with_prefix_bits(r_mle, r_layer_id, vec![]);
+        println!("Input layer for the would-be random value r has layer id: {:?}", r_layer_id);
 
         // Build the denominator r - constrained
         let mut constrained_expr = self.shreds[0].constrained_node_id.expr();
@@ -154,6 +156,7 @@ where
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
+        println!("Layer that calcs r - constrained has layer id: {:?}", layer_id);
         // Create the MLE for the denominator
         let constrained_values: Vec<_> = self.shreds.iter().map(|shred| {
             let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
@@ -173,6 +176,7 @@ where
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
+        println!("Layer that sets the numerators to 1 has layer id: {:?}", layer_id);
         let mle = MultilinearExtension::new(vec![F::from(1u64); denominator_length]);
         let lhs_numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
@@ -180,6 +184,7 @@ where
         let (lhs_numerator, lhs_denominator) = build_fractional_sum(lhs_numerator, lhs_denominator, witness_builder);
 
         // Build the RHS of the equation (defined by the table values and multiplicities)
+        println!("Build the RHS of the equation (defined by the table values and multiplicities)");
 
         // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one shred)
         let (multiplicities_location, multiplicities) = &circuit_map.0[&self.shreds[0].multiplicities_node_id];
@@ -194,6 +199,7 @@ where
             let layer_id = witness_builder.next_layer();
             let layer = RegularLayer::new_raw(layer_id, expr);
             witness_builder.add_layer(layer.into());
+            println!("Layer that aggs the multiplicities has layer id: {:?}", layer_id);
             let eval_vecs: Vec<_> = self.shreds.iter().map(|shred| {
                 let (_, multiplicities) = circuit_map.0[&shred.multiplicities_node_id];
                 multiplicities.get_evals_vector()
@@ -209,6 +215,7 @@ where
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
+        println!("Layer that calculates r - table has layer id: {:?}", layer_id);
         let mle = MultilinearExtension::new(
             table.get_evals_vector()
                 .iter()
@@ -225,11 +232,13 @@ where
         let layer_id = witness_builder.next_input_layer();
         witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
         let lhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+        println!("Input layer that for LHS denom prod inverse has layer id: {:?}", layer_id);
         // Same, but for the RHS
         let mle = MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
         witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
         let rhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+        println!("Input layer that for RHS denom prod inverse has layer id: {:?}", layer_id);
 
         // Add a layer that calculates the product of the denominator and the inverse and subtracts 1 (for both LHS and RHS)
         let lhs_expr = PE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_densemle.clone()]);
@@ -238,6 +247,7 @@ where
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
+        println!("Layer calcs product of (product of denoms) and their inverses has layer id: {:?}", layer_id);
         // Add an output layer that checks that the result is zero
         let mle = ZeroMle::new(1, None, layer_id);
         witness_builder.add_output_layer(mle.into());
@@ -247,6 +257,7 @@ where
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
+        println!("Layer that checks that fractions are equal has layer id: {:?}", layer_id);
         // Add an output layer that checks that the result is zero
         let mle = ZeroMle::new(0, None, layer_id);
         witness_builder.add_output_layer(mle.into());
@@ -293,7 +304,7 @@ pub fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
     let mut numerator = numerator;
     let mut denominator = denominator;
 
-    for _ in 0..numerator.num_iterated_vars() {
+    for i in 0..numerator.num_iterated_vars() {
         let numerators = split_dense_mle(&numerator);
         let denominators = split_dense_mle(&denominator);
         // TODO v2: presently we are creating two layers per loop - what is the correct way to concatenate them in Newmainder?
@@ -303,6 +314,7 @@ pub fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
+        println!("Layer that performs {:?} round of numerator part of fractional sum has layer id: {:?}", i, layer_id);
         let mle = MultilinearExtension::new(
             numerators.0.clone().into_iter().zip(numerators.1.clone().into_iter())
             .zip(denominators.0.clone().into_iter().zip(denominators.1.clone().into_iter()))
@@ -317,6 +329,7 @@ pub fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
+        println!("Layer that calculates product of denominators has layer id: {:?}", layer_id);
         let mle = MultilinearExtension::new(
             denominators.0.clone().into_iter()
             .zip(denominators.1.clone().into_iter())
