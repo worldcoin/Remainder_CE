@@ -18,13 +18,7 @@ use crate::{
 };
 
 use super::nodes::{
-    circuit_inputs::{InputLayerNode, InputShred, SealedInputNode},
-    circuit_outputs::OutputNode,
-    gate::GateNode,
-    matmult::MatMultNode,
-    node_enum::{NodeEnum, NodeEnumGroup},
-    split_node::SplitNode,
-    CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
+    circuit_inputs::{InputLayerNode, InputShred, SealedInputNode}, circuit_outputs::OutputNode, gate::GateNode, lookup::{LookupNode, LookupShred}, matmult::MatMultNode, node_enum::{NodeEnum, NodeEnumGroup}, split_node::SplitNode, CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode
 };
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield
@@ -216,6 +210,22 @@ pub fn layout<
     let mut dag = NodeEnumGroup::new(nodes);
 
     let out = {
+        // Build a map node id -> LookupNode
+        let mut lookup_node_map: HashMap<NodeId, &mut LookupNode<F>> = HashMap::new();
+        let mut lookup_nodes: Vec<LookupNode<F>> = dag.get_nodes();
+        for lookup_node in lookup_nodes.iter_mut() {
+            lookup_node_map.insert(lookup_node.id(), lookup_node);
+        }
+        // Add LookupShreds to their respective LookupNodes
+        let lookup_shreds: Vec<LookupShred<F>> = dag.get_nodes();
+        for lookup_shred in lookup_shreds {
+            let lookup_node_id = lookup_shred.table_node_id;
+            let lookup_node = lookup_node_map
+                .get_mut(&lookup_node_id)
+                .ok_or(DAGError::DanglingNodeId(lookup_node_id))?;
+            lookup_node.add_shred(lookup_shred);
+        }
+
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
         let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
         let sealed_inputs: Vec<SealedInputNode<F>> = dag.get_nodes();

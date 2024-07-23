@@ -18,6 +18,7 @@ use super::node_enum::NodeEnum;
 use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupNode).
+#[derive(Clone, Debug)]
 pub struct LookupShred<F: FieldExt> {
     pub id: NodeId,
     /// The id of the LookupNode (lookup table) that we are a lookup up into.
@@ -61,6 +62,7 @@ impl<F: FieldExt> CircuitNode for LookupShred<F> {
 }
 
 /// Represents a table of data that can be looked up into, e.g. for a range check.
+#[derive(Clone, Debug)]
 pub struct LookupNode<F: FieldExt> {
     id: NodeId,
     /// The lookups that are performed on this table (will be populated by calls to add_shred).
