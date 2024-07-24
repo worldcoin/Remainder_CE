@@ -1,47 +1,23 @@
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
-    hyrax_primitives::proof_of_equality::ProofOfEquality,
-    layer::{
-        claims::{compute_aggregated_challenges, Claim, ClaimGroup},
-        layer_enum::LayerEnum,
-        product::HyraxClaim,
-        Layer, LayerDescription, LayerId,
-    },
-    mle::MleRef,
-    prover::{
-        input_layer::{
-            self,
-            enum_input_layer::{CommitmentEnum, InputLayerEnum},
-            hyrax_input_layer::HyraxInputLayer,
-            public_input_layer::PublicInputLayer,
-            random_input_layer::RandomInputLayer,
-            InputLayer,
-        },
-        InputLayerProof,
-    },
-    sumcheck::evaluate_at_a_point,
-    utils::vandermonde::VandermondeInverse,
+    hyrax_primitives::proof_of_equality::ProofOfEquality, utils::vandermonde::VandermondeInverse,
 };
-use hyrax_input_layer::{HyraxInputLayerProof, InputProofEnum};
+// use hyrax_input_layer::{HyraxInputLayerProof, InputProofEnum};
 use hyrax_output_layer::{HyraxOutputLayerProof, OutputLayerDescription};
 use itertools::Itertools;
 use rand::Rng;
+use remainder::layer::layer_enum::LayerEnum;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    curves::PrimeOrderCurve,
     hyrax_pcs::HyraxPCSProof,
-    hyrax_primitives::{
-        helpers::append_x_y_to_transcript_single, proof_of_claim_agg::ProofOfClaimAggregation,
-    },
     pedersen::{CommittedScalar, PedersenCommitter},
 };
 
-use remainder_shared_types::transcript::Transcript;
+use remainder_shared_types::{curves::PrimeOrderCurve, transcript::Transcript};
 
 use self::{hyrax_layer::HyraxLayerProof, hyrax_output_layer::HyraxOutputLayer};
-use remainder_shared_types::ScalarField;
 
 /// The module that contains all functions necessary to do operations on an
 /// output layer, [HyraxInputLayer]

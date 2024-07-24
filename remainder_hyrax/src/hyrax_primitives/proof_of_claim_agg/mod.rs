@@ -1,12 +1,11 @@
+use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
+use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use rand::Rng;
 use remainder::layer::LayerId;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::ff::Field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 use remainder_shared_types::FieldExt;
-
-use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
 use super::proof_of_equality::ProofOfEquality;
 use super::proof_of_opening::ProofOfOpening;
@@ -85,7 +84,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             .collect();
 
         // A random evaluation point $\tau \in \mathbb{F}$ is sampled from the transcript
-        let tau = transcript.get_challenge("PoCA tau");
+        let tau = transcript.get_scalar_field_challenge("PoCA tau");
 
         // Calculate the powers of tau
         let powers_of_tau: Vec<C::Scalar> =
@@ -192,7 +191,7 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
             });
 
         // A random evaluation point $\tau \in \mathbb{F}$ is sampled from the transcript
-        let tau = transcript.get_challenge("PoCA tau").unwrap();
+        let tau = transcript.get_scalar_field_challenge("PoCA tau").unwrap();
 
         // Calculate the powers of tau
         let powers_of_tau: Vec<C::Scalar> =

@@ -1,9 +1,17 @@
 use crate::{
     halo2curves::{bn256::G1 as Bn256, group::ff::Field, CurveExt},
-    FieldExt,
+    FieldExt, HasByteRepresentation,
 };
-use ark_std::rand::{self, RngCore};
+use ark_std::{
+    rand::{self, RngCore},
+    test_rng,
+};
+use halo2curves::{
+    bn256::{Fq, Fr},
+    group::Curve,
+};
 use itertools::Itertools;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha3::{
     digest::{
@@ -90,6 +98,62 @@ pub trait PrimeOrderCurve:
 
     /// Returns the group element from x and y coordinates.
     fn from_xy(x: Self::Base, y: Self::Base) -> Self;
+
+    /// Returns the group element from x coordinate + parity of y.
+    fn from_x_and_sign_y(x: Self::Base, y_sign: u8) -> Self;
+}
+
+/// TODO(ryancao): Test these implementations!
+impl HasByteRepresentation for Fr {
+    fn from_bytes_le(bytes: Vec<u8>) -> Self {
+        if bytes.len() != 32 {
+            panic!("Error: Attempted to convert from non-32-length byte vector into Fr")
+        }
+        let bytes_len_32_slice: [u8; 32] = bytes.try_into().unwrap();
+        Fr::from_bytes(&bytes_len_32_slice).unwrap()
+    }
+
+    fn to_bytes_le(&self) -> Vec<u8> {
+        Fr::to_bytes(&self).to_vec()
+    }
+}
+
+impl HasByteRepresentation for Fq {
+    fn from_bytes_le(bytes: Vec<u8>) -> Self {
+        if bytes.len() != 32 {
+            panic!("Error: Attempted to convert from non-32-length byte vector into Fr")
+        }
+        let bytes_len_32_slice: [u8; 32] = bytes.try_into().unwrap();
+        Fq::from_bytes(&bytes_len_32_slice).unwrap()
+    }
+
+    fn to_bytes_le(&self) -> Vec<u8> {
+        Fq::to_bytes(&self).to_vec()
+    }
+}
+
+/// Ensures that doing `from_bytes_le` and `to_bytes_le` gives the same value.
+///
+/// TODO(ryancao): Do another manual test to ensure that the integer-interpretable
+/// values of the translation between an [Fr] and an [Fq] element are equal
+/// (and in particular, equal to the original `u64` value)!
+fn test_byte_repr_identity<F: FieldExt>() {
+    let mut rng = test_rng();
+
+    (0..100).for_each(|_| {
+        let orig_value_u64 = rng.gen::<u64>();
+        let orig_value = F::from(orig_value_u64);
+        let orig_value_bytes = orig_value.to_bytes_le();
+        let new_value = F::from_bytes_le(orig_value_bytes);
+        assert_eq!(orig_value, new_value);
+    })
+}
+
+/// Wrapper for [Fr] and [Fq] for the above
+#[test]
+fn test_byte_repr_identity_fr_fq() {
+    test_byte_repr_identity::<Fr>();
+    test_byte_repr_identity::<Fq>();
 }
 
 impl PrimeOrderCurve for Bn256 {
@@ -248,25 +312,9 @@ impl PrimeOrderCurve for Bn256 {
             let mut x_alloc_bytes = [0_u8; 32];
             x_alloc_bytes.copy_from_slice(&bytes[1..33]);
             let y_sign_byte: u8 = bytes[33];
-
-            // y^2 = x^3 + ax + b
             let x_coord = Self::Base::from_bytes(&x_alloc_bytes).unwrap();
-            let y_square = (x_coord.square() + Self::a()) * x_coord + Self::b();
-            let one_y_sqrt = y_square.sqrt().unwrap();
 
-            // --- Flip y-sign if needed ---
-            let y_coord = if (one_y_sqrt.to_bytes()[0] % 2) ^ y_sign_byte == 0 {
-                one_y_sqrt
-            } else {
-                one_y_sqrt.neg()
-            };
-
-            let point = Self {
-                x: x_coord,
-                y: y_coord,
-                z: Self::Base::one(),
-            };
-            point
+            Self::from_x_and_sign_y(x_coord, y_sign_byte)
         }
     }
 
@@ -278,6 +326,29 @@ impl PrimeOrderCurve for Bn256 {
             z: Self::Base::ONE,
         };
         assert_eq!(point.is_on_curve().unwrap_u8(), 1_u8);
+        point
+    }
+
+    fn from_x_and_sign_y(x: Self::Base, y_sign: u8) -> Self {
+        // --- Ensure that `y_sign` is either 0 or 1 ---
+        assert!(y_sign == 0 || y_sign == 1);
+
+        // y^2 = x^3 + ax + b
+        let y_square = (x.square() + Self::a()) * x + Self::b();
+        let one_y_sqrt = y_square.sqrt().unwrap();
+
+        // --- Flip y-sign if needed ---
+        let y_coord = if (one_y_sqrt.to_bytes()[0] % 2) ^ y_sign == 0 {
+            one_y_sqrt
+        } else {
+            one_y_sqrt.neg()
+        };
+
+        let point = Self {
+            x,
+            y: y_coord,
+            z: Self::Base::one(),
+        };
         point
     }
 }

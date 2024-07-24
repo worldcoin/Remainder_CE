@@ -1,4 +1,6 @@
+use crate::{curves, HasByteRepresentation};
 use ff::PrimeField;
+use halo2curves::group::ff::Field;
 use itertools::Itertools;
 use tracing::warn;
 
@@ -44,6 +46,14 @@ where
     fn append_ec_point(&mut self, label: &str, elem: C);
 
     fn append_ec_points(&mut self, label: &str, elements: &[C]);
+
+    fn get_scalar_field_challenge(&mut self, label: &str) -> C::Scalar;
+
+    fn get_scalar_field_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C::Scalar>;
+
+    fn get_ec_challenge(&mut self, label: &str) -> C;
+
+    fn get_ec_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C>;
 }
 
 impl<C: PrimeOrderCurve, Tr> ECProverTranscript<C> for Tr
@@ -61,6 +71,75 @@ where
             self.append_elements(label, &[x_coord, y_coord]);
         });
     }
+
+    /// Literally takes the byte representation of the base field element and
+    /// dumps it (TODO: in an unsafe manner! Make this return an error rather
+    /// than just panicking) into a scalar field element's representation.
+    fn get_scalar_field_challenge(&mut self, label: &str) -> <C as PrimeOrderCurve>::Scalar {
+        let base_field_challenge = self.get_challenge(label);
+        C::Scalar::from_bytes_le(base_field_challenge.to_bytes_le())
+    }
+
+    fn get_scalar_field_challenges(
+        &mut self,
+        label: &str,
+        num_elements: usize,
+    ) -> Vec<<C as PrimeOrderCurve>::Scalar> {
+        let base_field_challenges = self.get_challenges(label, num_elements);
+        base_field_challenges
+            .iter()
+            .map(|base_field_challenge| {
+                C::Scalar::from_bytes_le(base_field_challenge.to_bytes_le())
+            })
+            .collect()
+    }
+
+    /// Generates two base field elements, and uses only the parity of the second
+    /// to determine the actual `y`-coordinate to be used.
+    ///
+    /// WARNING/TODO(ryancao): USING THIS FUNCTION `num_elements` TIMES WILL
+    /// NOT PRODUCE THE SAME EC CHALLENGES AS CALLING [Self::get_ec_challenges]
+    /// WITH `num_elements` AS A PARAMETER!!!
+    ///
+    /// IN PARTICULAR, THIS FUNCTION
+    /// GENERATES (x, y) ELEMENTS IN INDIVIDUAL PAIRS, WHILE THE
+    /// [Self::get_ec_challenges] FUNCTION GENERATES (x, y) ELEMENTS BY FIRST
+    /// GENERATING ALL x-coordinates AND THEN GENERATING ALL ELEMENTS DETERMINING
+    /// THE PARITY OF THE CORRESPONDING y-coordinates.
+    fn get_ec_challenge(&mut self, label: &str) -> C {
+        let x_coord_label = label.to_string() + ": x-coord";
+        let x_coord = self.get_challenge(&x_coord_label);
+
+        let y_coord_sign_elem_label = label.to_string() + ": y-coord sign elem";
+        let y_coord_sign_elem = self.get_challenge(&y_coord_sign_elem_label);
+        let y_coord_sign = y_coord_sign_elem.to_bytes_le()[0] & 1;
+
+        C::from_x_and_sign_y(x_coord, y_coord_sign)
+    }
+
+    /// Generates two base field elements for each element requested, by FIRST
+    /// generating ALL of the x-coords and AFTERWARDS generating ALL of the
+    /// base field elements whose parity determines the sign of the corresponding
+    /// y-coord.
+    ///
+    /// WARNING/TODO(ryancao): SEE WARNING FOR [Self::get_ec_challenge]!!!
+    fn get_ec_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C> {
+        let x_coord_label = label.to_string() + ": x-coords";
+        let y_coord_sign_elem_label = label.to_string() + ": y-coord sign elems";
+
+        let x_coords = self.get_challenges(&x_coord_label, num_elements);
+        let y_coord_sign_elems = self.get_challenges(&y_coord_sign_elem_label, num_elements);
+
+        let y_coord_signs = y_coord_sign_elems
+            .iter()
+            .map(|y_coord_sign_elem| y_coord_sign_elem.to_bytes_le()[0] & 1);
+
+        x_coords
+            .into_iter()
+            .zip(y_coord_signs)
+            .map(|(x_coord, y_coord_sign)| C::from_x_and_sign_y(x_coord, y_coord_sign))
+            .collect()
+    }
 }
 
 /// The prover-side interface for interacting with a transcript sponge. A
@@ -76,18 +155,15 @@ pub struct ECTranscriptWriter<C: PrimeOrderCurve, T> {
     transcript: Transcript<<C::Base as PrimeField>::Repr>,
 }
 
-impl<
-        C: PrimeOrderCurve,
-        F: FieldExt<Repr = <C::Base as PrimeField>::Repr>,
-        Sp: TranscriptSponge<F>,
-    > ProverTranscript<F> for ECTranscriptWriter<C, Sp>
+impl<C: PrimeOrderCurve, Sp: TranscriptSponge<C::Base>> ProverTranscript<C::Base>
+    for ECTranscriptWriter<C, Sp>
 {
-    fn append(&mut self, label: &str, elem: F) {
+    fn append(&mut self, label: &str, elem: C::Base) {
         self.sponge.absorb(elem);
         self.transcript.append_elements(label, &[elem.to_repr()]);
     }
 
-    fn append_elements(&mut self, label: &str, elements: &[F]) {
+    fn append_elements(&mut self, label: &str, elements: &[C::Base]) {
         if !elements.is_empty() {
             let elements_repr = elements.iter().map(|elem| elem.to_repr()).collect_vec();
             self.sponge.absorb_elements(elements);
@@ -95,13 +171,13 @@ impl<
         }
     }
 
-    fn get_challenge(&mut self, label: &str) -> F {
+    fn get_challenge(&mut self, label: &str) -> C::Base {
         let challenge = self.sponge.squeeze();
         self.transcript.squeeze_elements(label, 1);
         challenge
     }
 
-    fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<F> {
+    fn get_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C::Base> {
         if num_elements == 0 {
             vec![]
         } else {
@@ -140,6 +216,25 @@ where
         label: &'static str,
         num_elements: usize,
     ) -> Result<Vec<C>, TranscriptReaderError>;
+
+    fn get_scalar_field_challenge(
+        &mut self,
+        label: &'static str,
+    ) -> Result<C::Scalar, TranscriptReaderError>;
+
+    fn get_scalar_field_challenges(
+        &mut self,
+        label: &'static str,
+        num_elements: usize,
+    ) -> Result<Vec<C::Scalar>, TranscriptReaderError>;
+
+    fn get_ec_challenge(&mut self, label: &'static str) -> Result<C, TranscriptReaderError>;
+
+    fn get_ec_challenges(
+        &mut self,
+        label: &'static str,
+        num_elements: usize,
+    ) -> Result<Vec<C>, TranscriptReaderError>;
 }
 
 impl<C: PrimeOrderCurve, Tr> ECVerifierTranscript<C> for Tr
@@ -160,6 +255,87 @@ where
         Ok(points
             .chunks(2)
             .map(|points| C::from_xy(points[0], points[1]))
+            .collect())
+    }
+
+    /// Literally takes the byte representation of the base field element and
+    /// dumps it (TODO: in an unsafe manner! Make this return an error rather
+    /// than just panicking) into a scalar field element's representation.
+    fn get_scalar_field_challenge(
+        &mut self,
+        label: &'static str,
+    ) -> Result<<C as curves::PrimeOrderCurve>::Scalar, TranscriptReaderError> {
+        let base_field_challenge = self.get_challenge(label)?;
+        Ok(C::Scalar::from_bytes_le(base_field_challenge.to_bytes_le()))
+    }
+
+    fn get_scalar_field_challenges(
+        &mut self,
+        label: &'static str,
+        num_elements: usize,
+    ) -> Result<Vec<<C as curves::PrimeOrderCurve>::Scalar>, TranscriptReaderError> {
+        let base_field_challenges = self.get_challenges(label, num_elements)?;
+        Ok(base_field_challenges
+            .iter()
+            .map(|base_field_challenge| {
+                C::Scalar::from_bytes_le(base_field_challenge.to_bytes_le())
+            })
+            .collect())
+    }
+
+    /// Generates two base field elements, and uses only the parity of the second
+    /// to determine the actual `y`-coordinate to be used.
+    ///
+    /// WARNING/TODO(ryancao): USING THIS FUNCTION `num_elements` TIMES WILL
+    /// NOT PRODUCE THE SAME EC CHALLENGES AS CALLING [Self::get_ec_challenges]
+    /// WITH `num_elements` AS A PARAMETER!!!
+    ///
+    /// IN PARTICULAR, THIS FUNCTION
+    /// GENERATES (x, y) ELEMENTS IN INDIVIDUAL PAIRS, WHILE THE
+    /// [Self::get_ec_challenges] FUNCTION GENERATES (x, y) ELEMENTS BY FIRST
+    /// GENERATING ALL x-coordinates AND THEN GENERATING ALL ELEMENTS DETERMINING
+    /// THE PARITY OF THE CORRESPONDING y-coordinates.
+    fn get_ec_challenge(&mut self, label: &'static str) -> Result<C, TranscriptReaderError> {
+        let x_coord_label = label.to_string() + ": x-coord";
+        let x_coord = self.get_challenge(Box::leak(x_coord_label.into_boxed_str()))?;
+
+        let y_coord_sign_elem_label = label.to_string() + ": y-coord sign elem";
+        let y_coord_sign_elem =
+            self.get_challenge(Box::leak(y_coord_sign_elem_label.into_boxed_str()))?;
+        let y_coord_sign = y_coord_sign_elem.to_bytes_le()[0] & 1;
+
+        Ok(C::from_x_and_sign_y(x_coord, y_coord_sign))
+    }
+
+    /// Generates two base field elements for each element requested, by FIRST
+    /// generating ALL of the x-coords and AFTERWARDS generating ALL of the
+    /// base field elements whose parity determines the sign of the corresponding
+    /// y-coord.
+    ///
+    /// WARNING/TODO(ryancao): SEE WARNING FOR [Self::get_ec_challenge]!!!
+    fn get_ec_challenges(
+        &mut self,
+        label: &str,
+        num_elements: usize,
+    ) -> Result<Vec<C>, TranscriptReaderError> {
+        let x_coord_label = label.to_string() + ": x-coords";
+        let y_coord_sign_elem_label = label.to_string() + ": y-coord sign elems";
+
+        let x_coords =
+            self.get_challenges(Box::leak(x_coord_label.into_boxed_str()), num_elements)?;
+        let y_coord_sign_elems = self.get_challenges(
+            Box::leak(y_coord_sign_elem_label.into_boxed_str()),
+            num_elements,
+        )?;
+
+        let y_coord_signs = y_coord_sign_elems
+            .iter()
+            .map(|y_coord_sign_elem| y_coord_sign_elem.to_bytes_le()[0] & 1);
+
+        Ok(x_coords
+            .into_iter()
+            .zip(y_coord_signs)
+            .map(|(x_coord, y_coord_sign)| C::from_x_and_sign_y(x_coord, y_coord_sign))
             .collect())
     }
 }

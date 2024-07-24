@@ -8,6 +8,7 @@ use ndarray::Array2;
 use rand::Rng;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::transcript::{
+    self,
     ec_transcript::{ECProverTranscript, ECVerifierTranscript},
     Transcript,
 };
@@ -147,13 +148,13 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         if challenge_coordinates.len() > 0 {
             // dynamic programming algorithm in Tha13 for computing these equality values and returning them as a vector
             let (one_minus_r, r) = (
-                C::Scalar::one() - challenge_coordinates[0],
+                C::Scalar::ONE - challenge_coordinates[0],
                 challenge_coordinates[0],
             );
             let mut cur_table = vec![one_minus_r, r];
 
             for challenge in challenge_coordinates.iter().skip(1) {
-                let (one_minus_r, r) = (C::Scalar::one() - challenge, challenge);
+                let (one_minus_r, r) = (C::Scalar::ONE - challenge, challenge);
                 let mut firsthalf: Vec<C::Scalar> = cfg_into_iter!(cur_table.clone())
                     .map(|eval| eval * one_minus_r)
                     .collect();
@@ -220,7 +221,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             .map(|row| {
                 row.iter()
                     .zip(vector.iter())
-                    .fold(C::Scalar::zero(), |acc, (row_elem, vec_elem)| {
+                    .fold(C::Scalar::ZERO, |acc, (row_elem, vec_elem)| {
                         acc + (*row_elem * vec_elem)
                     })
             })
@@ -262,7 +263,7 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
         // the blinding factor for the commitment to the T' vector is a combination of the blinding factors of the commitments
         // to the rows of the T matrix. it is a dot product of the L vector and the blinding factors of the matrix rows commits.
         let blinding_factor_t_prime = blinding_factors_matrix.iter().zip(l_vector.iter()).fold(
-            C::Scalar::zero(),
+            C::Scalar::ZERO,
             |acc: <C as PrimeOrderCurve>::Scalar, (row_blind, l_vec_exponent)| {
                 acc + (*row_blind * l_vec_exponent)
             },
@@ -270,21 +271,23 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
 
         // commit to t_prime_vector and add to the transcript
         let t_prime_commit = committer.committed_vector(&t_prime, &blinding_factor_t_prime);
-        Self::append_x_y_to_transcript_single(
-            &t_prime_commit.commitment,
-            prover_transcript,
-            "commitment to x, x-coord",
-            "commitment to x, y-coord",
-        );
+        prover_transcript.append_ec_point("commitment to x", t_prime_commit.commitment);
+        // Self::append_x_y_to_transcript_single(
+        //     &t_prime_commit.commitment,
+        //     prover_transcript,
+        //     "commitment to x, x-coord",
+        //     "commitment to x, y-coord",
+        // );
         // commit to the dot product, add this to the transcript
         let mle_eval_commit =
             committer.committed_scalar(mle_evaluation_at_challenge, &blinding_factor_evaluation);
-        Self::append_x_y_to_transcript_single(
-            &mle_eval_commit.commitment,
-            prover_transcript,
-            "commitment to y, x-coord",
-            "commitment to y, y-coord",
-        );
+        prover_transcript.append_ec_point("commitment to y", mle_eval_commit.commitment);
+        // Self::append_x_y_to_transcript_single(
+        //     &mle_eval_commit.commitment,
+        //     prover_transcript,
+        //     "commitment to y, x-coord",
+        //     "commitment to y, y-coord",
+        // );
 
         // now that we have a commitment to T', we can do a proof of dot product which claims that the dot product of
         // T' and R is indeed the MLE evaluation point. this evaluation proof is what the hyrax verifier uses to verify
@@ -341,18 +344,33 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             });
 
         // add PoDP commitments to the transcript
-        Self::append_x_y_to_transcript_single(
-            &t_prime_commit_from_t_commit,
-            verifier_transcript,
-            "commitment to x, x-coord",
-            "commitment to x, y-coord",
+        let transcript_t_prime_commit_from_t_commit = verifier_transcript
+            .consume_ec_point("commitment to x")
+            .unwrap();
+        assert_eq!(
+            t_prime_commit_from_t_commit,
+            transcript_t_prime_commit_from_t_commit
         );
-        Self::append_x_y_to_transcript_single(
-            &commitment_to_evaluation.commitment,
-            verifier_transcript,
-            "commitment to y, x-coord",
-            "commitment to y, y-coord",
+        // Self::append_x_y_to_transcript_single(
+        //     &t_prime_commit_from_t_commit,
+        //     verifier_transcript,
+        //     "commitment to x, x-coord",
+        //     "commitment to x, y-coord",
+        // );
+
+        let transcript_commitment_to_evaluation = verifier_transcript
+            .consume_ec_point("commitment to y")
+            .unwrap();
+        assert_eq!(
+            commitment_to_evaluation.commitment,
+            transcript_commitment_to_evaluation
         );
+        // Self::append_x_y_to_transcript_single(
+        //     &commitment_to_evaluation.commitment,
+        //     verifier_transcript,
+        //     "commitment to y, x-coord",
+        //     "commitment to y, y-coord",
+        // );
 
         // using this commitment, the verifier can then do a proof of dot product verification given the evaluation proof
         // and the prover's claimed commitment to the evaluation of the MLE.
