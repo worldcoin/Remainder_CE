@@ -1,4 +1,5 @@
 //! Nodes that implement LogUp.
+use crate::expression::abstract_expr::AbstractExpr;
 use crate::mle::{evals::Evaluations, MleIndex};
 use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::public_input_layer::PublicInputLayer;
@@ -29,11 +30,12 @@ pub struct LookupShred<F: FieldExt> {
 
 impl<F: FieldExt> LookupShred<F> {
     /// Creates a new LookupShred, constraining the data of `constrained` to form a subset of the
-    /// data in `table` with multiplicities given by `multiplicities`.
+    /// data in `table` with multiplicities given by `multiplicities`. Caller is responsible for the
+    /// yielding of all nodes (including `constrained` and `multiplicities`).
     pub fn new(
         ctx: &Context,
         lookup_node: &LookupNode<F>,
-        constrained: &dyn ClaimableNode<F = F>,
+        constrained: &dyn ClaimableNode<F=F>,
         multiplicities: &dyn ClaimableNode<F=F>,
     ) -> Self {
         let id = ctx.get_new_id();
@@ -117,6 +119,7 @@ where
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError>
      {
+        type AE<F> = Expression::<F, AbstractExpr>;
         type PE<F> = Expression::<F, ProverExpr>;
 
         // Ensure that number of LookupShreds is a power of two (otherwise when we concat the
@@ -142,16 +145,8 @@ where
         println!("Input layer for the would-be random value r has layer id: {:?}", r_layer_id);
 
         // Build the denominator r - constrained
-        let mut constrained_expr = self.shreds[0].constrained_node_id.expr();
-        // There may be more than one shred, so concat the constrained expressions
-        constrained_expr = self.shreds.iter()
-            .skip(1)
-            .fold(constrained_expr, |acc, shred| {
-                let node_id = shred.constrained_node_id;
-                let expr = node_id.expr();
-                acc.concat_expr(expr)
-            }
-        );
+        // There may be more than one shred, so build a selector tree if necessary
+        let constrained_expr = AE::<F>::selectors(self.shreds.iter().map(|shred| shred.constrained_node_id.expr()).collect());
         let expr = r_densemle.clone().expression() - constrained_expr.build_prover_expr(circuit_map)?;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
@@ -162,6 +157,7 @@ where
             let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
             constrained_mle.get_evals_vector()
         }).flat_map(|vec| vec.into_iter()).collect();
+        println!("Constrained values: {:?}", constrained_values);
         let mle = MultilinearExtension::new(
             constrained_values
                 .into_iter()
