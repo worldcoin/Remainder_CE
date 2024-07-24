@@ -50,3 +50,6 @@ pub mod builders;
 pub mod layouter;
 
 pub use remainder_shared_types;
+
+// module for worldcoin circuits
+pub mod worldcoin;
