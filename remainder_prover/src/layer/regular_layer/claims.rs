@@ -1,11 +1,12 @@
 use ark_std::cfg_into_iter;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use remainder_shared_types::{claims::YieldClaim, layer::Layer, FieldExt};
+use remainder_shared_types::FieldExt;
 
+use crate::layer::Layer;
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        ClaimError,
+        ClaimError, YieldClaim,
     },
     expression::{
         generic_expr::{ExpressionNode, ExpressionType},

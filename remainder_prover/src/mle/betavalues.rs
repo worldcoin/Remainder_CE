@@ -4,8 +4,10 @@ use std::{collections::HashMap, fmt::Debug};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
-use remainder_shared_types::{layer::LayerId, FieldExt};
+use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
+
+use crate::layer::LayerId;
 
 use super::{dense::DenseMle, MleIndex};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -60,7 +62,7 @@ impl<F: FieldExt> BetaValues<F> {
     /// challenge point `g_i` and current challenge `r_i`.
     ///
     /// We remove it from the unbound hashmap and add it to the bound hashmap.
-    pub(crate) fn beta_update(&mut self, round_index: usize, challenge: F) {
+    pub fn beta_update(&mut self, round_index: usize, challenge: F) {
         let val_to_update = self.unbound_values.remove(&round_index).unwrap();
         let updated_val =
             ((F::ONE - val_to_update) * (F::ONE - challenge)) + (val_to_update * challenge);

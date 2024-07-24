@@ -1,13 +1,13 @@
 //! A part of the input layer that is random and secured through F-S
 
 use remainder_shared_types::{
-    layer::LayerId,
     transcript::{ProverTranscript, TranscriptSponge, TranscriptWriter, VerifierTranscript},
     FieldExt,
 };
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
+    layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 

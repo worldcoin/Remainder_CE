@@ -15,8 +15,10 @@ use rayon::{
     iter::{IntoParallelIterator, IntoParallelRefMutIterator},
     prelude::{IndexedParallelIterator, ParallelIterator},
 };
-use remainder_shared_types::{layer::LayerId, FieldExt};
+use remainder_shared_types::FieldExt;
 use thiserror::Error;
+
+use super::LayerId;
 
 /// Error handling for gate mle construction
 #[derive(Error, Debug, Clone)]

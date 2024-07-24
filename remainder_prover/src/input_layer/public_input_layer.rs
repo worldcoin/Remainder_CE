@@ -1,18 +1,17 @@
 //! An input layer that is sent to the verifier in the clear
 
 use remainder_shared_types::{
-    input_layer::InputLayer,
-    layer::LayerId,
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
+    layer::LayerId,
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayerError, MleInputLayer};
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer};
 use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier

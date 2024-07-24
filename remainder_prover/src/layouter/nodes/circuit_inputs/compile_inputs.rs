@@ -1,10 +1,11 @@
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::{input_layer::InputLayer, FieldExt};
+use remainder_shared_types::FieldExt;
 
 use crate::{
     input_layer::{
-        ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, MleInputLayer,
+        ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer,
+        MleInputLayer,
     },
     layouter::{
         compiling::WitnessBuilder,

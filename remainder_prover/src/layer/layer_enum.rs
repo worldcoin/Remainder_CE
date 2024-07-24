@@ -1,11 +1,11 @@
 //! Helper struct that combines multiple `Layer` implementations into
 //! a single struct that can represent many types of `Layer`
 
-use remainder_shared_types::claims::YieldClaim;
 use remainder_shared_types::FieldExt;
 use tracing_subscriber::fmt::Layer;
 
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
+use crate::claims::YieldClaim;
 use crate::layer_enum;
 
 use super::gate::Gate;

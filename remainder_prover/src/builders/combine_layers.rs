@@ -4,12 +4,11 @@ use std::cmp::min;
 
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::{
-    layer::{Layer, LayerId},
-    FieldExt,
-};
+use remainder_shared_types::FieldExt;
 use thiserror::Error;
 
+use crate::layer::{Layer, LayerId};
+use crate::prover::layers::Layers;
 use crate::{
     expression::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
@@ -19,8 +18,6 @@ use crate::{
     mle::{mle_enum::MleEnum, MleIndex},
     utils::{argsort, bits_iter},
 };
-
-use crate::prover::layers::Layers;
 
 #[derive(Error, Debug)]
 #[error("Layers can't be combined!")]

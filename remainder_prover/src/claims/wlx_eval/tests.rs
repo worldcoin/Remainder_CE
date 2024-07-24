@@ -6,7 +6,6 @@ use crate::mle::dense::DenseMle;
 use crate::mle::{Mle, MleIndex};
 use crate::utils::test_utils::DummySponge;
 use rand::Rng;
-use remainder_shared_types::layer::LayerId;
 use remainder_shared_types::transcript::{TranscriptSponge, TranscriptWriter};
 
 use self::claim_group::ClaimGroup;

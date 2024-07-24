@@ -4,10 +4,6 @@ pub mod tests;
 mod helpers;
 
 mod claim_group;
-
-use remainder_shared_types::claims::{Claim, ClaimAggregator, ClaimAndProof, YieldClaim};
-use remainder_shared_types::input_layer::InputLayer;
-use remainder_shared_types::layer::{Layer, LayerId};
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 use remainder_shared_types::FieldExt;
 
@@ -17,12 +13,13 @@ use crate::claims::wlx_eval::helpers::{
 };
 
 use crate::claims::ClaimError;
+use crate::input_layer::InputLayer;
 use crate::mle::mle_enum::MleEnum;
 
 use crate::prover::GKRError;
 use crate::sumcheck::*;
 
-use crate::layer::LayerError;
+use crate::layer::{Layer, LayerError, LayerId};
 
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +29,8 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use log::debug;
+
+use super::{Claim, ClaimAggregator, ClaimAndProof, YieldClaim};
 
 ///The basic ClaimAggregator
 ///

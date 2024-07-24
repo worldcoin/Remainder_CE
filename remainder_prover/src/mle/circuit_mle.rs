@@ -1,6 +1,7 @@
-use remainder_shared_types::{layer::LayerId, FieldExt};
+use remainder_shared_types::FieldExt;
 
 use crate::{
+    layer::LayerId,
     layouter::nodes::{
         circuit_inputs::{InputLayerNode, InputShred},
         Context,
@@ -97,7 +98,7 @@ impl<F: FieldExt, const N: usize> FlatMles<F, N> {
 #[cfg(test)]
 mod tests {
 
-    use remainder_shared_types::layer::LayerId;
+    use crate::layer::LayerId;
     use remainder_shared_types::Fr;
 
     use crate::mle::circuit_mle::CircuitMle;

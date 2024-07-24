@@ -1577,6 +1577,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "remainder-hyrax"
+version = "0.1.0"
+dependencies = [
+ "ark-std",
+ "ff 0.13.0",
+ "itertools 0.11.0",
+ "ndarray",
+ "ndarray-npy",
+ "num",
+ "num-bigint",
+ "pasta_curves",
+ "rand",
+ "rayon",
+ "remainder",
+ "remainder-shared-types",
+ "serde",
+ "serde_json",
+ "sha3 0.10.8",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "remainder-ligero"
 version = "0.1.0"
 dependencies = [
@@ -1661,13 +1684,6 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber 0.3.17",
-]
-
-[[package]]
-name = "remainder_hyrax"
-version = "0.1.0"
-dependencies = [
- "remainder-shared-types",
 ]
 
 [[package]]

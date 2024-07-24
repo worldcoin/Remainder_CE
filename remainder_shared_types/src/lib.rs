@@ -1,7 +1,5 @@
-pub mod claims;
+pub mod curves;
 pub mod ec;
-pub mod input_layer;
-pub mod layer;
 pub mod transcript;
 
 use std::hash::Hash;

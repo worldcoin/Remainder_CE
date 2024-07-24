@@ -7,8 +7,6 @@ use log::debug;
 use ndarray::Array2;
 use rand::Rng;
 use remainder_shared_types::{
-    claims::YieldClaim,
-    layer::{Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -16,12 +14,12 @@ use remainder_shared_types::{
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::{check_fully_bound, compute_sumcheck_message_no_beta_table},
-    LayerError,
+    Layer, LayerError, LayerId,
 };
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError,
+        Claim, ClaimError, YieldClaim,
     },
     layer::VerificationError,
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
@@ -684,11 +682,14 @@ pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix
 #[cfg(test)]
 mod test {
     use ark_std::test_rng;
-    use remainder_shared_types::{layer::LayerId, Fr};
+    use remainder_shared_types::Fr;
 
     use crate::{
         claims::Claim,
-        layer::matmult::{product_two_matrices, MatMult, Matrix},
+        layer::{
+            matmult::{product_two_matrices, MatMult, Matrix},
+            LayerId,
+        },
         mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     };
 

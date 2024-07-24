@@ -262,10 +262,11 @@ fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Regular
 
 #[cfg(test)]
 mod tests {
-    use remainder_shared_types::{layer::LayerId, Fr};
+    use remainder_shared_types::Fr;
 
     use crate::{
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+        layer::LayerId,
         layouter::{
             compiling::WitnessBuilder,
             layouting::{CircuitLocation, CircuitMap},

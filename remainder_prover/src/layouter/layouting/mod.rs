@@ -6,12 +6,12 @@ mod tests;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use itertools::Itertools;
-use remainder_shared_types::{layer::LayerId, FieldExt};
+use remainder_shared_types::FieldExt;
 use thiserror::Error;
 
 use crate::{
     input_layer::enum_input_layer::InputLayerEnum,
-    layer::layer_enum::LayerEnum,
+    layer::{layer_enum::LayerEnum, LayerId},
     layouter::nodes::sector::{Sector, SectorGroup},
     mle::{evals::MultilinearExtension, mle_enum::MleEnum},
     prover::proof_system::ProofSystem,

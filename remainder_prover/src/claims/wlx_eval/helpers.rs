@@ -4,7 +4,6 @@ use ark_std::{cfg_into_iter, end_timer, start_timer};
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
-    claims::ClaimAndProof,
     transcript::{ProverTranscript, TranscriptReaderError, VerifierTranscript},
     FieldExt,
 };
@@ -13,7 +12,7 @@ use tracing::{debug, info};
 use crate::{
     claims::{
         wlx_eval::{claim_group::form_claim_groups, get_num_wlx_evaluations, ClaimMle},
-        Claim, ClaimError,
+        Claim, ClaimAndProof, ClaimError,
     },
     layer::combine_mle_refs::get_og_mle_refs,
     mle::mle_enum::MleEnum,

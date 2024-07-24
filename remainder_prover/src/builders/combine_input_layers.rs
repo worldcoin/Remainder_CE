@@ -6,9 +6,10 @@ use remainder_ligero::{
     ligero_structs::LigeroEncoding, poseidon_ligero::PoseidonSpongeHasher, LcCommit,
     LcProofAuxiliaryInfo, LcRoot,
 };
-use remainder_shared_types::{layer::LayerId, FieldExt};
+use remainder_shared_types::FieldExt;
 
 use crate::{
+    layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex},
     utils::{argsort, pad_to_nearest_power_of_two},
 };
