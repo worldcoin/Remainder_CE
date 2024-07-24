@@ -72,20 +72,10 @@ impl<F: FieldExt, const N: usize> CircuitMle<F, N> for FlatMles<F, N> {
 
 impl<F: FieldExt, const N: usize> FlatMles<F, N> {
     /// Creates a new [FlatMles] from raw data.
-    pub fn new_from_raw(
-        data: [Vec<F>; N],
-        layer_id: LayerId,
-        prefix_bits: Option<Vec<MleIndex<F>>>,
-    ) -> Self {
+    pub fn new_from_raw(data: [Vec<F>; N], layer_id: LayerId) -> Self {
         let mles = data
             .into_iter()
-            .map(|data| {
-                let mut out = DenseMle::new_from_raw(data, layer_id);
-                if let Some(prefix_bits) = prefix_bits.clone() {
-                    out.add_prefix_bits(prefix_bits);
-                }
-                out
-            })
+            .map(|data| DenseMle::new_from_raw(data, layer_id))
             .collect_vec()
             .try_into()
             .unwrap();
@@ -111,8 +101,7 @@ mod tests {
             vec![Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)],
         ];
 
-        let tuple2_mle =
-            FlatMles::<Fr, 2>::new_from_raw(tuple_vec.clone(), LayerId::Input(0), None);
+        let tuple2_mle = FlatMles::<Fr, 2>::new_from_raw(tuple_vec.clone(), LayerId::Input(0));
 
         let mles = tuple2_mle.get_mle_refs();
 

@@ -1,8 +1,9 @@
 use crate::{
     halo2curves::{bn256::G1 as Bn256, group::ff::Field, CurveExt},
-    FieldExt,
+    FieldExt, HasByteRepresentation,
 };
 use ark_std::rand::{self, RngCore};
+use halo2curves::bn256::{Fq, Fr};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sha3::{
@@ -90,6 +91,35 @@ pub trait PrimeOrderCurve:
 
     /// Returns the group element from x and y coordinates.
     fn from_xy(x: Self::Base, y: Self::Base) -> Self;
+}
+
+/// TODO(ryancao): Test these implementations!
+impl HasByteRepresentation for Fr {
+    fn from_bytes_le(bytes: Vec<u8>) -> Self {
+        if bytes.len() != 32 {
+            panic!("Error: Attempted to convert from non-32-length byte vector into Fr")
+        }
+        let bytes_len_32_slice: [u8; 32] = bytes.try_into().unwrap();
+        Fr::from_bytes(&bytes_len_32_slice).unwrap()
+    }
+
+    fn to_bytes_le(&self) -> Vec<u8> {
+        Fr::to_bytes(&self).to_vec()
+    }
+}
+
+impl HasByteRepresentation for Fq {
+    fn from_bytes_le(bytes: Vec<u8>) -> Self {
+        if bytes.len() != 32 {
+            panic!("Error: Attempted to convert from non-32-length byte vector into Fr")
+        }
+        let bytes_len_32_slice: [u8; 32] = bytes.try_into().unwrap();
+        Fq::from_bytes(&bytes_len_32_slice).unwrap()
+    }
+
+    fn to_bytes_le(&self) -> Vec<u8> {
+        Fq::to_bytes(&self).to_vec()
+    }
 }
 
 impl PrimeOrderCurve for Bn256 {
