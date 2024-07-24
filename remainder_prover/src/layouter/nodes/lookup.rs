@@ -330,37 +330,30 @@ pub fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
     for i in 0..numerator.num_iterated_vars() {
         let numerators = split_dense_mle(&numerator);
         let denominators = split_dense_mle(&denominator);
-        // TODO v2: presently we are creating two layers per loop - what is the correct way to concatenate them in Newmainder?
 
         // Calculate the new numerator
-        let expr = PE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()]) + PE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
-        let layer_id = witness_builder.next_layer();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
-        println!("Layer that performs {:?} round of numerator part of fractional sum has layer id: {:?}", i, layer_id);
-        let mle = MultilinearExtension::new(
+        let next_numerator_expr = PE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()]) + PE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
+        let next_numerator_values = 
             numerators.0.clone().into_iter().zip(numerators.1.clone().into_iter())
             .zip(denominators.0.clone().into_iter().zip(denominators.1.clone().into_iter()))
             .map(|((num1, num2), (denom1, denom2))| {
                 num1 * denom2 + num2 * denom1
-            }).collect()
-        );
-        numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+            }).collect();
 
         // Calculate the new denominator
-        let expr = PE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
-        let layer_id = witness_builder.next_layer();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
-        println!("Layer that calculates product of denominators has layer id: {:?}", layer_id);
-        let mle = MultilinearExtension::new(
-            denominators.0.clone().into_iter()
+        let next_denominator_expr = PE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
+        let next_denominator_values = denominators.0.clone().into_iter()
             .zip(denominators.1.clone().into_iter())
             .map(|(denom1, denom2)| {
                 denom1 * denom2
-            }).collect()
-        );
-        denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+            }).collect();
+        let layer_id = witness_builder.next_layer();
+        let layer = RegularLayer::new_raw(layer_id, next_numerator_expr.concat_expr(next_denominator_expr));
+        witness_builder.add_layer(layer.into());
+        println!("Iteration {:?} of build_fractional_sumcheck has layer id: {:?}", i, layer_id);
+
+        denominator = DenseMle::new_with_prefix_bits(MultilinearExtension::new(next_denominator_values), layer_id, vec![false]);
+        numerator = DenseMle::new_with_prefix_bits(MultilinearExtension::new(next_numerator_values), layer_id, vec![true]);
     }
     debug_assert_eq!(numerator.num_iterated_vars(), 0);
     debug_assert_eq!(denominator.num_iterated_vars(), 0);
