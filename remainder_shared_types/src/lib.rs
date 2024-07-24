@@ -21,6 +21,7 @@ pub trait FieldExt:
     + Ord
     + Serialize
     + for<'de> Deserialize<'de>
+    + HasByteRepresentation
 {
 }
 
@@ -32,7 +33,15 @@ impl<
             + Hash
             + Ord
             + Serialize
-            + for<'de> Deserialize<'de>,
+            + for<'de> Deserialize<'de>
+            + HasByteRepresentation,
     > FieldExt for F
 {
+}
+
+/// Simple trait which allows us to convert to and from
+/// a little-endian byte representation.
+pub trait HasByteRepresentation {
+    fn from_bytes_le(bytes: Vec<u8>) -> Self;
+    fn to_bytes_le(&self) -> Vec<u8>;
 }
