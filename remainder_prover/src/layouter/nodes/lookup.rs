@@ -17,6 +17,7 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 /// Represents the use of a lookup into a particular table (represented by a LookupNode).
 #[derive(Clone, Debug)]
 pub struct LookupShred<F: FieldExt> {
+    /// The id of this LookupShred.
     pub id: NodeId,
     /// The id of the LookupNode (lookup table) that we are a lookup up into.
     pub table_node_id: NodeId,
@@ -163,7 +164,6 @@ where
         // Build the denominator r - constrained
         // There may be more than one shred, so build a selector tree if necessary
         let constrained_expr = AE::<F>::selectors(self.shreds.iter().map(|shred| shred.constrained_node_id.expr()).collect());
-        println!("Constrained expr: {:?}", constrained_expr);
         let expr = r_densemle.clone().expression() - constrained_expr.build_prover_expr(circuit_map)?;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
@@ -177,7 +177,6 @@ where
                     constrained_mle.get_evals_vector().clone()
             }).collect()
         );
-        println!("Constrained values: {:?}", constrained_values);
         let mle = MultilinearExtension::new(
             constrained_values
                 .into_iter()
@@ -204,7 +203,6 @@ where
 
         // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one shred)
         let (multiplicities_location, multiplicities) = &circuit_map.0[&self.shreds[0].multiplicities_node_id];
-        println!("Multiplicities location: {:?}", multiplicities_location);
         let mut rhs_numerator = DenseMle::new_with_prefix_bits((*multiplicities).clone(), multiplicities_location.layer_id, multiplicities_location.prefix_bits.clone());
         if self.shreds.len() > 1 {
             // insert an extra layer that aggregates the multiplicities
