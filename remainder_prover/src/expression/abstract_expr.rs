@@ -113,10 +113,11 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
         Expression::new(concat_node, ())
     }
 
-    /// Create a nested selector Expression that selects between multiple Expressions
+    /// Create a nested selector Expression that selects between 2^k Expressions
     /// by creating a binary tree of Selector Expressions.
     /// The order of the leaves is the order of the input expressions.
     /// (Note that this is very different from calling concat_expr consecutively.)
+    /// See also [calculate_selector_values].
     pub fn selectors(expressions: Vec<Self>) -> Self {
         // Ensure length is a power of two
         assert!(expressions.len().is_power_of_two());

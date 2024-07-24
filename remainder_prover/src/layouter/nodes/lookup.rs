@@ -106,6 +106,22 @@ impl<F: FieldExt> CircuitNode for LookupNode<F> {
     }
 }
 
+// FIXME this belongs elsewhere.
+/// Companion function to [selectors] that calculates the resulting MLE from the MLEs of the
+/// expressions that make up the selector tree.
+pub fn calculate_selector_values<F: FieldExt>(mles: Vec<Vec<F>>) -> Vec<F> {
+    use itertools::Itertools;
+    let mut mles = mles;
+    assert!(mles.len().is_power_of_two());
+
+    while mles.len() > 1 {
+        mles = mles.into_iter().tuples().map(|(mle1, mle2)| {
+            mle1.into_iter().zip(mle2.into_iter()).flat_map(|(a, b)| vec![a, b]).collect()
+        }).collect();
+    }
+    mles[0].clone()
+}
+
 impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = OL>, IL, L, OL> CompilableNode<F, Pf>
     for LookupNode<F> 
 where
@@ -147,16 +163,20 @@ where
         // Build the denominator r - constrained
         // There may be more than one shred, so build a selector tree if necessary
         let constrained_expr = AE::<F>::selectors(self.shreds.iter().map(|shred| shred.constrained_node_id.expr()).collect());
+        println!("Constrained expr: {:?}", constrained_expr);
         let expr = r_densemle.clone().expression() - constrained_expr.build_prover_expr(circuit_map)?;
         let layer_id = witness_builder.next_layer();
         let layer = RegularLayer::new_raw(layer_id, expr);
         witness_builder.add_layer(layer.into());
         println!("Layer that calcs r - constrained has layer id: {:?}", layer_id);
         // Create the MLE for the denominator
-        let constrained_values: Vec<_> = self.shreds.iter().map(|shred| {
-            let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
-            constrained_mle.get_evals_vector()
-        }).flat_map(|vec| vec.into_iter()).collect();
+        let constrained_values = calculate_selector_values(
+            self.shreds.iter().map(
+                |shred| {
+                    let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
+                    constrained_mle.get_evals_vector().clone()
+            }).collect()
+        );
         println!("Constrained values: {:?}", constrained_values);
         let mle = MultilinearExtension::new(
             constrained_values
