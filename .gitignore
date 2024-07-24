@@ -25,3 +25,4 @@ remainder_prover/*.json
 
 *.npy
 *.json
+*.bin
