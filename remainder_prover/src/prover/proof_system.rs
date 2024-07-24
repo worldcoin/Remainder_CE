@@ -1,7 +1,4 @@
 use remainder_shared_types::{
-    claims::{ClaimAggregator, YieldClaim},
-    input_layer::InputLayer,
-    layer::Layer,
     transcript::{
         poseidon_transcript::PoseidonSponge, ProverTranscript, TranscriptReader, TranscriptWriter,
         VerifierTranscript,
@@ -13,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 use crate::{
-    claims::wlx_eval::WLXAggregator,
-    input_layer::InputLayerError,
-    layer::{layer_enum::LayerEnum, LayerError},
+    claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
+    input_layer::{InputLayer, InputLayerError},
+    layer::{layer_enum::LayerEnum, Layer, LayerError},
     mle::{mle_enum::MleEnum, Mle},
 };
 
@@ -49,17 +46,17 @@ macro_rules! layer_enum {
             pub enum [<$type_name Proof>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Proof variant"]
-                    $var_name(<$variant as $crate::remainder_shared_types::layer::Layer<F>>::Proof),
+                    $var_name(<$variant as $crate::layer::Layer<F>>::Proof),
                 )*
             }
         }
 
-        impl<F: FieldExt> $crate::remainder_shared_types::layer::Layer<F> for $type_name<F> {
+        impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
             paste::paste! { type Proof = [<$type_name Proof>]<F>;}
             type Error = LayerError;
             fn prove_rounds(
                 &mut self,
-                claim: $crate::remainder_shared_types::claims::Claim<F>,
+                claim: $crate::layer::Claim<F>,
                 transcript: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
             ) -> Result<Self::Proof, super::LayerError> {
                 match self {
@@ -71,7 +68,7 @@ macro_rules! layer_enum {
 
             fn verify_rounds(
                 &mut self,
-                claim: $crate::remainder_shared_types::claims::Claim<F>,
+                claim: $crate::claims::Claim<F>,
                 proof: Self::Proof,
                 transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
             ) -> Result<(), super::LayerError> {
@@ -88,7 +85,7 @@ macro_rules! layer_enum {
                 }
             }
 
-            fn id(&self) -> &$crate::remainder_shared_types::layer::LayerId {
+            fn id(&self) -> &$crate::layer::LayerId {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.id(),
@@ -146,7 +143,7 @@ macro_rules! input_layer_enum {
             }
         }
 
-        impl<F: FieldExt> $crate::remainder_shared_types::input_layer::InputLayer<F> for $type_name<F> {
+        impl<F: FieldExt> $crate::input_layer::InputLayer<F> for $type_name<F> {
             paste::paste! {
                 type Commitment = [<$type_name Commitment>]<F>;
                 type OpeningProof = [<$type_name OpeningProof>]<F>;
@@ -214,7 +211,7 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn layer_id(&self) -> &$crate::remainder_shared_types::layer::LayerId {
+            fn layer_id(&self) -> &$crate::layer::LayerId {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.layer_id(),

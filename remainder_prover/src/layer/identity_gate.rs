@@ -1,3 +1,6 @@
+//! Identity gate id(z, x) determines whether the xth gate from the
+//! i + 1th layer contributes to the zth gate in the ith layer.
+
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
@@ -6,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError,
+        Claim, ClaimError, YieldClaim,
     },
     layer::{LayerError, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
@@ -14,8 +17,6 @@ use crate::{
     sumcheck::*,
 };
 use remainder_shared_types::{
-    claims::YieldClaim,
-    layer::{Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -24,10 +25,13 @@ use crate::layer::gate::gate_helpers::prove_round_identity;
 
 use thiserror::Error;
 
-use super::gate::{
-    check_fully_bound,
-    gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
-    index_mle_indices_gate, Gate, GateError,
+use super::{
+    gate::{
+        check_fully_bound,
+        gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
+        index_mle_indices_gate, Gate, GateError,
+    },
+    Layer, LayerId,
 };
 
 /// implement the layer trait for identitygate struct

@@ -8,7 +8,6 @@ mod tests;
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    layer::{Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -26,6 +25,8 @@ use crate::{
         compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
     },
 };
+
+use super::{Layer, LayerId};
 
 /// The most common implementation of `Layer`
 ///

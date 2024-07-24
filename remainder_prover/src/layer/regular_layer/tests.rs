@@ -1,12 +1,12 @@
 use ark_std::test_rng;
 use remainder_shared_types::{
-    layer::{Layer, LayerId},
     transcript::{poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptWriter},
     Fr,
 };
 
 use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    layer::{Layer, LayerId},
     mle::dense::DenseMle,
 };
 

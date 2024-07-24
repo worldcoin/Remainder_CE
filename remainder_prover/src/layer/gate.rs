@@ -11,8 +11,6 @@ use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
-    claims::YieldClaim,
-    layer::{Layer, LayerId},
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -21,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
-        Claim, ClaimError,
+        Claim, ClaimError, YieldClaim,
     },
     layer::{LayerError, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle},
@@ -34,6 +32,8 @@ pub use self::gate_helpers::{
     index_mle_indices_gate, libra_giraffe, prove_round_dataparallel_phase, prove_round_gate,
     GateError,
 };
+
+use super::{Layer, LayerId};
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 

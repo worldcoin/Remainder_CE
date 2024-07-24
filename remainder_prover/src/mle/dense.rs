@@ -10,15 +10,15 @@ use serde::{Deserialize, Serialize};
 
 use super::{mle_enum::MleEnum, Mle, MleIndex};
 use crate::{
-    claims::ClaimError,
-    expression::{generic_expr::Expression, prover_expr::ProverExpr},
-    layer::LayerError,
-};
-use crate::{
     claims::{wlx_eval::ClaimMle, Claim},
     mle::evals::{Evaluations, MultilinearExtension},
 };
-use remainder_shared_types::{claims::YieldClaim, layer::LayerId, FieldExt};
+use crate::{
+    claims::{ClaimError, YieldClaim},
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
+    layer::{LayerError, LayerId},
+};
+use remainder_shared_types::FieldExt;
 
 /// An implementation of an [Mle] using a dense representation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -347,6 +347,21 @@ impl<F: FieldExt> DenseMle<F> {
     /// creates an expression from the current Mle
     pub fn expression(self) -> Expression<F, ProverExpr> {
         Expression::<F, ProverExpr>::mle(self)
+    }
+
+    /// Returns the evaluation challenges for a fully-bound MLE.
+    ///
+    /// Note that this function panics if a particular challenge is neither
+    /// fixed nor bound!
+    pub fn get_claim_point(&self) -> Vec<F> {
+        self.mle_indices()
+            .iter()
+            .map(|index| match index {
+                MleIndex::Bound(chal, _) => *chal,
+                MleIndex::Fixed(chal) => F::from(*chal as u64),
+                _ => panic!("MLE index not bound"),
+            })
+            .collect()
     }
 }
 

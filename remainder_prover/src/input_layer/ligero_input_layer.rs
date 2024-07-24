@@ -10,7 +10,6 @@ use remainder_ligero::{
     LcCommit, LcProofAuxiliaryInfo, LcRoot,
 };
 use remainder_shared_types::{
-    layer::LayerId,
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
@@ -18,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::wlx_eval::YieldWLXEvals,
+    layer::LayerId,
     mle::{evals::MultilinearExtension, mle_enum::MleEnum},
 };
 

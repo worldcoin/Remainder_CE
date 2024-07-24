@@ -2,17 +2,14 @@ use ff::PrimeField;
 use itertools::Itertools;
 use tracing::warn;
 
-use crate::FieldExt;
-use crate::ec::CurveAffine;
+use crate::{curves::PrimeOrderCurve, FieldExt};
 
 use super::{
     Operation, ProverTranscript, Transcript, TranscriptReaderError, TranscriptSponge,
     VerifierTranscript,
 };
 
-pub trait ECTranscriptSponge<C: CurveAffine>:
-    TranscriptSponge<C::Base> + TranscriptSponge<C::ScalarExt>
-{
+pub trait ECTranscriptSponge<C: PrimeOrderCurve>: TranscriptSponge<C::Base> {
     /// Absorb a single field element `elem`.
     fn absorb_ec_point(&mut self, elem: C);
 
@@ -22,48 +19,46 @@ pub trait ECTranscriptSponge<C: CurveAffine>:
 
 impl<C, Tr> ECTranscriptSponge<C> for Tr
 where
-    C: CurveAffine,
-    Tr: TranscriptSponge<C::Base> + TranscriptSponge<C::ScalarExt>,
-    C::Base: FieldExt,
-    C::ScalarExt: FieldExt,
+    C: PrimeOrderCurve,
+    Tr: TranscriptSponge<C::Base>,
 {
     fn absorb_ec_point(&mut self, elem: C) {
-        let coords = elem.coordinates().unwrap();
-        self.absorb(*coords.x());
-        self.absorb(*coords.y());
+        let (x, y) = elem.affine_coordinates().unwrap();
+        self.absorb(x);
+        self.absorb(y);
     }
 
     fn absorb_ec_points(&mut self, elements: &[C]) {
         elements.iter().for_each(|elem| {
-            let coords = elem.coordinates().unwrap();
-            self.absorb(*coords.x());
-            self.absorb(*coords.y());
+            let (x, y) = elem.affine_coordinates().unwrap();
+            self.absorb(x);
+            self.absorb(y);
         });
     }
 }
 
-pub trait ECProverTranscript<C: CurveAffine>
+pub trait ECProverTranscript<C: PrimeOrderCurve>
 where
-    Self: ProverTranscript<C::Base> + ProverTranscript<C::ScalarExt>,
+    Self: ProverTranscript<C::Base>,
 {
     fn append_ec_point(&mut self, label: &str, elem: C);
 
     fn append_ec_points(&mut self, label: &str, elements: &[C]);
 }
 
-impl<C: CurveAffine, Tr> ECProverTranscript<C> for Tr
+impl<C: PrimeOrderCurve, Tr> ECProverTranscript<C> for Tr
 where
-    Tr: ProverTranscript<C::Base> + ProverTranscript<C::ScalarExt>,
+    Tr: ProverTranscript<C::Base>,
 {
     fn append_ec_point(&mut self, label: &str, elem: C) {
-        let coords = elem.coordinates().unwrap();
-        self.append_elements(label, &[*coords.x(), *coords.y()]);
+        let (x_coord, y_coord) = elem.affine_coordinates().unwrap();
+        self.append_elements(label, &[x_coord, y_coord]);
     }
 
     fn append_ec_points(&mut self, label: &str, elements: &[C]) {
         elements.iter().for_each(|elem| {
-            let coords = elem.coordinates().unwrap();
-            self.append_elements(label, &[*coords.x(), *coords.y()]);
+            let (x_coord, y_coord) = elem.affine_coordinates().unwrap();
+            self.append_elements(label, &[x_coord, y_coord]);
         });
     }
 }
@@ -72,7 +67,7 @@ where
 /// `ECTranscriptWriter` acts as a wrapper around a `ECTranscriptSponge` and
 /// additionally keeps track of all the append/squeeze operations to be able to
 /// generate a serializable `Transcript`.
-pub struct ECTranscriptWriter<C: CurveAffine, T> {
+pub struct ECTranscriptWriter<C: PrimeOrderCurve, T> {
     /// The sponge that this writer is using to append/squeeze elements.
     sponge: T,
 
@@ -82,7 +77,7 @@ pub struct ECTranscriptWriter<C: CurveAffine, T> {
 }
 
 impl<
-        C: CurveAffine,
+        C: PrimeOrderCurve,
         F: FieldExt<Repr = <C::Base as PrimeField>::Repr>,
         Sp: TranscriptSponge<F>,
     > ProverTranscript<F> for ECTranscriptWriter<C, Sp>
@@ -117,7 +112,7 @@ impl<
     }
 }
 
-impl<C: CurveAffine, Tr: ECTranscriptSponge<C>> ECTranscriptWriter<C, Tr> {
+impl<C: PrimeOrderCurve, Tr: ECTranscriptSponge<C> + Default> ECTranscriptWriter<C, Tr> {
     /// Destructively extract the transcript produced by this writer.
     /// This should be the last operation performed on a `TranscriptWriter`.
     pub fn get_transcript(self) -> Transcript<<C::Base as PrimeField>::Repr> {
@@ -134,9 +129,9 @@ impl<C: CurveAffine, Tr: ECTranscriptSponge<C>> ECTranscriptWriter<C, Tr> {
     }
 }
 
-pub trait ECVerifierTranscript<C: CurveAffine>
+pub trait ECVerifierTranscript<C: PrimeOrderCurve>
 where
-    Self: VerifierTranscript<C::Base> + VerifierTranscript<C::ScalarExt>,
+    Self: VerifierTranscript<C::Base>,
 {
     fn consume_ec_point(&mut self, label: &'static str) -> Result<C, TranscriptReaderError>;
 
@@ -147,13 +142,13 @@ where
     ) -> Result<Vec<C>, TranscriptReaderError>;
 }
 
-impl<C: CurveAffine, Tr> ECVerifierTranscript<C> for Tr
+impl<C: PrimeOrderCurve, Tr> ECVerifierTranscript<C> for Tr
 where
-    Tr: VerifierTranscript<C::Base> + VerifierTranscript<C::ScalarExt>,
+    Tr: VerifierTranscript<C::Base>,
 {
     fn consume_ec_point(&mut self, label: &'static str) -> Result<C, TranscriptReaderError> {
         let points = self.consume_elements(label, 2)?;
-        Ok(C::from_xy(points[0], points[1]).unwrap())
+        Ok(C::from_xy(points[0], points[1]))
     }
 
     fn consume_ec_points(
@@ -164,12 +159,12 @@ where
         let points = self.consume_elements(label, 2 * num_elements)?;
         Ok(points
             .chunks(2)
-            .map(|points| C::from_xy(points[0], points[1]).unwrap())
+            .map(|points| C::from_xy(points[0], points[1]))
             .collect())
     }
 }
 
-pub struct ECTranscriptReader<C: CurveAffine, T> {
+pub struct ECTranscriptReader<C: PrimeOrderCurve, T> {
     /// The sponge that this reader is wrapping around.
     sponge: T,
 
@@ -182,7 +177,7 @@ pub struct ECTranscriptReader<C: CurveAffine, T> {
     next_element: (usize, usize),
 }
 
-impl<C: CurveAffine, T: Default> ECTranscriptReader<C, T> {
+impl<C: PrimeOrderCurve, T: Default> ECTranscriptReader<C, T> {
     /// Generate a new `TranscriptReader` to operate on a given `transcript`.
     pub fn new(transcript: Transcript<<C::Base as PrimeField>::Repr>) -> Self {
         Self {
@@ -219,8 +214,11 @@ impl<C: CurveAffine, T: Default> ECTranscriptReader<C, T> {
     }
 }
 
-impl<C: CurveAffine, F: FieldExt<Repr = <C::Base as PrimeField>::Repr>, T: TranscriptSponge<F>>
-    VerifierTranscript<F> for ECTranscriptReader<C, T>
+impl<
+        C: PrimeOrderCurve,
+        F: FieldExt<Repr = <C::Base as PrimeField>::Repr>,
+        T: TranscriptSponge<F>,
+    > VerifierTranscript<F> for ECTranscriptReader<C, T>
 {
     /// Reads off a single element from the transcript and returns it if
     /// successful.
