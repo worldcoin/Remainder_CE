@@ -1577,7 +1577,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "remainder-hyrax"
+name = "remainder-hyrax-shared-types"
 version = "0.1.0"
 dependencies = [
  "ark-std",
@@ -1590,7 +1590,6 @@ dependencies = [
  "pasta_curves",
  "rand",
  "rayon",
- "remainder",
  "remainder-shared-types",
  "serde",
  "serde_json",
