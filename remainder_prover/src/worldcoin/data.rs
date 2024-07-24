@@ -164,7 +164,7 @@ pub fn load_data_from_serialized_inputs<P: PrimeOrderCurve>(
         .iter()
         .map(|element| (*element as usize).to_string())
         .collect();
-    dbg!(string_iriscode);
+    // dbg!(string_iriscode);
 
     let iris_code_vec_from_file =
         read_iris_code_from_file_with_key(iris_code_file_path, iris_code_key_value);
