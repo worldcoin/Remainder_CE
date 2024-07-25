@@ -3,7 +3,6 @@ use rand::Rng;
 use remainder::layer::LayerId;
 use remainder::mle::mle_enum::MleEnum;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-use remainder_shared_types::transcript::Transcript;
 use remainder_shared_types::{curves::PrimeOrderCurve, halo2curves::group::ff::Field};
 use serde::{Deserialize, Serialize};
 
