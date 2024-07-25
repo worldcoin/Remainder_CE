@@ -1,5 +1,5 @@
 use super::*;
-use remainder_shared_types::halo2curves::bn256::Fr;
+use rand::rngs::OsRng;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 /// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 use remainder_shared_types::halo2curves::group::Group;
@@ -30,8 +30,9 @@ fn sanity_check_test_honest_prover_small_identity() {
     let mle_evaluation_at_challenge = Scalar::one();
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript: PoseidonTranscript<Scalar, Base> =
-        PoseidonTranscript::new("testing proof of dot product - prover");
+    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
+        "testing proof of dot product - prover",
+    );
 
     let blinding_factors_matrix_rows = (0..2).map(|_| Scalar::one()).collect_vec();
     let blinding_factor_evaluation = Scalar::one();
@@ -60,8 +61,9 @@ fn sanity_check_test_honest_prover_small_identity() {
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript: PoseidonTranscript<Scalar, Base> =
-        PoseidonTranscript::new("testing proof of dot product - verifier");
+    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
+        "testing proof of dot product - verifier",
+    );
     hyrax_eval_proof.verify_hyrax_evaluation_proof(
         log_split_point,
         &committer,
@@ -91,8 +93,9 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
 
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript: PoseidonTranscript<Scalar, Base> =
-        PoseidonTranscript::new("testing proof of dot product - prover");
+    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
+        "testing proof of dot product - prover",
+    );
 
     let blinding_factors_matrix_rows = (0..4).map(|_| Scalar::one()).collect_vec();
     let blinding_factor_evaluation = Scalar::one();
@@ -116,8 +119,9 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript: PoseidonTranscript<Scalar, Base> =
-        PoseidonTranscript::new("testing proof of dot product - verifier");
+    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
+        "testing proof of dot product - verifier",
+    );
     hyrax_eval_proof.verify_hyrax_evaluation_proof(
         log_split_point,
         &committer,
@@ -169,8 +173,9 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         });
     let log_split_point = 1;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript: PoseidonTranscript<Scalar, Base> =
-        PoseidonTranscript::new("testing proof of dot product - prover");
+    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
+        "testing proof of dot product - prover",
+    );
 
     let blinding_factors_matrix_rows = (0..4)
         .map(|_| Scalar::from(rand::random::<u64>()))
@@ -196,8 +201,9 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript: PoseidonTranscript<Scalar, Base> =
-        PoseidonTranscript::new("testing proof of dot product - verifier");
+    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
+        "testing proof of dot product - verifier",
+    );
     hyrax_eval_proof.verify_hyrax_evaluation_proof(
         log_split_point,
         &committer,
@@ -240,8 +246,9 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         });
     let log_split_point = 9;
     let prover_random_generator = &mut rand::thread_rng();
-    let mut prover_transcript: PoseidonTranscript<Scalar, Base> =
-        PoseidonTranscript::new("testing proof of dot product - prover");
+    let mut prover_transcript = ECTranscriptWriter::<Bn256Point, PoseidonSponge<Base>>::new(
+        "testing proof of dot product - prover",
+    );
 
     let blinding_factors_matrix_rows = (0..(1 << 9))
         .map(|_| Scalar::from(rand::random::<u64>()))
@@ -267,8 +274,9 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
         &blinding_factors_matrix_rows,
     );
 
-    let mut verifier_transcript: PoseidonTranscript<Scalar, Base> =
-        PoseidonTranscript::new("testing proof of dot product - verifier");
+    let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
+        "testing proof of dot product - verifier",
+    );
     hyrax_eval_proof.verify_hyrax_evaluation_proof(
         log_split_point,
         &committer,
