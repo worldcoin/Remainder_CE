@@ -19,8 +19,8 @@ node_enum!(NodeEnum: FieldExt,
     (GateNode: GateNode<F>),
     (SplitNode: SplitNode<F>),
     (MatMultNode: MatMultNode<F>),
-    (LookupShred: LookupShred<F>),
-    (LookupNode: LookupNode<F>)
+    (LookupShred: LookupShred),
+    (LookupNode: LookupNode)
 );
 
 /// Organizational wrapper for a vec of `NodeEnum`s
@@ -35,8 +35,8 @@ pub struct NodeEnumGroup<F: FieldExt> {
     gate_node: Option<Vec<GateNode<F>>>,
     split_nodes: Option<Vec<SplitNode<F>>>,
     matmult_nodes: Option<Vec<MatMultNode<F>>>,
-    lookup_nodes: Option<Vec<LookupNode<F>>>,
-    lookup_shreds: Option<Vec<LookupShred<F>>>,
+    lookup_nodes: Option<Vec<LookupNode>>,
+    lookup_shreds: Option<Vec<LookupShred>>,
 }
 
 impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
@@ -133,14 +133,14 @@ impl<F: FieldExt> YieldNode<MatMultNode<F>> for NodeEnumGroup<F> {
     }
 }
 
-impl<F: FieldExt> YieldNode<LookupNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<LookupNode<F>> {
+impl<F: FieldExt> YieldNode<LookupNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<LookupNode> {
         self.lookup_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<LookupShred<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<LookupShred<F>> {
+impl<F: FieldExt> YieldNode<LookupShred> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<LookupShred> {
         self.lookup_shreds.take().unwrap_or_default()
     }
 }

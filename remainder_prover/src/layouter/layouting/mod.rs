@@ -211,13 +211,13 @@ pub fn layout<
 
     let out = {
         // Build a map node id -> LookupNode
-        let mut lookup_node_map: HashMap<NodeId, &mut LookupNode<F>> = HashMap::new();
-        let mut lookup_nodes: Vec<LookupNode<F>> = dag.get_nodes();
+        let mut lookup_node_map: HashMap<NodeId, &mut LookupNode> = HashMap::new();
+        let mut lookup_nodes: Vec<LookupNode> = dag.get_nodes();
         for lookup_node in lookup_nodes.iter_mut() {
             lookup_node_map.insert(lookup_node.id(), lookup_node);
         }
         // Add LookupShreds to their respective LookupNodes
-        let lookup_shreds: Vec<LookupShred<F>> = dag.get_nodes();
+        let lookup_shreds: Vec<LookupShred> = dag.get_nodes();
         for lookup_shred in lookup_shreds {
             let lookup_node_id = lookup_shred.table_node_id;
             let lookup_node = lookup_node_map

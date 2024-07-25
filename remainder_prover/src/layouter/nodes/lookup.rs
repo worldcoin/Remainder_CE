@@ -21,7 +21,7 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupNode).
 #[derive(Clone, Debug)]
-pub struct LookupShred<F: FieldExt> {
+pub struct LookupShred {
     /// The id of this LookupShred.
     pub id: NodeId,
     /// The id of the LookupNode (lookup table) that we are a lookup up into.
@@ -30,17 +30,15 @@ pub struct LookupShred<F: FieldExt> {
     pub constrained_node_id: NodeId,
     /// The node that provides the multiplicities for the constrained data.
     pub multiplicities_node_id: NodeId,
-    // FIXME needed?
-    _data: PhantomData<F>,
 }
 
-impl<F: FieldExt> LookupShred<F> {
+impl LookupShred {
     /// Creates a new LookupShred, constraining the data of `constrained` to form a subset of the
     /// data in `table` with multiplicities given by `multiplicities`. Caller is responsible for the
     /// yielding of all nodes (including `constrained` and `multiplicities`).
-    pub fn new(
+    pub fn new<F: FieldExt>(
         ctx: &Context,
-        lookup_node: &LookupNode<F>,
+        lookup_node: &LookupNode,
         constrained: &dyn ClaimableNode<F = F>,
         multiplicities: &dyn ClaimableNode<F = F>,
     ) -> Self {
@@ -50,12 +48,11 @@ impl<F: FieldExt> LookupShred<F> {
             table_node_id: lookup_node.id(),
             constrained_node_id: constrained.id(),
             multiplicities_node_id: multiplicities.id(),
-            _data: PhantomData,
         }
     }
 }
 
-impl<F: FieldExt> CircuitNode for LookupShred<F> {
+impl CircuitNode for LookupShred {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -67,15 +64,15 @@ impl<F: FieldExt> CircuitNode for LookupShred<F> {
 
 /// Represents a table of data that can be looked up into, e.g. for a range check.
 #[derive(Clone, Debug)]
-pub struct LookupNode<F: FieldExt> {
+pub struct LookupNode {
     id: NodeId,
     /// The lookups that are performed on this table (will be populated by calls to add_shred).
-    shreds: Vec<LookupShred<F>>,
+    shreds: Vec<LookupShred>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
 }
 
-impl<F: FieldExt> LookupNode<F> {
+impl LookupNode {
     /// Create a new table to use for subsequent lookups.
     /// (Perform a lookup in this table by creating a [LookupShred].)
     pub fn new(ctx: &Context, table: NodeId) -> Self {
@@ -90,12 +87,12 @@ impl<F: FieldExt> LookupNode<F> {
 
     /// Add a lookup shred to this node.
     /// (Will be called by the layouter when laying out the circuit.)
-    pub fn add_shred(&mut self, shred: LookupShred<F>) {
+    pub fn add_shred(&mut self, shred: LookupShred) {
         self.shreds.push(shred);
     }
 }
 
-impl<F: FieldExt> CircuitNode for LookupNode<F> {
+impl CircuitNode for LookupNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -133,7 +130,7 @@ pub fn calculate_selector_values<F: FieldExt>(mles: Vec<Vec<F>>) -> Vec<F> {
 }
 
 impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = OL>, IL, L, OL>
-    CompilableNode<F, Pf> for LookupNode<F>
+    CompilableNode<F, Pf> for LookupNode
 where
     IL: From<PublicInputLayer<F>>,
     L: From<RegularLayer<F>>,
