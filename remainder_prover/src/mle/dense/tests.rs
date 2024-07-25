@@ -49,7 +49,7 @@ fn set_mle_dim() {
     let axes_name = ["data", "tree batch"].map(String::from).to_vec();
     let dim_info = DimInfo::new(dims, axes_name.clone()).unwrap();
 
-    let mut mle = MultilinearExtension::new(evals);
+    let mut mle = MultilinearExtension::new_from_evals(evals);
     assert!(mle.set_dim_info(dim_info).is_ok());
 
     assert_eq!(mle.get_axes_names().unwrap(), axes_name);
@@ -96,7 +96,7 @@ fn set_mle_zkdt_dim() {
         .to_vec();
     let dim_info = DimInfo::new(dims, axes_name.clone()).unwrap();
 
-    let mut mle = MultilinearExtension::new(evals);
+    let mut mle = MultilinearExtension::new_from_evals(evals);
     assert!(mle.set_dim_info(dim_info).is_ok());
 
     assert_eq!(mle.get_axes_names().unwrap(), axes_name);
@@ -132,7 +132,7 @@ fn mle_zkdt_dim_mismatch_with_num_var() {
         .to_vec();
     let dim_info = DimInfo::new(dims, axes_name).unwrap();
 
-    let mut mle = MultilinearExtension::new(evals);
+    let mut mle = MultilinearExtension::new_from_evals(evals);
     assert!(mle.set_dim_info(dim_info).is_err())
 }
 
@@ -152,7 +152,7 @@ fn mle_dim_mismatch_with_num_var() {
     let axes_name = ["data", "tree batch"].map(String::from).to_vec();
     let dim_info = DimInfo::new(dims, axes_name).unwrap();
 
-    let mut mle = MultilinearExtension::new(evals);
+    let mut mle = MultilinearExtension::new_from_evals(evals);
     assert!(mle.set_dim_info(dim_info).is_err())
 }
 

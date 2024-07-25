@@ -1,7 +1,7 @@
 {
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
-        "./remainder_prover/Cargo.toml",
-        "./remainder_shared_types/Cargo.toml"
+        // "./remainder_prover/Cargo.toml",
+        // "./remainder_shared_types/Cargo.toml"
     ]
 }

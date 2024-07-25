@@ -132,3 +132,15 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MleEnum<F> {
         }
     }
 }
+
+impl<F: FieldExt> From<DenseMle<F>> for MleEnum<F> {
+    fn from(value: DenseMle<F>) -> Self {
+        Self::Dense(value)
+    }
+}
+
+impl<F: FieldExt> From<ZeroMle<F>> for MleEnum<F> {
+    fn from(value: ZeroMle<F>) -> Self {
+        Self::Zero(value)
+    }
+}

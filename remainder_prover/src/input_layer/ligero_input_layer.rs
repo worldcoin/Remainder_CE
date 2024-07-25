@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::wlx_eval::YieldWLXEvals,
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum, Mle},
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
 use super::{
@@ -32,8 +32,7 @@ use super::{
 #[derive(Debug)]
 pub struct LigeroInputLayer<F: FieldExt> {
     /// The MLE which we wish to commit to.
-    pub mle: DenseMle<F>,
-
+    pub mle: MultilinearExtension<F>,
     /// The ID corresponding to this layer.
     pub(crate) layer_id: LayerId,
 
@@ -225,7 +224,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
 }
 
 impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
-    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self {
+    fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self {
             mle,
             layer_id,
@@ -242,7 +241,7 @@ impl<F: FieldExt> MleInputLayer<F> for LigeroInputLayer<F> {
 impl<F: FieldExt> LigeroInputLayer<F> {
     /// Creates new Ligero input layer WITH a precomputed Ligero commitment
     pub fn new_with_ligero_commitment(
-        mle: DenseMle<F>,
+        mle: MultilinearExtension<F>,
         layer_id: LayerId,
         ligero_comm: LcCommit<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>,
         ligero_aux: LigeroAuxInfo<F>,
@@ -263,7 +262,7 @@ impl<F: FieldExt> LigeroInputLayer<F> {
 
     /// Creates new Ligero input layer with specified rho inverse
     pub fn new_with_rho_inv_ratio(
-        mle: DenseMle<F>,
+        mle: MultilinearExtension<F>,
         layer_id: LayerId,
         rho_inv: u8,
         ratio: f64,
