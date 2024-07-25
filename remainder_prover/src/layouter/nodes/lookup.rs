@@ -1,12 +1,11 @@
 //! Nodes that implement LogUp.
-use crate::expression::abstract_expr::AbstractExpr;
+use crate::expression::abstract_expr::{AbstractExpr, calculate_selector_values};
 use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::public_input_layer::PublicInputLayer;
-use crate::input_layer::{InputLayer, MleInputLayer};
+use crate::input_layer::MleInputLayer;
 use crate::mle::zero::ZeroMle;
 use crate::mle::Mle;
 use crate::mle::{evals::Evaluations, MleIndex};
-use std::marker::PhantomData;
 
 use remainder_shared_types::FieldExt;
 
@@ -22,24 +21,23 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 /// Represents the use of a lookup into a particular table (represented by a LookupNode).
 #[derive(Clone, Debug)]
 pub struct LookupShred {
-    /// The id of this LookupShred.
-    pub id: NodeId,
+    id: NodeId,
     /// The id of the LookupNode (lookup table) that we are a lookup up into.
     pub table_node_id: NodeId,
     /// The id of the node that is being constrained by this lookup.
-    pub constrained_node_id: NodeId,
-    /// The node that provides the multiplicities for the constrained data.
-    pub multiplicities_node_id: NodeId,
+    constrained_node_id: NodeId,
+    /// The id of the node that provides the multiplicities for the constrained data.
+    multiplicities_node_id: NodeId,
     /// Whether the values constrained by this LookupShred should be considered secret
     /// (Determines which InputLayer type is used for the denominator inverses.)
-    pub constrained_values_secret: bool
+    secret_constrained_values: bool
 }
 
 impl LookupShred {
     /// Creates a new LookupShred, constraining the data of `constrained` to form a subset of the
-    /// data in `table` with multiplicities given by `multiplicities`. Caller is responsible for the
+    /// data in `lookup_node` with multiplicities given by `multiplicities`. Caller is responsible for the
     /// yielding of all nodes (including `constrained` and `multiplicities`).
-    /// `constrained_values_secret` controls whether a public or a hiding input layer is used for
+    /// `secret_constrained_values` controls whether a public or a hiding input layer is used for
     /// the denominator inverses, which are derived from the constrained values.  The caller is
     /// responsible of the hiding of the constrained values themselves, if required.
     pub fn new<F: FieldExt>(
@@ -47,9 +45,9 @@ impl LookupShred {
         lookup_node: &LookupNode,
         constrained: &dyn ClaimableNode<F = F>,
         multiplicities: &dyn ClaimableNode<F = F>,
-        constrained_values_secret: bool,
+        secret_constrained_values: bool,
     ) -> Self {
-        if constrained_values_secret {
+        if secret_constrained_values {
             unimplemented!("Secret constrained values not yet supported (requires HyraxInputLayer)");
         }
         let id = ctx.get_new_id();
@@ -58,7 +56,7 @@ impl LookupShred {
             table_node_id: lookup_node.id(),
             constrained_node_id: constrained.id(),
             multiplicities_node_id: multiplicities.id(),
-            constrained_values_secret: false
+            secret_constrained_values: false
         }
     }
 }
@@ -77,7 +75,8 @@ impl CircuitNode for LookupShred {
 #[derive(Clone, Debug)]
 pub struct LookupNode {
     id: NodeId,
-    /// The lookups that are performed on this table (will be populated by calls to add_shred).
+    /// The lookups that are performed on this table (will be automatically populated, via
+    /// add_shred, during layout).
     shreds: Vec<LookupShred>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
@@ -115,29 +114,6 @@ impl CircuitNode for LookupNode {
     fn sources(&self) -> Vec<NodeId> {
         self.shreds.iter().map(|shred| shred.id()).collect()
     }
-}
-
-// FIXME this belongs elsewhere.
-/// Companion function to [selectors] that calculates the resulting MLE from the MLEs of the
-/// expressions that make up the selector tree.
-pub fn calculate_selector_values<F: FieldExt>(mles: Vec<Vec<F>>) -> Vec<F> {
-    use itertools::Itertools;
-    let mut mles = mles;
-    assert!(mles.len().is_power_of_two());
-
-    while mles.len() > 1 {
-        mles = mles
-            .into_iter()
-            .tuples()
-            .map(|(mle1, mle2)| {
-                mle1.into_iter()
-                    .zip(mle2.into_iter())
-                    .flat_map(|(a, b)| vec![a, b])
-                    .collect()
-            })
-            .collect();
-    }
-    mles[0].clone()
 }
 
 impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = OL>, IL, L, OL>
@@ -248,7 +224,7 @@ where
             multiplicities_location.prefix_bits.clone(),
         );
         if self.shreds.len() > 1 {
-            // insert an extra layer that aggregates the multiplicities
+            // Insert an extra layer that aggregates the multiplicities
             let expr = self
                 .shreds
                 .iter()
@@ -314,7 +290,7 @@ where
         let mle =
             MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
-        if self.shreds.iter().map(|shred| shred.constrained_values_secret).any(|x| x) {
+        if self.shreds.iter().map(|shred| shred.secret_constrained_values).any(|x| x) {
             // TODO use HyraxInputLayer, once its implemented
             unimplemented!();
         } else {
@@ -325,8 +301,8 @@ where
             "Input layer that for LHS denom prod inverse has layer id: {:?}",
             layer_id
         );
-        // Same, but for the RHS - this doesn't reveal any information about the constrained values,
-        // so OK to use PublicInputLayer
+        // Add an input layer for the inverse of the denominators of the RHS. This doesn't reveal
+        // any information about the constrained values, so it's OK to use PublicInputLayer.
         let mle =
             MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
@@ -337,7 +313,8 @@ where
             layer_id
         );
 
-        // Add a layer that calculates the product of the denominator and the inverse and subtracts 1 (for both LHS and RHS)
+        // Add a layer that calculates the product of the denominator and the inverse and subtracts
+        // 1 (for both LHS and RHS)
         let lhs_expr =
             PE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_densemle.clone()]);
         let rhs_expr =
@@ -372,8 +349,8 @@ where
     }
 }
 
-/// Extract the prefix bits from a DenseMle
-pub fn extract_prefix_bits<F: FieldExt>(mle: &DenseMle<F>) -> Vec<bool> {
+/// Extract the prefix bits from a DenseMle.
+fn extract_prefix_bits<F: FieldExt>(mle: &DenseMle<F>) -> Vec<bool> {
     mle.mle_indices()
         .iter()
         .map(|mle_index| match mle_index {
@@ -384,8 +361,9 @@ pub fn extract_prefix_bits<F: FieldExt>(mle: &DenseMle<F>) -> Vec<bool> {
         .collect()
 }
 
-/// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and the right half containing the odd-indexed elements, setting the prefix bits accordingly.
-pub fn split_dense_mle<F: FieldExt>(mle: &DenseMle<F>) -> (DenseMle<F>, DenseMle<F>) {
+/// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and
+/// the right half containing the odd-indexed elements, setting the prefix bits accordingly.
+fn split_dense_mle<F: FieldExt>(mle: &DenseMle<F>) -> (DenseMle<F>, DenseMle<F>) {
     let data = mle.current_mle.clone();
     let prefix_bits = extract_prefix_bits(mle);
     let left: Vec<F> = data.get_evals_vector().iter().step_by(2).cloned().collect();
@@ -410,9 +388,9 @@ pub fn split_dense_mle<F: FieldExt>(mle: &DenseMle<F>) -> (DenseMle<F>, DenseMle
 }
 
 /// Given two Mles of the same length representing the numerators and denominators of a sequence of
-/// fractions, add layers that perform a sum of the fractions, return a new pair of Mles
-/// representing the numerator and denominator of the (unreduced) sum.
-pub fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
+/// fractions, add layers that perform a sum of the fractions, return a new pair of length-1 Mles
+/// representing the numerator and denominator of the sum.
+fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
     numerator: DenseMle<F>,
     denominator: DenseMle<F>,
     witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,

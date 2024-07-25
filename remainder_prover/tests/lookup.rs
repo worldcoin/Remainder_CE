@@ -16,7 +16,8 @@ use remainder_shared_types::Fr;
 pub mod utils;
 use utils::get_input_shred_from_vec;
 
-/// Test the case where there is only one LookupShred for the LookupNode i.e. just one constrained MLE.
+/// Test the case where there is only one LookupShred for the LookupNode i.e. just one constrained
+/// MLE.
 #[test]
 pub fn single_shred_test() {
     let circuit = LayouterCircuit::new(|ctx| {

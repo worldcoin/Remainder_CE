@@ -426,3 +426,24 @@ impl<F: std::fmt::Debug + FieldExt> Expression<F, AbstractExpr> {
         CircuitDesc(&self.expression_node, &self.mle_vec)
     }
 }
+
+/// Companion function to [selectors] that calculates the resulting MLE from the MLEs of the
+/// expressions that make up the selector tree.
+pub fn calculate_selector_values<F: FieldExt>(mles: Vec<Vec<F>>) -> Vec<F> {
+    let mut mles = mles;
+    assert!(mles.len().is_power_of_two());
+
+    while mles.len() > 1 {
+        mles = mles
+            .into_iter()
+            .tuples()
+            .map(|(mle1, mle2)| {
+                mle1.into_iter()
+                    .zip(mle2.into_iter())
+                    .flat_map(|(a, b)| vec![a, b])
+                    .collect()
+            })
+            .collect();
+    }
+    mles[0].clone()
+}
