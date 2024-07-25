@@ -30,24 +30,35 @@ pub struct LookupShred {
     pub constrained_node_id: NodeId,
     /// The node that provides the multiplicities for the constrained data.
     pub multiplicities_node_id: NodeId,
+    /// Whether the values constrained by this LookupShred should be considered secret
+    /// (Determines which InputLayer type is used for the denominator inverses.)
+    pub constrained_values_secret: bool
 }
 
 impl LookupShred {
     /// Creates a new LookupShred, constraining the data of `constrained` to form a subset of the
     /// data in `table` with multiplicities given by `multiplicities`. Caller is responsible for the
     /// yielding of all nodes (including `constrained` and `multiplicities`).
+    /// `constrained_values_secret` controls whether a public or a hiding input layer is used for
+    /// the denominator inverses, which are derived from the constrained values.  The caller is
+    /// responsible of the hiding of the constrained values themselves, if required.
     pub fn new<F: FieldExt>(
         ctx: &Context,
         lookup_node: &LookupNode,
         constrained: &dyn ClaimableNode<F = F>,
         multiplicities: &dyn ClaimableNode<F = F>,
+        constrained_values_secret: bool,
     ) -> Self {
+        if constrained_values_secret {
+            unimplemented!("Secret constrained values not yet supported (requires HyraxInputLayer)");
+        }
         let id = ctx.get_new_id();
         LookupShred {
             id,
             table_node_id: lookup_node.id(),
             constrained_node_id: constrained.id(),
             multiplicities_node_id: multiplicities.id(),
+            constrained_values_secret: false
         }
     }
 }
@@ -70,9 +81,6 @@ pub struct LookupNode {
     shreds: Vec<LookupShred>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
-    /// Whether the values constrained by this table should be considered secret
-    /// (Determines which InputLayer type is used for the denominator inverses.)
-    constrained_values_secret: bool
 }
 
 impl LookupNode {
@@ -85,7 +93,6 @@ impl LookupNode {
             id,
             shreds: vec![],
             table_node_id: table,
-            constrained_values_secret: false,
         }
     }
 
@@ -301,13 +308,13 @@ where
         let (rhs_numerator, rhs_denominator) =
             build_fractional_sum(rhs_numerator, rhs_denominator, witness_builder);
 
-        // Add an input layer for the inverse of the denominators of the LHS This value holds
+        // Add an input layer for the inverse of the denominators of the LHS. This value holds
         // reveals some information about the constrained values, so we optionally use a
         // HyraxInputLayer.
         let mle =
             MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
-        if self.constrained_values_secret {
+        if self.shreds.iter().map(|shred| shred.constrained_values_secret).any(|x| x) {
             // TODO use HyraxInputLayer, once its implemented
             unimplemented!();
         } else {

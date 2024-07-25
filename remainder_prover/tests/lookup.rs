@@ -33,7 +33,7 @@ pub fn single_shred_test() {
             ctx,
         );
         let multiplicities = get_input_shred_from_vec(vec![Fr::from(1u64), Fr::from(3u64)], ctx);
-        let lookup_shred = LookupShred::new(ctx, &lookup_node, &constrained, &multiplicities);
+        let lookup_shred = LookupShred::new(ctx, &lookup_node, &constrained, &multiplicities, false);
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -66,7 +66,7 @@ pub fn multi_shred_test() {
             ctx,
         );
         let multiplicities_0 = get_input_shred_from_vec(vec![Fr::from(3u64), Fr::from(1u64)], ctx);
-        let lookup_shred_0 = LookupShred::new(ctx, &lookup_node, &constrained_0, &multiplicities_0);
+        let lookup_shred_0 = LookupShred::new(ctx, &lookup_node, &constrained_0, &multiplicities_0, false);
 
         let constrained_1 = get_input_shred_from_vec(
             vec![
@@ -78,7 +78,7 @@ pub fn multi_shred_test() {
             ctx,
         );
         let multiplicities_1 = get_input_shred_from_vec(vec![Fr::from(0u64), Fr::from(4u64)], ctx);
-        let lookup_shred_1 = LookupShred::new(ctx, &lookup_node, &constrained_1, &multiplicities_1);
+        let lookup_shred_1 = LookupShred::new(ctx, &lookup_node, &constrained_1, &multiplicities_1, false);
 
         let constrained_2 = get_input_shred_from_vec(
             vec![
@@ -90,7 +90,7 @@ pub fn multi_shred_test() {
             ctx,
         );
         let multiplicities_2 = get_input_shred_from_vec(vec![Fr::from(2u64), Fr::from(2u64)], ctx);
-        let lookup_shred_2 = LookupShred::new(ctx, &lookup_node, &constrained_2, &multiplicities_2);
+        let lookup_shred_2 = LookupShred::new(ctx, &lookup_node, &constrained_2, &multiplicities_2, false);
 
         let constrained_3 = get_input_shred_from_vec(
             vec![
@@ -102,7 +102,7 @@ pub fn multi_shred_test() {
             ctx,
         );
         let multiplicities_3 = get_input_shred_from_vec(vec![Fr::from(1u64), Fr::from(3u64)], ctx);
-        let lookup_shred_3 = LookupShred::new(ctx, &lookup_node, &constrained_3, &multiplicities_3);
+        let lookup_shred_3 = LookupShred::new(ctx, &lookup_node, &constrained_3, &multiplicities_3, false);
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
@@ -144,7 +144,7 @@ pub fn test_not_satisfied() {
             ctx,
         );
         let multiplicities = get_input_shred_from_vec(vec![Fr::from(1u64), Fr::from(3u64)], ctx);
-        let lookup_shred = LookupShred::new(ctx, &lookup_node, &constrained, &multiplicities);
+        let lookup_shred = LookupShred::new(ctx, &lookup_node, &constrained, &multiplicities, false);
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
