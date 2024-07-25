@@ -2,7 +2,7 @@
 use crate::expression::abstract_expr::AbstractExpr;
 use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::public_input_layer::PublicInputLayer;
-use crate::input_layer::MleInputLayer;
+use crate::input_layer::{InputLayer, MleInputLayer};
 use crate::mle::zero::ZeroMle;
 use crate::mle::Mle;
 use crate::mle::{evals::Evaluations, MleIndex};
@@ -70,6 +70,9 @@ pub struct LookupNode {
     shreds: Vec<LookupShred>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
+    /// Whether the values constrained by this table should be considered secret
+    /// (Determines which InputLayer type is used for the denominator inverses.)
+    constrained_values_secret: bool
 }
 
 impl LookupNode {
@@ -82,6 +85,7 @@ impl LookupNode {
             id,
             shreds: vec![],
             table_node_id: table,
+            constrained_values_secret: false,
         }
     }
 
@@ -297,21 +301,29 @@ where
         let (rhs_numerator, rhs_denominator) =
             build_fractional_sum(rhs_numerator, rhs_denominator, witness_builder);
 
-        // Add an input layer for the inverse of the denominators of the LHS
+        // Add an input layer for the inverse of the denominators of the LHS This value holds
+        // reveals some information about the constrained values, so we optionally use a
+        // HyraxInputLayer.
         let mle =
             MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
-        witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
+        if self.constrained_values_secret {
+            // TODO use HyraxInputLayer, once its implemented
+            unimplemented!();
+        } else {
+            witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into());
+        }
         let lhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
         println!(
             "Input layer that for LHS denom prod inverse has layer id: {:?}",
             layer_id
         );
-        // Same, but for the RHS
+        // Same, but for the RHS - this doesn't reveal any information about the constrained values,
+        // so OK to use PublicInputLayer
         let mle =
             MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
-        witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into()); // FIXME change to Hyrax when it becomes available
+        witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into());
         let rhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
         println!(
             "Input layer that for RHS denom prod inverse has layer id: {:?}",
