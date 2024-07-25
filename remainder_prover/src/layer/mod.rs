@@ -11,6 +11,7 @@ pub mod regular_layer;
 
 use std::fmt::Debug;
 
+use product::PostSumcheckLayer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -145,4 +146,18 @@ pub trait SumcheckLayer<F: FieldExt>: Layer<F> {
 
     /// How many sumcheck rounds this layer will take to prove
     fn num_sumcheck_rounds(&self) -> usize;
+
+    /// Get the max degree of any univariate in the sumcheck protocol in this layer.
+    fn max_degree(&self) -> usize;
+}
+
+/// An interface for constructing a [PostSumcheckLayer] for a layer.
+pub trait PostSumcheckEvaluation<F: FieldExt>: SumcheckLayer<F> {
+    /// Get the [PostSumcheckLayer] for a certain layer, which is a struct which represents
+    /// the fully bound layer.
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F>;
 }

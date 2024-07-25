@@ -5,6 +5,7 @@ use remainder_shared_types::FieldExt;
 use crate::{claims::wlx_eval::YieldWLXEvals, input_layer_enum, layer::LayerId};
 
 use super::{
+    hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
     ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
     random_input_layer::RandomInputLayer, InputLayer,
 };
@@ -13,7 +14,8 @@ input_layer_enum!(
     InputLayerEnum,
     (LigeroInputLayer: LigeroInputLayer<F>),
     (PublicInputLayer: PublicInputLayer<F>),
-    (RandomInputLayer: RandomInputLayer<F>)
+    (RandomInputLayer: RandomInputLayer<F>),
+    (HyraxPlaceholderInputLayer: HyraxPlaceholderInputLayer<F>)
 );
 
 impl<F: FieldExt> InputLayerEnum<F> {
@@ -23,6 +25,7 @@ impl<F: FieldExt> InputLayerEnum<F> {
             InputLayerEnum::LigeroInputLayer(layer) => layer.layer_id = layer_id,
             InputLayerEnum::PublicInputLayer(layer) => layer.layer_id = layer_id,
             InputLayerEnum::RandomInputLayer(layer) => layer.layer_id = layer_id,
+            InputLayerEnum::HyraxPlaceholderInputLayer(layer) => layer.layer_id = layer_id,
         }
     }
 }
@@ -54,6 +57,13 @@ impl<F: FieldExt> YieldWLXEvals<F> for InputLayerEnum<F> {
                 num_idx,
             ),
             InputLayerEnum::RandomInputLayer(layer) => layer.get_wlx_evaluations(
+                claim_vecs,
+                claimed_vals,
+                claimed_mles,
+                num_claims,
+                num_idx,
+            ),
+            InputLayerEnum::HyraxPlaceholderInputLayer(layer) => layer.get_wlx_evaluations(
                 claim_vecs,
                 claimed_vals,
                 claimed_mles,

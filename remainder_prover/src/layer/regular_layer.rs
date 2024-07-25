@@ -27,7 +27,7 @@ use crate::{
     },
 };
 
-use super::{product::PostSumcheckLayer, Layer, LayerId, SumcheckLayer};
+use super::{product::PostSumcheckLayer, Layer, LayerId, PostSumcheckEvaluation, SumcheckLayer};
 
 /// The most common implementation of `Layer`
 ///
@@ -347,9 +347,11 @@ impl<F: FieldExt> RegularLayer<F> {
             beta_vals: None,
         }
     }
+}
 
+impl<F: FieldExt> PostSumcheckEvaluation<F> for RegularLayer<F> {
     /// Get the [PostSumcheckLayer] for a regular layer, which represents the fully bound expression.
-    pub fn get_post_sumcheck_layer(
+    fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
         claim_challenges: &[F],
@@ -432,5 +434,9 @@ impl<F: FieldExt> SumcheckLayer<F> for RegularLayer<F> {
 
     fn num_sumcheck_rounds(&self) -> usize {
         self.nonlinear_rounds.as_ref().unwrap().len()
+    }
+
+    fn max_degree(&self) -> usize {
+        &self.expression.get_max_degree() + 1
     }
 }

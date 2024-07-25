@@ -15,7 +15,7 @@ use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::{check_fully_bound, compute_sumcheck_message_no_beta_table},
     product::{PostSumcheckLayer, Product},
-    Layer, LayerError, LayerId, SumcheckLayer,
+    Layer, LayerError, LayerId, PostSumcheckEvaluation, SumcheckLayer,
 };
 use crate::{
     claims::{
@@ -347,9 +347,15 @@ impl<F: FieldExt> MatMult<F> {
 
         Ok(())
     }
+}
 
+impl<F: FieldExt> PostSumcheckEvaluation<F> for MatMult<F> {
     /// Return the [PostSumcheckLayer], panicking if either of the MLE refs is not fully bound.
-    pub fn get_post_sumcheck_layer(&self) -> PostSumcheckLayer<F, F> {
+    fn get_post_sumcheck_layer(
+        &self,
+        _round_challenges: &[F],
+        _claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
         let mle_refs = vec![self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()];
         PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
     }
@@ -630,6 +636,10 @@ impl<F: FieldExt> SumcheckLayer<F> for MatMult<F> {
 
     fn num_sumcheck_rounds(&self) -> usize {
         self.num_vars_middle_ab.unwrap()
+    }
+
+    fn max_degree(&self) -> usize {
+        2
     }
 }
 

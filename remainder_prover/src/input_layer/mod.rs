@@ -20,6 +20,11 @@ pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
 pub mod random_input_layer;
 
+/// An input layer in order to distinguish Hyrax input layers from others.
+/// NOTE: this input layer is just a placeholder to convert from [Witness]s to [HyraxCircuit]s, but
+/// the functionality should NOT be used in just a regular [Witness].
+pub mod hyrax_placeholder_input_layer;
+
 #[cfg(test)]
 mod tests;
 
@@ -125,6 +130,7 @@ pub trait InputLayer<F: FieldExt> {
     /// The struct that contains the opening proof.
     type OpeningProof: Serialize + for<'a> Deserialize<'a>;
 
+    /// The error associated with the input layer that implements this trait.
     type Error: std::error::Error;
 
     /// Generates a commitment

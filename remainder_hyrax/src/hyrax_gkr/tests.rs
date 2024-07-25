@@ -1,41 +1,15 @@
-use crate::curves::PrimeOrderCurve;
 use crate::hyrax_gkr::hyrax_input_layer::HyraxInputLayerProof;
 use crate::hyrax_gkr::hyrax_output_layer::HyraxOutputLayer;
-use crate::hyrax_gkr::{Circuit, CircuitDescription, HyraxProof};
-use crate::layer::from_mle;
-use crate::mle::{Mle, MleRef};
-use crate::prover::input_layer::combine_input_layers::InputLayerBuilder;
-use crate::prover::input_layer::enum_input_layer::{CommitmentEnum, InputLayerEnum};
-use crate::prover::input_layer::hyrax_input_layer::HyraxInputLayer;
-use crate::prover::input_layer::public_input_layer::PublicInputLayer;
-use crate::prover::input_layer::InputLayer;
-use crate::prover::input_layer::MleInputLayer;
-use crate::prover::Layers;
+use crate::hyrax_gkr::{HyraxCircuit, HyraxProof};
+
+use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
-use crate::{
-    curves::ConstantRng,
-    expression::{Expression, ExpressionStandard},
-    gate::identitygate::IdentityGate,
-    layer::{
-        layer_enum::{LayerDescEnum, LayerEnum},
-        matmult::{MatMult, Matrix},
-        product::HyraxClaim,
-        GKRLayer, GKRLayerDesc, Layer, LayerDescription, LayerId,
-    },
-    mle::{
-        dense::{DenseMle, DenseMleRef},
-        mle_enum::MleEnum,
-    },
-    pedersen::{CommittedScalar, PedersenCommitter},
-};
-use ark_test_curves::bn::Bn;
-use halo2_base::halo2_proofs::poly::commitment;
+
 use rand::RngCore;
+use remainder::layer::LayerId;
+use remainder::mle::dense::DenseMle;
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
-    transcript::{
-        counting_transcript::CountingTranscript, poseidon_transcript::PoseidonTranscript,
-    },
     FieldExt, Poseidon,
 };
 use remainder_shared_types::{transcript::Transcript, Fr};
@@ -46,7 +20,7 @@ type Base = <Bn256Point as CurveExt>::Base;
 
 /// Evaluates (a copy of) the MLE at a given point.
 /// Helper function for the tests.
-pub fn evaluate_mle<F: FieldExt>(mle: &DenseMleRef<F>, point: &Vec<F>) -> F {
+pub fn evaluate_mle<F: FieldExt>(mle: &DenseMle<F>, point: &Vec<F>) -> F {
     let mut mle = mle.clone();
     mle.index_mle_indices(0);
     point.iter().enumerate().for_each(|(i, coord)| {
@@ -58,7 +32,7 @@ pub fn evaluate_mle<F: FieldExt>(mle: &DenseMleRef<F>, point: &Vec<F>) -> F {
 #[test]
 fn test_evaluate_mle() {
     let vals = vec![Fr::from(6), Fr::one(), Fr::from(30), Fr::from(2)];
-    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vals.clone(), LayerId::Input(0), None);
+    let mle: DenseMle<Fr, Fr> = DenseMle::new_from_raw(vals.clone(), LayerId::Input(0));
     let mle_ref = mle.mle_ref();
     let point = vec![Fr::from(3), Fr::from(5)];
     let eval = (Fr::one() - point[0]) * (Fr::one() - point[1]) * vals[0] +
@@ -84,9 +58,8 @@ fn degree_one_regular_hyrax_layer_test() {
             Fr::one() + Fr::one(),
         ],
         LayerId::Input(0),
-        None,
     );
-    let expression = ExpressionStandard::Mle(mle_1.mle_ref());
+    let expression = mle_1.expression();
 
     // Construct the GKR Layer from the expression
     let layer: GKRLayer<Scalar, Base, Transcript> =
@@ -695,7 +668,7 @@ fn small_regular_circuit_hyrax_input_layer_test() {
     let output_layers = vec![output_layer];
 
     // FULL CIRCUIT
-    let mut circuit = Circuit {
+    let mut circuit = HyraxCircuit {
         input_layers,
         layers,
         output_layers,
@@ -777,7 +750,7 @@ fn small_regular_circuit_public_input_layer_test() {
     let output_layers = vec![output_layer];
 
     // FULL CIRCUIT
-    let mut circuit = Circuit {
+    let mut circuit = HyraxCircuit {
         input_layers,
         layers,
         output_layers,
@@ -885,7 +858,7 @@ fn medium_regular_circuit_hyrax_input_layer_test() {
     let output_layers = vec![output_layer];
 
     // FULL CIRCUIT
-    let mut circuit = Circuit {
+    let mut circuit = HyraxCircuit {
         input_layers,
         layers,
         output_layers,
@@ -990,7 +963,7 @@ fn medium_regular_circuit_public_input_layer_test() {
     let output_layers = vec![output_layer];
 
     // FULL CIRCUIT
-    let mut circuit = Circuit {
+    let mut circuit = HyraxCircuit {
         input_layers,
         layers,
         output_layers,
@@ -1080,7 +1053,7 @@ fn regular_identity_circuit_test() {
     let output_layers = vec![output_layer];
 
     // FULL CIRCUIT
-    let mut circuit = Circuit {
+    let mut circuit = HyraxCircuit {
         input_layers,
         layers,
         output_layers,
@@ -1181,7 +1154,7 @@ fn regular_identity_matmult_circuit_test() {
     let output_layers = vec![output_layer];
 
     // FULL CIRCUIT
-    let mut circuit = Circuit {
+    let mut circuit = HyraxCircuit {
         input_layers,
         layers,
         output_layers,

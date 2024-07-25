@@ -1,25 +1,27 @@
 use std::{collections::HashMap, marker::PhantomData};
 
-use crate::{
-    hyrax_primitives::proof_of_equality::ProofOfEquality, utils::vandermonde::VandermondeInverse,
-};
-use hyrax_input_layer::InputProofEnum;
-// use hyrax_input_layer::{HyraxInputLayerProof, InputProofEnum};
-use hyrax_output_layer::{HyraxOutputLayerProof, OutputLayerDescription};
+use crate::utils::vandermonde::VandermondeInverse;
+use hyrax_input_layer::{HyraxInputLayerProof, InputProofEnum};
+use hyrax_layer::HyraxClaim;
+use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
+use remainder::mle::Mle;
 use remainder::{
-    input_layer::enum_input_layer::InputLayerEnum,
-    layer::{layer_enum::LayerEnum, SumcheckLayer},
-};
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    hyrax_pcs::HyraxPCSProof,
-    pedersen::{CommittedScalar, PedersenCommitter},
+    claims::wlx_eval::ClaimMle,
+    input_layer::{
+        enum_input_layer::InputLayerEnum, public_input_layer::PublicInputLayer,
+        random_input_layer::RandomInputLayer,
+    },
+    layer::{LayerId, PostSumcheckEvaluation, SumcheckLayer},
 };
 
-use remainder_shared_types::{curves::PrimeOrderCurve, transcript::Transcript};
+use crate::pedersen::{CommittedScalar, PedersenCommitter};
+
+use remainder_shared_types::{
+    curves::PrimeOrderCurve,
+    transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript},
+};
 
 use self::{hyrax_layer::HyraxLayerProof, hyrax_output_layer::HyraxOutputLayer};
 
@@ -39,70 +41,33 @@ pub mod tests;
 
 /// The struct that holds all the respective proofs that the verifier needs in order
 /// to verify a HyraxGKRProof
-pub struct HyraxProof<C: PrimeOrderCurve> {
+pub struct HyraxProof<
+    C: PrimeOrderCurve,
+    L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar>,
+> {
     /// The [HyraxLayerProof] for each of the intermediate layers in this circuit.
     layer_proofs: Vec<HyraxLayerProof<C>>,
     /// The [HyraxInputLayerProof] for each of the input polynomial commitments using the Hyrax PCS.
     input_layer_proofs: Vec<InputProofEnum<C>>,
     /// A commitment to the output of the circuit, i.e. what the final value of the output layer is.
     output_layer_proofs: Vec<HyraxOutputLayerProof<C>>,
-}
-
-/// This struct specifies the structure of the circuit (to the verifier, in particular).
-/// It contains no information that depends on particular runs of the circuit.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct CircuitDescription<C: PrimeOrderCurve> {
-    pub layers: Vec<LayerDescription<C::Scalar>>,
-    pub output_layers: Vec<OutputLayerDescription>,
-}
-
-impl<C: PrimeOrderCurve> CircuitDescription<C> {
-    /// Append this circuit description to the transcript.
-    pub fn append_to_transcript(&self, transcript: &mut impl Transcript<C::Scalar, C::Base>) {
-        let encoded: Vec<u8> = bincode::serialize(&self).unwrap();
-        // For each chunk of 8 bytes, convert to a base field element and append to the transcript
-        encoded.chunks(8).for_each(|chunk| {
-            let chunk: [u8; 8] = chunk.try_into().unwrap();
-            let base_field_element = C::Base::from_bytes_le(&chunk);
-            transcript
-                .append_base_field_element("circuit description", base_field_element)
-                .unwrap();
-        });
-    }
+    _marker: PhantomData<L>,
 }
 
 /// The struct that holds all the necessary information to describe a circuit.
-#[derive(Clone)]
-pub struct Circuit<C: PrimeOrderCurve> {
+pub struct HyraxCircuit<
+    C: PrimeOrderCurve,
+    L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar>,
+> {
     pub input_layers: Vec<InputLayerEnum<C::Scalar>>,
-    pub layers: Vec<impl SumcheckLayer<C::Scalar>>,
+    pub layers: Vec<L>,
     pub output_layers: Vec<HyraxOutputLayer<C>>,
     pub input_commitments: Vec<CommitmentEnum<C, C::Scalar>>,
 }
 
-impl<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> From<Circuit<C, Tr>>
-    for CircuitDescription<C>
+impl<C: PrimeOrderCurve, L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar>>
+    HyraxProof<C, L>
 {
-    fn from(circuit: Circuit<C, Tr>) -> Self {
-        // FIXME add the input layer
-        let layers = circuit
-            .layers
-            .into_iter()
-            .map(|layer| layer.into())
-            .collect();
-        let output_layers = circuit
-            .output_layers
-            .into_iter()
-            .map(|output_layer| output_layer.into())
-            .collect();
-        Self {
-            layers,
-            output_layers,
-        }
-    }
-}
-
-impl<C: PrimeOrderCurve> HyraxProof<C, Tr> {
     /// TODO(vishady) riad audit comments: add in comments the ordering of the proofs every time they are in a vec
 
     /// The Hyrax GKR prover for a full circuit, including output layers, intermediate layers,
@@ -111,13 +76,13 @@ impl<C: PrimeOrderCurve> HyraxProof<C, Tr> {
     /// description and the values and/or commitments of the input layer (which is appropriate
     /// unless already added further upstream).
     pub fn prove(
-        circuit: &mut Circuit<C, Tr>,
+        circuit: &mut HyraxCircuit<C, L>,
         committer: &PedersenCommitter<C>,
         mut blinding_rng: &mut impl Rng,
-        transcript: &mut Tr,
+        transcript: &mut impl ECProverTranscript<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> Self {
-        let Circuit {
+        let HyraxCircuit {
             input_layers,
             layers,
             output_layers,
@@ -139,7 +104,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C, Tr> {
                     committer,
                 );
                 // Add the output claim to the claims table
-                let output_layer_id = output_layer.underlying_mle.get_layer_id();
+                let output_layer_id = output_layer.underlying_mle.layer_id();
                 claim_tracker.insert(output_layer_id, vec![committed_output_claim]);
                 output_layer_proof
             })
@@ -235,10 +200,10 @@ impl<C: PrimeOrderCurve> HyraxProof<C, Tr> {
     /// description and the values and/or commitments of the input layer (which is appropriate
     /// unless already added further upstream).
     pub fn verify(
-        proof: &HyraxProof<C, Tr>,
+        proof: &HyraxProof<C, L>,
         circuit_description: &CircuitDescription<C>,
         committer: &PedersenCommitter<C>,
-        transcript: &mut impl Transcript<C::Scalar, C::Base>,
+        transcript: &mut impl ECVerifierTranscript<C>,
     ) {
         let HyraxProof {
             layer_proofs,
@@ -306,7 +271,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C, Tr> {
                     let plaintext_claims =
                         Self::match_claims(&claims_as_commitments, &committed_claims, committer);
                     plaintext_claims.into_iter().for_each(|claim| {
-                        PublicInputLayer::<C, _, _>::verify(
+                        PublicInputLayer::<C>::verify(
                             &layer.clone().commit().unwrap(),
                             &(),
                             claim,
@@ -321,7 +286,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C, Tr> {
                     let plaintext_claims =
                         Self::match_claims(&claims_as_commitments, &committed_claims, committer);
                     plaintext_claims.into_iter().for_each(|claim| {
-                        RandomInputLayer::<C, _, _, _>::verify(
+                        RandomInputLayer::<C>::verify(
                             &layer.clone().commit().unwrap(),
                             &(),
                             claim,
@@ -346,7 +311,7 @@ impl<C: PrimeOrderCurve> HyraxProof<C, Tr> {
         verifier_claims: &Vec<HyraxClaim<C::Scalar, C>>,
         prover_claims: &Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
         committer: &PedersenCommitter<C>,
-    ) -> Vec<Claim<C::Scalar>> {
+    ) -> Vec<ClaimMle<C::Scalar>> {
         verifier_claims
             .iter()
             .map(|claim| {

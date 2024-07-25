@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::hyrax_gkr::hyrax_input_layer::InputProofEnum;
 use crate::hyrax_gkr::hyrax_output_layer::HyraxOutputLayer;
-use crate::hyrax_gkr::{Circuit, CircuitDescription};
+use crate::hyrax_gkr::HyraxCircuit;
 use crate::hyrax_pcs::MleCoefficientsVector;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::{
@@ -24,7 +24,7 @@ pub struct WorldcoinCircuitPrecommit<P: PrimeOrderCurve> {
 fn generate_hyrax_WC_circuit(
     worldcoin_precommit_data: WorldcoinCircuitPrecommit<Bn256Point>,
     prover_transcript: &mut PoseidonTranscript<Scalar, Base>,
-) -> Circuit<Bn256Point, PoseidonTranscript<Scalar, Base>> {
+) -> HyraxCircuit<Bn256Point, PoseidonTranscript<Scalar, Base>> {
     type Transcript = PoseidonTranscript<Scalar, Base>;
 
     const HYRAX_INPUT_LAYER_ID: usize = 0;
@@ -254,7 +254,7 @@ fn generate_hyrax_WC_circuit(
         .collect_vec();
 
     let layers = layers.0;
-    let circuit = Circuit {
+    let circuit = HyraxCircuit {
         input_layers,
         layers,
         output_layers,
