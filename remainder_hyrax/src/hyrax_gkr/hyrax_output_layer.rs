@@ -18,25 +18,6 @@ pub struct HyraxOutputLayer<C: PrimeOrderCurve> {
     pub underlying_mle: MleEnum<C::Scalar>,
 }
 
-/// Everything that is needed to describe an output layer, without any dependence on the actual input values that instantiate a circuit.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct OutputLayerDescription {
-    /// The number of variables in the output layer
-    pub num_vars: usize,
-    /// The layer id of the output layer
-    pub layer_id: LayerId,
-}
-
-impl<C: PrimeOrderCurve> From<HyraxOutputLayer<C>> for OutputLayerDescription {
-    /// Conversion from an output layer to its description
-    fn from(output_layer: HyraxOutputLayer<C>) -> Self {
-        Self {
-            num_vars: output_layer.underlying_mle.original_mle_indices().len(),
-            layer_id: output_layer.underlying_mle.get_layer_id(),
-        }
-    }
-}
-
 impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
     /// This function will evaluate the output layer at a random point, which is the challenge.
     /// It will get these challenges from the transcript.

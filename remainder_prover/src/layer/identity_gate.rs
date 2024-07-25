@@ -29,10 +29,10 @@ use super::{
     gate::{
         check_fully_bound,
         gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
-        index_mle_indices_gate, Gate, GateError,
+        index_mle_indices_gate, GateError,
     },
     product::{PostSumcheckLayer, Product},
-    Layer, LayerId, SumcheckLayer,
+    Layer, LayerId, PostSumcheckEvaluation, SumcheckLayer,
 };
 
 /// implement the layer trait for identitygate struct
@@ -332,16 +332,16 @@ impl<F: FieldExt> IdentityGate<F> {
         let Evals(evaluations) = evals;
         Ok(evaluations)
     }
+}
 
-    /// Get the [PostSumcheckLayer], the fully bound representation of an identity gate layer.
-    pub fn get_post_sumcheck_layer(
+impl<F: FieldExt> PostSumcheckEvaluation<F> for IdentityGate<F> {
+    fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
         let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
         let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
-
         let beta_g = BetaValues::new_beta_equality_mle(claim_challenges.to_vec());
 
         let f_1_uv = self
@@ -438,5 +438,9 @@ impl<F: FieldExt> SumcheckLayer<F> for IdentityGate<F> {
 
     fn num_sumcheck_rounds(&self) -> usize {
         self.mle_ref.num_iterated_vars()
+    }
+
+    fn max_degree(&self) -> usize {
+        2
     }
 }

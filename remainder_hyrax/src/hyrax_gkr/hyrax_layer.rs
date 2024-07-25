@@ -1,4 +1,3 @@
-use crate::hyrax_primitives::proof_of_equality::ProofOfEquality;
 use crate::{
     hyrax_primitives::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_product::ProofOfProduct,
@@ -12,18 +11,16 @@ use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::wlx_eval::claim_group::ClaimGroup;
 use remainder::claims::wlx_eval::ClaimMle;
+use remainder::claims::wlx_eval::YieldWLXEvals;
 use remainder::layer::combine_mle_refs::get_og_mle_refs;
-use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::product::{new_with_values, Product};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
-use remainder::layer::{LayerId, SumcheckLayer};
+use remainder::layer::{LayerId, PostSumcheckEvaluation, SumcheckLayer};
 use remainder::mle::mle_enum::MleEnum;
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::group::ff::Field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
-use remainder_shared_types::transcript::Transcript;
 use remainder_shared_types::FieldExt;
-use std::{collections::HashMap, marker::PhantomData};
 /// This struct represents what a proof looks like for one layer of GKR, but Hyrax version.
 pub struct HyraxLayerProof<C: PrimeOrderCurve> {
     /// This is the proof of the sumcheck rounds for that layer.
@@ -42,7 +39,9 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     /// essentially the coefficients to the univariate committed to (using the appropriate
     /// generators for that round, i.e. accounting for the zero padding of the sumcheck messages).
     fn commit_to_round(
-        underlying_layer: &mut impl SumcheckLayer<C::Scalar>,
+        underlying_layer: &mut (impl SumcheckLayer<C::Scalar>
+                  + PostSumcheckEvaluation<C::Scalar>
+                  + YieldWLXEvals<C::Scalar>),
         committer: &PedersenCommitter<C>,
         round_index: usize,
         max_degree: usize,
@@ -51,20 +50,22 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> CommittedVector<C> {
         // The univariate evaluations for that round (i.e. f(0), f(1), ...)
-        let round_evaluations = underlying_layer.compute_round_sumcheck_message(round_index);
+        let round_evaluations = underlying_layer
+            .compute_round_sumcheck_message(round_index)
+            .unwrap();
 
         // Convert the evaluations above into coefficients (in Hyrax, it is the coefficients, not
         // the evaluations, that are used)
-        let mut round_coefficients = vec![C::Scalar::zero(); (max_degree + 1) * round_index];
+        let mut round_coefficients = vec![C::Scalar::ZERO; (max_degree + 1) * round_index];
         // Pad the coefficients to form the $v^{(`round_index`)}$ vector, so that only the generators for this round are used
         let computed_coeffs = converter.convert_to_coefficients(round_evaluations);
         round_coefficients.extend(&computed_coeffs);
         round_coefficients.extend(vec![
-            C::Scalar::zero();
+            C::Scalar::ZERO;
             (max_degree + 1) - computed_coeffs.len()
         ]);
         round_coefficients.extend(vec![
-            C::Scalar::zero();
+            C::Scalar::ZERO;
             (max_degree + 1) * (num_rounds - round_index - 1)
         ]);
         let blinding_factor = C::Scalar::random(blinding_rng);
@@ -76,7 +77,9 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     /// Return also a [HyraxClaim] representing the aggregated claim.
     pub fn prove(
         // The layer that we are proving
-        mut layer: &mut impl SumcheckLayer<C::Scalar>,
+        mut layer: &mut (impl SumcheckLayer<C::Scalar>
+                  + PostSumcheckEvaluation<C::Scalar>
+                  + YieldWLXEvals<C::Scalar>),
         // The claims on that layer (unaggregated)
         claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
@@ -136,7 +139,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // Go through each of the sumcheck rounds and produce the \alpha_i messages.
         (0..num_rounds).for_each(|round| {
             let round_commit = HyraxLayerProof::commit_to_round(
-                &mut layer,
+                layer,
                 &committer,
                 round,
                 degree,
@@ -145,13 +148,11 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                 converter,
             );
             messages.push(round_commit);
-            transcript.append_ec_point("sumcheck message commitment", &round_commit.commitment);
+            transcript.append_ec_point("sumcheck message commitment", round_commit.commitment);
 
-            let challenge = transcript
-                .get_scalar_field_challenge("sumcheck round challenge")
-                .unwrap();
+            let challenge = transcript.get_scalar_field_challenge("sumcheck round challenge");
             bindings.push(challenge);
-            layer.bind_round_variable(challenge, round);
+            layer.bind_round_variable(round, challenge);
         });
 
         // Get the post sumcheck layer
@@ -162,16 +163,17 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             commit_to_post_sumcheck_layer(&post_sumcheck_layer, &committer, &mut blinding_rng);
 
         // Get the commitments (i.e. points on C)
-        let commitments = post_sumcheck_layer_committed.as_commitments().get_values();
+        let commitments =
+            committed_scalar_psl_as_commitments(post_sumcheck_layer_committed).get_values();
 
         // Add each of the commitments to the transcript
-        transcript.append_ec_points("commitment to product input/outputs", commitments);
+        transcript.append_ec_points("commitment to product input/outputs", &commitments);
 
         // Get the claims made in this layer
         let committed_claims: Vec<_> = post_sumcheck_layer_committed
             .0
             .iter()
-            .map(|product| product.get_claims())
+            .map(|product| get_claims_from_product(&product))
             .flatten()
             .collect();
 
@@ -274,7 +276,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                 let transcript_sumcheck_message_commit = transcript
                     .consume_ec_point("sumcheck message commitment")
                     .unwrap();
-                assert_eq!(transcript_sumcheck_message_commit, message);
+                assert_eq!(&transcript_sumcheck_message_commit, message);
             });
         // Final challenge in sumcheck -- needed for "oracle query".
         if num_sumcheck_rounds_expected > 0 {
@@ -291,7 +293,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         let transcript_commitments: Vec<C> = transcript
             .consume_ec_points("commitment to product input/outputs", commitments.len())
             .unwrap();
-        assert_eq!(transcript_commitments, commitments);
+        assert_eq!(&transcript_commitments, commitments);
 
         // Build the PostSumcheckLayer from the commitments and the layer description
         let post_sumcheck_layer_desc = layer_desc
@@ -330,7 +332,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         let claims = post_sumcheck_layer
             .0
             .iter()
-            .map(|product| product.get_claims())
+            .map(|product| get_claims_from_product(&product))
             .flatten()
             .collect_vec();
 
@@ -339,7 +341,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 }
 
 // ---------- This is where all the Hyrax [PostSumcheckLayer]-specific stuff is going! ----------
-
+/// Evaluate the PostSumcheckLayer to a single CommittedScalar.
 pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
     post_sumcheck_layer: PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
 ) -> CommittedScalar<C> {
@@ -351,9 +353,10 @@ pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
         })
 }
 
+/// Turn all the CommittedScalars into commitments i.e. Cs.
 pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
     post_sumcheck_layer: PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
-) -> CommittedScalar<C> {
+) -> PostSumcheckLayer<C::Scalar, C> {
     PostSumcheckLayer(
         post_sumcheck_layer
             .0
@@ -388,6 +391,7 @@ pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
     )
 }
 
+/// Evaluate the PostSumcheckLayer to a single scalar
 pub fn evaluate_committed_psl<C: PrimeOrderCurve>(
     post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, C>,
 ) -> C {
@@ -399,8 +403,9 @@ pub fn evaluate_committed_psl<C: PrimeOrderCurve>(
         })
 }
 
+/// Return the claims made on other layers by the atomic factors of this product.
 pub fn get_claims_from_product<F: FieldExt, T: Clone>(
-    product: Product<F, T>,
+    product: &Product<F, T>,
 ) -> Vec<HyraxClaim<F, T>> {
     product
         .intermediates
