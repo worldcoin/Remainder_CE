@@ -1,19 +1,19 @@
-use std::marker::PhantomData;
-
+use ark_std::log2;
 use itertools::Itertools;
-use rand::Rng;
+use rand::{rngs::OsRng, Rng};
+use rand_chacha::ChaCha20Rng;
 use remainder::{
     claims::wlx_eval::claim_group::ClaimGroup,
     input_layer::{public_input_layer::PublicInputLayer, random_input_layer::RandomInputLayer},
     layer::LayerId,
+    mle::dense::DenseMle,
 };
 use remainder_shared_types::{
-    curves::PrimeOrderCurve,
-    transcript::{ec_transcript::ECProverTranscript, Transcript},
+    curves::PrimeOrderCurve, transcript::ec_transcript::ECProverTranscript,
 };
 
 use crate::{
-    hyrax_pcs::HyraxPCSProof,
+    hyrax_pcs::{HyraxPCSProof, MleCoefficientsVector},
     hyrax_primitives::{
         proof_of_claim_agg::ProofOfClaimAggregation, proof_of_equality::ProofOfEquality,
     },
@@ -33,7 +33,7 @@ pub enum InputProofEnum<C: PrimeOrderCurve> {
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
     RandomInputLayerProof(
-        RandomInputLayer<C, C::Scalar, C::Base>,
+        RandomInputLayer<C::Scalar>,
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
 }
@@ -150,5 +150,117 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
             &committer,
             transcript,
         );
+    }
+}
+
+pub struct HyraxInputLayer<C: PrimeOrderCurve> {
+    pub mle: MleCoefficientsVector<C>,
+    pub log_num_cols: usize,
+    // NB committer wouldn't belong here, except that the committers need
+    // to be available to for the implementation of the commit() method, whose signature is defined
+    // by a trait.
+    pub committer: PedersenCommitter<C>,
+    pub blinding_factors_matrix: Vec<C::Scalar>,
+    pub blinding_factor_eval: C::Scalar,
+    pub(crate) layer_id: LayerId,
+    comm: Option<Vec<C>>,
+}
+
+impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
+    pub fn new_with_committer(
+        mle: DenseMle<C::Scalar>,
+        layer_id: LayerId,
+        committer: PedersenCommitter<C>,
+    ) -> Self {
+        let mle_len = mle.mle_ref().bookkeeping_table.len();
+        assert!(mle_len.is_power_of_two());
+
+        let mle_coefficients_vector = MleCoefficientsVector::ScalarFieldVector(mle.mle);
+        let log_num_cols = (log2(mle_len) / 2) as usize;
+        let num_rows = mle_len / (1 << log_num_cols);
+
+        let mut seed_matrix = [0u8; 32];
+        OsRng.fill_bytes(&mut seed_matrix);
+        let mut prng = ChaCha20Rng::from_seed(seed_matrix);
+
+        let blinding_factors_matrix = (0..num_rows)
+            .map(|_| C::Scalar::random(&mut prng))
+            .collect_vec();
+        let mut seed_eval = [0u8; 32];
+        OsRng.fill_bytes(&mut seed_eval);
+        let mut prng = ChaCha20Rng::from_seed(seed_matrix);
+
+        let blinding_factor_eval = C::Scalar::random(&mut prng);
+
+        Self {
+            mle: mle_coefficients_vector,
+            layer_id,
+            log_num_cols,
+            committer,
+            blinding_factors_matrix,
+            blinding_factor_eval,
+            comm: None,
+        }
+    }
+
+    fn new_with_mle_coeff_vec(
+        mle_coefficients_vector: MleCoefficientsVector<C>,
+        layer_id: LayerId,
+    ) -> Self {
+        assert!(mle_coefficients_vector.len().is_power_of_two());
+        let log_num_cols = (log2(mle_coefficients_vector.len()) / 2) as usize;
+        let num_rows = mle_coefficients_vector.len() / (1 << log_num_cols);
+        let committer = PedersenCommitter::new(
+            1 << log_num_cols + 1,
+            "abcdefghijklmnopqrstuvwxyz qwertyuiop",
+            None,
+        );
+
+        let mut seed_matrix = [0u8; 32];
+        OsRng.fill_bytes(&mut seed_matrix);
+        let mut prng = ChaCha20Rng::from_seed(seed_matrix);
+        let blinding_factors_matrix = (0..num_rows)
+            .map(|_| C::Scalar::random(&mut prng))
+            .collect_vec();
+        let mut seed_eval = [0u8; 32];
+        OsRng.fill_bytes(&mut seed_eval);
+        let mut prng = ChaCha20Rng::from_seed(seed_eval);
+        let blinding_factor_eval = C::Scalar::random(&mut prng);
+
+        Self {
+            mle: mle_coefficients_vector,
+            layer_id,
+            log_num_cols,
+            committer,
+            blinding_factors_matrix,
+            blinding_factor_eval,
+            comm: None,
+        }
+    }
+
+    /// Creates new Ligero input layer WITH a precomputed Ligero commitment
+    pub fn new_with_hyrax_commitment(
+        mle: MleCoefficientsVector<C>,
+        layer_id: LayerId,
+        committer: PedersenCommitter<C>,
+        blinding_factors_matrix: Vec<C::Scalar>,
+        log_num_cols: usize,
+        commitment: Vec<C>,
+    ) -> Self {
+        let mut seed_eval = [0u8; 32];
+        OsRng.fill_bytes(&mut seed_eval);
+        OsRng.fill_bytes(&mut seed_eval);
+        let mut prng = ChaCha20Rng::from_seed(seed_eval);
+        let blinding_factor_eval = C::Scalar::random(&mut prng);
+
+        Self {
+            mle,
+            layer_id,
+            log_num_cols,
+            committer,
+            blinding_factors_matrix,
+            blinding_factor_eval,
+            comm: Some(commitment),
+        }
     }
 }

@@ -1589,6 +1589,7 @@ dependencies = [
  "num-bigint",
  "pasta_curves",
  "rand",
+ "rand_chacha",
  "rayon",
  "remainder",
  "remainder-shared-types",
