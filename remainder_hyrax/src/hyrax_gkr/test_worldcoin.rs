@@ -4,34 +4,9 @@ use crate::hyrax_gkr::hyrax_input_layer::InputProofEnum;
 use crate::hyrax_gkr::hyrax_output_layer::HyraxOutputLayer;
 use crate::hyrax_gkr::{Circuit, CircuitDescription};
 use crate::hyrax_pcs::MleCoefficientsVector;
-use crate::layer::matmult::Matrix;
-use crate::layer::LayerId;
-use crate::logup::circuits::{fractional_sumcheck, setup_logup_mles};
-use crate::mle::dense::DenseMle;
-use crate::mle::{Mle, MleRef};
-use crate::pedersen::PedersenCommitter;
-use crate::prover::input_layer::combine_input_layers::InputLayerBuilder;
-use crate::prover::input_layer::enum_input_layer::{CommitmentEnum, InputLayerEnum};
-use crate::prover::input_layer::hyrax_input_layer::HyraxInputLayer;
-use crate::prover::input_layer::ligero_input_layer::LigeroInputLayer;
-use crate::prover::input_layer::public_input_layer::PublicInputLayer;
-use crate::prover::input_layer::random_input_layer::RandomInputLayer;
-use crate::prover::input_layer::InputLayer;
-use crate::utils::vandermonde::VandermondeInverse;
-use crate::worldcoin::builders::SignedRecompBuilder;
-use crate::worldcoin::data::{load_data, load_data_from_serialized_inputs, WorldcoinData};
-use crate::worldcoin::digit_decomposition::{DigitRecompBuilder, BASE};
-use crate::{curves::PrimeOrderCurve, prover::GKRCircuit, worldcoin::data::WorldcoinCircuitData};
-use ark_std::{end_timer, log2, start_timer};
-use ark_test_curves::bn::Bn;
-use halo2_base::halo2_proofs::poly::commitment;
-use itertools::Itertools;
-use remainder_shared_types::transcript::poseidon_transcript::PoseidonTranscript;
-use remainder_shared_types::transcript::Transcript;
-use remainder_shared_types::ScalarField;
+use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
-    transcript::counting_transcript::CountingTranscript,
     FieldExt, Poseidon,
 };
 

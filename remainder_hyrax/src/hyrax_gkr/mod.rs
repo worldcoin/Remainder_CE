@@ -3,11 +3,15 @@ use std::{collections::HashMap, marker::PhantomData};
 use crate::{
     hyrax_primitives::proof_of_equality::ProofOfEquality, utils::vandermonde::VandermondeInverse,
 };
+use hyrax_input_layer::InputProofEnum;
 // use hyrax_input_layer::{HyraxInputLayerProof, InputProofEnum};
 use hyrax_output_layer::{HyraxOutputLayerProof, OutputLayerDescription};
 use itertools::Itertools;
 use rand::Rng;
-use remainder::layer::layer_enum::LayerEnum;
+use remainder::{
+    input_layer::enum_input_layer::InputLayerEnum,
+    layer::{layer_enum::LayerEnum, SumcheckLayer},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -35,14 +39,13 @@ pub mod tests;
 
 /// The struct that holds all the respective proofs that the verifier needs in order
 /// to verify a HyraxGKRProof
-pub struct HyraxProof<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> {
+pub struct HyraxProof<C: PrimeOrderCurve> {
     /// The [HyraxLayerProof] for each of the intermediate layers in this circuit.
-    layer_proofs: Vec<HyraxLayerProof<C, Tr>>,
+    layer_proofs: Vec<HyraxLayerProof<C>>,
     /// The [HyraxInputLayerProof] for each of the input polynomial commitments using the Hyrax PCS.
-    input_layer_proofs: Vec<InputProofEnum<C, Tr>>,
+    input_layer_proofs: Vec<InputProofEnum<C>>,
     /// A commitment to the output of the circuit, i.e. what the final value of the output layer is.
     output_layer_proofs: Vec<HyraxOutputLayerProof<C>>,
-    _marker: PhantomData<Tr>,
 }
 
 /// This struct specifies the structure of the circuit (to the verifier, in particular).
@@ -70,9 +73,9 @@ impl<C: PrimeOrderCurve> CircuitDescription<C> {
 
 /// The struct that holds all the necessary information to describe a circuit.
 #[derive(Clone)]
-pub struct Circuit<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> {
-    pub input_layers: Vec<InputLayerEnum<C, Tr>>,
-    pub layers: Vec<LayerEnum<C::Scalar, C::Base, Tr>>,
+pub struct Circuit<C: PrimeOrderCurve> {
+    pub input_layers: Vec<InputLayerEnum<C::Scalar>>,
+    pub layers: Vec<impl SumcheckLayer<C::Scalar>>,
     pub output_layers: Vec<HyraxOutputLayer<C>>,
     pub input_commitments: Vec<CommitmentEnum<C, C::Scalar>>,
 }
@@ -99,7 +102,7 @@ impl<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> From<Circuit<C, Tr>
     }
 }
 
-impl<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> HyraxProof<C, Tr> {
+impl<C: PrimeOrderCurve> HyraxProof<C, Tr> {
     /// TODO(vishady) riad audit comments: add in comments the ordering of the proofs every time they are in a vec
 
     /// The Hyrax GKR prover for a full circuit, including output layers, intermediate layers,

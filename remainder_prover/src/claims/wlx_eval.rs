@@ -3,7 +3,7 @@ pub mod tests;
 
 mod helpers;
 
-mod claim_group;
+pub mod claim_group;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 use remainder_shared_types::FieldExt;
 

@@ -3,10 +3,14 @@ use std::marker::PhantomData;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::{
+    claims::wlx_eval::claim_group::ClaimGroup,
     input_layer::{public_input_layer::PublicInputLayer, random_input_layer::RandomInputLayer},
     layer::LayerId,
 };
-use remainder_shared_types::{curves::PrimeOrderCurve, transcript::Transcript};
+use remainder_shared_types::{
+    curves::PrimeOrderCurve,
+    transcript::{ec_transcript::ECProverTranscript, Transcript},
+};
 
 use crate::{
     hyrax_pcs::HyraxPCSProof,
@@ -22,14 +26,14 @@ use super::hyrax_layer::HyraxClaim;
 /// FIXME revise doc
 /// FIXME: temporary fix to work with hyrax input layer proofs and the generic input layer proof for
 /// [InputLayerEnum]. Need this for circuits that use multiple different types of input layers.
-pub enum InputProofEnum<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> {
-    HyraxInputLayerProof(HyraxInputLayerProof<C, Tr>),
+pub enum InputProofEnum<C: PrimeOrderCurve> {
+    HyraxInputLayerProof(HyraxInputLayerProof<C>),
     PublicInputLayerProof(
-        PublicInputLayer<C, C::Scalar, Tr>,
+        PublicInputLayer<C::Scalar>,
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
     RandomInputLayerProof(
-        RandomInputLayer<C, C::Scalar, C::Base, Tr>,
+        RandomInputLayer<C, C::Scalar, C::Base>,
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
 }
@@ -38,7 +42,7 @@ pub enum InputProofEnum<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> 
 /// the [ProofOfClaimAggregation], and the appropriate opening proof for opening
 /// the polynomial commitment at a random evaluation point.
 
-pub struct HyraxInputLayerProof<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> {
+pub struct HyraxInputLayerProof<C: PrimeOrderCurve> {
     /// The ID of the layer that this is a proof for
     pub layer_id: LayerId,
     /// The proof of claim aggregation for this layer
@@ -50,17 +54,16 @@ pub struct HyraxInputLayerProof<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C:
     /// The proof of equality that the aggregated claim point and the
     /// commitment in the evaluation proof are indeed to the same value
     pub proof_of_equality: ProofOfEquality<C>,
-    _marker: PhantomData<Tr>,
 }
 
-impl<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> HyraxInputLayerProof<C, Tr> {
+impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
     pub fn prove(
-        input_layer: &HyraxInputLayer<C, Tr>,
+        input_layer: &HyraxInputLayer<C>,
         commitment: &Vec<C>,
         committed_claims: &Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
         committer: &PedersenCommitter<C>,
         blinding_rng: &mut impl Rng,
-        transcript: &mut impl Transcript<C::Scalar, C::Base>,
+        transcript: &mut impl ECProverTranscript<C>,
         converter: &mut VandermondeInverse<C::Scalar>,
     ) -> Self {
         // Calculate the coefficients of the polynomial that interpolates the claims
@@ -113,7 +116,6 @@ impl<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> HyraxInputLayerProo
             claim_agg_proof: proof_of_claim_agg,
             evaluation_proof,
             proof_of_equality,
-            _marker: PhantomData,
         }
     }
 
@@ -123,7 +125,7 @@ impl<C: PrimeOrderCurve, Tr: Transcript<C::Scalar, C::Base>> HyraxInputLayerProo
         &self,
         claim_commitments: &[HyraxClaim<C::Scalar, C>],
         committer: &PedersenCommitter<C>,
-        transcript: &mut impl Transcript<C::Scalar, C::Base>,
+        transcript: &mut impl ECProverTranscript<C>,
     ) {
         // Verify the proof of claim aggregation
         let agg_claim = self.claim_agg_proof.verify(

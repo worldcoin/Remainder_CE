@@ -31,9 +31,9 @@ impl<F: FieldExt> PostSumcheckLayer<F, F> {
 pub struct Product<F: FieldExt, T> {
     /// the evaluated MLEs that are being multiplied and their intermediates
     /// in the order a, b, ab, c, abc, d, abcd, ...
-    intermediates: Vec<Intermediate<F, T>>,
+    pub intermediates: Vec<Intermediate<F, T>>,
     /// the (public) coefficient i.e. the "mxi"
-    coefficient: F,
+    pub coefficient: F,
 }
 
 impl<F: FieldExt> Product<F, F> {
@@ -80,7 +80,7 @@ impl<F: FieldExt> Product<F, F> {
 #[derive(Clone, Debug)]
 /// Represents either an atomic factor of a product (i.e. an evaluation of an MLE), or the result of
 /// an intermediate product of atoms.
-enum Intermediate<F: FieldExt, T> {
+pub enum Intermediate<F: FieldExt, T> {
     Atom {
         /// the id of the layer upon which this is a claim
         layer_id: LayerId,

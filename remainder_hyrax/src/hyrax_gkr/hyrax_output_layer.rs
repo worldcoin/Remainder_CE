@@ -1,15 +1,15 @@
-use crate::{curves::PrimeOrderCurve, pedersen::CommittedScalar, pedersen::PedersenCommitter};
-use crate::{
-    layer::{product::HyraxClaim, LayerId},
-    mle::{mle_enum::MleEnum, MleRef},
-    utils::append_x_y_to_transcript_single,
-};
 use itertools::Itertools;
 use rand::Rng;
-use remainder_shared_types::halo2curves::group::ff::Field;
+use remainder::layer::LayerId;
+use remainder::mle::mle_enum::MleEnum;
+use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 use remainder_shared_types::transcript::Transcript;
+use remainder_shared_types::{curves::PrimeOrderCurve, halo2curves::group::ff::Field};
 use serde::{Deserialize, Serialize};
-use tracing_subscriber::Layer;
+
+use crate::pedersen::{CommittedScalar, PedersenCommitter};
+
+use super::hyrax_layer::HyraxClaim;
 
 /// This is a wrapper around the existing [MleEnum], but suited in order
 /// to produce Zero Knowledge evaluations using Hyrax.
@@ -43,7 +43,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
     /// It will get these challenges from the transcript.
     pub fn fix_variable_on_challenge(
         &mut self,
-        prover_transcript: &mut impl Transcript<C::Scalar, C::Base>,
+        prover_transcript: &mut impl ECProverTranscript<C>,
     ) {
         let challenge: Vec<C::Scalar> = (0..self.underlying_mle.num_vars())
             .map(|_idx| {
@@ -105,7 +105,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// Returns a HyraxOutputLayerProof and the claim that the output layer is making.
     pub fn prove(
         output_layer: &mut HyraxOutputLayer<C>,
-        transcript: &mut impl Transcript<C::Scalar, C::Base>,
+        transcript: &mut impl ECProverTranscript<C>,
         blinding_rng: &mut impl Rng,
         scalar_committer: &PedersenCommitter<C>,
     ) -> (Self, HyraxClaim<C::Scalar, CommittedScalar<C>>) {
@@ -114,12 +114,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         let committed_claim = output_layer.get_claim(blinding_rng, scalar_committer);
         let commitment = committed_claim.to_claim_commitment().evaluation;
         // Add the commitment to the transcript
-        append_x_y_to_transcript_single(
-            &commitment,
-            transcript,
-            "output layer commit x",
-            "output layer commit y",
-        );
+        transcript.append_ec_point("output layer commit", &commitment);
 
         (
             Self {
@@ -135,7 +130,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     pub fn verify(
         proof: &HyraxOutputLayerProof<C>,
         layer_desc: &OutputLayerDescription,
-        transcript: &mut impl Transcript<C::Scalar, C::Base>,
+        transcript: &mut impl ECVerifierTranscript<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
         let bindings = (0..layer_desc.num_vars)
@@ -147,13 +142,9 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
             })
             .collect_vec();
 
-        // Add the commitment to the transcript
-        append_x_y_to_transcript_single(
-            &proof.claim_commitment,
-            transcript,
-            "output layer commit x",
-            "output layer commit y",
-        );
+        let transcript_claim_commit = transcript.consume_ec_point("output layer commit").unwrap();
+        assert_eq!(&proof.claim_commitment, transcript_claim_commit);
+
         HyraxClaim {
             point: bindings,
             mle_enum: None,
