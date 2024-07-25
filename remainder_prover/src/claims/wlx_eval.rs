@@ -303,6 +303,7 @@ impl<F: fmt::Debug + FieldExt> fmt::Debug for ClaimMle<F> {
 ///  *  `l(1) = `claim_vecs[1]`,
 ///  *   ...,
 ///  *  `l(m-1) = `claim_vecs[m-1]`.
+///
 /// It is guaranteed that the returned value is at least `num_claims =
 /// claim_vecs.len()`.
 /// # Panics

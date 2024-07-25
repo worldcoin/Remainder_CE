@@ -1008,8 +1008,7 @@ where
         let cols_to_open: Vec<usize> = tr
             .get_challenges("Columns", n_col_opens)
             .into_iter()
-            .enumerate()
-            .map(|(_i, challenge)| {
+            .map(|challenge| {
                 compute_col_idx_from_transcript_challenge(challenge, comm.encoded_num_cols)
             })
             .collect();

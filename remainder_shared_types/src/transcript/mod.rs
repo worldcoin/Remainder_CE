@@ -248,6 +248,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
     ///   is invalid. This is an internal error which should never appear under
     ///   normal circumstances.
+    ///
     /// TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
@@ -288,6 +289,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
     ///   is invalid. This is an internal error which should never appear under
     ///   normal circumstances.
+    ///
     /// TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
@@ -317,6 +319,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
     ///   is invalid. This is an internal error which should never appear under
     ///   normal circumstances.
+    ///
     /// TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used
@@ -352,6 +355,7 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
     /// * `TranscriptReaderError::InternalIndicesError`: if the internal state
     ///   is invalid. This is an internal error which should never appear under
     ///   normal circumstances.
+    ///
     /// TODO(Makis): Consider turning the internal error into a panic.
     ///
     /// The `label` is used for sanity checking against the label that was used

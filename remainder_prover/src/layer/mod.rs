@@ -4,6 +4,7 @@ pub mod combine_mle_refs;
 
 pub mod gate;
 pub mod layer_enum;
+pub mod matmult;
 pub mod regular_layer;
 
 use std::fmt::Debug;
@@ -102,6 +103,18 @@ pub enum LayerId {
     Layer(usize),
     /// An MLE located in the output layer.
     Output(usize),
+}
+
+impl LayerId {
+    /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
+    pub(crate) fn next(&self) -> LayerId {
+        match self {
+            LayerId::RandomInput(id) => LayerId::RandomInput(id + 1),
+            LayerId::Input(id) => LayerId::Input(id + 1),
+            LayerId::Layer(id) => LayerId::Layer(id + 1),
+            LayerId::Output(id) => LayerId::Output(id + 1),
+        }
+    }
 }
 
 /// A layer is the smallest component of the GKR protocol.

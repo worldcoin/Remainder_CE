@@ -1,5 +1,8 @@
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::max,
+    collections::HashMap,
     fmt::Debug,
     iter::repeat,
     ops::{Add, Mul, Neg, Sub},
@@ -7,9 +10,18 @@ use std::{
 
 use remainder_shared_types::FieldExt;
 
-use crate::{layouter::nodes::NodeId, mle::MleIndex};
+use crate::{
+    layouter::{
+        layouting::{CircuitMap, DAGError},
+        nodes::NodeId,
+    },
+    mle::{dense::DenseMle, MleIndex},
+};
 
-use super::generic_expr::{Expression, ExpressionNode, ExpressionType};
+use super::{
+    generic_expr::{Expression, ExpressionNode, ExpressionType},
+    prover_expr::{MleVecIndex, ProverExpr},
+};
 
 /// Abstract Expression
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -18,6 +30,9 @@ impl<F: FieldExt> ExpressionType<F> for AbstractExpr {
     type MLENodeRepr = NodeId;
     type MleVec = ();
 }
+
+/// alias for circuit building
+pub type ExprBuilder<F> = Expression<F, AbstractExpr>;
 
 //  comments for Phase II:
 //  This will be the the circuit "pre-data" stage
@@ -39,6 +54,56 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
         };
         self.traverse(&mut get_sources_closure).unwrap();
         sources
+    }
+
+    /// Computes the num_vars of this expression (how many rounds of sumcheck it would take to prove)
+    pub fn num_vars(&self, circuit_map: &CircuitMap<'_, F>) -> Result<usize, DAGError> {
+        self.expression_node.get_num_vars(circuit_map)
+    }
+
+    /// Builds the ProverExpression using the AbstractExpression as a template.
+    ///
+    /// Gets the information the prover needs by consulting the CircuitMap to get
+    /// the data and the prefix_bits
+    pub fn build_prover_expr(
+        self,
+        circuit_map: &CircuitMap<'_, F>,
+    ) -> Result<Expression<F, ProverExpr>, DAGError> {
+        // First we get all the mles that this expression will need to store
+        let mut nodes = self.expression_node.get_node_ids(vec![]);
+        nodes.sort();
+        nodes.dedup();
+
+        let mut node_map = HashMap::<NodeId, usize>::new();
+
+        let mle_vec: Result<Vec<_>, _> = nodes
+            .into_iter()
+            .enumerate()
+            .map(|(idx, node_id)| {
+                let (location, data) = circuit_map.get_node(&node_id)?;
+
+                let data = (*data).clone();
+
+                let data = DenseMle::new_with_prefix_bits(
+                    data,
+                    location.layer_id,
+                    location.prefix_bits.clone(),
+                );
+
+                node_map.insert(node_id, idx);
+                Ok(data)
+            })
+            .collect();
+        let mle_vec = mle_vec?;
+
+        // Then we replace the NodeIds in the AbstractExpr w/ indices of our stored MLEs
+
+        let expression_node = self.expression_node.build_prover_node(&node_map)?;
+
+        Ok(Expression::<F, ProverExpr> {
+            expression_node,
+            mle_vec,
+        })
     }
 
     /// Concatenates two expressions together
@@ -106,6 +171,104 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
         let (node, _) = expression.deconstruct();
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), ())
+    }
+}
+
+impl<F: FieldExt> ExpressionNode<F, AbstractExpr> {
+    /// Map the node_ids in the AbstractExpr to the resolved list of MLEs stored by the ProverExpr
+    fn build_prover_node(
+        self,
+        node_map: &HashMap<NodeId, usize>,
+    ) -> Result<ExpressionNode<F, ProverExpr>, DAGError> {
+        // Note that the node_map is the map of node_ids to the internal vec of MLEs, not the circuit_map
+        match self {
+            ExpressionNode::Constant(val) => Ok(ExpressionNode::Constant(val)),
+            ExpressionNode::Selector(mle_index, lhs, rhs) => {
+                let lhs = lhs.build_prover_node(node_map)?;
+                let rhs = rhs.build_prover_node(node_map)?;
+                Ok(ExpressionNode::Selector(
+                    mle_index,
+                    Box::new(lhs),
+                    Box::new(rhs),
+                ))
+            }
+            ExpressionNode::Mle(node_id) => Ok(ExpressionNode::Mle(MleVecIndex::new(
+                *node_map
+                    .get(&node_id)
+                    .ok_or(DAGError::DanglingNodeId(node_id))?,
+            ))),
+            ExpressionNode::Negated(expr) => Ok(ExpressionNode::Negated(Box::new(
+                expr.build_prover_node(node_map)?,
+            ))),
+            ExpressionNode::Sum(lhs, rhs) => {
+                let lhs = lhs.build_prover_node(node_map)?;
+                let rhs = rhs.build_prover_node(node_map)?;
+                Ok(ExpressionNode::Sum(Box::new(lhs), Box::new(rhs)))
+            }
+            ExpressionNode::Product(nodes) => {
+                let mle_vec_indices = nodes
+                    .into_iter()
+                    .map(|node_id| {
+                        Ok(MleVecIndex::new(
+                            *node_map
+                                .get(&node_id)
+                                .ok_or(DAGError::DanglingNodeId(node_id))?,
+                        ))
+                    })
+                    .collect::<Result<_, _>>()?;
+                Ok(ExpressionNode::Product(mle_vec_indices))
+            }
+            ExpressionNode::Scaled(expr, scalar) => {
+                let expr = expr.build_prover_node(node_map)?;
+                Ok(ExpressionNode::Scaled(Box::new(expr), scalar))
+            }
+        }
+    }
+
+    fn get_node_ids(&self, mut node_ids: Vec<NodeId>) -> Vec<NodeId> {
+        match self {
+            ExpressionNode::Constant(_) => node_ids,
+            ExpressionNode::Selector(_, lhs, rhs) => {
+                let node_ids = rhs.get_node_ids(node_ids);
+                lhs.get_node_ids(node_ids)
+            }
+            ExpressionNode::Mle(node_id) => {
+                node_ids.push(*node_id);
+                node_ids
+            }
+            ExpressionNode::Negated(expr) => expr.get_node_ids(node_ids),
+            ExpressionNode::Sum(lhs, rhs) => {
+                let node_ids = lhs.get_node_ids(node_ids);
+                rhs.get_node_ids(node_ids)
+            }
+            ExpressionNode::Product(nodes) => {
+                node_ids.extend(nodes.iter());
+                node_ids
+            }
+            ExpressionNode::Scaled(expr, _) => expr.get_node_ids(node_ids),
+        }
+    }
+
+    fn get_num_vars(&self, circuit_map: &CircuitMap<'_, F>) -> Result<usize, DAGError> {
+        match self {
+            ExpressionNode::Constant(_) => Ok(0),
+            ExpressionNode::Selector(_, lhs, rhs) => Ok(max(
+                lhs.get_num_vars(circuit_map)? + 1,
+                rhs.get_num_vars(circuit_map)? + 1,
+            )),
+            ExpressionNode::Mle(node_id) => Ok(circuit_map.get_node(node_id)?.1.num_vars()),
+            ExpressionNode::Negated(expr) => expr.get_num_vars(circuit_map),
+            ExpressionNode::Sum(lhs, rhs) => Ok(max(
+                lhs.get_num_vars(circuit_map)?,
+                rhs.get_num_vars(circuit_map)?,
+            )),
+            ExpressionNode::Product(nodes) => Ok(nodes
+                .iter()
+                .map(|node_id| Ok(Some(circuit_map.get_node(node_id)?.1.num_vars())))
+                .fold_ok(None, max)?
+                .unwrap_or(0)),
+            ExpressionNode::Scaled(expr, _) => expr.get_num_vars(circuit_map),
+        }
     }
 }
 

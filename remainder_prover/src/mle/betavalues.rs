@@ -59,8 +59,9 @@ impl<F: FieldExt> BetaValues<F> {
 
     /// Updates the given value of beta using a new challenge point. Simply `(1
     /// - r_i)*(1 - g_i) + (r_i * g_i)` for an index `i`, previous claim
-    /// challenge point `g_i` and current challenge `r_i`. We remove it from the
-    /// unbound hashmap and add it to the bound hashmap.
+    /// challenge point `g_i` and current challenge `r_i`.
+    ///
+    /// We remove it from the unbound hashmap and add it to the bound hashmap.
     pub(crate) fn beta_update(&mut self, round_index: usize, challenge: F) {
         let val_to_update = self.unbound_values.remove(&round_index).unwrap();
         let updated_val =

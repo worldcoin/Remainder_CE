@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
-    mle::{dense::DenseMle, mle_enum::MleEnum},
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
 use super::{
@@ -23,7 +23,7 @@ use crate::mle::Mle;
 /// "in the clear" (i.e. without a commitment).
 #[derive(Debug)]
 pub struct PublicInputLayer<F: FieldExt> {
-    mle: DenseMle<F>,
+    mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,
 }
 

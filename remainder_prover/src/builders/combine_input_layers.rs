@@ -223,7 +223,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
 
     /// Turn this builder into an input layer.
     pub fn to_input_layer<I: MleInputLayer<F>>(self) -> I {
-        let final_mle: DenseMle<F> = self.combine_input_mles();
+        let final_mle = self.combine_input_mles().original_mle;
         I::new(final_mle, self.layer_id)
     }
 
@@ -235,7 +235,7 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         ligero_root: LcRoot<LigeroAuxInfo<F>, F>,
         verifier_is_precommit: bool,
     ) -> LigeroInputLayer<F> {
-        let final_mle: DenseMle<F> = self.combine_input_mles();
+        let final_mle = self.combine_input_mles().original_mle;
         LigeroInputLayer::<F>::new_with_ligero_commitment(
             final_mle,
             self.layer_id,

@@ -1,23 +1,71 @@
 use ark_std::test_rng;
 
+use itertools::Itertools;
 use remainder::{
-    builders::{
-        combine_input_layers::InputLayerBuilder, layer_builder::simple_builders::ZeroBuilder,
+    layouter::{
+        compiling::LayouterCircuit,
+        component::{Component, ComponentSet},
+        nodes::{
+            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_outputs::OutputNode,
+            node_enum::NodeEnum,
+            sector::Sector,
+            CircuitNode, ClaimableNode, Context,
+        },
     },
-    input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
     mle::{dense::DenseMle, Mle},
-    prover::{
-        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
-        Witness,
-    },
+    prover::helpers::test_circuit,
 };
-use remainder_shared_types::FieldExt;
-use utils::{ProductScaledBuilder, TripleNestedSelectorBuilder};
+use remainder_shared_types::{FieldExt, Fr};
+use utils::DifferenceBuilderComponent;
+use utils::{ProductScaledBuilderComponent, TripleNestedBuilderComponent};
 
-use crate::utils::get_dummy_random_mle_vec;
+use crate::utils::{get_dummy_random_mle_vec, get_input_shred_from_vec};
 
 pub mod utils;
+
+struct DataparallelTripleNestedSelectorComponent<F: FieldExt> {
+    first_layer_component: TripleNestedBuilderComponent<F>,
+    output_component: DifferenceBuilderComponent<F>,
+}
+
+impl<F: FieldExt> DataparallelTripleNestedSelectorComponent<F> {
+    /// A simple wrapper around the [TripleNestedBuilderComponent] which
+    /// additionally contains a [DifferenceBuilderComponent] for zero output
+    pub fn new(
+        ctx: &Context,
+        mle_1_input: &dyn ClaimableNode<F = F>,
+        mle_2_input: &dyn ClaimableNode<F = F>,
+        mle_3_input: &dyn ClaimableNode<F = F>,
+    ) -> Self {
+        dbg!(&mle_1_input.get_data().num_vars());
+        dbg!(&mle_2_input.get_data().num_vars());
+        dbg!(&mle_3_input.get_data().num_vars());
+        let first_layer_component =
+            TripleNestedBuilderComponent::new(ctx, mle_1_input, mle_2_input, mle_3_input);
+
+        let output_component =
+            DifferenceBuilderComponent::new(ctx, first_layer_component.get_output_sector());
+
+        Self {
+            first_layer_component,
+            output_component,
+        }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for DataparallelTripleNestedSelectorComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        self.first_layer_component
+            .yield_nodes()
+            .into_iter()
+            .chain(self.output_component.yield_nodes())
+            .collect_vec()
+    }
+}
 
 /// A circuit which does the following:
 /// * Layer 0: [ProductScaledBuilder] with `mle_1_vec`, `mle_2_vec`
@@ -34,93 +82,27 @@ pub mod utils;
 /// have one more variable than in `mle_3_vec`.
 ///
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
-struct DataParallelCircuitAlt<F: FieldExt> {
-    mle_1: DenseMle<F>,
-    mle_2: DenseMle<F>,
-    mle_3: DenseMle<F>,
-    mle_4: DenseMle<F>,
-}
-
-impl<F: FieldExt> GKRCircuit<F> for DataParallelCircuitAlt<F> {
-    type ProofSystem = DefaultProofSystem;
-
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let mut layers = Layers::new();
-
-        self.mle_1.layer_id = LayerId::Input(0);
-        self.mle_2.layer_id = LayerId::Input(0);
-        self.mle_3.layer_id = LayerId::Input(0);
-        self.mle_4.layer_id = LayerId::Input(0);
-
-        let input_commit: Vec<&mut dyn Mle<F>> = vec![
-            &mut self.mle_1,
-            &mut self.mle_2,
-            &mut self.mle_3,
-            &mut self.mle_4,
-        ];
-
-        let input_commit_builder =
-            InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));
-
-        let input_layer: PublicInputLayer<F> =
-            input_commit_builder.to_input_layer::<PublicInputLayer<F>>();
-
-        let input_layer_enum = input_layer.into();
-
-        let first_layer_builder = ProductScaledBuilder::new(self.mle_1.clone(), self.mle_2.clone());
-        let first_layer_output = layers.add_gkr(first_layer_builder);
-
-        let second_layer_builder = TripleNestedSelectorBuilder::new(
-            first_layer_output.clone(),
-            self.mle_3.clone(),
-            self.mle_4.clone(),
-        );
-
-        let second_layer_output = layers.add_gkr(second_layer_builder);
-
-        let zero_builder = ZeroBuilder::new(second_layer_output.clone());
-        let output = layers.add_gkr(zero_builder);
-
-        Witness {
-            layers,
-            output_layers: vec![output.get_enum()],
-            input_layers: vec![input_layer_enum],
-        }
-    }
-}
-
-impl<F: FieldExt> DataParallelCircuitAlt<F> {
-    fn new(mle_1: DenseMle<F>, mle_2: DenseMle<F>, mle_3: DenseMle<F>, mle_4: DenseMle<F>) -> Self {
-        Self {
-            mle_1,
-            mle_2,
-            mle_3,
-            mle_4,
-        }
-    }
-}
-
-// TODO(vishady): this test fails based off of our current implementation of remainder!! The current problem is the way
-// selector bits are treated when combining expressions.
-
 #[test]
-fn test_dataparallel_selector_alt() {
-    const NUM_DATA_PARALLEL_BITS: usize = 3;
+fn test_dataparallel_selector_alt_newmainder() {
+    const NUM_DATAPARALLEL_BITS: usize = 3;
     const NUM_VARS_MLE_1_2: usize = 2;
     const NUM_VARS_MLE_3: usize = NUM_VARS_MLE_1_2 + 1;
     const NUM_VARS_MLE_4: usize = NUM_VARS_MLE_3 + 1;
     let mut rng = test_rng();
 
-    let mle_1_vec = get_dummy_random_mle_vec(NUM_VARS_MLE_1_2, NUM_DATA_PARALLEL_BITS, &mut rng);
-    let mle_2_vec = get_dummy_random_mle_vec(NUM_VARS_MLE_1_2, NUM_DATA_PARALLEL_BITS, &mut rng);
-    let mle_3_vec = get_dummy_random_mle_vec(NUM_VARS_MLE_3, NUM_DATA_PARALLEL_BITS, &mut rng);
-    let mle_4_vec = get_dummy_random_mle_vec(NUM_VARS_MLE_4, NUM_DATA_PARALLEL_BITS, &mut rng);
+    // This is not strictly necessary; the setup of `DenseMle` -->
+    // `batch_mles()` --> `bookkeeping_table` is just to emulate what
+    // batching *would* look like
+    let mle_1_vec = get_dummy_random_mle_vec(NUM_VARS_MLE_1_2, NUM_DATAPARALLEL_BITS, &mut rng);
+    let mle_2_vec = get_dummy_random_mle_vec(NUM_VARS_MLE_1_2, NUM_DATAPARALLEL_BITS, &mut rng);
+    let mle_3_vec = get_dummy_random_mle_vec(NUM_VARS_MLE_3, NUM_DATAPARALLEL_BITS, &mut rng);
+    let mle_4_vec = get_dummy_random_mle_vec(NUM_VARS_MLE_4, NUM_DATAPARALLEL_BITS, &mut rng);
 
     // These checks can possibly be done with the newly designed batching bits/system
     assert_eq!(mle_1_vec.len(), mle_2_vec.len());
     assert_eq!(mle_3_vec.len(), mle_2_vec.len());
     assert_eq!(mle_3_vec.len(), mle_4_vec.len());
-    assert_eq!(mle_1_vec.len(), 1 << NUM_DATA_PARALLEL_BITS);
+    assert_eq!(mle_1_vec.len(), 1 << NUM_DATAPARALLEL_BITS);
     let all_num_vars_1_2: Vec<usize> = mle_1_vec
         .iter()
         .chain(mle_2_vec.iter())
@@ -148,18 +130,59 @@ fn test_dataparallel_selector_alt() {
     assert!(all_vars_same_4);
     // These checks can possibly be done with the newly designed batching bits/system
 
-    // the batched mle should be able to demonstrate that there's NUM_DATA_PARALLEL_BITS of batch bits
-    let mle_1_vec_batched = DenseMle::batch_mles(mle_1_vec);
-    let mle_2_vec_batched = DenseMle::batch_mles(mle_2_vec);
-    let mle_3_vec_batched = DenseMle::batch_mles(mle_3_vec);
-    let mle_4_vec_batched = DenseMle::batch_mles(mle_4_vec);
-    // the batched mle should be able to demonstrate that there's NUM_DATA_PARALLEL_BITS of batch bits
+    // TODO(%): the batched mle should be able to demonstrate that there's NUM_DATA_PARALLEL_BITS of batch bits
+    let dataparallel_mle_1 = DenseMle::batch_mles(mle_1_vec);
+    let dataparallel_mle_2 = DenseMle::batch_mles(mle_2_vec);
+    let dataparallel_mle_3 = DenseMle::batch_mles(mle_3_vec);
+    let dataparallel_mle_4 = DenseMle::batch_mles(mle_4_vec);
 
-    let circuit = DataParallelCircuitAlt::new(
-        mle_1_vec_batched,
-        mle_2_vec_batched,
-        mle_3_vec_batched,
-        mle_4_vec_batched,
-    );
-    test_circuit(circuit, None);
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let dataparallel_input_mle_1 = get_input_shred_from_vec(
+            dataparallel_mle_1.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+        let dataparallel_input_mle_2 = get_input_shred_from_vec(
+            dataparallel_mle_2.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+        let dataparallel_input_mle_3 = get_input_shred_from_vec(
+            dataparallel_mle_3.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+        let dataparallel_input_mle_4 = get_input_shred_from_vec(
+            dataparallel_mle_4.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+
+        let component_1 = ProductScaledBuilderComponent::new(
+            ctx,
+            &dataparallel_input_mle_1,
+            &dataparallel_input_mle_2,
+        );
+        let component_2 = DataparallelTripleNestedSelectorComponent::new(
+            ctx,
+            component_1.get_output_sector(),
+            &dataparallel_input_mle_3,
+            &dataparallel_input_mle_4,
+        );
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            dataparallel_input_mle_1.into(),
+            dataparallel_input_mle_2.into(),
+            dataparallel_input_mle_3.into(),
+            dataparallel_input_mle_4.into(),
+        ];
+
+        all_nodes.extend(component_1.yield_nodes());
+        all_nodes.extend(component_2.yield_nodes());
+        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    });
+
+    test_circuit(circuit, None)
 }

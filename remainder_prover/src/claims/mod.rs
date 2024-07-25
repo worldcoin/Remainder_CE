@@ -54,6 +54,10 @@ pub enum ClaimError {
     /// Error while combining mle refs in order to evaluate challenge point.
     #[error("Error while combining mle refs in order to evaluate challenge point")]
     MleRefCombineError(#[from] CombineMleRefError),
+
+    /// Zero MLE refs cannot be used as intermediate values within a circuit!
+    #[error("Zero MLE refs cannot be used as intermediate values within a circuit")]
+    IntermediateZeroMLERefError,
 }
 
 /// A claim contains a `point \in F^n` along with the `result \in F` that an

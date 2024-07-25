@@ -1,19 +1,23 @@
 use ark_std::test_rng;
 
+use itertools::Itertools;
 use remainder::{
-    builders::{
-        combine_input_layers::InputLayerBuilder, layer_builder::simple_builders::ZeroBuilder,
+    layouter::{
+        compiling::LayouterCircuit,
+        component::{Component, ComponentSet},
+        nodes::{
+            circuit_inputs::{InputLayerNode, InputLayerType},
+            circuit_outputs::OutputNode,
+            node_enum::NodeEnum,
+            sector::Sector,
+            CircuitNode, ClaimableNode, Context,
+        },
     },
-    input_layer::public_input_layer::PublicInputLayer,
-    layer::LayerId,
     mle::{dense::DenseMle, Mle},
-    prover::{
-        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
-        Witness,
-    },
+    prover::helpers::test_circuit,
 };
-use remainder_shared_types::FieldExt;
-use utils::ProductScaledBuilder;
+use remainder_shared_types::{FieldExt, Fr};
+use utils::{get_input_shred_from_vec, DifferenceBuilderComponent, ProductScaledBuilderComponent};
 
 use crate::utils::get_dummy_random_mle_vec;
 pub mod utils;
@@ -29,57 +33,48 @@ pub mod utils;
 /// table values, same size.
 ///
 /// * `num_dataparallel_bits` - The number of bits that represent which copy index the circuit is.
-struct NonSelectorDataparallelCircuitAlt<F: FieldExt> {
-    mle_1_vec: DenseMle<F>,
-    mle_2_vec: DenseMle<F>,
+
+struct NonSelectorDataparallelComponent<F: FieldExt> {
+    first_layer_component: ProductScaledBuilderComponent<F>,
+    output_component: DifferenceBuilderComponent<F>,
 }
 
-impl<F: FieldExt> GKRCircuit<F> for NonSelectorDataparallelCircuitAlt<F> {
-    type ProofSystem = DefaultProofSystem;
+impl<F: FieldExt> NonSelectorDataparallelComponent<F> {
+    /// A simple wrapper around the [TripleNestedBuilderComponent] which
+    /// additionally contains a [DifferenceBuilderComponent] for zero output
+    pub fn new(
+        ctx: &Context,
+        mle_1_input: &dyn ClaimableNode<F = F>,
+        mle_2_input: &dyn ClaimableNode<F = F>,
+    ) -> Self {
+        let first_layer_component =
+            ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
 
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem> {
-        let mut layers = Layers::new();
+        let output_component =
+            DifferenceBuilderComponent::new(ctx, first_layer_component.get_output_sector());
 
-        self.mle_1_vec.layer_id = LayerId::Input(0);
-        self.mle_2_vec.layer_id = LayerId::Input(0);
-
-        let input_commit: Vec<&mut dyn Mle<F>> = vec![&mut self.mle_1_vec, &mut self.mle_2_vec];
-
-        let input_commit_builder =
-            InputLayerBuilder::<F>::new(input_commit, None, LayerId::Input(0));
-
-        let input_layer: PublicInputLayer<F> =
-            input_commit_builder.to_input_layer::<PublicInputLayer<F>>();
-
-        let input_layer_enum = input_layer.into();
-
-        let first_layer_builder =
-            ProductScaledBuilder::new(self.mle_1_vec.clone(), self.mle_2_vec.clone());
-
-        let first_layer_output = layers.add_gkr(first_layer_builder);
-
-        let zero_builder = ZeroBuilder::new(first_layer_output);
-        let output = layers.add_gkr(zero_builder);
-
-        Witness {
-            layers,
-            output_layers: vec![output.get_enum()],
-            input_layers: vec![input_layer_enum],
+        Self {
+            first_layer_component,
+            output_component,
         }
     }
 }
 
-impl<F: FieldExt> NonSelectorDataparallelCircuitAlt<F> {
-    fn new(mle_1_vec: DenseMle<F>, mle_2_vec: DenseMle<F>) -> Self {
-        Self {
-            mle_1_vec,
-            mle_2_vec,
-        }
+impl<F: FieldExt, N> Component<N> for NonSelectorDataparallelComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        self.first_layer_component
+            .yield_nodes()
+            .into_iter()
+            .chain(self.output_component.yield_nodes())
+            .collect_vec()
     }
 }
 
 #[test]
-fn test_simple_dataparallel_circuit_alt() {
+fn test_dataparallel_simple_newmainder() {
     const NUM_DATA_PARALLEL_BITS: usize = 3;
     const NUM_VARS_MLE_1_2: usize = 2;
     let mut rng = test_rng();
@@ -99,13 +94,39 @@ fn test_simple_dataparallel_circuit_alt() {
     assert!(all_vars_same);
     assert_eq!(mle_1_vec.len(), mle_2_vec.len());
     assert_eq!(mle_1_vec.len(), 1 << NUM_DATA_PARALLEL_BITS);
-    // These checks can possibly be done with the newly designed batching bits/system
 
-    // the batched mle should be able to demonstrate that there's NUM_DATA_PARALLEL_BITS of batch bits
-    let mle_1_vec_batched = DenseMle::batch_mles(mle_1_vec);
-    let mle_2_vec_batched = DenseMle::batch_mles(mle_2_vec);
-    // the batched mle should be able to demonstrate that there's NUM_DATA_PARALLEL_BITS of batch bits
+    // TODO(%): the batched mle should be able to demonstrate that there's NUM_DATA_PARALLEL_BITS of batch bits
+    let dataparallel_mle_1 = DenseMle::batch_mles(mle_1_vec);
+    let dataparallel_mle_2 = DenseMle::batch_mles(mle_2_vec);
 
-    let circuit = NonSelectorDataparallelCircuitAlt::new(mle_1_vec_batched, mle_2_vec_batched);
-    test_circuit(circuit, None);
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let dataparallel_input_mle_1 = get_input_shred_from_vec(
+            dataparallel_mle_1.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+        let dataparallel_input_mle_2 = get_input_shred_from_vec(
+            dataparallel_mle_2.bookkeeping_table().to_vec(),
+            ctx,
+            &input_layer,
+        );
+
+        let component_1 = NonSelectorDataparallelComponent::new(
+            ctx,
+            &dataparallel_input_mle_1,
+            &dataparallel_input_mle_2,
+        );
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            dataparallel_input_mle_1.into(),
+            dataparallel_input_mle_2.into(),
+        ];
+
+        all_nodes.extend(component_1.yield_nodes());
+        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    });
+
+    test_circuit(circuit, None)
 }

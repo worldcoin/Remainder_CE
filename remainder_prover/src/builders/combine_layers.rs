@@ -119,27 +119,22 @@ pub fn combine_layers<F: FieldExt>(
         .collect_vec();
 
     // --- First zip combines the subcircuit layers with all of its output layers AND all of its subcircuit-major "layer bits" ---
-    layers
+    for ((layers, output_layers), new_bits) in layers
         .iter_mut()
         .zip(output_layers.iter_mut())
         .zip(layer_bits)
-        // --- For each subcircuit... ---
-        .map(|((layers, output_layers), new_bits)| {
-            for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
-                if let Some(effected_layer) =
-                    layers.layers.get(layer_idx).map(|layer| layer.layer_id())
-                {
-                    add_bits_to_layer_refs(
-                        &mut layers.layers[layer_idx..],
-                        output_layers,
-                        new_bits,
-                        effected_layer,
-                    )?;
-                }
+    {
+        for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
+            if let Some(&effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.id()) {
+                add_bits_to_layer_refs(
+                    &mut layers.layers[layer_idx..],
+                    output_layers,
+                    new_bits,
+                    effected_layer,
+                )?;
             }
-            Ok(())
-        })
-        .try_collect()?;
+        }
+    }
 
     //Combine all the sub-circuits expressions in such a way that it matches the
     //extra bits we calculated

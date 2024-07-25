@@ -128,10 +128,7 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     // TODO(Makis): Parallelize
     let intermediate_results: Result<Vec<_>, _> = claim_groups
         .into_iter()
-        .enumerate()
-        .map(|(_idx, claim_group)| {
-            verifier_aggregate_claims_in_one_round(&claim_group, transcript_reader)
-        })
+        .map(|claim_group| verifier_aggregate_claims_in_one_round(&claim_group, transcript_reader))
         .collect();
     let intermediate_results = intermediate_results?;
 

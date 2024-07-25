@@ -14,6 +14,7 @@ use crate::{
 
 use crate::mle::Mle;
 
+#[derive(Clone, Debug)]
 /// The list of Layers that make up the GKR circuit
 #[derive(Debug)]
 pub struct Layers<F: FieldExt, T: Layer<F>> {
@@ -44,6 +45,7 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
     ///
     /// # Arguments
     /// * `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
+    ///
     /// x is the label on the batched mle `lhs`, y is the label on the batched mle `rhs`, and z is the label on the next layer, batched
     /// * `lhs`: the flattened mle representing the left side of the summation
     /// * `rhs`: the flattened mle representing the right side of the summation

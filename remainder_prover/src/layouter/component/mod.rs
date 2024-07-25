@@ -12,6 +12,7 @@ pub trait Component<N: CircuitNode> {
 ///
 /// keeps track of an unordered list of nodes,
 /// and can consume other components to add to this list
+#[derive(Clone, Debug, Default)]
 pub struct ComponentSet<N> {
     nodes: Vec<N>,
 }
@@ -25,6 +26,11 @@ impl<N: CircuitNode> ComponentSet<N> {
     /// Adds the nodes a `Component` yields to this `ComponentSet`
     pub fn add_component<C: Component<N>>(&mut self, other: C) {
         self.nodes.append(&mut other.yield_nodes())
+    }
+
+    /// Creates a new ComponentSet with some Nodes added explicitely
+    pub fn new_raw(nodes: Vec<N>) -> Self {
+        Self { nodes }
     }
 }
 

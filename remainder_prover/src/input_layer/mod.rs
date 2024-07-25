@@ -2,7 +2,7 @@
 
 use ark_std::cfg_into_iter;
 
-use crate::mle::Mle;
+use crate::mle::{evals::MultilinearExtension, Mle};
 use rayon::prelude::*;
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
@@ -126,7 +126,7 @@ pub trait VerifierInputLayer<F: FieldExt> {
 /// Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs.
 pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {
     /// Creates a new InputLayer from a flat mle.
-    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self;
+    fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self;
 }
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.

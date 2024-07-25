@@ -1,4 +1,6 @@
-//! Nodes that represent inputs to a circuit in the circuit DAG
+//! Nodes that represent inputs to a circuit in the circuit DAG\
+
+mod compile_inputs;
 
 use remainder_shared_types::FieldExt;
 
@@ -13,8 +15,7 @@ use super::{CircuitNode, ClaimableNode, Context, NodeId};
 #[derive(Debug, Clone)]
 pub struct InputShred<F> {
     id: NodeId,
-    #[allow(dead_code)]
-    parent: Option<NodeId>,
+    parent: NodeId,
     data: MultilinearExtension<F>,
 }
 
@@ -45,15 +46,16 @@ impl<F: FieldExt> InputShred<F> {
     ///
     /// Specifying a source indicates to the layouter that this
     /// InputShred should be appended to the source when laying out
-    pub fn new(
-        ctx: &Context,
-        data: MultilinearExtension<F>,
-        source: Option<&InputLayerNode<F>>,
-    ) -> Self {
+    pub fn new(ctx: &Context, data: MultilinearExtension<F>, source: &InputLayerNode<F>) -> Self {
         let id = ctx.get_new_id();
-        let parent = source.map(CircuitNode::id);
+        let parent = source.id();
 
         InputShred { id, parent, data }
+    }
+
+    /// Gets the parent NodeId of this InputShred. The InputLayerNode this InputShred will eventually be added to
+    pub fn get_parent(&self) -> NodeId {
+        self.parent
     }
 }
 
@@ -61,7 +63,7 @@ impl<F: FieldExt> InputShred<F> {
 /// of InputLayer an InputLayerNode can be compiled into
 #[derive(Debug, Clone)]
 pub enum InputLayerType {
-    /// A LigeroInputLayer
+    ///An InputLayer that will be compiled into a `LigeroInputLayer`
     LigeroInputLayer,
     /// A PublicInputLayer
     PublicInputLayer,
@@ -77,8 +79,7 @@ pub enum InputLayerType {
 pub struct InputLayerNode<F> {
     id: NodeId,
     children: Vec<InputShred<F>>,
-    #[allow(dead_code)]
-    input_layer_type: InputLayerType,
+    pub(in crate::layouter) input_layer_type: InputLayerType,
 }
 
 impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
@@ -92,20 +93,6 @@ impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
 
     fn sources(&self) -> Vec<NodeId> {
         vec![]
-    }
-}
-
-impl<F: FieldExt> ClaimableNode for InputLayerNode<F> {
-    type F = F;
-
-    fn get_data(&self) -> &MultilinearExtension<Self::F> {
-        todo!()
-        // ende's comment here: maybe InputLayerNode also needs a data field?
-        // i.e. after combining the shreds, appending all the necessary prefix bits, etc.
-    }
-
-    fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
-        todo!()
     }
 }
 

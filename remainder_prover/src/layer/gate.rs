@@ -32,7 +32,7 @@ use crate::{
     sumcheck::{evaluate_at_a_point, Evals},
 };
 
-use self::gate_helpers::{
+pub use self::gate_helpers::{
     check_fully_bound, compute_full_gate, compute_sumcheck_message_no_beta_table,
     index_mle_indices_gate, libra_giraffe, prove_round_dataparallel_phase, prove_round_gate,
     GateError,
@@ -466,9 +466,11 @@ impl<F: FieldExt> Gate<F> {
     /// Construct a new gate layer
     ///
     /// # Arguments
-    /// * `num_dataparallel_bits`: an optional representing the number of bits representing the circuit copy we are looking at. None
-    /// if this is not dataparallel, otherwise specify the number of bits
+    /// * `num_dataparallel_bits`: an optional representing the number of bits representing the circuit copy we are looking at.
+    ///
+    /// None if this is not dataparallel, otherwise specify the number of bits
     /// * `nonzero_gates`: the gate wiring between single-copy circuit (as the wiring for each circuit remains the same)
+    ///
     /// x is the label on the batched mle `lhs`, y is the label on the batched mle `rhs`, and z is the label on the next layer, batched
     /// * `lhs`: the flattened mle representing the left side of the summation
     /// * `rhs`: the flattened mle representing the right side of the summation
