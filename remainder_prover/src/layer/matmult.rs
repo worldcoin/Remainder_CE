@@ -14,7 +14,8 @@ use remainder_shared_types::{
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::{check_fully_bound, compute_sumcheck_message_no_beta_table},
-    Layer, LayerError, LayerId,
+    product::{PostSumcheckLayer, Product},
+    Layer, LayerError, LayerId, SumcheckLayer,
 };
 use crate::{
     claims::{
@@ -346,6 +347,12 @@ impl<F: FieldExt> MatMult<F> {
 
         Ok(())
     }
+
+    /// Return the [PostSumcheckLayer], panicking if either of the MLE refs is not fully bound.
+    pub fn get_post_sumcheck_layer(&self) -> PostSumcheckLayer<F, F> {
+        let mle_refs = vec![self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()];
+        PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
+    }
 }
 
 impl<F: FieldExt> Layer<F> for MatMult<F> {
@@ -589,6 +596,40 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
         let mut wlx_evals = claimed_vals.to_vec();
         wlx_evals.extend(&next_evals);
         Ok(wlx_evals)
+    }
+}
+
+impl<F: FieldExt> SumcheckLayer<F> for MatMult<F> {
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), Self::Error> {
+        let mut claim_b = claim_point.to_vec();
+        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+        self.pre_processing_step(claim_a, claim_b);
+        Ok(())
+    }
+
+    fn compute_round_sumcheck_message(
+        &mut self,
+        round_index: usize,
+    ) -> Result<Vec<F>, Self::Error> {
+        let mle_a = self.mle_a.as_mut().unwrap();
+        let mle_b = self.mle_b.as_mut().unwrap();
+        let sumcheck_message =
+            compute_sumcheck_message_no_beta_table(&[mle_a.clone(), mle_b.clone()], 2, round_index)
+                .unwrap();
+        Ok(sumcheck_message)
+    }
+
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), Self::Error> {
+        let mle_a = self.mle_a.as_mut().unwrap();
+        let mle_b = self.mle_b.as_mut().unwrap();
+        mle_a.fix_variable(round_index, challenge);
+        mle_b.fix_variable(round_index, challenge);
+
+        Ok(())
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.num_vars_middle_ab.unwrap()
     }
 }
 
