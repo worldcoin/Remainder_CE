@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+rand_chacha = "0.3.1"
 remainder-shared-types = { path = "../remainder_shared_types" }
 remainder = { path = "../remainder_prover" }
 itertools = "0.11.0"
