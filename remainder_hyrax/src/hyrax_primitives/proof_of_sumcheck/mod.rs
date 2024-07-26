@@ -7,7 +7,10 @@ use remainder_shared_types::{
 };
 use std::ops::Neg;
 
-use crate::pedersen::{CommittedScalar, CommittedVector, PedersenCommitter};
+use crate::{
+    hyrax_gkr::hyrax_layer::{evaluate_committed_psl, evaluate_committed_scalar},
+    pedersen::{CommittedScalar, CommittedVector, PedersenCommitter},
+};
 
 use super::proof_of_dot_prod::ProofOfDotProduct;
 
@@ -85,7 +88,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
             Self::calculate_j_star(&bindings.to_vec(), &rhos, &gammas, degree);
 
         // need a CommittedScalar for the result of the dot product
-        let oracle_eval = post_sumcheck_layer.evaluate();
+        let oracle_eval = evaluate_committed_scalar(post_sumcheck_layer);
         let sum_commitment = sum.commitment;
         let dot_product: CommittedScalar<C> =
             oracle_eval * rhos[rhos.len() - 1].neg() + sum.clone() * rhos[0];
@@ -167,7 +170,7 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
             Self::calculate_j_star(&bindings.to_vec(), &rhos, &gammas, degree);
 
         // calculate a commitment to the expected dot product
-        let oracle_eval = post_sumcheck_layer.evaluate();
+        let oracle_eval = evaluate_committed_psl(post_sumcheck_layer);
         let dot_product: C = self.sum * rhos[0] + oracle_eval * rhos[rhos.len() - 1].neg();
 
         self.podp

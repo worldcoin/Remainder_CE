@@ -1,4 +1,5 @@
 use crate::hyrax_gkr::hyrax_layer::commit_to_post_sumcheck_layer;
+use crate::hyrax_gkr::hyrax_layer::committed_scalar_psl_as_commitments;
 use crate::utils::vandermonde::VandermondeInverse;
 
 use super::*;
@@ -6,6 +7,7 @@ use remainder::layer::product::Product;
 use remainder::layer::LayerId;
 use remainder::mle::betavalues::BetaValues;
 use remainder::mle::dense::DenseMle;
+use remainder::mle::Mle;
 use remainder_shared_types::curves::ConstantRng;
 use remainder_shared_types::halo2curves::bn256::Fr;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
@@ -120,10 +122,12 @@ fn test_completeness() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(transcript);
 
+    let psl_as_commits = committed_scalar_psl_as_commitments(post_sumcheck_layer);
+
     proof.verify(
         &sum_commit.commitment,
         1, // the degree of the messages
-        &post_sumcheck_layer.as_commitments(),
+        &psl_as_commits,
         &bindings,
         &committer,
         &mut verifier_transcript,
@@ -155,9 +159,8 @@ fn test_example_with_regular_layer() {
     let v01 = Fr::from(1);
     let v11 = Fr::from(1);
     let mut mle_ref = DenseMle::new_from_raw(vec![v00, v10, v01, v11], LayerId::Input(0));
-    // let mut equality_mle = BetaTable::new(vec![Fr::one(), Fr::one()]).unwrap();
-    let layer_claim_vars_and_index_for_beta = vec![(0 as usize, Fr::one())];
-    let mut equality_mle = BetaValues::new(layer_claim_vars_and_index_for_beta);
+    let layer_claim_for_beta = vec![Fr::one()];
+    let mut equality_mle = BetaValues::new_beta_equality_mle(layer_claim_for_beta);
     let mut constant_rng = ConstantRng::new(1);
 
     // the sum
@@ -171,7 +174,7 @@ fn test_example_with_regular_layer() {
 
     // bind the variables
     mle_ref.index_mle_indices(0);
-    equality_mle.table.index_mle_indices(0);
+    equality_mle.index_mle_indices(0);
 
     // first sumcheck message f1
     let f1_padded = vec![
@@ -185,7 +188,7 @@ fn test_example_with_regular_layer() {
     let message1 = committer.committed_vector(&f1_padded, &Fr::one());
 
     // second sumcheck message f2
-    equality_mle.beta_update(0, r1);
+    equality_mle.fix_variable(0, r1);
     mle_ref.fix_variable(0, r1);
 
     // TODO!(ryancao): Put the `compute_sumcheck_message` back in?
@@ -194,7 +197,7 @@ fn test_example_with_regular_layer() {
 
     let evaluations = vec![Fr::from(0), Fr::from(1), Fr::from(2)];
     let mut converter = VandermondeInverse::<Fr>::new();
-    let coefficients = converter.convert_to_coefficients(evaluations.0);
+    let coefficients = converter.convert_to_coefficients(evaluations.to_vec());
     assert_eq!(coefficients, vec![Fr::from(0), Fr::from(1), Fr::from(0)]);
 
     let f2_padded = vec![
@@ -207,15 +210,15 @@ fn test_example_with_regular_layer() {
     ];
     let message2 = committer.committed_vector(&f2_padded, &Fr::from(7));
 
-    equality_mle.beta_update(0, r2);
+    equality_mle.fix_variable(0, r2);
     mle_ref.fix_variable(1, r2);
 
-    let mle_eval = mle_ref.bookkeeping_table()[0] * equality_mle.table.bookkeeping_table[0];
+    let mle_eval = mle_ref.bookkeeping_table()[0] * equality_mle.bookkeeping_table()[0];
     dbg!(&mle_eval);
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
         &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
             &vec![mle_ref.clone()],
-            equality_mle.table.bookkeeping_table[0],
+            equality_mle.bookkeeping_table()[0],
         )]),
         &committer,
         &mut rand::thread_rng(),
@@ -235,10 +238,12 @@ fn test_example_with_regular_layer() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(transcript);
 
+    let committed_psl = committed_scalar_psl_as_commitments(post_sumcheck_layer);
+
     proof.verify(
         &sum_commit.commitment,
         2, // the degree of the messages
-        &post_sumcheck_layer.as_commitments(),
+        &committed_psl,
         &bindings,
         &committer,
         &mut verifier_transcript,
@@ -293,10 +298,11 @@ fn test_soundness() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(transcript);
 
+    let committed_psl = committed_scalar_psl_as_commitments(post_sumcheck_layer);
     proof.verify(
         &sum_commit.commitment,
         1, // the degree of the messages
-        &post_sumcheck_layer.as_commitments(),
+        &committed_psl,
         &bindings,
         &committer,
         &mut verifier_transcript,

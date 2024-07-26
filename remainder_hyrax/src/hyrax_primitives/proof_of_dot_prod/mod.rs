@@ -62,7 +62,8 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         transcript.append_ec_point("commitment to d", commit_d);
         transcript.append_ec_point("commitment to d dot a", commit_d_dot_a);
 
-        let c: <C as PrimeOrderCurve>::Scalar = transcript.get_challenge("challenge c");
+        let c: <C as PrimeOrderCurve>::Scalar =
+            transcript.get_scalar_field_challenge("challenge c");
 
         // the z vector that is cx + d. only the prover can compute this because it knows x.
         let z_vector = x
@@ -125,7 +126,9 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
 
         // now the verifier can sample the same random challenge. once again, this is in the base field so we
         // truncate in order to convert it into the scalar field.
-        let c = transcript.get_challenge("challenge c").unwrap();
+        let c = transcript
+            .get_scalar_field_challenge("challenge c")
+            .unwrap();
 
         // we compute <z, a> and then commitments to z and <z, a> based off of the blinding factors and values in
         // the evaluation proof.

@@ -1,12 +1,18 @@
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::utils::vandermonde::VandermondeInverse;
-use hyrax_input_layer::{HyraxInputLayerProof, InputProofEnum};
+use hyrax_input_layer::{HyraxCircuitInputLayerEnum, HyraxInputLayerProof, InputProofEnum};
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
+use remainder::claims::wlx_eval::YieldWLXEvals;
+use remainder::layouter::compiling::LayouterCircuit;
+use remainder::layouter::component::Component;
+use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::mle::Mle;
+use remainder::prover::proof_system::DefaultProofSystem;
+use remainder::prover::{GKRCircuit, Witness};
 use remainder::{
     claims::wlx_eval::ClaimMle,
     input_layer::{
@@ -15,6 +21,7 @@ use remainder::{
     },
     layer::{LayerId, PostSumcheckEvaluation, SumcheckLayer},
 };
+use remainder_shared_types::FieldExt;
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 
@@ -57,16 +64,53 @@ pub struct HyraxProof<
 /// The struct that holds all the necessary information to describe a circuit.
 pub struct HyraxCircuit<
     C: PrimeOrderCurve,
-    L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar>,
+    L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar> + YieldWLXEvals<C::Scalar>,
 > {
-    pub input_layers: Vec<InputLayerEnum<C::Scalar>>,
+    pub input_layers: Vec<HyraxCircuitInputLayerEnum<C>>,
     pub layers: Vec<L>,
     pub output_layers: Vec<HyraxOutputLayer<C>>,
     pub input_commitments: Vec<CommitmentEnum<C, C::Scalar>>,
 }
 
-impl<C: PrimeOrderCurve, L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar>>
-    HyraxProof<C, L>
+impl<
+        C: PrimeOrderCurve,
+        L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar> + YieldWLXEvals<C::Scalar>,
+    > HyraxCircuit<C, L>
+{
+    fn new_from_gkr_circuit(gkr_circuit: &mut LayouterCircuit<>) -> Self {
+        let witness: Witness<<C as PrimeOrderCurve>::Scalar, DefaultProofSystem> = gkr_circuit.synthesize();
+        let Witness {
+            input_layers,
+            layers,
+            output_layers,
+        } = witness;
+
+        // let hyrax_output_layers = output_layers.iter().map(
+        //     |output_layer| {
+        //         HyraxOutputLayer {
+        //             underlying_mle: output_layer,
+        //             _marker: PhantomData,
+        //         }
+        //     }
+        // )
+
+        let input_layers = input_layers.iter().map(
+            |input_layer| {
+                match input_layer {
+                    InputLayerEnum::HyraxPlaceholderInputLayer(_) => (),
+
+                }
+            }
+        )
+
+        todo!()
+    }
+}
+
+impl<
+        C: PrimeOrderCurve,
+        L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar> + YieldWLXEvals<C::Scalar>,
+    > HyraxProof<C, L>
 {
     /// TODO(vishady) riad audit comments: add in comments the ordering of the proofs every time they are in a vec
 

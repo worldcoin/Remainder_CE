@@ -21,9 +21,14 @@ pub mod public_input_layer;
 pub mod random_input_layer;
 
 /// An input layer in order to distinguish Hyrax input layers from others.
-/// NOTE: this input layer is just a placeholder to convert from [Witness]s to [HyraxCircuit]s, but
-/// the functionality should NOT be used in just a regular [Witness].
+/// NOTE: this input layer is just a placeholder to convert from impl [GKRCircuit]s to [HyraxCircuit]s, but
+/// the functionality should NOT be used in just a regular [GKRCircuit].
 pub mod hyrax_placeholder_input_layer;
+
+/// An input layer in order to distinguish Hyrax input layers with precommits from others.
+/// NOTE: this input layer is just a placeholder to convert from impl [GKRCircuit]s to [HyraxCircuit]s, but
+/// the functionality should NOT be used in just a regular [GKRCircuit].
+pub mod hyrax_precommit_placeholder_input_layer;
 
 #[cfg(test)]
 mod tests;

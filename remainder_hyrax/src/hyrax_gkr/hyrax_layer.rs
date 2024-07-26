@@ -343,7 +343,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 // ---------- This is where all the Hyrax [PostSumcheckLayer]-specific stuff is going! ----------
 /// Evaluate the PostSumcheckLayer to a single CommittedScalar.
 pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
-    post_sumcheck_layer: PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
+    post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
 ) -> CommittedScalar<C> {
     post_sumcheck_layer
         .0
