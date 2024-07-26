@@ -229,13 +229,13 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
                 }
             })
             .collect();
-        dbg!(&point);
+        // dbg!(&point);
 
         let verifier_expr = self
             .expression
             .bind(&point, transcript_reader)
             .map_err(|err| VerificationError::ExpressionError(err))?;
-        dbg!(&verifier_expr);
+        // dbg!(&verifier_expr);
 
         let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
 

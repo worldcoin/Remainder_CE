@@ -6,6 +6,7 @@
 //! intermediate/input layer whose [LayerId] it inherits. The MLE it stores is a
 //! restriction of an MLE defining its associated layer.
 
+use num::Zero;
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +32,23 @@ use super::{
 #[serde(bound = "F: FieldExt")]
 pub struct MleOutputLayer<F: FieldExt> {
     mle: MleEnum<F>,
+}
+
+/// Required for output layer shenanigans within `layout`
+impl<F: FieldExt> From<DenseMle<F>> for MleOutputLayer<F> {
+    fn from(value: DenseMle<F>) -> Self {
+        Self {
+            mle: MleEnum::Dense(value),
+        }
+    }
+}
+
+impl<F: FieldExt> From<ZeroMle<F>> for MleOutputLayer<F> {
+    fn from(value: ZeroMle<F>) -> Self {
+        Self {
+            mle: MleEnum::Zero(value),
+        }
+    }
 }
 
 impl<F: FieldExt> MleOutputLayer<F> {

@@ -14,14 +14,18 @@ use remainder_shared_types::{
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::{check_fully_bound, compute_sumcheck_message_no_beta_table},
-    Layer, LayerError, LayerId,
+    CircuitLayer, Layer, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
     claims::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
+    expression::{
+        circuit_expr::CircuitMle, expr_errors::ExpressionError, verifier_expr::VerifierMle,
+    },
     layer::VerificationError,
+    layouter::nodes::matmult::MatMultNode,
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, VerifyError},
@@ -349,13 +353,13 @@ impl<F: FieldExt> MatMult<F> {
 }
 
 impl<F: FieldExt> Layer<F> for MatMult<F> {
-    type Proof = Option<SumcheckProof<F>>;
+    // type Proof = Option<SumcheckProof<F>>;
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) -> Result<Option<SumcheckProof<F>>, LayerError> {
+    ) -> Result<(), LayerError> {
         let mut claim_b = claim.get_point().clone();
         let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
 
@@ -416,98 +420,237 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
             .unwrap()
             .fix_variable(num_vars_middle - 1, final_chal);
 
-        Ok(Some(sumcheck_rounds.into()))
-    }
-
-    /// Verifies the sumcheck protocol
-    fn verify_rounds(
-        &mut self,
-        claim: Claim<F>,
-        sumcheck_prover_messages: Self::Proof,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    ) -> Result<(), LayerError> {
-        let sumcheck_prover_messages = sumcheck_prover_messages.unwrap().0;
-        let mut challenges = vec![];
-
-        let mut prev_evals = &sumcheck_prover_messages[0];
-        let mut claim_b = claim.get_point().clone();
-        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
-
-        let claimed_val = prev_evals[0] + prev_evals[1];
-
-        if claimed_val != claim.get_result() {
-            debug!("I'm the PROBLEM");
-            debug!("msg0 + msg1 =\n{:?}", prev_evals[0] + prev_evals[1]);
-            debug!("rest =\n{:?}", claim.get_result());
-            return Err(LayerError::VerificationError(
-                VerificationError::SumcheckStartFailed,
-            ));
-        }
-
-        let num_prev_evals = sumcheck_prover_messages[0].len();
-        transcript_reader
-            .consume_elements("Initial Sumcheck evaluations", num_prev_evals)
-            .unwrap();
-
-        // --- For round 1 < i < n, perform the check ---
-        // g_{i - 1}(r_i) = g_i(0) + g_i(1)
-        for curr_evals in sumcheck_prover_messages.iter().skip(1) {
-            let challenge = transcript_reader
-                .get_challenge("Sumcheck challenge")
-                .unwrap();
-
-            let prev_at_r =
-                evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
-
-            if prev_at_r != curr_evals[0] + curr_evals[1] {
-                return Err(LayerError::VerificationError(
-                    VerificationError::SumcheckFailed,
-                ));
-            };
-
-            transcript_reader
-                .consume_elements("Sumcheck evaluations", curr_evals.len())
-                .unwrap();
-
-            prev_evals = curr_evals;
-            challenges.push(challenge);
-        }
-
-        // --- In the final round, we check that g(r_1, ..., r_n) = g_n(r_n) ---
-        // Here, we first sample r_n.
-        let final_chal = transcript_reader
-            .get_challenge("Final Sumcheck challenge")
-            .unwrap();
-        challenges.push(final_chal);
-
-        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
-        let full_claim_chals_a = challenges
-            .clone()
-            .into_iter()
-            .chain(claim_a.into_iter())
-            .collect_vec();
-        let full_claim_chals_b = claim_b
-            .into_iter()
-            .chain(challenges.into_iter())
-            .collect_vec();
-        let fully_bound_a =
-            check_fully_bound(&mut [self.mle_a.clone().unwrap()], full_claim_chals_a).unwrap();
-        let fully_bound_b =
-            check_fully_bound(&mut [self.mle_b.clone().unwrap()], full_claim_chals_b).unwrap();
-        let matrix_product = fully_bound_a * fully_bound_b;
-
-        if prev_at_r != matrix_product {
-            return Err(LayerError::VerificationError(
-                VerificationError::FinalSumcheckFailed,
-            ));
-        }
-
+        // Ok(Some(sumcheck_rounds.into()))
         Ok(())
     }
 
-    ///Gets this layers id
-    fn id(&self) -> &LayerId {
-        &self.layer_id
+    // /// Verifies the sumcheck protocol
+    // fn verify_rounds(
+    //     &mut self,
+    //     claim: Claim<F>,
+    //     sumcheck_prover_messages: Self::Proof,
+    //     transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    // ) -> Result<(), LayerError> {
+    //     let sumcheck_prover_messages = sumcheck_prover_messages.unwrap().0;
+    //     let mut challenges = vec![];
+
+    //     let mut prev_evals = &sumcheck_prover_messages[0];
+    //     let mut claim_b = claim.get_point().clone();
+    //     let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+
+    //     let claimed_val = prev_evals[0] + prev_evals[1];
+
+    //     if claimed_val != claim.get_result() {
+    //         debug!("I'm the PROBLEM");
+    //         debug!("msg0 + msg1 =\n{:?}", prev_evals[0] + prev_evals[1]);
+    //         debug!("rest =\n{:?}", claim.get_result());
+    //         return Err(LayerError::VerificationError(
+    //             VerificationError::SumcheckStartFailed,
+    //         ));
+    //     }
+
+    //     let num_prev_evals = sumcheck_prover_messages[0].len();
+    //     transcript_reader
+    //         .consume_elements("Initial Sumcheck evaluations", num_prev_evals)
+    //         .unwrap();
+
+    //     // --- For round 1 < i < n, perform the check ---
+    //     // g_{i - 1}(r_i) = g_i(0) + g_i(1)
+    //     for curr_evals in sumcheck_prover_messages.iter().skip(1) {
+    //         let challenge = transcript_reader
+    //             .get_challenge("Sumcheck challenge")
+    //             .unwrap();
+
+    //         let prev_at_r =
+    //             evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
+
+    //         if prev_at_r != curr_evals[0] + curr_evals[1] {
+    //             return Err(LayerError::VerificationError(
+    //                 VerificationError::SumcheckFailed,
+    //             ));
+    //         };
+
+    //         transcript_reader
+    //             .consume_elements("Sumcheck evaluations", curr_evals.len())
+    //             .unwrap();
+
+    //         prev_evals = curr_evals;
+    //         challenges.push(challenge);
+    //     }
+
+    //     // --- In the final round, we check that g(r_1, ..., r_n) = g_n(r_n) ---
+    //     // Here, we first sample r_n.
+    //     let final_chal = transcript_reader
+    //         .get_challenge("Final Sumcheck challenge")
+    //         .unwrap();
+    //     challenges.push(final_chal);
+
+    //     let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
+    //     let full_claim_chals_a = challenges
+    //         .clone()
+    //         .into_iter()
+    //         .chain(claim_a.into_iter())
+    //         .collect_vec();
+    //     let full_claim_chals_b = claim_b
+    //         .into_iter()
+    //         .chain(challenges.into_iter())
+    //         .collect_vec();
+    //     let fully_bound_a =
+    //         check_fully_bound(&mut [self.mle_a.clone().unwrap()], full_claim_chals_a).unwrap();
+    //     let fully_bound_b =
+    //         check_fully_bound(&mut [self.mle_b.clone().unwrap()], full_claim_chals_b).unwrap();
+    //     let matrix_product = fully_bound_a * fully_bound_b;
+
+    //     if prev_at_r != matrix_product {
+    //         return Err(LayerError::VerificationError(
+    //             VerificationError::FinalSumcheckFailed,
+    //         ));
+    //     }
+
+    //     Ok(())
+    // }
+
+    /// TODO(ryancao, vishady) -- write circuit description for matmult!
+    type CircuitLayer = CircuitMatmultLayer<F>;
+
+    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
+        let circuit_a_matrix_mle = dense_mle_to_circuit_mle(&self.mle_a.as_ref().unwrap());
+        let circuit_b_matrix_mle = dense_mle_to_circuit_mle(&self.mle_b.as_ref().unwrap());
+        Ok(CircuitMatmultLayer {
+            layer_id: self.layer_id,
+            a_matrix_mle: circuit_a_matrix_mle,
+            b_matrix_mle: circuit_b_matrix_mle,
+        })
+    }
+
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+}
+
+/// Converts a [Matrix<F>] into a [CircuitMle<F>].
+fn matrix_mle_to_circuit_mle<F: FieldExt>(matrix_mle: Matrix<F>) -> CircuitMle<F> {
+
+    let mle_indices = matrix_mle.prefix_bits.unwrap_or(vec![]).chain(
+        matrix_mle.
+    )
+
+    CircuitMle::new(matrix_mle.layer_id.unwrap())
+}
+
+/// TODO(ryancao): Move this to a separate `utils` file and use it everywhere
+/// TODO(ryancao): Make this do real error handling
+pub fn dense_mle_to_circuit_mle<F: FieldExt>(mle: &DenseMle<F>) -> CircuitMle<F> {
+    let layer_id = mle.get_layer_id();
+    let mle_indices = mle.mle_indices();
+
+    let all_indices_indexed = mle.mle_indices().iter().all(|mle_index| match mle_index {
+        MleIndex::IndexedBit(_) => true,
+        MleIndex::Fixed(_) => true,
+        _ => false,
+    });
+
+    // TODO(ryancao): Make this a more descriptive error
+    if !all_indices_indexed {
+        panic!("Error: Indices not indexed within `DenseMLE`");
+    }
+
+    CircuitMle::new(layer_id, mle_indices)
+}
+
+/// The circuit description counterpart of a Matmult layer.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+pub struct CircuitMatmultLayer<F: FieldExt> {
+    /// The layer id associated with this gate layer.
+    layer_id: LayerId,
+
+    /// The LHS MLE to be multiplied.
+    /// TODO(vishady): Create new CircuitMatrixMLE/VerifierMatrixMLE struct which also keeps track of dimensionality!
+    a_matrix_mle: CircuitMle<F>,
+
+    /// The RHS MLE to be multiplied.
+    b_matrix_mle: CircuitMle<F>,
+}
+
+impl<F: FieldExt> CircuitLayer<F> for CircuitMatmultLayer<F> {
+    type VerifierLayer = VerifierMatmultLayer<F>;
+
+    /// Gets this layer's id.
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+
+    fn verify_rounds(
+        &self,
+        claim: Claim<F>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::VerifierLayer, VerificationError> {
+        todo!()
+    }
+}
+
+/// The verifier's counterpart of a Matmult layer.
+///
+/// TODO(ryancao): Ask Makis why the `CircuitLayer` is different from the `VerifierLayer`
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+pub struct VerifierMatmultLayer<F: FieldExt> {
+    /// The layer id associated with this gate layer.
+    layer_id: LayerId,
+
+    /// The LHS MLE to be multiplied.
+    /// TODO(vishady): Create new CircuitMatrixMLE/VerifierMatrixMLE struct which also keeps track of dimensionality!
+    a_matrix_mle: VerifierMle<F>,
+
+    /// The RHS MLE to be multiplied.
+    b_matrix_mle: VerifierMle<F>,
+}
+
+impl<F: FieldExt> VerifierLayer<F> for VerifierMatmultLayer<F> {
+    fn layer_id(&self) -> LayerId {
+        self.layer_id
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierMatmultLayer<F> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        let claims = vec![&self.a_matrix_mle, &self.b_matrix_mle]
+            .into_iter()
+            .map(|matrix| {
+                let matrix_fixed_indices = matrix
+                    .mle_indices()
+                    .into_iter()
+                    .map(|index| {
+                        index
+                            .val()
+                            .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))
+                            .unwrap()
+                    })
+                    .collect_vec();
+
+                let mle_layer_id = matrix.layer_id();
+                let matrix_claimed_val = matrix.value();
+
+                // Dummy MLE ref.
+                // TODO(ryancao): Fix things so that we don't need to pass this around... This is not right
+                let mle_ref = MleEnum::Dense(DenseMle::new_from_raw(
+                    vec![matrix_claimed_val],
+                    mle_layer_id,
+                ));
+
+                let claim: ClaimMle<F> = ClaimMle::new(
+                    matrix_fixed_indices,
+                    matrix_claimed_val,
+                    Some(self.layer_id.clone()),
+                    Some(matrix.layer_id()),
+                    Some(mle_ref),
+                );
+                claim
+            })
+            .collect_vec();
+
+        Ok(claims)
     }
 }
 
@@ -534,7 +677,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MatMult<F> {
                 let claim: ClaimMle<F> = ClaimMle::new(
                     matrix_fixed_indices,
                     matrix_val,
-                    Some(self.id().clone()),
+                    Some(self.layer_id.clone()),
                     Some(matrix.as_ref().unwrap().layer_id),
                     Some(MleEnum::Dense(matrix.clone().unwrap())),
                 );

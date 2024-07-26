@@ -190,7 +190,8 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     ) -> Result<Expression<F, CircuitExpr>, ExpressionError> {
         self.index_mle_indices(0);
 
-        let (mut expression_node, mle_vec) = self.deconstruct();
+        let (expression_node, mle_vec) = self.deconstruct_mut();
+
         let expression = Expression::new(
             expression_node
                 .transform_to_circuit_expression_node(&mle_vec)
@@ -407,6 +408,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                 });
 
                 if !all_indices_indexed {
+                    dbg!(&mle_indices);
                     return Err(ExpressionError::EvaluateNotFullyIndexedError);
                 }
 
@@ -442,6 +444,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     let mle_indices = mle.mle_indices();
                     let all_indices_indexed = mle_indices.iter().all(|mle_index| match mle_index {
                         MleIndex::IndexedBit(_) => true,
+                        MleIndex::Fixed(_) => true,
                         _ => false,
                     });
                     if !all_indices_indexed {

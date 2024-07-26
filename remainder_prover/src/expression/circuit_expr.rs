@@ -76,6 +76,7 @@ impl<F: FieldExt> CircuitMle<F> {
             .iter()
             .map(|mle_index| match mle_index {
                 MleIndex::IndexedBit(idx) => Ok(MleIndex::Bound(point[*idx], *idx)),
+                MleIndex::Fixed(val) => Ok(MleIndex::Fixed(*val)),
                 _ => Err(ExpressionError::SelectorBitNotBoundError),
             })
             .collect::<Result<Vec<MleIndex<F>>, ExpressionError>>()?;

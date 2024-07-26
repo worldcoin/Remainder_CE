@@ -57,7 +57,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
         // Because this is a public input layer, we do not need to commit to the
         // MLE and the "commitment" is just the MLE evaluations themselves.
-        Ok(self.mle.current_mle.get_evals_vector().clone())
+        Ok(self.mle.get_evals_vector().clone())
     }
 
     /// Append the commitment to the Fiat-Shamir transcript.
@@ -83,15 +83,14 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     }
 
     fn get_padded_mle(&self) -> DenseMle<F> {
-        self.mle.clone()
+        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
 
     fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
-        let layer_id = self.mle.get_layer_id();
-        let num_bits = self.mle.original_num_vars();
+        let num_bits = self.mle.num_vars();
 
         Self::VerifierInputLayer {
-            layer_id,
+            layer_id: self.layer_id,
             num_bits,
             _marker: PhantomData,
         }
@@ -99,7 +98,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
 }
 
 impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
-    fn new(mle: DenseMle<F>, layer_id: LayerId) -> Self {
+    fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
 }
@@ -187,7 +186,7 @@ mod tests {
         let evals = [1, 2, 3, 4].into_iter().map(|i| Fr::from(i)).collect();
         let dense_mle = DenseMle::new_from_raw(evals, layer_id);
 
-        let public_input_layer = PublicInputLayer::new(dense_mle, layer_id);
+        let public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
         let verifier_public_input_layer = public_input_layer.into_verifier_input_layer();
 
         let expected_verifier_public_input_layer =
@@ -212,7 +211,7 @@ mod tests {
         let claim_result = Fr::from(2);
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
 
-        let mut public_input_layer = PublicInputLayer::new(dense_mle, layer_id);
+        let mut public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
         let verifier_public_input_layer = public_input_layer.into_verifier_input_layer();
 
         // Transcript writer with test sponge that always returns `1`.

@@ -253,6 +253,11 @@ impl<F: FieldExt> InputLayerBuilder<F> {
         ratio: f64,
     ) -> LigeroInputLayer<F> {
         let final_mle: DenseMle<F> = self.combine_input_mles();
-        LigeroInputLayer::<F>::new_with_rho_inv_ratio(final_mle, self.layer_id, rho_inv, ratio)
+        LigeroInputLayer::<F>::new_with_rho_inv_ratio(
+            final_mle.original_mle,
+            self.layer_id,
+            rho_inv,
+            ratio,
+        )
     }
 }

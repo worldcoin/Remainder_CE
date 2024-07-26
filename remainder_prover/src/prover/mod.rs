@@ -278,8 +278,10 @@ pub trait GKRCircuit<F: FieldExt> {
             end_timer!(claim_aggr_timer);
 
             info!("Prove sumcheck message");
-            let sumcheck_msg_timer =
-                start_timer!(|| format!("Compute sumcheck message for layer {:?}", *layer.id()));
+            let sumcheck_msg_timer = start_timer!(|| format!(
+                "Compute sumcheck message for layer {:?}",
+                layer.layer_id()
+            ));
 
             // Compute all sumcheck messages across this particular layer.
             let _prover_sumcheck_messages = layer
@@ -487,7 +489,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
         {
             let layer_timer = start_timer!(|| format!(
                 "proof generation for INPUT layer {:?}",
-                input_layer.layer_id
+                input_layer.layer_id()
             ));
 
             let input_layer_id = input_layer.layer_id();
@@ -495,7 +497,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
 
             let claim_aggr_timer = start_timer!(|| format!(
                 "verify aggregated claim for INPUT layer {:?}",
-                input_layer.layer_id
+                input_layer.layer_id()
             ));
 
             let input_layer_claim =
@@ -506,7 +508,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
 
             let sumcheck_msg_timer = start_timer!(|| format!(
                 "verify sumcheck message for INPUT layer {:?}",
-                input_layer.layer_id
+                input_layer.layer_id()
             ));
 
             input_layer

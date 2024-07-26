@@ -125,7 +125,8 @@ pub fn combine_layers<F: FieldExt>(
         .zip(layer_bits)
     {
         for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
-            if let Some(&effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.id()) {
+            if let Some(effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.layer_id())
+            {
                 add_bits_to_layer_refs(
                     &mut layers.layers[layer_idx..],
                     output_layers,
