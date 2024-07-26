@@ -44,7 +44,9 @@ impl<F: FieldExt> MatMultNode<F> {
     ) -> Self {
         let matrix_a_data =
             MultilinearExtension::new(matrix_node_a.get_data().get_evals_vector().clone());
-        let matrix_a = Matrix::new(
+        println!("matrix_a_data {:?}", matrix_a_data.get_evals_vector().len());
+        println!("matrix_a_data {:?}", matrix_a_data.num_vars());
+        let matrix_a = Matrix::new_with_padding(
             matrix_a_data,
             num_rows_cols_a.0,
             num_rows_cols_a.1,
@@ -54,7 +56,7 @@ impl<F: FieldExt> MatMultNode<F> {
 
         let matrix_b_data =
             MultilinearExtension::new(matrix_node_b.get_data().get_evals_vector().clone());
-        let matrix_b = Matrix::new(
+        let matrix_b = Matrix::new_with_padding(
             matrix_b_data,
             num_rows_cols_b.0,
             num_rows_cols_b.1,
@@ -98,7 +100,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
         let (matrix_a_location, matrix_a_data) = circuit_map.get_node(&self.matrix_a)?;
 
         // should already been padded
-        let matrix_a = Matrix::new(
+        let matrix_a = Matrix::new_with_padding(
             (*matrix_a_data).clone(),
             1 << self.num_vars_rows_cols_a.0,
             1 << self.num_vars_rows_cols_a.1,
@@ -109,7 +111,7 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
         let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
 
         // should already been padded
-        let matrix_b = Matrix::new(
+        let matrix_b = Matrix::new_with_padding(
             (*matrix_b_data).clone(),
             1 << self.num_vars_rows_cols_b.0,
             1 << self.num_vars_rows_cols_b.1,

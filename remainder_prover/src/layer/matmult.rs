@@ -92,6 +92,28 @@ impl<F: FieldExt> Matrix<F> {
         }
     }
 
+    /// new function but pads trailing zeros according to the row / col count
+    pub fn new_with_padding(
+        mle: MultilinearExtension<F>,
+        num_rows: usize,
+        num_cols: usize,
+        prefix_bits: Option<Vec<bool>>,
+        layer_id: Option<LayerId>,
+    ) -> Matrix<F> {
+        let mut original_mle = mle.get_evals_vector().to_vec();
+        original_mle.extend(vec![F::ZERO; num_rows * num_cols - original_mle.len()]);
+        let mle = MultilinearExtension::new(original_mle);
+
+        assert_eq!(mle.get_evals_vector().len(), num_cols * num_rows);
+        Matrix {
+            mle,
+            num_rows_vars: log2(num_rows) as usize,
+            num_cols_vars: log2(num_cols) as usize,
+            prefix_bits,
+            layer_id,
+        }
+    }
+
     /// get the dimension of this matrix
     pub fn num_vars_rows_cols(&self) -> (usize, usize) {
         (self.num_rows_vars, self.num_cols_vars)
