@@ -75,11 +75,14 @@ pub struct LookupTable {
 }
 
 impl LookupTable {
-    /// Create a new LookupTable (i.e. lookup table) to use for subsequent lookups (a.k.a.
-    /// LookupConstraints). (Perform a lookup in this table by creating a [LookupConstraint].)
+    /// Create a new LookupTable to use for subsequent lookups.
+    /// (To perform a lookup using this table, create a [LookupConstraint].)
     /// `secret_constrained_values` controls whether a public or a hiding input layer is used for
     /// the denominator inverse, which is derived from the constrained values (note that LookupTable
     /// does not hide the constrained values themselves - that is up to the caller).
+    /// 
+    /// # Requires
+    ///     - `table` must have length a power of two.
     pub fn new<F: FieldExt>(
         ctx: &Context,
         table: &dyn ClaimableNode<F = F>,
@@ -132,7 +135,6 @@ where
         type AE<F> = Expression<F, AbstractExpr>;
         type PE<F> = Expression<F, ProverExpr>;
 
-        // FIXME doc prereqs
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
         // table
