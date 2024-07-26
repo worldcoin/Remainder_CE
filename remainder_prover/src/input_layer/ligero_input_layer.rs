@@ -3,7 +3,6 @@
 use std::marker::PhantomData;
 
 use remainder_ligero::{
-    adapter::LigeroProof,
     ligero_commit::{
         remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
     },
@@ -113,7 +112,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         }
 
         let (aux, comm, root) = remainder_ligero_commit(
-            self.mle.current_mle.get_evals_vector(),
+            self.mle.get_evals_vector(),
             self.rho_inv.unwrap(),
             self.ratio.unwrap(),
             None,
@@ -156,7 +155,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
             .ok_or(InputLayerError::OpeningBeforeCommitment)?;
 
         remainder_ligero_eval_prove(
-            self.mle.current_mle.get_evals_vector(),
+            self.mle.get_evals_vector(),
             claim.get_point(),
             transcript_writer,
             &aux,
@@ -171,12 +170,12 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     }
 
     fn get_padded_mle(&self) -> DenseMle<F> {
-        self.mle.clone()
+        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
 
     fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
         let layer_id = self.layer_id();
-        let num_bits = self.mle.original_num_vars();
+        let num_bits = self.mle.num_vars();
         let aux = self.aux.clone().unwrap();
 
         Self::VerifierInputLayer {
@@ -267,7 +266,7 @@ impl<F: FieldExt> LigeroInputLayer<F> {
         rho_inv: u8,
         ratio: f64,
     ) -> Self {
-        let aux = LigeroAuxInfo::<F>::new(mle.bookkeeping_table().len(), rho_inv, ratio, None);
+        let aux = LigeroAuxInfo::<F>::new(mle.get_evals_vector().len(), rho_inv, ratio, None);
 
         Self {
             mle,
@@ -326,7 +325,7 @@ mod tests {
         let (aux, pre_commitment, root) = remainder_ligero_commit(&evals, rho_inv, ratio, None);
 
         let ligero_input_layer = LigeroInputLayer::new_with_ligero_commitment(
-            dense_mle,
+            dense_mle.original_mle,
             layer_id,
             pre_commitment,
             aux.clone(),
@@ -356,8 +355,12 @@ mod tests {
 
         let (expected_aux, _, _) = remainder_ligero_commit(&evals, rho_inv, ratio, None);
 
-        let ligero_input_layer =
-            LigeroInputLayer::new_with_rho_inv_ratio(dense_mle, layer_id, rho_inv, ratio);
+        let ligero_input_layer = LigeroInputLayer::new_with_rho_inv_ratio(
+            dense_mle.original_mle,
+            layer_id,
+            rho_inv,
+            ratio,
+        );
         let verifier_ligero_input_layer = ligero_input_layer.into_verifier_input_layer();
 
         let expected_verifier_ligero_input_layer =
@@ -387,7 +390,7 @@ mod tests {
         let (aux, pre_commitment, root) = remainder_ligero_commit(&evals, rho_inv, ratio, None);
 
         let mut ligero_input_layer = LigeroInputLayer::new_with_ligero_commitment(
-            dense_mle,
+            dense_mle.original_mle,
             layer_id,
             pre_commitment,
             aux.clone(),
@@ -453,8 +456,12 @@ mod tests {
 
         let (expected_aux, _, _) = remainder_ligero_commit(&evals, rho_inv, ratio, None);
 
-        let mut ligero_input_layer =
-            LigeroInputLayer::new_with_rho_inv_ratio(dense_mle, layer_id, rho_inv, ratio);
+        let mut ligero_input_layer = LigeroInputLayer::new_with_rho_inv_ratio(
+            dense_mle.original_mle,
+            layer_id,
+            rho_inv,
+            ratio,
+        );
         let verifier_ligero_input_layer = ligero_input_layer.into_verifier_input_layer();
 
         // Transcript writer with test sponge that always returns `1`.
