@@ -25,3 +25,7 @@ remainder_prover/*.json
 
 *.npy
 *.json
+scripts-ion/
+scripts-noya/
+scripts-upshot/
+remainder_prover/worldcoin_witness_data/
