@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::nodes::{
-    circuit_inputs::{InputLayerNode, InputShred, SealedInputNode}, circuit_outputs::OutputNode, gate::GateNode, lookup::{LookupNode, LookupShred}, matmult::MatMultNode, node_enum::{NodeEnum, NodeEnumGroup}, split_node::SplitNode, CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode
+    circuit_inputs::{InputLayerNode, InputShred, SealedInputNode}, circuit_outputs::OutputNode, gate::GateNode, lookup::{LookupTable, LookupConstraint}, matmult::MatMultNode, node_enum::{NodeEnum, NodeEnumGroup}, split_node::SplitNode, CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode
 };
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield
@@ -210,20 +210,20 @@ pub fn layout<
     let mut dag = NodeEnumGroup::new(nodes);
 
     let out = {
-        // Build a map node id -> LookupNode
-        let mut lookup_node_map: HashMap<NodeId, &mut LookupNode> = HashMap::new();
-        let mut lookup_nodes: Vec<LookupNode> = dag.get_nodes();
-        for lookup_node in lookup_nodes.iter_mut() {
-            lookup_node_map.insert(lookup_node.id(), lookup_node);
+        // Build a map node id -> LookupTable
+        let mut lookup_table_map: HashMap<NodeId, &mut LookupTable> = HashMap::new();
+        let mut lookup_tables: Vec<LookupTable> = dag.get_nodes();
+        for lookup_table in lookup_tables.iter_mut() {
+            lookup_table_map.insert(lookup_table.id(), lookup_table);
         }
-        // Add LookupShreds to their respective LookupNodes
-        let lookup_shreds: Vec<LookupShred> = dag.get_nodes();
-        for lookup_shred in lookup_shreds {
-            let lookup_node_id = lookup_shred.table_node_id;
-            let lookup_node = lookup_node_map
-                .get_mut(&lookup_node_id)
-                .ok_or(DAGError::DanglingNodeId(lookup_node_id))?;
-            lookup_node.add_shred(lookup_shred);
+        // Add LookupConstraints to their respective LookupTables
+        let lookup_constraints: Vec<LookupConstraint> = dag.get_nodes();
+        for lookup_constraint in lookup_constraints {
+            let lookup_table_id = lookup_constraint.table_node_id;
+            let lookup_table = lookup_table_map
+                .get_mut(&lookup_table_id)
+                .ok_or(DAGError::DanglingNodeId(lookup_table_id))?;
+            lookup_table.add_lookup_constraint(lookup_constraint);
         }
 
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
@@ -261,7 +261,7 @@ pub fn layout<
                     .map(|input| Box::new(input) as Box<dyn CompilableNode<F, Pf>>),
             )
             .chain(
-                lookup_nodes
+                lookup_tables
                     .into_iter()
                     .map(|node| Box::new(node) as Box<dyn CompilableNode<F, Pf>>),
             )

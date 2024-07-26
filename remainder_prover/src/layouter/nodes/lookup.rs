@@ -18,11 +18,11 @@ use crate::{
 
 use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 
-/// Represents the use of a lookup into a particular table (represented by a LookupNode).
+/// Represents the use of a lookup into a particular table (represented by a LookupTable).
 #[derive(Clone, Debug)]
-pub struct LookupShred {
+pub struct LookupConstraint {
     id: NodeId,
-    /// The id of the LookupNode (lookup table) that we are a lookup up into.
+    /// The id of the LookupTable (lookup table) that we are a lookup up into.
     pub table_node_id: NodeId,
     /// The id of the node that is being constrained by this lookup.
     constrained_node_id: NodeId,
@@ -30,27 +30,27 @@ pub struct LookupShred {
     multiplicities_node_id: NodeId,
 }
 
-impl LookupShred {
-    /// Creates a new LookupShred, constraining the data of `constrained` to form a subset of the
-    /// data in `lookup_node` with multiplicities given by `multiplicities`. Caller is responsible for the
+impl LookupConstraint {
+    /// Creates a new LookupConstraint, constraining the data of `constrained` to form a subset of the
+    /// data in `lookup_table` with multiplicities given by `multiplicities`. Caller is responsible for the
     /// yielding of all nodes (including `constrained` and `multiplicities`).
     pub fn new<F: FieldExt>(
         ctx: &Context,
-        lookup_node: &LookupNode,
+        lookup_table: &LookupTable,
         constrained: &dyn ClaimableNode<F = F>,
         multiplicities: &dyn ClaimableNode<F = F>,
     ) -> Self {
         let id = ctx.get_new_id();
-        LookupShred {
+        LookupConstraint {
             id,
-            table_node_id: lookup_node.id(),
+            table_node_id: lookup_table.id(),
             constrained_node_id: constrained.id(),
             multiplicities_node_id: multiplicities.id(),
         }
     }
 }
 
-impl CircuitNode for LookupShred {
+impl CircuitNode for LookupConstraint {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -62,23 +62,23 @@ impl CircuitNode for LookupShred {
 
 /// Represents a table of data that can be looked up into, e.g. for a range check.
 #[derive(Clone, Debug)]
-pub struct LookupNode {
+pub struct LookupTable {
     id: NodeId,
     /// The lookups that are performed on this table (will be automatically populated, via
-    /// add_shred, during layout).
-    shreds: Vec<LookupShred>,
+    /// [add_lookup_constraint], during layout).
+    constraints: Vec<LookupConstraint>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
-    /// Whether any of the values to be constrained by this LookupNode should be considered secret
+    /// Whether any of the values to be constrained by this LookupTable should be considered secret
     /// (Determines which InputLayer type is used for the denominator inverses.)
     secret_constrained_values: bool
 }
 
-impl LookupNode {
-    /// Create a new LookupNode (i.e. lookup table) to use for subsequent lookups (a.k.a.
-    /// LookupShreds). (Perform a lookup in this table by creating a [LookupShred].)
+impl LookupTable {
+    /// Create a new LookupTable (i.e. lookup table) to use for subsequent lookups (a.k.a.
+    /// LookupConstraints). (Perform a lookup in this table by creating a [LookupConstraint].)
     /// `secret_constrained_values` controls whether a public or a hiding input layer is used for
-    /// the denominator inverse, which is derived from the constrained values (note that LookupNode
+    /// the denominator inverse, which is derived from the constrained values (note that LookupTable
     /// does not hide the constrained values themselves - that is up to the caller).
     pub fn new<F: FieldExt>(
         ctx: &Context,
@@ -88,37 +88,37 @@ impl LookupNode {
         if secret_constrained_values {
             unimplemented!("Secret constrained values not yet supported (requires HyraxInputLayer)");
         }
-        LookupNode {
+        LookupTable {
             id: ctx.get_new_id(),
-            shreds: vec![],
+            constraints: vec![],
             table_node_id: table.id(),
             secret_constrained_values: false,
         }
     }
 
-    /// Add a lookup shred to this node.
+    /// Add a lookup constraint to this node.
     /// (Will be called by the layouter when laying out the circuit.)
-    pub fn add_shred(&mut self, shred: LookupShred) {
-        self.shreds.push(shred);
+    pub fn add_lookup_constraint(&mut self, constraint: LookupConstraint) {
+        self.constraints.push(constraint);
     }
 }
 
-impl CircuitNode for LookupNode {
+impl CircuitNode for LookupTable {
     fn id(&self) -> NodeId {
         self.id
     }
 
     fn children(&self) -> Option<Vec<NodeId>> {
-        Some(self.shreds.iter().map(|shred| shred.id()).collect())
+        Some(self.constraints.iter().map(|constraint| constraint.id()).collect())
     }
 
     fn sources(&self) -> Vec<NodeId> {
-        self.shreds.iter().map(|shred| shred.id()).collect()
+        self.constraints.iter().map(|constraint| constraint.id()).collect()
     }
 }
 
 impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = OL>, IL, L, OL>
-    CompilableNode<F, Pf> for LookupNode
+    CompilableNode<F, Pf> for LookupTable
 where
     IL: From<PublicInputLayer<F>>,
     L: From<RegularLayer<F>>,
@@ -133,13 +133,13 @@ where
         type PE<F> = Expression<F, ProverExpr>;
 
         // FIXME doc prereqs
-        // Ensure that number of LookupShreds is a power of two (otherwise when we concat the
+        // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
         // table
         assert_eq!(
-            self.shreds.len().count_ones(),
+            self.constraints.len().count_ones(),
             1,
-            "Number of LookupShreds should be a power of two"
+            "Number of LookupConstraints should be a power of two"
         );
 
         // Ensure that the table length is a power of two (otherwise 0 will be added implicitly,
@@ -167,11 +167,11 @@ where
         );
 
         // Build the denominator r - constrained
-        // There may be more than one shred, so build a selector tree if necessary
+        // There may be more than one constraint, so build a selector tree if necessary
         let constrained_expr = AE::<F>::selectors(
-            self.shreds
+            self.constraints
                 .iter()
-                .map(|shred| shred.constrained_node_id.expr())
+                .map(|constraint| constraint.constrained_node_id.expr())
                 .collect(),
         );
         let expr =
@@ -185,10 +185,10 @@ where
         );
         // Create the MLE for the denominator
         let constrained_values = calculate_selector_values(
-            self.shreds
+            self.constraints
                 .iter()
-                .map(|shred| {
-                    let (_, constrained_mle) = circuit_map.0[&shred.constrained_node_id];
+                .map(|constraint| {
+                    let (_, constrained_mle) = circuit_map.0[&constraint.constrained_node_id];
                     constrained_mle.get_evals_vector().clone()
                 })
                 .collect(),
@@ -217,29 +217,29 @@ where
         // Build the RHS of the equation (defined by the table values and multiplicities)
         println!("Build the RHS of the equation (defined by the table values and multiplicities)");
 
-        // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one shred)
+        // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one constraint)
         let (multiplicities_location, multiplicities) =
-            &circuit_map.0[&self.shreds[0].multiplicities_node_id];
+            &circuit_map.0[&self.constraints[0].multiplicities_node_id];
         let mut rhs_numerator = DenseMle::new_with_prefix_bits(
             (*multiplicities).clone(),
             multiplicities_location.layer_id,
             multiplicities_location.prefix_bits.clone(),
         );
-        if self.shreds.len() > 1 {
+        if self.constraints.len() > 1 {
             // Insert an extra layer that aggregates the multiplicities
             let expr = self
-                .shreds
+                .constraints
                 .iter()
                 .skip(1)
-                .fold(rhs_numerator.expression(), |acc, shred| {
+                .fold(rhs_numerator.expression(), |acc, constraint| {
                     let (multiplicities_location, multiplicities) =
-                        &circuit_map.0[&shred.multiplicities_node_id];
-                    let mult_shred_mle = DenseMle::new_with_prefix_bits(
+                        &circuit_map.0[&constraint.multiplicities_node_id];
+                    let mult_constraint_mle = DenseMle::new_with_prefix_bits(
                         (*multiplicities).clone(),
                         multiplicities_location.layer_id,
                         multiplicities_location.prefix_bits.clone(),
                     );
-                    acc + mult_shred_mle.expression()
+                    acc + mult_constraint_mle.expression()
                 });
             let layer_id = witness_builder.next_layer();
             let layer = RegularLayer::new_raw(layer_id, expr);
@@ -249,10 +249,10 @@ where
                 layer_id
             );
             let eval_vecs: Vec<_> = self
-                .shreds
+                .constraints
                 .iter()
-                .map(|shred| {
-                    let (_, multiplicities) = circuit_map.0[&shred.multiplicities_node_id];
+                .map(|constraint| {
+                    let (_, multiplicities) = circuit_map.0[&constraint.multiplicities_node_id];
                     multiplicities.get_evals_vector()
                 })
                 .collect();
