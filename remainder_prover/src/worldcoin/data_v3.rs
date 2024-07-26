@@ -232,8 +232,7 @@ pub fn convert_to_circuit_data<F: FieldExt>(
     let padding_amount = im_len_power_of_2 - flattened_input_image.len();
     let padding_values = vec![F::ZERO; padding_amount];
     flattened_input_image.extend(padding_values);
-    let image_matrix_mle: DenseMle<F> =
-        DenseMle::new_from_raw(flattened_input_image, LayerId::Input(0));
+    let image_matrix_mle = flattened_input_image;
 
     let (_im_num_rows, im_num_cols) = image_responses_data.image.dim();
 
@@ -256,8 +255,7 @@ pub fn convert_to_circuit_data<F: FieldExt>(
                 .collect_vec()
         })
         .collect_vec();
-    let kernel_matrix_mle: DenseMle<F> =
-        DenseMle::new_from_raw(flattened_kernel_matrix, LayerId::Input(0));
+    let kernel_matrix_mle = flattened_kernel_matrix;
     let (kernel_matrix_rows, _kernel_matrix_cols) = kernel_data.kernel_matrix.dim();
     let kernel_matrix_dims = kernel_data.kernel_matrix.dim();
 
@@ -309,10 +307,10 @@ pub fn convert_to_circuit_data<F: FieldExt>(
         digit_multiplicities[digit as usize] += 1;
     }
     // turn into an MLE
-    let digit_multiplicities = DenseMle::new_from_iter(
-        digit_multiplicities.into_iter().map(|x| F::from(x as u64)),
-        LayerId::Input(0),
-    );
+    let digit_multiplicities = digit_multiplicities
+        .into_iter()
+        .map(|x| F::from(x as u64))
+        .collect_vec();
 
     let digits: FlatMles<F, NUM_DIGITS> = FlatMles::new_from_raw(
         to_flat_mles(
@@ -338,8 +336,7 @@ pub fn convert_to_circuit_data<F: FieldExt>(
         .iter()
         .map(|elem| F::from(*elem as u64))
         .collect_vec();
-    let iris_code: DenseMle<F> =
-        DenseMle::new_from_raw(flattened_iris_code_matrix, LayerId::Input(0));
+    let iris_code = flattened_iris_code_matrix;
 
     WorldcoinCircuitData {
         image_matrix_mle,

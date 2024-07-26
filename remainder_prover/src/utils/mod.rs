@@ -3,19 +3,44 @@
 
 use std::{fs, iter::repeat_with};
 
-use ark_std::test_rng;
+use ark_std::{log2, test_rng};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
-use remainder_shared_types::{layer::LayerId, FieldExt, Poseidon};
+use remainder_shared_types::{layer::LayerId, FieldExt, Fr, Poseidon};
 
 use crate::{
     layer::layer_enum::LayerEnum,
-    mle::{dense::DenseMle, MleIndex},
+    layouter::nodes::{
+        circuit_inputs::{InputLayerNode, InputShred},
+        Context,
+    },
+    mle::{
+        dense::DenseMle,
+        evals::{Evaluations, MultilinearExtension},
+        MleIndex,
+    },
     prover::layers::Layers,
 };
 
 #[cfg(test)]
 pub(crate) mod test_utils;
+
+/// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
+pub fn get_input_shred_from_vec(
+    mle_vec: Vec<Fr>,
+    ctx: &Context,
+    input_node: &InputLayerNode<Fr>,
+) -> InputShred<Fr> {
+    assert!(mle_vec.len().is_power_of_two());
+    InputShred::new(
+        ctx,
+        MultilinearExtension::new_from_evals(Evaluations::new(
+            log2(mle_vec.len()) as usize,
+            mle_vec,
+        )),
+        input_node,
+    )
+}
 
 /// Returns a zero-padded version of `coeffs` with length padded
 /// to the nearest power of two.

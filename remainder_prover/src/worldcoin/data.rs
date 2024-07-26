@@ -30,21 +30,21 @@ use remainder_shared_types::HasByteRepresentation;
 /// Instantiated from WorldCoin data.
 pub struct WorldcoinCircuitData<F: FieldExt> {
     /// Row-major flattening of the input image.
-    pub image_matrix_mle: DenseMle<F>,
+    pub image_matrix_mle: Vec<F>,
     /// The reroutings from the input image to the matrix multiplicand "A", as pairs of gate labels.
     pub reroutings: Vec<(usize, usize)>,
     /// The number of kernel placements
     pub num_placements: usize,
     /// The row-major flattening of [WorldcoinData::kernel_matrix]
-    pub kernel_matrix_mle: DenseMle<F>,
+    pub kernel_matrix_mle: Vec<F>,
     /// (kernel_num_rows * kernel_num_cols, num_kernels)
     pub kernel_matrix_dims: (usize, usize),
     /// The digital decompositions base BASE of the abs value of the responses
     pub digits: FlatMles<F, NUM_DIGITS>,
     /// The iris code = the sign bits of the responses
-    pub iris_code: DenseMle<F>,
+    pub iris_code: Vec<F>,
     /// The number of times each digit 0 .. BASE - 1 occurs in the digital decompositions
-    pub digit_multiplicities: DenseMle<F>,
+    pub digit_multiplicities: Vec<F>,
 }
 
 /// Witness data for the Worldcoin circuit, before conversion to MLEs.
@@ -318,8 +318,7 @@ impl<F: FieldExt> From<&WorldcoinData<F>> for WorldcoinCircuitData<F> {
         let padding_amount = im_len_power_of_2 - flattened_input_image.len();
         let padding_values = vec![F::ZERO; padding_amount];
         flattened_input_image.extend(padding_values);
-        let image_matrix_mle: DenseMle<F> =
-            DenseMle::new_from_raw(flattened_input_image, LayerId::Input(0));
+        let image_matrix_mle = flattened_input_image;
 
         let (_im_num_rows, im_num_cols) = data.image.dim();
 
@@ -341,8 +340,7 @@ impl<F: FieldExt> From<&WorldcoinData<F>> for WorldcoinCircuitData<F> {
                     .collect_vec()
             })
             .collect_vec();
-        let kernel_matrix_mle: DenseMle<F> =
-            DenseMle::new_from_raw(flattened_kernel_matrix, LayerId::Input(0));
+        let kernel_matrix_mle = flattened_kernel_matrix;
         let (kernel_matrix_rows, _kernel_matrix_cols) = data.kernel_matrix.dim();
         let kernel_matrix_dims = data.kernel_matrix.dim();
 
@@ -395,10 +393,10 @@ impl<F: FieldExt> From<&WorldcoinData<F>> for WorldcoinCircuitData<F> {
             digit_multiplicities[digit as usize] += 1;
         }
         // turn into an MLE
-        let digit_multiplicities = DenseMle::new_from_iter(
-            digit_multiplicities.into_iter().map(|x| F::from(x as u64)),
-            LayerId::Input(0),
-        );
+        let digit_multiplicities = digit_multiplicities
+            .into_iter()
+            .map(|x| F::from(x as u64))
+            .collect_vec();
 
         let digits: FlatMles<F, NUM_DIGITS> = FlatMles::new_from_raw(
             to_flat_mles(
@@ -424,8 +422,7 @@ impl<F: FieldExt> From<&WorldcoinData<F>> for WorldcoinCircuitData<F> {
             .iter()
             .map(|elem| F::from(*elem as u64))
             .collect_vec();
-        let iris_code: DenseMle<F> =
-            DenseMle::new_from_raw(flattened_iris_code_matrix, LayerId::Input(0));
+        let iris_code = flattened_iris_code_matrix;
 
         WorldcoinCircuitData {
             image_matrix_mle,
@@ -434,7 +431,7 @@ impl<F: FieldExt> From<&WorldcoinData<F>> for WorldcoinCircuitData<F> {
             kernel_matrix_mle,
             kernel_matrix_dims,
             digits,
-            iris_code: iris_code,
+            iris_code,
             digit_multiplicities,
         }
     }
