@@ -1,5 +1,6 @@
 use super::*;
 use rand::rngs::OsRng;
+use rand::RngCore;
 use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
 /// Tests for the Pedersen commitment scheme using the BN254 (aka BN256) curve and its scalar field (Fr).
 use remainder_shared_types::halo2curves::group::Group;
@@ -62,7 +63,7 @@ fn sanity_check_test_honest_prover_small_identity() {
     );
 
     let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - verifier",
+        prover_transcript.get_transcript(),
     );
     hyrax_eval_proof.verify_hyrax_evaluation_proof(
         log_split_point,
@@ -120,7 +121,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_one() {
     );
 
     let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - verifier",
+        prover_transcript.get_transcript(),
     );
     hyrax_eval_proof.verify_hyrax_evaluation_proof(
         log_split_point,
@@ -202,7 +203,7 @@ fn sanity_check_test_honest_prover_small_asymmetric_random() {
     );
 
     let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - verifier",
+        prover_transcript.get_transcript(),
     );
     hyrax_eval_proof.verify_hyrax_evaluation_proof(
         log_split_point,
@@ -275,7 +276,7 @@ fn sanity_check_test_honest_prover_iris_size_symmetric_random() {
     );
 
     let mut verifier_transcript = ECTranscriptReader::<Bn256Point, PoseidonSponge<Base>>::new(
-        "testing proof of dot product - verifier",
+        prover_transcript.get_transcript(),
     );
     hyrax_eval_proof.verify_hyrax_evaluation_proof(
         log_split_point,

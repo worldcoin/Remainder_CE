@@ -7,6 +7,7 @@ use remainder::{
     claims::wlx_eval::{claim_group::ClaimGroup, get_num_wlx_evaluations},
     input_layer::{
         hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
+        hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
         public_input_layer::PublicInputLayer, random_input_layer::RandomInputLayer, InputLayer,
     },
     layer::LayerId,
@@ -264,7 +265,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     }
 
     pub fn new_from_placeholder_with_commitment(
-        hyrax_placeholder_il: HyraxPlaceholderInputLayer<C::Scalar>,
+        hyrax_placeholder_il: HyraxPrecommitPlaceholderInputLayer<C::Scalar>,
         committer: PedersenCommitter<C>,
         blinding_factors_matrix: Vec<C::Scalar>,
         log_num_cols: usize,
