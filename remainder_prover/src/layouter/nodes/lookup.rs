@@ -28,35 +28,24 @@ pub struct LookupShred {
     constrained_node_id: NodeId,
     /// The id of the node that provides the multiplicities for the constrained data.
     multiplicities_node_id: NodeId,
-    /// Whether the values constrained by this LookupShred should be considered secret
-    /// (Determines which InputLayer type is used for the denominator inverses.)
-    secret_constrained_values: bool
 }
 
 impl LookupShred {
     /// Creates a new LookupShred, constraining the data of `constrained` to form a subset of the
     /// data in `lookup_node` with multiplicities given by `multiplicities`. Caller is responsible for the
     /// yielding of all nodes (including `constrained` and `multiplicities`).
-    /// `secret_constrained_values` controls whether a public or a hiding input layer is used for
-    /// the denominator inverses, which are derived from the constrained values.  The caller is
-    /// responsible of the hiding of the constrained values themselves, if required.
     pub fn new<F: FieldExt>(
         ctx: &Context,
         lookup_node: &LookupNode,
         constrained: &dyn ClaimableNode<F = F>,
         multiplicities: &dyn ClaimableNode<F = F>,
-        secret_constrained_values: bool,
     ) -> Self {
-        if secret_constrained_values {
-            unimplemented!("Secret constrained values not yet supported (requires HyraxInputLayer)");
-        }
         let id = ctx.get_new_id();
         LookupShred {
             id,
             table_node_id: lookup_node.id(),
             constrained_node_id: constrained.id(),
             multiplicities_node_id: multiplicities.id(),
-            secret_constrained_values: false
         }
     }
 }
@@ -80,18 +69,30 @@ pub struct LookupNode {
     shreds: Vec<LookupShred>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
+    /// Whether any of the values to be constrained by this LookupNode should be considered secret
+    /// (Determines which InputLayer type is used for the denominator inverses.)
+    secret_constrained_values: bool
 }
 
 impl LookupNode {
-    /// Create a new table to use for subsequent lookups.
-    /// (Perform a lookup in this table by creating a [LookupShred].)
-    pub fn new(ctx: &Context, table: NodeId) -> Self {
-        let id = ctx.get_new_id();
-
+    /// Create a new LookupNode (i.e. lookup table) to use for subsequent lookups (a.k.a.
+    /// LookupShreds). (Perform a lookup in this table by creating a [LookupShred].)
+    /// `secret_constrained_values` controls whether a public or a hiding input layer is used for
+    /// the denominator inverse, which is derived from the constrained values (note that LookupNode
+    /// does not hide the constrained values themselves - that is up to the caller).
+    pub fn new<F: FieldExt>(
+        ctx: &Context,
+        table: &dyn ClaimableNode<F = F>,
+        secret_constrained_values: bool,
+     ) -> Self {
+        if secret_constrained_values {
+            unimplemented!("Secret constrained values not yet supported (requires HyraxInputLayer)");
+        }
         LookupNode {
-            id,
+            id: ctx.get_new_id(),
             shreds: vec![],
-            table_node_id: table,
+            table_node_id: table.id(),
+            secret_constrained_values: false,
         }
     }
 
@@ -131,6 +132,7 @@ where
         type AE<F> = Expression<F, AbstractExpr>;
         type PE<F> = Expression<F, ProverExpr>;
 
+        // FIXME doc prereqs
         // Ensure that number of LookupShreds is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
         // table
@@ -154,7 +156,7 @@ where
         println!("Build the LHS of the equation (defined by the constrained values)");
 
         // TODO (future) Draw a random value from the transcript
-        let r = F::from(11111111u64); // FIXME
+        let r = F::from(11111111u64); // FIXME @Nick
         let r_mle = MultilinearExtension::<F>::new(vec![r]);
         let r_layer_id = witness_builder.next_input_layer();
         witness_builder.add_input_layer(PublicInputLayer::new(r_mle.clone(), r_layer_id).into());
@@ -290,8 +292,8 @@ where
         let mle =
             MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
         let layer_id = witness_builder.next_input_layer();
-        if self.shreds.iter().map(|shred| shred.secret_constrained_values).any(|x| x) {
-            // TODO use HyraxInputLayer, once its implemented
+        if self.secret_constrained_values {
+            // TODO use HyraxInputLayer, once it's implemented
             unimplemented!();
         } else {
             witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into());
