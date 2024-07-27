@@ -1,4 +1,4 @@
-use itertools::Itertools;
+use itertools::{all, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
@@ -130,6 +130,17 @@ impl<F: FieldExt> SignedRecompComponent<F> {
             },
             |data| {
                 assert_eq!(data.len(), 3);
+
+                let values = data[0]
+                    .get_evals_vector()
+                    .iter()
+                    .zip(data[1].get_evals_vector())
+                    .zip(data[2].get_evals_vector())
+                    .map(|((values, signed), abs_val)| {
+                        *values + *abs_val + F::from(2).neg() * signed * abs_val
+                    })
+                    .collect_vec();
+                all(values.into_iter(), |val| val == F::ZERO);
 
                 MultilinearExtension::new_sized_zero(data[0].num_vars())
             },
