@@ -44,8 +44,6 @@ impl<F: FieldExt> MatMultNode<F> {
     ) -> Self {
         let matrix_a_data =
             MultilinearExtension::new(matrix_node_a.get_data().get_evals_vector().clone());
-        println!("matrix_a_data {:?}", matrix_a_data.get_evals_vector().len());
-        println!("matrix_a_data {:?}", matrix_a_data.num_vars());
         let matrix_a = Matrix::new_with_padding(
             matrix_a_data,
             num_rows_cols_a.0,

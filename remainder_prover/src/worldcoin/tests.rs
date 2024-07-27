@@ -11,10 +11,14 @@ mod tests {
     use crate::layouter::nodes::node_enum::NodeEnum;
     use crate::layouter::nodes::sector::Sector;
     use crate::layouter::nodes::ClaimableNode;
+    use crate::mle::circuit_mle::CircuitMle;
     use crate::mle::evals::MultilinearExtension;
     use crate::prover::helpers::test_circuit;
     use crate::utils::get_input_shred_from_vec;
+    use crate::utils::pad_to_nearest_power_of_two;
+    use crate::worldcoin::components::DigitRecompComponent;
     use crate::worldcoin::components::IdentityGateComponent;
+    use crate::worldcoin::components::SignedRecompComponent;
     // use crate::worldcoin::circuits::{WorldcoinCircuit, WorldcoinCircuitPrecommit};
     use crate::worldcoin::data::{
         load_data, load_data_from_serialized_inputs, WorldcoinCircuitData, WorldcoinData,
@@ -24,6 +28,8 @@ mod tests {
         load_kernel_data_iriscode_v3, IrisCodeV3KernelData, WorldcoinDataV3, IRIS_CODE_V3_IMG_COLS,
         IRIS_CODE_V3_IMG_ROWS,
     };
+    use crate::worldcoin::digit_decomposition::BASE;
+    use itertools::Itertools;
     use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
     use remainder_shared_types::Fr;
     use std::marker::PhantomData;
@@ -90,37 +96,41 @@ mod tests {
                 matrix_b_num_rows_cols,
             );
 
-            let expected_out =
-                InputShred::new(ctx, result_of_matmult.get_data().clone(), &input_layer);
+            let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
+            let digits_input_refs = digits_input_shreds
+                .iter()
+                .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+                .collect_vec();
+            let recomp_of_abs_value =
+                DigitRecompComponent::new(ctx, &digits_input_refs, BASE as u64);
 
-            let diff_sector = Sector::new(
+            let iris_code_input_shred = get_input_shred_from_vec(
+                pad_to_nearest_power_of_two(iris_code.clone()),
                 ctx,
-                &[&result_of_matmult, &expected_out],
-                |input_nodes| {
-                    assert_eq!(input_nodes.len(), 2);
-                    let mle_1_id = input_nodes[0];
-                    let mle_2_id = input_nodes[1];
-
-                    mle_1_id.expr() - mle_2_id.expr()
-                },
-                |data| {
-                    let mle_1_data = data[0];
-                    MultilinearExtension::new_sized_zero(mle_1_data.num_vars())
-                },
+                &input_layer,
+            );
+            let recomp_check_builder = SignedRecompComponent::new(
+                ctx,
+                &result_of_matmult,
+                &iris_code_input_shred,
+                &recomp_of_abs_value.recomp_sector,
             );
 
-            let output = OutputNode::new_zero(ctx, &diff_sector);
+            let output = OutputNode::new_zero(ctx, &recomp_check_builder.signed_recomp_sector);
 
-            let all_nodes: Vec<NodeEnum<Fr>> = vec![
+            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
                 input_layer.into(),
                 input_shred_matrix_a.into(),
                 matrix_a.into(),
                 matrix_b.into(),
                 result_of_matmult.into(),
-                expected_out.into(),
-                diff_sector.into(),
+                recomp_of_abs_value.recomp_sector.into(),
+                iris_code_input_shred.into(),
+                recomp_check_builder.signed_recomp_sector.into(),
                 output.into(),
             ];
+
+            all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
 
             ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
         });
