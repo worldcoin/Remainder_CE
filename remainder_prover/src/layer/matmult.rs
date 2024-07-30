@@ -46,6 +46,7 @@ impl<F: FieldExt> Matrix<F> {
         let mut new_bookkeeping_table = Vec::new();
         // pad the columns
         if 1 << log2(num_cols) != num_cols {
+            assert!((1 << log2(num_cols) as usize) > num_cols);
             let num_to_pad_each_row = (1 << log2(num_cols) as usize) - num_cols;
             for chunk in mle.bookkeeping_table().chunks(num_cols) {
                 new_bookkeeping_table.extend(
@@ -61,14 +62,25 @@ impl<F: FieldExt> Matrix<F> {
         // pad the rows
         let padded_matrix_len = (1 << log2(num_rows) as usize) * (1 << log2(num_cols) as usize);
         if new_bookkeeping_table.len() != padded_matrix_len {
+            assert!((1 << log2(num_rows) as usize) > num_rows);
             let num_need_to_pad = padded_matrix_len - new_bookkeeping_table.len();
             new_bookkeeping_table = [new_bookkeeping_table, vec![F::ZERO; num_need_to_pad]]
                 .into_iter()
                 .concat()
         }
 
-        let mle =
-            DenseMle::new_with_indices(&new_bookkeeping_table, mle.layer_id(), &mle.mle_indices());
+        // pad the MLE indices as well!
+        let expected_num_iterated_vars = (log2(num_rows) + log2(num_cols)) as usize;
+        let new_indices = if mle.num_iterated_vars() != expected_num_iterated_vars {
+            assert!(expected_num_iterated_vars > mle.num_iterated_vars());
+            let num_iterated_vars_to_add = expected_num_iterated_vars - mle.num_iterated_vars();
+            let padding_indices = vec![MleIndex::Iterated; num_iterated_vars_to_add];
+            &[mle.mle_indices.to_vec(), padding_indices].concat()
+        } else {
+            mle.mle_indices()
+        };
+
+        let mle = DenseMle::new_with_indices(&new_bookkeeping_table, mle.layer_id(), new_indices);
 
         assert_eq!(padded_matrix_len, mle.bookkeeping_table().len());
 
@@ -1073,6 +1085,8 @@ mod test {
 
         let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 5, 3);
         let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 3, 3);
+        dbg!(&matrix_a);
+        dbg!(&matrix_b);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
         let mut mle_product_ref = DenseMle::new_from_raw(res_product, LayerId::Input(0));
