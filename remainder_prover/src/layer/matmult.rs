@@ -1085,8 +1085,6 @@ mod test {
 
         let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 5, 3);
         let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 3, 3);
-        dbg!(&matrix_a);
-        dbg!(&matrix_b);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
         let mut mle_product_ref = DenseMle::new_from_raw(res_product, LayerId::Input(0));
