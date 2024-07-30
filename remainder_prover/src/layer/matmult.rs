@@ -4,7 +4,6 @@ use ::serde::{Deserialize, Serialize};
 use ark_std::{cfg_into_iter, end_timer, log2, start_timer};
 use itertools::Itertools;
 use ndarray::Array2;
-use rand::Rng;
 use remainder_shared_types::{
     transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter},
     FieldExt,
@@ -12,7 +11,7 @@ use remainder_shared_types::{
 
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
-    gate::{check_fully_bound, compute_sumcheck_message_no_beta_table},
+    gate::compute_sumcheck_message_no_beta_table,
     CircuitLayer, Layer, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
@@ -22,8 +21,8 @@ use crate::{
     },
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::VerificationError,
-    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
-    sumcheck::{evaluate_at_a_point, VerifyError},
+    mle::{dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
+    sumcheck::evaluate_at_a_point,
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -32,7 +31,8 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct Matrix<F: FieldExt> {
-    mle: DenseMle<F>,
+    /// The underlying and padded MLE that represents this matrix.
+    pub mle: DenseMle<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
 }
@@ -140,7 +140,7 @@ impl<F: FieldExt> MatMult<F> {
         }
 
         let transpose_timer = start_timer!(|| "transpose matrix");
-        let mut matrix_a_transp = gen_transpose_matrix(&self.matrix_a);
+        let matrix_a_transp = gen_transpose_matrix(&self.matrix_a);
         end_timer!(transpose_timer);
 
         let mut matrix_a_transp = matrix_a_transp.mle;
@@ -203,133 +203,6 @@ impl<F: FieldExt> MatMult<F> {
         matrix_b_mle.index_mle_indices(0);
     }
 
-    /// dummy sumcheck prover for this, testing purposes
-    #[allow(dead_code)]
-    fn dummy_prove_rounds(
-        &mut self,
-        claim: Claim<F>,
-        rng: &mut impl Rng,
-    ) -> Result<Vec<(Vec<F>, Option<F>)>, LayerError> {
-        let mut claim_b = claim.get_point().clone();
-        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
-
-        self.pre_processing_step(claim_a, claim_b);
-
-        let mut messages: Vec<(Vec<F>, Option<F>)> = vec![];
-        let mut challenges: Vec<F> = vec![];
-        let mut challenge: Option<F> = None;
-
-        let first_message = compute_sumcheck_message_no_beta_table(
-            &[self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
-            0,
-            2,
-        )
-        .unwrap();
-        messages.push((first_message, challenge));
-
-        let num_vars_middle = self.num_vars_middle_ab.unwrap(); // TODO: raise error if not
-
-        for round in 1..num_vars_middle {
-            // TODO: raise error if None
-            challenge = Some(F::from(rng.gen::<u64>()));
-            let chal = challenge.unwrap();
-            challenges.push(chal);
-            self.matrix_a
-                .mle
-                .fix_variable(round - 1, challenge.clone().unwrap());
-            self.matrix_b
-                .mle
-                .fix_variable(round - 1, challenge.clone().unwrap());
-            let next_message = compute_sumcheck_message_no_beta_table(
-                &[self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
-                round,
-                2,
-            )
-            .unwrap();
-            messages.push((next_message, challenge));
-        }
-
-        Ok(messages)
-    }
-
-    /// dummy verifier for dummy sumcheck, testing purposes
-    #[allow(dead_code)]
-    fn dummy_verify_rounds(
-        &mut self,
-        messages: Vec<(Vec<F>, Option<F>)>,
-        rng: &mut impl Rng,
-        claim: Claim<F>,
-    ) -> Result<(), VerifyError> {
-        // first message check
-        let mut prev_evals = &messages[0].0;
-        let mut challenges = vec![];
-
-        let mut claim_b = claim.get_point().clone();
-        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
-
-        let claimed_val = prev_evals[0] + prev_evals[1];
-        if claimed_val != claim.get_result() {
-            dbg!("hello");
-            dbg!(messages[0].0[0] + messages[0].0[1]);
-            return Err(VerifyError::SumcheckBad);
-        }
-
-        let num_vars_middle = self.num_vars_middle_ab.unwrap(); // TODO: raise error if not
-
-        // --- Go through sumcheck messages + (FS-generated) challenges ---
-        for i in 1..num_vars_middle {
-            // TODO: raise error if not
-            let (evals, challenge) = &messages[i];
-            let curr_evals = evals;
-            let chal = (challenge).unwrap();
-            // --- Evaluate the previous round's polynomial at the random challenge point, i.e. g_{i - 1}(r_i) ---
-            let prev_at_r = evaluate_at_a_point(prev_evals, challenge.unwrap())
-                .expect("could not evaluate at challenge point");
-
-            if prev_at_r != curr_evals[0] + curr_evals[1] {
-                dbg!("whoops");
-                dbg!(&prev_at_r);
-                dbg!(curr_evals[0] + curr_evals[1]);
-                return Err(VerifyError::SumcheckBad);
-            };
-            prev_evals = curr_evals;
-            challenges.push(chal);
-        }
-
-        let final_chal = F::from(rng.gen::<u64>());
-        challenges.push(final_chal);
-        self.matrix_a
-            .mle
-            .fix_variable(num_vars_middle - 1, final_chal);
-        self.matrix_b
-            .mle
-            .fix_variable(num_vars_middle - 1, final_chal);
-
-        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
-
-        let full_claim_chals_a = challenges
-            .clone()
-            .into_iter()
-            .chain(claim_a.into_iter())
-            .collect_vec();
-        let full_claim_chals_b = claim_b
-            .into_iter()
-            .chain(challenges.into_iter())
-            .collect_vec();
-
-        let fully_bound_a =
-            check_fully_bound(&mut [self.matrix_a.mle.clone()], full_claim_chals_a).unwrap();
-        let fully_bound_b =
-            check_fully_bound(&mut [self.matrix_b.mle.clone()], full_claim_chals_b).unwrap();
-        let matrix_product = fully_bound_a * fully_bound_b;
-
-        if prev_at_r != matrix_product {
-            return Err(VerifyError::SumcheckBad);
-        }
-
-        Ok(())
-    }
-
     fn append_leaf_mles_to_transcript(
         &self,
         transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
@@ -364,28 +237,18 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
         let num_vars_middle = self.num_vars_middle_ab.unwrap(); // TODO: raise error if not
 
         for round in 0..num_vars_middle {
-            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-            challenges.push(challenge);
-            self.matrix_a.mle.fix_variable(round - 1, challenge);
-            self.matrix_b.mle.fix_variable(round - 1, challenge);
-            let next_message = compute_sumcheck_message_no_beta_table(
+            let message = compute_sumcheck_message_no_beta_table(
                 &[self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
                 round,
                 2,
             )
             .unwrap();
-            transcript_writer.append_elements("Sumcheck evaluations", &next_message);
+            transcript_writer.append_elements("Sumcheck evaluations", &message);
+            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            challenges.push(challenge);
+            self.matrix_a.mle.fix_variable(round, challenge);
+            self.matrix_b.mle.fix_variable(round, challenge);
         }
-
-        let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge for binding x");
-        challenges.push(final_chal);
-        self.matrix_a
-            .mle
-            .fix_variable(num_vars_middle - 1, final_chal);
-        self.matrix_b
-            .mle
-            .fix_variable(num_vars_middle - 1, final_chal);
-
         self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
     }
@@ -801,16 +664,15 @@ pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix
 
 #[cfg(test)]
 mod test {
-    use ark_std::test_rng;
+
     use remainder_shared_types::Fr;
 
     use crate::{
-        claims::Claim,
         layer::{
-            matmult::{product_two_matrices, MatMult, Matrix},
+            matmult::{product_two_matrices, Matrix},
             LayerId,
         },
-        mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+        mle::{dense::DenseMle, Mle},
     };
 
     #[test]
@@ -983,138 +845,5 @@ mod test {
         let matrix_out = Matrix::new(DenseMle::new_from_raw(exp_product, LayerId::Layer(0)), 5, 3);
 
         assert_eq!(res_product, matrix_out.mle.bookkeeping_table().clone());
-    }
-
-    #[test]
-    /// super basic symmetric test
-    fn test_sumcheck_1() {
-        let mut rng = test_rng();
-        let claim = Claim::new(vec![Fr::from(1), Fr::from(0)], Fr::from(3));
-
-        let matrix_a_vec = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(1)];
-        let matrix_b_vec = vec![Fr::from(1), Fr::from(1), Fr::from(1), Fr::from(1)];
-
-        let matrix_a = Matrix::new(
-            DenseMle::new_from_raw(matrix_a_vec, LayerId::Layer(0)),
-            2,
-            2,
-        );
-        let matrix_b = Matrix::new(
-            DenseMle::new_from_raw(matrix_b_vec, LayerId::Layer(0)),
-            2,
-            2,
-        );
-
-        let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
-
-        let messages = matrix_init.dummy_prove_rounds(claim.clone(), &mut rng);
-        let verify_res = matrix_init.dummy_verify_rounds(messages.unwrap(), &mut rng, claim);
-
-        assert!(verify_res.is_ok());
-    }
-
-    #[test]
-    /// super basic asymmetric test
-    fn test_sumcheck_asymmetric() {
-        let mut rng = test_rng();
-        let claim = Claim::new(vec![Fr::from(1)], Fr::from(8));
-
-        let matrix_a_vec = vec![
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(3),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(1),
-            Fr::from(1),
-            Fr::from(2),
-        ];
-        let matrix_b_vec = vec![Fr::from(1), Fr::from(2), Fr::from(1), Fr::from(1)];
-
-        let matrix_a = Matrix::new(
-            DenseMle::new_from_raw(matrix_a_vec, LayerId::Layer(0)),
-            2,
-            4,
-        );
-        let matrix_b = Matrix::new(
-            DenseMle::new_from_raw(matrix_b_vec, LayerId::Layer(0)),
-            4,
-            1,
-        );
-
-        let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
-
-        let messages = matrix_init.dummy_prove_rounds(claim.clone(), &mut rng);
-        let verify_res = matrix_init.dummy_verify_rounds(messages.unwrap(), &mut rng, claim);
-
-        assert!(verify_res.is_ok());
-    }
-
-    #[test]
-    fn test_sumcheck_irregular_matrices() {
-        let mut rng = test_rng();
-
-        let mle_vec_a = vec![
-            Fr::from(1),
-            Fr::from(2),
-            Fr::from(9),
-            Fr::from(10),
-            Fr::from(13),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(10),
-            Fr::from(2),
-            Fr::from(9),
-            Fr::from(10),
-            Fr::from(1),
-            Fr::from(3),
-            Fr::from(10),
-            Fr::from(2),
-        ];
-        let mle_vec_b = vec![
-            Fr::from(3),
-            Fr::from(5),
-            Fr::from(9),
-            Fr::from(6),
-            Fr::from(5),
-            Fr::from(9),
-            Fr::from(6),
-            Fr::from(1),
-            Fr::from(3),
-        ];
-
-        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 5, 3);
-        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 3, 3);
-
-        let res_product = product_two_matrices(&matrix_a, &matrix_b);
-        let mut mle_product_ref = DenseMle::new_from_raw(res_product, LayerId::Input(0));
-
-        let _ = mle_product_ref.index_mle_indices(0);
-
-        mle_product_ref.fix_variable(0, Fr::from(1));
-        mle_product_ref.fix_variable(1, Fr::from(2));
-        mle_product_ref.fix_variable(2, Fr::from(3));
-        mle_product_ref.fix_variable(3, Fr::from(4));
-        mle_product_ref.fix_variable(4, Fr::from(5));
-
-        assert_eq!(mle_product_ref.bookkeeping_table().len(), 1);
-
-        let claim = Claim::new(
-            vec![
-                Fr::from(1),
-                Fr::from(2),
-                Fr::from(3),
-                Fr::from(4),
-                Fr::from(5),
-            ],
-            mle_product_ref.bookkeeping_table()[0],
-        );
-
-        let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
-
-        let messages = matrix_init.dummy_prove_rounds(claim.clone(), &mut rng);
-        let verify_res = matrix_init.dummy_verify_rounds(messages.unwrap(), &mut rng, claim);
-
-        assert!(verify_res.is_ok());
     }
 }
