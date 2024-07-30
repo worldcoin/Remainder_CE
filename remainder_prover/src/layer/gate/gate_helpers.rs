@@ -167,6 +167,8 @@ pub fn check_fully_bound<F: FieldExt>(
     mle_refs: &mut [impl Mle<F>],
     challenges: Vec<F>,
 ) -> Result<F, GateError> {
+    dbg!(&mle_refs);
+    dbg!(&challenges);
     let mles_bound: Vec<bool> = mle_refs
         .iter()
         .map(|mle_ref| {

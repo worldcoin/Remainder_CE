@@ -16,20 +16,16 @@ use tracing::info;
 
 use crate::{
     builders::layer_builder::LayerBuilder,
-    claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator},
+    claims::Claim,
     expression::{
         circuit_expr::CircuitExpr,
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
     },
-    input_layer::enum_input_layer::InputLayerEnum,
     layer::{Layer, LayerError, LayerId, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, Mle},
-    prover::SumcheckProof,
-    sumcheck::{
-        compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree, Evals,
-    },
+    sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
 use super::{CircuitLayer, VerifierLayer};
@@ -386,7 +382,7 @@ impl<F: FieldExt> RegularLayer<F> {
                 ExpressionNode::Product(mle_vec_indices) => {
                     for mle_vec_index in mle_vec_indices {
                         let mle = &mle_vec[mle_vec_index.index()];
-                        let eval = mle.bookkeeping_table()[0];
+                        let eval = mle.current_mle.value();
                         transcript_writer.append("Product MLE value", eval);
                     }
                     Ok(())

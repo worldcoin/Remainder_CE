@@ -170,6 +170,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
     /// WHICH CAN BE GENERATED INDEPENDENTLY OF WHETHER THE PROVER HAS ALREADY
     /// PERFORMED SUMCHECK OVER IT!!!
     fn into_circuit_layer(&self) -> Result<CircuitGateLayer<F>, LayerError> {
+        let lhs_circuit_mle = CircuitMle::
         let lhs_circuit_mle = CircuitMle::new(self.lhs.layer_id(), self.lhs.mle_indices());
         let rhs_circuit_mle = CircuitMle::new(self.lhs.layer_id(), self.rhs.mle_indices());
         Ok(CircuitGateLayer {

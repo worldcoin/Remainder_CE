@@ -1,21 +1,22 @@
-use crate::{layer::LayerId, mle::MleIndex};
+use crate::{
+    layer::LayerId,
+    mle::{dense::DenseMle, Mle, MleIndex},
+};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
-use thiserror::Error;
 
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge},
+    transcript::{TranscriptReader, TranscriptSponge},
     FieldExt,
 };
 
 use super::{
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
-    prover_expr::ProverExpr,
     verifier_expr::{VerifierExpr, VerifierMle},
 };
 
@@ -68,7 +69,7 @@ impl<F: FieldExt> CircuitMle<F> {
 
     pub fn into_verifier_mle(
         &self,
-        point: &Vec<F>,
+        point: &[F],
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<VerifierMle<F>, ExpressionError> {
         let verifier_indices = self
@@ -86,6 +87,25 @@ impl<F: FieldExt> CircuitMle<F> {
             .map_err(|err| ExpressionError::TranscriptError(err))?;
 
         Ok(VerifierMle::new(self.layer_id, verifier_indices, eval))
+    }
+
+    /// Generate a [CircuitMle] from a [DenseMle].
+    pub fn from_dense_mle(mle: &DenseMle<F>) -> Result<Self, ExpressionError> {
+        let layer_id = mle.get_layer_id();
+        let mle_indices = mle.mle_indices();
+
+        let all_indices_indexed = mle_indices.iter().all(|mle_index| match mle_index {
+            MleIndex::IndexedBit(_) => true,
+            MleIndex::Fixed(_) => true,
+            MleIndex::Bound(..) => true,
+            _ => false,
+        });
+
+        if !all_indices_indexed {
+            return Err(ExpressionError::EvaluateNotFullyIndexedError);
+        }
+
+        Ok(CircuitMle::new(layer_id, mle_indices))
     }
 }
 
