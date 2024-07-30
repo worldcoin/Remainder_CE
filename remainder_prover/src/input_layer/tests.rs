@@ -2,7 +2,7 @@ use std::cmp::max;
 
 use ark_std::test_rng;
 use remainder_ligero::ligero_commit::remainder_ligero_commit;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::{transcript::ProverTranscript, FieldExt, Fr};
 
 use crate::{
     builders::{
@@ -14,8 +14,10 @@ use crate::{
     mle::{dense::DenseMle, Mle},
     output_layer::mle_output_layer::MleOutputLayer,
     prover::{
-        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, CircuitInputLayer,
-        CircuitTranscript, GKRCircuit, GKRError, GKRVerifierKey, Witness,
+        helpers::test_circuit,
+        layers::Layers,
+        proof_system::{DefaultProofSystem, ProofSystem},
+        CircuitInputLayer, GKRCircuit, GKRError, GKRVerifierKey, Witness,
     },
     utils::get_random_mle,
 };
@@ -45,7 +47,7 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
 
     fn synthesize_and_commit(
         &mut self,
-        transcript_writer: &mut <Self::ProofSystem as ProofSystem<F>>::ProverTranscript,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<
         (
             Witness<F, Self::ProofSystem>,
@@ -192,7 +194,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
 
     fn synthesize_and_commit(
         &mut self,
-        transcript_writer: &mut CircuitTranscript<F, Self>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<
         (
             Witness<F, Self::ProofSystem>,

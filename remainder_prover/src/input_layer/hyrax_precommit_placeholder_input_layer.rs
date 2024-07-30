@@ -50,7 +50,7 @@ impl<F: FieldExt> InputLayer<F> for HyraxPrecommitPlaceholderInputLayer<F> {
 
     fn append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) {
         todo!()
     }

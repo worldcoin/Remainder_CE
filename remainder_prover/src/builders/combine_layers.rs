@@ -14,7 +14,7 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
+    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer},
     mle::{mle_enum::MleEnum, Mle, MleIndex},
     utils::{argsort, bits_iter},
 };

@@ -3,6 +3,7 @@
 use ark_std::cfg_into_iter;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 
+use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use rayon::prelude::*;
 use remainder_shared_types::{transcript::TranscriptReaderError, FieldExt};
@@ -87,7 +88,7 @@ pub trait InputLayer<F: FieldExt> {
     /// Appends the commitment to the F-S Transcript.
     fn append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     );
 
     /// Generates a proof of polynomial evaluation at the point
@@ -96,7 +97,7 @@ pub trait InputLayer<F: FieldExt> {
     /// Appends any communication to the transcript.
     fn open(
         &self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
         claim: Claim<F>,
     ) -> Result<(), InputLayerError>;
 
@@ -118,7 +119,7 @@ pub trait VerifierInputLayer<F: FieldExt> {
     /// Read the commitment off of the transcript.
     fn get_commitment_from_transcript(
         &self,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::Commitment, InputLayerError>;
 
     /// Verifies the evaluation at the point in the `Claim` relative to the
@@ -127,7 +128,7 @@ pub trait VerifierInputLayer<F: FieldExt> {
         &self,
         commitment: &Self::Commitment,
         claim: Claim<F>,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError>;
 }
 
@@ -189,56 +190,4 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     wlx_evals.extend(&next_evals);
     debug!("Returning evals:\n{:#?} ", wlx_evals);
     Ok(wlx_evals)
-}
-
-/// The InputLayer trait in which the evaluation proof, commitment, and proof/verification
-/// process takes place for input layers.
-pub trait InputLayer<F: FieldExt> {
-    /// The struct that contains the commitment to the contents of the input_layer.
-    type Commitment: Serialize + for<'a> Deserialize<'a>;
-
-    /// The struct that contains the opening proof.
-    type OpeningProof: Serialize + for<'a> Deserialize<'a>;
-
-    /// The error associated with the input layer that implements this trait.
-    type Error: std::error::Error;
-
-    /// Generates a commitment
-    ///
-    /// Can mutate self to cache useful information.
-    fn commit(&mut self) -> Result<Self::Commitment, Self::Error>;
-
-    /// Appends the commitment to the F-S Transcript.
-    fn prover_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript_writer: &mut impl ProverTranscript<F>,
-    );
-
-    /// Appends the commitment to the F-S Transcript.
-    fn verifier_append_commitment_to_transcript(
-        commitment: &Self::Commitment,
-        transcript: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), Self::Error>;
-
-    /// Generates a proof of polynomial evaluation at the point
-    /// in the `Claim`.
-    ///
-    /// Appends any communication to the transcript.
-    fn open(
-        &self,
-        transcript: &mut impl ProverTranscript<F>,
-        claim: Claim<F>,
-    ) -> Result<Self::OpeningProof, Self::Error>;
-
-    /// Verifies the evaluation at the point in the `Claim` relative to the
-    /// polynomial commitment using the opening proof.
-    fn verify(
-        commitment: &Self::Commitment,
-        opening_proof: &Self::OpeningProof,
-        claim: Claim<F>,
-        transcript: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), Self::Error>;
-
-    /// Returns the `LayerId` of this layer.
-    fn layer_id(&self) -> &LayerId;
 }

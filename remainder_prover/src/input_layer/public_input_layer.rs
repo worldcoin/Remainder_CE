@@ -113,7 +113,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
 
     fn get_commitment_from_transcript(
         &self,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::Commitment, InputLayerError> {
         let num_evals = 1 << self.num_bits;
         Ok(transcript_reader.consume_elements("Public Input Commitment", num_evals)?)
@@ -126,7 +126,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
         &self,
         commitment: &Self::Commitment,
         claim: Claim<F>,
-        _: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        _: &mut impl VerifierTranscript<F>,
     ) -> Result<(), super::InputLayerError> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
         mle_ref.index_mle_indices(0);
@@ -176,7 +176,9 @@ impl<F: FieldExt> YieldWLXEvals<F> for PublicInputLayer<F> {
 #[cfg(test)]
 mod tests {
     use remainder_shared_types::{
-        halo2curves::ff::Field, transcript::test_transcript::TestSponge, Fr,
+        halo2curves::ff::Field,
+        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
+        Fr,
     };
 
     use super::*;

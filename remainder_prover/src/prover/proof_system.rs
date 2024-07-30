@@ -8,7 +8,7 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-use crate::layer::Layer;
+use crate::{claims::wlx_eval::ClaimMle, layer::Layer};
 use crate::{
     claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
     input_layer::VerifierInputLayer,
@@ -217,7 +217,7 @@ macro_rules! input_layer_enum {
 
             fn append_commitment_to_transcript(
                 commitment: &Self::Commitment,
-                transcript_writer: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                transcript_writer: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
             ) {
                 match commitment {
                     $(
@@ -228,7 +228,7 @@ macro_rules! input_layer_enum {
 
             fn open(
                 &self,
-                transcript_writer: &mut $crate::remainder_shared_types::transcript::TranscriptWriter<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                transcript_writer: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
                 claim: $crate::claims::Claim<F>,
             ) -> Result<(), $crate::input_layer::InputLayerError> {
                 match self {
@@ -270,7 +270,7 @@ macro_rules! input_layer_enum {
 
                 fn get_commitment_from_transcript(
                     &self,
-                    transcript_reader: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>
+                    transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
                 )  -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
                     match self {
                         $(
@@ -286,7 +286,7 @@ macro_rules! input_layer_enum {
                     &self,
                     commitment: &Self::Commitment,
                     claim: $crate::claims::Claim<F>,
-                    transcript_reader: &mut $crate::remainder_shared_types::transcript::TranscriptReader<F, impl $crate::remainder_shared_types::transcript::TranscriptSponge<F>>,
+                    transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
                 ) -> Result<(), $crate::input_layer::InputLayerError> {
                     match self {
                         $(
@@ -337,8 +337,8 @@ pub trait ProofSystem<F: FieldExt> {
     /// The MleRef type that serves as the output layer representation
     type OutputLayer: OutputLayer<
             F,
-            CircuitOutputLayer: CircuitOutputLayer<F, VerifierOutputLayer: YieldClaim<F>>,
-        > + YieldClaim<F>
+            CircuitOutputLayer: CircuitOutputLayer<F, VerifierOutputLayer: YieldClaim<ClaimMle<F>>>,
+        > + YieldClaim<ClaimMle<F>>
         + Serialize
         + for<'de> Deserialize<'de>
         + Debug;

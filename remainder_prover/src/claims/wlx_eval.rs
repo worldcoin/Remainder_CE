@@ -30,7 +30,7 @@ use std::marker::PhantomData;
 
 use log::debug;
 
-use super::{Claim, ClaimAggregator, ClaimAndProof, YieldClaim};
+use super::{Claim, ClaimAggregator, YieldClaim};
 
 /// The default ClaimAggregator.
 ///
@@ -52,7 +52,6 @@ impl<
         LI: InputLayer<F> + YieldWLXEvals<F>,
     > ClaimAggregator<F> for WLXAggregator<F, L, LI>
 {
-    type Error = GKRError;
     type Claim = ClaimMle<F>;
 
     type Layer = L;
@@ -65,10 +64,7 @@ impl<
         }
     }
 
-    fn extract_claims(
-        &mut self,
-        layer: &impl YieldClaim<F, Self::Claim>,
-    ) -> Result<(), LayerError> {
+    fn extract_claims(&mut self, layer: &impl YieldClaim<ClaimMle<F>>) -> Result<(), LayerError> {
         // Ask `layer` to generate claims for other layers.
         let claims = layer.get_claims()?;
 
@@ -94,16 +90,16 @@ impl<
         &self,
         layer: &Self::Layer,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError> {
-        let layer_id = layer.id();
-        self.prover_aggregate_claims(layer, *layer_id, transcript_writer)
+    ) -> Result<Claim<F>, GKRError> {
+        let layer_id = layer.layer_id();
+        self.prover_aggregate_claims(layer, layer_id, transcript_writer)
     }
 
     fn prover_aggregate_claims_input(
         &self,
         layer: &Self::InputLayer,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, GKRError> {
+    ) -> Result<Claim<F>, GKRError> {
         let layer_id = layer.layer_id();
         self.prover_aggregate_claims(layer, layer_id, transcript_writer)
     }
@@ -156,17 +152,6 @@ impl<
             Ok(claims[0].get_claim().clone())
         }
     }
-
-    fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]> {
-        self.claims.get(&layer_id).map(|claims| claims.as_slice())
-    }
-
-    fn new() -> Self {
-        Self {
-            claims: HashMap::new(),
-            _marker: PhantomData,
-        }
-    }
 }
 
 impl<
@@ -180,10 +165,10 @@ impl<
         layer: &impl YieldWLXEvals<F>,
         layer_id: LayerId,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, GKRError> {
+    ) -> Result<Claim<F>, GKRError> {
         let claims = self
             .get_claims(layer_id)
-            .ok_or(GKRError::ErrorWhenVerifyingLayer(
+            .ok_or(GKRError::ErrorWhenProvingLayer(
                 layer_id,
                 LayerError::ClaimError(ClaimError::ClaimAggroError),
             ))?;

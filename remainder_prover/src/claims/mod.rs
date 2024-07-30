@@ -9,7 +9,10 @@ use remainder_shared_types::{
 };
 use thiserror::Error;
 
-use crate::layer::combine_mle_refs::CombineMleRefError;
+use crate::{
+    layer::{combine_mle_refs::CombineMleRefError, LayerError},
+    prover::GKRError,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -115,8 +118,7 @@ pub trait ClaimAggregator<F: FieldExt> {
 
     /// Retrieves claims from `layer` to keep track internally and later
     /// aggregate.
-    fn extract_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>)
-        -> Result<(), LayerError>;
+    fn extract_claims(&mut self, layer: &impl YieldClaim<Self::Claim>) -> Result<(), LayerError>;
 
     /// Returns the claims made to layer with ID `layer_id` (if any).
     /// The claims must have already been retrieved using
@@ -136,7 +138,7 @@ pub trait ClaimAggregator<F: FieldExt> {
         &self,
         layer: &Self::Layer,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, LayerError>;
+    ) -> Result<Claim<F>, GKRError>;
 
     /// Similar to `prover_aggregate_claims` but for an input layer.
     ///
@@ -151,7 +153,7 @@ pub trait ClaimAggregator<F: FieldExt> {
         &self,
         layer: &Self::InputLayer,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, LayerError>;
+    ) -> Result<Claim<F>, GKRError>;
 
     /// The verifier's variant of `prover_aggregate_claims`.
     ///
@@ -171,7 +173,7 @@ pub trait ClaimAggregator<F: FieldExt> {
         &self,
         layer_id: LayerId,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Claim<F>, LayerError>;
+    ) -> Result<Claim<F>, GKRError>;
 }
 
 /// A trait that allows a layer-like type to yield claims for other layers.

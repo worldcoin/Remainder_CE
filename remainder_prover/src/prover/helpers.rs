@@ -11,14 +11,13 @@ use std::path::Path;
 use super::proof_system::ProofSystem;
 
 /// Boilerplate code for testing a circuit
-pub fn test_circuit<F: FieldExt, C: GKRCircuit<F, ProofSystem = PR>, PR, Sp>(
+pub fn test_circuit<F: FieldExt, C: GKRCircuit<F, ProofSystem = PR>, PR>(
     mut circuit: C,
     path: Option<&Path>,
 ) where
     PR: ProofSystem<F>,
-    Sp: TranscriptSponge<F>,
 {
-    let mut transcript_writer = CircuitTranscript::<F, C>::new("GKR Prover Transcript");
+    let mut transcript_writer = TranscriptWriter::<F, C>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
     match circuit.prove(transcript_writer) {
@@ -44,7 +43,7 @@ pub fn test_circuit<F: FieldExt, C: GKRCircuit<F, ProofSystem = PR>, PR, Sp>(
             };
 
             let mut transcript_reader =
-                TranscriptReader::<_, CircuitTranscript<F, C>>::new(transcript);
+                TranscriptReader::<_, TranscriptWriter<F, C>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
             match gkr_circuit_description.verify(&mut transcript_reader) {

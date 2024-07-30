@@ -7,7 +7,10 @@
 //! restriction of an MLE defining its associated layer.
 
 use num::Zero;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    transcript::{ProverTranscript, VerifierTranscript},
+    FieldExt,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -90,10 +93,7 @@ impl<F: FieldExt> OutputLayer<F> for MleOutputLayer<F> {
 
     fn fix_layer(
         &mut self,
-        transcript_writer: &mut remainder_shared_types::transcript::TranscriptWriter<
-            F,
-            impl remainder_shared_types::transcript::TranscriptSponge<F>,
-        >,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), crate::layer::LayerError> {
         let bits = self.mle.index_mle_indices(0);
 
@@ -121,13 +121,7 @@ impl<F: FieldExt> OutputLayer<F> for MleOutputLayer<F> {
         }
     }
 
-    fn append_mle_to_transcript(
-        &self,
-        transcript_writer: &mut remainder_shared_types::transcript::TranscriptWriter<
-            F,
-            impl remainder_shared_types::transcript::TranscriptSponge<F>,
-        >,
-    ) {
+    fn append_mle_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
         transcript_writer.append_elements("Output Layer MLE evals", self.mle.bookkeeping_table());
     }
 }
@@ -175,10 +169,7 @@ impl<F: FieldExt> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
 
     fn retrieve_mle_from_transcript_and_fix_layer(
         &self,
-        transcript_reader: &mut remainder_shared_types::transcript::TranscriptReader<
-            F,
-            impl remainder_shared_types::transcript::TranscriptSponge<F>,
-        >,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierOutputLayer, VerifierOutputLayerError> {
         // We do not yet handle DenseMle.
         assert!(self.is_zero());
@@ -255,7 +246,7 @@ impl<F: FieldExt> VerifierOutputLayer<F> for VerifierMleOutputLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F> for MleOutputLayer<F> {
+impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleOutputLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.mle.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
@@ -284,7 +275,7 @@ impl<F: FieldExt> YieldClaim<F> for MleOutputLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<F> for VerifierMleOutputLayer<F> {
+impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMleOutputLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         // We do not support non-zero MLEs on Output Layers at this point!
         assert!(self.is_zero());

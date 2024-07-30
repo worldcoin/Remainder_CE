@@ -14,7 +14,7 @@ use crate::{
         wlx_eval::{claim_group::form_claim_groups, get_num_wlx_evaluations, ClaimMle},
         Claim, ClaimError,
     },
-    layer::combine_mle_refs::get_og_mle_refs,
+    layer::{combine_mle_refs::get_og_mle_refs, LayerError},
     mle::mle_enum::MleEnum,
     prover::GKRError,
 };
@@ -39,7 +39,7 @@ use super::{claim_group::ClaimGroup, evaluate_at_a_point, YieldWLXEvals};
 pub fn prover_aggregate_claims_helper<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
-    transcript_writer: &mut TranscriptWriter<F, Tr>,
+    transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<Claim<F>, GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
@@ -77,13 +77,7 @@ pub fn prover_aggregate_claims_helper<F: FieldExt>(
     let intermediate_claims = intermediate_results
         .clone()
         .into_iter()
-        .map(|result| {
-            ClaimMle::new_raw(result.claim.get_point().clone(), result.claim.get_result())
-        })
-        .collect();
-    let intermediate_wlx_evals: Vec<Vec<F>> = intermediate_results
-        .into_iter()
-        .flat_map(|result| result.proof)
+        .map(|result| ClaimMle::new_raw(result.get_point().clone(), result.get_result()))
         .collect();
 
     end_timer!(intermediate_timer);
@@ -110,9 +104,9 @@ pub fn prover_aggregate_claims_helper<F: FieldExt>(
 /// # Returns
 ///
 /// If successful, returns a single aggregated claim.
-pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
+pub fn verifier_aggregate_claims_helper<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    transcript_reader: &mut TranscriptReader<F, Tr>,
+    transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> Result<Claim<F>, TranscriptReaderError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
@@ -218,11 +212,11 @@ pub fn compute_aggregated_challenges<F: FieldExt>(
 /// # Returns
 ///
 /// If successful, returns a single aggregated claim.
-fn prover_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<F>>(
+fn prover_aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer_mle_refs: &[MleEnum<F>],
     layer: &impl YieldWLXEvals<F>,
-    transcript_writer: &mut TranscriptWriter<F, Tr>,
+    transcript_writer: &mut impl ProverTranscript<F>,
 ) -> Result<Claim<F>, GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
@@ -241,18 +235,15 @@ fn prover_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<F>>(
     // Aggregate claims by performing the claim aggregation protocol.
     // First compute V_i(l(x)).
 
-    let wlx_evaluations = {
-        let wlx_evals = layer
-            .get_wlx_evaluations(
-                claims.get_claim_points_matrix(),
-                claims.get_results(),
-                layer_mle_refs.to_vec(),
-                claims.get_num_claims(),
-                claims.get_num_vars(),
-            )
-            .unwrap();
-        Ok(wlx_evals)
-    }?;
+    let wlx_evaluations = layer
+        .get_wlx_evaluations(
+            claims.get_claim_points_matrix(),
+            claims.get_results(),
+            layer_mle_refs.to_vec(),
+            claims.get_num_claims(),
+            claims.get_num_vars(),
+        )
+        .unwrap();
     let relevant_wlx_evaluations = wlx_evaluations[num_claims..].to_vec();
 
     // Append evaluations to the transcript before sampling a challenge.
@@ -281,7 +272,7 @@ fn prover_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<F>>(
 
 fn verifier_aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    transcript_reader: &mut TranscriptReader<F, Tr>,
+    transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> Result<Claim<F>, TranscriptReaderError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);

@@ -10,7 +10,7 @@ use std::{
 };
 
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptSponge},
+    transcript::{TranscriptReader, TranscriptSponge, VerifierTranscript},
     FieldExt,
 };
 
@@ -70,7 +70,7 @@ impl<F: FieldExt> CircuitMle<F> {
     pub fn into_verifier_mle(
         &self,
         point: &[F],
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<VerifierMle<F>, ExpressionError> {
         let verifier_indices = self
             .var_indices
@@ -134,7 +134,7 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
     pub fn bind(
         &self,
         point: &Vec<F>,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Expression<F, VerifierExpr>, ExpressionError> {
         Ok(Expression::new(
             self.expression_node
@@ -226,7 +226,7 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
     pub fn into_verifier_node(
         &self,
         point: &Vec<F>,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<ExpressionNode<F, VerifierExpr>, ExpressionError> {
         match self {
             ExpressionNode::Constant(scalar) => Ok(ExpressionNode::Constant(*scalar)),

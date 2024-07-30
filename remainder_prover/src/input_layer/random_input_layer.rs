@@ -66,7 +66,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
 
     fn append_commitment_to_transcript(
         commitment: &Self::Commitment,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) {
         transcript_writer.append_elements("Random Layer Evaluations", commitment);
     }
@@ -110,7 +110,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
 
     fn get_commitment_from_transcript(
         &self,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::Commitment, InputLayerError> {
         let num_evals = 1 << self.num_bits;
         Ok(transcript_reader.get_challenges("Random Layer Evaluations", num_evals)?)
@@ -120,7 +120,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
         &self,
         commitment: &Self::Commitment,
         claim: Claim<F>,
-        _transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        _transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError> {
         // In order to verify, simply fix variable on each of the variables for
         // the point in `claim`. Check whether the single element left in the
@@ -188,7 +188,9 @@ impl<F: FieldExt> YieldWLXEvals<F> for RandomInputLayer<F> {
 #[cfg(test)]
 mod tests {
     use remainder_shared_types::{
-        halo2curves::ff::Field, transcript::test_transcript::TestSponge, Fr,
+        halo2curves::ff::Field,
+        transcript::{test_transcript::TestSponge, TranscriptReader},
+        Fr,
     };
 
     use super::*;

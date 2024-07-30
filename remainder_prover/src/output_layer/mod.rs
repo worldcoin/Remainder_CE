@@ -1,7 +1,10 @@
 //! Traits and implementations for GKR Output Layers.
 
 use remainder_shared_types::{
-    transcript::{TranscriptReader, TranscriptReaderError, TranscriptSponge, TranscriptWriter},
+    transcript::{
+        ProverTranscript, TranscriptReader, TranscriptReaderError, TranscriptSponge,
+        TranscriptWriter, VerifierTranscript,
+    },
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -56,16 +59,13 @@ pub trait OutputLayer<F: FieldExt> {
     fn layer_id(&self) -> LayerId;
 
     /// Append the original MLE representation to the transcript.
-    fn append_mle_to_transcript(
-        &self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    );
+    fn append_mle_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>);
 
     /// Fix the variables of this output layer to random challenges sampled
     /// from the transcript.
     fn fix_layer(
         &mut self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<(), LayerError>;
 
     /// Return the Circuit description for this Output Layer to be used
@@ -88,7 +88,7 @@ pub trait CircuitOutputLayer<F: FieldExt> {
     /// Retrieve the original MLE representation from the transcript.
     fn retrieve_mle_from_transcript(
         &mut self,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), VerifierOutputLayerError>;
     */
 
@@ -97,7 +97,7 @@ pub trait CircuitOutputLayer<F: FieldExt> {
     /// Returns a description of the layer ready to be used by the verifier.
     fn retrieve_mle_from_transcript_and_fix_layer(
         &self,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierOutputLayer, VerifierOutputLayerError>;
 }
 
