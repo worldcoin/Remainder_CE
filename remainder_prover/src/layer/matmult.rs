@@ -528,16 +528,6 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     }
 }
 
-/// Converts a [Matrix<F>] into a [CircuitMle<F>].
-fn matrix_mle_to_circuit_mle<F: FieldExt>(matrix_mle: Matrix<F>) -> CircuitMle<F> {
-
-    let mle_indices = matrix_mle.prefix_bits.unwrap_or(vec![]).chain(
-        matrix_mle.
-    )
-
-    CircuitMle::new(matrix_mle.layer_id.unwrap())
-}
-
 /// TODO(ryancao): Move this to a separate `utils` file and use it everywhere
 /// TODO(ryancao): Make this do real error handling
 pub fn dense_mle_to_circuit_mle<F: FieldExt>(mle: &DenseMle<F>) -> CircuitMle<F> {
