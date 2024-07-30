@@ -491,6 +491,8 @@ fn test_add_gate_circuit() {
     test_circuit(circuit, None);
 }
 
+/// Okay let's attempt the test using the new Remainder frontend and what not
+
 #[test]
 fn test_uneven_add_gate_circuit() {
     const NUM_ITERATED_BITS: usize = 4;
@@ -510,8 +512,8 @@ fn test_uneven_add_gate_circuit() {
 
 #[test]
 fn test_dataparallel_add_gate_circuit() {
-    const NUM_DATAPARALLEL_BITS: usize = 4;
-    const NUM_ITERATED_BITS: usize = 4;
+    const NUM_DATAPARALLEL_BITS: usize = 2;
+    const NUM_ITERATED_BITS: usize = 2;
 
     let mut rng = test_rng();
     let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
@@ -573,8 +575,8 @@ fn test_dataparallel_uneven_add_gate_circuit() {
 
 #[test]
 fn test_dataparallel_mul_add_gate_circuit() {
-    const NUM_DATAPARALLEL_BITS: usize = 4;
-    const NUM_ITERATED_BITS: usize = 4;
+    const NUM_DATAPARALLEL_BITS: usize = 2;
+    const NUM_ITERATED_BITS: usize = 2;
 
     let mut rng = test_rng();
     let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);

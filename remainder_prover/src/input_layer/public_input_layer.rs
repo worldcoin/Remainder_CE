@@ -87,6 +87,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     }
 
     fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+        dbg!(&self.mle);
         let num_bits = self.mle.num_vars();
 
         Self::VerifierInputLayer {
@@ -131,6 +132,8 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
         mle_ref.index_mle_indices(0);
 
         let eval = if mle_ref.num_iterated_vars() != 0 {
+            dbg!(&mle_ref);
+            dbg!(&claim);
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);

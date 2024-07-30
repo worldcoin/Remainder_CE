@@ -4,6 +4,7 @@
 mod gate_helpers;
 #[cfg(test)]
 mod tests;
+mod new_interface_tests;
 
 use std::cmp::max;
 
@@ -21,13 +22,9 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::{
-        circuit_expr::CircuitMle,
-        generic_expr::Expression,
-        verifier_expr::{VerifierExpr, VerifierMle},
-    },
+    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle},
+    mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, Evals},
 };
@@ -87,6 +84,8 @@ pub struct Gate<F: FieldExt> {
     pub phase_2_mles: Option<Vec<Vec<DenseMle<F>>>>,
     /// The gate operation representing the fan-in-two relationship.
     pub gate_operation: BinaryOperation,
+    /// Temp for debugging
+    challenges: Vec<F>,
 }
 
 impl<F: FieldExt> Layer<F> for Gate<F> {
@@ -105,7 +104,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         let mut sumcheck_rounds = vec![];
         let (mut beta_g1, mut beta_g2) = self.compute_beta_tables(claim.get_point());
         let mut beta_g2_fully_bound = F::ONE;
-        // We perform the dataparallel initiliazation only if there is at least one variable
+        // We perform the dataparallel initialization only if there is at least one variable
         // representing which copy we are in.
         if self.num_dataparallel_bits > 0 {
             let (dataparallel_rounds, beta_g2_bound) = self
@@ -139,13 +138,50 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         sumcheck_rounds.extend(phase_1_rounds.0);
         sumcheck_rounds.extend(phase_2_rounds.0);
 
+        // --- Finally, send the claimed values for each of the bound MLEs to the verifier ---
+        // First, send the claimed value of V_{i + 1}(g_2, u)
+        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
+        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
+        debug_assert!(lhs_reduced.bookkeeping_table().len() == 1);
+        transcript_writer.append(
+            "Evaluation of V_{i + 1}(g_2, u)",
+            lhs_reduced.bookkeeping_table()[0],
+        );
+        // Next, send the claimed value of V_{i + 1}(g_2, v)
+        debug_assert!(rhs_reduced.bookkeeping_table().len() == 1);
+        transcript_writer.append(
+            "Evaluation of V_{i + 1}(g_2, v)",
+            rhs_reduced.bookkeeping_table()[0],
+        );
+
         // The concatenation of all of these rounds is the proof resulting from a gate layer.
         //Ok(sumcheck_rounds.into())
         Ok(())
     }
 
+    /// NOTE: THIS ASSUMES THAT ALL MLE INDICES HAVE *NOT* BEEN BOUND ALREADY!!! THAT
+    /// IS NOT NECESSARILY A GOOD ASSUMPTION AND WE SHOULD HAVE A CIRCUIT DESCRIPTION
+    /// WHICH CAN BE GENERATED INDEPENDENTLY OF WHETHER THE PROVER HAS ALREADY
+    /// PERFORMED SUMCHECK OVER IT!!!
+    ///
+    /// ADDITIONALLY, WE SHOULD NOT BE INDEXING MLE INDICES HERE -- RATHER, WE
+    /// SHOULD DO IT ONCE AT THE VERY BEGINNING, AND GENERATE BOTH PROVER AND
+    /// VERIFIER CIRCUIT DESCRIPTIONS FROM SUCH
     fn into_circuit_layer(&self) -> Result<CircuitGateLayer<F>, LayerError> {
-        todo!()
+        let mut lhs_clone_indexed = self.lhs.clone();
+        let mut rhs_clone_indexed = self.rhs.clone();
+        lhs_clone_indexed.index_mle_indices(0);
+        rhs_clone_indexed.index_mle_indices(0);
+        let lhs_circuit_mle = CircuitMle::from_dense_mle(&lhs_clone_indexed).unwrap();
+        let rhs_circuit_mle = CircuitMle::from_dense_mle(&rhs_clone_indexed).unwrap();
+        Ok(CircuitGateLayer {
+            id: self.layer_id(),
+            gate_operation: self.gate_operation,
+            wiring: self.nonzero_gates.clone(),
+            lhs_mle: lhs_circuit_mle,
+            rhs_mle: rhs_circuit_mle,
+            num_dataparallel_bits: self.num_dataparallel_bits,
+        })
     }
 }
 
@@ -177,6 +213,15 @@ pub struct CircuitGateLayer<F: FieldExt> {
     num_dataparallel_bits: usize,
 }
 
+/// Degree of independent variable is cubic for mul dataparallel binding and
+/// quadratic for all other bindings (see below expression to verify for yourself!)
+///
+/// V_i(g_2, g_1) = \sum_{p_2, x, y} \beta(g_2, p_2) f_1(g_1, x, y) (V_{i + 1}(p_2, x) \op V_{i + 1}(p_2, y))
+const DATAPARALLEL_ROUND_MUL_NUM_EVALS: usize = 4;
+const DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
+const NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS: usize = 3;
+const NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS: usize = 3;
+
 impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
     type VerifierLayer = VerifierGateLayer<F>;
 
@@ -190,141 +235,207 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        todo!()
-        /*
-        let sumcheck_rounds = sumcheck_rounds.0;
-        let mut prev_evals = &sumcheck_rounds[0];
-        let mut challenges = vec![];
+        // --- Storing challenges for the sake of claim generation later ---
         let mut first_u_challenges = vec![];
         let mut last_v_challenges = vec![];
         let mut first_copy_challenges = vec![];
-        let num_u = self.lhs.original_num_vars();
+
+        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- BITS ---
+        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_bits;
+        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_bits;
+
+        // --- Store all prover sumcheck messages to check against ---
+        let mut sumcheck_messages: Vec<Vec<F>> = vec![];
 
         // First round check against the claim.
-        let claimed_val = sumcheck_rounds[0][0] + sumcheck_rounds[0][1];
-        if claimed_val != claim.get_result() {
-            return Err(LayerError::VerificationError(
-                VerificationError::SumcheckStartFailed,
-            ));
+        let first_round_num_evals = match (self.gate_operation, self.num_dataparallel_bits) {
+            (BinaryOperation::Add, 0) => NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS,
+            (BinaryOperation::Mul, 0) => NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS,
+            (BinaryOperation::Add, _) => DATAPARALLEL_ROUND_ADD_NUM_EVALS,
+            (BinaryOperation::Mul, _) => DATAPARALLEL_ROUND_MUL_NUM_EVALS,
+        };
+        let first_round_sumcheck_messages =
+            transcript_reader.consume_elements("Sumcheck evaluations", first_round_num_evals)?;
+        sumcheck_messages.push(first_round_sumcheck_messages.clone());
+
+        // Check: V_i(g_2, g_1) =? g_1(0) + g_1(1)
+        // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
+        if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_result()
+        {
+            return Err(VerificationError::SumcheckStartFailed);
         }
 
-        let num_elements = sumcheck_rounds[0].len();
-        let transcript_sumcheck_round_zero = transcript_reader
-            .consume_elements("Initial Sumcheck evaluations", num_elements)
-            .map_err(LayerError::TranscriptError)?;
-        debug_assert_eq!(transcript_sumcheck_round_zero, sumcheck_rounds[0]);
-
         // Check each of the messages -- note that here the verifier doesn't actually see the difference
-        // between dataparallel rounds, phase 1 rounds, and phase 2 rounds--the prover's proof reads
+        // between dataparallel rounds, phase 1 rounds, and phase 2 rounds; instead, the prover's proof reads
         // as a single continuous proof.
-        for (i, curr_evals) in sumcheck_rounds.iter().enumerate().skip(1) {
+        for sumcheck_round_idx in 1..self.num_dataparallel_bits + num_u + num_v {
+            // --- Read challenge r_{i - 1} from transcript ---
             let challenge = transcript_reader
                 .get_challenge("Sumcheck challenge")
                 .unwrap();
-            let prev_at_r =
-                evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
+            let g_i_minus_1_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
 
-            if prev_at_r != curr_evals[0] + curr_evals[1] {
-                return Err(LayerError::VerificationError(
-                    VerificationError::SumcheckFailed,
-                ));
+            // --- Evaluate g_{i - 1}(r_{i - 1}) ---
+            let prev_at_r = evaluate_at_a_point(&g_i_minus_1_evals, challenge).unwrap();
+
+            // --- Read off g_i(0), g_i(1), ..., g_i(d) from transcript ---
+            let univariate_num_evals = match (
+                sumcheck_round_idx < self.num_dataparallel_bits, // 0-indexed, so strictly less-than is correct
+                self.gate_operation,
+            ) {
+                (true, BinaryOperation::Add) => DATAPARALLEL_ROUND_ADD_NUM_EVALS,
+                (true, BinaryOperation::Mul) => DATAPARALLEL_ROUND_MUL_NUM_EVALS,
+                (false, BinaryOperation::Add) => NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS,
+                (false, BinaryOperation::Mul) => NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS,
             };
 
-            let num_curr_evals = curr_evals.len();
-            let transcript_curr_evals = transcript_reader
-                .consume_elements("Sumcheck evaluations", num_curr_evals)
-                .map_err(LayerError::TranscriptError)?;
-            debug_assert_eq!(transcript_curr_evals, *curr_evals);
-            prev_evals = curr_evals;
-            challenges.push(challenge);
+            let curr_evals = transcript_reader
+                .consume_elements("Sumcheck evaluations", univariate_num_evals)
+                .unwrap();
 
-            // We want to separate the challenges into which ones are from the dataprallel bits, which ones
+            // --- Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1}) ---
+            if prev_at_r != curr_evals[0] + curr_evals[1] {
+                return Err(VerificationError::SumcheckFailed);
+            };
+
+            // --- Add the prover message to the sumcheck messages ---
+            sumcheck_messages.push(curr_evals);
+
+            // We want to separate the challenges into which ones are from the dataparallel bits, which ones
             // are for binding x (phase 1), and which are for binding y (phase 2).
-            if (..=self.num_dataparallel_bits).contains(&i) {
+            if sumcheck_round_idx <= self.num_dataparallel_bits {
                 first_copy_challenges.push(challenge);
-            } else if (..=num_u).contains(&i) {
+            } else if sumcheck_round_idx <= self.num_dataparallel_bits + num_u {
                 first_u_challenges.push(challenge);
             } else {
                 last_v_challenges.push(challenge);
             }
         }
 
-        // Final round of sumcheck.
+        // Final round of sumcheck -- sample r_n from transcript.
         let final_chal = transcript_reader
             .get_challenge("Final Sumcheck challenge")
-            .map_err(LayerError::TranscriptError)?;
-        challenges.push(final_chal);
+            .unwrap();
 
-        // This belongs in the last challenge bound to y.
-        if self.rhs.num_iterated_vars() == 0 {
+        // This belongs in the last challenge bound to y. If our RHS MLE has no
+        // variables, bind to LHS MLE.
+        if num_v == 0 {
             first_u_challenges.push(final_chal);
         } else {
             last_v_challenges.push(final_chal);
         }
 
-        // We want to grab the mutated bookkeeping tables from the "reduced_gate", this is the non-batched version.
-        let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
-        let rhs_reduced = self.phase_2_mles.clone().unwrap()[0][1].clone();
+        // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
+        let lhs_challenges = first_copy_challenges
+            .iter()
+            .chain(first_u_challenges.iter())
+            .enumerate()
+            .map(|(_idx, challenge)| *challenge)
+            .collect_vec();
+        let rhs_challenges = first_copy_challenges
+            .iter()
+            .chain(last_v_challenges.iter())
+            .enumerate()
+            .map(|(_idx, challenge)| *challenge)
+            .collect_vec();
 
-        // Since the original mles are batched, the challenges are the concat of the copy bits and the variable bound bits.
-        let lhs_challenges = [
-            first_copy_challenges.clone().as_slice(),
-            first_u_challenges.clone().as_slice(),
-        ]
-        .concat();
-        let rhs_challenges = [
-            first_copy_challenges.clone().as_slice(),
-            last_v_challenges.clone().as_slice(),
-        ]
-        .concat();
+        let lhs_verifier_mle = self
+            .lhs_mle
+            .into_verifier_mle(&lhs_challenges, transcript_reader)
+            .unwrap();
+        let rhs_verifier_mle = self
+            .rhs_mle
+            .into_verifier_mle(&rhs_challenges, transcript_reader)
+            .unwrap();
 
-        let g2_challenges = claim.get_point()[..self.num_dataparallel_bits].to_vec();
-        let g1_challenges = claim.get_point()[self.num_dataparallel_bits..].to_vec();
+        // --- Create the resulting verifier layer for claim tracking ---
+        // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
+        let verifier_gate_layer = VerifierGateLayer {
+            layer_id: self.layer_id(),
+            gate_operation: self.gate_operation,
+            wiring: self.wiring.clone(),
+            lhs_mle: lhs_verifier_mle,
+            rhs_mle: rhs_verifier_mle,
+            num_dataparallel_rounds: self.num_dataparallel_bits,
+            claim_challenge_points: claim.get_point().clone(),
+            dataparallel_sumcheck_challenges: first_copy_challenges,
+            first_u_challenges,
+            last_v_challenges,
+        };
+        let final_result = verifier_gate_layer.evaluate(&claim);
+
+        // Finally, compute g_n(r_n).
+        let g_n_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
+        let prev_at_r = evaluate_at_a_point(&g_n_evals, final_chal).unwrap();
+
+        // Final check in sumcheck.
+        if final_result != prev_at_r {
+            return Err(VerificationError::FinalSumcheckFailed);
+        }
+
+        Ok(verifier_gate_layer)
+    }
+}
+
+impl<F: FieldExt> VerifierGateLayer<F> {
+    /// Computes the oracle query's value for a given [VerifierGateLayer].
+    pub fn evaluate(&self, claim: &Claim<F>) -> F {
+        let g2_challenges = claim.get_point()[..self.num_dataparallel_rounds].to_vec();
+        let g1_challenges = claim.get_point()[self.num_dataparallel_rounds..].to_vec();
 
         // Compute the gate function bound at those variables.
         // Beta table corresponding to the equality of binding the x variables to u.
-        let beta_u = BetaValues::new_beta_equality_mle(first_u_challenges.clone());
+        let beta_u = BetaValues::new_beta_equality_mle(self.first_u_challenges.clone());
         // Beta table corresponding to the equality of binding the y variables to v.
-        let beta_v = BetaValues::new_beta_equality_mle(last_v_challenges.clone());
+        let beta_v = BetaValues::new_beta_equality_mle(self.last_v_challenges.clone());
         // Beta table representing all "z" label challenges.
         let beta_g = BetaValues::new_beta_equality_mle(g1_challenges);
         // Multiply the corresponding entries of the beta tables to get the full value of the gate function
         // i.e. f1(z, x, y) bound at the challenges f1(g1, u, v).
-        let f_1_uv =
-            self.nonzero_gates
-                .clone()
-                .into_iter()
-                .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                    let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                    let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
-                    let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
-                    acc + gz * ux * vy
-                });
+        let f_1_uv = self
+            .wiring
+            .clone()
+            .into_iter()
+            .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
+                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                let vy = *beta_v.bookkeeping_table().get(y_ind).unwrap_or(&F::ZERO);
+                acc + gz * ux * vy
+            });
 
-        // Check that the original mles have been bound correctly -- this is
-        // what we get from the reduced gate.
-        check_fully_bound(&mut [lhs_reduced.clone()], lhs_challenges).unwrap();
-        check_fully_bound(&mut [rhs_reduced.clone()], rhs_challenges).unwrap();
-        let f2_bound = lhs_reduced.bookkeeping_table()[0];
-        let f3_bound = rhs_reduced.bookkeeping_table()[0];
-        let beta_bound =
-            BetaValues::compute_beta_over_two_challenges(&g2_challenges, &first_copy_challenges);
+        // --- Finally, grab the claimed values for each of the bound MLEs from transcript ---
+        // // First, the claimed value of V_{i + 1}(g_2, u)
+        // let f2_bound = transcript_reader
+        //     .consume_element("Evaluation of V_{i + 1}(g_2, u)")
+        //     .unwrap();
+        // // Next, the claimed value of V_{i + 1}(g_2, v)
+        // let f3_bound = transcript_reader
+        //     .consume_element("Evaluation of V_{i + 1}(g_2, v)")
+        //     .unwrap();
 
-        // Compute the final result of the bound expression.
-        let final_result =
-            beta_bound * (f_1_uv * self.gate_operation.perform_operation(f2_bound, f3_bound));
+        let beta_bound = BetaValues::compute_beta_over_two_challenges(
+            &g2_challenges,
+            &self.dataparallel_sumcheck_challenges,
+        );
 
-        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
-
-        // Final check in sumcheck.
-        if final_result != prev_at_r {
-            return Err(LayerError::VerificationError(
-                VerificationError::FinalSumcheckFailed,
-            ));
-        }
-
-        Ok(())
-        */
+        // Compute the final result of the bound expression (this is the oracle query).
+        beta_bound
+            * (f_1_uv
+                * self
+                    .gate_operation
+                    .perform_operation(self.lhs_mle.value(), self.rhs_mle.value()))
     }
 }
 
@@ -351,9 +462,20 @@ pub struct VerifierGateLayer<F: FieldExt> {
     /// variables).
     rhs_mle: VerifierMle<F>,
 
-    /// The number of bits representing the number of "dataparallel" copies of
-    /// the circuit.
-    num_dataparallel_bits: usize,
+    /// The challenge points for the claim on the [Gate] layer.
+    claim_challenge_points: Vec<F>,
+
+    /// The number of dataparallel rounds.
+    num_dataparallel_rounds: usize,
+
+    /// The challenges for `p_2`, as derived from sumcheck.
+    dataparallel_sumcheck_challenges: Vec<F>,
+
+    /// The challenges for `x`, as derived from sumcheck.
+    first_u_challenges: Vec<F>,
+
+    /// The challenges for `y`, as derived from sumcheck.
+    last_v_challenges: Vec<F>,
 }
 
 impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
@@ -414,7 +536,67 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for Gate<F> {
 
 impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierGateLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        todo!()
+        // Grab the claim on the left side.
+        // TODO!(ryancao): Do error handling here!
+        let lhs_vars = self.lhs_mle.mle_indices();
+        let lhs_point = lhs_vars
+            .iter()
+            .map(|idx| match idx {
+                MleIndex::Bound(chal, _bit_idx) => *chal,
+                MleIndex::Fixed(val) => {
+                    if *val {
+                        F::ONE
+                    } else {
+                        F::ZERO
+                    }
+                }
+                _ => panic!("Error: Not fully bound"),
+            })
+            .collect_vec();
+        let lhs_val = self.lhs_mle.value();
+
+        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
+        let dummy_lhs_mle = DenseMle::new_from_raw(vec![lhs_val], self.layer_id());
+
+        let lhs_claim: ClaimMle<F> = ClaimMle::new(
+            lhs_point,
+            lhs_val,
+            Some(self.layer_id()),
+            Some(self.lhs_mle.layer_id()),
+            Some(MleEnum::Dense(dummy_lhs_mle)),
+        );
+
+        // Grab the claim on the right side.
+        // TODO!(ryancao): Do error handling here!
+        let rhs_vars: &[MleIndex<F>] = self.rhs_mle.mle_indices();
+        let rhs_point = rhs_vars
+            .iter()
+            .map(|idx| match idx {
+                MleIndex::Bound(chal, _bit_idx) => *chal,
+                MleIndex::Fixed(val) => {
+                    if *val {
+                        F::ONE
+                    } else {
+                        F::ZERO
+                    }
+                }
+                _ => panic!("Error: Not fully bound"),
+            })
+            .collect_vec();
+        let rhs_val = self.rhs_mle.value();
+
+        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
+        let dummy_rhs_mle = DenseMle::new_from_raw(vec![rhs_val], self.layer_id());
+
+        let rhs_claim: ClaimMle<F> = ClaimMle::new(
+            rhs_point,
+            rhs_val,
+            Some(self.layer_id()),
+            Some(self.rhs_mle.layer_id()),
+            Some(MleEnum::Dense(dummy_rhs_mle)),
+        );
+
+        Ok(vec![lhs_claim, rhs_claim])
     }
 }
 
@@ -496,6 +678,7 @@ impl<F: FieldExt> Gate<F> {
             phase_1_mles: None,
             phase_2_mles: None,
             gate_operation,
+            challenges: vec![],
         }
     }
 
@@ -596,7 +779,7 @@ impl<F: FieldExt> Gate<F> {
 
         let a_hg_rhs_mle_ref = DenseMle::new_from_raw(a_hg_rhs, LayerId::Input(0));
 
-        // The actual mles defer based on whether we are doing a add gate or a mul gate, because
+        // The actual mles differ based on whether we are doing a add gate or a mul gate, because
         // in the case of an add gate, we distribute the gate function whereas in the case of the
         // mul gate, we simply take the product over all three mles.
         let mut phase_1_mles = match self.gate_operation {
@@ -675,6 +858,7 @@ impl<F: FieldExt> Gate<F> {
             });
 
         let a_f1_lhs_mle_ref = DenseMle::new_from_raw(a_f1_lhs, LayerId::Input(0));
+
         // --- We need to multiply h_g(x) by f_2(x) ---
         let mut phase_2_mles = match self.gate_operation {
             BinaryOperation::Add => {
@@ -735,13 +919,13 @@ impl<F: FieldExt> Gate<F> {
 
         let (lhs, rhs) = (&mut self.lhs, &mut self.rhs);
 
-        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
+        transcript_writer.append_elements("Sumcheck evaluations DATAPARALLEL", &first_message);
         let num_rounds_copy_phase = self.num_dataparallel_bits;
 
         // Do the first dataparallel bits number sumcheck rounds using libra giraffe.
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds_copy_phase).map(|round| {
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge DATAPARALLEL");
                 challenges.push(challenge);
                 let eval = prove_round_dataparallel_phase(
                     lhs,
@@ -755,13 +939,14 @@ impl<F: FieldExt> Gate<F> {
                     self.gate_operation,
                 )
                 .unwrap();
-                transcript_writer.append_elements("Sumcheck evaluations", &eval);
+                transcript_writer.append_elements("Sumcheck evaluations DATAPARALLEL", &eval);
                 Ok::<_, LayerError>(eval)
             }))
             .try_collect()?;
 
         // Bind the final challenge, update the final beta table.
-        let final_chal_copy = transcript_writer.get_challenge("Final Sumcheck challenge");
+        let final_chal_copy =
+            transcript_writer.get_challenge("Final Sumcheck challenge DATAPARALLEL");
         // Fix the variable and everything as you would in the last round of sumcheck
         // the evaluations from this is what you return from the first round of sumcheck in the next phase!
         beta_g2.fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
@@ -800,13 +985,13 @@ impl<F: FieldExt> Gate<F> {
             .unwrap();
 
         let mut challenges: Vec<F> = vec![];
-        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
+        transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &first_message);
         let num_rounds_phase1 = self.lhs.num_iterated_vars();
 
         // Sumcheck rounds (binding x).
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds_phase1).map(|round| {
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge PHASE 1");
                 challenges.push(challenge);
                 // If there are dataparallel bits, we want to start at that index.
                 let eval =
@@ -814,7 +999,7 @@ impl<F: FieldExt> Gate<F> {
                         .into_iter()
                         .map(|eval| eval * beta_g2_fully_bound)
                         .collect_vec();
-                transcript_writer.append_elements("Sumcheck evaluations", &eval);
+                transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &eval);
                 Ok::<_, LayerError>(eval)
             }))
             .try_collect()?;
@@ -869,7 +1054,7 @@ impl<F: FieldExt> Gate<F> {
                 .ok_or(GateError::Phase2InitError)
                 .unwrap();
 
-            transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
+            transcript_writer.append_elements("Sumcheck evaluations", &first_message);
 
             let num_rounds_phase2 = self.rhs.num_iterated_vars();
 
