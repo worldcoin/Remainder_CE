@@ -205,10 +205,7 @@ impl<F: FieldExt> MatMult<F> {
         matrix_b_mle.index_mle_indices(0);
     }
 
-    fn append_leaf_mles_to_transcript(
-        &self,
-        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-    ) {
+    fn append_leaf_mles_to_transcript(&self, transcript_writer: &mut impl ProverTranscript<F>) {
         assert_eq!(self.matrix_a.mle.bookkeeping_table().len(), 1);
         assert_eq!(self.matrix_b.mle.bookkeeping_table().len(), 1);
 
@@ -315,7 +312,7 @@ impl<F: FieldExt> CircuitMatMultLayer<F> {
         &self,
         point_a: &[F],
         point_b: &[F],
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> VerifierMatMultLayer<F> {
         let matrix_a = VerifierMatrix {
             mle: self

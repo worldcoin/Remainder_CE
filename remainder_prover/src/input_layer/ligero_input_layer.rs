@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::wlx_eval::YieldWLXEvals,
     layer::LayerId,
-    mle::{evals::MultilinearExtension, mle_enum::MleEnum},
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
 use super::{
@@ -196,7 +196,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
 
     fn get_commitment_from_transcript(
         &self,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::Commitment, InputLayerError> {
         let root = transcript_reader.consume_element("Ligero Merkle Commitment")?;
         Ok(Self::Commitment::new(root))
@@ -207,7 +207,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
         &self,
         commitment: &Self::Commitment,
         claim: crate::claims::Claim<F>,
-        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError> {
         let num_coeffs = 2_usize.pow(claim.get_num_vars() as u32);
         let ligero_aux = &self.aux;
@@ -305,7 +305,9 @@ impl<F: FieldExt> YieldWLXEvals<F> for LigeroInputLayer<F> {
 #[cfg(test)]
 mod tests {
     use remainder_shared_types::{
-        halo2curves::ff::Field, transcript::test_transcript::TestSponge, Fr,
+        halo2curves::ff::Field,
+        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
+        Fr,
     };
 
     use crate::claims::Claim;
