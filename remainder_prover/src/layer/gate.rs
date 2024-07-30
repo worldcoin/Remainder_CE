@@ -170,9 +170,12 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
     /// WHICH CAN BE GENERATED INDEPENDENTLY OF WHETHER THE PROVER HAS ALREADY
     /// PERFORMED SUMCHECK OVER IT!!!
     fn into_circuit_layer(&self) -> Result<CircuitGateLayer<F>, LayerError> {
-        let lhs_circuit_mle = CircuitMle::
-        let lhs_circuit_mle = CircuitMle::new(self.lhs.layer_id(), self.lhs.mle_indices());
-        let rhs_circuit_mle = CircuitMle::new(self.lhs.layer_id(), self.rhs.mle_indices());
+        let mut lhs_clone_indexed = self.lhs.clone();
+        let mut rhs_clone_indexed = self.rhs.clone();
+        lhs_clone_indexed.index_mle_indices(0);
+        rhs_clone_indexed.index_mle_indices(0);
+        let lhs_circuit_mle = CircuitMle::from_dense_mle(&lhs_clone_indexed).unwrap();
+        let rhs_circuit_mle = CircuitMle::from_dense_mle(&rhs_clone_indexed).unwrap();
         Ok(CircuitGateLayer {
             id: self.layer_id(),
             gate_operation: self.gate_operation,
@@ -212,8 +215,8 @@ pub struct CircuitGateLayer<F: FieldExt> {
     num_dataparallel_bits: usize,
 }
 
-/// Degree of independent variable is cubic for dataparallel binding and
-/// quadratic for non-dataparallel binding.
+/// Degree of independent variable is cubic for mul dataparallel binding and
+/// quadratic for all other bindings (see below expression to verify for yourself!)
 ///
 /// V_i(g_2, g_1) = \sum_{p_2, x, y} \beta(g_2, p_2) f_1(g_1, x, y) (V_{i + 1}(p_2, x) \op V_{i + 1}(p_2, y))
 const DATAPARALLEL_ROUND_MUL_NUM_EVALS: usize = 4;
@@ -239,18 +242,21 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         let mut last_v_challenges = vec![];
         let mut first_copy_challenges = vec![];
 
+        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- BITS ---
         let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
-        });
+        }) - self.num_dataparallel_bits;
         let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
                 _ => 1,
             }
-        });
+        }) - self.num_dataparallel_bits;
 
         // --- Store all prover sumcheck messages to check against ---
         let mut sumcheck_messages: Vec<Vec<F>> = vec![];
@@ -267,7 +273,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         sumcheck_messages.push(first_round_sumcheck_messages.clone());
 
         // Check: V_i(g_2, g_1) =? g_1(0) + g_1(1)
-        // TODO(ryancao): SUPER overloaded notation; fix across the board
+        // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
         if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_result()
         {
             return Err(VerificationError::SumcheckStartFailed);
@@ -287,16 +293,21 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
             let prev_at_r = evaluate_at_a_point(&g_i_minus_1_evals, challenge).unwrap();
 
             // --- Read off g_i(0), g_i(1), ..., g_i(d) from transcript ---
-            let mut univariate_num_evals = if sumcheck_round_idx > self.num_dataparallel_bits {
-                0
-            } else {
-                1
+            let univariate_num_evals = match (
+                sumcheck_round_idx < self.num_dataparallel_bits, // 0-indexed, so strictly less-than is correct
+                self.gate_operation,
+            ) {
+                (true, BinaryOperation::Add) => DATAPARALLEL_ROUND_ADD_NUM_EVALS,
+                (true, BinaryOperation::Mul) => DATAPARALLEL_ROUND_MUL_NUM_EVALS,
+                (false, BinaryOperation::Add) => NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS,
+                (false, BinaryOperation::Mul) => NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS,
             };
-            univariate_num_evals += if let BinaryOperation::Add = self.gate_operation {
-                NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS
-            } else {
-                NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS
-            };
+            dbg!(
+                sumcheck_round_idx,
+                self.gate_operation,
+                self.num_dataparallel_bits,
+                univariate_num_evals
+            );
             let curr_evals = transcript_reader
                 .consume_elements("Sumcheck evaluations", univariate_num_evals)
                 .unwrap();
@@ -327,7 +338,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
 
         // This belongs in the last challenge bound to y. If our RHS MLE has no
         // variables, bind to LHS MLE.
-        if self.rhs_mle.mle_indices().len() == 0 {
+        if num_v == 0 {
             first_u_challenges.push(final_chal);
         } else {
             last_v_challenges.push(final_chal);
@@ -338,14 +349,14 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
             .iter()
             .chain(first_u_challenges.iter())
             .enumerate()
-            .map(|(idx, challenge)| *challenge)
-            .collect();
+            .map(|(_idx, challenge)| *challenge)
+            .collect_vec();
         let rhs_challenges = first_copy_challenges
             .iter()
             .chain(last_v_challenges.iter())
             .enumerate()
-            .map(|(idx, challenge)| *challenge)
-            .collect();
+            .map(|(_idx, challenge)| *challenge)
+            .collect_vec();
 
         let lhs_verifier_mle = self
             .lhs_mle
@@ -534,8 +545,6 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierGateLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         // Grab the claim on the left side.
         // TODO!(ryancao): Do error handling here!
-        dbg!(&self.lhs_mle);
-        dbg!(&self.rhs_mle);
         let lhs_vars = self.lhs_mle.mle_indices();
         let lhs_point = lhs_vars
             .iter()
@@ -593,8 +602,6 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierGateLayer<F> {
             Some(self.rhs_mle.layer_id()),
             Some(MleEnum::Dense(dummy_rhs_mle)),
         );
-
-        dbg!(&lhs_claim, &rhs_claim);
 
         Ok(vec![lhs_claim, rhs_claim])
     }
@@ -919,13 +926,13 @@ impl<F: FieldExt> Gate<F> {
 
         let (lhs, rhs) = (&mut self.lhs, &mut self.rhs);
 
-        transcript_writer.append_elements("Sumcheck evaluations", &first_message);
+        transcript_writer.append_elements("Sumcheck evaluations DATAPARALLEL", &first_message);
         let num_rounds_copy_phase = self.num_dataparallel_bits;
 
         // Do the first dataparallel bits number sumcheck rounds using libra giraffe.
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds_copy_phase).map(|round| {
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge DATAPARALLEL");
                 challenges.push(challenge);
                 let eval = prove_round_dataparallel_phase(
                     lhs,
@@ -939,13 +946,14 @@ impl<F: FieldExt> Gate<F> {
                     self.gate_operation,
                 )
                 .unwrap();
-                transcript_writer.append_elements("Sumcheck evaluations", &eval);
+                transcript_writer.append_elements("Sumcheck evaluations DATAPARALLEL", &eval);
                 Ok::<_, LayerError>(eval)
             }))
             .try_collect()?;
 
         // Bind the final challenge, update the final beta table.
-        let final_chal_copy = transcript_writer.get_challenge("Final Sumcheck challenge");
+        let final_chal_copy =
+            transcript_writer.get_challenge("Final Sumcheck challenge DATAPARALLEL");
         // Fix the variable and everything as you would in the last round of sumcheck
         // the evaluations from this is what you return from the first round of sumcheck in the next phase!
         beta_g2.fix_variable(num_rounds_copy_phase - 1, final_chal_copy);
@@ -984,13 +992,13 @@ impl<F: FieldExt> Gate<F> {
             .unwrap();
 
         let mut challenges: Vec<F> = vec![];
-        transcript_writer.append_elements("Sumcheck evaluations", &first_message);
+        transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &first_message);
         let num_rounds_phase1 = self.lhs.num_iterated_vars();
 
         // Sumcheck rounds (binding x).
         let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds_phase1).map(|round| {
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+                let challenge = transcript_writer.get_challenge("Sumcheck challenge PHASE 1");
                 challenges.push(challenge);
                 // If there are dataparallel bits, we want to start at that index.
                 let eval =
@@ -998,7 +1006,7 @@ impl<F: FieldExt> Gate<F> {
                         .into_iter()
                         .map(|eval| eval * beta_g2_fully_bound)
                         .collect_vec();
-                transcript_writer.append_elements("Sumcheck evaluations", &eval);
+                transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &eval);
                 Ok::<_, LayerError>(eval)
             }))
             .try_collect()?;

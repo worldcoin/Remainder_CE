@@ -263,7 +263,6 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
             Some(Operation::Squeeze(_, _)) => Err(TranscriptReaderError::ConsumeError),
             Some(Operation::Append(expected_label, v)) => {
                 if label != expected_label {
-                    dbg!("Label mismatch on TranscriptReader consume_element. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                     warn!("Label mismatch on TranscriptReader consume_element. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 match v.get(element_idx) {
@@ -332,10 +331,9 @@ impl<F: FieldExt, T: TranscriptSponge<F>> TranscriptReader<F, T> {
 
         match self.transcript.transcript_operations.get(operation_idx) {
             None => Err(TranscriptReaderError::SqueezeError),
-            Some(Operation::Append(label, elems)) => Err(TranscriptReaderError::SqueezeError),
+            Some(Operation::Append(_, _)) => Err(TranscriptReaderError::SqueezeError),
             Some(Operation::Squeeze(expected_label, num_elements)) => {
                 if label != expected_label {
-                    dbg!("Label mismatch on TranscriptReader get_challenge. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                     warn!("Label mismatch on TranscriptReader get_challenge. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 if element_idx >= *num_elements {

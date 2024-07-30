@@ -364,7 +364,7 @@ impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
 
     type InputLayer = InputLayerEnum<F>;
 
-    type Transcript = TestSponge<F>;
+    type Transcript = PoseidonSponge<F>;
 
     type OutputLayer = MleOutputLayer<F>;
 
