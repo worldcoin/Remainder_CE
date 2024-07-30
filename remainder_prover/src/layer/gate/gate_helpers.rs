@@ -167,6 +167,8 @@ pub fn check_fully_bound<F: FieldExt>(
     mle_refs: &mut [impl Mle<F>],
     challenges: Vec<F>,
 ) -> Result<F, GateError> {
+    dbg!(&mle_refs);
+    dbg!(&challenges);
     let mles_bound: Vec<bool> = mle_refs
         .iter()
         .map(|mle_ref| {
@@ -392,7 +394,9 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
     )
 }
 
-/// Get the evals for a batched mul gate.
+/// Get the evals for a batched mul gate. Note that this specifically refers to
+/// computing the prover message while binding the dataparallel bits of a `Gate`
+/// expression.
 pub fn libra_giraffe<F: FieldExt>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,

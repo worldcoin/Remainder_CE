@@ -3,8 +3,7 @@ use crate::poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use crate::{LcColumn, LcEncoding};
 
 use crate::poseidon_ligero::PoseidonSpongeHasher;
-use crate::LcProofAuxiliaryInfo;
-use crate::{ligero_structs::LigeroEncoding, ligero_structs::LigeroEvalProof};
+use crate::{ligero_structs::LigeroAuxInfo, ligero_structs::LigeroEvalProof};
 
 use crate::FieldExt;
 
@@ -41,7 +40,7 @@ pub struct LigeroClaim<F> {
 /// Converts a lcpc-style Ligero proof/root into the above data structure.
 pub fn convert_lcpc_to_halo<F: FieldExt>(
     root: LigeroRoot<F>,
-    pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroEncoding<F>, F>,
+    pf: LigeroEvalProof<PoseidonSpongeHasher<F>, LigeroAuxInfo<F>, F>,
 ) -> LigeroProof<F> {
     let merkle_root = root.root;
 
@@ -90,9 +89,9 @@ pub fn convert_lcpc_to_halo<F: FieldExt>(
 /// * `ligero_eval_proof` - The evaluation proof (including columns + openings)
 /// * `enc` - The encoding (should be deprecated, but haven't had time yet TODO!(ryancao))
 pub fn convert_halo_to_lcpc<D, E, F>(
-    aux: LcProofAuxiliaryInfo,
+    aux: &LigeroAuxInfo<F>,
     halo2_ligero_proof: LigeroProof<F>,
-) -> (LigeroRoot<F>, LigeroEvalProof<D, E, F>, LigeroEncoding<F>)
+) -> (LigeroRoot<F>, LigeroEvalProof<D, E, F>, LigeroAuxInfo<F>)
 where
     F: FieldExt,
     D: FieldHashFnDigest<F> + Send + Sync,
@@ -126,12 +125,5 @@ where
         phantom_data: std::marker::PhantomData,
     };
 
-    let enc = LigeroEncoding {
-        orig_num_cols: aux.orig_num_cols,
-        encoded_num_cols: aux.encoded_num_cols,
-        phantom: std::marker::PhantomData,
-        rho_inv: aux.rho_inv,
-    };
-
-    (root, ligero_eval_proof, enc)
+    (root, ligero_eval_proof, aux.clone())
 }
