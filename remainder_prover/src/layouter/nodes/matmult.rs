@@ -4,9 +4,12 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::matmult::{product_two_matrices, MatMult, Matrix},
+    layer::{
+        matmult::{product_two_matrices, MatMult, Matrix},
+        LayerId,
+    },
     layouter::layouting::CircuitLocation,
-    mle::evals::MultilinearExtension,
+    mle::{dense::DenseMle, evals::MultilinearExtension},
     prover::proof_system::ProofSystem,
 };
 
@@ -34,7 +37,7 @@ impl<F: FieldExt> CircuitNode for MatMultNode<F> {
 }
 
 impl<F: FieldExt> MatMultNode<F> {
-    /// Constructs a new GateNode and computes the data it generates
+    /// Constructs a new MatMultNode and computes the data it generates
     pub fn new(
         ctx: &Context,
         matrix_node_a: &impl ClaimableNode<F = F>,
@@ -42,25 +45,17 @@ impl<F: FieldExt> MatMultNode<F> {
         matrix_node_b: &impl ClaimableNode<F = F>,
         num_rows_cols_b: (usize, usize),
     ) -> Self {
-        let matrix_a_data =
-            MultilinearExtension::new(matrix_node_a.get_data().get_evals_vector().clone());
-        let matrix_a = Matrix::new(
-            matrix_a_data,
-            num_rows_cols_a.0,
-            num_rows_cols_a.1,
-            None,
-            None,
+        let matrix_a_mle = DenseMle::new_from_raw(
+            matrix_node_a.get_data().get_evals_vector().to_vec(),
+            LayerId::Layer(0),
         );
+        let matrix_a = Matrix::new(matrix_a_mle, num_rows_cols_a.0, num_rows_cols_a.1);
 
-        let matrix_b_data =
-            MultilinearExtension::new(matrix_node_b.get_data().get_evals_vector().clone());
-        let matrix_b = Matrix::new(
-            matrix_b_data,
-            num_rows_cols_b.0,
-            num_rows_cols_b.1,
-            None,
-            None,
+        let matrix_b_mle = DenseMle::new_from_raw(
+            matrix_node_b.get_data().get_evals_vector().to_vec(),
+            LayerId::Layer(0),
         );
+        let matrix_b = Matrix::new(matrix_b_mle, num_rows_cols_b.0, num_rows_cols_b.1);
 
         let data = MultilinearExtension::new(product_two_matrices(&matrix_a, &matrix_b));
 
@@ -97,24 +92,32 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
     ) -> Result<(), crate::layouter::layouting::DAGError> {
         let (matrix_a_location, matrix_a_data) = circuit_map.get_node(&self.matrix_a)?;
 
+        let mle_a = DenseMle::new_with_prefix_bits(
+            MultilinearExtension::new(matrix_a_data.get_evals_vector().clone()),
+            matrix_a_location.layer_id.clone(),
+            matrix_a_location.prefix_bits.clone(),
+        );
+
         // should already been padded
         let matrix_a = Matrix::new(
-            (*matrix_a_data).clone(),
+            mle_a,
             1 << self.num_vars_rows_cols_a.0,
             1 << self.num_vars_rows_cols_a.1,
-            Some(matrix_a_location.prefix_bits.clone()),
-            Some(matrix_a_location.layer_id.clone()),
         );
 
         let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
 
+        let mle_b = DenseMle::new_with_prefix_bits(
+            MultilinearExtension::new(matrix_b_data.get_evals_vector().clone()),
+            matrix_b_location.layer_id,
+            matrix_b_location.prefix_bits.clone(),
+        );
+
         // should already been padded
         let matrix_b = Matrix::new(
-            (*matrix_b_data).clone(),
+            mle_b,
             1 << self.num_vars_rows_cols_b.0,
             1 << self.num_vars_rows_cols_b.1,
-            Some(matrix_b_location.prefix_bits.clone()),
-            Some(matrix_b_location.layer_id.clone()),
         );
 
         let layer_id = witness_builder.next_layer();
