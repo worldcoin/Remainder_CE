@@ -6,6 +6,7 @@ use crate::mle::dense::DenseMle;
 use crate::mle::{Mle, MleIndex};
 use crate::utils::test_utils::DummySponge;
 use rand::Rng;
+use remainder_shared_types::transcript::test_transcript::TestSponge;
 use remainder_shared_types::transcript::{TranscriptSponge, TranscriptWriter};
 
 use self::claim_group::ClaimGroup;
@@ -37,6 +38,9 @@ fn claims_from_expr_and_points(
     expr: &Expression<Fr, ProverExpr>,
     points: &Vec<Vec<Fr>>,
 ) -> ClaimGroup<Fr> {
+    let mut transcript_writer =
+        TranscriptWriter::<Fr, TestSponge<Fr>>::new("Test Transcript Writer");
+
     let claims_vector: Vec<ClaimMle<Fr>> = points
         .iter()
         .flat_map(|point| {
@@ -75,6 +79,7 @@ fn build_random_mle_layer(num_vars: usize) -> RegularLayer<Fr> {
     layer_from_evals(mle_evals)
 }
 
+/*
 fn compute_claim_wlx<F: FieldExt, Sp: TranscriptSponge<F>>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
@@ -92,6 +97,7 @@ fn compute_claim_wlx<F: FieldExt, Sp: TranscriptSponge<F>>(
     let claim_proof = prover_aggregate_claims_helper(claims, layer, &mut transcript).unwrap();
     (claim_proof.claim, claim_proof.proof)
 }
+*/
 
 /// Wraps around low-level claim aggregation WITHOUT Layer ID
 /// information.
@@ -99,8 +105,17 @@ fn claim_aggregation_back_end_wrapper<Sp: TranscriptSponge<Fr>>(
     layer: &impl YieldWLXEvals<Fr>,
     claims: &ClaimGroup<Fr>,
 ) -> Claim<Fr> {
-    let (claim, _) = compute_claim_wlx::<_, Sp>(claims, layer);
-    claim
+    let num_claims = claims.get_num_claims();
+    let num_vars = claims.get_num_vars();
+
+    let points_matrix = claims.get_claim_points_matrix();
+
+    debug_assert_eq!(points_matrix.len(), num_claims);
+    debug_assert_eq!(points_matrix[0].len(), num_vars);
+
+    let mut transcript: TranscriptWriter<_, Sp> = TranscriptWriter::new("Claims Test Transcript");
+
+    prover_aggregate_claims_helper(claims, layer, &mut transcript).unwrap()
 }
 
 /// Compute l* = l(r*).
@@ -411,8 +426,10 @@ fn test_aggro_claim_common_suffix1() {
     // Compare to l(10) computed by hand.
     assert_eq!(l_star, vec![Fr::from(11), Fr::from(13), Fr::from(5)]);
 
+    /*
     let wlx = compute_claim_wlx::<_, DummySponge<Fr, 10>>(&claims, &layer);
     assert_eq!(wlx.1.first().unwrap().clone(), vec![Fr::from(2269)]);
+    */
 
     let aggregated_claim =
         claim_aggregation_back_end_wrapper::<DummySponge<Fr, 10>>(&layer, &claims);

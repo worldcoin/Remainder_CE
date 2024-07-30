@@ -22,30 +22,11 @@ pub struct HyraxPrecommitPlaceholderInputLayer<F: FieldExt> {
 
 impl<F: FieldExt> InputLayer<F> for HyraxPrecommitPlaceholderInputLayer<F> {
     type Commitment = Vec<F>;
-
-    type OpeningProof = ();
-
-    type Error = InputLayerError;
+    type VerifierInputLayer;
 
     /// Because this is a public input layer, we do not need to commit to the MLE and the
     /// "commitment" is just the MLE itself.
     fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
-        unimplemented!()
-    }
-
-    /// Append the commitment to the Fiat-Shamir transcript.
-    fn prover_append_commitment_to_transcript(
-        _commitment: &Self::Commitment,
-        _transcript_writer: &mut impl ProverTranscript<F>,
-    ) {
-        unimplemented!()
-    }
-
-    /// Append the commitment to the Fiat-Shamir transcript.
-    fn verifier_append_commitment_to_transcript(
-        _commitment: &Self::Commitment,
-        _transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), InputLayerError> {
         unimplemented!()
     }
 
@@ -59,20 +40,23 @@ impl<F: FieldExt> InputLayer<F> for HyraxPrecommitPlaceholderInputLayer<F> {
         Ok(())
     }
 
-    /// In order to verify, simply fix variable on each of the variables for the point
-    /// in `claim`. Check whether the single element left in the bookkeeping table is
-    /// equal to the claimed value in `claim`.
-    fn verify(
-        _commitment: &Self::Commitment,
-        _opening_proof: &Self::OpeningProof,
-        _claim: Claim<F>,
-        _transcript: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), super::InputLayerError> {
-        unimplemented!()
-    }
-
     fn layer_id(&self) -> &LayerId {
         &self.layer_id
+    }
+
+    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+        todo!()
+    }
+
+    fn append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) {
+        todo!()
+    }
+
+    fn get_padded_mle(&self) -> DenseMle<F> {
+        todo!()
     }
 }
 

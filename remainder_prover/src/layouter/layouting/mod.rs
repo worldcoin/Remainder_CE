@@ -14,6 +14,7 @@ use crate::{
     layer::{layer_enum::LayerEnum, LayerId},
     layouter::nodes::sector::{Sector, SectorGroup},
     mle::{evals::MultilinearExtension, mle_enum::MleEnum},
+    output_layer::mle_output_layer::MleOutputLayer,
     prover::proof_system::ProofSystem,
 };
 
@@ -226,7 +227,12 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CircuitNode for IntermediateNode<F, Pf> {
 
 pub fn layout<
     F: FieldExt,
-    Pf: ProofSystem<F, Layer = LayerEnum<F>, InputLayer = InputLayerEnum<F>, OutputLayer = MleEnum<F>>,
+    Pf: ProofSystem<
+        F,
+        Layer = LayerEnum<F>,
+        InputLayer = InputLayerEnum<F>,
+        OutputLayer = MleOutputLayer<F>,
+    >,
 >(
     ctx: Context,
     nodes: Vec<NodeEnum<F>>,

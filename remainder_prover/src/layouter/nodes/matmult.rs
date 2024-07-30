@@ -4,9 +4,12 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::matmult::{product_two_matrices, MatMult, Matrix},
+    layer::{
+        matmult::{product_two_matrices, MatMult, Matrix},
+        LayerId,
+    },
     layouter::layouting::CircuitLocation,
-    mle::evals::MultilinearExtension,
+    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     prover::proof_system::ProofSystem,
 };
 
@@ -17,9 +20,9 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 pub struct MatMultNode<F: FieldExt> {
     id: NodeId,
     matrix_a: NodeId,
-    num_vars_rows_cols_a: (usize, usize),
+    num_rows_cols_a: (usize, usize),
     matrix_b: NodeId,
-    num_vars_rows_cols_b: (usize, usize),
+    num_rows_cols_b: (usize, usize),
     data: MultilinearExtension<F>,
 }
 
@@ -34,7 +37,7 @@ impl<F: FieldExt> CircuitNode for MatMultNode<F> {
 }
 
 impl<F: FieldExt> MatMultNode<F> {
-    /// Constructs a new GateNode and computes the data it generates
+    /// Constructs a new MatMultNode and computes the data it generates
     pub fn new(
         ctx: &Context,
         matrix_node_a: &impl ClaimableNode<F = F>,
@@ -42,34 +45,27 @@ impl<F: FieldExt> MatMultNode<F> {
         matrix_node_b: &impl ClaimableNode<F = F>,
         num_rows_cols_b: (usize, usize),
     ) -> Self {
-        let matrix_a_data =
-            MultilinearExtension::new(matrix_node_a.get_data().get_evals_vector().clone());
-        let matrix_a = Matrix::new(
-            matrix_a_data,
-            num_rows_cols_a.0,
-            num_rows_cols_a.1,
-            None,
-            None,
+        let matrix_a_mle = DenseMle::new_from_raw(
+            matrix_node_a.get_data().get_evals_vector().to_vec(),
+            LayerId::Layer(0),
         );
+        dbg!(&matrix_a_mle.bookkeeping_table().len());
+        let matrix_a = Matrix::new(matrix_a_mle, num_rows_cols_a.0, num_rows_cols_a.1);
 
-        let matrix_b_data =
-            MultilinearExtension::new(matrix_node_b.get_data().get_evals_vector().clone());
-        let matrix_b = Matrix::new(
-            matrix_b_data,
-            num_rows_cols_b.0,
-            num_rows_cols_b.1,
-            None,
-            None,
+        let matrix_b_mle = DenseMle::new_from_raw(
+            matrix_node_b.get_data().get_evals_vector().to_vec(),
+            LayerId::Layer(0),
         );
+        let matrix_b = Matrix::new(matrix_b_mle, num_rows_cols_b.0, num_rows_cols_b.1);
 
         let data = MultilinearExtension::new(product_two_matrices(&matrix_a, &matrix_b));
 
         Self {
             id: ctx.get_new_id(),
             matrix_a: matrix_node_a.id(),
-            num_vars_rows_cols_a: matrix_a.num_vars_rows_cols(),
+            num_rows_cols_a,
             matrix_b: matrix_node_b.id(),
-            num_vars_rows_cols_b: matrix_b.num_vars_rows_cols(),
+            num_rows_cols_b,
             data,
         }
     }
@@ -97,25 +93,26 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
     ) -> Result<(), crate::layouter::layouting::DAGError> {
         let (matrix_a_location, matrix_a_data) = circuit_map.get_node(&self.matrix_a)?;
 
-        // should already been padded
-        let matrix_a = Matrix::new(
-            (*matrix_a_data).clone(),
-            1 << self.num_vars_rows_cols_a.0,
-            1 << self.num_vars_rows_cols_a.1,
-            Some(matrix_a_location.prefix_bits.clone()),
-            Some(matrix_a_location.layer_id.clone()),
+        let mle_a = DenseMle::new_with_prefix_bits(
+            MultilinearExtension::new(matrix_a_data.get_evals_vector().clone()),
+            matrix_a_location.layer_id.clone(),
+            matrix_a_location.prefix_bits.clone(),
         );
 
+        // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
+        let matrix_a = Matrix::new(mle_a, self.num_rows_cols_a.0, self.num_rows_cols_a.1);
+        dbg!(&matrix_a.mle.bookkeeping_table().len());
+        dbg!(&matrix_a.num_vars_rows_cols());
         let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
 
-        // should already been padded
-        let matrix_b = Matrix::new(
-            (*matrix_b_data).clone(),
-            1 << self.num_vars_rows_cols_b.0,
-            1 << self.num_vars_rows_cols_b.1,
-            Some(matrix_b_location.prefix_bits.clone()),
-            Some(matrix_b_location.layer_id.clone()),
+        let mle_b = DenseMle::new_with_prefix_bits(
+            MultilinearExtension::new(matrix_b_data.get_evals_vector().clone()),
+            matrix_b_location.layer_id,
+            matrix_b_location.prefix_bits.clone(),
         );
+
+        // should already been padded
+        let matrix_b = Matrix::new(mle_b, self.num_rows_cols_b.0, self.num_rows_cols_b.1);
 
         let layer_id = witness_builder.next_layer();
         let matmult_layer = MatMult::new(layer_id, matrix_a, matrix_b);
@@ -136,6 +133,10 @@ mod test {
 
     use crate::{
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+        layer::{
+            matmult::{product_two_matrices, Matrix},
+            LayerId,
+        },
         layouter::{
             compiling::LayouterCircuit,
             component::ComponentSet,
@@ -146,7 +147,7 @@ mod test {
                 sector::Sector,
             },
         },
-        mle::evals::MultilinearExtension,
+        mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
         prover::helpers::test_circuit,
     };
 
@@ -188,6 +189,113 @@ mod test {
 
             let matmult_sector =
                 MatMultNode::new(ctx, &input_matrix_a, (4, 2), &input_matrix_b, (2, 2));
+
+            let difference_sector = Sector::new(
+                ctx,
+                &[&matmult_sector, &input_matrix_product],
+                |inputs| {
+                    Expression::<Fr, AbstractExpr>::mle(inputs[0])
+                        - Expression::<Fr, AbstractExpr>::mle(inputs[1])
+                },
+                |inputs| {
+                    let data: Vec<_> = inputs[0]
+                        .get_evals_vector()
+                        .iter()
+                        .zip(inputs[1].get_evals_vector().iter())
+                        .map(|(lhs, rhs)| lhs - rhs)
+                        .collect();
+
+                    MultilinearExtension::new(data)
+                },
+            );
+
+            let output_node = OutputNode::new_zero(ctx, &difference_sector);
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                input_layer.into(),
+                input_matrix_a.into(),
+                input_matrix_b.into(),
+                input_matrix_product.into(),
+                matmult_sector.into(),
+                difference_sector.into(),
+                output_node.into(),
+            ])
+        });
+
+        test_circuit(circuit, None);
+    }
+
+    #[test]
+    fn test_matmult_node_irregular_in_circuit() {
+        let circuit = LayouterCircuit::new(|ctx| {
+            let mle_vec_a = vec![
+                Fr::from(1),
+                Fr::from(2),
+                Fr::from(9),
+                Fr::from(10),
+                Fr::from(13),
+                Fr::from(1),
+                Fr::from(3),
+                Fr::from(10),
+                Fr::from(2),
+                Fr::from(9),
+                Fr::from(10),
+                Fr::from(1),
+                Fr::from(3),
+                Fr::from(10),
+                Fr::from(2),
+            ];
+            let mle_vec_b = vec![
+                Fr::from(3),
+                Fr::from(5),
+                Fr::from(9),
+                Fr::from(6),
+                Fr::from(5),
+                Fr::from(9),
+                Fr::from(6),
+                Fr::from(1),
+                Fr::from(3),
+            ];
+            let matrix_a = Matrix::new(
+                DenseMle::new_from_raw(mle_vec_a.clone(), LayerId::Layer(0)),
+                5,
+                3,
+            );
+            let matrix_b = Matrix::new(
+                DenseMle::new_from_raw(mle_vec_b.clone(), LayerId::Layer(0)),
+                3,
+                3,
+            );
+            let res_product = product_two_matrices(&matrix_a, &matrix_b);
+            let exp_product = MultilinearExtension::new(res_product);
+
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let input_matrix_a = InputShred::new(
+                ctx,
+                MultilinearExtension::new(matrix_a.mle.bookkeeping_table().to_vec()),
+                &input_layer,
+            );
+            let input_matrix_b = InputShred::new(
+                ctx,
+                MultilinearExtension::new(matrix_b.mle.bookkeeping_table().to_vec()),
+                &input_layer,
+            );
+            let input_matrix_product = InputShred::new(ctx, exp_product, &input_layer);
+
+            // NOTE THE INPUT MLES MUST BE PADDED FOR THE CLAIMS TO HAVE THE CORRECT VALUE
+            let matmult_sector = MatMultNode::new(
+                ctx,
+                &input_matrix_a,
+                (
+                    (1 << matrix_a.num_vars_rows_cols().0),
+                    (1 << matrix_a.num_vars_rows_cols().1),
+                ),
+                &input_matrix_b,
+                (
+                    (1 << matrix_b.num_vars_rows_cols().0),
+                    (1 << matrix_b.num_vars_rows_cols().1),
+                ),
+            );
 
             let difference_sector = Sector::new(
                 ctx,

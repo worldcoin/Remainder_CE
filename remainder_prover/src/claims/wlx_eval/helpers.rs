@@ -12,7 +12,7 @@ use tracing::{debug, info};
 use crate::{
     claims::{
         wlx_eval::{claim_group::form_claim_groups, get_num_wlx_evaluations, ClaimMle},
-        Claim, ClaimAndProof, ClaimError,
+        Claim, ClaimError,
     },
     layer::combine_mle_refs::get_og_mle_refs,
     mle::mle_enum::MleEnum,
@@ -21,20 +21,15 @@ use crate::{
 
 use super::{claim_group::ClaimGroup, evaluate_at_a_point, YieldWLXEvals};
 
-/// Performs claim aggregation. Can be used by both the prover and the verifier.
-/// * `claims`: a group of claims, all residing in the same layer (same
-///   `to_layer_id` fields), to be aggregated into one.
-/// * `compute_wlx_fn`: closure for computing the wlx evaluations. If
-///   `aggregate_claims` is called by the prover, the closure should compute the
-///   wlx evaluations, potentially using "smart" aggregation controlled by
-///   `ENABLE_REDUCED_WLX_EVALS` which provides tighter bounds on the degree of
-///   `W(l(x))`. A prover's `compute_wlx_fn` should never produce an error. If
-///   called by the verifier, the closure should return the next wlx evaluations
-///   received from the prover. In case claim aggregation requires more
-///   evaluations than the ones provided by the prover, the closure should
-///   return a `GKRError` which is propagated back to the caller of
-///   `aggregate_claims`.
-/// * `transcript`: is used to post wlx evaluations and generate challenges.
+/// Performs claim aggregation on the prover side.
+/// * `claims`: a group of claims, all on the same layer (same `to_layer_id`),
+///   to be aggregated into one.
+/// * `layer`: typically, the GKR layer this claim group is making claims on,
+///    but in general could be anything that yields WLX evalutions.
+/// * `transcript_writer`: is used to post wlx evaluations and generate
+///   challenges.
+///
+/// # Returns
 ///
 /// If successful, returns a pair containing the aggregated claim without
 /// from/to layer ID information and a vector of wlx evaluations. The vector
@@ -44,8 +39,8 @@ use super::{claim_group::ClaimGroup, evaluate_at_a_point, YieldWLXEvals};
 pub fn prover_aggregate_claims_helper<F: FieldExt>(
     claims: &ClaimGroup<F>,
     layer: &impl YieldWLXEvals<F>,
-    transcript_writer: &mut impl ProverTranscript<F>,
-) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, GKRError> {
+    transcript_writer: &mut TranscriptWriter<F, Tr>,
+) -> Result<Claim<F>, GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
@@ -95,31 +90,30 @@ pub fn prover_aggregate_claims_helper<F: FieldExt>(
     let final_timer = start_timer!(|| "Final stage aggregation.".to_string());
 
     // Finally, aggregate all intermediate claims.
-    let ClaimAndProof {
-        claim,
-        proof: wlx_evals_option,
-    } = prover_aggregate_claims_in_one_round(
+    let claim = prover_aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
         &layer_mle_refs,
         layer,
         transcript_writer,
     )?;
 
-    // Holds a sequence of relevant wlx evaluations, one for each claim
-    // group that is being aggregated.
-    let group_wlx_evaluations = [intermediate_wlx_evals, wlx_evals_option].concat();
-
     end_timer!(final_timer);
-    Ok(ClaimAndProof {
-        claim,
-        proof: group_wlx_evaluations,
-    })
+    Ok(claim)
 }
 
-pub fn verifier_aggregate_claims_helper<F: FieldExt>(
+/// Performs claim aggregation on the verifier side.
+/// * `claims`: a group of claims, all on the same layer (same `to_layer_id`),
+///   to be aggregated into one.
+/// * `transcript_reader`: is used to retrieve the wlx evaluations and generate
+///   challenges.
+///
+/// # Returns
+///
+/// If successful, returns a single aggregated claim.
+pub fn verifier_aggregate_claims_helper<F: FieldExt, Tr: TranscriptSponge<F>>(
     claims: &ClaimGroup<F>,
-    transcript_reader: &mut impl VerifierTranscript<F>,
-) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, TranscriptReaderError> {
+    transcript_reader: &mut TranscriptReader<F, Tr>,
+) -> Result<Claim<F>, TranscriptReaderError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
     info!("High-level claim aggregation on {num_claims} claims.");
@@ -151,36 +145,20 @@ pub fn verifier_aggregate_claims_helper<F: FieldExt>(
     let intermediate_claims = intermediate_results
         .clone()
         .into_iter()
-        .map(|result| {
-            ClaimMle::new_raw(result.claim.get_point().clone(), result.claim.get_result())
-        })
-        .collect();
-    let intermediate_wlx_evals: Vec<Vec<F>> = intermediate_results
-        .into_iter()
-        .flat_map(|result| result.proof)
+        .map(|result| ClaimMle::new_raw(result.point, result.result))
         .collect();
 
     end_timer!(intermediate_timer);
     let final_timer = start_timer!(|| "Final stage aggregation.".to_string());
 
     // Finally, aggregate all intermediate claims.
-    let ClaimAndProof {
-        claim,
-        proof: wlx_evals_option,
-    } = verifier_aggregate_claims_in_one_round(
+    let claim = verifier_aggregate_claims_in_one_round(
         &ClaimGroup::new(intermediate_claims).unwrap(),
         transcript_reader,
     )?;
 
-    // Holds a sequence of relevant wlx evaluations, one for each claim
-    // group that is being aggregated.
-    let group_wlx_evaluations = [intermediate_wlx_evals, wlx_evals_option].concat();
-
     end_timer!(final_timer);
-    Ok(ClaimAndProof {
-        claim,
-        proof: group_wlx_evaluations,
-    })
+    Ok(claim)
 }
 
 /// Aggregates a sequence of claim into a single point. If `claims` contains `m`
@@ -220,8 +198,9 @@ pub fn compute_aggregated_challenges<F: FieldExt>(
     Ok(r)
 }
 
-/// Low-level analogue of `aggregate_claims` which performs claim aggregation on
-/// the claim group `claims` in a single stage without further grouping.
+/// Low-level analogue of `prover_aggregate_claims` which performs claim
+/// aggregation on the claim group `claims` in a single stage without further
+/// grouping.
 /// * `claims`: the group of claims to be aggregated.
 /// * `compute_wlx_fn`: closure for computing the wlx evaluations. If
 ///   `aggregate_claims_in_one_round` is called by the prover, the closure
@@ -233,19 +212,18 @@ pub fn compute_aggregated_challenges<F: FieldExt>(
 ///   evaluations than the ones provided by the prover, the closure should
 ///   return a `GKRError` which is propagated back to the caller of
 ///   `aggregate_claims_in_one_round`.
-/// * `transcript`: is used to post wlx evaluations and generate challenges.
+/// * `transcript_writer`: is used to post wlx evaluations and generate
+///   challenges.
 ///
-/// If successful, returns a pair containing the aggregated claim without
-/// from/to layer ID information and a vector of wlx evaluations. The vector
-/// either contains no evaluations (in the trivial case of aggregating a single
-/// claim) or contains a single vector of the wlx evaluations produced during
-/// this 1-step claim aggregation.
-fn prover_aggregate_claims_in_one_round<F: FieldExt>(
+/// # Returns
+///
+/// If successful, returns a single aggregated claim.
+fn prover_aggregate_claims_in_one_round<F: FieldExt, Tr: TranscriptSponge<F>>(
     claims: &ClaimGroup<F>,
     layer_mle_refs: &[MleEnum<F>],
     layer: &impl YieldWLXEvals<F>,
-    transcript_writer: &mut impl ProverTranscript<F>,
-) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, GKRError> {
+    transcript_writer: &mut TranscriptWriter<F, Tr>,
+) -> Result<Claim<F>, GKRError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
     info!("Low-level claim aggregation on {num_claims} claims.");
@@ -257,10 +235,7 @@ fn prover_aggregate_claims_in_one_round<F: FieldExt>(
         // trigger any checks from claim groups used in claim aggregation.
         let claim = claims.get_claim(0).claim.clone();
 
-        return Ok(ClaimAndProof {
-            claim,
-            proof: vec![vec![]],
-        });
+        return Ok(claim);
     }
 
     // Aggregate claims by performing the claim aggregation protocol.
@@ -300,16 +275,14 @@ fn prover_aggregate_claims_in_one_round<F: FieldExt>(
         ClaimMle::new_raw(aggregated_challenges.clone(), claimed_val)
     );
 
-    Ok(ClaimAndProof {
-        claim: Claim::new(aggregated_challenges, claimed_val),
-        proof: vec![relevant_wlx_evaluations],
-    })
+    let claim = Claim::new(aggregated_challenges, claimed_val);
+    Ok(claim)
 }
 
 fn verifier_aggregate_claims_in_one_round<F: FieldExt>(
     claims: &ClaimGroup<F>,
-    transcript_reader: &mut impl VerifierTranscript<F>,
-) -> Result<ClaimAndProof<F, Vec<Vec<F>>>, TranscriptReaderError> {
+    transcript_reader: &mut TranscriptReader<F, Tr>,
+) -> Result<Claim<F>, TranscriptReaderError> {
     let num_claims = claims.get_num_claims();
     debug_assert!(num_claims > 0);
     info!("Low-level claim aggregation on {num_claims} claims.");
@@ -320,10 +293,9 @@ fn verifier_aggregate_claims_in_one_round<F: FieldExt>(
         // Return the claim but erase any from/to layer info so as not to
         // trigger any checks from claim groups used in claim aggregation.
 
-        return Ok(ClaimAndProof {
-            claim: claims.get_claim(0).claim.clone(),
-            proof: vec![vec![]],
-        });
+        let claim = claims.get_claim(0).claim.clone();
+
+        return Ok(claim);
     }
 
     // Aggregate claims by performing the claim aggregation protocol.
@@ -355,8 +327,6 @@ fn verifier_aggregate_claims_in_one_round<F: FieldExt>(
         ClaimMle::new_raw(aggregated_challenges.clone(), claimed_val)
     );
 
-    Ok(ClaimAndProof {
-        claim: Claim::new(aggregated_challenges, claimed_val),
-        proof: vec![relevant_wlx_evaluations],
-    })
+    let claim = Claim::new(aggregated_challenges, claimed_val);
+    Ok(claim)
 }

@@ -17,11 +17,14 @@ use super::ClaimMle;
 pub struct ClaimGroup<F: FieldExt> {
     /// A vector of claims in F^n.
     pub claims: Vec<ClaimMle<F>>,
+
     /// A 2D matrix with the claim's points as its rows.
     claim_points_matrix: Vec<Vec<F>>,
+
     /// The points in `claims` is effectively a matrix of elements in F. We also
     /// store the transpose of this matrix for convenient access.
     claim_points_transpose: Vec<Vec<F>>,
+
     /// A vector of `self.get_num_claims()` elements. For each claim i,
     /// `result_vector[i]` stores the expected result of the i-th claim.
     result_vector: Vec<F>,
@@ -52,6 +55,7 @@ impl<F: FieldExt> ClaimGroup<F> {
             .into_iter()
             .all(|claim| claim.get_num_vars() == num_vars)
         {
+            dbg!("Okay yeah it was this one");
             return Err(ClaimError::NumVarsMismatch);
         }
 

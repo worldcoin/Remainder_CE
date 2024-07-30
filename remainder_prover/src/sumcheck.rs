@@ -578,7 +578,26 @@ pub(crate) fn get_round_degree<F: FieldExt>(
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
-pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &[F], point: F) -> Result<F, InterpError> {
+pub(crate) fn evaluate_at_a_point<F: FieldExt>(
+    given_evals: &[F],
+    point: F,
+) -> Result<F, InterpError> {
+    // Special case for the constant polynomial.
+    if given_evals.len() == 1 {
+        return Ok(given_evals[0]);
+    }
+
+    debug_assert!(given_evals.len() > 1);
+
+    // Special cases for `point == 0` and `point == 1`.
+    // TODO(Makis): Treat as special cases all points in the interval `(0..given_evals.len())`.
+    if point == F::ZERO {
+        return Ok(given_evals[0]);
+    }
+    if point == F::ONE {
+        return Ok(*given_evals.get(1).unwrap_or(&given_evals[0]));
+    }
+
     // Need degree + 1 evaluations to interpolate
     let eval = (0..given_evals.len())
         .map(

@@ -11,6 +11,8 @@ pub mod ec_transcript;
 pub mod keccak_transcript;
 pub mod poseidon_transcript;
 
+pub mod test_transcript;
+
 /// A `TranscriptSponge` provides the basic interface for a cryptographic sponge
 /// operating on field elements. It is typically used for representing the
 /// transcript of an interactive protocol turned non-interactive view
@@ -190,7 +192,7 @@ pub trait VerifierTranscript<F> {
 }
 
 /// Errors that a `TranscriptReader` may produce.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum TranscriptReaderError {
     #[error("Transcript indices out of bounds")]
     InternalIndicesError,

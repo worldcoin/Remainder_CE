@@ -18,10 +18,13 @@ use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::{LayerError, LayerId},
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    transcript::{TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 
 /// An implementation of an [Mle] using a dense representation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DenseMle<F> {
     /// The ID of the layer this data belongs to.
     pub layer_id: LayerId,
@@ -195,7 +198,6 @@ impl<F: FieldExt> Mle<F> for DenseMle<F> {
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for DenseMle<F> {
-    type Error = LayerError;
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
@@ -209,9 +211,11 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for DenseMle<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
             })
             .collect();
+        let claim_value = self.bookkeeping_table()[0];
+
         Ok(vec![ClaimMle::new(
             mle_indices?,
-            self.bookkeeping_table()[0],
+            claim_value,
             None,
             Some(self.layer_id),
             Some(self.clone().get_enum()),
@@ -242,6 +246,28 @@ impl<F: FieldExt> DenseMle<F> {
             original_mle_indices: mle_indices,
         }
     }
+
+    /// Constructs a new `DenseMle` with specified MLE indices, normally when we are
+    /// trying to construct a new MLE based off of a previous MLE, such as in [MatMult], but
+    /// want to preserve the "prefix bits."
+    ///
+    /// The MLE should not have ever been mutated if this function is ever called, so none of the
+    /// indices should ever be Indexed here.
+    pub fn new_with_indices(data: &[F], layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
+        let mut mle = DenseMle::new_from_raw(data.to_vec(), layer_id);
+
+        let all_indices_iterated_or_fixed = mle_indices.iter().fold(true, |acc, index| {
+            acc && (index == &MleIndex::Iterated
+                || index == &MleIndex::Fixed(true)
+                || index == &MleIndex::Fixed(false))
+        });
+        assert!(all_indices_iterated_or_fixed);
+
+        mle.original_mle_indices = mle_indices.to_vec();
+        mle.mle_indices = mle_indices.to_vec();
+        mle
+    }
+
     /// Constructs a new `DenseMle` from an iterator over items of the [MleAble]
     /// type `T`.
     ///

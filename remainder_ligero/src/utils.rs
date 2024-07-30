@@ -29,11 +29,10 @@ pub fn get_random_coeffs_for_multilinear_poly<F: FieldExt>(
 /// * `poly_len` - Number of coefficients in the actual polynomial, i.e.
 ///     width(M) * height(M)
 /// * `rho_inv` - rho^{-1}, i.e. the code rate
-pub fn get_ligero_matrix_dims(
-    poly_len: usize,
-    rho_inv: u8,
-    ratio: f64,
-) -> Option<(usize, usize, usize)> {
+///
+/// ## Returns
+/// * (`num_rows`, `orig_num_cols`, `encoded_num_cols`)
+pub fn get_ligero_matrix_dims(poly_len: usize, rho_inv: u8, ratio: f64) -> (usize, usize, usize) {
     // --- Compute rho ---
     let rho: f64 = 1. / (rho_inv as f64);
 
@@ -42,8 +41,9 @@ pub fn get_ligero_matrix_dims(
     assert!(rho < 1f64);
 
     // computes the encoded num cols that will get closest to the ratio for original num cols : num rows
-    let encoded_num_cols =
-        (((poly_len as f64 * ratio).sqrt() / rho).ceil() as usize).checked_next_power_of_two()?;
+    let encoded_num_cols = (((poly_len as f64 * ratio).sqrt() / rho).ceil() as usize)
+        .checked_next_power_of_two()
+        .unwrap();
 
     // --- Computes the other dimensions with respect to `encoded_num_cols` ---
     let orig_num_cols = ((encoded_num_cols as f64) * rho).floor() as usize;
@@ -53,7 +53,7 @@ pub fn get_ligero_matrix_dims(
     assert!(orig_num_cols * num_rows >= poly_len);
     assert!(orig_num_cols * (num_rows - 1) < poly_len);
 
-    Some((num_rows, orig_num_cols, encoded_num_cols))
+    (num_rows, orig_num_cols, encoded_num_cols)
 }
 
 /// Wrapper function over Halo2's FFT.

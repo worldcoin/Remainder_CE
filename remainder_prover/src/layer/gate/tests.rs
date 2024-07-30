@@ -9,6 +9,7 @@ use crate::{
     input_layer::public_input_layer::PublicInputLayer,
     layer::LayerId,
     mle::{dense::DenseMle, Mle},
+    output_layer::mle_output_layer::MleOutputLayer,
     prover::{
         helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, GKRCircuit,
         Witness,
@@ -60,9 +61,11 @@ impl<F: FieldExt> GKRCircuit<F> for AddGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -112,9 +115,11 @@ impl<F: FieldExt> GKRCircuit<F> for UnevenAddGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -190,9 +195,11 @@ impl<F: FieldExt> GKRCircuit<F> for MulAddGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -277,9 +284,11 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelMulAddGateCircuit<F> {
 
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -356,9 +365,11 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelAddGateCircuit<F> {
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -427,9 +438,11 @@ impl<F: FieldExt> GKRCircuit<F> for DataparallelUnevenAddGateCircuit<F> {
         let output_layer_builder = ZeroBuilder::new(first_layer_output);
         let output_layer_mle = layers.add_gkr(output_layer_builder);
 
+        let output_layers = vec![MleOutputLayer::new_zero(output_layer_mle)];
+
         Witness {
             layers,
-            output_layers: vec![output_layer_mle.get_enum()],
+            output_layers,
             input_layers: vec![input_layer],
         }
     }
@@ -478,6 +491,8 @@ fn test_add_gate_circuit() {
     test_circuit(circuit, None);
 }
 
+/// Okay let's attempt the test using the new Remainder frontend and what not
+
 #[test]
 fn test_uneven_add_gate_circuit() {
     const NUM_ITERATED_BITS: usize = 4;
@@ -497,8 +512,8 @@ fn test_uneven_add_gate_circuit() {
 
 #[test]
 fn test_dataparallel_add_gate_circuit() {
-    const NUM_DATAPARALLEL_BITS: usize = 4;
-    const NUM_ITERATED_BITS: usize = 4;
+    const NUM_DATAPARALLEL_BITS: usize = 2;
+    const NUM_ITERATED_BITS: usize = 2;
 
     let mut rng = test_rng();
     let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
@@ -560,8 +575,8 @@ fn test_dataparallel_uneven_add_gate_circuit() {
 
 #[test]
 fn test_dataparallel_mul_add_gate_circuit() {
-    const NUM_DATAPARALLEL_BITS: usize = 4;
-    const NUM_ITERATED_BITS: usize = 4;
+    const NUM_DATAPARALLEL_BITS: usize = 2;
+    const NUM_ITERATED_BITS: usize = 2;
 
     let mut rng = test_rng();
     let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);

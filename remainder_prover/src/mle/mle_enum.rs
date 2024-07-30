@@ -2,7 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{
+    transcript::{TranscriptSponge, TranscriptWriter},
+    FieldExt,
+};
 
 use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
@@ -13,7 +16,7 @@ use crate::{
 use super::{dense::DenseMle, zero::ZeroMle, MleIndex};
 
 /// A wrapper type for various kinds of [MleRef]s.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub enum MleEnum<F: FieldExt> {
     /// A [DenseMle] variant.
@@ -113,13 +116,15 @@ impl<F: FieldExt> Mle<F> for MleEnum<F> {
         todo!()
     }
 
-    fn layer_id(&self) -> LayerId {
-        todo!()
+    fn layer_id(&self) -> crate::layer::LayerId {
+        match self {
+            MleEnum::Dense(dense_mle) => dense_mle.layer_id(),
+            MleEnum::Zero(zero_mle) => zero_mle.layer_id(),
+        }
     }
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MleEnum<F> {
-    type Error = LayerError;
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         match self {
             MleEnum::Dense(layer) => layer.get_claims(),

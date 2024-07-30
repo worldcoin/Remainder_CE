@@ -56,7 +56,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> WitnessBuilder<F, Pf> {
         self.layers
             .layers
             .last()
-            .map(|last| last.id().next())
+            .map(|last| last.layer_id().next())
             .unwrap_or(LayerId::Layer(0))
     }
 

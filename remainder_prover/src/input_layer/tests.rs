@@ -12,11 +12,10 @@ use crate::{
     expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::LayerId,
     mle::{dense::DenseMle, Mle},
+    output_layer::mle_output_layer::MleOutputLayer,
     prover::{
-        helpers::test_circuit,
-        layers::Layers,
-        proof_system::{DefaultProofSystem, ProofSystem},
-        CircuitInputLayer, CircuitProverTranscript, GKRCircuit, GKRError, Witness,
+        helpers::test_circuit, layers::Layers, proof_system::DefaultProofSystem, CircuitInputLayer,
+        CircuitTranscript, GKRCircuit, GKRError, GKRVerifierKey, Witness,
     },
     utils::get_random_mle,
 };
@@ -51,15 +50,16 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         (
             Witness<F, Self::ProofSystem>,
             Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+            GKRVerifierKey<F, Self::ProofSystem>,
         ),
         GKRError,
     > {
         let input = InputLayerBuilder::new(vec![&mut self.mle], None, LayerId::Input(0))
-            .to_input_layer_with_rho_inv(4, 1.);
+            .to_ligero_input_layer_with_rho_inv(4, 1.);
         let mut input: CircuitInputLayer<F, Self> = input.into();
 
         let input_commit = input.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::prover_append_commitment_to_transcript(&input_commit, transcript_writer);
+        InputLayerEnum::append_commitment_to_transcript(&input_commit, transcript_writer);
 
         // TODO!(ryancao): Fix the `RandomInputLayer::new()` argument to make it less confusing
         let random = RandomInputLayer::new(transcript_writer, 1, LayerId::Input(1));
@@ -98,22 +98,23 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
                 .to_input_layer::<PublicInputLayer<F>>()
                 .into();
         let input_layer_2_commit = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::prover_append_commitment_to_transcript(
-            &input_layer_2_commit,
-            transcript_writer,
-        );
+        InputLayerEnum::append_commitment_to_transcript(&input_layer_2_commit, transcript_writer);
 
         let layer_2 = EqualityCheck::new(output, output_input);
         let output = layers.add_gkr(layer_2);
 
-        Ok((
-            Witness {
-                layers,
-                output_layers: vec![output.get_enum()],
-                input_layers: vec![input, random, input_layer_2],
-            },
-            vec![input_commit, random_commit, input_layer_2_commit],
-        ))
+        let output_layers = vec![MleOutputLayer::new_zero(output)];
+
+        let witness = Witness {
+            layers,
+            output_layers,
+            input_layers: vec![input, random, input_layer_2],
+        };
+        let commitments = vec![input_commit, random_commit, input_layer_2_commit];
+        let verifier_key = witness.generate_verifier_key().unwrap();
+        // dbg!(&verifier_key);
+
+        Ok((witness, commitments, verifier_key))
     }
 }
 
@@ -191,11 +192,12 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
 
     fn synthesize_and_commit(
         &mut self,
-        transcript_writer: &mut CircuitProverTranscript<F, Self>,
+        transcript_writer: &mut CircuitTranscript<F, Self>,
     ) -> Result<
         (
             Witness<F, Self::ProofSystem>,
             Vec<<CircuitInputLayer<F, Self> as InputLayer<F>>::Commitment>,
+            GKRVerifierKey<F, Self::ProofSystem>,
         ),
         GKRError,
     > {
@@ -208,7 +210,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         .to_input_layer::<PublicInputLayer<F>>()
         .into();
         let input_layer_1_commitment = input_layer_1.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::prover_append_commitment_to_transcript(
+        InputLayerEnum::append_commitment_to_transcript(
             &input_layer_1_commitment,
             transcript_writer,
         );
@@ -222,7 +224,7 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         .to_input_layer::<PublicInputLayer<F>>()
         .into();
         let input_layer_2_commitment = input_layer_2.commit().map_err(GKRError::InputLayerError)?;
-        InputLayerEnum::prover_append_commitment_to_transcript(
+        InputLayerEnum::append_commitment_to_transcript(
             &input_layer_2_commitment,
             transcript_writer,
         );
@@ -248,16 +250,21 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
         let layer_4 = EqualityCheck::new(third_layer_output.clone(), third_layer_output);
         let fourth_layer_output = layers.add_gkr(layer_4);
 
-        Ok((
-            Witness {
-                layers,
-                output_layers: vec![fourth_layer_output.get_enum()],
-                input_layers: vec![input_layer_1, input_layer_2],
-            },
-            vec![input_layer_1_commitment, input_layer_2_commitment],
-        ))
+        let output_layers = vec![MleOutputLayer::new_zero(fourth_layer_output)];
+
+        let witness = Witness {
+            layers,
+            output_layers,
+            input_layers: vec![input_layer_1, input_layer_2],
+        };
+        dbg!(&witness);
+        let commitments = vec![input_layer_1_commitment, input_layer_2_commitment];
+        let verifier_key = witness.generate_verifier_key().unwrap();
+
+        Ok((witness, commitments, verifier_key))
     }
 }
+
 impl<F: FieldExt> MultiInputLayerCircuit<F> {
     pub fn new(
         input_layer_1_mle_1: DenseMle<F>,
@@ -321,19 +328,25 @@ impl<F: FieldExt> GKRCircuit<F> for SimplePrecommitCircuit<F> {
         // --- We should have two input layers: a single pre-committed and a single regular Ligero layer ---
         let rho_inv = 4;
         let ratio = 1_f64;
-        let (_, ligero_comm, ligero_root, ligero_aux) =
-            remainder_ligero_commit(self.mle.current_mle.get_evals_vector(), rho_inv, ratio);
+        let (ligero_aux, ligero_comm, ligero_root) = remainder_ligero_commit(
+            self.mle.current_mle.get_evals_vector(),
+            rho_inv,
+            ratio,
+            None,
+        );
         let precommitted_input_layer: LigeroInputLayer<F> = precommitted_input_layer_builder
             .to_input_layer_with_precommit(ligero_comm, ligero_aux, ligero_root, true);
         let live_committed_input_layer: LigeroInputLayer<F> =
-            live_committed_input_layer_builder.to_input_layer_with_rho_inv(4, 1.);
+            live_committed_input_layer_builder.to_ligero_input_layer_with_rho_inv(4, 1.);
+
+        let output_layers = vec![
+            MleOutputLayer::new_zero(first_layer_output_1),
+            MleOutputLayer::new_zero(first_layer_output_2),
+        ];
 
         Witness {
             layers,
-            output_layers: vec![
-                first_layer_output_1.get_enum(),
-                first_layer_output_2.get_enum(),
-            ],
+            output_layers,
             input_layers: vec![
                 precommitted_input_layer.into(),
                 live_committed_input_layer.into(),

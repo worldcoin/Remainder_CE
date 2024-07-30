@@ -1,6 +1,7 @@
 //! A space-efficient implementation of an [MleRef] which contains only zeros.
 
 use itertools::{repeat_n, Itertools};
+use remainder_shared_types::transcript::{TranscriptSponge, TranscriptWriter};
 use serde::{Deserialize, Serialize};
 
 use crate::claims::{wlx_eval::ClaimMle, Claim};
@@ -12,14 +13,14 @@ use super::Mle;
 use super::{mle_enum::MleEnum, MleIndex};
 
 /// An [MleRef] that contains only zeros; typically used for the output layer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZeroMle<F> {
     pub(crate) mle_indices: Vec<MleIndex<F>>,
     pub(crate) original_mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck).
     num_vars: usize,
-    pub(crate) layer_id: LayerId,
+    layer_id: LayerId,
     zero: [F; 1],
     indexed: bool,
 }
@@ -41,6 +42,25 @@ impl<F: FieldExt> ZeroMle<F> {
             layer_id,
             zero: [F::ZERO],
             indexed: false,
+        }
+    }
+
+    /// To be used internally for testing.
+    pub(crate) fn new_raw(
+        mle_indices: Vec<MleIndex<F>>,
+        original_mle_indices: Vec<MleIndex<F>>,
+        num_vars: usize,
+        layer_id: LayerId,
+        zero: [F; 1],
+        indexed: bool,
+    ) -> Self {
+        Self {
+            mle_indices,
+            original_mle_indices,
+            num_vars,
+            layer_id,
+            zero,
+            indexed,
         }
     }
 }
@@ -132,12 +152,11 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
 
     #[doc = " Get the layer ID of the associated MLE."]
     fn layer_id(&self) -> LayerId {
-        todo!()
+        self.layer_id
     }
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
-    type Error = LayerError;
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
@@ -151,6 +170,9 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
                     .ok_or(LayerError::ClaimError(ClaimError::MleRefMleError))
             })
             .collect();
+
+        // Note: Claim result is always zero. No need to append to transcript.
+
         Ok(vec![ClaimMle::new(
             mle_indices?,
             F::ZERO,

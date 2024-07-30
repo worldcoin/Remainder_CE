@@ -1,0 +1,492 @@
+use ark_std::test_rng;
+use rand::Rng;
+use remainder_shared_types::{FieldExt, Fr};
+use std::iter;
+
+use crate::{
+    layer::{gate::BinaryOperation, LayerId},
+    layouter::{
+        compiling::LayouterCircuit,
+        component::{Component, ComponentSet},
+        nodes::{
+            circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+            circuit_outputs::OutputNode,
+            gate::GateNode,
+            node_enum::NodeEnum,
+            sector::Sector,
+            CircuitNode, ClaimableNode, Context,
+        },
+    },
+    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
+    prover::helpers::test_circuit,
+};
+
+// ------------------- COPIED FROM `remainder_prover/tests/utils/mod.rs` -------------------
+
+/// A builder which takes the difference of an MLE from itself to return a zero layer.
+
+pub struct DifferenceBuilderComponent<F: FieldExt> {
+    pub output_sector: Sector<F>,
+    pub output_node: OutputNode<F>,
+}
+
+impl<F: FieldExt> DifferenceBuilderComponent<F> {
+    pub fn new(ctx: &Context, input: &dyn ClaimableNode<F = F>) -> Self {
+        let zero_output_sector = Sector::new(
+            ctx,
+            &[input],
+            |input_vec| {
+                assert_eq!(input_vec.len(), 1);
+                let input_data = input_vec[0];
+                input_data.expr() - input_data.expr()
+            },
+            |data| MultilinearExtension::new_sized_zero(data[0].num_vars()),
+        );
+
+        let output = OutputNode::new_zero(ctx, &zero_output_sector);
+
+        Self {
+            output_sector: zero_output_sector,
+            output_node: output,
+        }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for DifferenceBuilderComponent<F>
+where
+    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.output_sector.into(), self.output_node.into()]
+    }
+}
+
+// ------------------- END COPY -------------------
+
+/// A circuit which takes in two MLEs of the same size and adds
+/// the contents, element-wise, to one another.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle` - An MLE with arbitrary bookkeeping table values.
+/// * `neg_mle` - An MLE whose bookkeeping table is the element-wise negation
+///     of that of `mle`.
+#[test]
+fn test_add_gate_circuit_newmainder() {
+    const NUM_ITERATED_BITS: usize = 4;
+
+    let mut rng = test_rng();
+    let size = 1 << NUM_ITERATED_BITS;
+
+    let mle: DenseMle<Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+    );
+
+    let neg_mle = DenseMle::new_from_iter(
+        mle.current_mle
+            .get_evals_vector()
+            .clone()
+            .into_iter()
+            .map(|elem| -elem),
+        LayerId::Input(0),
+    );
+
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let mle_input_shred = InputShred::new(ctx, mle.current_mle.clone(), &input_layer);
+        let neg_mle_input_shred = InputShred::new(ctx, neg_mle.current_mle.clone(), &input_layer);
+
+        let mut nonzero_gates = vec![];
+        let total_num_elems = 1 << mle_input_shred.get_data().num_vars();
+        (0..total_num_elems).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
+        });
+
+        let gate_node = GateNode::new(
+            ctx,
+            &mle_input_shred,
+            &neg_mle_input_shred,
+            nonzero_gates,
+            super::BinaryOperation::Add,
+            None,
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            mle_input_shred.into(),
+            neg_mle_input_shred.into(),
+            gate_node.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    });
+
+    test_circuit(circuit, None)
+}
+
+/// A circuit which takes in two MLEs of the same size, and performs a
+/// dataparallel version of [test_add_gate_circuit_newmainder()].
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_dataparallel`, `neg_mle_dataparallel` -
+///     Similar to their counterparts within [test_add_gate_circuit_newmainder()]. Note that
+///     these are interpreted to be dataparallel MLEs with
+///     `2^num_dataparallel_bits` copies of smaller MLEs.
+/// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
+#[test]
+fn test_dataparallel_add_gate_circuit_newmainder() {
+    const NUM_DATAPARALLEL_BITS: usize = 2;
+    const NUM_ITERATED_BITS: usize = 2;
+
+    let mut rng = test_rng();
+    let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
+
+    // --- This should be 2^4 ---
+    let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+    );
+
+    let neg_mle_dataparallel = DenseMle::new_from_iter(
+        mle_dataparallel
+            .current_mle
+            .get_evals_vector()
+            .clone()
+            .into_iter()
+            .map(|elem| -elem),
+        LayerId::Input(0),
+    );
+
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let dataparallel_mle_input_shred =
+            InputShred::new(ctx, mle_dataparallel.current_mle.clone(), &input_layer);
+        let dataparallel_neg_mle_input_shred =
+            InputShred::new(ctx, neg_mle_dataparallel.current_mle.clone(), &input_layer);
+
+        let mut nonzero_gates = vec![];
+        let table_size = 1 << (NUM_ITERATED_BITS);
+
+        (0..table_size).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
+        });
+
+        let gate_node = GateNode::new(
+            ctx,
+            &dataparallel_mle_input_shred,
+            &dataparallel_neg_mle_input_shred,
+            nonzero_gates,
+            super::BinaryOperation::Add,
+            Some(NUM_DATAPARALLEL_BITS),
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            dataparallel_mle_input_shred.into(),
+            dataparallel_neg_mle_input_shred.into(),
+            gate_node.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    });
+
+    test_circuit(circuit, None)
+}
+
+/// A circuit which takes in two MLEs of the same size and adds
+/// only the very first element of `mle` with the first of `neg_mle`.
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle` - An MLE with arbitrary bookkeeping table values.
+/// * `neg_mle` - An MLE whose bookkeeping table is the element-wise negation
+///     of that of `mle`.
+#[test]
+fn test_uneven_add_gate_circuit_newmainder() {
+    const NUM_ITERATED_BITS: usize = 4;
+
+    let mut rng = test_rng();
+    let size = 1 << NUM_ITERATED_BITS;
+
+    let mle: DenseMle<Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+    );
+
+    let neg_mle = DenseMle::new_from_raw(vec![mle.bookkeeping_table()[0].neg()], LayerId::Input(0));
+
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let mle_input_shred = InputShred::new(ctx, mle.current_mle.clone(), &input_layer);
+        let neg_mle_input_shred = InputShred::new(ctx, neg_mle.current_mle.clone(), &input_layer);
+
+        let nonzero_gates = vec![(0, 0, 0)];
+        let gate_node = GateNode::new(
+            ctx,
+            &mle_input_shred,
+            &neg_mle_input_shred,
+            nonzero_gates,
+            super::BinaryOperation::Add,
+            None,
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            mle_input_shred.into(),
+            neg_mle_input_shred.into(),
+            gate_node.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    });
+
+    test_circuit(circuit, None)
+}
+
+#[test]
+fn test_mul_add_gate_circuit_newmainder() {
+    const NUM_ITERATED_BITS: usize = 4;
+
+    let mut rng = test_rng();
+    let size = 1 << NUM_ITERATED_BITS;
+
+    let mle_1: DenseMle<Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+    );
+
+    let mle_2: DenseMle<Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+    );
+
+    let neg_mle_2 = DenseMle::new_from_iter(
+        mle_2.bookkeeping_table().into_iter().map(|elem| -elem),
+        LayerId::Input(0),
+    );
+
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let mle_1_input_shred = InputShred::new(ctx, mle_1.current_mle.clone(), &input_layer);
+        let mle_2_input_shred = InputShred::new(ctx, mle_2.current_mle.clone(), &input_layer);
+        let neg_mle_2_input_shred =
+            InputShred::new(ctx, neg_mle_2.current_mle.clone(), &input_layer);
+
+        let mut nonzero_gates = vec![];
+        let table_size = 1 << NUM_ITERATED_BITS;
+
+        (0..table_size).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
+        });
+
+        let neg_mul_output = GateNode::new(
+            ctx,
+            &mle_1_input_shred,
+            &neg_mle_2_input_shred,
+            nonzero_gates.clone(),
+            super::BinaryOperation::Mul,
+            None,
+        );
+
+        let pos_mul_output = GateNode::new(
+            ctx,
+            &mle_1_input_shred,
+            &mle_2_input_shred,
+            nonzero_gates.clone(),
+            BinaryOperation::Mul,
+            None,
+        );
+
+        let add_gate_layer_output = GateNode::new(
+            ctx,
+            &pos_mul_output,
+            &neg_mul_output,
+            nonzero_gates,
+            BinaryOperation::Add,
+            None,
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &add_gate_layer_output);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            mle_1_input_shred.into(),
+            mle_2_input_shred.into(),
+            neg_mle_2_input_shred.into(),
+            neg_mul_output.into(),
+            pos_mul_output.into(),
+            add_gate_layer_output.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    });
+
+    test_circuit(circuit, None)
+}
+
+/// A circuit which takes in two MLEs of the same size, and performs a
+/// dataparallel version of [test_uneven_add_gate_circuit_newmainder()].
+///
+/// The expected output of this circuit is the zero MLE.
+///
+/// ## Arguments
+/// * `mle_dataparallel`, `neg_mle_dataparallel` -
+///     Similar to their counterparts within [test_uneven_add_gate_circuit_newmainder()]. Note that
+///     these are interpreted to be dataparallel MLEs with
+///     `2^num_dataparallel_bits` copies of smaller MLEs.
+/// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
+#[test]
+fn test_dataparallel_uneven_add_gate_circuit_newmainder() {
+    const NUM_DATAPARALLEL_BITS: usize = 4;
+    const NUM_ITERATED_BITS: usize = 4;
+
+    let mut rng = test_rng();
+    let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
+
+    let mle_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+    );
+
+    let neg_mle_dataparallel = DenseMle::new_from_iter(
+        mle_dataparallel
+            .current_mle
+            .get_evals_vector()
+            .iter()
+            .map(|elem| -elem),
+        LayerId::Input(0),
+    );
+
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let dataparallel_mle_input_shred =
+            InputShred::new(ctx, mle_dataparallel.current_mle.clone(), &input_layer);
+        let dataparallel_neg_mle_input_shred =
+            InputShred::new(ctx, neg_mle_dataparallel.current_mle.clone(), &input_layer);
+
+        let nonzero_gates = vec![(0, 0, 0)];
+
+        let gate_node = GateNode::new(
+            ctx,
+            &dataparallel_mle_input_shred,
+            &dataparallel_neg_mle_input_shred,
+            nonzero_gates,
+            super::BinaryOperation::Add,
+            Some(NUM_DATAPARALLEL_BITS),
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &gate_node);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            dataparallel_mle_input_shred.into(),
+            dataparallel_neg_mle_input_shred.into(),
+            gate_node.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    });
+
+    test_circuit(circuit, None)
+}
+
+#[test]
+fn test_dataparallel_mul_add_gate_circuit_newmainder() {
+    const NUM_DATAPARALLEL_BITS: usize = 2;
+    const NUM_ITERATED_BITS: usize = 2;
+
+    let mut rng = test_rng();
+    let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
+
+    let mle_1_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+    );
+
+    let mle_2_dataparallel: DenseMle<Fr> = DenseMle::new_from_iter(
+        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+        LayerId::Input(0),
+    );
+
+    let neg_mle_2_dataparallel = DenseMle::new_from_iter(
+        mle_2_dataparallel
+            .bookkeeping_table()
+            .into_iter()
+            .map(|elem| -elem),
+        LayerId::Input(0),
+    );
+
+    let circuit = LayouterCircuit::new(|ctx| {
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let dataparallel_mle_1_input_shred =
+            InputShred::new(ctx, mle_1_dataparallel.current_mle.clone(), &input_layer);
+        let dataparallel_mle_2_input_shred =
+            InputShred::new(ctx, mle_2_dataparallel.current_mle.clone(), &input_layer);
+        let dataparallel_neg_mle_2_input_shred = InputShred::new(
+            ctx,
+            neg_mle_2_dataparallel.current_mle.clone(),
+            &input_layer,
+        );
+
+        let mut nonzero_gates = vec![];
+        let table_size = 1 << NUM_ITERATED_BITS;
+
+        (0..table_size).for_each(|idx| {
+            nonzero_gates.push((idx, idx, idx));
+        });
+
+        let neg_mul_output = GateNode::new(
+            ctx,
+            &dataparallel_mle_1_input_shred,
+            &dataparallel_neg_mle_2_input_shred,
+            nonzero_gates.clone(),
+            super::BinaryOperation::Mul,
+            Some(NUM_DATAPARALLEL_BITS),
+        );
+
+        let pos_mul_output = GateNode::new(
+            ctx,
+            &dataparallel_mle_1_input_shred,
+            &dataparallel_mle_2_input_shred,
+            nonzero_gates.clone(),
+            BinaryOperation::Mul,
+            Some(NUM_DATAPARALLEL_BITS),
+        );
+
+        let add_gate_layer_output = GateNode::new(
+            ctx,
+            &pos_mul_output,
+            &neg_mul_output,
+            nonzero_gates,
+            BinaryOperation::Add,
+            Some(NUM_DATAPARALLEL_BITS),
+        );
+
+        let component_2 = DifferenceBuilderComponent::new(ctx, &add_gate_layer_output);
+
+        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+            input_layer.into(),
+            dataparallel_mle_1_input_shred.into(),
+            dataparallel_mle_2_input_shred.into(),
+            dataparallel_neg_mle_2_input_shred.into(),
+            neg_mul_output.into(),
+            pos_mul_output.into(),
+            add_gate_layer_output.into(),
+        ];
+        all_nodes.extend(component_2.yield_nodes());
+        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    });
+
+    test_circuit(circuit, None)
+}

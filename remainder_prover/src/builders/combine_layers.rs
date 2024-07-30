@@ -14,8 +14,8 @@ use crate::{
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
     },
-    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer},
-    mle::{mle_enum::MleEnum, MleIndex},
+    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
+    mle::{mle_enum::MleEnum, Mle, MleIndex},
     utils::{argsort, bits_iter},
 };
 
@@ -61,7 +61,7 @@ pub fn combine_layers<F: FieldExt>(
     let bit_counts: Vec<Vec<Vec<MleIndex<F>>>> = interpolated_layers
         .map(|layers_at_combined_index| {
             // --- Global layer ID for this column ---
-            let _layer_id = layers_at_combined_index[0].1.id();
+            let _layer_id = layers_at_combined_index[0].1.layer_id();
             let layer_sizes = layers_at_combined_index
                 .iter()
                 .map(|layer| layer.1.layer_size());
@@ -125,7 +125,8 @@ pub fn combine_layers<F: FieldExt>(
         .zip(layer_bits)
     {
         for (layer_idx, new_bits) in new_bits.into_iter().enumerate() {
-            if let Some(&effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.id()) {
+            if let Some(effected_layer) = layers.layers.get(layer_idx).map(|layer| layer.layer_id())
+            {
                 add_bits_to_layer_refs(
                     &mut layers.layers[layer_idx..],
                     output_layers,
@@ -147,7 +148,7 @@ pub fn combine_layers<F: FieldExt>(
         })
         .map(|layers| {
             // let new_bits = log2(layers.len()) as usize;
-            let layer_id = *layers[0].id();
+            let layer_id = layers[0].layer_id();
 
             let expressions = layers
                 .into_iter()
@@ -250,7 +251,7 @@ fn add_bits_to_layer_refs<F: FieldExt>(
                 }
             }
             MleEnum::Zero(mle) => {
-                if mle.layer_id == effected_layer {
+                if mle.get_layer_id() == effected_layer {
                     mle.mle_indices = new_bits
                         .iter()
                         .chain(mle.mle_indices.iter())

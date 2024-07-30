@@ -1,5 +1,6 @@
-//!Utilities involving the claims a layer makes
-///The claim aggregator that uses wlx evaluations
+//! Utilities involving the claims a layer makes.
+
+/// The default claim aggregator that uses wlx evaluations.
 pub mod wlx_eval;
 
 use remainder_shared_types::{
@@ -16,56 +17,66 @@ use crate::{
     layer::{Layer, LayerId},
 };
 
+/// Errors to do with aggregating and collecting claims.
 #[derive(Error, Debug, Clone)]
-///Errors to do with aggregating and collecting claims
 pub enum ClaimError {
+    /// The Layer has not finished the sumcheck protocol.
     #[error("The Layer has not finished the sumcheck protocol")]
-    ///The Layer has not finished the sumcheck protocol
     SumCheckNotComplete,
+
+    /// MLE indices must all be fixed.
     #[error("MLE indices must all be fixed")]
-    ///MLE indices must all be fixed
     ClaimMleIndexError,
+
+    /// Layer ID not assigned.
     #[error("Layer ID not assigned")]
-    ///Layer ID not assigned
     LayerMleError,
+
+    /// MLE within MleRef has multiple values within it.
     #[error("MLE within MleRef has multiple values within it")]
-    ///MLE within MleRef has multiple values within it
     MleRefMleError,
+
+    /// Error aggregating claims.
     #[error("Error aggregating claims")]
-    ///Error aggregating claims
     ClaimAggroError,
+
+    /// Should be evaluating to a sum.
     #[error("Should be evaluating to a sum")]
-    ///Should be evaluating to a sum
     ExpressionEvalError,
+
+    /// All claims in a group should agree on the number of variables.
     #[error("All claims in a group should agree on the number of variables")]
-    ///All claims in a group should agree on the number of variables
     NumVarsMismatch,
+
+    /// All claims in a group should agree the destination layer field.
     #[error("All claims in a group should agree the destination layer field")]
-    ///All claims in a group should agree the destination layer field
     LayerIdMismatch,
+
+    /// Error while combining mle refs in order to evaluate challenge point.
     #[error("Error while combining mle refs in order to evaluate challenge point")]
-    ///Error while combining mle refs in order to evaluate challenge point
-    MleRefCombineError(CombineMleRefError),
+    MleRefCombineError(#[from] CombineMleRefError),
 
     /// Zero MLE refs cannot be used as intermediate values within a circuit!
     #[error("Zero MLE refs cannot be used as intermediate values within a circuit")]
     IntermediateZeroMLERefError,
 }
 
-/// A claim contains a `point` \in F^n along with the `result` \in F that an
-/// associated layer MLE is expected to evaluate to. In other words, if `W : F^n
-/// -> F` is the MLE, then the claim asserts: `W(point) == result`
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// A claim contains a `point \in F^n` along with the `result \in F` that an
+/// associated layer MLE is expected to evaluate to. In other words, if
+/// `\tilde{V} : F^n -> F` is the MLE of a layer, then this claim asserts:
+/// `\tilde{V}(point) == result`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "F: FieldExt")]
 pub struct Claim<F: FieldExt> {
     /// The point in F^n where the layer MLE is to be evaluated on.
     point: Vec<F>,
+
     /// The expected result of evaluating this layer's MLE on `point`.
     result: F,
 }
 
 impl<F: FieldExt> Claim<F> {
-    /// Constructs a new `Claim`
+    /// Constructs a new `Claim` from a given `point` and `result`.
     pub fn new(point: Vec<F>, result: F) -> Self {
         Self { point, result }
     }
@@ -86,77 +97,87 @@ impl<F: FieldExt> Claim<F> {
     }
 }
 
-/// A wrapper struct that represents the `Claim` a `ClaimAggregator`
-/// generates and the proof that this claim is correct
-#[derive(Clone, Debug)]
-pub struct ClaimAndProof<F: FieldExt, P> {
-    /// The `Claim` that was proven
-    pub claim: Claim<F>,
-    /// The proof that the `Claim` is correct
-    pub proof: P,
-}
-
-/// A trait that defines a protocol for the tracking/aggregation of many claims
+/// A trait that defines a protocol for the tracking/aggregation of many claims.
 pub trait ClaimAggregator<F: FieldExt> {
-    ///The struct the claim aggregator takes in.
-    ///
-    /// Is typically composed of the `Claim` struct and additional information
+    /// The struct the claim aggregator takes in.
+    /// Is typically composed of the `Claim` struct and additional information.
     type Claim: std::fmt::Debug + Clone + Serialize + for<'a> Deserialize<'a>;
 
-    ///The proof that a verifier can use to check that the aggregation was done correctly
-    type AggregationProof: std::fmt::Debug + Clone + Serialize + for<'a> Deserialize<'a>;
-
-    ///The Layer this claim aggregator takes claims from, and aggregates claims for
+    /// The `Layer` this claim aggregator takes claims from, and aggregates
+    /// claims for.
     type Layer: Layer<F>;
 
-    ///The InputLayer this claim aggregator aggregates claims for
+    /// The `InputLayer` this claim aggregator aggregates claims for.
     type InputLayer: InputLayer<F>;
 
-    type Error: std::error::Error;
-
-    ///Creates an empty ClaimAggregator, ready to track claims
+    /// Creates an empty [ClaimAggregator], ready to track claims.
     fn new() -> Self;
 
-    ///Takes in claims to track and later aggregate
-    fn add_claims<L: YieldClaim<Self::Claim>>(&mut self, layer: &L) -> Result<(), L::Error>;
+    /// Retrieves claims from `layer` to keep track internally and later
+    /// aggregate.
+    fn extract_claims(&mut self, layer: &impl YieldClaim<F, Self::Claim>)
+        -> Result<(), LayerError>;
 
-    ///Retrieves claims for aggregation
+    /// Returns the claims made to layer with ID `layer_id` (if any).
+    /// The claims must have already been retrieved using
+    /// `extract_claims`.
+    ///
+    /// TODO(Makis): Do we need to expose this method to the public interface?
+    /// It seems it is only used by the `aggregate_claim` variants internally.
     fn get_claims(&self, layer_id: LayerId) -> Option<&[Self::Claim]>;
 
-    ///Takes in some claims from the prover and aggregates them into one claim
+    /// Aggregates all the claims made on `layer` and returns a single claim.
+    //
+    /// Should be called only after all claims for `input_layer` have been
+    /// retrieved using `extract_claims`.
     ///
-    /// Extracts additional information from the `Layer` the claims are made on if neccessary.
-    ///
-    /// Adds any communication to the F-S Transcript
+    /// Adds any communication to the F-S Transcript as needed.
     fn prover_aggregate_claims(
         &self,
         layer: &Self::Layer,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, Self::Error>;
+    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, LayerError>;
 
-    ///Takes in some claims from the prover and aggregates them into one claim
+    /// Similar to `prover_aggregate_claims` but for an input layer.
     ///
-    /// Extracts additional information from the `InputLayer` the claims are made on if neccessary.
+    /// Aggregates all the claims made on `input_layer` and returns a single
+    /// claim.
     ///
-    /// Adds any communication to the F-S Transcript
+    /// Should be called only after all claims for `input_layer` have been
+    /// retrieved using `extract_claims`.
+    ///
+    /// Adds any communication to the F-S Transcript as needed.
     fn prover_aggregate_claims_input(
         &self,
         layer: &Self::InputLayer,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, Self::Error>;
+    ) -> Result<ClaimAndProof<F, Self::AggregationProof>, LayerError>;
 
-    ///Reads an AggregationProof from the Transcript and uses it to verify the aggregation of some claims.
+    /// The verifier's variant of `prover_aggregate_claims`.
+    ///
+    /// Aggregates all the claims made on the Layer with ID `layer_id` (could be
+    /// either an intermediate or input layer) and returns a single claim.
+    ///
+    /// Should be called only after all claims for this layer have been
+    /// retrieved using `extract_claims`.
+    ///
+    /// Uses the `transcript_reader` to retrieve any necessary information.
+    ///
+    /// Note: The reason that the verifier version only needs the ID of the
+    /// layer and not the layer itself is that is retrieves the WLX evaluations
+    /// from the transcript, instead of asking the layer struct to generate
+    /// them.
     fn verifier_aggregate_claims(
         &self,
         layer_id: LayerId,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Claim<F>, Self::Error>;
+    ) -> Result<Claim<F>, LayerError>;
 }
 
-///A trait that allows the type to yield some claims to be added
-/// to the claim tracker
+/// A trait that allows a layer-like type to yield claims for other layers.
+/// Typically, a [ClaimAggregator] uses this trait's method to extract
+/// and keep track of claims.
 pub trait YieldClaim<Claim> {
-    type Error: std::error::Error;
     /// Get the claims that this layer makes on other layers
-    fn get_claims(&self) -> Result<Vec<Claim>, Self::Error>;
+    fn get_claims(&self) -> Result<Vec<Claim>, LayerError>;
 }

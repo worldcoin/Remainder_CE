@@ -57,7 +57,7 @@ pub enum InputLayerError {
     RandomInputVerificationFailed,
     /// This is when there is an error when trying to squeeze or add elements to the transcript.
     #[error("Error during interaction with the transcript.")]
-    TranscriptError(TranscriptReaderError),
+    TranscriptError(#[from] TranscriptReaderError),
     /// This is thrown when the transcript squeezed value for the verifier does not
     /// match what the prover squeezed for the same point.
     #[error("Challenge or consumed element did not match the expected value.")]
@@ -65,6 +65,71 @@ pub enum InputLayerError {
 }
 
 use log::{debug, info};
+/// The InputLayer trait in which the evaluation proof, commitment, and proof/verification
+/// process takes place for input layers.
+pub trait InputLayer<F: FieldExt> {
+    /// The struct that contains the commitment to the contents of the input_layer.
+    type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
+
+    /// The Verifier Key representation for this input layer.
+    type VerifierInputLayer: VerifierInputLayer<F, Commitment = Self::Commitment>
+        + Serialize
+        + for<'a> Deserialize<'a>
+        + core::fmt::Debug;
+
+    /// Returns the circuit description of this layer for the verifier.
+    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer;
+
+    /// Generates and returns a commitment.
+    /// May also store it internally.
+    fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
+
+    /// Appends the commitment to the F-S Transcript.
+    fn append_commitment_to_transcript(
+        commitment: &Self::Commitment,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    );
+
+    /// Generates a proof of polynomial evaluation at the point
+    /// in the `Claim`.
+    ///
+    /// Appends any communication to the transcript.
+    fn open(
+        &self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+        claim: Claim<F>,
+    ) -> Result<(), InputLayerError>;
+
+    /// Returns the `LayerId` of this layer.
+    fn layer_id(&self) -> LayerId;
+
+    /// Returns the contents of this `InputLayer` as an
+    /// owned `DenseMle`.
+    fn get_padded_mle(&self) -> DenseMle<F>;
+}
+
+pub trait VerifierInputLayer<F: FieldExt> {
+    /// The struct that contains the commitment to the contents of the input_layer.
+    type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
+
+    /// Returns the `LayerId` of this layer.
+    fn layer_id(&self) -> LayerId;
+
+    /// Read the commitment off of the transcript.
+    fn get_commitment_from_transcript(
+        &self,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<Self::Commitment, InputLayerError>;
+
+    /// Verifies the evaluation at the point in the `Claim` relative to the
+    /// polynomial commitment using the opening proof in the transcript.
+    fn verify(
+        &self,
+        commitment: &Self::Commitment,
+        claim: Claim<F>,
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> Result<(), InputLayerError>;
+}
 
 /// Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs.
 pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {

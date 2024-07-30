@@ -1,6 +1,8 @@
 //! Identity gate id(z, x) determines whether the xth gate from the
 //! i + 1th layer contributes to the zth gate in the ith layer.
 
+use std::marker::PhantomData;
+
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
@@ -32,19 +34,52 @@ use super::{
         index_mle_indices_gate, GateError,
     },
     product::{PostSumcheckLayer, Product},
-    Layer, LayerId, PostSumcheckEvaluation, SumcheckLayer,
+    CircuitLayer, Layer, LayerId, PostSumcheckEvaluation, SumcheckLayer, VerifierLayer,
 };
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct IdentityGateCircuitLayer<F: FieldExt> {
+    // TODO(vishady) actually fill this in NOW
+    marker: PhantomData<F>,
+}
+
+impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
+    type VerifierLayer = IdentityGateVerifierLayer<F>;
+
+    fn layer_id(&self) -> LayerId {
+        todo!()
+    }
+
+    fn verify_rounds(
+        &self,
+        claim: Claim<F>,
+        transcript: &mut impl VerifierTranscript<F>,
+    ) -> Result<Self::VerifierLayer, VerificationError> {
+        todo!()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct IdentityGateVerifierLayer<F: FieldExt> {
+    // TODO(vishady) actually fill this in NOW
+    marker: PhantomData<F>,
+}
+
+impl<F: FieldExt> VerifierLayer<F> for IdentityGateVerifierLayer<F> {
+    fn layer_id(&self) -> LayerId {
+        todo!()
+    }
+}
 
 /// implement the layer trait for identitygate struct
 impl<F: FieldExt> Layer<F> for IdentityGate<F> {
-    type Error = LayerError;
-    type Proof = SumcheckProof<F>;
+    type CircuitLayer = IdentityGateCircuitLayer<F>;
 
     fn prove_rounds(
         &mut self,
         claim: Claim<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
-    ) -> Result<SumcheckProof<F>, LayerError> {
+    ) -> Result<(), LayerError> {
         // initialization, get the first sumcheck message
         let first_message = self
             .init_phase_1(claim)
@@ -83,103 +118,16 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
         Ok(sumcheck_rounds.into())
     }
 
-    /// Verifies the sumcheck protocol
-    fn verify_rounds(
-        &mut self,
-        claim: Claim<F>,
-        sumcheck_rounds: Self::Proof,
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<(), LayerError> {
-        let sumcheck_rounds = sumcheck_rounds.0;
-        let mut prev_evals = &sumcheck_rounds[0];
-
-        let mut challenges = vec![];
-
-        // first round check
-        let claimed_claim = prev_evals[0] + prev_evals[1];
-        if claimed_claim != claim.get_result() {
-            return Err(LayerError::VerificationError(
-                VerificationError::SumcheckStartFailed,
-            ));
-        }
-
-        let num_elements = sumcheck_rounds[0].len();
-        let transcript_sumcheck_round_zero = transcript_reader
-            .consume_elements("Initial Sumcheck evaluations", num_elements)
-            .unwrap();
-        debug_assert_eq!(transcript_sumcheck_round_zero, sumcheck_rounds[0]);
-
-        for curr_evals in sumcheck_rounds.iter().skip(1) {
-            let challenge = transcript_reader
-                .get_challenge("Sumcheck challenge")
-                .unwrap();
-
-            let prev_at_r =
-                evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
-
-            if prev_at_r != curr_evals[0] + curr_evals[1] {
-                return Err(LayerError::VerificationError(
-                    VerificationError::SumcheckFailed,
-                ));
-            };
-            let num_curr_evals = curr_evals.len();
-            let transcript_curr_evals = transcript_reader
-                .consume_elements("Sumcheck evaluations", num_curr_evals)
-                .map_err(LayerError::TranscriptError)?;
-            debug_assert_eq!(transcript_curr_evals, *curr_evals);
-
-            prev_evals = curr_evals;
-            challenges.push(challenge);
-        }
-
-        // final round of sumcheck
-        let final_chal = transcript_reader
-            .get_challenge("Final Sumcheck challenge")
-            .unwrap();
-        challenges.push(final_chal);
-
-        // we mutate the mles in the struct as we bind variables, so we can check whether they were bound correctly
-        let [_, mle_ref] = self.phase_1_mles.as_mut().unwrap();
-        let bound_mle_ref = check_fully_bound(&mut [mle_ref.clone()], challenges.clone()).unwrap();
-
-        // compute the sum over all the variables of the gate function
-        let beta_u = BetaValues::new_beta_equality_mle(challenges.clone());
-
-        let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
-
-        let f_1_uv = self
-            .nonzero_gates
-            .clone()
-            .into_iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
-
-                acc + gz * ux
-            });
-
-        // get the fully evaluated "expression"
-        let fully_evaluated = f_1_uv * (bound_mle_ref);
-        let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
-
-        // error if this doesn't match the last round of sumcheck
-        if fully_evaluated != prev_at_r {
-            return Err(LayerError::VerificationError(
-                VerificationError::FinalSumcheckFailed,
-            ));
-        }
-
-        Ok(())
+    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
+        todo!()
     }
 
-    /// Gets this layer's id.
-    fn id(&self) -> &LayerId {
-        &self.layer_id
+    fn layer_id(&self) -> LayerId {
+        todo!()
     }
 }
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
-    type Error = LayerError;
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let mut claims = vec![];
@@ -380,7 +328,7 @@ impl<F: std::fmt::Debug + FieldExt> IdentityGate<F> {
 }
 
 impl<F: FieldExt> SumcheckLayer<F> for IdentityGate<F> {
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), Self::Error> {
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
         self.set_beta_g(beta_g.clone());
 
@@ -408,10 +356,7 @@ impl<F: FieldExt> SumcheckLayer<F> for IdentityGate<F> {
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(
-        &mut self,
-        round_index: usize,
-    ) -> Result<Vec<F>, Self::Error> {
+    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
         let mles = self.phase_1_mles.as_mut().unwrap();
         let independent_variable = mles
             .iter()
@@ -428,7 +373,7 @@ impl<F: FieldExt> SumcheckLayer<F> for IdentityGate<F> {
         Ok(evaluations)
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), Self::Error> {
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
         let mles = self.phase_1_mles.as_mut().unwrap();
         mles.iter_mut().for_each(|mle_ref| {
             mle_ref.fix_variable(round_index, challenge);
