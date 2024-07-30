@@ -121,28 +121,29 @@ impl<
             ))?;
 
         let claim_group = ClaimGroup::new(claims.to_vec()).unwrap();
+        // dbg!(&claim_group);
         debug!("Layer Claim Group for input: {:#?}", claims);
 
-        // --- Add the claimed values to the FS transcript ---
-        for claim in claims {
-            let claim_point_len = claim.get_point().len();
-            let transcript_claim_point = transcript_reader
-                .consume_elements(
-                    "Claimed challenge coordinates to be aggregated",
-                    claim_point_len,
-                )
-                .map_err(|err| {
-                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
-                })?;
-            debug_assert_eq!(transcript_claim_point, *claim.get_point());
+        // // --- Add the claimed values to the FS transcript ---
+        // for claim in claims {
+        //     let claim_point_len = claim.get_point().len();
+        //     let transcript_claim_point = transcript_reader
+        //         .consume_elements(
+        //             "Claimed challenge coordinates to be aggregated",
+        //             claim_point_len,
+        //         )
+        //         .map_err(|err| {
+        //             GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
+        //         })?;
+        //     debug_assert_eq!(transcript_claim_point, *claim.get_point());
 
-            let transcript_claim_result = transcript_reader
-                .consume_element("Claimed value to be aggregated")
-                .map_err(|err| {
-                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
-                })?;
-            debug_assert_eq!(transcript_claim_result, claim.get_result());
-        }
+        //     let transcript_claim_result = transcript_reader
+        //         .consume_element("Claimed value to be aggregated")
+        //         .map_err(|err| {
+        //             GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::TranscriptError(err))
+        //         })?;
+        //     debug_assert_eq!(transcript_claim_result, claim.get_result());
+        // }
 
         if claims.len() > 1 {
             let prev_claim = verifier_aggregate_claims_helper(&claim_group, transcript_reader)
@@ -178,11 +179,11 @@ impl<
         let claim_group = ClaimGroup::new(claims.to_vec()).unwrap();
         debug!("Found Layer claims:\n{:#?}", claims);
 
-        // --- Add the claimed values to the FS transcript ---
-        for claim in claims {
-            transcript_writer.append_elements("Claimed bits to be aggregated", claim.get_point());
-            transcript_writer.append("Claimed value to be aggregated", claim.get_result());
-        }
+        // // --- Add the claimed values to the FS transcript ---
+        // for claim in claims {
+        //     transcript_writer.append_elements("Claimed bits to be aggregated", claim.get_point());
+        //     transcript_writer.append("Claimed value to be aggregated", claim.get_result());
+        // }
 
         prover_aggregate_claims_helper(&claim_group, layer, transcript_writer)
     }

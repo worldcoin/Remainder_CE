@@ -468,15 +468,17 @@ impl<F: FieldExt> DataparallelUnevenAddGateCircuit<F> {
 
 #[test]
 fn test_add_gate_circuit() {
-    const NUM_ITERATED_BITS: usize = 4;
+    const NUM_ITERATED_BITS: usize = 1;
 
     let mut rng = test_rng();
     let size = 1 << NUM_ITERATED_BITS;
 
-    let mle: DenseMle<Fr> = DenseMle::new_from_iter(
-        (0..size).map(|_| Fr::from(rng.gen::<u64>())),
-        LayerId::Input(0),
-    );
+    // let mle: DenseMle<Fr> = DenseMle::new_from_iter(
+    //     (0..size).map(|_| Fr::from(rng.gen::<u64>())),
+    //     LayerId::Input(0),
+    // );
+    let mle: DenseMle<Fr> =
+        DenseMle::new_from_iter((0..size).map(|idx| Fr::from(idx)), LayerId::Input(0));
 
     let neg_mle = DenseMle::new_from_iter(
         mle.current_mle

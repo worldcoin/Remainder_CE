@@ -348,7 +348,9 @@ pub fn prove_round_dataparallel_phase<F: FieldExt>(
     )
 }
 
-/// Get the evals for a batched mul gate.
+/// Get the evals for a batched mul gate. Note that this specifically refers to
+/// computing the prover message while binding the dataparallel bits of a `Gate`
+/// expression.
 pub fn libra_giraffe<F: FieldExt>(
     f2_p2_x: &DenseMle<F>,
     f3_p2_y: &DenseMle<F>,

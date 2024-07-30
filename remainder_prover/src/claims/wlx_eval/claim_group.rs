@@ -55,6 +55,7 @@ impl<F: FieldExt> ClaimGroup<F> {
             .into_iter()
             .all(|claim| claim.get_num_vars() == num_vars)
         {
+            dbg!("Okay yeah it was this one");
             return Err(ClaimError::NumVarsMismatch);
         }
 
