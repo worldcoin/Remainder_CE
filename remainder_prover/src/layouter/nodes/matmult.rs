@@ -226,4 +226,76 @@ mod test {
 
         test_circuit(circuit, None);
     }
+
+    #[test]
+    fn test_matmult_node_irregular_in_circuit() {
+        let circuit = LayouterCircuit::new(|ctx| {
+            let mle_vec_a = MultilinearExtension::new(vec![
+                Fr::from(1),
+                Fr::from(2),
+                Fr::from(9),
+                Fr::from(10),
+                Fr::from(13),
+                Fr::from(1),
+                Fr::from(3),
+                Fr::from(10),
+            ]);
+
+            let mle_vec_b =
+                MultilinearExtension::new(vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)]);
+
+            let exp_product = MultilinearExtension::new(vec![
+                Fr::from(1 * 3 + 2 * 9),
+                Fr::from(1 * 5 + 2 * 6),
+                Fr::from(9 * 3 + 10 * 9),
+                Fr::from(9 * 5 + 10 * 6),
+                Fr::from(13 * 3 + 1 * 9),
+                Fr::from(13 * 5 + 1 * 6),
+                Fr::from(3 * 3 + 10 * 9),
+                Fr::from(3 * 5 + 10 * 6),
+            ]);
+
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+
+            let input_matrix_a = InputShred::new(ctx, mle_vec_a, &input_layer);
+            let input_matrix_b = InputShred::new(ctx, mle_vec_b, &input_layer);
+            let input_matrix_product = InputShred::new(ctx, exp_product, &input_layer);
+
+            let matmult_sector =
+                MatMultNode::new(ctx, &input_matrix_a, (4, 2), &input_matrix_b, (2, 2));
+
+            let difference_sector = Sector::new(
+                ctx,
+                &[&matmult_sector, &input_matrix_product],
+                |inputs| {
+                    Expression::<Fr, AbstractExpr>::mle(inputs[0])
+                        - Expression::<Fr, AbstractExpr>::mle(inputs[1])
+                },
+                |inputs| {
+                    let data: Vec<_> = inputs[0]
+                        .get_evals_vector()
+                        .iter()
+                        .zip(inputs[1].get_evals_vector().iter())
+                        .map(|(lhs, rhs)| lhs - rhs)
+                        .collect();
+
+                    MultilinearExtension::new(data)
+                },
+            );
+
+            let output_node = OutputNode::new_zero(ctx, &difference_sector);
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                input_layer.into(),
+                input_matrix_a.into(),
+                input_matrix_b.into(),
+                input_matrix_product.into(),
+                matmult_sector.into(),
+                difference_sector.into(),
+                output_node.into(),
+            ])
+        });
+
+        test_circuit(circuit, None);
+    }
 }
