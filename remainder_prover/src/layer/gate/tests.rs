@@ -491,6 +491,8 @@ fn test_add_gate_circuit() {
     test_circuit(circuit, None);
 }
 
+/// Okay let's attempt the test using the new Remainder frontend and what not
+
 #[test]
 fn test_uneven_add_gate_circuit() {
     const NUM_ITERATED_BITS: usize = 4;

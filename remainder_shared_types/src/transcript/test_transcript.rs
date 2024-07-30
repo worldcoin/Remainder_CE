@@ -25,7 +25,7 @@ impl<F: FieldExt> TranscriptSponge<F> for TestSponge<F> {
     fn absorb_elements(&mut self, _elements: &[F]) {}
 
     fn squeeze(&mut self) -> F {
-        F::ONE + F::ONE
+        F::ONE
     }
 
     fn squeeze_elements(&mut self, num_elements: usize) -> Vec<F> {

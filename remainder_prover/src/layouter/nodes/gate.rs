@@ -42,8 +42,8 @@ impl<F: FieldExt> GateNode<F> {
     /// Constructs a new GateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        lhs: &impl ClaimableNode<F = F>,
-        rhs: &impl ClaimableNode<F = F>,
+        lhs: &dyn ClaimableNode<F = F>,
+        rhs: &dyn ClaimableNode<F = F>,
         nonzero_gates: Vec<(usize, usize, usize)>,
         gate_operation: BinaryOperation,
         num_dataparallel_bits: Option<usize>,

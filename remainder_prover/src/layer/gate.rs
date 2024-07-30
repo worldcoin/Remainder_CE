@@ -4,6 +4,7 @@
 mod gate_helpers;
 #[cfg(test)]
 mod tests;
+mod new_interface_tests;
 
 use std::cmp::max;
 
