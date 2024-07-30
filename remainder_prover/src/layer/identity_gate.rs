@@ -13,6 +13,7 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
+    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::{LayerError, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     prover::SumcheckProof,
@@ -38,31 +39,181 @@ use super::{
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
 pub struct IdentityGateCircuitLayer<F: FieldExt> {
-    // TODO(vishady) actually fill this in NOW
-    marker: PhantomData<F>,
+    /// The layer id associated with this gate layer.
+    id: LayerId,
+
+    /// A vector of tuples representing the "nonzero" gates, especially useful
+    /// in the sparse case the format is (z, x) where the gate at label z is
+    /// the output of adding all values from labels x.
+    wiring: Vec<(usize, usize)>,
+
+    /// The source MLE of the expression, i.e. the mle that makes up the "x"
+    /// variables.
+    source_mle: CircuitMle<F>,
 }
+
+/// Degree of independent variable is always quadratic!
+///
+/// V_i(g_2, g_1) = \sum_{p_2, x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
+const DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
+const NON_DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
 
 impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
     type VerifierLayer = IdentityGateVerifierLayer<F>;
 
     fn layer_id(&self) -> LayerId {
-        todo!()
+        self.id
     }
 
+    /// Note that this ONLY verifies for non-dataparallel identity gate!!!
+    ///
+    /// TODO(vishady, ryancao): Implement dataparallel identity gate prover + verifier
     fn verify_rounds(
         &self,
         claim: Claim<F>,
-        transcript: &mut impl VerifierTranscript<F>,
+        transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        todo!()
+        // --- SAME ISSUE HERE AS IN GATE.RS: JUST ASSUMING THAT TOTAL NUMBER
+        // --- OF SUMCHECK ROUNDS IS GOING TO BE THE NUMBER OF NON-FIXED BITS
+        let num_sumcheck_rounds = self
+            .source_mle
+            .mle_indices()
+            .iter()
+            .fold(0_usize, |acc, idx| {
+                acc + match idx {
+                    MleIndex::Fixed(_) => 0,
+                    _ => 1,
+                }
+            });
+
+        // --- Store challenges for later claim generation ---
+        let mut challenges = vec![];
+
+        // --- Grab the first round prover sumcheck message g_1(x) ---
+        let sumcheck_messages: Vec<Vec<F>> = vec![];
+        let first_round_sumcheck_messages = transcript_reader.consume_elements(
+            "Initial sumcheck evaluations",
+            NON_DATAPARALLEL_ROUND_ID_NUM_EVALS,
+        )?;
+        sumcheck_messages.push(first_round_sumcheck_messages.clone());
+
+        // Check: V_i(g_1) =? g_1(0) + g_1(1)
+        // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
+        if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_result()
+        {
+            return Err(LayerError::VerificationError(
+                VerificationError::SumcheckStartFailed,
+            ));
+        }
+
+        for sumcheck_round_idx in 1..num_sumcheck_rounds {
+            // --- Read challenge r_{i - 1} from transcript ---
+            let challenge = transcript_reader
+                .get_challenge("Sumcheck challenge")
+                .unwrap();
+            let g_i_minus_1_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
+
+            // --- Evaluate g_{i - 1}(r_{i - 1}) ---
+            let prev_at_r = evaluate_at_a_point(&g_i_minus_1_evals, challenge).unwrap();
+
+            // --- Read off g_i(0), g_i(1), ..., g_i(d) from transcript ---
+            let curr_evals = transcript_reader
+                .consume_elements("Sumcheck evaluations", NON_DATAPARALLEL_ROUND_ID_NUM_EVALS)
+                .unwrap();
+
+            // --- Check: g_i(0) + g_i(1) =? g_{i - 1}(r_{i - 1}) ---
+            if prev_at_r != curr_evals[0] + curr_evals[1] {
+                return Err(VerificationError::SumcheckFailed);
+            };
+
+            // --- Add the prover message to the sumcheck messages ---
+            sumcheck_messages.push(curr_evals);
+
+            // --- Store all challenges from transcript ---
+            challenges.push(challenge);
+        }
+
+        // final round of sumcheck
+        let final_chal = transcript_reader
+            .get_challenge("Final Sumcheck challenge")
+            .unwrap();
+        challenges.push(final_chal);
+
+        let src_verifier_mle = self
+            .source_mle
+            .into_verifier_mle(&challenges, transcript_reader)
+            .unwrap();
+
+        // --- Create the resulting verifier layer for claim tracking ---
+        // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
+        let verifier_id_gate_layer = IdentityGateVerifierLayer {
+            layer_id: self.layer_id(),
+            wiring: self.wiring.clone(),
+            source_mle: self.source_mle,
+            claim_challenge_points: claim.get_point().clone(),
+            first_u_challenges: challenges,
+        };
+        let final_result = verifier_id_gate_layer.evaluate(&claim);
+
+        // Finally, compute g_n(r_n).
+        let g_n_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
+        let prev_at_r = evaluate_at_a_point(&g_n_evals, final_chal).unwrap();
+
+        // error if this doesn't match the last round of sumcheck
+        if final_result != prev_at_r {
+            return Err(LayerError::VerificationError(
+                VerificationError::FinalSumcheckFailed,
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+impl<F: FieldExt> IdentityGateVerifierLayer<F> {
+    /// Computes the oracle query's value for a given [IdentityGateVerifierLayer].
+    pub fn evaluate(&self, claim: &Claim<F>) -> F {
+        // compute the sum over all the variables of the gate function
+        let beta_u = BetaValues::new_beta_equality_mle(self.claim_challenge_points);
+        let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
+
+        let f_1_uv = self
+            .wiring
+            .into_iter()
+            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
+                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+
+                acc + gz * ux
+            });
+
+        // get the fully evaluated "expression"
+        let fully_evaluated = f_1_uv * self.source_mle.value();
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
 pub struct IdentityGateVerifierLayer<F: FieldExt> {
-    // TODO(vishady) actually fill this in NOW
-    marker: PhantomData<F>,
+    /// The layer id associated with this gate layer.
+    layer_id: LayerId,
+
+    /// A vector of tuples representing the "nonzero" gates, especially useful
+    /// in the sparse case the format is (z, x) where the gate at label z is
+    /// the output of adding all values from labels x.
+    wiring: Vec<(usize, usize)>,
+
+    /// The source MLE of the expression, i.e. the mle that makes up the "x"
+    /// variables.
+    source_mle: VerifierMle<F>,
+
+    /// The challenge points for the claim on the [IdentityGate] layer.
+    claim_challenge_points: Vec<F>,
+
+    /// The challenges for `x`, as derived from sumcheck.
+    first_u_challenges: Vec<F>,
 }
 
 impl<F: FieldExt> VerifierLayer<F> for IdentityGateVerifierLayer<F> {
@@ -123,7 +274,7 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
     }
 
     fn layer_id(&self) -> LayerId {
-        todo!()
+        self.layer_id
     }
 }
 
