@@ -186,7 +186,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
     /// If the bookkeeping table has more than 1 element, it
     /// throws an ExpressionError::EvaluateNotFullyBoundError
     pub fn transform_to_circuit_expression(
-        mut self,
+        &mut self,
     ) -> Result<Expression<F, CircuitExpr>, ExpressionError> {
         self.index_mle_indices(0);
 
@@ -398,34 +398,7 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             )),
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle = mle_vec_idx.get_mle(mle_vec);
-                let layer_id = mle.get_layer_id();
-                let mle_indices = mle.mle_indices();
-
-                let all_indices_indexed = mle_indices.iter().all(|mle_index| match mle_index {
-                    MleIndex::IndexedBit(_) => true,
-                    MleIndex::Fixed(_) => true,
-                    _ => false,
-                });
-
-                if !all_indices_indexed {
-                    dbg!(&mle_indices);
-                    return Err(ExpressionError::EvaluateNotFullyIndexedError);
-                }
-
-                /*
-                let all_indices_fixed_or_iterated =
-                    mle_indices.iter().all(|mle_index| match mle_index {
-                        MleIndex::Fixed(_) => true,
-                        MleIndex::Iterated => true,
-                        _ => false,
-                    });
-
-                if !all_indices_fixed_or_iterated {
-                    return Err(ExpressionError::EvaluateNotFullyIndexedError);
-                }
-                */
-
-                Ok(ExpressionNode::Mle(CircuitMle::new(layer_id, mle_indices)))
+                Ok(ExpressionNode::Mle(CircuitMle::from_dense_mle(mle)?))
             }
             ExpressionNode::Negated(a) => Ok(ExpressionNode::Negated(Box::new(
                 a.transform_to_circuit_expression_node(mle_vec)?,
@@ -440,21 +413,9 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
                     .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec))
                     .collect_vec();
 
-                for mle in mles.iter() {
-                    let mle_indices = mle.mle_indices();
-                    let all_indices_indexed = mle_indices.iter().all(|mle_index| match mle_index {
-                        MleIndex::IndexedBit(_) => true,
-                        MleIndex::Fixed(_) => true,
-                        _ => false,
-                    });
-                    if !all_indices_indexed {
-                        return Err(ExpressionError::EvaluateNotFullyIndexedError);
-                    }
-                }
-
                 Ok(ExpressionNode::Product(
                     mles.into_iter()
-                        .map(|mle| CircuitMle::new(mle.get_layer_id(), mle.mle_indices()))
+                        .map(|mle| CircuitMle::from_dense_mle(mle).unwrap())
                         .collect_vec(),
                 ))
             }

@@ -247,6 +247,28 @@ impl<F: FieldExt> DenseMle<F> {
             original_mle_indices: mle_indices,
         }
     }
+
+    /// Constructs a new `DenseMle` with specified MLE indices, normally when we are
+    /// trying to construct a new MLE based off of a previous MLE, such as in [MatMult], but
+    /// want to preserve the "prefix bits."
+    ///
+    /// The MLE should not have ever been mutated if this function is ever called, so none of the
+    /// indices should ever be Indexed here.
+    pub fn new_with_indices(data: &[F], layer_id: LayerId, mle_indices: &[MleIndex<F>]) -> Self {
+        let mut mle = DenseMle::new_from_raw(data.to_vec(), layer_id);
+
+        let all_indices_iterated_or_fixed = mle_indices.iter().fold(true, |acc, index| {
+            acc && (index == &MleIndex::Iterated
+                || index == &MleIndex::Fixed(true)
+                || index == &MleIndex::Fixed(false))
+        });
+        assert!(all_indices_iterated_or_fixed);
+
+        mle.original_mle_indices = mle_indices.to_vec();
+        mle.mle_indices = mle_indices.to_vec();
+        mle
+    }
+
     /// Constructs a new `DenseMle` from an iterator over items of the [MleAble]
     /// type `T`.
     ///

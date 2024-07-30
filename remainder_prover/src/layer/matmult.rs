@@ -3,7 +3,6 @@
 use ::serde::{Deserialize, Serialize};
 use ark_std::{cfg_into_iter, end_timer, log2, start_timer};
 use itertools::Itertools;
-use log::debug;
 use ndarray::Array2;
 use rand::Rng;
 use remainder_shared_types::{
@@ -21,13 +20,9 @@ use crate::{
         wlx_eval::{get_num_wlx_evaluations, ClaimMle, YieldWLXEvals},
         Claim, ClaimError, YieldClaim,
     },
-    expression::{
-        circuit_expr::CircuitMle, expr_errors::ExpressionError, verifier_expr::VerifierMle,
-    },
+    expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::VerificationError,
-    layouter::nodes::matmult::MatMultNode,
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
-    prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, VerifyError},
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -37,30 +32,22 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct Matrix<F: FieldExt> {
-    mle: MultilinearExtension<F>,
+    mle: DenseMle<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
-    prefix_bits: Option<Vec<bool>>,
-    layer_id: Option<LayerId>,
 }
 
 impl<F: FieldExt> Matrix<F> {
     /// Create a new matrix, note that we require num_rows, and later converts this
     /// parameter to log(num_rows). This is necessary to check all dims are powers of 2
-    pub fn new(
-        mle: MultilinearExtension<F>,
-        num_rows: usize,
-        num_cols: usize,
-        prefix_bits: Option<Vec<bool>>,
-        layer_id: Option<LayerId>,
-    ) -> Matrix<F> {
-        assert_eq!(mle.get_evals_vector().len(), num_rows * num_cols);
+    pub fn new(mle: DenseMle<F>, num_rows: usize, num_cols: usize) -> Matrix<F> {
+        assert_eq!(mle.bookkeeping_table().len(), num_rows * num_cols);
 
         let mut new_bookkeeping_table = Vec::new();
         // pad the columns
         if 1 << log2(num_cols) != num_cols {
             let num_to_pad_each_row = (1 << log2(num_cols) as usize) - num_cols;
-            for chunk in mle.get_evals_vector().chunks(num_cols) {
+            for chunk in mle.bookkeeping_table().chunks(num_cols) {
                 new_bookkeeping_table.extend(
                     [chunk.to_vec(), vec![F::ZERO; num_to_pad_each_row]]
                         .into_iter()
@@ -68,7 +55,7 @@ impl<F: FieldExt> Matrix<F> {
                 )
             }
         } else {
-            new_bookkeeping_table = mle.get_evals_vector().to_vec();
+            new_bookkeeping_table = mle.bookkeeping_table().to_vec();
         }
 
         // pad the rows
@@ -80,16 +67,15 @@ impl<F: FieldExt> Matrix<F> {
                 .concat()
         }
 
-        let mle = MultilinearExtension::new(new_bookkeeping_table);
+        let mle =
+            DenseMle::new_with_indices(&new_bookkeeping_table, mle.layer_id(), &mle.mle_indices());
 
-        assert_eq!(padded_matrix_len, mle.get_evals_vector().len());
+        assert_eq!(padded_matrix_len, mle.bookkeeping_table().len());
 
         Matrix {
             mle,
             num_rows_vars: log2(num_rows) as usize,
             num_cols_vars: log2(num_cols) as usize,
-            prefix_bits,
-            layer_id,
         }
     }
 
@@ -105,9 +91,7 @@ impl<F: FieldExt> Matrix<F> {
 pub struct MatMult<F: FieldExt> {
     layer_id: LayerId,
     matrix_a: Matrix<F>,
-    mle_a: Option<DenseMle<F>>,
     matrix_b: Matrix<F>,
-    mle_b: Option<DenseMle<F>>,
     num_vars_middle_ab: Option<usize>,
 }
 
@@ -117,9 +101,7 @@ impl<F: FieldExt> MatMult<F> {
         MatMult {
             layer_id,
             matrix_a,
-            mle_a: None,
             matrix_b,
-            mle_b: None,
             num_vars_middle_ab: None,
         }
     }
@@ -131,11 +113,11 @@ impl<F: FieldExt> MatMult<F> {
         // check that both matrices are padded
         assert_eq!(
             (1 << self.matrix_a.num_cols_vars) * (1 << self.matrix_a.num_rows_vars),
-            matrix_a_mle.get_evals_vector().len()
+            matrix_a_mle.bookkeeping_table().len()
         );
         assert_eq!(
             (1 << self.matrix_b.num_cols_vars) * (1 << self.matrix_b.num_rows_vars),
-            matrix_b_mle.get_evals_vector().len()
+            matrix_b_mle.bookkeeping_table().len()
         );
 
         // check to make sure the dimensions match
@@ -146,19 +128,10 @@ impl<F: FieldExt> MatMult<F> {
         }
 
         let transpose_timer = start_timer!(|| "transpose matrix");
-        let matrix_a_transp = gen_transpose_matrix(&self.matrix_a);
+        let mut matrix_a_transp = gen_transpose_matrix(&self.matrix_a);
         end_timer!(transpose_timer);
 
-        let mut matrix_a_transp = DenseMle::new_with_prefix_bits(
-            matrix_a_transp.mle,
-            matrix_a_transp.layer_id.unwrap(),
-            matrix_a_transp.prefix_bits.unwrap_or(vec![]),
-        );
-        let mut matrix_b_mle = DenseMle::new_with_prefix_bits(
-            self.matrix_b.mle.clone(),
-            self.matrix_b.layer_id.unwrap(),
-            self.matrix_b.prefix_bits.clone().unwrap_or(vec![]),
-        );
+        let mut matrix_a_transp = matrix_a_transp.mle;
 
         matrix_a_transp.index_mle_indices(0);
         matrix_b_mle.index_mle_indices(0);
@@ -196,7 +169,7 @@ impl<F: FieldExt> MatMult<F> {
             .collect_vec();
         mle_a.index_mle_indices(0);
 
-        self.mle_a = Some(mle_a);
+        self.matrix_a.mle = mle_a;
 
         // bind the column indices of matrix b to relevant claim point
         claim_b.into_iter().enumerate().for_each(|(idx, chal)| {
@@ -216,8 +189,6 @@ impl<F: FieldExt> MatMult<F> {
             .collect_vec();
         matrix_b_mle.mle_indices = new_b_indices;
         matrix_b_mle.index_mle_indices(0);
-
-        self.mle_b = Some(matrix_b_mle)
     }
 
     /// dummy sumcheck prover for this, testing purposes
@@ -237,7 +208,7 @@ impl<F: FieldExt> MatMult<F> {
         let mut challenge: Option<F> = None;
 
         let first_message = compute_sumcheck_message_no_beta_table(
-            &[self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()],
+            &[self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
             0,
             2,
         )
@@ -251,16 +222,14 @@ impl<F: FieldExt> MatMult<F> {
             challenge = Some(F::from(rng.gen::<u64>()));
             let chal = challenge.unwrap();
             challenges.push(chal);
-            self.mle_a
-                .as_mut()
-                .unwrap()
+            self.matrix_a
+                .mle
                 .fix_variable(round - 1, challenge.clone().unwrap());
-            self.mle_b
-                .as_mut()
-                .unwrap()
+            self.matrix_b
+                .mle
                 .fix_variable(round - 1, challenge.clone().unwrap());
             let next_message = compute_sumcheck_message_no_beta_table(
-                &[self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()],
+                &[self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
                 round,
                 2,
             )
@@ -317,13 +286,11 @@ impl<F: FieldExt> MatMult<F> {
 
         let final_chal = F::from(rng.gen::<u64>());
         challenges.push(final_chal);
-        self.mle_a
-            .as_mut()
-            .unwrap()
+        self.matrix_a
+            .mle
             .fix_variable(num_vars_middle - 1, final_chal);
-        self.mle_b
-            .as_mut()
-            .unwrap()
+        self.matrix_b
+            .mle
             .fix_variable(num_vars_middle - 1, final_chal);
 
         let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
@@ -339,9 +306,9 @@ impl<F: FieldExt> MatMult<F> {
             .collect_vec();
 
         let fully_bound_a =
-            check_fully_bound(&mut [self.mle_a.clone().unwrap()], full_claim_chals_a).unwrap();
+            check_fully_bound(&mut [self.matrix_a.mle.clone()], full_claim_chals_a).unwrap();
         let fully_bound_b =
-            check_fully_bound(&mut [self.mle_b.clone().unwrap()], full_claim_chals_b).unwrap();
+            check_fully_bound(&mut [self.matrix_b.mle.clone()], full_claim_chals_b).unwrap();
         let matrix_product = fully_bound_a * fully_bound_b;
 
         if prev_at_r != matrix_product {
@@ -350,10 +317,27 @@ impl<F: FieldExt> MatMult<F> {
 
         Ok(())
     }
+
+    fn append_leaf_mles_to_transcript(
+        &self,
+        transcript_writer: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
+    ) {
+        assert_eq!(self.matrix_a.mle.bookkeeping_table().len(), 1);
+        assert_eq!(self.matrix_b.mle.bookkeeping_table().len(), 1);
+
+        transcript_writer.append_elements(
+            "Fully bound matrix evaluations",
+            &[
+                self.matrix_a.mle.bookkeeping_table()[0],
+                self.matrix_b.mle.bookkeeping_table()[0],
+            ],
+        );
+    }
 }
 
 impl<F: FieldExt> Layer<F> for MatMult<F> {
     // type Proof = Option<SumcheckProof<F>>;
+    type CircuitLayer = CircuitMatMultLayer<F>;
 
     fn prove_rounds(
         &mut self,
@@ -362,209 +346,130 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     ) -> Result<(), LayerError> {
         let mut claim_b = claim.get_point().clone();
         let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
-
-        let pre_process_timer = start_timer!(|| "start preprocessing step");
         self.pre_processing_step(claim_a, claim_b);
-        end_timer!(pre_process_timer);
 
         let mut challenges: Vec<F> = vec![];
-
-        let first_message = compute_sumcheck_message_no_beta_table(
-            &[self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()],
-            0,
-            2,
-        )
-        .unwrap();
-        transcript_writer.append_elements("Initial Sumcheck evaluations", &first_message);
-
-        let val = claim.get_result();
-        if val != first_message[0] + first_message[1] {
-            dbg!(&val);
-            dbg!(first_message[0] + first_message[1]);
-        }
-
         let num_vars_middle = self.num_vars_middle_ab.unwrap(); // TODO: raise error if not
 
-        let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
-            .chain((1..num_vars_middle).map(|round| {
-                let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-                challenges.push(challenge);
-                self.mle_a
-                    .as_mut()
-                    .unwrap()
-                    .fix_variable(round - 1, challenge);
-                self.mle_b
-                    .as_mut()
-                    .unwrap()
-                    .fix_variable(round - 1, challenge);
-                let next_message = compute_sumcheck_message_no_beta_table(
-                    &[self.mle_a.clone().unwrap(), self.mle_b.clone().unwrap()],
-                    round,
-                    2,
-                )
-                .unwrap();
-
-                transcript_writer.append_elements("Sumcheck evaluations", &next_message);
-                Ok::<_, LayerError>(next_message)
-            }))
-            .try_collect()?;
+        for round in 0..num_vars_middle {
+            let challenge = transcript_writer.get_challenge("Sumcheck challenge");
+            challenges.push(challenge);
+            self.matrix_a.mle.fix_variable(round - 1, challenge);
+            self.matrix_b.mle.fix_variable(round - 1, challenge);
+            let next_message = compute_sumcheck_message_no_beta_table(
+                &[self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
+                round,
+                2,
+            )
+            .unwrap();
+            transcript_writer.append_elements("Sumcheck evaluations", &next_message);
+        }
 
         let final_chal = transcript_writer.get_challenge("Final Sumcheck challenge for binding x");
         challenges.push(final_chal);
-        self.mle_a
-            .as_mut()
-            .unwrap()
+        self.matrix_a
+            .mle
             .fix_variable(num_vars_middle - 1, final_chal);
-        self.mle_b
-            .as_mut()
-            .unwrap()
+        self.matrix_b
+            .mle
             .fix_variable(num_vars_middle - 1, final_chal);
 
-        // Ok(Some(sumcheck_rounds.into()))
+        self.append_leaf_mles_to_transcript(transcript_writer);
         Ok(())
-    }
-
-    // /// Verifies the sumcheck protocol
-    // fn verify_rounds(
-    //     &mut self,
-    //     claim: Claim<F>,
-    //     sumcheck_prover_messages: Self::Proof,
-    //     transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
-    // ) -> Result<(), LayerError> {
-    //     let sumcheck_prover_messages = sumcheck_prover_messages.unwrap().0;
-    //     let mut challenges = vec![];
-
-    //     let mut prev_evals = &sumcheck_prover_messages[0];
-    //     let mut claim_b = claim.get_point().clone();
-    //     let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
-
-    //     let claimed_val = prev_evals[0] + prev_evals[1];
-
-    //     if claimed_val != claim.get_result() {
-    //         debug!("I'm the PROBLEM");
-    //         debug!("msg0 + msg1 =\n{:?}", prev_evals[0] + prev_evals[1]);
-    //         debug!("rest =\n{:?}", claim.get_result());
-    //         return Err(LayerError::VerificationError(
-    //             VerificationError::SumcheckStartFailed,
-    //         ));
-    //     }
-
-    //     let num_prev_evals = sumcheck_prover_messages[0].len();
-    //     transcript_reader
-    //         .consume_elements("Initial Sumcheck evaluations", num_prev_evals)
-    //         .unwrap();
-
-    //     // --- For round 1 < i < n, perform the check ---
-    //     // g_{i - 1}(r_i) = g_i(0) + g_i(1)
-    //     for curr_evals in sumcheck_prover_messages.iter().skip(1) {
-    //         let challenge = transcript_reader
-    //             .get_challenge("Sumcheck challenge")
-    //             .unwrap();
-
-    //         let prev_at_r =
-    //             evaluate_at_a_point(prev_evals, challenge).map_err(LayerError::InterpError)?;
-
-    //         if prev_at_r != curr_evals[0] + curr_evals[1] {
-    //             return Err(LayerError::VerificationError(
-    //                 VerificationError::SumcheckFailed,
-    //             ));
-    //         };
-
-    //         transcript_reader
-    //             .consume_elements("Sumcheck evaluations", curr_evals.len())
-    //             .unwrap();
-
-    //         prev_evals = curr_evals;
-    //         challenges.push(challenge);
-    //     }
-
-    //     // --- In the final round, we check that g(r_1, ..., r_n) = g_n(r_n) ---
-    //     // Here, we first sample r_n.
-    //     let final_chal = transcript_reader
-    //         .get_challenge("Final Sumcheck challenge")
-    //         .unwrap();
-    //     challenges.push(final_chal);
-
-    //     let prev_at_r = evaluate_at_a_point(prev_evals, final_chal).unwrap();
-    //     let full_claim_chals_a = challenges
-    //         .clone()
-    //         .into_iter()
-    //         .chain(claim_a.into_iter())
-    //         .collect_vec();
-    //     let full_claim_chals_b = claim_b
-    //         .into_iter()
-    //         .chain(challenges.into_iter())
-    //         .collect_vec();
-    //     let fully_bound_a =
-    //         check_fully_bound(&mut [self.mle_a.clone().unwrap()], full_claim_chals_a).unwrap();
-    //     let fully_bound_b =
-    //         check_fully_bound(&mut [self.mle_b.clone().unwrap()], full_claim_chals_b).unwrap();
-    //     let matrix_product = fully_bound_a * fully_bound_b;
-
-    //     if prev_at_r != matrix_product {
-    //         return Err(LayerError::VerificationError(
-    //             VerificationError::FinalSumcheckFailed,
-    //         ));
-    //     }
-
-    //     Ok(())
-    // }
-
-    /// TODO(ryancao, vishady) -- write circuit description for matmult!
-    type CircuitLayer = CircuitMatmultLayer<F>;
-
-    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
-        let circuit_a_matrix_mle = dense_mle_to_circuit_mle(&self.mle_a.as_ref().unwrap());
-        let circuit_b_matrix_mle = dense_mle_to_circuit_mle(&self.mle_b.as_ref().unwrap());
-        Ok(CircuitMatmultLayer {
-            layer_id: self.layer_id,
-            a_matrix_mle: circuit_a_matrix_mle,
-            b_matrix_mle: circuit_b_matrix_mle,
-        })
     }
 
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
-}
 
-/// TODO(ryancao): Move this to a separate `utils` file and use it everywhere
-/// TODO(ryancao): Make this do real error handling
-pub fn dense_mle_to_circuit_mle<F: FieldExt>(mle: &DenseMle<F>) -> CircuitMle<F> {
-    let layer_id = mle.get_layer_id();
-    let mle_indices = mle.mle_indices();
-
-    let all_indices_indexed = mle.mle_indices().iter().all(|mle_index| match mle_index {
-        MleIndex::IndexedBit(_) => true,
-        MleIndex::Fixed(_) => true,
-        _ => false,
-    });
-
-    // TODO(ryancao): Make this a more descriptive error
-    if !all_indices_indexed {
-        panic!("Error: Indices not indexed within `DenseMLE`");
+    fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
+        Ok(self.clone().into())
     }
-
-    CircuitMle::new(layer_id, mle_indices)
 }
 
-/// The circuit description counterpart of a Matmult layer.
+/// The circuit description counterpart of a [Matrix].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct CircuitMatmultLayer<F: FieldExt> {
-    /// The layer id associated with this gate layer.
-    layer_id: LayerId,
-
-    /// The LHS MLE to be multiplied.
-    /// TODO(vishady): Create new CircuitMatrixMLE/VerifierMatrixMLE struct which also keeps track of dimensionality!
-    a_matrix_mle: CircuitMle<F>,
-
-    /// The RHS MLE to be multiplied.
-    b_matrix_mle: CircuitMle<F>,
+pub struct CircuitMatrix<F: FieldExt> {
+    mle: CircuitMle<F>,
+    num_rows_vars: usize,
+    num_cols_vars: usize,
 }
 
-impl<F: FieldExt> CircuitLayer<F> for CircuitMatmultLayer<F> {
-    type VerifierLayer = VerifierMatmultLayer<F>;
+impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
+    fn from(matrix: Matrix<F>) -> Self {
+        let mut indexed_mle = matrix.mle.clone();
+        indexed_mle.index_mle_indices(0);
+        CircuitMatrix {
+            mle: CircuitMle::from_dense_mle(&indexed_mle).unwrap(),
+            num_rows_vars: matrix.num_rows_vars,
+            num_cols_vars: matrix.num_cols_vars,
+        }
+    }
+}
+/// The circuit description counterpart of a [MatMult] layer.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+pub struct CircuitMatMultLayer<F: FieldExt> {
+    /// The layer id associated with this matmult layer.
+    layer_id: LayerId,
+
+    /// The LHS Matrix to be multiplied.
+    matrix_a: CircuitMatrix<F>,
+
+    /// The RHS Matrix to be multiplied.
+    matrix_b: CircuitMatrix<F>,
+}
+
+impl<F: FieldExt> From<MatMult<F>> for CircuitMatMultLayer<F> {
+    /// Convert a [MatMult] to a [CircuitMatmultLayer].
+    fn from(matmult_layer: MatMult<F>) -> Self {
+        CircuitMatMultLayer {
+            layer_id: matmult_layer.layer_id,
+            matrix_a: matmult_layer.matrix_a.into(),
+            matrix_b: matmult_layer.matrix_b.into(),
+        }
+    }
+}
+
+impl<F: FieldExt> CircuitMatMultLayer<F> {
+    /// Convert a [CircuitMatMultLayer] to a [VerifierMatMultLayer], which represents a fully bound MatMult layer.
+    pub fn into_verifier_matmult_layer(
+        &self,
+        point_a: &[F],
+        point_b: &[F],
+        transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
+    ) -> VerifierMatMultLayer<F> {
+        let matrix_a = VerifierMatrix {
+            mle: self
+                .matrix_a
+                .mle
+                .into_verifier_mle(point_a, transcript_reader)
+                .unwrap(),
+            num_rows_vars: self.matrix_a.num_rows_vars,
+            num_cols_vars: self.matrix_a.num_cols_vars,
+        };
+
+        let matrix_b = VerifierMatrix {
+            mle: self
+                .matrix_b
+                .mle
+                .into_verifier_mle(point_b, transcript_reader)
+                .unwrap(),
+            num_rows_vars: self.matrix_b.num_rows_vars,
+            num_cols_vars: self.matrix_b.num_cols_vars,
+        };
+
+        VerifierMatMultLayer {
+            layer_id: self.layer_id,
+            matrix_a,
+            matrix_b,
+        }
+    }
+}
+
+impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
+    type VerifierLayer = VerifierMatMultLayer<F>;
 
     /// Gets this layer's id.
     fn layer_id(&self) -> LayerId {
@@ -576,39 +481,125 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatmultLayer<F> {
         claim: Claim<F>,
         transcript_reader: &mut TranscriptReader<F, impl TranscriptSponge<F>>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        todo!()
+        // First split the claim made on this layer to the according points that are bound to
+        // matrix A and matrix B.
+        let mut claim_b = claim.get_point().clone();
+        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+
+        // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
+        let mut challenges = vec![];
+
+        // Represents `g_{i-1}(x)` of the previous round.
+        // This is initialized to the constant polynomial `g_0(x)` which evaluates
+        // to the claim result for any `x`.
+        let mut g_prev_round = vec![claim.get_result()];
+
+        // Previous round's challege: r_{i-1}.
+        let mut prev_challenge = F::ZERO;
+
+        // Get the number of rounds, which is exactly the inner dimension of the matrix product.
+        assert_eq!(self.matrix_a.num_cols_vars, self.matrix_b.num_rows_vars);
+        let num_rounds = self.matrix_a.num_cols_vars;
+
+        // For round 1 <= i <= n, perform the check:
+        for _round in 0..num_rounds {
+            let degree = 2;
+
+            let g_cur_round = transcript_reader
+                .consume_elements("Sumcheck message", degree + 1)
+                .map_err(|err| VerificationError::TranscriptError(err))?;
+
+            // Sample random challenge `r_i`.
+            let challenge = transcript_reader.get_challenge("Sumcheck challenge")?;
+
+            // Verify that:
+            //       `g_i(0) + g_i(1) == g_{i - 1}(r_{i-1})`
+            let g_i_zero = evaluate_at_a_point(&g_cur_round, F::ZERO).unwrap();
+            let g_i_one = evaluate_at_a_point(&g_cur_round, F::ONE).unwrap();
+            let g_prev_r_prev = evaluate_at_a_point(&g_prev_round, prev_challenge).unwrap();
+
+            if g_i_zero + g_i_one != g_prev_r_prev {
+                return Err(VerificationError::SumcheckFailed);
+            }
+
+            g_prev_round = g_cur_round;
+            prev_challenge = challenge;
+            challenges.push(challenge);
+        }
+
+        // Evalute `g_n(r_n)`.
+        // Note: If there were no nonlinear rounds, this value reduces to
+        // `claim.get_result()` due to how we initialized `g_prev_round`.
+        let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
+
+        let full_claim_chals_a = challenges
+            .clone()
+            .into_iter()
+            .chain(claim_a.into_iter())
+            .collect_vec();
+        let full_claim_chals_b = claim_b
+            .into_iter()
+            .chain(challenges.into_iter())
+            .collect_vec();
+
+        let verifier_layer: VerifierMatMultLayer<F> = self.into_verifier_matmult_layer(
+            &full_claim_chals_a,
+            &full_claim_chals_b,
+            transcript_reader,
+        );
+
+        let matrix_product = verifier_layer.evaluate();
+
+        if g_final_r_final != matrix_product {
+            return Err(VerificationError::FinalSumcheckFailed);
+        }
+
+        Ok(verifier_layer)
     }
 }
 
-/// The verifier's counterpart of a Matmult layer.
-///
-/// TODO(ryancao): Ask Makis why the `CircuitLayer` is different from the `VerifierLayer`
+/// The verifier's counterpart of a [Matrix].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct VerifierMatmultLayer<F: FieldExt> {
+pub struct VerifierMatrix<F: FieldExt> {
+    mle: VerifierMle<F>,
+    num_rows_vars: usize,
+    num_cols_vars: usize,
+}
+
+/// The verifier's counterpart of a [MatMult] layer.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(bound = "F: FieldExt")]
+pub struct VerifierMatMultLayer<F: FieldExt> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
 
-    /// The LHS MLE to be multiplied.
-    /// TODO(vishady): Create new CircuitMatrixMLE/VerifierMatrixMLE struct which also keeps track of dimensionality!
-    a_matrix_mle: VerifierMle<F>,
+    /// The LHS Matrix to be multiplied.
+    matrix_a: VerifierMatrix<F>,
 
-    /// The RHS MLE to be multiplied.
-    b_matrix_mle: VerifierMle<F>,
+    /// The RHS Matrix to be multiplied.
+    matrix_b: VerifierMatrix<F>,
 }
 
-impl<F: FieldExt> VerifierLayer<F> for VerifierMatmultLayer<F> {
+impl<F: FieldExt> VerifierLayer<F> for VerifierMatMultLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 }
 
-impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierMatmultLayer<F> {
+impl<F: FieldExt> VerifierMatMultLayer<F> {
+    fn evaluate(&self) -> F {
+        self.matrix_a.mle.value() * self.matrix_b.mle.value()
+    }
+}
+
+impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierMatMultLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        let claims = vec![&self.a_matrix_mle, &self.b_matrix_mle]
+        let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
             .map(|matrix| {
                 let matrix_fixed_indices = matrix
+                    .mle
                     .mle_indices()
                     .into_iter()
                     .map(|index| {
@@ -619,8 +610,8 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierMatmultLayer<F> {
                     })
                     .collect_vec();
 
-                let mle_layer_id = matrix.layer_id();
-                let matrix_claimed_val = matrix.value();
+                let mle_layer_id = matrix.mle.layer_id();
+                let matrix_claimed_val = matrix.mle.value();
 
                 // Dummy MLE ref.
                 // TODO(ryancao): Fix things so that we don't need to pass this around... This is not right
@@ -633,7 +624,7 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierMatmultLayer<F> {
                     matrix_fixed_indices,
                     matrix_claimed_val,
                     Some(self.layer_id.clone()),
-                    Some(matrix.layer_id()),
+                    Some(matrix.mle.layer_id()),
                     Some(mle_ref),
                 );
                 claim
@@ -647,12 +638,10 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for VerifierMatmultLayer<F> {
 impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MatMult<F> {
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        let claims = vec![&self.mle_a, &self.mle_b]
+        let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
             .into_iter()
-            .map(|matrix| {
-                let matrix_fixed_indices = matrix
-                    .as_ref()
-                    .unwrap()
+            .map(|matrix_mle| {
+                let matrix_fixed_indices = matrix_mle
                     .mle_indices()
                     .into_iter()
                     .map(|index| {
@@ -663,13 +652,13 @@ impl<F: FieldExt> YieldClaim<F, ClaimMle<F>> for MatMult<F> {
                     })
                     .collect_vec();
 
-                let matrix_val = matrix.as_ref().unwrap().bookkeeping_table()[0];
+                let matrix_val = matrix_mle.bookkeeping_table()[0];
                 let claim: ClaimMle<F> = ClaimMle::new(
                     matrix_fixed_indices,
                     matrix_val,
                     Some(self.layer_id.clone()),
-                    Some(matrix.as_ref().unwrap().layer_id),
-                    Some(MleEnum::Dense(matrix.clone().unwrap())),
+                    Some(matrix_mle.layer_id),
+                    Some(MleEnum::Dense(matrix_mle.clone())),
                 );
                 claim
             })
@@ -732,22 +721,10 @@ impl<F: std::fmt::Debug + FieldExt> MatMult<F> {
         impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for MatMultCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("MatMult")
-                    .field(
-                        "matrix_a_layer_id",
-                        &self.0.mle_a.as_ref().unwrap().layer_id,
-                    )
-                    .field(
-                        "matrix_a_mle_indices",
-                        &self.0.mle_a.as_ref().unwrap().mle_indices,
-                    )
-                    .field(
-                        "matrix_b_layer_id",
-                        &self.0.mle_b.as_ref().unwrap().layer_id,
-                    )
-                    .field(
-                        "matrix_b_mle_indices",
-                        &self.0.mle_b.as_ref().unwrap().mle_indices,
-                    )
+                    .field("matrix_a_layer_id", &self.0.matrix_a.mle.layer_id)
+                    .field("matrix_a_mle_indices", &self.0.matrix_a.mle.mle_indices)
+                    .field("matrix_b_layer_id", &self.0.matrix_b.mle.layer_id)
+                    .field("matrix_b_mle_indices", &self.0.matrix_b.mle.mle_indices)
                     .field("num_vars_middle_ab", &self.0.matrix_a.num_cols_vars)
                     .finish()
             }
@@ -761,9 +738,11 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
     let num_rows = 1 << matrix.num_rows_vars;
     let num_cols = 1 << matrix.num_cols_vars;
 
-    let matrix_array_2 =
-        Array2::from_shape_vec((num_rows, num_cols), matrix.mle.get_evals_vector().to_vec())
-            .unwrap();
+    let matrix_array_2 = Array2::from_shape_vec(
+        (num_rows, num_cols),
+        matrix.mle.bookkeeping_table().to_vec(),
+    )
+    .unwrap();
     let matrix_transpose = matrix_array_2.reversed_axes();
     let matrix_transp_vec = matrix_transpose
         .outer_iter()
@@ -771,15 +750,13 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
         .flat_map(|row| row)
         .collect_vec();
 
-    let mle = MultilinearExtension::new(matrix_transp_vec);
+    let mle = DenseMle::new_with_indices(
+        &matrix_transp_vec,
+        matrix.mle.layer_id,
+        &matrix.mle.mle_indices,
+    );
 
-    Matrix::new(
-        mle,
-        num_rows,
-        num_cols,
-        matrix.prefix_bits.clone(),
-        matrix.layer_id.clone(),
-    )
+    Matrix::new(mle, num_rows, num_cols)
 }
 
 /// Multiply two matrices together, with a transposed matrix_b
@@ -790,12 +767,12 @@ pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix
 
     let product_matrix = matrix_a
         .mle
-        .get_evals_vector()
+        .bookkeeping_table()
         .chunks(num_middle_ab as usize)
         .flat_map(|chunk_a| {
             matrix_b_transpose
                 .mle
-                .get_evals_vector()
+                .bookkeeping_table()
                 .chunks(num_middle_ab)
                 .map(|chunk_b| {
                     chunk_a
@@ -838,8 +815,8 @@ mod test {
         ];
         let mle_vec_b = vec![Fr::from(3), Fr::from(5), Fr::from(9), Fr::from(6)];
 
-        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 4, 2, None, None);
-        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 2, 2, None, None);
+        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 4, 2);
+        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 2, 2);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -904,8 +881,8 @@ mod test {
             Fr::from(4),
         ];
 
-        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 8, 4, None, None);
-        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 4, 2, None, None);
+        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 8, 4);
+        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 4, 2);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -962,8 +939,8 @@ mod test {
             Fr::from(3),
         ];
 
-        let matrix_a = Matrix::new(MultilinearExtension::new(mle_vec_a), 5, 3, None, None);
-        let matrix_b = Matrix::new(MultilinearExtension::new(mle_vec_b), 3, 3, None, None);
+        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 5, 3);
+        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 3, 3);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
 
@@ -991,9 +968,9 @@ mod test {
             Fr::from(3 * 9 + 10 * 9 + 2 * 3),
         ];
 
-        let matrix_out = Matrix::new(MultilinearExtension::new(exp_product), 5, 3, None, None);
+        let matrix_out = Matrix::new(DenseMle::new_from_raw(exp_product, LayerId::Layer(0)), 5, 3);
 
-        assert_eq!(res_product, matrix_out.mle.get_evals_vector().clone());
+        assert_eq!(res_product, matrix_out.mle.bookkeeping_table().clone());
     }
 
     #[test]
@@ -1005,19 +982,15 @@ mod test {
         let matrix_a_vec = vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(1)];
         let matrix_b_vec = vec![Fr::from(1), Fr::from(1), Fr::from(1), Fr::from(1)];
 
-        let matrix_a: Matrix<Fr> = Matrix::new(
-            MultilinearExtension::new(matrix_a_vec),
+        let matrix_a = Matrix::new(
+            DenseMle::new_from_raw(matrix_a_vec, LayerId::Layer(0)),
             2,
             2,
-            None,
-            Some(LayerId::Input(0)),
         );
-        let matrix_b: Matrix<Fr> = Matrix::new(
-            MultilinearExtension::new(matrix_b_vec),
+        let matrix_b = Matrix::new(
+            DenseMle::new_from_raw(matrix_b_vec, LayerId::Layer(0)),
             2,
             2,
-            None,
-            Some(LayerId::Input(0)),
         );
 
         let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
@@ -1046,19 +1019,15 @@ mod test {
         ];
         let matrix_b_vec = vec![Fr::from(1), Fr::from(2), Fr::from(1), Fr::from(1)];
 
-        let matrix_a: Matrix<Fr> = Matrix::new(
-            MultilinearExtension::new(matrix_a_vec),
+        let matrix_a = Matrix::new(
+            DenseMle::new_from_raw(matrix_a_vec, LayerId::Layer(0)),
             2,
             4,
-            None,
-            Some(LayerId::Input(0)),
         );
-        let matrix_b: Matrix<Fr> = Matrix::new(
-            MultilinearExtension::new(matrix_b_vec),
+        let matrix_b = Matrix::new(
+            DenseMle::new_from_raw(matrix_b_vec, LayerId::Layer(0)),
             4,
             1,
-            None,
-            Some(LayerId::Input(0)),
         );
 
         let mut matrix_init: MatMult<Fr> = MatMult::new(LayerId::Input(0), matrix_a, matrix_b);
@@ -1102,20 +1071,8 @@ mod test {
             Fr::from(3),
         ];
 
-        let matrix_a = Matrix::new(
-            MultilinearExtension::new(mle_vec_a),
-            5,
-            3,
-            None,
-            Some(LayerId::Input(0)),
-        );
-        let matrix_b = Matrix::new(
-            MultilinearExtension::new(mle_vec_b),
-            3,
-            3,
-            None,
-            Some(LayerId::Input(0)),
-        );
+        let matrix_a = Matrix::new(DenseMle::new_from_raw(mle_vec_a, LayerId::Layer(0)), 5, 3);
+        let matrix_b = Matrix::new(DenseMle::new_from_raw(mle_vec_b, LayerId::Layer(0)), 3, 3);
 
         let res_product = product_two_matrices(&matrix_a, &matrix_b);
         let mut mle_product_ref = DenseMle::new_from_raw(res_product, LayerId::Input(0));
