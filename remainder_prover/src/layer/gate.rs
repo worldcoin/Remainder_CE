@@ -137,13 +137,6 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         sumcheck_rounds.extend(phase_1_rounds.0);
         sumcheck_rounds.extend(phase_2_rounds.0);
 
-        // --- Okay let's just see if the things we sent are reasonable ---
-        // let f_n_at_r_n = evaluate_at_a_point(
-        //     &sumcheck_rounds[sumcheck_rounds.len() - 1],
-        //     self.challenges[self.challenges.len() - 1],
-        // )
-        // .unwrap();
-
         // --- Finally, send the claimed values for each of the bound MLEs to the verifier ---
         // First, send the claimed value of V_{i + 1}(g_2, u)
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
@@ -169,6 +162,10 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
     /// IS NOT NECESSARILY A GOOD ASSUMPTION AND WE SHOULD HAVE A CIRCUIT DESCRIPTION
     /// WHICH CAN BE GENERATED INDEPENDENTLY OF WHETHER THE PROVER HAS ALREADY
     /// PERFORMED SUMCHECK OVER IT!!!
+    ///
+    /// ADDITIONALLY, WE SHOULD NOT BE INDEXING MLE INDICES HERE -- RATHER, WE
+    /// SHOULD DO IT ONCE AT THE VERY BEGINNING, AND GENERATE BOTH PROVER AND
+    /// VERIFIER CIRCUIT DESCRIPTIONS FROM SUCH
     fn into_circuit_layer(&self) -> Result<CircuitGateLayer<F>, LayerError> {
         let mut lhs_clone_indexed = self.lhs.clone();
         let mut rhs_clone_indexed = self.rhs.clone();
@@ -302,12 +299,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
                 (false, BinaryOperation::Add) => NON_DATAPARALLEL_ROUND_ADD_NUM_EVALS,
                 (false, BinaryOperation::Mul) => NON_DATAPARALLEL_ROUND_MUL_NUM_EVALS,
             };
-            dbg!(
-                sumcheck_round_idx,
-                self.gate_operation,
-                self.num_dataparallel_bits,
-                univariate_num_evals
-            );
+
             let curr_evals = transcript_reader
                 .consume_elements("Sumcheck evaluations", univariate_num_evals)
                 .unwrap();
