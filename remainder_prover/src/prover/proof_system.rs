@@ -1,5 +1,7 @@
 use remainder_shared_types::{
-    transcript::{poseidon_transcript::PoseidonSponge, TranscriptSponge},
+    transcript::{
+        poseidon_transcript::PoseidonSponge, test_transcript::TestSponge, TranscriptSponge,
+    },
     FieldExt,
 };
 
