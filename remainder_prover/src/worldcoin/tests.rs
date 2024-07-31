@@ -20,7 +20,7 @@ mod tests {
     use crate::utils::pad_to_nearest_power_of_two;
     use crate::worldcoin::components::DigitRecompComponent;
     use crate::worldcoin::components::IdentityGateComponent;
-    use crate::worldcoin::components::SignedRecompComponent;
+    use crate::worldcoin::components::SignCheckerComponent;
     // use crate::worldcoin::circuits::{WorldcoinCircuit, WorldcoinCircuitPrecommit};
     use crate::worldcoin::data::{
         load_data, load_data_from_serialized_inputs, WorldcoinCircuitData, WorldcoinData,
@@ -42,24 +42,64 @@ mod tests {
     use log::LevelFilter;
     use std::io::Write;
 
+
+    #[test]
+    fn test_sign_checker() {
+        let values = vec![ Fr::from(3u64), Fr::from(2u64).neg() ];
+        let abs_values = vec![ Fr::from(3u64), Fr::from(2u64)];
+        let sign_bits = vec![
+            Fr::from(1u64), // positive
+            Fr::from(0u64), // negative
+        ];
+
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let abs_values_shred = get_input_shred_from_vec(abs_values.clone(), ctx, &input_layer);
+            let sign_bits_input_shred = get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
+            let values_input_shred = get_input_shred_from_vec(values.clone(), ctx, &input_layer);
+
+            let sign_checker = SignCheckerComponent::new(
+                ctx,
+                &values_input_shred,
+                &sign_bits_input_shred,
+                &abs_values_shred,
+            );
+
+            let output = OutputNode::new_zero(ctx, &sign_checker.sector);
+
+            let all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                abs_values_shred.into(),
+                sign_bits_input_shred.into(),
+                values_input_shred.into(),
+                sign_checker.sector.into(),
+                output.into(),
+            ];
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        });
+
+        test_circuit(circuit, None);
+    }
+
     #[test]
     fn test_recomposition() {
         let base = 16;
         // it's a length 2 decomposition
         let digits = vec![
+            // vec![
+            //     Fr::from(1u64),
+            //     Fr::from(0u64)], // MSB
             vec![
-                //Fr::from(1u64),
-                Fr::from(0u64)], // MSB
-            vec![
-                //Fr::from(3u64),
+                Fr::from(3u64),
                 Fr::from(2u64)], // LSB
         ];
         let sign_bits = vec![
-            //Fr::from(1u64), // positive
+            Fr::from(1u64), // positive
             Fr::from(0u64), // negative
         ];
         let expected = vec![
-            //Fr::from(19u64),
+            Fr::from(3u64),
             Fr::from(2u64).neg()
         ];
 
@@ -75,7 +115,7 @@ mod tests {
                 .collect_vec();
             let recomp_of_abs_value = DigitRecompComponent::new(ctx, &digits_input_refs, base);
 
-            let signed_recomp_checker = SignedRecompComponent::new(
+            let signed_recomp_checker = SignCheckerComponent::new(
                 ctx,
                 &expected_input_shred,
                 &sign_bits_input_shred,
@@ -172,7 +212,7 @@ mod tests {
                 ctx,
                 &input_layer,
             );
-            let recomp_check_builder = SignedRecompComponent::new(
+            let recomp_check_builder = SignCheckerComponent::new(
                 ctx,
                 &result_of_matmult,
                 &iris_code_input_shred,

@@ -98,11 +98,11 @@ where
     }
 }
 
-pub struct SignedRecompComponent<F: FieldExt> {
+pub struct SignCheckerComponent<F: FieldExt> {
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> SignedRecompComponent<F> {
+impl<F: FieldExt> SignCheckerComponent<F> {
     /// Calculates (values + abs_values) + -2 * sign_bits * abs_values
     /// (So sign bit of 0 indicates negative, 1 indicates positive).
     pub fn new(
@@ -156,7 +156,7 @@ impl<F: FieldExt> SignedRecompComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for SignedRecompComponent<F>
+impl<F: FieldExt, N> Component<N> for SignCheckerComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
