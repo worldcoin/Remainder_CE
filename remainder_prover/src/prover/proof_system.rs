@@ -337,8 +337,13 @@ pub trait ProofSystem<F: FieldExt> {
     /// The MleRef type that serves as the output layer representation
     type OutputLayer: OutputLayer<
             F,
-            CircuitOutputLayer: CircuitOutputLayer<F, VerifierOutputLayer: YieldClaim<ClaimMle<F>>>,
-        > + YieldClaim<ClaimMle<F>>
+            CircuitOutputLayer: CircuitOutputLayer<
+                F,
+                VerifierOutputLayer: YieldClaim<
+                    <Self::ClaimAggregator as ClaimAggregator<F>>::Claim,
+                >,
+            >,
+        > + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>
         + Serialize
         + for<'de> Deserialize<'de>
         + Debug;

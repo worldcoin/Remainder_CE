@@ -149,11 +149,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
 
 impl<F: FieldExt> RandomInputLayer<F> {
     /// Generates a random MLE of size `size` that is generated from the FS Transcript
-    pub fn new(
-        transcript: &mut TranscriptWriter<F, impl TranscriptSponge<F>>,
-        size: usize,
-        layer_id: LayerId,
-    ) -> Self {
+    pub fn new(transcript: &mut impl ProverTranscript<F>, size: usize, layer_id: LayerId) -> Self {
         let mle = transcript.get_challenges("Random Input Layer Challenges", size);
         Self { mle, layer_id }
     }

@@ -9,8 +9,6 @@ pub mod proof_system;
 /// Struct for representing a list of layers
 pub mod layers;
 
-use std::marker::PhantomData;
-
 use self::{layers::Layers, proof_system::ProofSystem};
 use crate::expression::verifier_expr::VerifierMle;
 use crate::input_layer::VerifierInputLayer;
@@ -27,11 +25,13 @@ use crate::{
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use proof_system::DefaultProofSystem;
+use remainder_shared_types::transcript::ProverTranscript;
 use remainder_shared_types::transcript::{
-    ProverTranscript, Transcript, TranscriptReader, TranscriptReaderError, TranscriptWriter,
+    Transcript, TranscriptReader, TranscriptReaderError, TranscriptWriter,
 };
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
 use thiserror::Error;
 use tracing::{debug, info};
 use tracing::{instrument, span, Level};
@@ -134,6 +134,10 @@ impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
 /// Controls claim aggregation behavior.
 pub const ENABLE_OPTIMIZATION: bool = true;
 
+/// A helper type for easier reference to a circuit's Transcript
+pub type CircuitTranscript<F, C> =
+    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Transcript;
+
 /// A helper type alias for easier reference to a circuits InputLayer
 pub type CircuitInputLayer<F, C> =
     <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::InputLayer;
@@ -189,8 +193,11 @@ pub trait GKRCircuit<F: FieldExt> {
     #[instrument(skip_all, err)]
     fn prove(
         &mut self,
-        mut transcript_writer: impl ProverTranscript<F>,
-    ) -> Result<(Transcript<F>, GKRVerifierKey<F, Self::ProofSystem>), GKRError> {
+        mut transcript_writer: TranscriptWriter<F, CircuitTranscript<F, Self>>,
+    ) -> Result<(Transcript<F>, GKRVerifierKey<F, Self::ProofSystem>), GKRError>
+    where
+        CircuitTranscript<F, Self>: Sync,
+    {
         let synthesize_commit_timer = start_timer!(|| "Circuit synthesize and commit");
         info!("Synethesizing circuit...");
 
@@ -253,7 +260,7 @@ pub trait GKRCircuit<F: FieldExt> {
             let layer_id = layer.layer_id();
 
             let layer_timer = start_timer!(|| format!("Generating proof for layer {:?}", layer_id));
-            let layer_id_trace_repr = format!("{}", layer_id);
+            let layer_id_trace_repr = format!("{:?}", layer_id);
             let layer_sumcheck_proving_span = span!(
                 Level::DEBUG,
                 "layer_sumcheck_proving_span",
@@ -341,7 +348,8 @@ pub trait GKRCircuit<F: FieldExt> {
     where
         Self::ProofSystem: ProofSystem<F, Layer = LayerEnum<F>>,
     {
-        let mut transcript_writer = ProverTranscript::new("Circuit Hash");
+        let mut transcript_writer =
+            TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
         let (Witness { layers, .. }, _, _) =
             self.synthesize_and_commit(&mut transcript_writer).unwrap();
 
