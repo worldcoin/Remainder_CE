@@ -19,6 +19,7 @@ mod tests {
     use crate::utils::get_input_shred_from_vec;
     use crate::utils::pad_to_nearest_power_of_two;
     use crate::worldcoin::components::DigitRecompComponent;
+    use crate::worldcoin::components::EqualityCheckerComponent;
     use crate::worldcoin::components::IdentityGateComponent;
     use crate::worldcoin::components::SignCheckerComponent;
     // use crate::worldcoin::circuits::{WorldcoinCircuit, WorldcoinCircuitPrecommit};
@@ -42,6 +43,37 @@ mod tests {
     use log::LevelFilter;
     use std::io::Write;
 
+
+    #[test]
+    fn test_equality_checker() {
+        let values = vec![ Fr::from(3u64), Fr::from(2u64).neg() ];
+
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let lhs = get_input_shred_from_vec(values.clone(), ctx, &input_layer);
+            let rhs = get_input_shred_from_vec(values.clone(), ctx, &input_layer);
+
+            let component = EqualityCheckerComponent::new(
+                ctx,
+                &lhs,
+                &rhs,
+            );
+
+            let output = OutputNode::new_zero(ctx, &component.sector);
+
+            let all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                lhs.into(),
+                rhs.into(),
+                component.sector.into(),
+                output.into(),
+            ];
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        });
+
+        test_circuit(circuit, None);
+    }
 
     #[test]
     fn test_sign_checker() {

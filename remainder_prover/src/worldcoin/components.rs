@@ -98,6 +98,53 @@ where
     }
 }
 
+pub struct EqualityCheckerComponent<F: FieldExt> {
+    pub sector: Sector<F>,
+}
+impl<F: FieldExt> EqualityCheckerComponent<F> {
+    /// Checks if two MLEs are equal.
+    pub fn new(
+        ctx: &Context,
+        lhs: &dyn ClaimableNode<F = F>,
+        rhs: &dyn ClaimableNode<F = F>,
+    ) -> Self {
+        let sector = Sector::new(
+            ctx,
+            &[lhs, rhs],
+            |input_nodes| {
+                assert_eq!(input_nodes.len(), 2);
+                input_nodes[0].expr() - input_nodes[1].expr()
+            },
+            |data| {
+                assert_eq!(data.len(), 2);
+                let values = data[0].get_evals_vector()
+                    .iter()
+                    .zip(data[1].get_evals_vector())
+                    .map(|((value_lhs, value_rhs))| {
+                        *value_lhs - *value_rhs
+                    })
+                    .collect_vec();
+                assert!(all(values.into_iter(), |val| val == F::ZERO));
+                MultilinearExtension::new_sized_zero(data[0].num_vars())
+            },
+        );
+
+        Self {
+            sector,
+        }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for EqualityCheckerComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.sector.into()]
+    }
+}
+
+
 pub struct SignCheckerComponent<F: FieldExt> {
     pub sector: Sector<F>,
 }
@@ -144,7 +191,7 @@ impl<F: FieldExt> SignCheckerComponent<F> {
                         *values + *abs_val + F::from(2).neg() * signed * abs_val
                     })
                     .collect_vec();
-                all(values.into_iter(), |val| val == F::ZERO);
+                assert!(all(values.into_iter(), |val| val == F::ZERO));
 
                 MultilinearExtension::new_sized_zero(data[0].num_vars())
             },
