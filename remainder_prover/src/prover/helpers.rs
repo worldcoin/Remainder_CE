@@ -1,6 +1,7 @@
 use crate::prover::GKRCircuit;
 use ark_std::{end_timer, start_timer};
 
+use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::transcript::{TranscriptReader, TranscriptSponge, TranscriptWriter};
 use remainder_shared_types::FieldExt;
 use serde_json;
@@ -17,7 +18,7 @@ pub fn test_circuit<F: FieldExt, C: GKRCircuit<F, ProofSystem = PR>, PR>(
 ) where
     PR: ProofSystem<F>,
 {
-    let mut transcript_writer = TranscriptWriter::<F, C>::new("GKR Prover Transcript");
+    let transcript_writer = TranscriptWriter::<F, PR::Transcript>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
     match circuit.prove(transcript_writer) {
@@ -42,8 +43,7 @@ pub fn test_circuit<F: FieldExt, C: GKRCircuit<F, ProofSystem = PR>, PR>(
                 transcript
             };
 
-            let mut transcript_reader =
-                TranscriptReader::<_, TranscriptWriter<F, C>>::new(transcript);
+            let mut transcript_reader = TranscriptReader::<_, PR::Transcript>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
             match gkr_circuit_description.verify(&mut transcript_reader) {

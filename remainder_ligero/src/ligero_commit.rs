@@ -2,8 +2,8 @@ use crate::ligero_ml_helper::get_ml_inner_outer_tensors;
 use crate::ligero_structs::{LigeroAuxInfo, LigeroCommit, LigeroRoot};
 use crate::FieldExt;
 use crate::{verify, ProverError};
-use remainder_shared_types::transcript::TranscriptReader;
 use remainder_shared_types::transcript::{ProverTranscript, TranscriptSponge};
+use remainder_shared_types::transcript::{TranscriptReader, VerifierTranscript};
 use tracing::instrument;
 
 use super::poseidon_ligero::PoseidonSpongeHasher;
@@ -114,10 +114,10 @@ pub fn remainder_ligero_eval_prove<F: FieldExt>(
 /// ```
 /// // TODO!(ryancao) -- see tests below!
 /// ```
-pub fn remainder_ligero_verify<F: FieldExt, T: TranscriptSponge<F>>(
+pub fn remainder_ligero_verify<F: FieldExt>(
     commit_root: F,
     aux: &LigeroAuxInfo<F>,
-    tr: &mut TranscriptReader<F, T>,
+    tr: &mut impl VerifierTranscript<F>,
     challenge_coord: &[F],
     claimed_value: F,
 ) {
@@ -201,7 +201,7 @@ pub mod tests {
         let mut transcript_reader = TranscriptReader::<Fr, PoseidonSponge<Fr>>::new(transcript);
         let transcript_commit_result = transcript_reader.consume_element("root").unwrap();
 
-        remainder_ligero_verify::<Fr, PoseidonSponge<Fr>>(
+        remainder_ligero_verify::<Fr>(
             transcript_commit_result,
             &aux,
             &mut transcript_reader,

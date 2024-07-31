@@ -211,7 +211,7 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
     ) -> Result<(), InputLayerError> {
         let num_coeffs = 2_usize.pow(claim.get_num_vars() as u32);
         let ligero_aux = &self.aux;
-        remainder_ligero_verify::<F, _>(
+        remainder_ligero_verify::<F>(
             commitment.root,
             ligero_aux,
             transcript_reader,

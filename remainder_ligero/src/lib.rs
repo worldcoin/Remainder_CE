@@ -19,6 +19,7 @@ to the codebase.
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
 use ark_std::{end_timer, start_timer};
+use halo2_proofs::poly::commitment::Prover;
 use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
 use poseidon_ligero::PoseidonSpongeHasher;
@@ -244,11 +245,11 @@ where
     /// ## Returns
     /// * `proof` - Ligero evaluation proof for committed polynomial at the
     ///     challenge point represented by `outer_tensor`
-    pub fn prove<T: TranscriptSponge<F>>(
+    pub fn prove(
         &self,
         outer_tensor: &[F],
         enc: &E,
-        tr: &mut TranscriptWriter<F, T>,
+        tr: &mut impl ProverTranscript<F>,
     ) -> ProverResult<(), ErrT<E, F>> {
         prove(self, outer_tensor, enc, tr)
     }
@@ -757,16 +758,15 @@ const fn log2(v: usize) -> usize {
 /// * `proof` - Ligero evaluation proof, i.e. columns + Merkle paths
 /// * `enc` - Encoding for computing M --> M'
 /// * `tr` - Fiat-Shamir transcript
-fn verify<E, F, T>(
+fn verify<E, F>(
     root: &F,
     outer_tensor: &[F],
     inner_tensor: &[F],
     aux: &E,
-    transcript_reader: &mut TranscriptReader<F, T>,
+    transcript_reader: &mut impl VerifierTranscript<F>,
 ) -> VerifierResult<F, ErrT<E, F>>
 where
     F: FieldExt,
-    T: TranscriptSponge<F>,
     E: LcEncoding<F> + Send + Sync,
 {
     // --- Grab ONE global copy of Merkle + column hashing Poseidon ---

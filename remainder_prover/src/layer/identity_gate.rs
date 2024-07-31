@@ -61,7 +61,7 @@ const DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
 const NON_DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
 
 impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
-    type VerifierLayer = IdentityGateVerifierLayer<F>;
+    type VerifierLayer = VerifierIdentityGateLayer<F>;
 
     fn layer_id(&self) -> LayerId {
         self.id
@@ -92,7 +92,7 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
         let mut challenges = vec![];
 
         // --- Grab the first round prover sumcheck message g_1(x) ---
-        let sumcheck_messages: Vec<Vec<F>> = vec![];
+        let mut sumcheck_messages: Vec<Vec<F>> = vec![];
         let first_round_sumcheck_messages = transcript_reader.consume_elements(
             "Initial sumcheck evaluations",
             NON_DATAPARALLEL_ROUND_ID_NUM_EVALS,
@@ -103,9 +103,7 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
         // TODO(ryancao): SUPER overloaded notation (in e.g. above comments); fix across the board
         if first_round_sumcheck_messages[0] + first_round_sumcheck_messages[1] != claim.get_result()
         {
-            return Err(LayerError::VerificationError(
-                VerificationError::SumcheckStartFailed,
-            ));
+            return Err(VerificationError::SumcheckStartFailed);
         }
 
         for sumcheck_round_idx in 1..num_sumcheck_rounds {
@@ -148,10 +146,10 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
 
         // --- Create the resulting verifier layer for claim tracking ---
         // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
-        let verifier_id_gate_layer = IdentityGateVerifierLayer {
+        let verifier_id_gate_layer = VerifierIdentityGateLayer {
             layer_id: self.layer_id(),
             wiring: self.wiring.clone(),
-            source_mle: self.source_mle,
+            source_mle: src_verifier_mle,
             claim_challenge_points: claim.get_point().clone(),
             first_u_challenges: challenges,
         };
@@ -163,24 +161,23 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
 
         // error if this doesn't match the last round of sumcheck
         if final_result != prev_at_r {
-            return Err(LayerError::VerificationError(
-                VerificationError::FinalSumcheckFailed,
-            ));
+            return Err(VerificationError::FinalSumcheckFailed);
         }
 
-        Ok(())
+        Ok(verifier_id_gate_layer)
     }
 }
 
-impl<F: FieldExt> IdentityGateVerifierLayer<F> {
+impl<F: FieldExt> VerifierIdentityGateLayer<F> {
     /// Computes the oracle query's value for a given [IdentityGateVerifierLayer].
     pub fn evaluate(&self, claim: &Claim<F>) -> F {
         // compute the sum over all the variables of the gate function
-        let beta_u = BetaValues::new_beta_equality_mle(self.claim_challenge_points);
+        let beta_u = BetaValues::new_beta_equality_mle(self.claim_challenge_points.clone());
         let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
 
         let f_1_uv = self
             .wiring
+            .clone()
             .into_iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
                 let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
@@ -191,12 +188,14 @@ impl<F: FieldExt> IdentityGateVerifierLayer<F> {
 
         // get the fully evaluated "expression"
         let fully_evaluated = f_1_uv * self.source_mle.value();
+
+        fully_evaluated
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct IdentityGateVerifierLayer<F: FieldExt> {
+pub struct VerifierIdentityGateLayer<F: FieldExt> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
 
@@ -216,9 +215,9 @@ pub struct IdentityGateVerifierLayer<F: FieldExt> {
     first_u_challenges: Vec<F>,
 }
 
-impl<F: FieldExt> VerifierLayer<F> for IdentityGateVerifierLayer<F> {
+impl<F: FieldExt> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
     fn layer_id(&self) -> LayerId {
-        todo!()
+        self.layer_id
     }
 }
 
@@ -247,7 +246,7 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
         let num_rounds = self.mle_ref.num_iterated_vars();
 
         // sumcheck rounds (binding x)
-        let sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
+        let _sumcheck_rounds: Vec<Vec<F>> = std::iter::once(Ok(first_message))
             .chain((1..num_rounds).map(|round| {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                 challenges.push(challenge);
@@ -266,7 +265,7 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             mle.fix_variable(num_rounds - 1, final_chal);
         });
 
-        Ok(sumcheck_rounds.into())
+        Ok(())
     }
 
     fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
@@ -297,7 +296,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
             let claim: ClaimMle<F> = ClaimMle::new(
                 fixed_mle_indices_u,
                 val,
-                Some(self.id().clone()),
+                Some(self.layer_id().clone()),
                 Some(mle_ref.get_layer_id()),
                 Some(MleEnum::Dense(mle_ref.clone())),
             );
@@ -348,6 +347,43 @@ impl<F: FieldExt> YieldWLXEvals<F> for IdentityGate<F> {
         Ok(wlx_evals)
     }
 }
+
+impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierIdentityGateLayer<F> {
+    fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        // Grab the claim on the left side.
+        // TODO!(ryancao): Do error handling here!
+        let source_vars = self.source_mle.mle_indices();
+        let source_point = source_vars
+            .iter()
+            .map(|idx| match idx {
+                MleIndex::Bound(chal, _bit_idx) => *chal,
+                MleIndex::Fixed(val) => {
+                    if *val {
+                        F::ONE
+                    } else {
+                        F::ZERO
+                    }
+                }
+                _ => panic!("Error: Not fully bound"),
+            })
+            .collect_vec();
+        let source_val = self.source_mle.value();
+
+        // WARNING: DO NOT TRUST THIS MLE! IT IS INCORRECT
+        let dummy_source_mle = DenseMle::new_from_raw(vec![source_val], self.layer_id());
+
+        let source_claim: ClaimMle<F> = ClaimMle::new(
+            source_point,
+            source_val,
+            Some(self.layer_id()),
+            Some(self.source_mle.layer_id()),
+            Some(MleEnum::Dense(dummy_source_mle)),
+        );
+
+        Ok(vec![source_claim])
+    }
+}
+
 /// identity gate struct
 /// wiring is used to be able to select specific elements from an MLE
 /// (equivalent to an add gate with a zero mle ref)
