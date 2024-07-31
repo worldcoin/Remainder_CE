@@ -187,8 +187,8 @@ impl<F: FieldExt> SignCheckerComponent<F> {
                     .iter()
                     .zip(data[1].get_evals_vector())
                     .zip(data[2].get_evals_vector())
-                    .map(|((values, signed), abs_val)| {
-                        *values + *abs_val + F::from(2).neg() * signed * abs_val
+                    .map(|((val, sign_bit), abs_val)| {
+                        *val + *abs_val + F::from(2).neg() * sign_bit * abs_val
                     })
                     .collect_vec();
                 assert!(all(values.into_iter(), |val| val == F::ZERO));
