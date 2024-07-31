@@ -11,7 +11,9 @@ mod tests {
     use crate::layouter::nodes::node_enum::NodeEnum;
     use crate::layouter::nodes::sector::Sector;
     use crate::layouter::nodes::ClaimableNode;
+    use crate::layouter::nodes::Context;
     use crate::mle::circuit_mle::CircuitMle;
+    use crate::mle::evals::Evaluations;
     use crate::mle::evals::MultilinearExtension;
     use crate::prover::helpers::test_circuit;
     use crate::utils::get_input_shred_from_vec;
@@ -30,6 +32,7 @@ mod tests {
     };
     use crate::worldcoin::digit_decomposition::BASE;
     use itertools::Itertools;
+    use num_traits::sign;
     use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
     use remainder_shared_types::Fr;
     use std::marker::PhantomData;
@@ -38,6 +41,66 @@ mod tests {
     use chrono;
     use log::LevelFilter;
     use std::io::Write;
+
+    #[test]
+    fn test_recomposition() {
+        let base = 16;
+        // it's a length 2 decomposition
+        let digits = vec![
+            vec![
+                //Fr::from(1u64),
+                Fr::from(0u64)], // MSB
+            vec![
+                //Fr::from(3u64),
+                Fr::from(2u64)], // LSB
+        ];
+        let sign_bits = vec![
+            //Fr::from(1u64), // positive
+            Fr::from(0u64), // negative
+        ];
+        let expected = vec![
+            //Fr::from(19u64),
+            Fr::from(2u64).neg()
+        ];
+
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let digits_input_shreds = digits.iter().map(|digits_at_place| get_input_shred_from_vec(digits_at_place.clone(), ctx, &input_layer)).collect_vec();
+            let sign_bits_input_shred = get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
+            let expected_input_shred = get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
+
+            let digits_input_refs = digits_input_shreds
+                .iter()
+                .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+                .collect_vec();
+            let recomp_of_abs_value = DigitRecompComponent::new(ctx, &digits_input_refs, base);
+
+            let signed_recomp_checker = SignedRecompComponent::new(
+                ctx,
+                &expected_input_shred,
+                &sign_bits_input_shred,
+                &recomp_of_abs_value.sector,
+            );
+
+            let output = OutputNode::new_zero(ctx, &signed_recomp_checker.sector);
+
+            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                sign_bits_input_shred.into(),
+                expected_input_shred.into(),
+                recomp_of_abs_value.sector.into(),
+                signed_recomp_checker.sector.into(),
+                output.into(),
+            ];
+
+            all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        });
+
+        test_circuit(circuit, None);
+    }
+    
 
     #[test]
     fn test_worldcoin_circuit() {
@@ -113,10 +176,10 @@ mod tests {
                 ctx,
                 &result_of_matmult,
                 &iris_code_input_shred,
-                &recomp_of_abs_value.recomp_sector,
+                &recomp_of_abs_value.sector,
             );
 
-            let output = OutputNode::new_zero(ctx, &recomp_check_builder.signed_recomp_sector);
+            let output = OutputNode::new_zero(ctx, &recomp_check_builder.sector);
 
             let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
                 input_layer.into(),
@@ -124,9 +187,9 @@ mod tests {
                 matrix_a.into(),
                 matrix_b.into(),
                 result_of_matmult.into(),
-                recomp_of_abs_value.recomp_sector.into(),
+                recomp_of_abs_value.sector.into(),
                 iris_code_input_shred.into(),
-                recomp_check_builder.signed_recomp_sector.into(),
+                recomp_check_builder.sector.into(),
                 output.into(),
             ];
 

@@ -39,16 +39,18 @@ where
 }
 
 pub struct DigitRecompComponent<F: FieldExt> {
-    pub recomp_sector: Sector<F>,
+    pub sector: Sector<F>,
 }
 
 impl<F: FieldExt> DigitRecompComponent<F> {
+    /// `mles` give the digits to be recomposed, most significant digit first.
     pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>], base: u64) -> Self {
-        let recomp_sector = Sector::new(
+        let num_digits = mles.len();
+        let sector = Sector::new(
             ctx,
             mles,
             |input_nodes| {
-                assert_eq!(input_nodes.len(), NUM_DIGITS);
+                assert_eq!(input_nodes.len(), num_digits);
 
                 // --- Let's just do a linear accumulator for now ---
                 // TODO!(ryancao): Rewrite this expression but as a tree
@@ -58,7 +60,7 @@ impl<F: FieldExt> DigitRecompComponent<F> {
                     b_s_initial_acc,
                     |acc_expr, (bit_idx, bin_decomp_mle)| {
                         let b_i_mle_expression_ptr = bin_decomp_mle.expr();
-                        let power = F::from(base.pow((NUM_DIGITS - (bit_idx + 1)) as u32));
+                        let power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));
                         let b_s_times_coeff_times_base =
                             Expression::<F, AbstractExpr>::scaled(b_i_mle_expression_ptr, power);
                         acc_expr + b_s_times_coeff_times_base
@@ -66,14 +68,14 @@ impl<F: FieldExt> DigitRecompComponent<F> {
                 )
             },
             |data| {
-                assert_eq!(data.len(), NUM_DIGITS);
+                assert_eq!(data.len(), num_digits);
                 let init_vec = vec![F::ZERO; data[0].get_evals_vector().len()];
 
                 let result_iter =
                     data.into_iter()
                         .enumerate()
                         .fold(init_vec, |acc, (bit_idx, curr_bits)| {
-                            let base_power = F::from(base.pow((NUM_DIGITS - (bit_idx + 1)) as u32));
+                            let base_power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));
                             acc.into_iter()
                                 .zip(curr_bits.get_evals_vector().into_iter())
                                 .map(|(elem, curr_bit)| elem + base_power * curr_bit)
@@ -83,7 +85,7 @@ impl<F: FieldExt> DigitRecompComponent<F> {
             },
         );
 
-        Self { recomp_sector }
+        Self { sector }
     }
 }
 
@@ -92,22 +94,24 @@ where
     N: CircuitNode + From<Sector<F>>,
 {
     fn yield_nodes(self) -> Vec<N> {
-        vec![self.recomp_sector.into()]
+        vec![self.sector.into()]
     }
 }
 
 pub struct SignedRecompComponent<F: FieldExt> {
-    pub signed_recomp_sector: Sector<F>,
+    pub sector: Sector<F>,
 }
 
 impl<F: FieldExt> SignedRecompComponent<F> {
+    /// Calculates (values + abs_values) + -2 * sign_bits * abs_values
+    /// (So sign bit of 0 indicates negative, 1 indicates positive).
     pub fn new(
         ctx: &Context,
         values: &dyn ClaimableNode<F = F>,
         sign_bits: &dyn ClaimableNode<F = F>,
         abs_values: &dyn ClaimableNode<F = F>,
     ) -> Self {
-        let recomp_sector = Sector::new(
+        let sector = Sector::new(
             ctx,
             &[values, sign_bits, abs_values],
             |input_nodes| {
@@ -147,7 +151,7 @@ impl<F: FieldExt> SignedRecompComponent<F> {
         );
 
         Self {
-            signed_recomp_sector: recomp_sector,
+            sector,
         }
     }
 }
@@ -157,6 +161,6 @@ where
     N: CircuitNode + From<Sector<F>>,
 {
     fn yield_nodes(self) -> Vec<N> {
-        vec![self.signed_recomp_sector.into()]
+        vec![self.sector.into()]
     }
 }

@@ -359,9 +359,7 @@ impl<F: FieldExt> From<&WorldcoinData<F>> for WorldcoinCircuitData<F> {
             .map(|row| row.to_vec())
             .collect_vec();
 
-        // FIXME manually inserting padding - must this be removed for soundness?
-        // (Not worried about this for now, since according to Yi Chen, in the next iteration the number of responses will be a power of two anyway.)
-        // (The logUp implementation currently requires witness length to be a power of two)
+        // Manually inserting padding - this is fine since it is a public input.
         let pad_length =
             next_power_of_two(responses_vec_vec.len()).unwrap() - responses_vec_vec.len();
         let num_filters = data.kernel_matrix.dim().1;
