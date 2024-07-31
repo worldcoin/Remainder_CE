@@ -26,3 +26,7 @@ remainder_prover/*.json
 *.npy
 *.json
 *.bin
+
+scripts-ion/*
+scripts-upshot/*
+scripts-noya/*
