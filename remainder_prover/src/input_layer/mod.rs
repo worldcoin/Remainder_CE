@@ -157,10 +157,18 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     dbg!(&mle_ref);
     dbg!(&claim_vecs);
     dbg!(&common_idx);
+    // This is necessary because `fix_variable_at_index()` over [MultilinearExtension] will
+    // "shift" all following indices backwards by one each time a particular index is fixed.
+    // We thus compute the offset and subtract to find the correct relative index to fix.
     if let Some(common_idx) = common_idx {
-        common_idx.iter().for_each(|chal_idx| {
-            mle_ref.fix_variable_at_index(*chal_idx, chal_point[*chal_idx]);
-        });
+        let mut common_idx_sorted = common_idx.clone();
+        common_idx_sorted.sort();
+        common_idx_sorted
+            .iter()
+            .enumerate()
+            .for_each(|(offset_idx, chal_idx)| {
+                mle_ref.fix_variable_at_index(*chal_idx - offset_idx, chal_point[*chal_idx]);
+            });
     }
     dbg!(&mle_ref);
     debug!("Evaluating {num_evals} times.");

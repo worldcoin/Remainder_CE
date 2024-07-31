@@ -206,7 +206,7 @@ where
 }
 
 #[test]
-fn test_batching_wraparound_newmainder() {
+fn test_dataparallel_recombination_newmainder() {
     const ITERATED_VARS: usize = 2;
     const DATAPARALLEL_VARS: usize = 2;
     let mut rng = test_rng();
@@ -220,8 +220,8 @@ fn test_batching_wraparound_newmainder() {
         })
         .unzip();
 
-    // let combined_mle = DenseMle::batch_mles_lil(mles_vec); // This works
-    let combined_mle = DenseMle::batch_mles(mles_vec); // This fails
+    let combined_mle = DenseMle::batch_mles_lil(mles_vec); // This works
+                                                           // let combined_mle = DenseMle::batch_mles(mles_vec); // This fails
     let combined_mle_vec = combined_mle.bookkeeping_table();
 
     let circuit = LayouterCircuit::new(|ctx| {
