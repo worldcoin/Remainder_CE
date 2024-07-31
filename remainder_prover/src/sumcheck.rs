@@ -578,10 +578,7 @@ pub(crate) fn get_round_degree<F: FieldExt>(
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
-pub(crate) fn evaluate_at_a_point<F: FieldExt>(
-    given_evals: &[F],
-    point: F,
-) -> Result<F, InterpError> {
+pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &[F], point: F) -> Result<F, InterpError> {
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
         return Ok(given_evals[0]);

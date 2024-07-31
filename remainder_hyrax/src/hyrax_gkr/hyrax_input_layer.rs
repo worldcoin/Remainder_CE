@@ -6,9 +6,11 @@ use rand_chacha::ChaCha20Rng;
 use remainder::{
     claims::wlx_eval::{claim_group::ClaimGroup, get_num_wlx_evaluations},
     input_layer::{
-        hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
-        hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
-        public_input_layer::PublicInputLayer, random_input_layer::RandomInputLayer, InputLayer,
+        // hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
+        // hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
+        public_input_layer::PublicInputLayer,
+        random_input_layer::RandomInputLayer,
+        InputLayer,
     },
     layer::LayerId,
     mle::{evals::MultilinearExtension, Mle},
