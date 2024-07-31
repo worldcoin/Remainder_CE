@@ -1,4 +1,5 @@
 use itertools::{all, Itertools};
+use num_traits::sign;
 use remainder_shared_types::FieldExt;
 
 use crate::{
@@ -144,7 +145,6 @@ where
     }
 }
 
-
 pub struct SignCheckerComponent<F: FieldExt> {
     pub sector: Sector<F>,
 }
@@ -172,8 +172,8 @@ impl<F: FieldExt> SignCheckerComponent<F> {
                 let first_summand = abs_values_mle_ref.expr() + values_mle_ref.expr();
                 let second_summand = Expression::<F, AbstractExpr>::scaled(
                     Expression::<F, AbstractExpr>::products(vec![
-                        sign_bits_mle_ref,
                         abs_values_mle_ref,
+                        sign_bits_mle_ref,
                     ]),
                     F::from(2).neg(),
                 );
