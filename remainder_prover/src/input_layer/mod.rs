@@ -73,7 +73,7 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     end_timer!(prep_timer);
     info!("Wlx MLE len: {}", mle_ref.get_evals_vector().len());
     // Get the number of evaluations needed depending on the claim vectors.
-    let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
+    let (num_evals, common_idx, non_common_idx) = get_num_wlx_evaluations(claim_vecs);
     let chal_point = &claim_vecs[0];
 
     if let Some(common_idx) = common_idx {
@@ -81,14 +81,13 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
             mle_ref.fix_variable_at_index(*chal_idx, chal_point[*chal_idx]);
         });
     }
-
     debug!("Evaluating {num_evals} times.");
 
     // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
     let next_evals: Vec<F> = cfg_into_iter!(num_claims..num_evals)
         .map(|idx| {
             // Get the challenge l(idx).
-            let new_chal: Vec<F> = cfg_into_iter!(0..num_idx)
+            let new_chal: Vec<F> = cfg_into_iter!(non_common_idx.clone())
                 .map(|claim_idx| {
                     let evals: Vec<F> = cfg_into_iter!(claim_vecs)
                         .map(|claim| claim[claim_idx])

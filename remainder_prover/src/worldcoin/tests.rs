@@ -76,11 +76,11 @@ mod tests {
 
     #[test]
     fn test_sign_checker() {
-        let values = vec![ Fr::from(3u64), Fr::from(2u64) ];
+        let values = vec![ Fr::from(3u64), Fr::from(2u64).neg() ];
         let abs_values = vec![ Fr::from(3u64), Fr::from(2u64)];
         let sign_bits = vec![
             Fr::from(1u64), // positive
-            Fr::from(1u64), // positive
+            Fr::from(0u64), // negative
         ];
 
         let circuit = LayouterCircuit::new(|ctx| {
