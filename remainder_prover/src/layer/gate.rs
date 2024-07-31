@@ -610,7 +610,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         // Get the number of evaluations.
-        let (num_evals, _) = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
 
         // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
         let next_evals: Vec<F> = (num_claims..num_evals)

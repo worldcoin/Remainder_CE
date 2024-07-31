@@ -87,7 +87,6 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     }
 
     fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
-        dbg!(&self.mle);
         let num_bits = self.mle.num_vars();
 
         Self::VerifierInputLayer {
@@ -100,6 +99,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
 
 impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
     fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
+        dbg!(&mle);
         Self { mle, layer_id }
     }
 }

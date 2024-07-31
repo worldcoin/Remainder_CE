@@ -553,7 +553,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
-        let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
 
         let mut claim_mles = claim_mles.clone();
 

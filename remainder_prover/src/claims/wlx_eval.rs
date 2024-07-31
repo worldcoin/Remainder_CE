@@ -305,19 +305,23 @@ impl<F: fmt::Debug + FieldExt> fmt::Debug for ClaimMle<F> {
 /// claim_vecs.len()`.
 /// # Panics
 ///  if `claim_vecs` is empty.
-pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &[Vec<F>]) -> (usize, Option<Vec<usize>>) {
+pub fn get_num_wlx_evaluations<F: FieldExt>(
+    claim_vecs: &[Vec<F>],
+) -> (usize, Option<Vec<usize>>, Vec<usize>) {
     let num_claims = claim_vecs.len();
     let num_vars = claim_vecs[0].len();
 
     debug!("Smart num_evals");
     let mut num_constant_columns = num_vars as i64;
     let mut common_idx = vec![];
+    let mut non_common_idx = vec![];
     for j in 0..num_vars {
         let mut degree_reduced = true;
         for i in 1..num_claims {
             if claim_vecs[i][j] != claim_vecs[i - 1][j] {
                 num_constant_columns -= 1;
                 degree_reduced = false;
+                non_common_idx.push(j);
                 break;
             }
         }
@@ -342,5 +346,5 @@ pub fn get_num_wlx_evaluations<F: FieldExt>(claim_vecs: &[Vec<F>]) -> (usize, Op
     let num_evals =
         (num_vars) * (num_claims - 1) + 1 - (num_constant_columns as usize) * (num_claims - 1);
     debug!("num_evals originally = {}", num_evals);
-    (max(num_evals, num_claims), Some(common_idx))
+    (max(num_evals, num_claims), Some(common_idx), non_common_idx)
 }

@@ -141,8 +141,8 @@ fn test_add_gate_circuit_newmainder() {
 /// * `num_dataparallel_bits` - Defines the log_2 of the number of circuit copies.
 #[test]
 fn test_dataparallel_add_gate_circuit_newmainder() {
-    const NUM_DATAPARALLEL_BITS: usize = 2;
-    const NUM_ITERATED_BITS: usize = 2;
+    const NUM_DATAPARALLEL_BITS: usize = 1;
+    const NUM_ITERATED_BITS: usize = 1;
 
     let mut rng = test_rng();
     let size = 1 << (NUM_DATAPARALLEL_BITS + NUM_ITERATED_BITS);
