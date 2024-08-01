@@ -44,7 +44,8 @@ pub struct DigitRecompComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> DigitRecompComponent<F> {
-    /// `mles` give the digits to be recomposed, most significant digit first.
+    /// Each of the Nodes in `mles` specifies the digits for a different "decimal place".  Most
+    /// significant digit comes first.
     pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>], base: u64) -> Self {
         let num_digits = mles.len();
         let sector = Sector::new(
@@ -68,12 +69,12 @@ impl<F: FieldExt> DigitRecompComponent<F> {
                     },
                 )
             },
-            |data| {
-                assert_eq!(data.len(), num_digits);
-                let init_vec = vec![F::ZERO; data[0].get_evals_vector().len()];
+            |digit_positions| {
+                assert_eq!(digit_positions.len(), num_digits);
+                let init_vec = vec![F::ZERO; digit_positions[0].get_evals_vector().len()];
 
                 let result_iter =
-                    data.into_iter()
+                    digit_positions.into_iter()
                         .enumerate()
                         .fold(init_vec, |acc, (bit_idx, curr_bits)| {
                             let base_power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));

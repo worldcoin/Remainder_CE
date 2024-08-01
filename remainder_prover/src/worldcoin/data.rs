@@ -48,44 +48,140 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
 }
 
 /// Witness data for the Worldcoin circuit, before conversion to MLEs.
+#[derive(Debug)]
 pub struct WorldcoinData<F: FieldExt> {
     /// Quantized input image (typically 100x400)
-    image: Array2<i64>,
+    pub image: Array2<i64>,
     /// Matrix of quantized kernel values of shape (kernel_num_rows * kernel_num_cols, num_kernels)
-    kernel_matrix: Array2<i64>,
+    pub kernel_matrix: Array2<i64>,
     /// Row coordinate of the top-left corner of each placement of the kernels (can be negative)
-    placements_row_idxs: Vec<i32>,
+    pub placements_row_idxs: Vec<i32>,
     /// Column coordinate of the top-left corner of each placement of the kernels (can be negative)
-    placements_col_idxs: Vec<i32>,
+    pub placements_col_idxs: Vec<i32>,
     /// Indices defining the wiring from input image to the matrix multiplicand "A".
     /// Each tuple is (A_row, A_column, image_row, image_column)
-    wirings: Vec<(usize, usize, usize, usize)>,
+    pub wirings: Vec<(usize, usize, usize, usize)>,
     /// Result of applying the convolutions at the specified placements, or of performing
     /// the equivalent matrix multiplication. Has shape (number of placements, num_kernels)
-    responses: Array2<i64>,
+    pub responses: Array2<i64>,
     /// Result of thresholding the responses.
     /// Has dimensions (number of placements * num_kernels)
-    iris_code: Vec<bool>,
-    _marker: PhantomData<F>,
+    pub iris_code: Vec<bool>,
+    pub _marker: PhantomData<F>,
+    // FIXME PhantomData needed?
+}
+
+impl<F: FieldExt> WorldcoinData<F> {
+    /// Create a new instance of WorldcoinData. kernel_values has dimensions (num_kernels,
+    /// kernel_num_rows, kernel_num_cols). Every _combination_ from placements_row_idxs x
+    /// placements_col_idxs specifies a kernel placement in the image (via the top-left coordinate).
+    pub fn new(
+        image: Array2<i64>,
+        kernel_values: Array3<i64>,
+        placements_row_idxs: Vec<i32>,
+        placements_col_idxs: Vec<i32>,
+    ) -> Self {
+        let (im_num_rows, im_num_cols) = image.dim();
+        let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
+
+        // has dimensions (kernel_num_rows * kernel_num_cols, num_kernels)
+        let kernel_matrix: Array2<i64> = kernel_values
+            .into_shape((num_kernels, kernel_num_rows * kernel_num_cols))
+            .unwrap()
+            .into_dimensionality::<ndarray::Ix2>()
+            .unwrap()
+            .t()
+            .to_owned();
+
+        // convert the kernel placements to wirings
+        let mut wirings: Vec<(usize, usize, usize, usize)> = Vec::new();
+        for (i, placement_row_idx) in placements_row_idxs.iter().enumerate() {
+            for (j, placement_col_idx) in placements_col_idxs.iter().enumerate() {
+                let placement_idx = i * placements_col_idxs.len() + j;
+                for row_idx in 0..kernel_num_rows {
+                    let image_row_idx = placement_row_idx + (row_idx as i32);
+                    if (image_row_idx < 0) || (image_row_idx as usize >= im_num_rows) {
+                        continue; // zero padding vertically, so if row is out of bounds, then nothing to do
+                    }
+                    for col_idx in 0..kernel_num_cols {
+                        // wrap around horizontally
+                        let mut image_col_idx =
+                            (placement_col_idx + (col_idx as i32)) % (im_num_cols as i32);
+                        // adjust if the remainder is negative
+                        if image_col_idx < 0 {
+                            image_col_idx += im_num_cols as i32;
+                        }
+                        let flattened_kernel_idx = row_idx * kernel_num_cols + col_idx;
+                        wirings.push((
+                            placement_idx,
+                            flattened_kernel_idx,
+                            image_row_idx as usize,
+                            image_col_idx as usize,
+                        ));
+                    }
+                }
+            }
+        }
+
+        // build the rerouted matrix as an array
+        let num_placements = placements_row_idxs.len() * placements_col_idxs.len();
+        let mut rerouted_matrix: Array2<i64> =
+            Array::zeros((num_placements, kernel_num_rows * kernel_num_cols));
+        for (a_row, a_col, im_row, im_col) in &wirings {
+            rerouted_matrix[[*a_row, *a_col]] = image[[*im_row, *im_col]];
+        }
+
+        // calculate the matrix product and the iris code
+        // both have dimensions (kernel_placements.len(), num_kernels)
+        let responses = rerouted_matrix.dot(&kernel_matrix);
+        let iris_code = responses.mapv(|x| x > 0);
+        let flattened_iris_code: Vec<bool> = iris_code
+            .outer_iter()
+            .flat_map(|row| row.to_vec())
+            .collect();
+
+        Self {
+            image,
+            kernel_matrix,
+            placements_row_idxs,
+            placements_col_idxs,
+            wirings,
+            responses,
+            iris_code: flattened_iris_code,
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// Test that WorldcoinData::new() derives data as expected.
+#[test]
+fn test_worldcoin_data_creation() {
+    use remainder_shared_types::Fr;
+    let image_shape = (2, 2);
+    let kernel_shape = (1, 2, 1);
+    let response_shape = (image_shape.0, kernel_shape.2);
+    let data = WorldcoinData::<Fr>::new(
+        Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
+        Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
+        vec![0],
+        vec![0, 1],
+    );
+    let expected_responses = Array2::from_shape_vec(response_shape, vec![1 * 3 + 2 * 4, 1 * 1 + 2 * 9]).unwrap(); // 11, 19
+    assert_eq!(expected_responses, data.responses);
+    // rewirings should transpose the matrix
+    let expected_wirings = vec![(0, 0, 0, 0), (0, 1, 1, 0), (1, 0, 0, 1), (1, 1, 1, 1)];
+    assert_eq!(expected_wirings, data.wirings);
+    // Both response values are positive, so expectet iris code is [true, true]
+    let expected_iris_code = vec![true, true];
+    assert_eq!(expected_iris_code, data.iris_code);
 }
 
 pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinData<F> {
     let image: Array2<i64> =
         read_npy(Path::new(&data_directory.join("quantized_image.npy"))).unwrap();
-    let (im_num_rows, im_num_cols) = image.dim();
 
     let kernel_values: Array3<i64> =
         read_npy(&data_directory.join("quantized_kernels.npy")).unwrap();
-    let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
-
-    // has dimensions (kernel_num_rows * kernel_num_cols, num_kernels)
-    let kernel_matrix: Array2<i64> = kernel_values
-        .into_shape((num_kernels, kernel_num_rows * kernel_num_cols))
-        .unwrap()
-        .into_dimensionality::<ndarray::Ix2>()
-        .unwrap()
-        .t()
-        .to_owned();
 
     // read in the kernel placements
     let placements_row_idxs: Vec<i32> =
@@ -98,52 +194,15 @@ pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinData<F> {
             .unwrap()
             .to_vec();
 
-    // convert the kernel placements to wirings
-    let mut wirings: Vec<(usize, usize, usize, usize)> = Vec::new();
-    for (i, placement_row_idx) in placements_row_idxs.iter().enumerate() {
-        for (j, placement_col_idx) in placements_col_idxs.iter().enumerate() {
-            let placement_idx = i * placements_col_idxs.len() + j;
-            for row_idx in 0..kernel_num_rows {
-                let image_row_idx = placement_row_idx + (row_idx as i32);
-                if (image_row_idx < 0) || (image_row_idx as usize >= im_num_rows) {
-                    continue; // zero padding vertically, so if row is out of bounds, then nothing to do
-                }
-                for col_idx in 0..kernel_num_cols {
-                    // wrap around horizontally
-                    let mut image_col_idx =
-                        (placement_col_idx + (col_idx as i32)) % (im_num_cols as i32);
-                    // adjust if the remainder is negative
-                    if image_col_idx < 0 {
-                        image_col_idx += im_num_cols as i32;
-                    }
-                    let flattened_kernel_idx = row_idx * kernel_num_cols + col_idx;
-                    wirings.push((
-                        placement_idx,
-                        flattened_kernel_idx,
-                        image_row_idx as usize,
-                        image_col_idx as usize,
-                    ));
-                }
-            }
-        }
-    }
-
-    // build the rerouted matrix as an array
+    let (num_kernels, _, _) = kernel_values.dim();
     let num_placements = placements_row_idxs.len() * placements_col_idxs.len();
-    let mut rerouted_matrix: Array2<i64> =
-        Array::zeros((num_placements, kernel_num_rows * kernel_num_cols));
-    for (a_row, a_col, im_row, im_col) in &wirings {
-        rerouted_matrix[[*a_row, *a_col]] = image[[*im_row, *im_col]];
-    }
 
-    // calculate the matrix product and the iris code
-    // both have dimensions (kernel_placements.len(), num_kernels)
-    let responses = rerouted_matrix.dot(&kernel_matrix);
-    let iris_code = responses.mapv(|x| x > 0);
-    let flattened_iris_code: Vec<bool> = iris_code
-        .outer_iter()
-        .flat_map(|row| row.to_vec())
-        .collect();
+    let result = WorldcoinData::new(
+        image,
+        kernel_values,
+        placements_row_idxs,
+        placements_col_idxs,
+    );
 
     // sanity check: load the iris code as calculated in Python, check it's the same
     let expected_iris_code3d: Array3<bool> =
@@ -155,18 +214,12 @@ pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinData<F> {
         .unwrap()
         .t()
         .to_owned();
-    assert_eq!(iris_code, expected_iris_code);
-
-    WorldcoinData {
-        image,
-        kernel_matrix,
-        placements_row_idxs,
-        placements_col_idxs,
-        wirings,
-        responses,
-        iris_code: flattened_iris_code,
-        _marker: PhantomData,
-    }
+    let expected_flattened = expected_iris_code
+        .outer_iter()
+        .flat_map(|row| row.to_vec())
+        .collect::<Vec<bool>>();
+    assert_eq!(result.iris_code, expected_flattened);
+    result
 }
 
 impl<F: FieldExt> From<&WorldcoinData<F>> for WorldcoinCircuitData<F> {

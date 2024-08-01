@@ -12,6 +12,7 @@ mod tests {
     use crate::prover::helpers::test_circuit;
     use crate::utils::get_input_shred_from_vec;
     use crate::utils::pad_to_nearest_power_of_two;
+    use crate::worldcoin::circuits::build_circuit;
     use crate::worldcoin::components::DigitRecompComponent;
     use crate::worldcoin::components::EqualityCheckerComponent;
     use crate::worldcoin::components::SignCheckerComponent;
@@ -26,8 +27,9 @@ mod tests {
     // };
     use crate::worldcoin::digit_decomposition::BASE;
     use itertools::Itertools;
-    use remainder_shared_types::halo2curves::bn256::G1 as Bn256Point;
+    use ndarray::{Array2, Array3};
     use remainder_shared_types::Fr;
+    use std::marker::PhantomData;
     use std::path::Path;
 
     use chrono;
@@ -162,106 +164,33 @@ mod tests {
 
         test_circuit(circuit, None);
     }
-    
+
+    /// Generate toy data for the worldcoin circuit.
+    /// Image is 2x2, and there are two placements of a 2x1 kernel.
+    pub fn toy_worldcoin_circuit_data() -> WorldcoinCircuitData<Fr> {
+        let image_shape = (2, 2);
+        let kernel_shape = (1, 2, 1);
+        let data = WorldcoinData::new(
+            Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
+            Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
+            vec![0],
+            vec![0, 1],
+        );
+        dbg!(&data);
+        (&data).into()
+    }
 
     #[test]
-    fn test_worldcoin_circuit() {
-        env_logger::Builder::new()
-            .format(|buf, record| {
-                writeln!(
-                    buf,
-                    "----> {}:{} {} [{}]:\n{}",
-                    record.file().unwrap_or("unknown"),
-                    record.line().unwrap_or(0),
-                    chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
-                    record.level(),
-                    record.args()
-                )
-            })
-            .filter(None, LevelFilter::Error)
-            .init();
-
-        // --- This is for V2 stuff ---
-        let data: WorldcoinData<Fr> = load_data(Path::new("worldcoin_witness_data").to_path_buf());
-        let WorldcoinCircuitData {
-            image_matrix_mle,
-            reroutings: wirings,
-            num_placements,
-            kernel_matrix_mle,
-            kernel_matrix_dims,
-            digits,
-            iris_code,
-            digit_multiplicities,
-        } = (&data).into();
-
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let input_shred_matrix_a =
-                get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
-
-            let matrix_a = IdentityGateNode::new(ctx, &input_shred_matrix_a, wirings.clone());
-            let (filter_num_rows, filter_num_cols) = kernel_matrix_dims;
-            let matrix_a_num_rows_cols = (num_placements, filter_num_rows);
-            let matrix_b = get_input_shred_from_vec(kernel_matrix_mle.clone(), ctx, &input_layer);
-            let matrix_b_num_rows_cols = (filter_num_rows, filter_num_cols);
-
-            let result_of_matmult = MatMultNode::new(
-                ctx,
-                &matrix_a,
-                matrix_a_num_rows_cols,
-                &matrix_b,
-                matrix_b_num_rows_cols,
-            );
-
-            let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
-            let digits_input_refs = digits_input_shreds
-                .iter()
-                .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
-                .collect_vec();
-            let recomp_of_abs_value =
-                DigitRecompComponent::new(ctx, &digits_input_refs, BASE as u64);
-
-            let iris_code_input_shred = get_input_shred_from_vec(
-                pad_to_nearest_power_of_two(iris_code.clone()),
-                ctx,
-                &input_layer,
-            );
-            let recomp_check_builder = SignCheckerComponent::new(
-                ctx,
-                &result_of_matmult,
-                &iris_code_input_shred,
-                &recomp_of_abs_value.sector,
-            );
-
-            let output = OutputNode::new_zero(ctx, &recomp_check_builder.sector);
-
-            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                input_shred_matrix_a.into(),
-                matrix_a.into(),
-                matrix_b.into(),
-                result_of_matmult.into(),
-                recomp_of_abs_value.sector.into(),
-                iris_code_input_shred.into(),
-                recomp_check_builder.sector.into(),
-                output.into(),
-            ];
-
-            all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
-
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
-        });
-
+    fn test_worldcoin_circuit_toy_data() {
+        let circuit = build_circuit(toy_worldcoin_circuit_data());
         test_circuit(circuit, None);
-
-        // let proof_filepath = format!(
-        //     "worldcoin_backfill_test/v3_stuff/live_commit_proof_v2_kernel_{}.json",
-        //     0
-        // );
-        // test_circuit::<Bn256Point, Fr, Fr, WorldcoinCircuit<Bn256Point>>(
-        //     worldcoin_circuit,
-        //     Some(Path::new(&proof_filepath)),
-        // );
+    }
+    
+    #[test]
+    fn test_worldcoin_circuit() {
+        let data: WorldcoinData<Fr> = load_data(Path::new("worldcoin_witness_data").to_path_buf());
+        let circuit = build_circuit((&data).into());
+        test_circuit(circuit, None);
     }
 
 }
