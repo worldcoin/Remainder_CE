@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn test_worldcoin_circuit_toy_data() {
         let circuit = build_circuit(toy_worldcoin_circuit_data());
-        test_circuit(circuit, None);
+        test_circuit(circuit, Some(Path::new("worldcoin_witness_data/blah.json")));
     }
     
     #[test]
