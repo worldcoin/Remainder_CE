@@ -16,22 +16,20 @@ use super::{
 
 use itertools::Itertools;
 
-/// helper function for converting Field Elements into FlatMles
-/// essentially
+/// Helper function that converts a [Vec<F; N>] into a [Vec<F>; N]
 pub fn to_flat_mles<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>; N] {
     // converts a [Vec<F; N>] into a [Vec<F>; N]
-    let out: [Vec<F>; N] = {
-        let mut iters = inputs.into_iter().map(|arr| arr.into_iter());
-        std::array::from_fn(|_| {
-            iters
-                .by_ref()
-                .map(|mut iter| iter.next().unwrap())
-                .collect()
-        })
-    };
-    out
+    let mut result: [Vec<F>; N] = vec![Vec::new(); N].try_into().unwrap();
+    for subarray in inputs {
+        for (i, element) in subarray.iter().enumerate() {
+            result[i].push(*element);
+        }
+    }
+    result
+
 }
 
+// Test that demonstrates the incorrectness of the previous implementation of to_flat_mles.
 #[test]
 fn test_to_flat_mles() {
     use remainder_shared_types::Fr;
