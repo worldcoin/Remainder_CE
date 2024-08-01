@@ -78,6 +78,19 @@ impl<F: FieldExt> CircuitRegularLayer<F> {
     }
 }
 
+impl<F: FieldExt> PostSumcheckEvaluation<F> for VerifierRegularLayer<F> {
+    /// Get the [PostSumcheckLayer] for a [VerifierRegularLayer], which represents the description of a fully bound expression.
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
+        let fully_bound_beta =
+            BetaValues::compute_beta_over_two_challenges(round_challenges, claim_challenges);
+        self.expression.get_post_sumcheck_layer(fully_bound_beta)
+    }
+}
+
 /// The verifier counterpart of a [RegularLayer].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
@@ -228,15 +241,10 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
                 }
             })
             .collect();
-        // dbg!(&point);
 
-        let verifier_expr = self
-            .expression
-            .bind(&point, transcript_reader)
-            .map_err(|err| VerificationError::ExpressionError(err))?;
-        // dbg!(&verifier_expr);
-
-        let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
+        let verifier_layer = self
+            .into_verifier_layer(&point, claim.get_point(), transcript_reader)
+            .unwrap();
 
         // Compute `P(r_1, ..., r_n)` over all challenge points (linear and
         // non-linear).
@@ -270,6 +278,25 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
             return Err(VerificationError::SumcheckFailed);
         }
 
+        Ok(verifier_layer)
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.expression.get_all_nonlinear_rounds().len()
+    }
+
+    fn into_verifier_layer(
+        &self,
+        sumcheck_challenges: &[F],
+        _claim_point: &[F],
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Self::VerifierLayer, VerificationError> {
+        let verifier_expr = self
+            .expression
+            .bind(sumcheck_challenges, transcript_reader)
+            .map_err(|err| VerificationError::ExpressionError(err))?;
+
+        let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
         Ok(verifier_layer)
     }
 }
@@ -476,10 +503,10 @@ impl<F: FieldExt> SumcheckLayer<F> for RegularLayer<F> {
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
         // Grabs the expression/beta table.
-        let expression = &mut self.expression;
-        let newbeta = &mut self.beta_vals;
+        let expression = &self.expression;
+        let newbeta = &self.beta_vals;
 
         // Grabs the degree of univariate polynomial we are sending over.
         let degree = get_round_degree(expression, round_index);

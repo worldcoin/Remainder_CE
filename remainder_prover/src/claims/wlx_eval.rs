@@ -222,7 +222,7 @@ pub struct ClaimMle<F: FieldExt> {
 impl<F: FieldExt> ClaimMle<F> {
     /// To be used internally only!
     /// Generate new raw claim without any origin/destination information.
-    pub(crate) fn new_raw(point: Vec<F>, result: F) -> Self {
+    pub fn new_raw(point: Vec<F>, result: F) -> Self {
         Self {
             claim: Claim::new(point, result),
             from_layer_id: None,

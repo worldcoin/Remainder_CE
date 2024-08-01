@@ -1,5 +1,8 @@
 use crate::{
-    layer::LayerId,
+    layer::{
+        product::{PostSumcheckLayer, Product},
+        LayerId,
+    },
     mle::{dense::DenseMle, Mle, MleIndex},
 };
 use itertools::Itertools;
@@ -133,7 +136,7 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
     /// VerifierExpr>` version of `self`.
     pub fn bind(
         &self,
-        point: &Vec<F>,
+        point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Expression<F, VerifierExpr>, ExpressionError> {
         Ok(Expression::new(
@@ -225,7 +228,7 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
 impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
     pub fn into_verifier_node(
         &self,
-        point: &Vec<F>,
+        point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<ExpressionNode<F, VerifierExpr>, ExpressionError> {
         match self {

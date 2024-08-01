@@ -75,18 +75,7 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        // --- SAME ISSUE HERE AS IN GATE.RS: JUST ASSUMING THAT TOTAL NUMBER
-        // --- OF SUMCHECK ROUNDS IS GOING TO BE THE NUMBER OF NON-FIXED BITS
-        let num_sumcheck_rounds = self
-            .source_mle
-            .mle_indices()
-            .iter()
-            .fold(0_usize, |acc, idx| {
-                acc + match idx {
-                    MleIndex::Fixed(_) => 0,
-                    _ => 1,
-                }
-            });
+        let num_sumcheck_rounds = self.num_sumcheck_rounds();
 
         // --- Store challenges for later claim generation ---
         let mut challenges = vec![];
@@ -139,20 +128,9 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
             .unwrap();
         challenges.push(final_chal);
 
-        let src_verifier_mle = self
-            .source_mle
-            .into_verifier_mle(&challenges, transcript_reader)
+        let verifier_id_gate_layer = self
+            .into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
             .unwrap();
-
-        // --- Create the resulting verifier layer for claim tracking ---
-        // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
-        let verifier_id_gate_layer = VerifierIdentityGateLayer {
-            layer_id: self.layer_id(),
-            wiring: self.wiring.clone(),
-            source_mle: src_verifier_mle,
-            claim_challenge_points: claim.get_point().clone(),
-            first_u_challenges: challenges,
-        };
         let final_result = verifier_id_gate_layer.evaluate(&claim);
 
         // Finally, compute g_n(r_n).
@@ -163,6 +141,46 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
         if final_result != prev_at_r {
             return Err(VerificationError::FinalSumcheckFailed);
         }
+
+        Ok(verifier_id_gate_layer)
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        // --- SAME ISSUE HERE AS IN GATE.RS: JUST ASSUMING THAT TOTAL NUMBER
+        // --- OF SUMCHECK ROUNDS IS GOING TO BE THE NUMBER OF NON-FIXED BITS
+        let num_sumcheck_rounds = self
+            .source_mle
+            .mle_indices()
+            .iter()
+            .fold(0_usize, |acc, idx| {
+                acc + match idx {
+                    MleIndex::Fixed(_) => 0,
+                    _ => 1,
+                }
+            });
+        num_sumcheck_rounds
+    }
+
+    fn into_verifier_layer(
+        &self,
+        sumcheck_challenges: &[F],
+        claim_point: &[F],
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Self::VerifierLayer, VerificationError> {
+        let src_verifier_mle = self
+            .source_mle
+            .into_verifier_mle(&sumcheck_challenges, transcript_reader)
+            .unwrap();
+
+        // --- Create the resulting verifier layer for claim tracking ---
+        // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
+        let verifier_id_gate_layer = VerifierIdentityGateLayer {
+            layer_id: self.layer_id(),
+            wiring: self.wiring.clone(),
+            source_mle: src_verifier_mle,
+            claim_challenge_points: claim_point.to_vec(),
+            first_u_challenges: sumcheck_challenges.to_vec(),
+        };
 
         Ok(verifier_id_gate_layer)
     }
@@ -543,8 +561,8 @@ impl<F: FieldExt> SumcheckLayer<F> for IdentityGate<F> {
         Ok(())
     }
 
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError> {
-        let mles = self.phase_1_mles.as_mut().unwrap();
+    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
+        let mles = self.phase_1_mles.as_ref().unwrap();
         let independent_variable = mles
             .iter()
             .map(|mle_ref| {

@@ -8,6 +8,8 @@ use remainder::{
     input_layer::{
         // hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
         // hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
+        hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
+        hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
         public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer,
         InputLayer,
@@ -319,7 +321,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         let num_idx = claims.get_num_vars();
 
         // get the number of evaluations
-        let (num_evals, common_idx) = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, _common_idx, _) = get_num_wlx_evaluations(claim_vecs);
         let chal_point = &claim_vecs[0];
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations

@@ -1,4 +1,10 @@
-use crate::{layer::LayerId, mle::MleIndex};
+use crate::{
+    layer::{
+        product::{PostSumcheckLayer, Product},
+        LayerId,
+    },
+    mle::MleIndex,
+};
 use ndarray::SliceInfoElem;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -57,6 +63,21 @@ impl<F: FieldExt> VerifierMle<F> {
 
     pub fn value(&self) -> F {
         self.eval
+    }
+
+    /// Returns the evaluation challenges for a fully-bound MLE.
+    ///
+    /// Note that this function panics if a particular challenge is neither
+    /// fixed nor bound!
+    pub fn get_bound_point(&self) -> Vec<F> {
+        self.mle_indices()
+            .iter()
+            .map(|index| match index {
+                MleIndex::Bound(chal, _) => *chal,
+                MleIndex::Fixed(chal) => F::from(*chal as u64),
+                _ => panic!("MLE index not bound"),
+            })
+            .collect()
     }
 }
 
@@ -130,6 +151,12 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
             expression_node.get_all_nonlinear_rounds(&mut vec![], mle_vec);
         nonlinear_rounds.sort();
         nonlinear_rounds
+    }
+
+    /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
+    pub fn get_post_sumcheck_layer(&self, multiplier: F) -> PostSumcheckLayer<F, F> {
+        self.expression_node
+            .get_post_sumcheck_layer(multiplier, &self.mle_vec)
     }
 }
 
@@ -307,6 +334,50 @@ impl<F: FieldExt> ExpressionNode<F, VerifierExpr> {
             }
         });
         curr_nonlinear_indices.clone()
+    }
+
+    /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
+    /// representation of an expression.
+    pub fn get_post_sumcheck_layer(
+        &self,
+        multiplier: F,
+        mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+    ) -> PostSumcheckLayer<F, F> {
+        let mut products: Vec<Product<F, F>> = vec![];
+        match self {
+            ExpressionNode::Selector(mle_index, a, b) => {
+                let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
+                let right_side_acc = multiplier * (mle_index.val().unwrap());
+                products.extend(a.get_post_sumcheck_layer(left_side_acc, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer(right_side_acc, mle_vec).0);
+            }
+            ExpressionNode::Sum(a, b) => {
+                products.extend(a.get_post_sumcheck_layer(multiplier, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer(multiplier, mle_vec).0);
+            }
+            ExpressionNode::Mle(mle) => {
+                products.push(Product::<F, F>::new_from_verifier_mle(
+                    &[mle.clone()],
+                    multiplier,
+                ));
+            }
+            ExpressionNode::Product(mles) => {
+                let product = Product::<F, F>::new_from_verifier_mle(&mles, multiplier);
+                products.push(product);
+            }
+            ExpressionNode::Scaled(a, scale_factor) => {
+                let acc = multiplier * scale_factor;
+                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
+            }
+            ExpressionNode::Negated(a) => {
+                let acc = multiplier.neg();
+                products.extend(a.get_post_sumcheck_layer(acc, mle_vec).0);
+            }
+            ExpressionNode::Constant(constant) => {
+                products.push(Product::<F, F>::new(&[], *constant * multiplier));
+            }
+        }
+        PostSumcheckLayer(products)
     }
 }
 

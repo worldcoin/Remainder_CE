@@ -142,6 +142,17 @@ pub trait CircuitLayer<F: FieldExt> {
         claim: Claim<F>,
         transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError>;
+
+    /// The number of sumcheck rounds of this layer.
+    fn num_sumcheck_rounds(&self) -> usize;
+
+    /// Turns this Circuit Layer into a Verifier Layer
+    fn into_verifier_layer(
+        &self,
+        sumcheck_bindings: &[F],
+        claim_point: &[F],
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Self::VerifierLayer, VerificationError>;
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.
@@ -185,7 +196,7 @@ pub trait SumcheckLayer<F: FieldExt>: Layer<F> {
     /// Return the evaluations of the univariate polynomial generated during this round of sumcheck.
     ///
     /// This must be called with a steadily incrementing round_index & with a securely generated challenge.
-    fn compute_round_sumcheck_message(&mut self, round_index: usize) -> Result<Vec<F>, LayerError>;
+    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError>;
 
     /// Mutate the underlying bookkeeping tables to "bind" the given `challenge` to the bit.
     /// labeled with that `round_index`.
@@ -199,7 +210,7 @@ pub trait SumcheckLayer<F: FieldExt>: Layer<F> {
 }
 
 /// An interface for constructing a [PostSumcheckLayer] for a layer.
-pub trait PostSumcheckEvaluation<F: FieldExt>: SumcheckLayer<F> {
+pub trait PostSumcheckEvaluation<F: FieldExt> {
     /// Get the [PostSumcheckLayer] for a certain layer, which is a struct which represents
     /// the fully bound layer.
     fn get_post_sumcheck_layer(

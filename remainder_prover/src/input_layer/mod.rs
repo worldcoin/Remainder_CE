@@ -154,15 +154,11 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     let (num_evals, common_idx, non_common_idx) = get_num_wlx_evaluations(claim_vecs);
     let chal_point = &claim_vecs[0];
 
-    dbg!(&mle_ref);
-    dbg!(&claim_vecs);
-    dbg!(&common_idx);
     if let Some(common_idx) = common_idx {
         common_idx.iter().for_each(|chal_idx| {
             mle_ref.fix_variable_at_index(*chal_idx, chal_point[*chal_idx]);
         });
     }
-    dbg!(&mle_ref);
     debug!("Evaluating {num_evals} times.");
 
     // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
@@ -179,8 +175,6 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
                 .collect();
 
             let mut fix_mle = mle_ref.clone();
-            dbg!(&fix_mle);
-            dbg!(&new_chal);
             {
                 new_chal.into_iter().for_each(|chal| {
                     fix_mle.fix_variable(chal);

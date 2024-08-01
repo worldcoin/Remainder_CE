@@ -379,7 +379,7 @@ impl<F: FieldExt> DenseMle<F> {
     ///
     /// Note that this function panics if a particular challenge is neither
     /// fixed nor bound!
-    pub fn get_claim_point(&self) -> Vec<F> {
+    pub fn get_bound_point(&self) -> Vec<F> {
         self.mle_indices()
             .iter()
             .map(|index| match index {

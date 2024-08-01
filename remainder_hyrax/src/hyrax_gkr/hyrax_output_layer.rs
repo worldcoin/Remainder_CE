@@ -3,7 +3,6 @@ use std::marker::PhantomData;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::{Claim, ClaimAggregator, YieldClaim};
-use remainder::layer::LayerError;
 use remainder::mle::dense::DenseMle;
 use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::Mle;
@@ -19,10 +18,7 @@ use super::hyrax_layer::HyraxClaim;
 /// to produce Zero Knowledge evaluations using Hyrax.
 pub struct HyraxOutputLayer<
     C: PrimeOrderCurve,
-    M: Mle<C::Scalar>
-        + YieldClaim<Claim<C::Scalar>, Error = LayerError>
-        + Serialize
-        + for<'de> Deserialize<'de>,
+    M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
 > {
     /// This is the MLE that this is a wrapper over. The output layer is always just an MLE.
     pub underlying_mle: M,
@@ -31,10 +27,7 @@ pub struct HyraxOutputLayer<
 
 impl<
         C: PrimeOrderCurve,
-        M: Mle<C::Scalar>
-            + YieldClaim<Claim<C::Scalar>, Error = LayerError>
-            + Serialize
-            + for<'de> Deserialize<'de>,
+        M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
     > HyraxOutputLayer<C, M>
 {
     /// This function will evaluate the output layer at a random point, which is the challenge.
@@ -97,10 +90,7 @@ impl<
 /// whether these match the transcript.
 pub struct HyraxOutputLayerProof<
     C: PrimeOrderCurve,
-    M: Mle<C::Scalar>
-        + YieldClaim<Claim<C::Scalar>, Error = LayerError>
-        + Serialize
-        + for<'de> Deserialize<'de>,
+    M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
 > {
     /// The commitment to the claim that the output layer is making
     pub claim_commitment: C,
@@ -109,10 +99,7 @@ pub struct HyraxOutputLayerProof<
 
 impl<
         C: PrimeOrderCurve,
-        M: Mle<C::Scalar>
-            + YieldClaim<Claim<C::Scalar>, Error = LayerError>
-            + Serialize
-            + for<'de> Deserialize<'de>,
+        M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
     > HyraxOutputLayerProof<C, M>
 {
     /// Returns a HyraxOutputLayerProof and the claim that the output layer is making.
