@@ -32,6 +32,22 @@ pub fn to_flat_mles<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>
     out
 }
 
+#[test]
+fn test_to_flat_mles() {
+    use remainder_shared_types::Fr;
+    let inputs = vec![
+        [Fr::from(1), Fr::from(2), Fr::from(3)],
+        [Fr::from(4), Fr::from(5), Fr::from(6)],
+    ];
+    let expected = [
+        vec![Fr::from(1), Fr::from(4)],
+        vec![Fr::from(2), Fr::from(5)],
+        vec![Fr::from(3), Fr::from(6)],
+    ];
+    let actual = to_flat_mles(inputs);
+    assert_eq!(actual, expected);
+}
+
 /// A trait for a MLE(s) that are the input(s) to a circuit,
 /// but are bundled together for semantic reasons.
 pub trait CircuitMle<F: FieldExt, const N: usize> {
