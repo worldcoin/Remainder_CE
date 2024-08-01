@@ -9,14 +9,14 @@ use crate::{
 use ark_std::iterable::Iterable;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::wlx_eval::claim_group::ClaimGroup;
-use remainder::claims::wlx_eval::ClaimMle;
 use remainder::claims::wlx_eval::YieldWLXEvals;
 use remainder::layer::combine_mle_refs::get_og_mle_refs;
 use remainder::layer::product::{new_with_values, Product};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
 use remainder::layer::{LayerId, PostSumcheckEvaluation, SumcheckLayer};
 use remainder::mle::mle_enum::MleEnum;
+use remainder::{claims::wlx_eval::claim_group::ClaimGroup, layer::layer_enum::CircuitLayerEnum};
+use remainder::{claims::wlx_eval::ClaimMle, layer::CircuitLayer};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::group::ff::Field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
@@ -221,7 +221,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     pub fn verify(
         proof: &HyraxLayerProof<C>,
         // a description of the layer being proven
-        layer_desc: &LayerDescription<C::Scalar>,
+        layer_desc: &CircuitLayerEnum<C::Scalar>,
         // commitments to the unaggregated claims
         claim_commitments: &Vec<HyraxClaim<C::Scalar, C>>,
         committer: &PedersenCommitter<C>,
@@ -241,12 +241,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // Because the beta table number of variables is exactly the number of points in the claim
         // made on that layer, we take the max of the number of variables in the expression and
         // the number of variables in the beta table.
-        let num_sumcheck_rounds_expected = match layer_desc.layer_desc_enum {
-            LayerDescEnum::EmptyLayer(_) | LayerDescEnum::Gkr(_) => {
-                std::cmp::max(layer_desc.layer_size, agg_claim.point.len())
-            }
-            _ => layer_desc.layer_size,
-        };
+        let num_sumcheck_rounds_expected = layer_desc.num_sumcheck_rounds();
 
         // Verify the proof of sumcheck
         // Add first sumcheck message to transcript, which is the proported sum.
@@ -278,6 +273,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
                     .unwrap();
                 assert_eq!(&transcript_sumcheck_message_commit, message);
             });
+
         // Final challenge in sumcheck -- needed for "oracle query".
         if num_sumcheck_rounds_expected > 0 {
             let final_chal = transcript
@@ -295,7 +291,14 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .unwrap();
         assert_eq!(&transcript_commitments, commitments);
 
-        // Build the PostSumcheckLayer from the commitments and the layer description
+        // Build the [PostSumcheckLayer] from the commitments and the layer description
+        let verifier_expr = layer_desc
+            .expression
+            .bind(&point, transcript_reader)
+            .map_err(|err| VerificationError::ExpressionError(err))?;
+
+        let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
+
         let post_sumcheck_layer_desc = layer_desc
             .layer_desc_enum
             .get_post_sumcheck_layer(&bindings, &agg_claim.point);

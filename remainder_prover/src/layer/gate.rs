@@ -236,9 +236,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         // --- Storing challenges for the sake of claim generation later ---
-        let mut first_u_challenges = vec![];
-        let mut last_v_challenges = vec![];
-        let mut first_copy_challenges = vec![];
+        let mut challenges = vec![];
 
         // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
         // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
@@ -312,39 +310,90 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
 
             // --- Add the prover message to the sumcheck messages ---
             sumcheck_messages.push(curr_evals);
-
-            // We want to separate the challenges into which ones are from the dataparallel bits, which ones
-            // are for binding x (phase 1), and which are for binding y (phase 2).
-            if sumcheck_round_idx <= self.num_dataparallel_bits {
-                first_copy_challenges.push(challenge);
-            } else if sumcheck_round_idx <= self.num_dataparallel_bits + num_u {
-                first_u_challenges.push(challenge);
-            } else {
-                last_v_challenges.push(challenge);
-            }
+            // Add the challenge.
+            challenges.push(challenge);
         }
 
         // Final round of sumcheck -- sample r_n from transcript.
         let final_chal = transcript_reader
             .get_challenge("Final Sumcheck challenge")
             .unwrap();
+        challenges.push(final_chal);
 
-        // This belongs in the last challenge bound to y. If our RHS MLE has no
-        // variables, bind to LHS MLE.
-        if num_v == 0 {
-            first_u_challenges.push(final_chal);
-        } else {
-            last_v_challenges.push(final_chal);
+        // --- Create the resulting verifier layer for claim tracking ---
+        // TODO(ryancao): This is not necessary; we only need to pass back the actual claims
+        let verifier_gate_layer = self
+            .into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .unwrap();
+        let final_result = verifier_gate_layer.evaluate(&claim);
+
+        // Finally, compute g_n(r_n).
+        let g_n_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
+        let prev_at_r = evaluate_at_a_point(&g_n_evals, final_chal).unwrap();
+
+        // Final check in sumcheck.
+        if final_result != prev_at_r {
+            return Err(VerificationError::FinalSumcheckFailed);
         }
 
+        Ok(verifier_gate_layer)
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_bits;
+        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_bits;
+        num_u + num_v + self.num_dataparallel_bits
+    }
+
+    fn into_verifier_layer(
+        &self,
+        sumcheck_bindings: &[F],
+        claim_point: &[F],
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Self::VerifierLayer, VerificationError> {
+        // --- WARNING: WE ARE ASSUMING HERE THAT MLE INDICES INCLUDE DATAPARALLEL ---
+        // --- INDICES AND MAKE NO DISTINCTION BETWEEN THOSE AND REGULAR ITERATED/INDEXED ---
+        // --- BITS ---
+        let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_bits;
+        let num_v = self.rhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
+            acc + match idx {
+                MleIndex::Fixed(_) => 0,
+                _ => 1,
+            }
+        }) - self.num_dataparallel_bits;
+
+        // We want to separate the challenges into which ones are from the dataparallel bits, which ones
+        // are for binding x (phase 1), and which are for binding y (phase 2).
+        let mut sumcheck_bindings_vec = sumcheck_bindings.to_vec();
+        let dataparallel_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_bits);
+        let first_u_challenges = sumcheck_bindings_vec.split_off(num_u);
+        let last_v_challenges = sumcheck_bindings_vec;
+        // Shape check!
+        assert_eq!(last_v_challenges.len(), num_v);
+
         // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
-        let lhs_challenges = first_copy_challenges
+        let lhs_challenges = dataparallel_challenges
             .iter()
             .chain(first_u_challenges.iter())
             .enumerate()
             .map(|(_idx, challenge)| *challenge)
             .collect_vec();
-        let rhs_challenges = first_copy_challenges
+        let rhs_challenges = dataparallel_challenges
             .iter()
             .chain(last_v_challenges.iter())
             .enumerate()
@@ -369,21 +418,11 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
             lhs_mle: lhs_verifier_mle,
             rhs_mle: rhs_verifier_mle,
             num_dataparallel_rounds: self.num_dataparallel_bits,
-            claim_challenge_points: claim.get_point().clone(),
-            dataparallel_sumcheck_challenges: first_copy_challenges,
+            claim_challenge_points: claim_point.to_vec(),
+            dataparallel_sumcheck_challenges: dataparallel_challenges,
             first_u_challenges,
             last_v_challenges,
         };
-        let final_result = verifier_gate_layer.evaluate(&claim);
-
-        // Finally, compute g_n(r_n).
-        let g_n_evals = sumcheck_messages[sumcheck_messages.len() - 1].clone();
-        let prev_at_r = evaluate_at_a_point(&g_n_evals, final_chal).unwrap();
-
-        // Final check in sumcheck.
-        if final_result != prev_at_r {
-            return Err(VerificationError::FinalSumcheckFailed);
-        }
 
         Ok(verifier_gate_layer)
     }

@@ -4,6 +4,7 @@
 use remainder_shared_types::FieldExt;
 
 use super::LayerId;
+use crate::expression::verifier_expr::VerifierMle;
 use crate::mle::dense::DenseMle;
 use crate::mle::mle_enum::MleEnum;
 use crate::mle::Mle;
@@ -70,9 +71,43 @@ impl<F: FieldExt> Product<F, F> {
     fn build_atom(mle_ref: &DenseMle<F>) -> Intermediate<F, F> {
         Intermediate::Atom {
             layer_id: mle_ref.layer_id,
-            point: mle_ref.get_claim_point(),
+            point: mle_ref.get_bound_point(),
             mle_enum: Some(MleEnum::Dense(mle_ref.clone())),
             value: mle_ref.bookkeeping_table()[0],
+        }
+    }
+
+    /// Creates a new Product from a vector of fully bound Mles, which are represented as a [VerifierMle]
+    pub fn new_from_verifier_mle(verifier_mles: &[VerifierMle<F>], coefficient: F) -> Self {
+        if verifier_mles.len() == 0 {
+            return Product {
+                intermediates: vec![Intermediate::Composite { value: F::ONE }],
+                coefficient,
+            };
+        }
+        let mut intermediates = vec![Self::build_atom_from_verifier_mle(&verifier_mles[0])];
+        let _ = verifier_mles
+            .iter()
+            .skip(1)
+            .fold(verifier_mles[0].value(), |acc, verifier_mle| {
+                let prod_val = acc * verifier_mle.value();
+                intermediates.push(Self::build_atom_from_verifier_mle(verifier_mle));
+                intermediates.push(Intermediate::Composite { value: prod_val });
+                prod_val
+            });
+        Product {
+            intermediates,
+            coefficient,
+        }
+    }
+
+    // Helper function for `new_from_verifier_mle`
+    fn build_atom_from_verifier_mle(verifier_mle: &VerifierMle<F>) -> Intermediate<F, F> {
+        Intermediate::Atom {
+            layer_id: verifier_mle.layer_id(),
+            point: verifier_mle.get_bound_point(),
+            mle_enum: None,
+            value: verifier_mle.value(),
         }
     }
 }

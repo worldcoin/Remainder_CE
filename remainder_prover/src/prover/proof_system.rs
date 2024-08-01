@@ -1,19 +1,16 @@
 use remainder_shared_types::{
-    transcript::{
-        poseidon_transcript::PoseidonSponge, test_transcript::TestSponge, TranscriptSponge,
-    },
+    transcript::{poseidon_transcript::PoseidonSponge, TranscriptSponge},
     FieldExt,
 };
 
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-use crate::{claims::wlx_eval::ClaimMle, layer::Layer};
+use crate::layer::Layer;
 use crate::{
     claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
     input_layer::VerifierInputLayer,
     layer::{layer_enum::LayerEnum, CircuitLayer},
-    mle::{mle_enum::MleEnum, Mle},
     output_layer::{mle_output_layer::MleOutputLayer, CircuitOutputLayer, OutputLayer},
 };
 
@@ -79,6 +76,29 @@ macro_rules! layer_enum {
                     match self {
                         $(
                             Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.verify_rounds(claim, transcript)?)),
+                        )*
+                    }
+                }
+
+                fn num_sumcheck_rounds(
+                    &self
+                ) -> usize {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.num_sumcheck_rounds(),
+                        )*
+                    }
+                }
+
+                fn into_verifier_layer(
+                    &self,
+                    sumcheck_bindings: &[F],
+                    claim_point: &[F],
+                    transcript_reader: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
+                ) -> Result<Self::VerifierLayer, super::VerificationError> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.into_verifier_layer(sumcheck_bindings, claim_point, transcript_reader)?)),
                         )*
                     }
                 }

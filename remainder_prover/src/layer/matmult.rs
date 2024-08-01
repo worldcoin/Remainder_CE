@@ -14,7 +14,8 @@ use remainder_shared_types::{
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::compute_sumcheck_message_no_beta_table,
-    CircuitLayer, Layer, LayerError, LayerId, VerifierLayer,
+    product::{PostSumcheckLayer, Product},
+    CircuitLayer, Layer, LayerError, LayerId, PostSumcheckEvaluation, SumcheckLayer, VerifierLayer,
 };
 use crate::{
     claims::{
@@ -306,42 +307,6 @@ impl<F: FieldExt> From<MatMult<F>> for CircuitMatMultLayer<F> {
     }
 }
 
-impl<F: FieldExt> CircuitMatMultLayer<F> {
-    /// Convert a [CircuitMatMultLayer] to a [VerifierMatMultLayer], which represents a fully bound MatMult layer.
-    pub fn into_verifier_matmult_layer(
-        &self,
-        point_a: &[F],
-        point_b: &[F],
-        transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> VerifierMatMultLayer<F> {
-        let matrix_a = VerifierMatrix {
-            mle: self
-                .matrix_a
-                .mle
-                .into_verifier_mle(point_a, transcript_reader)
-                .unwrap(),
-            num_rows_vars: self.matrix_a.num_rows_vars,
-            num_cols_vars: self.matrix_a.num_cols_vars,
-        };
-
-        let matrix_b = VerifierMatrix {
-            mle: self
-                .matrix_b
-                .mle
-                .into_verifier_mle(point_b, transcript_reader)
-                .unwrap(),
-            num_rows_vars: self.matrix_b.num_rows_vars,
-            num_cols_vars: self.matrix_b.num_cols_vars,
-        };
-
-        VerifierMatMultLayer {
-            layer_id: self.layer_id,
-            matrix_a,
-            matrix_b,
-        }
-    }
-}
-
 impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
     type VerifierLayer = VerifierMatMultLayer<F>;
 
@@ -355,12 +320,6 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        // First split the claim made on this layer to the according points that are bound to
-        // matrix A and matrix B.
-
-        let mut claim_b = claim.get_point().clone();
-        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
-
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
@@ -407,21 +366,9 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         // `claim.get_result()` due to how we initialized `g_prev_round`.
         let g_final_r_final = evaluate_at_a_point(&g_prev_round, prev_challenge)?;
 
-        let full_claim_chals_a = challenges
-            .clone()
-            .into_iter()
-            .chain(claim_a.into_iter())
-            .collect_vec();
-        let full_claim_chals_b = claim_b
-            .into_iter()
-            .chain(challenges.into_iter())
-            .collect_vec();
-
-        let verifier_layer: VerifierMatMultLayer<F> = self.into_verifier_matmult_layer(
-            &full_claim_chals_a,
-            &full_claim_chals_b,
-            transcript_reader,
-        );
+        let verifier_layer: VerifierMatMultLayer<F> = self
+            .into_verifier_layer(&challenges, claim.get_point(), transcript_reader)
+            .unwrap();
 
         let matrix_product = verifier_layer.evaluate();
 
@@ -430,6 +377,70 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         }
 
         Ok(verifier_layer)
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        assert_eq!(self.matrix_a.num_cols_vars, self.matrix_b.num_rows_vars);
+        self.matrix_a.num_cols_vars
+    }
+
+    fn into_verifier_layer(
+        &self,
+        sumcheck_bindings: &[F],
+        claim_point: &[F],
+        transcript_reader: &mut impl VerifierTranscript<F>,
+    ) -> Result<Self::VerifierLayer, VerificationError> {
+        // Split the claim into the claims made on matrix A rows and matrix B cols.
+        let mut claim_b = claim_point.to_vec();
+        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+
+        // Construct the full claim made on A using the claim made on the layer and the sumcheck bindings.
+        let full_claim_chals_a = sumcheck_bindings
+            .to_vec()
+            .into_iter()
+            .chain(claim_a.into_iter())
+            .collect_vec();
+        // Construct the full claim made on B using the claim made on the layer and the sumcheck bindings.
+        let full_claim_chals_b = claim_b
+            .into_iter()
+            .chain(sumcheck_bindings.to_vec().into_iter())
+            .collect_vec();
+
+        // Shape checks.
+        assert_eq!(
+            full_claim_chals_a.len(),
+            self.matrix_a.num_rows_vars + self.matrix_a.num_cols_vars
+        );
+        assert_eq!(
+            full_claim_chals_b.len(),
+            self.matrix_b.num_rows_vars + self.matrix_b.num_cols_vars
+        );
+
+        // Construct the verifier matrices given these fully bound points.
+        let matrix_a = VerifierMatrix {
+            mle: self
+                .matrix_a
+                .mle
+                .into_verifier_mle(&full_claim_chals_a, transcript_reader)
+                .unwrap(),
+            num_rows_vars: self.matrix_a.num_rows_vars,
+            num_cols_vars: self.matrix_a.num_cols_vars,
+        };
+        let matrix_b = VerifierMatrix {
+            mle: self
+                .matrix_b
+                .mle
+                .into_verifier_mle(&full_claim_chals_b, transcript_reader)
+                .unwrap(),
+            num_rows_vars: self.matrix_b.num_rows_vars,
+            num_cols_vars: self.matrix_b.num_cols_vars,
+        };
+
+        Ok(VerifierMatMultLayer {
+            layer_id: self.layer_id,
+            matrix_a,
+            matrix_b,
+        })
     }
 }
 
@@ -465,6 +476,21 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierMatMultLayer<F> {
 impl<F: FieldExt> VerifierMatMultLayer<F> {
     fn evaluate(&self) -> F {
         self.matrix_a.mle.value() * self.matrix_b.mle.value()
+    }
+}
+
+impl<F: FieldExt> PostSumcheckEvaluation<F> for VerifierMatMultLayer<F> {
+    /// Return the [PostSumcheckLayer]
+    fn get_post_sumcheck_layer(
+        &self,
+        _round_challenges: &[F],
+        _claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
+        let verifier_mles = vec![self.matrix_a.mle.clone(), self.matrix_a.mle.clone()];
+        PostSumcheckLayer(vec![Product::<F, F>::new_from_verifier_mle(
+            &verifier_mles,
+            F::ONE,
+        )])
     }
 }
 
@@ -507,6 +533,51 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
             .collect_vec();
 
         Ok(claims)
+    }
+}
+
+impl<F: FieldExt> PostSumcheckEvaluation<F> for MatMult<F> {
+    /// Return the [PostSumcheckLayer], panicking if either of the MLE refs is not fully bound.
+    fn get_post_sumcheck_layer(
+        &self,
+        _round_challenges: &[F],
+        _claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
+        let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_a.mle.clone()];
+        PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
+    }
+}
+
+impl<F: FieldExt> SumcheckLayer<F> for MatMult<F> {
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+        let mut claim_b = claim_point.to_vec();
+        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+        self.pre_processing_step(claim_a, claim_b);
+        Ok(())
+    }
+
+    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
+        let mle_a = self.matrix_a.mle.clone();
+        let mle_b = self.matrix_b.mle.clone();
+        let sumcheck_message =
+            compute_sumcheck_message_no_beta_table(&[mle_a.clone(), mle_b.clone()], 2, round_index)
+                .unwrap();
+        Ok(sumcheck_message)
+    }
+
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+        self.matrix_a.mle.fix_variable(round_index, challenge);
+        self.matrix_b.mle.fix_variable(round_index, challenge);
+
+        Ok(())
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.num_vars_middle_ab.unwrap()
+    }
+
+    fn max_degree(&self) -> usize {
+        2
     }
 }
 
