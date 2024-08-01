@@ -9,14 +9,15 @@ use crate::{
 use ark_std::iterable::Iterable;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::wlx_eval::YieldWLXEvals;
 use remainder::layer::combine_mle_refs::get_og_mle_refs;
 use remainder::layer::product::{new_with_values, Product};
 use remainder::layer::product::{Intermediate, PostSumcheckLayer};
-use remainder::layer::{LayerId, PostSumcheckEvaluation, SumcheckLayer};
+use remainder::layer::Layer;
+use remainder::layer::LayerId;
 use remainder::mle::mle_enum::MleEnum;
 use remainder::{claims::wlx_eval::claim_group::ClaimGroup, layer::layer_enum::CircuitLayerEnum};
 use remainder::{claims::wlx_eval::ClaimMle, layer::CircuitLayer};
+use remainder::{claims::wlx_eval::YieldWLXEvals, layer::layer_enum::LayerEnum};
 use remainder_shared_types::curves::PrimeOrderCurve;
 use remainder_shared_types::halo2curves::group::ff::Field;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
@@ -39,9 +40,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     /// essentially the coefficients to the univariate committed to (using the appropriate
     /// generators for that round, i.e. accounting for the zero padding of the sumcheck messages).
     fn commit_to_round(
-        underlying_layer: &mut (impl SumcheckLayer<C::Scalar>
-                  + PostSumcheckEvaluation<C::Scalar>
-                  + YieldWLXEvals<C::Scalar>),
+        underlying_layer: &mut LayerEnum<C::Scalar>,
         committer: &PedersenCommitter<C>,
         round_index: usize,
         max_degree: usize,
@@ -77,9 +76,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     /// Return also a [HyraxClaim] representing the aggregated claim.
     pub fn prove(
         // The layer that we are proving
-        mut layer: &mut (impl SumcheckLayer<C::Scalar>
-                  + PostSumcheckEvaluation<C::Scalar>
-                  + YieldWLXEvals<C::Scalar>),
+        mut layer: &mut impl Layer<C::Scalar>,
         // The claims on that layer (unaggregated)
         claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
@@ -221,7 +218,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     pub fn verify(
         proof: &HyraxLayerProof<C>,
         // a description of the layer being proven
-        layer_desc: &CircuitLayerEnum<C::Scalar>,
+        layer_desc: &impl CircuitLayer<C::Scalar>,
         // commitments to the unaggregated claims
         claim_commitments: &Vec<HyraxClaim<C::Scalar, C>>,
         committer: &PedersenCommitter<C>,
@@ -291,24 +288,15 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .unwrap();
         assert_eq!(&transcript_commitments, commitments);
 
-        // Build the [PostSumcheckLayer] from the commitments and the layer description
-        let verifier_expr = layer_desc
-            .expression
-            .bind(&point, transcript_reader)
-            .map_err(|err| VerificationError::ExpressionError(err))?;
-
-        let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
-
-        let post_sumcheck_layer_desc = layer_desc
-            .layer_desc_enum
-            .get_post_sumcheck_layer(&bindings, &agg_claim.point);
+        let post_sumcheck_layer_desc =
+            layer_desc.get_post_sumcheck_layer(&bindings, &agg_claim.point);
         let post_sumcheck_layer: PostSumcheckLayer<C::Scalar, C> =
             new_with_values(&post_sumcheck_layer_desc, commitments);
 
         // Verify the proof of sumcheck!
         proof_of_sumcheck.verify(
             &agg_claim.evaluation,
-            layer_desc.max_degree,
+            layer_desc.max_degree(),
             &post_sumcheck_layer,
             &bindings,
             &committer,

@@ -5,9 +5,7 @@ use ark_std::{cfg_into_iter, end_timer, log2, start_timer};
 use itertools::Itertools;
 use ndarray::Array2;
 use remainder_shared_types::{
-    transcript::{
-        ProverTranscript, TranscriptReader, TranscriptSponge, TranscriptWriter, VerifierTranscript,
-    },
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 
@@ -15,7 +13,7 @@ use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::compute_sumcheck_message_no_beta_table,
     product::{PostSumcheckLayer, Product},
-    CircuitLayer, Layer, LayerError, LayerId, PostSumcheckEvaluation, SumcheckLayer, VerifierLayer,
+    CircuitLayer, Layer, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
     claims::{
@@ -260,6 +258,47 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
         Ok(self.clone().into())
     }
+
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+        let mut claim_b = claim_point.to_vec();
+        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
+        self.pre_processing_step(claim_a, claim_b);
+        Ok(())
+    }
+
+    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
+        let mle_a = self.matrix_a.mle.clone();
+        let mle_b = self.matrix_b.mle.clone();
+        let sumcheck_message =
+            compute_sumcheck_message_no_beta_table(&[mle_a.clone(), mle_b.clone()], 2, round_index)
+                .unwrap();
+        Ok(sumcheck_message)
+    }
+
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+        self.matrix_a.mle.fix_variable(round_index, challenge);
+        self.matrix_b.mle.fix_variable(round_index, challenge);
+
+        Ok(())
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.num_vars_middle_ab.unwrap()
+    }
+
+    fn max_degree(&self) -> usize {
+        2
+    }
+
+    /// Return the [PostSumcheckLayer], panicking if either of the MLE refs is not fully bound.
+    fn get_post_sumcheck_layer(
+        &self,
+        _round_challenges: &[F],
+        _claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
+        let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_a.mle.clone()];
+        PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
+    }
 }
 
 /// The circuit description counterpart of a [Matrix].
@@ -442,6 +481,24 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             matrix_b,
         })
     }
+
+    /// Return the PostSumcheckLayer, given challenges that fully bind the expression.
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        _claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, Option<F>> {
+        let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
+        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
+            &mle_refs,
+            F::ONE,
+            round_challenges,
+        )])
+    }
+
+    fn max_degree(&self) -> usize {
+        2
+    }
 }
 
 /// The verifier's counterpart of a [Matrix].
@@ -476,21 +533,6 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierMatMultLayer<F> {
 impl<F: FieldExt> VerifierMatMultLayer<F> {
     fn evaluate(&self) -> F {
         self.matrix_a.mle.value() * self.matrix_b.mle.value()
-    }
-}
-
-impl<F: FieldExt> PostSumcheckEvaluation<F> for VerifierMatMultLayer<F> {
-    /// Return the [PostSumcheckLayer]
-    fn get_post_sumcheck_layer(
-        &self,
-        _round_challenges: &[F],
-        _claim_challenges: &[F],
-    ) -> PostSumcheckLayer<F, F> {
-        let verifier_mles = vec![self.matrix_a.mle.clone(), self.matrix_a.mle.clone()];
-        PostSumcheckLayer(vec![Product::<F, F>::new_from_verifier_mle(
-            &verifier_mles,
-            F::ONE,
-        )])
     }
 }
 
@@ -533,51 +575,6 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
             .collect_vec();
 
         Ok(claims)
-    }
-}
-
-impl<F: FieldExt> PostSumcheckEvaluation<F> for MatMult<F> {
-    /// Return the [PostSumcheckLayer], panicking if either of the MLE refs is not fully bound.
-    fn get_post_sumcheck_layer(
-        &self,
-        _round_challenges: &[F],
-        _claim_challenges: &[F],
-    ) -> PostSumcheckLayer<F, F> {
-        let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_a.mle.clone()];
-        PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
-    }
-}
-
-impl<F: FieldExt> SumcheckLayer<F> for MatMult<F> {
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
-        let mut claim_b = claim_point.to_vec();
-        let claim_a = claim_b.split_off(self.matrix_b.num_cols_vars);
-        self.pre_processing_step(claim_a, claim_b);
-        Ok(())
-    }
-
-    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
-        let mle_a = self.matrix_a.mle.clone();
-        let mle_b = self.matrix_b.mle.clone();
-        let sumcheck_message =
-            compute_sumcheck_message_no_beta_table(&[mle_a.clone(), mle_b.clone()], 2, round_index)
-                .unwrap();
-        Ok(sumcheck_message)
-    }
-
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
-        self.matrix_a.mle.fix_variable(round_index, challenge);
-        self.matrix_b.mle.fix_variable(round_index, challenge);
-
-        Ok(())
-    }
-
-    fn num_sumcheck_rounds(&self) -> usize {
-        self.num_vars_middle_ab.unwrap()
-    }
-
-    fn max_degree(&self) -> usize {
-        2
     }
 }
 
