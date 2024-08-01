@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::{Claim, ClaimAggregator, YieldClaim};
+use remainder::expression::circuit_expr::CircuitMle;
 use remainder::mle::dense::DenseMle;
 use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::Mle;
@@ -21,7 +22,7 @@ pub struct HyraxOutputLayer<
     M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
 > {
     /// This is the MLE that this is a wrapper over. The output layer is always just an MLE.
-    pub underlying_mle: M,
+    pub underlying_mle: MleEnum<C::Scalar>,
     _marker: PhantomData<C>,
 }
 
@@ -130,7 +131,7 @@ impl<
     /// challenges that it ITSELF draws from the transcript.
     pub fn verify(
         proof: &HyraxOutputLayerProof<C, M>,
-        layer_desc: &OutputLayerDescription,
+        layer_desc: &CircuitMle<C::Scalar>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
@@ -149,7 +150,7 @@ impl<
         HyraxClaim {
             point: bindings,
             mle_enum: None,
-            to_layer_id: layer_desc.layer_id,
+            to_layer_id: layer_desc.layer_id(),
             evaluation: proof.claim_commitment,
         }
     }
