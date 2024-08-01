@@ -264,8 +264,8 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
             (BinaryOperation::Add, _) => DATAPARALLEL_ROUND_ADD_NUM_EVALS,
             (BinaryOperation::Mul, _) => DATAPARALLEL_ROUND_MUL_NUM_EVALS,
         };
-        let first_round_sumcheck_messages =
-            transcript_reader.consume_elements("Sumcheck evaluations", first_round_num_evals)?;
+        let first_round_sumcheck_messages = transcript_reader
+            .consume_elements("Initial Sumcheck evaluations", first_round_num_evals)?;
         sumcheck_messages.push(first_round_sumcheck_messages.clone());
 
         // Check: V_i(g_2, g_1) =? g_1(0) + g_1(1)
@@ -958,7 +958,8 @@ impl<F: FieldExt> Gate<F> {
 
         let (lhs, rhs) = (&mut self.lhs, &mut self.rhs);
 
-        transcript_writer.append_elements("Sumcheck evaluations DATAPARALLEL", &first_message);
+        transcript_writer
+            .append_elements("Initial Sumcheck evaluations DATAPARALLEL", &first_message);
         let num_rounds_copy_phase = self.num_dataparallel_bits;
 
         // Do the first dataparallel bits number sumcheck rounds using libra giraffe.

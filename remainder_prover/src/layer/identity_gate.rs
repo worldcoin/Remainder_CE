@@ -138,6 +138,8 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
         let prev_at_r = evaluate_at_a_point(&g_n_evals, final_chal).unwrap();
 
         // error if this doesn't match the last round of sumcheck
+        dbg!(&final_result);
+        dbg!(&prev_at_r);
         if final_result != prev_at_r {
             return Err(VerificationError::FinalSumcheckFailed);
         }
@@ -190,7 +192,7 @@ impl<F: FieldExt> VerifierIdentityGateLayer<F> {
     /// Computes the oracle query's value for a given [IdentityGateVerifierLayer].
     pub fn evaluate(&self, claim: &Claim<F>) -> F {
         // compute the sum over all the variables of the gate function
-        let beta_u = BetaValues::new_beta_equality_mle(self.claim_challenge_points.clone());
+        let beta_u = BetaValues::new_beta_equality_mle(self.first_u_challenges.clone());
         let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
 
         let f_1_uv = self
@@ -225,9 +227,6 @@ pub struct VerifierIdentityGateLayer<F: FieldExt> {
     /// The source MLE of the expression, i.e. the mle that makes up the "x"
     /// variables.
     source_mle: VerifierMle<F>,
-
-    /// The challenge points for the claim on the [IdentityGate] layer.
-    claim_challenge_points: Vec<F>,
 
     /// The challenges for `x`, as derived from sumcheck.
     first_u_challenges: Vec<F>,
@@ -283,11 +282,27 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             mle.fix_variable(num_rounds - 1, final_chal);
         });
 
+        // --- Finally, send the claimed values for each of the bound MLE to the verifier ---
+        // First, send the claimed value of V_{i + 1}(u)
+        let source_mle_reduced = self.phase_1_mles.clone().unwrap()[1].clone();
+        debug_assert!(source_mle_reduced.bookkeeping_table().len() == 1);
+        transcript_writer.append(
+            "Evaluation of V_{i + 1}(g_2, u)",
+            source_mle_reduced.bookkeeping_table()[0],
+        );
+        dbg!(&source_mle_reduced.bookkeeping_table()[0]);
+
         Ok(())
     }
 
     fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
-        todo!()
+        let mut source_mle_indexed = self.mle_ref.clone();
+        source_mle_indexed.index_mle_indices(0);
+        Ok(IdentityGateCircuitLayer {
+            id: self.layer_id,
+            wiring: self.nonzero_gates.clone(),
+            source_mle: CircuitMle::from_dense_mle(&source_mle_indexed).unwrap(),
+        })
     }
 
     fn layer_id(&self) -> LayerId {

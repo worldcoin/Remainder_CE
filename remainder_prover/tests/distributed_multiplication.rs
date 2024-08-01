@@ -152,16 +152,16 @@ fn test_batching_wraparound_newmainder() {
         })
         .collect_vec();
 
-    // let combined_prod_mle_expected = DenseMle::batch_mles_lil(prod_mles); // This works
-    let combined_prod_mle_expected = DenseMle::batch_mles(prod_mles); // This fails
+    let combined_prod_mle_expected = DenseMle::batch_mles_lil(prod_mles); // This works
+                                                                          // let combined_prod_mle_expected = DenseMle::batch_mles(prod_mles); // This fails
     let combined_prod_mle_expected_vec = combined_prod_mle_expected.bookkeeping_table();
 
-    // let smaller_combined_mle = DenseMle::batch_mles_lil(smaller_mles_vec); // This works
-    let smaller_combined_mle = DenseMle::batch_mles(smaller_mles_vec); // This fails
+    let smaller_combined_mle = DenseMle::batch_mles_lil(smaller_mles_vec); // This works
+                                                                           // let smaller_combined_mle = DenseMle::batch_mles(smaller_mles_vec); // This fails
     let smaller_combined_mle_vec = smaller_combined_mle.bookkeeping_table();
 
-    // let bigger_combined_mle = DenseMle::batch_mles_lil(bigger_mles_vec); // This works
-    let bigger_combined_mle = DenseMle::batch_mles(bigger_mles_vec); // This fails
+    let bigger_combined_mle = DenseMle::batch_mles_lil(bigger_mles_vec); // This works
+                                                                         // let bigger_combined_mle = DenseMle::batch_mles(bigger_mles_vec); // This fails
     let bigger_combined_mle_vec = bigger_combined_mle.bookkeeping_table();
 
     let circuit = LayouterCircuit::new(|ctx| {

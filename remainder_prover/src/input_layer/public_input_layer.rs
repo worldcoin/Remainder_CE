@@ -131,9 +131,10 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
         let mut mle_ref = DenseMle::<F>::new_from_raw(commitment.clone(), self.layer_id());
         mle_ref.index_mle_indices(0);
 
+        dbg!("First");
         let eval = if mle_ref.num_iterated_vars() != 0 {
-            dbg!(&mle_ref);
-            dbg!(&claim);
+            // dbg!(&mle_ref);
+            // dbg!(&claim);
             let mut eval = None;
             for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
                 eval = mle_ref.fix_variable(curr_bit, chal);
@@ -143,10 +144,12 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
         } else {
             Claim::new(vec![], mle_ref.current_mle[0])
         };
+        dbg!(&eval);
 
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
             Ok(())
         } else {
+            dbg!("Actually this one!");
             Err(InputLayerError::PublicInputVerificationFailed)
         }
     }
