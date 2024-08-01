@@ -102,6 +102,26 @@ macro_rules! layer_enum {
                         )*
                     }
                 }
+
+                fn get_post_sumcheck_layer(
+                    &self,
+                    round_challenges: &[F],
+                    claim_challenges: &[F],
+                ) -> $crate::layer::PostSumcheckLayer<F, Option<F>> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
+                        )*
+                    }
+                }
+
+                fn max_degree(&self) -> usize {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.max_degree(),
+                        )*
+                    }
+                }
             }
 
             impl<F: FieldExt> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
@@ -144,6 +164,58 @@ macro_rules! layer_enum {
                 match self {
                     $(
                         Self::$var_name(layer) => layer.prove_rounds(claim, transcript),
+                    )*
+                }
+            }
+
+            fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), super::LayerError> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.initialize_sumcheck(claim_point),
+                    )*
+                }
+            }
+
+            fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, super::LayerError> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.compute_round_sumcheck_message(round_index),
+                    )*
+                }
+            }
+
+            fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), super::LayerError> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.bind_round_variable(round_index, challenge),
+                    )*
+                }
+            }
+
+            fn num_sumcheck_rounds(&self) -> usize {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.num_sumcheck_rounds(),
+                    )*
+                }
+            }
+
+            fn max_degree(&self) -> usize {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.max_degree(),
+                    )*
+                }
+            }
+
+            fn get_post_sumcheck_layer(
+                &self,
+                round_challenges: &[F],
+                claim_challenges: &[F],
+            ) -> crate::layer::PostSumcheckLayer<F, F> {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.get_post_sumcheck_layer(round_challenges, claim_challenges),
                     )*
                 }
             }

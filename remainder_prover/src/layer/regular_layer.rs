@@ -29,7 +29,7 @@ use crate::{
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
-use super::{product::PostSumcheckLayer, PostSumcheckEvaluation, SumcheckLayer};
+use super::product::PostSumcheckLayer;
 
 use super::{CircuitLayer, VerifierLayer};
 
@@ -75,19 +75,6 @@ impl<F: FieldExt> CircuitRegularLayer<F> {
     /// Generates a new [CircuitRegularLayer] given raw data.
     pub(crate) fn new_raw(id: LayerId, expression: Expression<F, CircuitExpr>) -> Self {
         Self { id, expression }
-    }
-}
-
-impl<F: FieldExt> PostSumcheckEvaluation<F> for VerifierRegularLayer<F> {
-    /// Get the [PostSumcheckLayer] for a [VerifierRegularLayer], which represents the description of a fully bound expression.
-    fn get_post_sumcheck_layer(
-        &self,
-        round_challenges: &[F],
-        claim_challenges: &[F],
-    ) -> PostSumcheckLayer<F, F> {
-        let fully_bound_beta =
-            BetaValues::compute_beta_over_two_challenges(round_challenges, claim_challenges);
-        self.expression.get_post_sumcheck_layer(fully_bound_beta)
     }
 }
 
@@ -148,6 +135,91 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         let expression = self.expression.clone().transform_to_circuit_expression()?;
 
         Ok(Self::CircuitLayer { id, expression })
+    }
+
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+        let expression = &mut self.expression;
+        let _expression_num_indices = expression.index_mle_indices(0);
+        let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
+        let expression_linear_indices = expression.get_all_linear_rounds();
+
+        // for each of the linear indices in the expression, we can fix the variable at that index for
+        // the expression, so that now the only unbound indices are the nonlinear indices.
+        expression_linear_indices
+            .iter()
+            .sorted()
+            .for_each(|round_idx| {
+                expression.fix_variable_at_index(*round_idx, claim_point[*round_idx]);
+            });
+
+        // we need the beta values over the nonlinear indices of the expression, so we grab
+        // the claim points that are over these nonlinear indices and then initialize the betavalues
+        // struct over them.
+        let betavec = expression_nonlinear_indices
+            .iter()
+            .map(|idx| (*idx, claim_point[*idx]))
+            .collect_vec();
+        let newbeta = BetaValues::new(betavec);
+        self.beta_vals = Some(newbeta);
+
+        // store the nonlinear rounds of the expression within the layer so that we know these are the
+        // rounds we perform sumcheck over.
+        self.nonlinear_rounds = Some(expression_nonlinear_indices);
+        Ok(())
+    }
+
+    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
+        // Grabs the expression/beta table.
+        let expression = &self.expression;
+        let newbeta = &self.beta_vals;
+
+        // Grabs the degree of univariate polynomial we are sending over.
+        let degree = get_round_degree(expression, round_index);
+
+        // Computes the sumcheck message using the beta cascade algorithm.
+        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
+            expression,
+            round_index,
+            degree,
+            newbeta.as_ref().unwrap(),
+        )
+        .unwrap();
+
+        Ok(prover_sumcheck_message.0)
+    }
+
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+        // Grabs the expression/beta table.
+        let expression = &mut self.expression;
+        let newbeta = &mut self.beta_vals;
+
+        // Update the bookkeeping tables as necessary.
+        expression.fix_variable(round_index, challenge);
+        newbeta
+            .as_mut()
+            .unwrap()
+            .beta_update(round_index, challenge);
+
+        Ok(())
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.nonlinear_rounds.as_ref().unwrap().len()
+    }
+
+    fn max_degree(&self) -> usize {
+        &self.expression.get_max_degree() + 1
+    }
+
+    /// Get the [PostSumcheckLayer] for a regular layer, which represents the fully bound expression.
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
+        let fully_bound_beta =
+            BetaValues::compute_beta_over_two_challenges(round_challenges, claim_challenges);
+        self.expression.get_post_sumcheck_layer(fully_bound_beta)
     }
 }
 
@@ -298,6 +370,22 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
 
         let verifier_layer = VerifierRegularLayer::new_raw(self.layer_id(), verifier_expr);
         Ok(verifier_layer)
+    }
+
+    /// Get the [PostSumcheckLayer] for a [CircuitRegularLayer], which represents the description of a fully bound expression.
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, Option<F>> {
+        let fully_bound_beta =
+            BetaValues::compute_beta_over_two_challenges(round_challenges, claim_challenges);
+        self.expression
+            .get_post_sumcheck_layer(fully_bound_beta, round_challenges)
+    }
+
+    fn max_degree(&self) -> usize {
+        self.expression.get_max_degree() + 1
     }
 }
 
@@ -455,94 +543,5 @@ impl<F: FieldExt> RegularLayer<F> {
             nonlinear_rounds: None,
             beta_vals: None,
         }
-    }
-}
-
-impl<F: FieldExt> PostSumcheckEvaluation<F> for RegularLayer<F> {
-    /// Get the [PostSumcheckLayer] for a regular layer, which represents the fully bound expression.
-    fn get_post_sumcheck_layer(
-        &self,
-        round_challenges: &[F],
-        claim_challenges: &[F],
-    ) -> PostSumcheckLayer<F, F> {
-        let fully_bound_beta =
-            BetaValues::compute_beta_over_two_challenges(round_challenges, claim_challenges);
-        self.expression.get_post_sumcheck_layer(fully_bound_beta)
-    }
-}
-
-impl<F: FieldExt> SumcheckLayer<F> for RegularLayer<F> {
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
-        let expression = &mut self.expression;
-        let _expression_num_indices = expression.index_mle_indices(0);
-        let expression_nonlinear_indices = expression.get_all_nonlinear_rounds();
-        let expression_linear_indices = expression.get_all_linear_rounds();
-
-        // for each of the linear indices in the expression, we can fix the variable at that index for
-        // the expression, so that now the only unbound indices are the nonlinear indices.
-        expression_linear_indices
-            .iter()
-            .sorted()
-            .for_each(|round_idx| {
-                expression.fix_variable_at_index(*round_idx, claim_point[*round_idx]);
-            });
-
-        // we need the beta values over the nonlinear indices of the expression, so we grab
-        // the claim points that are over these nonlinear indices and then initialize the betavalues
-        // struct over them.
-        let betavec = expression_nonlinear_indices
-            .iter()
-            .map(|idx| (*idx, claim_point[*idx]))
-            .collect_vec();
-        let newbeta = BetaValues::new(betavec);
-        self.beta_vals = Some(newbeta);
-
-        // store the nonlinear rounds of the expression within the layer so that we know these are the
-        // rounds we perform sumcheck over.
-        self.nonlinear_rounds = Some(expression_nonlinear_indices);
-        Ok(())
-    }
-
-    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
-        // Grabs the expression/beta table.
-        let expression = &self.expression;
-        let newbeta = &self.beta_vals;
-
-        // Grabs the degree of univariate polynomial we are sending over.
-        let degree = get_round_degree(expression, round_index);
-
-        // Computes the sumcheck message using the beta cascade algorithm.
-        let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
-            expression,
-            round_index,
-            degree,
-            newbeta.as_ref().unwrap(),
-        )
-        .unwrap();
-
-        Ok(prover_sumcheck_message.0)
-    }
-
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
-        // Grabs the expression/beta table.
-        let expression = &mut self.expression;
-        let newbeta = &mut self.beta_vals;
-
-        // Update the bookkeeping tables as necessary.
-        expression.fix_variable(round_index, challenge);
-        newbeta
-            .as_mut()
-            .unwrap()
-            .beta_update(round_index, challenge);
-
-        Ok(())
-    }
-
-    fn num_sumcheck_rounds(&self) -> usize {
-        self.nonlinear_rounds.as_ref().unwrap().len()
-    }
-
-    fn max_degree(&self) -> usize {
-        &self.expression.get_max_degree() + 1
     }
 }

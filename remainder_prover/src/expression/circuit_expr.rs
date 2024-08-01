@@ -8,6 +8,7 @@ use crate::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
@@ -68,6 +69,20 @@ impl<F: FieldExt> CircuitMle<F> {
                 mle_index.bind_index(value);
             }
         }
+    }
+
+    /// Gets the values of the bound and fixed MLE indices of this MLE, panicking if the MLE is not
+    /// fully bound.
+    pub fn get_claim_point(&self, challenges: &[F]) -> Vec<F> {
+        self.var_indices
+            .iter()
+            .map(|index| match index {
+                MleIndex::Bound(chal, _) => *chal,
+                MleIndex::Fixed(chal) => F::from(*chal as u64),
+                MleIndex::IndexedBit(i) => challenges[*i],
+                _ => panic!("DenseMleRefDesc contained iterated bit!"),
+            })
+            .collect()
     }
 
     pub fn into_verifier_mle(
@@ -144,39 +159,6 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
                 .into_verifier_node(point, transcript_reader)?,
             (),
         ))
-
-        /*
-        let observer_fn = |expr_node: &mut ExpressionNode<F
-        let mut constant = |c| Ok(c);
-        let mut selector_column = |idx: &MleIndex<F>,
-                                   lhs: Result<F, ExpressionError>,
-                                   rhs: Result<F, ExpressionError>|
-         -> Result<F, ExpressionError> {
-            // --- Selector bit must be bound ---
-            if let MleIndex::Bound(val, _) = idx {
-                return Ok(*val * rhs? + (F::ONE - val) * lhs?);
-            }
-            Err(ExpressionError::SelectorBitNotBoundError)
-        };
-        let mut mle_eval = |vmle: &<CircuitExpr as ExpressionType<F>>::MLENodeRepr| -> Result<F, ExpressionError> {
-            Ok(transcript_reader.consume_element("Leaf MLE value").map_err(|err| ExpressionError::TranscriptError(err))?)
-        };
-        let mut negated = |val: Result<F, ExpressionError>| Ok((val?).neg());
-        let mut sum = |lhs: Result<F, ExpressionError>,
-                       rhs: Result<F, ExpressionError>| {
-            Ok(lhs? + rhs?)
-        };
-        let mut product = |vmles: & [<CircuitExpr as ExpressionType<F>>::MLENodeRepr]| -> Result<F, ExpressionError> {
-            vmles.iter().try_fold(F::ONE, |acc, _| {
-                let val = transcript_reader.consume_element("Product MLE value").map_err(|err| ExpressionError::TranscriptError(err))?;
-                Ok(acc * val)
-            })
-        };
-        let mut scaled = |val: Result<F, ExpressionError>, scalar: F| Ok(val? * scalar);
-
-        self.expression_node
-            .traverse_node_mut(&mut observer_fn, &mut self.mle_vec)
-        */
     }
 
     /// Traverses the expression tree to get the indices of all the nonlinear
@@ -187,6 +169,21 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
             .into_iter()
             .sorted()
             .collect()
+    }
+
+    /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
+    pub fn get_post_sumcheck_layer(
+        &self,
+        multiplier: F,
+        challenges: &[F],
+    ) -> PostSumcheckLayer<F, Option<F>> {
+        self.expression_node
+            .get_post_sumcheck_layer(multiplier, challenges, &self.mle_vec)
+    }
+
+    /// Get the maximum degree of any variable in this expression.
+    pub fn get_max_degree(&self) -> usize {
+        self.expression_node.get_max_degree(&self.mle_vec)
     }
 
     /// Returns the maximum degree of b_{curr_round} within an expression
@@ -439,6 +436,83 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
             }
         });
         curr_nonlinear_indices.clone()
+    }
+
+    /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound
+    /// representation of an expression.
+    pub fn get_post_sumcheck_layer(
+        &self,
+        multiplier: F,
+        challenges: &[F],
+        mle_vec: &<VerifierExpr as ExpressionType<F>>::MleVec,
+    ) -> PostSumcheckLayer<F, Option<F>> {
+        let mut products: Vec<Product<F, Option<F>>> = vec![];
+        match self {
+            ExpressionNode::Selector(mle_index, a, b) => {
+                let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
+                let right_side_acc = multiplier * (mle_index.val().unwrap());
+                products.extend(
+                    a.get_post_sumcheck_layer(left_side_acc, challenges, mle_vec)
+                        .0,
+                );
+                products.extend(
+                    b.get_post_sumcheck_layer(right_side_acc, challenges, mle_vec)
+                        .0,
+                );
+            }
+            ExpressionNode::Sum(a, b) => {
+                products.extend(a.get_post_sumcheck_layer(multiplier, challenges, mle_vec).0);
+                products.extend(b.get_post_sumcheck_layer(multiplier, challenges, mle_vec).0);
+            }
+            ExpressionNode::Mle(mle) => {
+                products.push(Product::<F, Option<F>>::new(
+                    &vec![mle.clone()],
+                    multiplier,
+                    challenges,
+                ));
+            }
+            ExpressionNode::Product(mles) => {
+                let product = Product::<F, Option<F>>::new(mles, multiplier, challenges);
+                products.push(product);
+            }
+            ExpressionNode::Scaled(a, scale_factor) => {
+                let acc = multiplier * scale_factor;
+                products.extend(a.get_post_sumcheck_layer(acc, challenges, mle_vec).0);
+            }
+            ExpressionNode::Negated(a) => {
+                let acc = multiplier.neg();
+                products.extend(a.get_post_sumcheck_layer(acc, challenges, mle_vec).0);
+            }
+            ExpressionNode::Constant(constant) => {
+                products.push(Product::<F, Option<F>>::new(
+                    &[],
+                    *constant * multiplier,
+                    challenges,
+                ));
+            }
+        }
+        PostSumcheckLayer(products)
+    }
+
+    /// Get the maximum degree of an ExpressionNode, recursively.
+    fn get_max_degree(&self, mle_vec: &<CircuitExpr as ExpressionType<F>>::MleVec) -> usize {
+        match self {
+            ExpressionNode::Selector(_, a, b) | ExpressionNode::Sum(a, b) => {
+                let a_degree = a.get_max_degree(mle_vec);
+                let b_degree = b.get_max_degree(mle_vec);
+                max(a_degree, b_degree)
+            }
+            ExpressionNode::Mle(_) => {
+                // 1 for the current MLE
+                1
+            }
+            ExpressionNode::Product(mle_refs) => {
+                // max degree is the number of MLEs in a product
+                mle_refs.len()
+            }
+            ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(mle_vec),
+            ExpressionNode::Constant(_) => 1,
+        }
     }
 }
 

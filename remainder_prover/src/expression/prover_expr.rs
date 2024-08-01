@@ -389,6 +389,7 @@ impl<F: FieldExt> Expression<F, ProverExpr> {
             .get_post_sumcheck_layer(multiplier, &self.mle_vec)
     }
 
+    /// Get the maximum degree of any variable in htis expression
     pub fn get_max_degree(&self) -> usize {
         self.expression_node.get_max_degree(&self.mle_vec)
     }

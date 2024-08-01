@@ -1,8 +1,6 @@
 //! Identity gate id(z, x) determines whether the xth gate from the
 //! i + 1th layer contributes to the zth gate in the ith layer.
 
-use std::marker::PhantomData;
-
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
@@ -16,7 +14,6 @@ use crate::{
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::{LayerError, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
-    prover::SumcheckProof,
     sumcheck::*,
 };
 use remainder_shared_types::{
@@ -30,12 +27,11 @@ use thiserror::Error;
 
 use super::{
     gate::{
-        check_fully_bound,
         gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
         index_mle_indices_gate, GateError,
     },
     product::{PostSumcheckLayer, Product},
-    CircuitLayer, Layer, LayerId, PostSumcheckEvaluation, SumcheckLayer, VerifierLayer,
+    CircuitLayer, Layer, LayerId, VerifierLayer,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -166,7 +162,7 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
     fn into_verifier_layer(
         &self,
         sumcheck_challenges: &[F],
-        claim_point: &[F],
+        _claim_point: &[F],
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
         let src_verifier_mle = self
@@ -180,11 +176,38 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
             layer_id: self.layer_id(),
             wiring: self.wiring.clone(),
             source_mle: src_verifier_mle,
-            claim_challenge_points: claim_point.to_vec(),
             first_u_challenges: sumcheck_challenges.to_vec(),
         };
 
         Ok(verifier_id_gate_layer)
+    }
+
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, Option<F>> {
+        let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
+        let beta_g = BetaValues::new_beta_equality_mle(claim_challenges.to_vec());
+        let f_1_uv = self
+            .wiring
+            .clone()
+            .into_iter()
+            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
+                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                acc + gz * ux
+            });
+
+        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
+            &vec![self.source_mle.clone()],
+            f_1_uv,
+            round_challenges,
+        )])
+    }
+
+    fn max_degree(&self) -> usize {
+        2
     }
 }
 
@@ -307,6 +330,90 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
 
     fn layer_id(&self) -> LayerId {
         self.layer_id
+    }
+
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+        let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
+        self.set_beta_g(beta_g.clone());
+
+        self.mle_ref.index_mle_indices(0);
+        let num_vars = self.mle_ref.num_iterated_vars();
+
+        let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
+
+        self.nonzero_gates
+            .clone()
+            .into_iter()
+            .for_each(|(z_ind, x_ind)| {
+                let beta_g_at_z = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                a_hg_mle_ref[x_ind] += beta_g_at_z;
+            });
+
+        let mut phase_1 = [
+            DenseMle::new_from_raw(a_hg_mle_ref, LayerId::Input(0)),
+            self.mle_ref.clone(),
+        ];
+
+        index_mle_indices_gate(&mut phase_1, 0);
+        self.set_phase_1(phase_1.clone());
+
+        Ok(())
+    }
+
+    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
+        let mles = self.phase_1_mles.as_ref().unwrap();
+        let independent_variable = mles
+            .iter()
+            .map(|mle_ref| {
+                mle_ref
+                    .mle_indices()
+                    .contains(&MleIndex::IndexedBit(round_index))
+            })
+            .reduce(|acc, item| acc | item)
+            .unwrap();
+        let evals =
+            evaluate_mle_ref_product_no_beta_table(mles, independent_variable, mles.len()).unwrap();
+        let Evals(evaluations) = evals;
+        Ok(evaluations)
+    }
+
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+        let mles = self.phase_1_mles.as_mut().unwrap();
+        mles.iter_mut().for_each(|mle_ref| {
+            mle_ref.fix_variable(round_index, challenge);
+        });
+        Ok(())
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        self.mle_ref.num_iterated_vars()
+    }
+
+    fn max_degree(&self) -> usize {
+        2
+    }
+
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> PostSumcheckLayer<F, F> {
+        let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
+        let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
+        let beta_g = BetaValues::new_beta_equality_mle(claim_challenges.to_vec());
+
+        let f_1_uv = self
+            .nonzero_gates
+            .clone()
+            .into_iter()
+            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
+                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+
+                acc + gz * ux
+            });
+
+        PostSumcheckLayer(vec![Product::<F, F>::new(&vec![mle_ref.clone()], f_1_uv)])
     }
 }
 
@@ -502,31 +609,6 @@ impl<F: FieldExt> IdentityGate<F> {
     }
 }
 
-impl<F: FieldExt> PostSumcheckEvaluation<F> for IdentityGate<F> {
-    fn get_post_sumcheck_layer(
-        &self,
-        round_challenges: &[F],
-        claim_challenges: &[F],
-    ) -> PostSumcheckLayer<F, F> {
-        let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
-        let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
-        let beta_g = BetaValues::new_beta_equality_mle(claim_challenges.to_vec());
-
-        let f_1_uv = self
-            .nonzero_gates
-            .clone()
-            .into_iter()
-            .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
-
-                acc + gz * ux
-            });
-
-        PostSumcheckLayer(vec![Product::<F, F>::new(&vec![mle_ref.clone()], f_1_uv)])
-    }
-}
-
 /// For circuit serialization to hash the circuit description into the transcript.
 impl<F: std::fmt::Debug + FieldExt> IdentityGate<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
@@ -544,68 +626,5 @@ impl<F: std::fmt::Debug + FieldExt> IdentityGate<F> {
             }
         }
         IdentityGateCircuitDesc(self)
-    }
-}
-
-impl<F: FieldExt> SumcheckLayer<F> for IdentityGate<F> {
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
-        let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
-        self.set_beta_g(beta_g.clone());
-
-        self.mle_ref.index_mle_indices(0);
-        let num_vars = self.mle_ref.num_iterated_vars();
-
-        let mut a_hg_mle_ref = vec![F::ZERO; 1 << num_vars];
-
-        self.nonzero_gates
-            .clone()
-            .into_iter()
-            .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                a_hg_mle_ref[x_ind] += beta_g_at_z;
-            });
-
-        let mut phase_1 = [
-            DenseMle::new_from_raw(a_hg_mle_ref, LayerId::Input(0)),
-            self.mle_ref.clone(),
-        ];
-
-        index_mle_indices_gate(&mut phase_1, 0);
-        self.set_phase_1(phase_1.clone());
-
-        Ok(())
-    }
-
-    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
-        let mles = self.phase_1_mles.as_ref().unwrap();
-        let independent_variable = mles
-            .iter()
-            .map(|mle_ref| {
-                mle_ref
-                    .mle_indices()
-                    .contains(&MleIndex::IndexedBit(round_index))
-            })
-            .reduce(|acc, item| acc | item)
-            .unwrap();
-        let evals =
-            evaluate_mle_ref_product_no_beta_table(mles, independent_variable, mles.len()).unwrap();
-        let Evals(evaluations) = evals;
-        Ok(evaluations)
-    }
-
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
-        let mles = self.phase_1_mles.as_mut().unwrap();
-        mles.iter_mut().for_each(|mle_ref| {
-            mle_ref.fix_variable(round_index, challenge);
-        });
-        Ok(())
-    }
-
-    fn num_sumcheck_rounds(&self) -> usize {
-        self.mle_ref.num_iterated_vars()
-    }
-
-    fn max_degree(&self) -> usize {
-        2
     }
 }

@@ -7,6 +7,7 @@ use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::wlx_eval::YieldWLXEvals;
+use remainder::layer::Layer;
 use remainder::layouter::compiling::LayouterCircuit;
 use remainder::layouter::component::Component;
 use remainder::layouter::nodes::node_enum::NodeEnum;
@@ -64,7 +65,7 @@ pub struct HyraxProof<
 /// The struct that holds all the necessary information to describe a circuit.
 pub struct HyraxCircuit<
     C: PrimeOrderCurve,
-    L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar> + YieldWLXEvals<C::Scalar>,
+    L: Layer<C::Scalar>,
 > {
     pub input_layers: Vec<HyraxCircuitInputLayerEnum<C>>,
     pub layers: Vec<L>,
@@ -84,6 +85,12 @@ impl<
             layers,
             output_layers,
         } = witness;
+
+        let hyrax_layers = layers.iter().map(
+            |layer| {
+                HyraxLayer
+            }
+        )
 
         // let hyrax_output_layers = output_layers.iter().map(
         //     |output_layer| {

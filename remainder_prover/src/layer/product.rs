@@ -4,10 +4,11 @@
 use remainder_shared_types::FieldExt;
 
 use super::LayerId;
+use crate::expression::circuit_expr::CircuitMle;
 use crate::expression::verifier_expr::VerifierMle;
 use crate::mle::dense::DenseMle;
 use crate::mle::mle_enum::MleEnum;
-use crate::mle::Mle;
+use crate::mle::{self, Mle};
 
 /// Represents a normal form for a layer expression in which the layer is represented as a linear
 /// combination of products of other layer MLEs, the coefficients of which are public.
@@ -35,6 +36,39 @@ pub struct Product<F: FieldExt, T> {
     pub intermediates: Vec<Intermediate<F, T>>,
     /// the (public) coefficient i.e. the "mxi"
     pub coefficient: F,
+}
+
+impl<F: FieldExt> Product<F, Option<F>> {
+    /// Creates a new Product from a vector of [CircuitMles].
+    pub fn new(mles: &[CircuitMle<F>], coefficient: F, bindings: &[F]) -> Self {
+        if mles.len() == 0 {
+            return Product {
+                intermediates: vec![Intermediate::Composite {
+                    value: Some(F::ONE),
+                }],
+                coefficient,
+            };
+        }
+        let mut intermediates = vec![Self::build_atom(&mles[0], &bindings)];
+        mles.iter().skip(1).for_each(|mle_ref| {
+            intermediates.push(Self::build_atom(mle_ref, &bindings));
+            intermediates.push(Intermediate::Composite { value: None });
+        });
+        Product {
+            intermediates,
+            coefficient,
+        }
+    }
+
+    // Helper function for new
+    fn build_atom(mle: &CircuitMle<F>, bindings: &[F]) -> Intermediate<F, Option<F>> {
+        Intermediate::Atom {
+            layer_id: mle.layer_id(),
+            point: mle.get_claim_point(bindings),
+            mle_enum: None,
+            value: None,
+        }
+    }
 }
 
 impl<F: FieldExt> Product<F, F> {

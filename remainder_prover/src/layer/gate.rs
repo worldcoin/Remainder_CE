@@ -183,6 +183,34 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
             num_dataparallel_bits: self.num_dataparallel_bits,
         })
     }
+
+    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+        todo!()
+    }
+
+    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
+        todo!()
+    }
+
+    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+        todo!()
+    }
+
+    fn num_sumcheck_rounds(&self) -> usize {
+        todo!()
+    }
+
+    fn max_degree(&self) -> usize {
+        todo!()
+    }
+
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> super::product::PostSumcheckLayer<F, F> {
+        todo!()
+    }
 }
 
 /// The circuit-description counterpart of a Gate layer description.
@@ -425,6 +453,18 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         };
 
         Ok(verifier_gate_layer)
+    }
+
+    fn get_post_sumcheck_layer(
+        &self,
+        round_challenges: &[F],
+        claim_challenges: &[F],
+    ) -> super::product::PostSumcheckLayer<F, Option<F>> {
+        todo!()
+    }
+
+    fn max_degree(&self) -> usize {
+        todo!()
     }
 }
 
