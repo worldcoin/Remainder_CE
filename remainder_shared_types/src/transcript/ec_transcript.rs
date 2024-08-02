@@ -47,6 +47,10 @@ where
 
     fn append_ec_points(&mut self, label: &str, elements: &[C]);
 
+    fn append_scalar_point(&mut self, label: &str, elem: C::Scalar);
+
+    fn append_scalar_points(&mut self, label: &str, elements: &[C::Scalar]);
+
     fn get_scalar_field_challenge(&mut self, label: &str) -> C::Scalar;
 
     fn get_scalar_field_challenges(&mut self, label: &str, num_elements: usize) -> Vec<C::Scalar>;
@@ -69,6 +73,18 @@ where
         elements.iter().for_each(|elem| {
             let (x_coord, y_coord) = elem.affine_coordinates().unwrap();
             self.append_elements(label, &[x_coord, y_coord]);
+        });
+    }
+
+    fn append_scalar_point(&mut self, label: &str, elem: C::Scalar) {
+        let base_elem = C::Base::from_bytes_le(elem.to_bytes_le());
+        self.append(label, base_elem);
+    }
+
+    fn append_scalar_points(&mut self, label: &str, elements: &[C::Scalar]) {
+        elements.iter().for_each(|elem| {
+            let base_elem = C::Base::from_bytes_le(elem.to_bytes_le());
+            self.append(label, base_elem);
         });
     }
 
@@ -217,6 +233,17 @@ where
         num_elements: usize,
     ) -> Result<Vec<C>, TranscriptReaderError>;
 
+    fn consume_scalar_point(
+        &mut self,
+        label: &'static str,
+    ) -> Result<C::Scalar, TranscriptReaderError>;
+
+    fn consume_scalar_points(
+        &mut self,
+        label: &'static str,
+        num_elements: usize,
+    ) -> Result<Vec<C::Scalar>, TranscriptReaderError>;
+
     fn get_scalar_field_challenge(
         &mut self,
         label: &'static str,
@@ -256,6 +283,30 @@ where
             .chunks(2)
             .map(|points| C::from_xy(points[0], points[1]))
             .collect())
+    }
+
+    fn consume_scalar_point(
+        &mut self,
+        label: &'static str,
+    ) -> Result<C::Scalar, TranscriptReaderError> {
+        let base_point = self.consume_element(label)?;
+        let scalar_point = C::Scalar::from_bytes_le(base_point.to_bytes_le());
+        Ok(scalar_point)
+    }
+
+    fn consume_scalar_points(
+        &mut self,
+        label: &'static str,
+        num_elements: usize,
+    ) -> Result<Vec<C::Scalar>, TranscriptReaderError> {
+        let points = self.consume_elements(label, num_elements)?;
+        Ok(points
+            .iter()
+            .map(|point| {
+                let scalar_point = C::Scalar::from_bytes_le(point.to_bytes_le());
+                scalar_point
+            })
+            .collect_vec())
     }
 
     /// Literally takes the byte representation of the base field element and

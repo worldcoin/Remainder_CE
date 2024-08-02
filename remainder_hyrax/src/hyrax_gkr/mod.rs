@@ -1,40 +1,28 @@
 use std::{collections::HashMap, marker::PhantomData};
 
+use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 use hyrax_input_layer::{
-    verify_public_and_random_input_layer, HyraxCircuitInputLayerEnum, HyraxInputLayer,
-    HyraxInputLayerProof, InputProofEnum,
+    verify_public_and_random_input_layer, CommitmentEnum, HyraxCircuitInputLayerEnum,
+    HyraxInputLayer, HyraxInputLayerProof, InputProofEnum,
 };
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
-use remainder::claims::wlx_eval::YieldWLXEvals;
-use remainder::input_layer::{
-    hyrax_placeholder_input_layer, hyrax_precommit_placeholder_input_layer, public_input_layer,
-    VerifierInputLayer,
-};
+use remainder::input_layer::InputLayer;
 use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::{CircuitLayer, Layer};
 use remainder::layouter::compiling::LayouterCircuit;
-use remainder::layouter::component::{Component, ComponentSet};
+use remainder::layouter::component::ComponentSet;
 use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::Context;
 use remainder::mle::Mle;
 use remainder::prover::proof_system::DefaultProofSystem;
 use remainder::prover::{GKRCircuit, GKRVerifierKey, Witness};
 use remainder::{
-    claims::wlx_eval::ClaimMle,
-    input_layer::{
-        enum_input_layer::InputLayerEnum, public_input_layer::PublicInputLayer,
-        random_input_layer::RandomInputLayer,
-    },
-    layer::LayerId,
+    claims::wlx_eval::ClaimMle, input_layer::enum_input_layer::InputLayerEnum, layer::LayerId,
 };
-use remainder_shared_types::FieldExt;
-
-use crate::pedersen::{CommittedScalar, PedersenCommitter};
-use remainder::input_layer::InputLayer;
 
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
@@ -96,7 +84,8 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
         blinding_factors_matrix: Vec<<C as PrimeOrderCurve>::Scalar>,
         log_num_cols: usize,
         commitment: Vec<C>,
-    ) -> Self {
+        prover_transcript: &mut impl ECProverTranscript<C>,
+    ) -> (Self, Vec<CommitmentEnum<C>>) {
         let witness: Witness<<C as PrimeOrderCurve>::Scalar, DefaultProofSystem> =
             gkr_circuit.synthesize();
         let Witness {
@@ -115,52 +104,76 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
 
         let mut hyrax_precommit_counter = 0;
 
-        let hyrax_input_layers = input_layers
+        let (hyrax_input_layers, commitments) = input_layers
             .into_iter()
             .map(|input_layer| match input_layer {
                 InputLayerEnum::LigeroInputLayer(_) => None,
-                InputLayerEnum::PublicInputLayer(public_input_layer) => Some(
-                    HyraxCircuitInputLayerEnum::PublicInputLayer(*public_input_layer),
-                ),
-                InputLayerEnum::RandomInputLayer(random_input_layer) => Some(
-                    HyraxCircuitInputLayerEnum::RandomInputLayer(*random_input_layer),
-                ),
+                InputLayerEnum::PublicInputLayer(mut public_input_layer) => {
+                    let public_commit = public_input_layer.commit().unwrap();
+                    prover_transcript
+                        .append_scalar_points("public input layer commit", &public_commit);
+                    Some((
+                        HyraxCircuitInputLayerEnum::PublicInputLayer(*public_input_layer),
+                        CommitmentEnum::PublicCommitment(public_commit),
+                    ))
+                }
+                InputLayerEnum::RandomInputLayer(mut random_input_layer) => {
+                    let random_commit = random_input_layer.commit().unwrap();
+                    prover_transcript
+                        .append_scalar_points("random input layer commit", &random_commit);
+                    Some((
+                        HyraxCircuitInputLayerEnum::RandomInputLayer(*random_input_layer),
+                        CommitmentEnum::RandomCommitment(random_commit),
+                    ))
+                }
                 InputLayerEnum::HyraxPlaceholderInputLayer(hyrax_placeholder_input_layer) => {
-                    Some(HyraxCircuitInputLayerEnum::HyraxInputLayer(
-                        HyraxInputLayer::new_from_placeholder_with_committer(
-                            *hyrax_placeholder_input_layer,
-                            committer,
-                        ),
+                    let hyrax_input_layer = HyraxInputLayer::new_from_placeholder_with_committer(
+                        *hyrax_placeholder_input_layer,
+                        committer,
+                    );
+                    let hyrax_commit = hyrax_input_layer.commit();
+                    prover_transcript.append_ec_points("hyrax pcs commitment", &hyrax_commit);
+                    Some((
+                        HyraxCircuitInputLayerEnum::HyraxInputLayer(hyrax_input_layer),
+                        CommitmentEnum::HyraxCommitment(hyrax_commit),
                     ))
                 }
                 InputLayerEnum::HyraxPrecommitPlaceholderInputLayer(
                     hyrax_precommit_placeholder_input_layer,
                 ) => {
                     hyrax_precommit_counter += 1;
-                    Some(HyraxCircuitInputLayerEnum::HyraxInputLayer(
+                    prover_transcript.append_ec_points("hyrax pcs commitment", &commitment);
+                    let hyrax_precommit_layer =
                         HyraxInputLayer::new_from_placeholder_with_commitment(
                             *hyrax_precommit_placeholder_input_layer,
                             committer,
                             blinding_factors_matrix.clone(),
                             log_num_cols,
                             commitment.clone(),
-                        ),
+                        );
+
+                    Some((
+                        HyraxCircuitInputLayerEnum::HyraxInputLayer(hyrax_precommit_layer),
+                        CommitmentEnum::HyraxCommitment(commitment.clone()),
                     ))
                 }
             })
             .filter_map(|x| x)
-            .collect_vec();
+            .unzip();
 
         if hyrax_precommit_counter > 1 {
             panic!("ERROR: MORE THAN ONE HYRAX PRECOMMIT LAYER FOUND IN CIRCUIT! THIS IS NOT SUPPORTED AT THE MOMENT (READ THE ERROR)");
         }
 
-        Self {
-            input_layers: hyrax_input_layers,
-            layers: layers.layers,
-            output_layers: hyrax_output_layers,
-            _phantom: PhantomData,
-        }
+        (
+            Self {
+                input_layers: hyrax_input_layers,
+                layers: layers.layers,
+                output_layers: hyrax_output_layers,
+                _phantom: PhantomData,
+            },
+            commitments,
+        )
     }
 }
 
@@ -237,7 +250,6 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
             .collect_vec();
 
         // Input layer proofs
-
         let input_layer_proofs = input_layers
             .into_iter()
             .map(|input_layer| {
@@ -257,8 +269,6 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
                         );
                         InputProofEnum::HyraxInputLayerProof(input_proof)
                     }
-
-                    // @vishady this bit is new
                     // For the other input layers, the prover just hands over the (CommittedScalar-valued) HyraxClaim for each claim.
                     // The verifier will need to check that each of the claims is consistent with the input layer.
                     HyraxCircuitInputLayerEnum::PublicInputLayer(layer) => {
@@ -272,9 +282,6 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
                             layer.clone(),
                             committed_claims.clone(),
                         )
-                    }
-                    _ => {
-                        panic!("Input layer type not supported by Hyrax");
                     }
                 }
             })
@@ -296,8 +303,32 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
         proof: &HyraxProof<C, Fn>,
         circuit_description: &GKRVerifierKey<C::Scalar, DefaultProofSystem>,
         committer: &PedersenCommitter<C>,
+        commitments: Vec<CommitmentEnum<C>>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) {
+        // First consume all input layer commitments from the transcript
+        commitments.iter().for_each(|commitment| match commitment {
+            CommitmentEnum::HyraxCommitment(hyrax_commit) => {
+                let transcript_hyrax_commit = transcript
+                    .consume_ec_points("hyrax pcs commitment", hyrax_commit.len())
+                    .unwrap();
+                assert_eq!(&transcript_hyrax_commit, hyrax_commit);
+            }
+            CommitmentEnum::PublicCommitment(public_commit) => {
+                let transcript_public_commit = transcript
+                    .consume_scalar_points("public commitment", public_commit.len())
+                    .unwrap();
+                assert_eq!(&transcript_public_commit, public_commit);
+            }
+            CommitmentEnum::RandomCommitment(random_commit) => {
+                let transcript_random_commit = transcript
+                    .consume_scalar_points("random commitment", random_commit.len())
+                    .unwrap();
+                assert_eq!(&transcript_random_commit, random_commit);
+            }
+        });
+
+        // Unpack the Hyrax proof.
         let HyraxProof {
             layer_proofs,
             input_layer_proofs,
@@ -354,38 +385,69 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
         // Input layers verification
         input_layer_proofs
             .into_iter()
-            .for_each(|input_layer_proof| match input_layer_proof {
-                InputProofEnum::HyraxInputLayerProof(hyrax_input_proof) => {
-                    let layer_id = hyrax_input_proof.layer_id;
-                    let layer_claims_vec = claim_tracker.remove(&layer_id).unwrap().clone();
-                    hyrax_input_proof.verify(&layer_claims_vec, &committer, transcript);
-                }
-                // @vishady this part is new
-                InputProofEnum::PublicInputLayerProof(layer, committed_claims) => {
-                    let claims_as_commitments =
-                        claim_tracker.remove(&layer.layer_id()).unwrap().clone();
-                    let plaintext_claims =
-                        Self::match_claims(&claims_as_commitments, &committed_claims, committer);
-                    plaintext_claims.into_iter().for_each(|claim| {
-                        verify_public_and_random_input_layer::<C>(
-                            layer.clone().commit().unwrap(),
-                            claim.get_claim(),
+            .zip(commitments.into_iter())
+            .for_each(
+                |(input_layer_proof, input_commit)| match input_layer_proof {
+                    InputProofEnum::HyraxInputLayerProof(hyrax_input_proof) => {
+                        // Check that the commitment given also matches with the commitment in the proof
+                        match input_commit {
+                            CommitmentEnum::HyraxCommitment(hyrax_commit) => {
+                                assert_eq!(hyrax_input_proof.input_commitment, hyrax_commit);
+                            }
+                            _ => panic!("should have a hyrax commitment here!"),
+                        }
+                        let layer_id = hyrax_input_proof.layer_id;
+                        let layer_claims_vec = claim_tracker.remove(&layer_id).unwrap().clone();
+                        hyrax_input_proof.verify(&layer_claims_vec, &committer, transcript);
+                    }
+                    InputProofEnum::PublicInputLayerProof(layer, committed_claims) => {
+                        let public_commit_from_proof = layer.clone().commit().unwrap();
+                        // Check that the commitment given also matches with the commitment in the proof
+                        match input_commit {
+                            CommitmentEnum::PublicCommitment(public_commit) => {
+                                assert_eq!(public_commit_from_proof, public_commit);
+                            }
+                            _ => panic!("should have a public commitment here!"),
+                        }
+                        let claims_as_commitments =
+                            claim_tracker.remove(&layer.layer_id()).unwrap().clone();
+                        let plaintext_claims = Self::match_claims(
+                            &claims_as_commitments,
+                            &committed_claims,
+                            committer,
                         );
-                    });
-                }
-                InputProofEnum::RandomInputLayerProof(layer, committed_claims) => {
-                    let claims_as_commitments =
-                        claim_tracker.remove(&layer.layer_id()).unwrap().clone();
-                    let plaintext_claims =
-                        Self::match_claims(&claims_as_commitments, &committed_claims, committer);
-                    plaintext_claims.into_iter().for_each(|claim| {
-                        verify_public_and_random_input_layer::<C>(
-                            layer.clone().commit().unwrap(),
-                            claim.get_claim(),
+                        plaintext_claims.into_iter().for_each(|claim| {
+                            verify_public_and_random_input_layer::<C>(
+                                &public_commit_from_proof,
+                                claim.get_claim(),
+                            );
+                        });
+                    }
+                    InputProofEnum::RandomInputLayerProof(layer, committed_claims) => {
+                        let random_commit_from_proof = layer.clone().commit().unwrap();
+                        // Check that the commitment given also matches with the commitment in the proof
+                        match input_commit {
+                            CommitmentEnum::RandomCommitment(random_commit) => {
+                                assert_eq!(random_commit_from_proof, random_commit);
+                            }
+                            _ => panic!("should have a public commitment here!"),
+                        }
+                        let claims_as_commitments =
+                            claim_tracker.remove(&layer.layer_id()).unwrap().clone();
+                        let plaintext_claims = Self::match_claims(
+                            &claims_as_commitments,
+                            &committed_claims,
+                            committer,
                         );
-                    });
-                }
-            });
+                        plaintext_claims.into_iter().for_each(|claim| {
+                            verify_public_and_random_input_layer::<C>(
+                                &random_commit_from_proof,
+                                claim.get_claim(),
+                            );
+                        });
+                    }
+                },
+            );
 
         // @vishady this is new, so that we can be sure that the prover didn't e.g. leave out an input layer proof!  (I changed all the claims.get() to claims.remove() above)
         // Check that there aren't any claims left in our claim tracking table!
