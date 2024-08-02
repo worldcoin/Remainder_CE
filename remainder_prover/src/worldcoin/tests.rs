@@ -109,22 +109,32 @@ mod tests {
     #[test]
     fn test_recomposition() {
         let base = 16;
-        // it's a length 2 decomposition
+        // a length 2 decomposition of four values
         let digits = vec![
-            vec![
+            vec![ // MSBs
                 Fr::from(1u64),
-                Fr::from(0u64)], // MSB
-            vec![
+                Fr::from(0u64),
+                Fr::from(2u64),
                 Fr::from(3u64),
-                Fr::from(2u64)], // LSB
+            ],
+            vec![ // LSBs
+                Fr::from(3u64),
+                Fr::from(2u64),
+                Fr::from(1u64),
+                Fr::from(0u64),
+            ],
         ];
-        let sign_bits = vec![
-            Fr::from(1u64), // positive
-            Fr::from(0u64), // negative
+        let sign_bits = vec![ // 1 means positive, 0 means negative
+            Fr::from(1u64),
+            Fr::from(0u64),
+            Fr::from(1u64),
+            Fr::from(0u64),
         ];
         let expected = vec![
             Fr::from(19u64),
-            Fr::from(2u64).neg()
+            Fr::from(2u64).neg(),
+            Fr::from(33u64),
+            Fr::from(48u64).neg(),
         ];
 
         let circuit = LayouterCircuit::new(|ctx| {
@@ -166,7 +176,7 @@ mod tests {
     }
 
     /// Generate toy data for the worldcoin circuit.
-    /// Image is 2x2, and there are two placements of a 2x1 kernel.
+    /// Image is 2x2, and there are two placements of two 2x1 kernels.
     pub fn toy_worldcoin_circuit_data() -> WorldcoinCircuitData<Fr> {
         let image_shape = (2, 2);
         let kernel_shape = (2, 2, 1);

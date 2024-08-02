@@ -1,11 +1,4 @@
-use crate::mle::{
-    dense::{get_padded_evaluations_for_list, DenseMle},
-    Mle, MleIndex,
-};
-use ark_std::log2;
 use itertools::{repeat_n, Itertools};
-use remainder_shared_types::FieldExt;
-use serde::{Deserialize, Serialize};
 
 pub const LOG_NUM_DIGITS: usize = 3;
 pub const NUM_DIGITS: usize = (1 << LOG_NUM_DIGITS) as usize;
