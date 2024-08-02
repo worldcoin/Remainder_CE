@@ -15,9 +15,12 @@ use remainder::layer::matmult::{MatMult, Matrix};
 use remainder::layer::regular_layer::RegularLayer;
 use remainder::layer::{Layer, LayerId};
 use remainder::mle::dense::DenseMle;
+use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::Mle;
-use remainder_shared_types::transcript::ec_transcript::{ECTranscriptReader, ECTranscriptWriter};
+use remainder_shared_types::transcript::ec_transcript::{
+    ECProverTranscript, ECTranscriptReader, ECTranscriptWriter,
+};
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
@@ -25,6 +28,7 @@ use remainder_shared_types::{
 };
 use remainder_shared_types::{transcript::Transcript, Fr};
 
+use super::hyrax_input_layer::HyraxInputLayer;
 use super::hyrax_layer::HyraxLayerProof;
 type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
@@ -562,61 +566,78 @@ fn degree_two_selector_regular_hyrax_layer_test() {
     );
 }
 
-// #[test]
-// fn hyrax_input_layer_proof_test() {
-//     let mut blinding_rng = &mut rand::thread_rng();
-//     type Transcript = PoseidonTranscript<Scalar, Base>;
-//     let claim_point = vec![Fr::from(1983), Fr::from(10832)];
-//     let committer = PedersenCommitter::<Bn256Point>::new(
-//         10,
-//         "hi why is this not working, please help me",
-//         None,
-//     );
+#[test]
+fn hyrax_input_layer_proof_test() {
+    let mut blinding_rng = &mut rand::thread_rng();
+    // type Transcript = PoseidonTranscript<Scalar, Base>;
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test claim agg transcript");
 
-//     let layer_id = LayerId::Input(0);
-//     let input_mle = DenseMle::<Scalar, Scalar>::new_from_raw(
-//         vec![
-//             Scalar::from(1093820),
-//             Scalar::from(21843),
-//             Scalar::from(47194),
-//             Scalar::from(1948),
-//         ],
-//         layer_id,
-//         None,
-//     );
-//     let mut input_layer: HyraxInputLayer<Bn256Point, Transcript> =
-//         HyraxInputLayer::new_with_committer(input_mle.clone(), layer_id, committer.clone());
+    let claim_point = vec![Fr::from(1983), Fr::from(10832)];
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        10,
+        "hi why is this not working, please help me",
+        None,
+    );
 
-//     let commitment = input_layer.commit().unwrap();
+    let layer_id = LayerId::Input(0);
+    let input_mle = MultilinearExtension::new_from_evals(Evaluations::new(
+        2,
+        vec![
+            Scalar::from(1093820),
+            Scalar::from(21843),
+            Scalar::from(47194),
+            Scalar::from(1948),
+        ],
+    ));
+    // --- Just for evaluations ---
+    let input_dense_mle = DenseMle::new_from_raw(
+        vec![
+            Scalar::from(1093820),
+            Scalar::from(21843),
+            Scalar::from(47194),
+            Scalar::from(1948),
+        ],
+        layer_id,
+    );
 
-//     let commitment_to_eval = committer.committed_scalar(
-//         &evaluate_mle(&input_mle, &claim_point),
-//         &input_layer.blinding_factor_eval,
-//     );
+    // --- Create input layer and generate commitment, then add to transcript ---
+    let input_layer: HyraxInputLayer<Bn256Point> =
+        HyraxInputLayer::new_with_committer(input_mle, layer_id, &committer);
+    let hyrax_commitment = input_layer.commit();
+    prover_transcript.append_ec_points("Hyrax PCS commit", &hyrax_commitment);
 
-//     let claim = HyraxClaim {
-//         to_layer_id: layer_id,
-//         point: claim_point,
-//         mle_enum: Some(MleEnum::Dense(input_mle.clone())),
-//         evaluation: commitment_to_eval,
-//     };
+    let commitment_to_eval = committer.committed_scalar(
+        &evaluate_mle(&input_dense_mle, &claim_point),
+        &input_layer.blinding_factor_eval,
+    );
 
-//     let proof = HyraxInputLayerProof::prove(
-//         &input_layer,
-//         &commitment,
-//         &vec![claim.clone()],
-//         &committer,
-//         &mut blinding_rng,
-//         &mut Transcript::new(""),
-//         &mut VandermondeInverse::new(),
-//     );
+    let claim = HyraxClaim {
+        to_layer_id: layer_id,
+        point: claim_point,
+        mle_enum: Some(MleEnum::Dense(input_dense_mle.clone())),
+        evaluation: commitment_to_eval,
+    };
 
-//     proof.verify(
-//         &vec![claim.to_claim_commitment()],
-//         &committer,
-//         &mut Transcript::new(""),
-//     )
-// }
+    let proof = HyraxInputLayerProof::prove(
+        &input_layer,
+        &hyrax_commitment,
+        &vec![claim.clone()],
+        &committer,
+        &mut blinding_rng,
+        &mut prover_transcript,
+        &mut VandermondeInverse::new(),
+    );
+
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
+
+    proof.verify(
+        &vec![claim.to_claim_commitment()],
+        &committer,
+        &mut verifier_transcript,
+    )
+}
 
 // #[test]
 // fn small_regular_circuit_hyrax_input_layer_test() {

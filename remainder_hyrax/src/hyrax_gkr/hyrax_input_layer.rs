@@ -110,6 +110,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         .unwrap();
         let wlx_evals = input_layer.compute_claim_wlx(&claims);
         let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
+        dbg!(&interpolant_coeffs);
 
         let (proof_of_claim_agg, aggregated_claim): (
             ProofOfClaimAggregation<C>,
@@ -199,6 +200,16 @@ pub struct HyraxInputLayer<C: PrimeOrderCurve> {
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
+    /// Just a wrapper around the corresponding [HyraxPCSProof] function.
+    pub fn commit(&self) -> Vec<C> {
+        HyraxPCSProof::compute_matrix_commitments(
+            self.log_num_cols,
+            &self.mle,
+            &self.committer,
+            &self.blinding_factors_matrix,
+        )
+    }
+
     pub fn new_from_placeholder_with_committer(
         hyrax_placeholder_il: HyraxPlaceholderInputLayer<C::Scalar>,
         committer: &PedersenCommitter<C>,
