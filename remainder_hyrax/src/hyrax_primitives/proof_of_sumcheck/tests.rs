@@ -122,7 +122,7 @@ fn test_completeness() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(transcript);
 
-    let psl_as_commits = committed_scalar_psl_as_commitments(post_sumcheck_layer);
+    let psl_as_commits = committed_scalar_psl_as_commitments(&post_sumcheck_layer);
 
     proof.verify(
         &sum_commit.commitment,
@@ -159,7 +159,7 @@ fn test_example_with_regular_layer() {
     let v01 = Fr::from(1);
     let v11 = Fr::from(1);
     let mut mle_ref = DenseMle::new_from_raw(vec![v00, v10, v01, v11], LayerId::Input(0));
-    let layer_claim_for_beta = vec![Fr::one()];
+    let layer_claim_for_beta = vec![Fr::one(), Fr::one()];
     let mut equality_mle = BetaValues::new_beta_equality_mle(layer_claim_for_beta);
     let mut constant_rng = ConstantRng::new(1);
 
@@ -210,7 +210,7 @@ fn test_example_with_regular_layer() {
     ];
     let message2 = committer.committed_vector(&f2_padded, &Fr::from(7));
 
-    equality_mle.fix_variable(0, r2);
+    equality_mle.fix_variable(1, r2);
     mle_ref.fix_variable(1, r2);
 
     let mle_eval = mle_ref.bookkeeping_table()[0] * equality_mle.bookkeeping_table()[0];
@@ -238,7 +238,7 @@ fn test_example_with_regular_layer() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(transcript);
 
-    let committed_psl = committed_scalar_psl_as_commitments(post_sumcheck_layer);
+    let committed_psl = committed_scalar_psl_as_commitments(&post_sumcheck_layer);
 
     proof.verify(
         &sum_commit.commitment,
@@ -298,7 +298,7 @@ fn test_soundness() {
     let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
         ECTranscriptReader::new(transcript);
 
-    let committed_psl = committed_scalar_psl_as_commitments(post_sumcheck_layer);
+    let committed_psl = committed_scalar_psl_as_commitments(&post_sumcheck_layer);
     proof.verify(
         &sum_commit.commitment,
         1, // the degree of the messages

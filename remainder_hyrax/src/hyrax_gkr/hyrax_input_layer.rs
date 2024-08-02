@@ -191,7 +191,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         committer: PedersenCommitter<C>,
     ) -> Self {
         HyraxInputLayer::new_with_committer(
-            hyrax_placeholder_il.mle,
+            hyrax_placeholder_il.mle.clone(),
             hyrax_placeholder_il.layer_id().clone(),
             committer,
         )

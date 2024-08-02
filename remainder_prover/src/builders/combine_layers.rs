@@ -153,7 +153,7 @@ pub fn combine_layers<F: FieldExt>(
             let expressions = layers
                 .into_iter()
                 .map(|layer| match layer {
-                    LayerEnum::Gkr(layer) => Ok(layer.expression),
+                    LayerEnum::Regular(layer) => Ok(layer.expression),
                     _ => Err(CombineError),
                 })
                 .try_collect()?;
@@ -180,7 +180,7 @@ fn add_bits_to_layer_refs<F: FieldExt>(
 ) -> Result<(), CombineError> {
     for layer in layers {
         let expression = match layer {
-            LayerEnum::Gkr(layer) => Ok(&mut layer.expression),
+            LayerEnum::Regular(layer) => Ok(&mut layer.expression),
             _ => Err(CombineError),
         }?;
 

@@ -71,7 +71,7 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError> {
-        let num_sumcheck_rounds = self.num_sumcheck_rounds();
+        let num_sumcheck_rounds = self.sumcheck_round_indices().len();
 
         // --- Store challenges for later claim generation ---
         let mut challenges = vec![];
@@ -143,7 +143,7 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
         Ok(verifier_id_gate_layer)
     }
 
-    fn num_sumcheck_rounds(&self) -> usize {
+    fn sumcheck_round_indices(&self) -> Vec<usize> {
         // --- SAME ISSUE HERE AS IN GATE.RS: JUST ASSUMING THAT TOTAL NUMBER
         // --- OF SUMCHECK ROUNDS IS GOING TO BE THE NUMBER OF NON-FIXED BITS
         let num_sumcheck_rounds = self
@@ -156,7 +156,7 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
                     _ => 1,
                 }
             });
-        num_sumcheck_rounds
+        (0..num_sumcheck_rounds).collect_vec()
     }
 
     fn into_verifier_layer(
@@ -385,8 +385,8 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
         Ok(())
     }
 
-    fn num_sumcheck_rounds(&self) -> usize {
-        self.mle_ref.num_iterated_vars()
+    fn sumcheck_round_indices(&self) -> Vec<usize> {
+        (0..self.mle_ref.num_iterated_vars()).collect_vec()
     }
 
     fn max_degree(&self) -> usize {

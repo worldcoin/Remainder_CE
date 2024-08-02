@@ -270,7 +270,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
         let mle_a = self.matrix_a.mle.clone();
         let mle_b = self.matrix_b.mle.clone();
         let sumcheck_message =
-            compute_sumcheck_message_no_beta_table(&[mle_a.clone(), mle_b.clone()], 2, round_index)
+            compute_sumcheck_message_no_beta_table(&[mle_a.clone(), mle_b.clone()], round_index, 2)
                 .unwrap();
         Ok(sumcheck_message)
     }
@@ -282,8 +282,8 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
         Ok(())
     }
 
-    fn num_sumcheck_rounds(&self) -> usize {
-        self.num_vars_middle_ab.unwrap()
+    fn sumcheck_round_indices(&self) -> Vec<usize> {
+        (0..self.num_vars_middle_ab.unwrap()).collect_vec()
     }
 
     fn max_degree(&self) -> usize {
@@ -296,7 +296,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
         _round_challenges: &[F],
         _claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
-        let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_a.mle.clone()];
+        let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
         PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
     }
 }
@@ -418,9 +418,9 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         Ok(verifier_layer)
     }
 
-    fn num_sumcheck_rounds(&self) -> usize {
+    fn sumcheck_round_indices(&self) -> Vec<usize> {
         assert_eq!(self.matrix_a.num_cols_vars, self.matrix_b.num_rows_vars);
-        self.matrix_a.num_cols_vars
+        (0..self.matrix_a.num_cols_vars).collect_vec()
     }
 
     fn into_verifier_layer(

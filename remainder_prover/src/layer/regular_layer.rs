@@ -203,8 +203,8 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         Ok(())
     }
 
-    fn num_sumcheck_rounds(&self) -> usize {
-        self.nonlinear_rounds.as_ref().unwrap().len()
+    fn sumcheck_round_indices(&self) -> Vec<usize> {
+        self.nonlinear_rounds.clone().unwrap()
     }
 
     fn max_degree(&self) -> usize {
@@ -353,8 +353,8 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
         Ok(verifier_layer)
     }
 
-    fn num_sumcheck_rounds(&self) -> usize {
-        self.expression.get_all_nonlinear_rounds().len()
+    fn sumcheck_round_indices(&self) -> Vec<usize> {
+        self.expression.get_all_nonlinear_rounds().clone()
     }
 
     fn into_verifier_layer(
