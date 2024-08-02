@@ -201,7 +201,7 @@ impl PrimeOrderCurve for Bn256 {
             None
         } else {
             let z_inv = self.z.invert().unwrap();
-            Some((self.x * z_inv.square(), self.y * z_inv.cube()))
+            Some((self.x * z_inv, self.y * z_inv))
         }
     }
 

@@ -196,7 +196,7 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         todo!()
     }
 
-    fn num_sumcheck_rounds(&self) -> usize {
+    fn sumcheck_round_indices(&self) -> Vec<usize> {
         todo!()
     }
 
@@ -367,7 +367,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         Ok(verifier_gate_layer)
     }
 
-    fn num_sumcheck_rounds(&self) -> usize {
+    fn sumcheck_round_indices(&self) -> Vec<usize> {
         let num_u = self.lhs_mle.mle_indices().iter().fold(0_usize, |acc, idx| {
             acc + match idx {
                 MleIndex::Fixed(_) => 0,
@@ -380,7 +380,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
                 _ => 1,
             }
         }) - self.num_dataparallel_bits;
-        num_u + num_v + self.num_dataparallel_bits
+        (0..num_u + num_v + self.num_dataparallel_bits).collect_vec()
     }
 
     fn into_verifier_layer(

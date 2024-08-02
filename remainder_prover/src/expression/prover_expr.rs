@@ -749,9 +749,13 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
     ) -> usize {
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
-                *mle_index = MleIndex::IndexedBit(curr_index);
-                let a_bits = a.index_mle_indices_node(curr_index + 1, mle_vec);
-                let b_bits = b.index_mle_indices_node(curr_index + 1, mle_vec);
+                let mut new_index = curr_index;
+                if *mle_index == MleIndex::Iterated {
+                    *mle_index = MleIndex::IndexedBit(curr_index);
+                    new_index += 1;
+                }
+                let a_bits = a.index_mle_indices_node(new_index, mle_vec);
+                let b_bits = b.index_mle_indices_node(new_index, mle_vec);
                 max(a_bits, b_bits)
             }
             ExpressionNode::Mle(mle_vec_idx) => {

@@ -17,20 +17,13 @@ use super::hyrax_layer::HyraxClaim;
 
 /// This is a wrapper around the existing [MleEnum], but suited in order
 /// to produce Zero Knowledge evaluations using Hyrax.
-pub struct HyraxOutputLayer<
-    C: PrimeOrderCurve,
-    M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
-> {
+pub struct HyraxOutputLayer<C: PrimeOrderCurve> {
     /// This is the MLE that this is a wrapper over. The output layer is always just an MLE.
     pub underlying_mle: MleEnum<C::Scalar>,
     _marker: PhantomData<C>,
 }
 
-impl<
-        C: PrimeOrderCurve,
-        M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
-    > HyraxOutputLayer<C, M>
-{
+impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
     /// This function will evaluate the output layer at a random point, which is the challenge.
     /// It will get these challenges from the transcript.
     pub fn fix_variable_on_challenge(
@@ -89,23 +82,15 @@ impl<
 /// doesn't need anything other than whether the challenges the
 /// output layer was evaluated on, so that the verifier can check
 /// whether these match the transcript.
-pub struct HyraxOutputLayerProof<
-    C: PrimeOrderCurve,
-    M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
-> {
+pub struct HyraxOutputLayerProof<C: PrimeOrderCurve> {
     /// The commitment to the claim that the output layer is making
     pub claim_commitment: C,
-    _marker: PhantomData<M>,
 }
 
-impl<
-        C: PrimeOrderCurve,
-        M: Mle<C::Scalar> + YieldClaim<Claim<C::Scalar>> + Serialize + for<'de> Deserialize<'de>,
-    > HyraxOutputLayerProof<C, M>
-{
+impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// Returns a HyraxOutputLayerProof and the claim that the output layer is making.
     pub fn prove(
-        output_layer: &mut HyraxOutputLayer<C, M>,
+        output_layer: &mut HyraxOutputLayer<C>,
         transcript: &mut impl ECProverTranscript<C>,
         blinding_rng: &mut impl Rng,
         scalar_committer: &PedersenCommitter<C>,
@@ -120,7 +105,6 @@ impl<
         (
             Self {
                 claim_commitment: commitment,
-                _marker: PhantomData,
             },
             committed_claim,
         )
@@ -130,12 +114,12 @@ impl<
     /// the prover, adds it to the transcript, and then returns a [HyraxClaim] that contains the
     /// challenges that it ITSELF draws from the transcript.
     pub fn verify(
-        proof: &HyraxOutputLayerProof<C, M>,
+        proof: &HyraxOutputLayerProof<C>,
         layer_desc: &CircuitMle<C::Scalar>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
-        let bindings = (0..layer_desc.num_vars)
+        let bindings = (0..layer_desc.num_iterated_vars())
             .map(|_| {
                 let challenge = transcript
                     .get_scalar_field_challenge("output claim point")

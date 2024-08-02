@@ -77,7 +77,7 @@ impl<F: FieldExt> CircuitMle<F> {
         self.var_indices
             .iter()
             .map(|index| match index {
-                MleIndex::Bound(chal, _) => *chal,
+                MleIndex::Bound(chal, idx) => *chal,
                 MleIndex::Fixed(chal) => F::from(*chal as u64),
                 MleIndex::IndexedBit(i) => challenges[*i],
                 _ => panic!("DenseMleRefDesc contained iterated bit!"),
@@ -362,6 +362,7 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
                 // refs that are part of a product. We iterate through all the indices in the
                 // product nodes to look for repeated indices within a single node.
                 ExpressionNode::Product(verifier_mles) => {
+                    dbg!(&verifier_mles);
                     let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
 
@@ -383,6 +384,8 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
                         .for_each(|(mle_index, count)| {
                             if count > 1 {
                                 if let MleIndex::IndexedBit(i) = mle_index {
+                                    product_nonlinear_indices.insert(i);
+                                } else if let MleIndex::Bound(_, i) = mle_index {
                                     product_nonlinear_indices.insert(i);
                                 }
                             }
@@ -449,6 +452,7 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
         let mut products: Vec<Product<F, Option<F>>> = vec![];
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
+                dbg!(&mle_index);
                 let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
                 let right_side_acc = multiplier * (mle_index.val().unwrap());
                 products.extend(

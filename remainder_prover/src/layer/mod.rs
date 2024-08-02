@@ -135,8 +135,8 @@ pub trait Layer<F: FieldExt> {
     /// labeled with that `round_index`.
     fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError>;
 
-    /// How many sumcheck rounds this layer will take to prove.
-    fn num_sumcheck_rounds(&self) -> usize;
+    /// The list of sumcheck rounds this layer will prove, by index.
+    fn sumcheck_round_indices(&self) -> Vec<usize>;
 
     /// The maximum degree for any univariate in the sumcheck protocol.
     fn max_degree(&self) -> usize;
@@ -169,8 +169,8 @@ pub trait CircuitLayer<F: FieldExt> {
         transcript: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::VerifierLayer, VerificationError>;
 
-    /// The number of sumcheck rounds of this layer.
-    fn num_sumcheck_rounds(&self) -> usize;
+    /// The list of sumcheck rounds this layer will prove, by index.
+    fn sumcheck_round_indices(&self) -> Vec<usize>;
 
     /// Turns this Circuit Layer into a Verifier Layer
     fn into_verifier_layer(
