@@ -20,7 +20,7 @@ use crate::mle::Mle;
 /// Represents a random input layer, where we generate random constants in the
 /// form of coefficients of an MLE that we can use for packing constants.
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RandomInputLayer<F: FieldExt> {
     mle: Vec<F>,
     pub(crate) layer_id: LayerId,

@@ -21,7 +21,7 @@ use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
 /// "in the clear" (i.e. without a commitment).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PublicInputLayer<F: FieldExt> {
     mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,

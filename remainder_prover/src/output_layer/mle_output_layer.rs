@@ -137,7 +137,7 @@ impl<F: FieldExt> OutputLayer<F> for MleOutputLayer<F> {
 #[serde(bound = "F: FieldExt")]
 pub struct CircuitMleOutputLayer<F: FieldExt> {
     /// The metadata of this MLE: indices and associated layer.
-    mle: CircuitMle<F>,
+    pub mle: CircuitMle<F>,
 
     /// Whether this is an MLE that is supposed to evaluate to zero.
     is_zero: bool,

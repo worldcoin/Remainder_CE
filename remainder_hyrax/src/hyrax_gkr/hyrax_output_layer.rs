@@ -7,6 +7,7 @@ use remainder::expression::circuit_expr::CircuitMle;
 use remainder::mle::dense::DenseMle;
 use remainder::mle::mle_enum::MleEnum;
 use remainder::mle::Mle;
+use remainder::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 use remainder_shared_types::{curves::PrimeOrderCurve, halo2curves::group::ff::Field};
 use serde::{Deserialize, Serialize};
@@ -20,7 +21,7 @@ use super::hyrax_layer::HyraxClaim;
 pub struct HyraxOutputLayer<C: PrimeOrderCurve> {
     /// This is the MLE that this is a wrapper over. The output layer is always just an MLE.
     pub underlying_mle: MleEnum<C::Scalar>,
-    _marker: PhantomData<C>,
+    pub _marker: PhantomData<C>,
 }
 
 impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
@@ -115,11 +116,11 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
     /// challenges that it ITSELF draws from the transcript.
     pub fn verify(
         proof: &HyraxOutputLayerProof<C>,
-        layer_desc: &CircuitMle<C::Scalar>,
+        layer_desc: &CircuitMleOutputLayer<C::Scalar>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
-        let bindings = (0..layer_desc.num_iterated_vars())
+        let bindings = (0..layer_desc.mle.num_iterated_vars())
             .map(|_| {
                 let challenge = transcript
                     .get_scalar_field_challenge("output claim point")
@@ -134,7 +135,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         HyraxClaim {
             point: bindings,
             mle_enum: None,
-            to_layer_id: layer_desc.layer_id(),
+            to_layer_id: layer_desc.mle.layer_id(),
             evaluation: proof.claim_commitment,
         }
     }

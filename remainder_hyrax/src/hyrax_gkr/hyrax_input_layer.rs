@@ -4,7 +4,10 @@ use itertools::Itertools;
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use remainder::{
-    claims::wlx_eval::{claim_group::ClaimGroup, get_num_wlx_evaluations},
+    claims::{
+        wlx_eval::{claim_group::ClaimGroup, get_num_wlx_evaluations},
+        Claim,
+    },
     input_layer::{
         // hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
         // hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
@@ -15,7 +18,7 @@ use remainder::{
         InputLayer,
     },
     layer::LayerId,
-    mle::{evals::MultilinearExtension, Mle},
+    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };
 use remainder_shared_types::{
@@ -55,6 +58,16 @@ pub enum HyraxCircuitInputLayerEnum<C: PrimeOrderCurve> {
     HyraxInputLayer(HyraxInputLayer<C>),
     PublicInputLayer(PublicInputLayer<C::Scalar>),
     RandomInputLayer(RandomInputLayer<C::Scalar>),
+}
+
+impl<C: PrimeOrderCurve> HyraxCircuitInputLayerEnum<C> {
+    pub fn layer_id(&self) -> LayerId {
+        match self {
+            HyraxCircuitInputLayerEnum::HyraxInputLayer(hyrax_layer) => hyrax_layer.layer_id,
+            HyraxCircuitInputLayerEnum::PublicInputLayer(public_layer) => public_layer.layer_id(),
+            HyraxCircuitInputLayerEnum::RandomInputLayer(random_layer) => random_layer.layer_id(),
+        }
+    }
 }
 
 /// The appropriate proof structure for a [HyraxInputLayer], which includes
@@ -182,13 +195,13 @@ pub struct HyraxInputLayer<C: PrimeOrderCurve> {
     pub blinding_factors_matrix: Vec<C::Scalar>,
     pub blinding_factor_eval: C::Scalar,
     pub(crate) layer_id: LayerId,
-    comm: Option<Vec<C>>,
+    pub comm: Option<Vec<C>>,
 }
 
 impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     pub fn new_from_placeholder_with_committer(
         hyrax_placeholder_il: HyraxPlaceholderInputLayer<C::Scalar>,
-        committer: PedersenCommitter<C>,
+        committer: &PedersenCommitter<C>,
     ) -> Self {
         HyraxInputLayer::new_with_committer(
             hyrax_placeholder_il.mle.clone(),
@@ -200,7 +213,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     pub fn new_with_committer(
         mle: MultilinearExtension<C::Scalar>,
         layer_id: LayerId,
-        committer: PedersenCommitter<C>,
+        committer: &PedersenCommitter<C>,
     ) -> Self {
         let mle_len = mle.f.len();
         assert!(mle_len.is_power_of_two());
@@ -226,7 +239,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
             mle: mle_coefficients_vector,
             layer_id,
             log_num_cols,
-            committer,
+            committer: committer.clone(),
             blinding_factors_matrix,
             blinding_factor_eval,
             comm: None,
@@ -270,7 +283,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
 
     pub fn new_from_placeholder_with_commitment(
         hyrax_placeholder_il: HyraxPrecommitPlaceholderInputLayer<C::Scalar>,
-        committer: PedersenCommitter<C>,
+        committer: &PedersenCommitter<C>,
         blinding_factors_matrix: Vec<C::Scalar>,
         log_num_cols: usize,
         commitment: Vec<C>,
@@ -278,7 +291,7 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         HyraxInputLayer::new_with_hyrax_commitment(
             MleCoefficientsVector::ScalarFieldVector(hyrax_placeholder_il.mle.f.to_vec()),
             hyrax_placeholder_il.layer_id().clone(),
-            committer,
+            committer.clone(),
             blinding_factors_matrix,
             log_num_cols,
             commitment,
@@ -356,4 +369,26 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         wlx_evals.extend(&next_evals);
         wlx_evals
     }
+}
+
+pub fn verify_public_and_random_input_layer<C: PrimeOrderCurve>(
+    mle_vec: Vec<C::Scalar>,
+    claim: &Claim<C::Scalar>,
+) {
+    let mut mle = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
+    mle.index_mle_indices(0);
+
+    let eval = if mle.num_iterated_vars() != 0 {
+        let mut eval = None;
+        for (curr_bit, &chal) in claim.get_point().iter().enumerate() {
+            eval = mle.fix_variable(curr_bit, chal);
+        }
+        debug_assert_eq!(mle.bookkeeping_table().len(), 1);
+        eval.unwrap()
+    } else {
+        Claim::new(vec![], mle.current_mle[0])
+    };
+
+    assert_eq!(eval.get_point(), claim.get_point());
+    assert_eq!(eval.get_result(), claim.get_result());
 }

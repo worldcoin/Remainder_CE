@@ -367,9 +367,11 @@ where {
 /// It consists of consice GKR Circuit description to be use by the Verifier.
 #[derive(Debug)]
 pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
-    input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer>,
-    intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
-    output_layers: Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer>,
+    pub input_layers:
+        Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer>,
+    pub intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
+    pub output_layers:
+        Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer>,
 }
 
 impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
