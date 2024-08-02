@@ -42,7 +42,8 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     fn commit_to_round(
         underlying_layer: &mut LayerEnum<C::Scalar>,
         committer: &PedersenCommitter<C>,
-        round_index: usize,
+        bit_index: usize,
+        round_number: usize,
         max_degree: usize,
         num_rounds: usize,
         blinding_rng: &mut impl Rng,
@@ -50,22 +51,25 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     ) -> CommittedVector<C> {
         // The univariate evaluations for that round (i.e. f(0), f(1), ...)
         let round_evaluations = underlying_layer
-            .compute_round_sumcheck_message(round_index)
+            .compute_round_sumcheck_message(bit_index)
             .unwrap();
 
         // Convert the evaluations above into coefficients (in Hyrax, it is the coefficients, not
         // the evaluations, that are used)
-        let mut round_coefficients = vec![C::Scalar::ZERO; (max_degree + 1) * round_index];
+        // Initial padding for the beginning 0s.
+        let mut round_coefficients = vec![C::Scalar::ZERO; (max_degree + 1) * round_number];
         // Pad the coefficients to form the $v^{(`round_index`)}$ vector, so that only the generators for this round are used
         let computed_coeffs = converter.convert_to_coefficients(round_evaluations);
         round_coefficients.extend(&computed_coeffs);
+        // Padding the current round until it is the max_degree size.
         round_coefficients.extend(vec![
             C::Scalar::ZERO;
             (max_degree + 1) - computed_coeffs.len()
         ]);
+        // Padding the entire vector to be the size of (`max_degree` + 1) * `num_rounds`
         round_coefficients.extend(vec![
             C::Scalar::ZERO;
-            (max_degree + 1) * (num_rounds - round_index - 1)
+            (max_degree + 1) * (num_rounds - round_number - 1)
         ]);
         let blinding_factor = C::Scalar::random(blinding_rng);
         let commitment = committer.committed_vector(&round_coefficients, &blinding_factor);
@@ -76,7 +80,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
     /// Return also a [HyraxClaim] representing the aggregated claim.
     pub fn prove(
         // The layer that we are proving
-        mut layer: &mut impl Layer<C::Scalar>,
+        layer: &mut LayerEnum<C::Scalar>,
         // The claims on that layer (unaggregated)
         claims: &[HyraxClaim<C::Scalar, CommittedScalar<C>>],
         committer: &PedersenCommitter<C>,
@@ -118,12 +122,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             &mut blinding_rng,
             transcript,
         );
-        // Note that the commitment to the aggregate evaluationp `eval` does not need to be added to the
-        // transcript since it is derived from commitments that are added to the transcript already
-        // (the commitments to the coefficients of the interpolant).
-        let degree = layer.max_degree();
-        // The number of sumcheck rounds for this layer
-        let num_rounds = layer.num_sumcheck_rounds();
 
         // These are going to be the commitments to the sumcheck messages.
         let mut messages: Vec<CommittedVector<C>> = vec![];
@@ -131,29 +129,53 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         let mut bindings: Vec<C::Scalar> = vec![];
 
         // Initialize the sumcheck layer.
-        layer.initialize_sumcheck(&agg_claim.point);
+        layer.initialize_sumcheck(&agg_claim.point).unwrap();
+
+        // Note that the commitment to the aggregate evaluationp `eval` does not need to be added to the
+        // transcript since it is derived from commitments that are added to the transcript already
+        // (the commitments to the coefficients of the interpolant).
+        let degree = layer.max_degree();
+        // The number of sumcheck rounds for this layer
+        let sumcheck_round_indices = layer.sumcheck_round_indices();
+        let num_rounds = sumcheck_round_indices.len();
 
         // Go through each of the sumcheck rounds and produce the \alpha_i messages.
-        (0..num_rounds).for_each(|round| {
-            let round_commit = HyraxLayerProof::commit_to_round(
-                layer,
-                &committer,
-                round,
-                degree,
-                num_rounds,
-                &mut blinding_rng,
-                converter,
-            );
-            messages.push(round_commit);
-            transcript.append_ec_point("sumcheck message commitment", round_commit.commitment);
+        sumcheck_round_indices
+            .iter()
+            .enumerate()
+            .for_each(|(round_number, bit_idx)| {
+                let round_commit = HyraxLayerProof::commit_to_round(
+                    layer,
+                    &committer,
+                    *bit_idx,
+                    round_number,
+                    degree,
+                    num_rounds,
+                    &mut blinding_rng,
+                    converter,
+                );
+                messages.push(round_commit.clone());
+                transcript.append_ec_point("sumcheck message commitment", round_commit.commitment);
 
-            let challenge = transcript.get_scalar_field_challenge("sumcheck round challenge");
-            bindings.push(challenge);
-            layer.bind_round_variable(round, challenge);
-        });
+                let challenge = transcript.get_scalar_field_challenge("sumcheck round challenge");
+                bindings.push(challenge);
+                layer.bind_round_variable(*bit_idx, challenge).unwrap();
+            });
 
         // Get the post sumcheck layer
-        let post_sumcheck_layer = layer.get_post_sumcheck_layer(&bindings, &agg_claim.point);
+        let nonlinear_claim_points = agg_claim
+            .point
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, point)| {
+                if sumcheck_round_indices.contains(&idx) {
+                    Some(*point)
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+        let post_sumcheck_layer = layer.get_post_sumcheck_layer(&bindings, &nonlinear_claim_points);
 
         // Commit to all the necessary values
         let post_sumcheck_layer_committed =
@@ -161,7 +183,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 
         // Get the commitments (i.e. points on C)
         let commitments =
-            committed_scalar_psl_as_commitments(post_sumcheck_layer_committed).get_values();
+            committed_scalar_psl_as_commitments(&post_sumcheck_layer_committed).get_values();
 
         // Add each of the commitments to the transcript
         transcript.append_ec_points("commitment to product input/outputs", &commitments);
@@ -238,13 +260,14 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
         // Because the beta table number of variables is exactly the number of points in the claim
         // made on that layer, we take the max of the number of variables in the expression and
         // the number of variables in the beta table.
-        let num_sumcheck_rounds_expected = layer_desc.num_sumcheck_rounds();
+        let num_sumcheck_rounds_expected = layer_desc.sumcheck_round_indices().len();
+        let sumcheck_round_indices = layer_desc.sumcheck_round_indices();
 
         // Verify the proof of sumcheck
         // Add first sumcheck message to transcript, which is the proported sum.
         if num_sumcheck_rounds_expected > 0 {
             let transcript_first_sumcheck_message = transcript
-                .consume_ec_point("first sumcheck message commitment")
+                .consume_ec_point("sumcheck message commitment")
                 .unwrap();
 
             assert_eq!(
@@ -288,8 +311,20 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .unwrap();
         assert_eq!(&transcript_commitments, commitments);
 
+        let nonlinear_claim_points = agg_claim
+            .point
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, point)| {
+                if sumcheck_round_indices.contains(&idx) {
+                    Some(*point)
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
         let post_sumcheck_layer_desc =
-            layer_desc.get_post_sumcheck_layer(&bindings, &agg_claim.point);
+            layer_desc.get_post_sumcheck_layer(&bindings, &nonlinear_claim_points);
         let post_sumcheck_layer: PostSumcheckLayer<C::Scalar, C> =
             new_with_values(&post_sumcheck_layer_desc, commitments);
 
@@ -346,7 +381,7 @@ pub fn evaluate_committed_scalar<C: PrimeOrderCurve>(
 
 /// Turn all the CommittedScalars into commitments i.e. Cs.
 pub fn committed_scalar_psl_as_commitments<C: PrimeOrderCurve>(
-    post_sumcheck_layer: PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
+    post_sumcheck_layer: &PostSumcheckLayer<C::Scalar, CommittedScalar<C>>,
 ) -> PostSumcheckLayer<C::Scalar, C> {
     PostSumcheckLayer(
         post_sumcheck_layer

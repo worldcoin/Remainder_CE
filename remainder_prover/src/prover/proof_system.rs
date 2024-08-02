@@ -80,12 +80,12 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn num_sumcheck_rounds(
+                fn sumcheck_round_indices(
                     &self
-                ) -> usize {
+                ) -> Vec<usize> {
                     match self {
                         $(
-                            Self::$var_name(layer) => layer.num_sumcheck_rounds(),
+                            Self::$var_name(layer) => layer.sumcheck_round_indices(),
                         )*
                     }
                 }
@@ -192,10 +192,10 @@ macro_rules! layer_enum {
                 }
             }
 
-            fn num_sumcheck_rounds(&self) -> usize {
+            fn sumcheck_round_indices(&self) -> Vec<usize> {
                 match self {
                     $(
-                        Self::$var_name(layer) => layer.num_sumcheck_rounds(),
+                        Self::$var_name(layer) => layer.sumcheck_round_indices(),
                     )*
                 }
             }
