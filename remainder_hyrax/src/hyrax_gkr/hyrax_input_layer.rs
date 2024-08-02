@@ -70,6 +70,15 @@ impl<C: PrimeOrderCurve> HyraxCircuitInputLayerEnum<C> {
     }
 }
 
+/// An Enum representing the types of commitments for each layer,
+/// to be used in [HyraxCircuit::new_from_gkr_circuit] to append
+/// input commitments to transcript.
+pub enum CommitmentEnum<C: PrimeOrderCurve> {
+    HyraxCommitment(Vec<C>),
+    PublicCommitment(Vec<C::Scalar>),
+    RandomCommitment(Vec<C::Scalar>),
+}
+
 /// The appropriate proof structure for a [HyraxInputLayer], which includes
 /// the [ProofOfClaimAggregation], and the appropriate opening proof for opening
 /// the polynomial commitment at a random evaluation point.
@@ -383,10 +392,10 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
 }
 
 pub fn verify_public_and_random_input_layer<C: PrimeOrderCurve>(
-    mle_vec: Vec<C::Scalar>,
+    mle_vec: &[C::Scalar],
     claim: &Claim<C::Scalar>,
 ) {
-    let mut mle = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
+    let mut mle = DenseMle::new_from_raw(mle_vec.to_vec(), LayerId::Input(0));
     mle.index_mle_indices(0);
 
     let eval = if mle.num_iterated_vars() != 0 {
