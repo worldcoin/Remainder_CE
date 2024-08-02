@@ -55,6 +55,11 @@ impl<F: FieldExt> From<ZeroMle<F>> for MleOutputLayer<F> {
 }
 
 impl<F: FieldExt> MleOutputLayer<F> {
+    /// Returns the MLE contained within. For PROVER use only!
+    pub fn get_mle(&self) -> &MleEnum<F> {
+        &self.mle
+    }
+
     /// Generate a new [MleOutputLayer] from a [DenseMle].
     pub fn new_dense(_dense_mle: DenseMle<F>) -> Self {
         // We do not currently allow `DenseMle`s in the output.

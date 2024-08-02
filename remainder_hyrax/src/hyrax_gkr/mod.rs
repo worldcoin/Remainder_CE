@@ -1,16 +1,23 @@
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::utils::vandermonde::VandermondeInverse;
-use hyrax_input_layer::{HyraxCircuitInputLayerEnum, HyraxInputLayerProof, InputProofEnum};
+use hyrax_input_layer::{
+    HyraxCircuitInputLayerEnum, HyraxInputLayer, HyraxInputLayerProof, InputProofEnum,
+};
 use hyrax_layer::HyraxClaim;
 use hyrax_output_layer::HyraxOutputLayerProof;
 use itertools::Itertools;
 use rand::Rng;
 use remainder::claims::wlx_eval::YieldWLXEvals;
+use remainder::input_layer::{
+    hyrax_placeholder_input_layer, hyrax_precommit_placeholder_input_layer, public_input_layer,
+};
+use remainder::layer::layer_enum::LayerEnum;
 use remainder::layer::Layer;
 use remainder::layouter::compiling::LayouterCircuit;
-use remainder::layouter::component::Component;
+use remainder::layouter::component::{Component, ComponentSet};
 use remainder::layouter::nodes::node_enum::NodeEnum;
+use remainder::layouter::nodes::Context;
 use remainder::mle::Mle;
 use remainder::prover::proof_system::DefaultProofSystem;
 use remainder::prover::{GKRCircuit, Witness};
@@ -20,11 +27,12 @@ use remainder::{
         enum_input_layer::InputLayerEnum, public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer,
     },
-    layer::{LayerId, PostSumcheckEvaluation, SumcheckLayer},
+    layer::LayerId,
 };
 use remainder_shared_types::FieldExt;
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
+use remainder::input_layer::InputLayer;
 
 use remainder_shared_types::{
     curves::PrimeOrderCurve,
@@ -49,75 +57,112 @@ pub mod tests;
 
 /// The struct that holds all the respective proofs that the verifier needs in order
 /// to verify a HyraxGKRProof
-pub struct HyraxProof<
-    C: PrimeOrderCurve,
-    L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar>,
-> {
+pub struct HyraxProof<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>>>
+{
     /// The [HyraxLayerProof] for each of the intermediate layers in this circuit.
     layer_proofs: Vec<HyraxLayerProof<C>>,
     /// The [HyraxInputLayerProof] for each of the input polynomial commitments using the Hyrax PCS.
     input_layer_proofs: Vec<InputProofEnum<C>>,
     /// A commitment to the output of the circuit, i.e. what the final value of the output layer is.
     output_layer_proofs: Vec<HyraxOutputLayerProof<C>>,
-    _marker: PhantomData<L>,
+    _marker: PhantomData<Fn>,
 }
 
 /// The struct that holds all the necessary information to describe a circuit.
 pub struct HyraxCircuit<
     C: PrimeOrderCurve,
-    L: Layer<C::Scalar>,
+    Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>>,
 > {
     pub input_layers: Vec<HyraxCircuitInputLayerEnum<C>>,
-    pub layers: Vec<L>,
+    pub layers: Vec<LayerEnum<C::Scalar>>,
     pub output_layers: Vec<HyraxOutputLayer<C>>,
-    pub input_commitments: Vec<CommitmentEnum<C, C::Scalar>>,
+    _phantom: PhantomData<Fn>,
 }
 
-impl<
-        C: PrimeOrderCurve,
-        L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar> + YieldWLXEvals<C::Scalar>,
-    > HyraxCircuit<C, L>
+impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>>>
+    HyraxCircuit<C, Fn>
 {
-    fn new_from_gkr_circuit(gkr_circuit: &mut LayouterCircuit<>) -> Self {
-        let witness: Witness<<C as PrimeOrderCurve>::Scalar, DefaultProofSystem> = gkr_circuit.synthesize();
+    /// WARNING: THIS CURRENTLY ASSUMES THAT THERE IS EXACTLY ONE [InputLayerEnum::HyraxPrecommitPlaceholderInputLayer]!!!
+    /// DUE TO THE LAYOUTER NOT ALLOWING LAYERS TO BE CONSTRUCTED WITH ANYTHING OTHER THAN THEIR DEFAULT `.new()`
+    /// CONSTRUCTORS! WE'RE JUST THROWING AN ERROR FOR NOW BUT SHOULD FIX THIS ASAP BECAUSE LIGERO IS ALSO
+    /// COMPLETELY BROKEN IN NEWMAINDER FOR THE SAME REASON
+    ///
+    /// TODO(ryancao, vishady): make the committer and other things optional
+    fn new_from_gkr_circuit(
+        gkr_circuit: &mut LayouterCircuit<C::Scalar, ComponentSet<NodeEnum<C::Scalar>>, Fn>,
+        committer: &PedersenCommitter<C>,
+        blinding_factors_matrix: Vec<<C as PrimeOrderCurve>::Scalar>,
+        log_num_cols: usize,
+        commitment: Vec<C>,
+    ) -> Self {
+        let witness: Witness<<C as PrimeOrderCurve>::Scalar, DefaultProofSystem> =
+            gkr_circuit.synthesize();
         let Witness {
             input_layers,
             layers,
             output_layers,
         } = witness;
 
-        let hyrax_layers = layers.iter().map(
-            |layer| {
-                HyraxLayer
-            }
-        )
+        let hyrax_output_layers = output_layers
+            .iter()
+            .map(|output_layer| HyraxOutputLayer {
+                underlying_mle: *output_layer.get_mle(),
+            })
+            .collect();
 
-        // let hyrax_output_layers = output_layers.iter().map(
-        //     |output_layer| {
-        //         HyraxOutputLayer {
-        //             underlying_mle: output_layer,
-        //             _marker: PhantomData,
-        //         }
-        //     }
-        // )
+        let mut hyrax_precommit_counter = 0;
 
-        let input_layers = input_layers.iter().map(
-            |input_layer| {
-                match input_layer {
-                    InputLayerEnum::HyraxPlaceholderInputLayer(_) => (),
-
+        let hyrax_input_layers = input_layers
+            .iter()
+            .map(|input_layer| match input_layer {
+                InputLayerEnum::LigeroInputLayer(_) => None,
+                InputLayerEnum::PublicInputLayer(public_input_layer) => Some(
+                    HyraxCircuitInputLayerEnum::PublicInputLayer(**public_input_layer),
+                ),
+                InputLayerEnum::RandomInputLayer(random_input_layer) => Some(
+                    HyraxCircuitInputLayerEnum::RandomInputLayer(**random_input_layer),
+                ),
+                InputLayerEnum::HyraxPlaceholderInputLayer(hyrax_placeholder_input_layer) => {
+                    Some(HyraxCircuitInputLayerEnum::HyraxInputLayer(
+                        HyraxInputLayer::new_from_placeholder_with_committer(
+                            **hyrax_placeholder_input_layer,
+                            *committer,
+                        ),
+                    ))
                 }
-            }
-        )
+                InputLayerEnum::HyraxPrecommitPlaceholderInputLayer(
+                    hyrax_precommit_placeholder_input_layer,
+                ) => {
+                    hyrax_precommit_counter += 1;
+                    Some(HyraxCircuitInputLayerEnum::HyraxInputLayer(
+                        HyraxInputLayer::new_from_placeholder_with_commitment(
+                            **hyrax_precommit_placeholder_input_layer,
+                            *committer,
+                            blinding_factors_matrix,
+                            log_num_cols,
+                            commitment,
+                        ),
+                    ))
+                }
+            })
+            .filter_map(|x| x)
+            .collect_vec();
 
-        todo!()
+        if hyrax_precommit_counter > 1 {
+            panic!("ERROR: MORE THAN ONE HYRAX PRECOMMIT LAYER FOUND IN CIRCUIT! THIS IS NOT SUPPORTED AT THE MOMENT (READ THE ERROR)");
+        }
+
+        Self {
+            input_layers: hyrax_input_layers,
+            layers: layers.layers,
+            output_layers: hyrax_output_layers,
+            _phantom: PhantomData,
+        }
     }
 }
 
-impl<
-        C: PrimeOrderCurve,
-        L: SumcheckLayer<C::Scalar> + PostSumcheckEvaluation<C::Scalar> + YieldWLXEvals<C::Scalar>,
-    > HyraxProof<C, L>
+impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>>>
+    HyraxProof<C, Fn>
 {
     /// TODO(vishady) riad audit comments: add in comments the ordering of the proofs every time they are in a vec
 
@@ -127,7 +172,7 @@ impl<
     /// description and the values and/or commitments of the input layer (which is appropriate
     /// unless already added further upstream).
     pub fn prove(
-        circuit: &mut HyraxCircuit<C, L>,
+        circuit: &mut HyraxCircuit<C, Fn>,
         committer: &PedersenCommitter<C>,
         mut blinding_rng: &mut impl Rng,
         transcript: &mut impl ECProverTranscript<C>,
@@ -137,7 +182,7 @@ impl<
             input_layers,
             layers,
             output_layers,
-            input_commitments,
+            _phantom,
         } = circuit;
 
         // HashMap to keep track of all claims made on each layer
@@ -165,7 +210,7 @@ impl<
             .into_iter()
             .rev()
             .map(|layer| {
-                let claims = claim_tracker.get(&layer.id()).unwrap().clone();
+                let claims = claim_tracker.get(&layer.layer_id()).unwrap().clone();
 
                 let (layer_proof, claims_from_layer) = HyraxLayerProof::prove(
                     layer,
@@ -220,16 +265,10 @@ impl<
                     // For the other input layers, the prover just hands over the (CommittedScalar-valued) HyraxClaim for each claim.
                     // The verifier will need to check that each of the claims is consistent with the input layer.
                     InputLayerEnum::PublicInputLayer(layer) => {
-                        InputProofEnum::PublicInputLayerProof(
-                            layer.clone(),
-                            committed_claims.clone(),
-                        )
+                        InputProofEnum::PublicInputLayerProof(*layer, committed_claims.clone())
                     }
                     InputLayerEnum::RandomInputLayer(layer) => {
-                        InputProofEnum::RandomInputLayerProof(
-                            layer.clone(),
-                            committed_claims.clone(),
-                        )
+                        InputProofEnum::RandomInputLayerProof(*layer, committed_claims.clone())
                     }
                     _ => {
                         panic!("Input layer type not supported by Hyrax");
@@ -251,7 +290,7 @@ impl<
     /// description and the values and/or commitments of the input layer (which is appropriate
     /// unless already added further upstream).
     pub fn verify(
-        proof: &HyraxProof<C, L>,
+        proof: &HyraxProof<C, Fn>,
         circuit_description: &CircuitDescription<C>,
         committer: &PedersenCommitter<C>,
         transcript: &mut impl ECVerifierTranscript<C>,
