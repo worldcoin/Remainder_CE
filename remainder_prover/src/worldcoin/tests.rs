@@ -169,10 +169,10 @@ mod tests {
     /// Image is 2x2, and there are two placements of a 2x1 kernel.
     pub fn toy_worldcoin_circuit_data() -> WorldcoinCircuitData<Fr> {
         let image_shape = (2, 2);
-        let kernel_shape = (1, 2, 1);
+        let kernel_shape = (2, 2, 1);
         let data = WorldcoinData::new(
             Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
-            Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
+            Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4]).unwrap(),
             vec![0],
             vec![0, 1],
         );
