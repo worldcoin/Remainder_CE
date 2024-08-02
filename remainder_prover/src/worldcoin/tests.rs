@@ -106,6 +106,71 @@ mod tests {
         test_circuit(circuit, None);
     }
 
+    // FIXME can remove this test later
+    #[test]
+    fn test_recomposition_simple() {
+        let base = 16;
+        // a length 1 decomposition of four values
+        let digits = vec![
+            vec![
+                Fr::from(0u64),
+                Fr::from(0u64),
+                Fr::from(0u64),
+                Fr::from(0u64),
+            ],
+        ];
+        let sign_bits = vec![ // 1 means positive, 0 means negative
+            Fr::from(1u64),
+            Fr::from(1u64),
+            Fr::from(1u64),
+            Fr::from(1u64),
+        ];
+        let expected = vec![
+            Fr::from(0u64),
+            Fr::from(0u64),
+            Fr::from(0u64),
+            Fr::from(0u64),
+        ];
+
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let digits_input_shreds = digits.iter().map(|digits_at_place| get_input_shred_from_vec(digits_at_place.clone(), ctx, &input_layer)).collect_vec();
+            let sign_bits_input_shred = get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
+            let expected_input_shred = get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
+
+            let digits_input_refs = digits_input_shreds
+                .iter()
+                .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+                .collect_vec();
+            let recomp_of_abs_value = DigitRecompComponent::new(ctx, &digits_input_refs, base);
+
+            let signed_recomp_checker = SignCheckerComponent::new(
+                ctx,
+                &expected_input_shred,
+                &sign_bits_input_shred,
+                &recomp_of_abs_value.sector,
+            );
+
+            let output = OutputNode::new_zero(ctx, &signed_recomp_checker.sector);
+
+            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                sign_bits_input_shred.into(),
+                expected_input_shred.into(),
+                recomp_of_abs_value.sector.into(),
+                signed_recomp_checker.sector.into(),
+                output.into(),
+            ];
+
+            all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        });
+
+        test_circuit(circuit, None);
+    }
+
+
     #[test]
     fn test_recomposition() {
         let base = 16;
