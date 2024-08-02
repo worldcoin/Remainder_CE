@@ -89,8 +89,6 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<IdentityGate<F>>> Compi
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
-        dbg!(&self.pre_routed_data);
-        dbg!("HIIII");
         let (pre_routed_data_location, pre_routed_data) = circuit_map
             .0
             .get(&self.pre_routed_data)
