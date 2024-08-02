@@ -53,9 +53,10 @@ where
 
 #[test]
 fn test_product_checker() {
-    let factor1 = vec![ Fr::from(3u64), Fr::from(2u64) ];
-    let factor2 = vec![ Fr::from(5u64), Fr::from(6u64) ];
-    let product = vec![ Fr::from(15u64), Fr::from(12u64)];
+    let factor1 = vec![ Fr::from(3u64), Fr::from(2u64), Fr::from(3u64), Fr::from(2u64) ];
+    let factor2 = vec![ Fr::from(5u64), Fr::from(6u64), Fr::from(5u64), Fr::from(6u64) ];
+    let product = vec![ Fr::from(15u64), Fr::from(12u64), Fr::from(15u64), Fr::from(12u64)];
+    // note that this test will pass if the MLEs have length only two!
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
