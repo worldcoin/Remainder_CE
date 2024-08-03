@@ -378,10 +378,48 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
+        let nonlinear_round_indices = self.sumcheck_round_indices();
+        // Filter the claim to get the values of the claim pertaining to the nonlinear rounds.
+        let nonlinear_claim_points = claim_challenges
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, point)| {
+                if nonlinear_round_indices.contains(&idx) {
+                    Some(*point)
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+        assert_eq!(round_challenges.len(), nonlinear_claim_points.len());
+
+        // Compute beta over these and the sumcheck challenges.
         let fully_bound_beta =
-            BetaValues::compute_beta_over_two_challenges(round_challenges, claim_challenges);
+            BetaValues::compute_beta_over_two_challenges(round_challenges, &nonlinear_claim_points);
+        dbg!(&claim_challenges);
+        dbg!(&round_challenges);
+        dbg!(&nonlinear_round_indices);
+
+        // Compute the fully bound challenges, which include those pre-fixed for linear rounds
+        // and the sumcheck rounds.
+        let mut nonlinear_round_index_counter = 0;
+        let all_bound_challenges = (0..claim_challenges.len())
+            .map(|idx| {
+                if nonlinear_round_indices.contains(&idx) {
+                    let chal = round_challenges[nonlinear_round_index_counter];
+                    nonlinear_round_index_counter += 1;
+                    chal
+                } else {
+                    claim_challenges[idx]
+                }
+            })
+            .collect_vec();
+
+        assert_eq!(nonlinear_round_index_counter, nonlinear_round_indices.len());
+        dbg!(&all_bound_challenges);
+
         self.expression
-            .get_post_sumcheck_layer(fully_bound_beta, round_challenges)
+            .get_post_sumcheck_layer(fully_bound_beta, &all_bound_challenges)
     }
 
     fn max_degree(&self) -> usize {

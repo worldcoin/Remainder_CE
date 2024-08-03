@@ -45,6 +45,10 @@ impl<F: FieldExt> CircuitMle<F> {
         }
     }
 
+    pub fn set_mle_indices(&mut self, new_mle_indices: Vec<MleIndex<F>>) {
+        self.var_indices = new_mle_indices;
+    }
+
     pub fn layer_id(&self) -> LayerId {
         self.layer_id
     }
@@ -77,7 +81,7 @@ impl<F: FieldExt> CircuitMle<F> {
         self.var_indices
             .iter()
             .map(|index| match index {
-                MleIndex::Bound(chal, idx) => *chal,
+                MleIndex::Bound(chal, _idx) => *chal,
                 MleIndex::Fixed(chal) => F::from(*chal as u64),
                 MleIndex::IndexedBit(i) => challenges[*i],
                 _ => panic!("DenseMleRefDesc contained iterated bit!"),
@@ -452,9 +456,15 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
         let mut products: Vec<Product<F, Option<F>>> = vec![];
         match self {
             ExpressionNode::Selector(mle_index, a, b) => {
-                dbg!(&mle_index);
-                let left_side_acc = multiplier * (F::ONE - mle_index.val().unwrap());
-                let right_side_acc = multiplier * (mle_index.val().unwrap());
+                let idx_val = match mle_index {
+                    MleIndex::IndexedBit(idx) => challenges[*idx],
+                    MleIndex::Bound(chal, _idx) => *chal,
+                    // TODO(vishady): actually we should just have an assertion that circuit description only
+                    // contains indexed bits
+                    _ => panic!("should not have any other index here"),
+                };
+                let left_side_acc = multiplier * (F::ONE - idx_val);
+                let right_side_acc = multiplier * (idx_val);
                 products.extend(
                     a.get_post_sumcheck_layer(left_side_acc, challenges, mle_vec)
                         .0,

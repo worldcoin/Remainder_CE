@@ -313,7 +313,18 @@ pub struct CircuitMatrix<F: FieldExt> {
 impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
     fn from(matrix: Matrix<F>) -> Self {
         let mut indexed_mle = matrix.mle.clone();
-        indexed_mle.index_mle_indices(0);
+        indexed_mle.mle_indices = indexed_mle
+            .mle_indices
+            .iter()
+            .enumerate()
+            .map(|(bit_idx, _)| {
+                if bit_idx >= matrix.num_rows_vars {
+                    MleIndex::IndexedBit(bit_idx - matrix.num_rows_vars)
+                } else {
+                    MleIndex::IndexedBit(bit_idx)
+                }
+            })
+            .collect();
         CircuitMatrix {
             mle: CircuitMle::from_dense_mle(&indexed_mle).unwrap(),
             num_rows_vars: matrix.num_rows_vars,
@@ -486,9 +497,37 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
     fn get_post_sumcheck_layer(
         &self,
         round_challenges: &[F],
-        _claim_challenges: &[F],
+        claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
-        let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
+        let mut pre_bound_matrix_a_mle = self.matrix_a.mle.clone();
+        pre_bound_matrix_a_mle.set_mle_indices(
+            claim_challenges[0..self.matrix_a.num_rows_vars]
+                .iter()
+                .enumerate()
+                .map(|(challenge_idx, challenge)| MleIndex::Bound(*challenge, challenge_idx))
+                .chain(
+                    self.matrix_a.mle.mle_indices()[self.matrix_a.num_rows_vars..]
+                        .to_vec()
+                        .into_iter(),
+                )
+                .collect(),
+        );
+        let mut pre_bound_matrix_b_mle = self.matrix_b.mle.clone();
+        pre_bound_matrix_b_mle.set_mle_indices(
+            self.matrix_b.mle.mle_indices()[0..self.matrix_b.num_rows_vars]
+                .to_vec()
+                .into_iter()
+                .chain(
+                    claim_challenges[self.matrix_b.num_rows_vars..]
+                        .iter()
+                        .enumerate()
+                        .map(|(challenge_idx, challenge)| {
+                            MleIndex::Bound(*challenge, challenge_idx)
+                        }),
+                )
+                .collect(),
+        );
+        let mle_refs = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &mle_refs,
             F::ONE,
