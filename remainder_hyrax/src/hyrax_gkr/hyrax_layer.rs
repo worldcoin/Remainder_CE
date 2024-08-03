@@ -311,20 +311,8 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             .unwrap();
         assert_eq!(&transcript_commitments, commitments);
 
-        let nonlinear_claim_points = agg_claim
-            .point
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, point)| {
-                if sumcheck_round_indices.contains(&idx) {
-                    Some(*point)
-                } else {
-                    None
-                }
-            })
-            .collect_vec();
         let post_sumcheck_layer_desc =
-            layer_desc.get_post_sumcheck_layer(&bindings, &nonlinear_claim_points);
+            layer_desc.get_post_sumcheck_layer(&bindings, &agg_claim.point);
         let post_sumcheck_layer: PostSumcheckLayer<C::Scalar, C> =
             new_with_values(&post_sumcheck_layer_desc, commitments);
 

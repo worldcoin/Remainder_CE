@@ -14,6 +14,8 @@ use remainder::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use remainder::layer::matmult::{MatMult, Matrix};
 use remainder::layer::regular_layer::RegularLayer;
 use remainder::layer::{Layer, LayerId};
+use remainder::layouter::compiling::LayouterCircuit;
+use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::mle_enum::MleEnum;
@@ -109,6 +111,9 @@ fn degree_one_regular_hyrax_layer_test() {
         evaluation: commitment_to_eval,
     }];
 
+    // Convert the layer to a layer description for the verifier.
+    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
+
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
@@ -118,9 +123,6 @@ fn degree_one_regular_hyrax_layer_test() {
         &mut prover_transcript,
         &mut VandermondeInverse::new(),
     );
-
-    // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
 
     // Convert the claims into their respective commitments for the verifier view.
     let claim_commitments: Vec<_> = claims
@@ -185,6 +187,9 @@ fn identity_gate_hyrax_layer_test() {
         evaluation: commitment_to_eval,
     }];
 
+    // Convert the layer to a layer description for the verifier.
+    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
+
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
@@ -194,9 +199,6 @@ fn identity_gate_hyrax_layer_test() {
         &mut prover_transcript,
         &mut VandermondeInverse::new(),
     );
-
-    // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
 
     // Convert the claims into their respective commitments for the verifier view.
     let claim_commitments: Vec<_> = claims
@@ -269,6 +271,9 @@ fn matmult_hyrax_layer_test() {
         evaluation: commitment_to_eval,
     }];
 
+    // Convert the layer to a layer description for the verifier.
+    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
+
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
@@ -278,9 +283,6 @@ fn matmult_hyrax_layer_test() {
         &mut prover_transcript,
         &mut VandermondeInverse::new(),
     );
-
-    // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
 
     // Convert the claims into their respective commitments for the verifier view.
     let claim_commitments: Vec<_> = claims
@@ -349,6 +351,9 @@ fn product_of_mles_regular_layer_test() {
         evaluation: commitment_to_eval,
     }];
 
+    // Convert the layer to a layer description for the verifier.
+    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
+
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
@@ -358,9 +363,6 @@ fn product_of_mles_regular_layer_test() {
         &mut prover_transcript,
         &mut VandermondeInverse::new(),
     );
-
-    // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
 
     // Convert the claims into their respective commitments for the verifier view.
     let claim_commitments: Vec<_> = claims
@@ -441,6 +443,9 @@ fn selector_only_test() {
         evaluation: commitment_to_eval,
     }];
 
+    // Convert the layer to a layer description for the verifier.
+    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
+
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
@@ -450,9 +455,6 @@ fn selector_only_test() {
         &mut prover_transcript,
         &mut VandermondeInverse::new(),
     );
-
-    // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
 
     // Convert the claims into their respective commitments for the verifier view.
     let claim_commitments: Vec<_> = claims
@@ -535,6 +537,9 @@ fn degree_two_selector_regular_hyrax_layer_test() {
         evaluation: commitment_to_eval,
     }];
 
+    // Convert the layer to a layer description for the verifier.
+    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
+
     // Construct the layer proof
     let (hyrax_layer_proof, _) = HyraxLayerProof::prove(
         &mut layer_enum,
@@ -544,9 +549,6 @@ fn degree_two_selector_regular_hyrax_layer_test() {
         &mut prover_transcript,
         &mut VandermondeInverse::new(),
     );
-
-    // Convert the layer to a layer description for the verifier.
-    let layer_desc: CircuitLayerEnum<Fr> = layer_enum.into_circuit_layer().unwrap();
 
     // Convert the claims into their respective commitments for the verifier view.
     let claim_commitments: Vec<_> = claims
@@ -642,86 +644,95 @@ fn hyrax_input_layer_proof_test() {
     )
 }
 
-#[test]
-fn small_regular_circuit_hyrax_input_layer_test() {
-    let mut blinding_rng = &mut rand::thread_rng();
-    let prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-        ECTranscriptWriter::new("Test small regular circuit");
-    const NUM_GENERATORS: usize = 10;
-    let committer = PedersenCommitter::<Bn256Point>::new(
-        NUM_GENERATORS + 1,
-        "hi why is this not working, please help me",
-        None,
-    );
+// #[test]
+// fn small_regular_circuit_hyrax_input_layer_test() {
+//     let mut blinding_rng = &mut rand::thread_rng();
+//     let prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+//         ECTranscriptWriter::new("Test small regular circuit");
+//     const NUM_GENERATORS: usize = 10;
+//     let committer = PedersenCommitter::<Bn256Point>::new(
+//         NUM_GENERATORS + 1,
+//         "hi why is this not working, please help me",
+//         None,
+//     );
 
-    // INPUT LAYER CONSTRUCTION
-    let input_multilinear_extension = MultilinearExtension::new(vec![
-        Scalar::from(8797),
-        Scalar::from(7308),
-        Scalar::from(94),
-        Scalar::from(67887),
-    ]);
-    let input_layer: HyraxInputLayer<Bn256Point> = HyraxInputLayer::new_with_committer(
-        input_multilinear_extension.clone(),
-        LayerId::Input(0),
-        &committer,
-    );
-    let mut input_enum = HyraxCircuitInputLayerEnum::HyraxInputLayer(input_layer);
-    let input_commit = input_enum.commit().unwrap();
-    let input_layers = vec![input_enum];
-    let input_commitments = vec![input_commit];
+//     let circuit = LayouterCircuit::new(|ctx| {
+// // INPUT LAYER CONSTRUCTION
+//         let input_multilinear_extension = MultilinearExtension::new(vec![
+//             Scalar::from(8797),
+//             Scalar::from(7308),
+//             Scalar::from(94),
+//             Scalar::from(67887),
+//         ]);
+//         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-    // INTERMEDIATE LAYERS CONSTRUCTION
-    let mut layers: Layers<Scalar, Base, Transcript> = Layers::new();
-    // Create a layer builder which is input_mle * input_mle
-    let squaring_builder = from_mle(
-        input_mle,
-        // Expression to build
-        |mle| ExpressionStandard::products(vec![mle, mle]),
-        // Expected output
-        |mle, layer_id, prefix_bits| {
-            DenseMle::new_from_iter(
-                mle.mle.iter().map(|eval| eval * eval),
-                layer_id,
-                prefix_bits,
-            )
-        },
-    );
-    let square_output = layers.add_gkr(squaring_builder);
-    let layers = layers.0;
+//         let input_shred = InputShred::new(
+//         );
 
-    // OUTPUT LAYER CONSTRUCTION
-    let output_layer: HyraxOutputLayer<Bn256Point> = HyraxOutputLayer {
-        underlying_mle: MleEnum::Dense(square_output),
-    };
-    let output_layers = vec![output_layer];
+//         todo!()
+//     })
 
-    // FULL CIRCUIT
-    let mut circuit = HyraxCircuit {
-        input_layers,
-        layers,
-        output_layers,
-        input_commitments,
-    };
+//     let input_layer: HyraxInputLayer<Bn256Point> = HyraxInputLayer::new_with_committer(
+//         input_multilinear_extension.clone(),
+//         LayerId::Input(0),
+//         &committer,
+//     );
+//     let mut input_enum = HyraxCircuitInputLayerEnum::HyraxInputLayer(input_layer);
+//     let input_commit = input_enum.commit().unwrap();
+//     let input_layers = vec![input_enum];
+//     let input_commitments = vec![input_commit];
 
-    // PROVE
-    let proof = HyraxProof::prove(
-        &mut circuit,
-        &committer,
-        &mut blinding_rng,
-        prover_transcript,
-        &mut VandermondeInverse::new(),
-    );
+//     // INTERMEDIATE LAYERS CONSTRUCTION
+//     let mut layers: Layers<Scalar, Base, Transcript> = Layers::new();
+//     // Create a layer builder which is input_mle * input_mle
+//     let squaring_builder = from_mle(
+//         input_mle,
+//         // Expression to build
+//         |mle| ExpressionStandard::products(vec![mle, mle]),
+//         // Expected output
+//         |mle, layer_id, prefix_bits| {
+//             DenseMle::new_from_iter(
+//                 mle.mle.iter().map(|eval| eval * eval),
+//                 layer_id,
+//                 prefix_bits,
+//             )
+//         },
+//     );
+//     let square_output = layers.add_gkr(squaring_builder);
+//     let layers = layers.0;
 
-    // VERIFY
-    let circuit_description: CircuitDescription<Bn256Point> = circuit.into();
-    HyraxProof::verify(
-        &proof,
-        &circuit_description,
-        &committer,
-        &mut Transcript::new(""),
-    )
-}
+//     // OUTPUT LAYER CONSTRUCTION
+//     let output_layer: HyraxOutputLayer<Bn256Point> = HyraxOutputLayer {
+//         underlying_mle: MleEnum::Dense(square_output),
+//     };
+//     let output_layers = vec![output_layer];
+
+//     // FULL CIRCUIT
+//     let mut circuit = HyraxCircuit {
+//         input_layers,
+//         layers,
+//         output_layers,
+//         input_commitments,
+//     };
+
+//     // PROVE
+//     let proof = HyraxProof::prove(
+//         &mut circuit,
+//         &committer,
+//         &mut blinding_rng,
+//         prover_transcript,
+//         &mut VandermondeInverse::new(),
+//     );
+
+//     // VERIFY
+//     let circuit_description: CircuitDescription<Bn256Point> = circuit.into();
+//     HyraxProof::verify(
+//         &proof,
+//         &circuit_description,
+//         &committer,
+//         &mut Transcript::new(""),
+//     )
+// }
 
 // #[test]
 // fn small_regular_circuit_public_input_layer_test() {

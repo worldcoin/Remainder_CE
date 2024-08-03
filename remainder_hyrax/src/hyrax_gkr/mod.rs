@@ -1,3 +1,4 @@
+use std::convert;
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
@@ -78,16 +79,24 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
     /// COMPLETELY BROKEN IN NEWMAINDER FOR THE SAME REASON
     ///
     /// TODO(ryancao, vishady): make the committer and other things optional
-    fn new_from_gkr_circuit(
+    pub fn new_from_gkr_circuit(
         gkr_circuit: &mut LayouterCircuit<C::Scalar, ComponentSet<NodeEnum<C::Scalar>>, Fn>,
         committer: &PedersenCommitter<C>,
-        blinding_factors_matrix: Vec<<C as PrimeOrderCurve>::Scalar>,
-        log_num_cols: usize,
-        commitment: Vec<C>,
+        blinding_factors_matrix: Option<Vec<<C as PrimeOrderCurve>::Scalar>>,
+        log_num_cols: Option<usize>,
+        commitment: Option<Vec<C>>,
         prover_transcript: &mut impl ECProverTranscript<C>,
-    ) -> (Self, Vec<CommitmentEnum<C>>) {
+    ) -> (
+        Self,
+        Vec<CommitmentEnum<C>>,
+        GKRVerifierKey<C::Scalar, DefaultProofSystem>,
+    ) {
         let witness: Witness<<C as PrimeOrderCurve>::Scalar, DefaultProofSystem> =
             gkr_circuit.synthesize();
+
+        let circuit_description = witness.generate_verifier_key().unwrap();
+        // TODO(ryancao, vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT!
+
         let Witness {
             input_layers,
             layers,
@@ -141,20 +150,21 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
                 InputLayerEnum::HyraxPrecommitPlaceholderInputLayer(
                     hyrax_precommit_placeholder_input_layer,
                 ) => {
+                    let precommit = commitment.clone().unwrap();
                     hyrax_precommit_counter += 1;
-                    prover_transcript.append_ec_points("hyrax pcs commitment", &commitment);
+                    prover_transcript.append_ec_points("hyrax pcs commitment", &precommit);
                     let hyrax_precommit_layer =
                         HyraxInputLayer::new_from_placeholder_with_commitment(
                             *hyrax_precommit_placeholder_input_layer,
                             committer,
-                            blinding_factors_matrix.clone(),
-                            log_num_cols,
-                            commitment.clone(),
+                            blinding_factors_matrix.clone().unwrap(),
+                            log_num_cols.unwrap(),
+                            precommit.clone(),
                         );
 
                     Some((
                         HyraxCircuitInputLayerEnum::HyraxInputLayer(hyrax_precommit_layer),
-                        CommitmentEnum::HyraxCommitment(commitment.clone()),
+                        CommitmentEnum::HyraxCommitment(precommit),
                     ))
                 }
             })
@@ -173,7 +183,88 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
                 _phantom: PhantomData,
             },
             commitments,
+            circuit_description,
         )
+    }
+
+    /// Called after proving in order to set up the verification so that we can call [HyraxProof::verify].
+    fn setup_verification(
+        circuit_description: &GKRVerifierKey<C::Scalar, DefaultProofSystem>,
+        commitments: &[CommitmentEnum<C>],
+        verifier_transcript: &mut impl ECVerifierTranscript<C>,
+    ) {
+        // TODO(vishady, ryancao): add circuit description to verifier transcript as well!!
+
+        // First consume all input layer commitments from the transcript
+        commitments.iter().for_each(|commitment| match commitment {
+            CommitmentEnum::HyraxCommitment(hyrax_commit) => {
+                let transcript_hyrax_commit = verifier_transcript
+                    .consume_ec_points("hyrax pcs commitment", hyrax_commit.len())
+                    .unwrap();
+                assert_eq!(&transcript_hyrax_commit, hyrax_commit);
+            }
+            CommitmentEnum::PublicCommitment(public_commit) => {
+                let transcript_public_commit = verifier_transcript
+                    .consume_scalar_points("public commitment", public_commit.len())
+                    .unwrap();
+                assert_eq!(&transcript_public_commit, public_commit);
+            }
+            CommitmentEnum::RandomCommitment(random_commit) => {
+                let transcript_random_commit = verifier_transcript
+                    .consume_scalar_points("random commitment", random_commit.len())
+                    .unwrap();
+                assert_eq!(&transcript_random_commit, random_commit);
+            }
+        });
+    }
+
+    /// Proves and verifies a circuit using the Hyrax IP given a GKR circuit!
+    pub fn prove_and_verify_gkr_circuit(
+        gkr_circuit: &mut LayouterCircuit<C::Scalar, ComponentSet<NodeEnum<C::Scalar>>, Fn>,
+        committer: &PedersenCommitter<C>,
+        blinding_factors_matrix: Option<Vec<<C as PrimeOrderCurve>::Scalar>>,
+        log_num_cols: Option<usize>,
+        commitment: Option<Vec<C>>,
+        blinding_rng: &mut impl Rng,
+        converter: &mut VandermondeInverse<C::Scalar>,
+        prover_transcript: &mut impl ECProverTranscript<C>,
+        verifier_transcript: &mut impl ECVerifierTranscript<C>,
+    ) {
+        // Create the hyrax circuit from the GKR circuit
+        let (mut hyrax_circuit, input_commits, circuit_description) =
+            HyraxCircuit::new_from_gkr_circuit(
+                gkr_circuit,
+                committer,
+                blinding_factors_matrix,
+                log_num_cols,
+                commitment,
+                prover_transcript,
+            );
+
+        // Create the hyrax proof from the Hyrax circuit
+        let hyrax_proof = HyraxProof::prove(
+            &mut hyrax_circuit,
+            committer,
+            blinding_rng,
+            prover_transcript,
+            converter,
+        );
+
+        // Setup verification by adding necessary commitments to transcript
+        HyraxCircuit::<C, Fn>::setup_verification(
+            &circuit_description,
+            &input_commits,
+            verifier_transcript,
+        );
+
+        // Verify the proof
+        HyraxProof::verify(
+            &hyrax_proof,
+            &circuit_description,
+            committer,
+            input_commits,
+            verifier_transcript,
+        );
     }
 }
 
@@ -306,28 +397,6 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
         commitments: Vec<CommitmentEnum<C>>,
         transcript: &mut impl ECVerifierTranscript<C>,
     ) {
-        // First consume all input layer commitments from the transcript
-        commitments.iter().for_each(|commitment| match commitment {
-            CommitmentEnum::HyraxCommitment(hyrax_commit) => {
-                let transcript_hyrax_commit = transcript
-                    .consume_ec_points("hyrax pcs commitment", hyrax_commit.len())
-                    .unwrap();
-                assert_eq!(&transcript_hyrax_commit, hyrax_commit);
-            }
-            CommitmentEnum::PublicCommitment(public_commit) => {
-                let transcript_public_commit = transcript
-                    .consume_scalar_points("public commitment", public_commit.len())
-                    .unwrap();
-                assert_eq!(&transcript_public_commit, public_commit);
-            }
-            CommitmentEnum::RandomCommitment(random_commit) => {
-                let transcript_random_commit = transcript
-                    .consume_scalar_points("random commitment", random_commit.len())
-                    .unwrap();
-                assert_eq!(&transcript_random_commit, random_commit);
-            }
-        });
-
         // Unpack the Hyrax proof.
         let HyraxProof {
             layer_proofs,
