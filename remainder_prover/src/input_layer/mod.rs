@@ -77,11 +77,15 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     let chal_point = &claim_vecs[0];
 
     if let Some(common_idx) = common_idx {
-        common_idx.iter().for_each(|chal_idx| {
-            mle_ref.fix_variable_at_index(*chal_idx, chal_point[*chal_idx]);
-        });
+        let mut common_idx_sorted = common_idx.clone();
+        common_idx_sorted.sort();
+        common_idx_sorted
+            .iter()
+            .enumerate()
+            .for_each(|(offset_idx, chal_idx)| {
+                mle_ref.fix_variable_at_index(*chal_idx - offset_idx, chal_point[*chal_idx]);
+            });
     }
-    dbg!(&mle_ref);
     debug!("Evaluating {num_evals} times.");
 
     // We already have the first #claims evaluations, get the next num_evals - #claims evaluations.
@@ -107,10 +111,8 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
         })
         .collect();
 
-    dbg!(&next_evals);
     // Concat this with the first k evaluations from the claims to get num_evals evaluations.
     let mut wlx_evals = claimed_vals.to_vec();
-    dbg!(&wlx_evals);
     wlx_evals.extend(&next_evals);
     debug!("Returning evals:\n{:#?} ", wlx_evals);
     Ok(wlx_evals)
