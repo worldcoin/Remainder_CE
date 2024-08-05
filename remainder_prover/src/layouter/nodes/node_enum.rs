@@ -10,6 +10,7 @@ use super::{
     debug::DebugNode,
     gate::GateNode,
     identity_gate::IdentityGateNode,
+    lookup::{LookupTable, LookupConstraint},
     matmult::MatMultNode,
     sector::{Sector, SectorGroup},
     split_node::SplitNode,
@@ -26,7 +27,9 @@ node_enum!(NodeEnum: FieldExt,
     (GateNode: GateNode<F>),
     (IdentityGateNode: IdentityGateNode<F>),
     (SplitNode: SplitNode<F>),
-    (MatMultNode: MatMultNode<F>)
+    (MatMultNode: MatMultNode<F>),
+    (LookupConstraint: LookupConstraint),
+    (LookupTable: LookupTable)
 );
 
 /// Organizational wrapper for a vec of `NodeEnum`s
@@ -41,6 +44,8 @@ pub struct NodeEnumGroup<F: FieldExt> {
     identity_gate_nodes: Option<Vec<IdentityGateNode<F>>>,
     split_nodes: Option<Vec<SplitNode<F>>>,
     matmult_nodes: Option<Vec<MatMultNode<F>>>,
+    lookup_tables: Option<Vec<LookupTable>>,
+    lookup_constraints: Option<Vec<LookupConstraint>>,
 }
 
 impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
@@ -58,6 +63,8 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
             identity_gate_nodes: Some(vec![]),
             split_nodes: Some(vec![]),
             matmult_nodes: Some(vec![]),
+            lookup_tables: Some(vec![]),
+            lookup_constraints: Some(vec![]),
         };
 
         for node in nodes {
@@ -74,6 +81,8 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
                 }
                 NodeEnum::SplitNode(node) => out.split_nodes.as_mut().unwrap().push(node),
                 NodeEnum::MatMultNode(node) => out.matmult_nodes.as_mut().unwrap().push(node),
+                NodeEnum::LookupTable(node) => out.lookup_tables.as_mut().unwrap().push(node),
+                NodeEnum::LookupConstraint(node) => out.lookup_constraints.as_mut().unwrap().push(node),
             }
         }
         out
@@ -133,5 +142,17 @@ impl<F: FieldExt> YieldNode<SplitNode<F>> for NodeEnumGroup<F> {
 impl<F: FieldExt> YieldNode<MatMultNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<MatMultNode<F>> {
         self.matmult_nodes.take().unwrap_or_default()
+    }
+}
+
+impl<F: FieldExt> YieldNode<LookupTable> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<LookupTable> {
+        self.lookup_tables.take().unwrap_or_default()
+    }
+}
+
+impl<F: FieldExt> YieldNode<LookupConstraint> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<LookupConstraint> {
+        self.lookup_constraints.take().unwrap_or_default()
     }
 }

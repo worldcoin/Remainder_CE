@@ -21,6 +21,7 @@ use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     gate::GateNode,
+    lookup::{LookupConstraint, LookupTable},
     identity_gate::IdentityGateNode,
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
@@ -234,6 +235,22 @@ pub fn layout<
     let mut dag = NodeEnumGroup::new(nodes);
 
     let out = {
+        // Build a map node id -> LookupTable
+        let mut lookup_table_map: HashMap<NodeId, &mut LookupTable> = HashMap::new();
+        let mut lookup_tables: Vec<LookupTable> = dag.get_nodes();
+        for lookup_table in lookup_tables.iter_mut() {
+            lookup_table_map.insert(lookup_table.id(), lookup_table);
+        }
+        // Add LookupConstraints to their respective LookupTables
+        let lookup_constraints: Vec<LookupConstraint> = dag.get_nodes();
+        for lookup_constraint in lookup_constraints {
+            let lookup_table_id = lookup_constraint.table_node_id;
+            let lookup_table = lookup_table_map
+                .get_mut(&lookup_table_id)
+                .ok_or(DAGError::DanglingNodeId(lookup_table_id))?;
+            lookup_table.add_lookup_constraint(lookup_constraint);
+        }
+
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
         let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
 
@@ -256,6 +273,11 @@ pub fn layout<
         input_layers
             .into_iter()
             .map(|input| Box::new(input) as Box<dyn CompilableNode<F, Pf>>)
+            .chain(
+                lookup_tables
+                    .into_iter()
+                    .map(|node| Box::new(node) as Box<dyn CompilableNode<F, Pf>>),
+            )
     };
 
     //handle intermediate layers
