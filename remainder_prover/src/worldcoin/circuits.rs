@@ -1,5 +1,5 @@
 use crate::layouter::compiling::LayouterCircuit;
-use crate::layouter::component::ComponentSet;
+use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::identity_gate::IdentityGateNode;
@@ -16,6 +16,8 @@ use crate::worldcoin::digit_decomposition::BASE;
 use itertools::Itertools;
 use remainder_shared_types::Fr;
 
+use super::components::BitsAreBinary;
+
 /// Builds the worldcoin circuit.
 pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
     -> LayouterCircuit<Fr, ComponentSet<NodeEnum<Fr>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<Fr>>> {
@@ -30,22 +32,22 @@ pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
             iris_code,
             digit_multiplicities,
         } = &data;
-        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let input_shred_matrix_a =
-            get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
+        let mut output_nodes = vec![];
 
-        let matrix_a = IdentityGateNode::new(ctx, &input_shred_matrix_a, wirings.clone());
-        let (filter_num_rows, filter_num_cols) = kernel_matrix_dims;
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
+        let matrix_a = IdentityGateNode::new(ctx, &image, wirings.clone());
+
+        let (filter_num_rows, _) = kernel_matrix_dims;
         let matrix_a_num_rows_cols = (*num_placements, *filter_num_rows);
         let matrix_b = get_input_shred_from_vec(kernel_matrix_mle.clone(), ctx, &input_layer);
-        let matrix_b_num_rows_cols = (*filter_num_rows, *filter_num_cols);
 
-        let result_of_matmult = MatMultNode::new(
+        let matmult = MatMultNode::new(
             ctx,
             &matrix_a,
             matrix_a_num_rows_cols,
             &matrix_b,
-            matrix_b_num_rows_cols,
+            *kernel_matrix_dims,
         );
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
@@ -63,26 +65,35 @@ pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
         );
         let recomp_check_builder = SignCheckerComponent::new(
             ctx,
-            &result_of_matmult,
+            &matmult,
             &iris_code_input_shred,
             &recomp_of_abs_value.sector,
         );
+        output_nodes.push(OutputNode::new_zero(ctx, &recomp_check_builder.sector));
 
-        let output = OutputNode::new_zero(ctx, &recomp_check_builder.sector);
+        let bits_are_binary = BitsAreBinary::new(ctx, &iris_code_input_shred);
+        output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
 
+        // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
-            input_shred_matrix_a.into(),
+            image.into(),
             matrix_a.into(),
             matrix_b.into(),
-            result_of_matmult.into(),
-            recomp_of_abs_value.sector.into(),
             iris_code_input_shred.into(),
-            recomp_check_builder.sector.into(),
-            output.into(),
         ];
+        all_nodes.extend(digits_input_shreds.into_iter().map(|node| node.into()));
 
-        all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
+        // Add matmult node
+        all_nodes.push(matmult.into());
+
+        // Add nodes from components
+        all_nodes.extend(bits_are_binary.yield_nodes().into_iter());
+        all_nodes.extend(recomp_of_abs_value.yield_nodes().into_iter());
+        all_nodes.extend(recomp_check_builder.yield_nodes().into_iter());
+
+        // Add output nodes
+        all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
         ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
     })

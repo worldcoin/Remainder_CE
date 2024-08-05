@@ -146,6 +146,50 @@ where
     }
 }
 
+pub struct BitsAreBinary<F: FieldExt> {
+    pub sector: Sector<F>,
+}
+
+impl<F: FieldExt> BitsAreBinary<F> {
+    /// Ensures that each bit is either 0 or 1. Add self.sector to the circuit as an output layer to
+    /// enforce this constraint.
+    pub fn new(
+        ctx: &Context,
+        values_node: &dyn ClaimableNode<F = F>,
+    ) -> Self {
+        let sector = Sector::new(
+            ctx,
+            &[values_node],
+            |nodes| {
+                assert_eq!(nodes.len(), 1);
+                let values_mle_ref = nodes[0];
+                Expression::<F, AbstractExpr>::products(vec![
+                    values_mle_ref,
+                    values_mle_ref
+                ]) - values_mle_ref.expr()
+            },
+            |data| {
+                assert_eq!(data.len(), 1);
+                let values = data[0].get_evals_vector();
+                let result = values.iter().map(|val| *val * *val - *val).collect_vec();
+                assert!(all(result.into_iter(), |val| val == F::ZERO));
+                MultilinearExtension::new_sized_zero(data[0].num_vars())
+            },
+        );
+        Self { sector }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for BitsAreBinary<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.sector.into()]
+    }
+}
+
+
 pub struct SignCheckerComponent<F: FieldExt> {
     pub sector: Sector<F>,
 }

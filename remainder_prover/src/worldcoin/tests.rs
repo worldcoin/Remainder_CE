@@ -13,7 +13,7 @@ mod tests {
     use crate::utils::get_input_shred_from_vec;
     use crate::utils::pad_to_nearest_power_of_two;
     use crate::worldcoin::circuits::build_circuit;
-    use crate::worldcoin::components::DigitRecompComponent;
+    use crate::worldcoin::components::{BitsAreBinary, DigitRecompComponent};
     use crate::worldcoin::components::EqualityCheckerComponent;
     use crate::worldcoin::components::SignCheckerComponent;
     // use crate::worldcoin::circuits::{WorldcoinCircuit, WorldcoinCircuitPrecommit};
@@ -188,6 +188,45 @@ mod tests {
         );
         dbg!(&data);
         (&data).into()
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bits_are_binary_soundness() {
+        let bits = vec![ Fr::from(3u64)];
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let shred = get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
+            let component = BitsAreBinary::new(ctx, &shred);
+            let output = OutputNode::new_zero(ctx, &component.sector);
+            let all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                shred.into(),
+                component.sector.into(),
+                output.into(),
+            ];
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        });
+        test_circuit(circuit, None);
+    }
+
+    #[test]
+    fn test_bits_are_binary() {
+        let bits = vec![ Fr::from(1u64), Fr::from(1u64), Fr::from(1u64), Fr::from(0u64), ];
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let shred = get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
+            let component = BitsAreBinary::new(ctx, &shred);
+            let output = OutputNode::new_zero(ctx, &component.sector);
+            let all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                shred.into(),
+                component.sector.into(),
+                output.into(),
+            ];
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        });
+        test_circuit(circuit, None);
     }
 
     #[test]
