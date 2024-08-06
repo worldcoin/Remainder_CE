@@ -8,7 +8,7 @@ use crate::expression::circuit_expr::CircuitMle;
 use crate::expression::verifier_expr::VerifierMle;
 use crate::mle::dense::DenseMle;
 use crate::mle::mle_enum::MleEnum;
-use crate::mle::{self, Mle};
+use crate::mle::Mle;
 
 /// Represents a normal form for a layer expression in which the layer is represented as a linear
 /// combination of products of other layer MLEs, the coefficients of which are public.
@@ -150,6 +150,7 @@ impl<F: FieldExt> Product<F, F> {
 /// Represents either an atomic factor of a product (i.e. an evaluation of an MLE), or the result of
 /// an intermediate product of atoms.
 pub enum Intermediate<F: FieldExt, T> {
+    /// A struct representing a single MLE and a commitment to its evaluation.
     Atom {
         /// the id of the layer upon which this is a claim
         layer_id: LayerId,
@@ -161,6 +162,7 @@ pub enum Intermediate<F: FieldExt, T> {
         /// populated for the prover but None for the verifier.
         mle_enum: Option<MleEnum<F>>,
     },
+    /// A struct representing a commitment to the product of two MLE evaluations.
     Composite {
         /// the value, commitment to the value, or CommittedScalar
         value: T,

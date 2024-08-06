@@ -17,7 +17,7 @@ use remainder::{
         random_input_layer::RandomInputLayer,
         InputLayer,
     },
-    layer::LayerId,
+    layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     sumcheck::evaluate_at_a_point,
 };
@@ -119,7 +119,6 @@ impl<C: PrimeOrderCurve> HyraxInputLayerProof<C> {
         .unwrap();
         let wlx_evals = input_layer.compute_claim_wlx(&claims);
         let interpolant_coeffs = converter.convert_to_coefficients(wlx_evals);
-        dbg!(&interpolant_coeffs);
 
         let (proof_of_claim_agg, aggregated_claim): (
             ProofOfClaimAggregation<C>,
@@ -210,13 +209,15 @@ pub struct HyraxInputLayer<C: PrimeOrderCurve> {
 
 impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
     /// Just a wrapper around the corresponding [HyraxPCSProof] function.
-    pub fn commit(&self) -> Vec<C> {
-        HyraxPCSProof::compute_matrix_commitments(
+    pub fn commit(&mut self) -> Vec<C> {
+        let comm = HyraxPCSProof::compute_matrix_commitments(
             self.log_num_cols,
             &self.mle,
             &self.committer,
             &self.blinding_factors_matrix,
-        )
+        );
+        self.comm = Some(comm.clone());
+        comm
     }
 
     pub fn new_from_placeholder_with_committer(
@@ -354,8 +355,12 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         let num_idx = claims.get_num_vars();
 
         // get the number of evaluations
-        let (num_evals, _common_idx, _) = get_num_wlx_evaluations(claim_vecs);
-        let chal_point = &claim_vecs[0];
+        let num_evals = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+            let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
+            num_evals
+        } else {
+            ((num_claims - 1) * num_idx) + 1
+        };
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<C::Scalar> = cfg_into_iter!(num_claims..num_evals)

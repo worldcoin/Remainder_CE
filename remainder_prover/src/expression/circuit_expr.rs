@@ -366,7 +366,6 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
                 // refs that are part of a product. We iterate through all the indices in the
                 // product nodes to look for repeated indices within a single node.
                 ExpressionNode::Product(verifier_mles) => {
-                    dbg!(&verifier_mles);
                     let mut product_nonlinear_indices: HashSet<usize> = HashSet::new();
                     let mut product_indices_counts: HashMap<MleIndex<F>, usize> = HashMap::new();
 

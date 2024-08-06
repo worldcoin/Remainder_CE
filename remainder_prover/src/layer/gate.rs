@@ -1,6 +1,7 @@
 //! module for defining the gate layer, uses the libra trick
 //! to reduce the number of rounds for gate layers (with binary operations)
 
+/// Helper functions used in the gate sumcheck algorithms.
 pub mod gate_helpers;
 mod new_interface_tests;
 #[cfg(test)]
@@ -184,15 +185,19 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
         })
     }
 
-    fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
+    fn initialize_sumcheck(&mut self, _claim_point: &[F]) -> Result<(), LayerError> {
         todo!()
     }
 
-    fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
+    fn compute_round_sumcheck_message(&self, _round_index: usize) -> Result<Vec<F>, LayerError> {
         todo!()
     }
 
-    fn bind_round_variable(&mut self, round_index: usize, challenge: F) -> Result<(), LayerError> {
+    fn bind_round_variable(
+        &mut self,
+        _round_index: usize,
+        _challenge: F,
+    ) -> Result<(), LayerError> {
         todo!()
     }
 
@@ -206,8 +211,8 @@ impl<F: FieldExt> Layer<F> for Gate<F> {
 
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[F],
+        _round_challenges: &[F],
+        _claim_challenges: &[F],
     ) -> super::product::PostSumcheckLayer<F, F> {
         todo!()
     }
@@ -408,10 +413,10 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         // We want to separate the challenges into which ones are from the dataparallel bits, which ones
         // are for binding x (phase 1), and which are for binding y (phase 2).
         let mut sumcheck_bindings_vec = sumcheck_bindings.to_vec();
-        let dataparallel_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_bits);
-        let first_u_challenges = sumcheck_bindings_vec.split_off(num_u);
-        let last_v_challenges = sumcheck_bindings_vec;
-        // Shape check!
+        let last_v_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_bits + num_u);
+        let first_u_challenges = sumcheck_bindings_vec.split_off(self.num_dataparallel_bits);
+        let dataparallel_challenges = sumcheck_bindings_vec;
+
         assert_eq!(last_v_challenges.len(), num_v);
 
         // Since the original mles are dataparallel, the challenges are the concat of the copy bits and the variable bound bits.
@@ -457,8 +462,8 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
 
     fn get_post_sumcheck_layer(
         &self,
-        round_challenges: &[F],
-        claim_challenges: &[F],
+        _round_challenges: &[F],
+        _claim_challenges: &[F],
     ) -> super::product::PostSumcheckLayer<F, Option<F>> {
         todo!()
     }
