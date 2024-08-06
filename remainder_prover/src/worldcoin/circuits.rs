@@ -10,7 +10,7 @@ use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::get_input_shred_from_vec;
 use crate::utils::pad_to_nearest_power_of_two;
-use crate::worldcoin::components::DigitalRecompositionComponent;
+use crate::worldcoin::components::{DigitalRecompositionComponent, SubtractThresholdsComponent};
 use crate::worldcoin::components::SignCheckerComponent;
 use crate::worldcoin::data::WorldcoinCircuitData;
 use crate::worldcoin::digit_decomposition::BASE;
@@ -30,8 +30,9 @@ pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
             kernel_matrix_mle: kernel_matrix,
             kernel_matrix_dims,
             digits,
-            iris_code,
+            code: iris_code,
             digit_multiplicities,
+            thresholds_matrix,
         } = &data;
         let mut output_nodes = vec![];
 
@@ -39,6 +40,8 @@ pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
         println!("Input layer = {:?}", input_layer.id());
         let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
         println!("Image input = {:?}", image.id());
+        let thresholds = get_input_shred_from_vec(thresholds_matrix.clone(), ctx, &input_layer);
+        println!("Thresholds input = {:?}", thresholds.id());
         let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
         println!("Identity gate = {:?}", rerouted_image.id());
 
@@ -55,6 +58,8 @@ pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
             *kernel_matrix_dims,
         );
         println!("Matmult = {:?}", matmult.id());
+
+        let subtract_thresholds = SubtractThresholdsComponent::new(ctx, &matmult, &thresholds);
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
@@ -93,7 +98,7 @@ pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
         println!("Iris code input = {:?}", iris_code.id());
         let sign_checker = SignCheckerComponent::new(
             ctx,
-            &matmult,
+            &subtract_thresholds.sector,
             &iris_code,
             &recomp_of_abs_value.sector,
         );
@@ -108,6 +113,7 @@ pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
             image.into(),
             kernel_matrix.into(),
             iris_code.into(),
+            thresholds.into(),
             digit_multiplicities.into(),
             lookup_table_values.into(),
         ];
@@ -124,6 +130,7 @@ pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
         all_nodes.push(lookup_constraint.into());
 
         // Add nodes from components
+        all_nodes.extend(subtract_thresholds.yield_nodes().into_iter());
         all_nodes.extend(digits_concatenator.yield_nodes().into_iter());
         all_nodes.extend(bits_are_binary.yield_nodes().into_iter());
         all_nodes.extend(recomp_of_abs_value.yield_nodes().into_iter());

@@ -13,6 +13,43 @@ use crate::{
     worldcoin::digit_decomposition::NUM_DIGITS,
 };
 
+pub struct SubtractThresholdsComponent<F: FieldExt> {
+    pub sector: Sector<F>,
+}
+
+impl<F: FieldExt> SubtractThresholdsComponent<F> {
+    /// Create a new SubtractThresholdsComponent component.
+    pub fn new(ctx: &Context, responses: &dyn ClaimableNode<F = F>, thresholds: &dyn ClaimableNode<F = F>) -> Self {
+        let sector = Sector::new(
+            ctx,
+            &[responses, thresholds],
+            |nodes| {
+                assert_eq!(nodes.len(), 2);
+                let (responses, thresholds) = (nodes[0], nodes[1]);
+                responses.expr() - thresholds.expr() // FIXME use selectors so we don't need the thresholds in expanded form
+            },
+            |data| {
+                assert_eq!(data.len(), 2);
+                let (responses, thresholds) = (data[0], data[1]);
+                let result = responses.get_evals_vector().iter().zip(thresholds.get_evals_vector())
+                    .map(|(response, threshold)| *response - *threshold)
+                    .collect_vec();
+                MultilinearExtension::new(result)
+            },
+        );
+        println!("SubtractThresholdsComponent sector = {:?}", sector.id());
+        Self { sector }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for SubtractThresholdsComponent<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.sector.into()]
+    }
+}
 /// A component that concatenates all the separate digit MLEs (there is one for each digital place)
 /// into a single MLE using a selector tree.
 /// (Necessary to interact with logup).

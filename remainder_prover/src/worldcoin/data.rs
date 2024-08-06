@@ -38,10 +38,13 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
     pub kernel_matrix_dims: (usize, usize),
     /// The digital decompositions base BASE of the abs value of the responses
     pub digits: FlatMles<F, NUM_DIGITS>,
-    /// The iris code = the sign bits of the responses
-    pub iris_code: Vec<F>,
+    /// The resulting binary code (=the sign bits of the responses)
+    /// (In the case we are processing the image (not the mask), this is the iris code.)
+    pub code: Vec<F>,
     /// The number of times each digit 0 .. BASE - 1 occurs in the digital decompositions
     pub digit_multiplicities: Vec<F>,
+    /// An entire matrix of thresholds! FIXME
+    pub thresholds_matrix: Vec<F>,
 }
 
 /// Witness data for the Worldcoin circuit, before conversion to MLEs.
@@ -63,19 +66,26 @@ pub struct WorldcoinData {
     pub responses: Array2<i64>,
     /// Result of thresholding the responses.
     /// Has dimensions (number of placements * num_kernels)
-    pub iris_code: Vec<bool>,
+    pub code: Vec<bool>,
+    /// The thresholds to be used for each kernel placement (row of kernel placement)
+    pub thresholds: Vec<i64>,
 }
 
 impl WorldcoinData {
     /// Create a new instance of WorldcoinData. kernel_values has dimensions (num_kernels,
     /// kernel_num_rows, kernel_num_cols). Every _combination_ from placements_row_idxs x
     /// placements_col_idxs specifies a kernel placement in the image (via the top-left coordinate).
+    /// `thresholds` specifies the threshold to use for each kernel placement (rather row of kernel
+    /// placement); these will be all zeroes for the iris code, but non-zero values for the mask.
+    /// Requires `thresholds.len() == placements_row_idxs.len()`. 
     pub fn new(
         image: Array2<i64>,
         kernel_values: Array3<i64>,
         placements_row_idxs: Vec<i32>,
         placements_col_idxs: Vec<i32>,
+        thresholds: Vec<i64>,
     ) -> Self {
+        assert!(thresholds.len() == placements_row_idxs.len());
         let (im_num_rows, im_num_cols) = image.dim();
         let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
 
@@ -126,11 +136,22 @@ impl WorldcoinData {
             rerouted_matrix[[*a_row, *a_col]] = image[[*im_row, *im_col]];
         }
 
-        // calculate the matrix product and the iris code
-        // both have dimensions (kernel_placements.len(), num_kernels)
-        let responses = rerouted_matrix.dot(&kernel_matrix);
-        let iris_code = responses.mapv(|x| x > 0);
-        let flattened_iris_code: Vec<bool> = iris_code
+        // calculate the matrix product
+        // has dimensions (kernel_placements.len(), num_kernels)
+        let mut responses = rerouted_matrix.dot(&kernel_matrix);
+
+        // build a matrix from the thresholds and subtract
+        let expanded_thresholds = thresholds
+            .iter()
+            .flat_map(|&thresh| std::iter::repeat(thresh).take(placements_col_idxs.len() * num_kernels))
+            .collect::<Vec<i64>>();
+        let thresholds_matrix = Array2::from_shape_vec((responses.shape()[0], responses.shape()[1]), expanded_thresholds).unwrap();
+        responses -= &thresholds_matrix;
+
+        // calculate code
+        // has dimensions (kernel_placements.len(), num_kernels)
+        let code = responses.mapv(|x| x > 0);
+        let flattened_code: Vec<bool> = code
             .outer_iter()
             .flat_map(|row| row.to_vec())
             .collect();
@@ -142,7 +163,8 @@ impl WorldcoinData {
             placements_col_idxs,
             wirings,
             responses,
-            iris_code: flattened_iris_code,
+            code: flattened_code,
+            thresholds: thresholds,
         }
     }
 }
@@ -158,6 +180,7 @@ fn test_worldcoin_data_creation() {
         Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
         vec![0],
         vec![0, 1],
+        vec![0],
     );
     let expected_responses = Array2::from_shape_vec(response_shape, vec![1 * 3 + 2 * 4, 1 * 1 + 2 * 9]).unwrap(); // 11, 19
     assert_eq!(expected_responses, data.responses);
@@ -166,7 +189,7 @@ fn test_worldcoin_data_creation() {
     assert_eq!(expected_wirings, data.wirings);
     // Both response values are positive, so expected iris code is [true, true]
     let expected_iris_code = vec![true, true];
-    assert_eq!(expected_iris_code, data.iris_code);
+    assert_eq!(expected_iris_code, data.code);
 }
 
 /// Loads the v2 Worldcoin data from disk, and checks our computation of the iris code against the
@@ -191,12 +214,14 @@ pub fn load_data(data_directory: PathBuf) -> WorldcoinData {
 
     let (num_kernels, _, _) = kernel_values.dim();
     let num_placements = placements_row_idxs.len() * placements_col_idxs.len();
+    let num_thresholds = placements_row_idxs.len();
 
     let result = WorldcoinData::new(
         image,
         kernel_values,
         placements_row_idxs,
         placements_col_idxs,
+        vec![0; num_thresholds],
     );
 
     // sanity check: load the iris code as calculated in Python, check it's the same
@@ -213,7 +238,7 @@ pub fn load_data(data_directory: PathBuf) -> WorldcoinData {
         .outer_iter()
         .flat_map(|row| row.to_vec())
         .collect::<Vec<bool>>();
-    assert_eq!(result.iris_code, expected_flattened);
+    assert_eq!(result.code, expected_flattened);
     result
 }
 
@@ -335,13 +360,20 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
             LayerId::Input(0),
         );
 
-        // Convert the iris code to a DenseMle
-        let flattened_iris_code_matrix: Vec<F> = data
-            .iris_code
+        // Convert the iris code to field elements
+        let iris_code: Vec<F> = data
+            .code
             .iter()
             .map(|elem| F::from(*elem as u64))
             .collect_vec();
-        let iris_code = flattened_iris_code_matrix;
+
+        // build a matrix from the thresholds and subtract
+        let expansion_factor = iris_code.len() / data.placements_row_idxs.len();
+        let thresholds_matrix = data.thresholds
+            .iter()
+            .map(|val| F::from(*val as u64)) // FIXME NEGATIVE POSSIBLE!
+            .flat_map(|thresh| std::iter::repeat(thresh).take(expansion_factor))
+            .collect::<Vec<F>>();
 
         WorldcoinCircuitData {
             image_matrix_mle,
@@ -350,8 +382,9 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
             kernel_matrix_mle,
             kernel_matrix_dims,
             digits,
-            iris_code,
+            code: iris_code,
             digit_multiplicities,
+            thresholds_matrix
         }
     }
 }
@@ -445,7 +478,7 @@ mod test {
         let num_placements = data.placements_row_idxs.len() * data.placements_col_idxs.len();
         let num_kernels = data.kernel_matrix.dim().1;
         assert_eq!(data.responses.dim(), (num_placements, num_kernels));
-        assert_eq!(data.iris_code.len(), (num_placements * num_kernels));
+        assert_eq!(data.code.len(), (num_placements * num_kernels));
     }
 
     #[test]

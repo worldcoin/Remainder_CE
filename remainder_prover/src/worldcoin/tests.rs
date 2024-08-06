@@ -176,6 +176,7 @@ mod tests {
             Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4]).unwrap(),
             vec![0],
             vec![0, 1],
+            vec![0]
         );
         dbg!(&data);
         (&data).into()
