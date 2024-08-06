@@ -22,9 +22,48 @@ use crate::{
 use crate::worldcoin::digit_decomposition::{BASE, NUM_DIGITS};
 use remainder_shared_types::HasByteRepresentation;
 
+/// Generate toy data for the worldcoin circuit.
+/// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
+pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
+    let image_shape = (2, 2);
+    let kernel_shape = (2, 2, 1);
+    let data = WorldcoinData::new(
+        Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
+        Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4]).unwrap(),
+        vec![0],
+        vec![0, 1],
+        vec![0]
+    );
+    dbg!(&data);
+    (&data).into()
+}
+
+/// Generate toy data for the worldcoin circuit.
+/// Image is 3x3:
+///  3 1 4
+///  1 5 9
+///  2 6 5
+/// There are four 2x2 kernels
+///  1 2    2 7    2 3    3 -3
+///  3 4    1 8    5 7    -2 0
+/// There are four placements of the kernels.
+/// Threshold values are non-trivial.
+pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
+    let image_shape = (3, 3);
+    let kernel_shape = (4, 2, 2);
+    let data = WorldcoinData::new(
+        Array2::from_shape_vec(image_shape, vec![3, 1, 4, 1, 5, 9, 2, 6, 5]).unwrap(),
+        Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4, 2, 7, 1, 8, 2, 3, 5, 7, 3, -3, -2, 0]).unwrap(),
+        vec![0, 2],
+        vec![0, 2],
+        vec![5, -5]
+    );
+    dbg!(&data);
+    (&data).into()
+}
+
 #[derive(Debug, Clone)]
-/// Used for instantiating [super::circuits::WorldcoinCircuit].
-/// Instantiated from WorldCoin data.
+/// Used for instantiating the Worldcoin circuit, creating from a [WorldcoinData] instance.
 pub struct WorldcoinCircuitData<F: FieldExt> {
     /// Row-major flattening of the input image.
     pub image_matrix_mle: Vec<F>,
@@ -138,19 +177,20 @@ impl WorldcoinData {
 
         // calculate the matrix product
         // has dimensions (kernel_placements.len(), num_kernels)
-        let mut responses = rerouted_matrix.dot(&kernel_matrix);
+        let responses = rerouted_matrix.dot(&kernel_matrix);
 
-        // build a matrix from the thresholds and subtract
+        // build a matrix from the thresholds for subtraction
+        let expansion_factor = placements_col_idxs.len() * num_kernels;
+        dbg!(expansion_factor);
         let expanded_thresholds = thresholds
             .iter()
-            .flat_map(|&thresh| std::iter::repeat(thresh).take(placements_col_idxs.len() * num_kernels))
+            .flat_map(|&thresh| std::iter::repeat(thresh).take(expansion_factor))
             .collect::<Vec<i64>>();
         let thresholds_matrix = Array2::from_shape_vec((responses.shape()[0], responses.shape()[1]), expanded_thresholds).unwrap();
-        responses -= &thresholds_matrix;
 
         // calculate code
         // has dimensions (kernel_placements.len(), num_kernels)
-        let code = responses.mapv(|x| x > 0);
+        let code = (&responses - thresholds_matrix).mapv(|x| x > 0);
         let flattened_code: Vec<bool> = code
             .outer_iter()
             .flat_map(|row| row.to_vec())
@@ -167,29 +207,6 @@ impl WorldcoinData {
             thresholds: thresholds,
         }
     }
-}
-
-/// Test that WorldcoinData::new() derives data as expected.
-#[test]
-fn test_worldcoin_data_creation() {
-    let image_shape = (2, 2);
-    let kernel_shape = (1, 2, 1);
-    let response_shape = (image_shape.0, kernel_shape.2);
-    let data = WorldcoinData::new(
-        Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
-        Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
-        vec![0],
-        vec![0, 1],
-        vec![0],
-    );
-    let expected_responses = Array2::from_shape_vec(response_shape, vec![1 * 3 + 2 * 4, 1 * 1 + 2 * 9]).unwrap(); // 11, 19
-    assert_eq!(expected_responses, data.responses);
-    // rewirings should transpose the matrix
-    let expected_wirings = vec![(0, 0, 0, 0), (0, 1, 1, 0), (1, 0, 0, 1), (1, 1, 1, 1)];
-    assert_eq!(expected_wirings, data.wirings);
-    // Both response values are positive, so expected iris code is [true, true]
-    let expected_iris_code = vec![true, true];
-    assert_eq!(expected_iris_code, data.code);
 }
 
 /// Loads the v2 Worldcoin data from disk, and checks our computation of the iris code against the
@@ -242,6 +259,15 @@ pub fn load_data(data_directory: PathBuf) -> WorldcoinData {
     result
 }
 
+/// Helper function for conversion to field elements, handling negative values.
+pub fn i64_to_field<F: FieldExt>(value: i64) -> F {
+    if value >= 0 {
+        F::from(value as u64)
+    } else {
+        F::from(value.unsigned_abs()).neg()
+    }
+}
+
 impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
     fn from(data: &WorldcoinData) -> Self {
         let mut flattened_input_image: Vec<F> = data
@@ -250,13 +276,7 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
             .map(|x| x.to_vec())
             .flat_map(|row| {
                 row.into_iter()
-                    .map(|elem| {
-                        if elem < 0 {
-                            F::from(elem.abs() as u64).neg()
-                        } else {
-                            F::from(elem.abs() as u64)
-                        }
-                    })
+                    .map(i64_to_field)
                     .collect_vec()
             })
             .collect_vec();
@@ -276,13 +296,7 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
             .map(|row| row.to_vec())
             .flat_map(|row| {
                 row.into_iter()
-                    .map(|elem| {
-                        if elem < 0 {
-                            F::from(elem.abs() as u64).neg()
-                        } else {
-                            F::from(elem.abs() as u64)
-                        }
-                    })
+                    .map(i64_to_field)
                     .collect_vec()
             })
             .collect_vec();
@@ -298,23 +312,46 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
             reroutings.push((a_gate_label, im_gate_label));
         }
 
-        // Calculate the signed digital decompositions of the data.responses
-        let responses_vec_vec: Vec<Vec<i64>> = data
-            .responses
+        // Build a matrix from the thresholds for subtraction from the responses
+        let num_kernels = data.code.len() / (data.placements_row_idxs.len() * data.placements_col_idxs.len());
+        let mut thresholds_matrix: Vec<Vec<i64>> = vec![];
+        for threshold in data.thresholds.iter() {
+            for _ in 0..data.placements_col_idxs.len() {
+                thresholds_matrix.push(vec![*threshold; num_kernels]);
+            }
+        }
+        // let thresholds_matrix = data.thresholds
+        //     .iter()
+        //     .map(|thresh| std::iter::repeat(thresh).take(expansion_factor).collect())
+        //     .collect::<Vec<Vec<_>>>();
+        dbg!(&thresholds_matrix);
+        dbg!(&data.responses);
+
+        // The thresholded responses
+        let thres_resp_vec_vec: Vec<Vec<i64>> = data.responses
             .outer_iter()
             .map(|row| row.to_vec())
+            .zip(thresholds_matrix.iter())
+            .map(
+                |(resp_row, thresh_row)| 
+                    resp_row
+                    .into_iter()
+                    .zip(thresh_row.iter())
+                    .map(|(resp, thresh)| resp - *thresh)
+                .collect())
             .collect_vec();
 
         // Manually inserting padding - this is fine since it is a public input.
         let pad_length =
-            next_power_of_two(responses_vec_vec.len()).unwrap() - responses_vec_vec.len();
+            next_power_of_two(thres_resp_vec_vec.len()).unwrap() - thres_resp_vec_vec.len();
         let num_filters = data.kernel_matrix.dim().1;
-        let responses_vec_vec: Vec<Vec<i64>> = responses_vec_vec
+        let thres_resp_vec_vec: Vec<Vec<i64>> = thres_resp_vec_vec
             .into_iter()
             .chain(vec![vec![0i64; num_filters]; pad_length].into_iter())
             .collect();
 
-        let responses_digital_decomps: Vec<Vec<[u16; NUM_DIGITS]>> = responses_vec_vec
+        // Calculate the signed digital decompositions of the thresholded responses
+        let thres_resp_decomps: Vec<Vec<[u16; NUM_DIGITS]>> = thres_resp_vec_vec
             .into_par_iter()
             .map(|row| {
                 row.into_par_iter()
@@ -322,21 +359,21 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
                     .collect()
             })
             .collect();
-        let responses_digital_decomps: Vec<[u16; NUM_DIGITS]> = responses_digital_decomps
+        let thres_resp_decomps: Vec<[u16; NUM_DIGITS]> = thres_resp_decomps
             .into_iter()
             .flat_map(|x| x)
             .collect();
 
-        // count the number of times each digit appears in the digits
+        // Count the number of times each digit appears in the digits
         let mut digit_multiplicities: Vec<usize> = vec![0; BASE as usize];
-        for digit in responses_digital_decomps
+        for digit in thres_resp_decomps
             .clone()
             .into_iter()
             .flat_map(|x| x.into_iter())
         {
             digit_multiplicities[digit as usize] += 1;
         }
-        // turn into an MLE
+        // Convert to field elements
         let digit_multiplicities = digit_multiplicities
             .into_iter()
             .map(|x| F::from(x as u64))
@@ -344,7 +381,7 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
 
         let digits: FlatMles<F, NUM_DIGITS> = FlatMles::new_from_raw(
             to_flat_mles(
-                responses_digital_decomps
+                thres_resp_decomps
                     .into_iter()
                     .map(|vals| {
                         let vals: [F; NUM_DIGITS] = vals
@@ -367,14 +404,6 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
             .map(|elem| F::from(*elem as u64))
             .collect_vec();
 
-        // build a matrix from the thresholds and subtract
-        let expansion_factor = iris_code.len() / data.placements_row_idxs.len();
-        let thresholds_matrix = data.thresholds
-            .iter()
-            .map(|val| F::from(*val as u64)) // FIXME NEGATIVE POSSIBLE!
-            .flat_map(|thresh| std::iter::repeat(thresh).take(expansion_factor))
-            .collect::<Vec<F>>();
-
         WorldcoinCircuitData {
             image_matrix_mle,
             reroutings,
@@ -384,7 +413,8 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
             digits,
             code: iris_code,
             digit_multiplicities,
-            thresholds_matrix
+            // FIXME
+            thresholds_matrix: thresholds_matrix.into_iter().flatten().map(|v| i64_to_field(v)).collect(),
         }
     }
 }
@@ -467,6 +497,7 @@ pub fn deserialize_blinding_factors_from_bytes<C: PrimeOrderCurve>(bytes: &[u8])
 }
 #[cfg(test)]
 mod test {
+    use ndarray::{Array2, Array3};
     use remainder_shared_types::Fr;
     use std::path::Path;
 
@@ -481,9 +512,35 @@ mod test {
         assert_eq!(data.code.len(), (num_placements * num_kernels));
     }
 
+    //FIXME do this test with the toy data above and check the dimensions of all the resulting attributes
     #[test]
     fn test_conversion_to_circuit_data() {
         let data: WorldcoinData = load_data(Path::new("worldcoin_witness_data").to_path_buf());
         let _circuit_data: WorldcoinCircuitData<Fr> = (&data).into();
     }
+
+    // FIXME do this with the toy data above
+    /// Test that WorldcoinData::new() derives data as expected.
+    #[test]
+    fn test_worldcoin_data_creation() {
+        let image_shape = (2, 2);
+        let kernel_shape = (1, 2, 1);
+        let response_shape = (image_shape.0, kernel_shape.2);
+        let data = WorldcoinData::new(
+            Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
+            Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
+            vec![0],
+            vec![0, 1],
+            vec![12], // threshold
+        );
+        let expected_responses = Array2::from_shape_vec(response_shape, vec![1 * 3 + 2 * 4, 1 * 1 + 2 * 9]).unwrap(); // 11, 19
+        assert_eq!(expected_responses, data.responses);
+        // rewirings should transpose the matrix
+        let expected_wirings = vec![(0, 0, 0, 0), (0, 1, 1, 0), (1, 0, 0, 1), (1, 1, 1, 1)];
+        assert_eq!(expected_wirings, data.wirings);
+        // iris code is true when response values > threshold: expected iris code is [false, true]
+        let expected_iris_code = vec![false, true];
+        assert_eq!(expected_iris_code, data.code);
+    }
+
 }

@@ -12,10 +12,9 @@ mod tests {
     use crate::worldcoin::components::{BitsAreBinary, DigitalRecompositionComponent};
     use crate::worldcoin::components::SignCheckerComponent;
     use crate::worldcoin::data::{
-        load_data, WorldcoinCircuitData, WorldcoinData,
+        load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinData
     };
     use itertools::Itertools;
-    use ndarray::{Array2, Array3};
     use remainder_shared_types::Fr;
     use std::path::Path;
 
@@ -166,25 +165,11 @@ mod tests {
         test_circuit(circuit, None);
     }
 
-    /// Generate toy data for the worldcoin circuit.
-    /// Image is 2x2, and there are two placements of two 2x1 kernels.
-    pub fn toy_worldcoin_circuit_data() -> WorldcoinCircuitData<Fr> {
-        let image_shape = (2, 2);
-        let kernel_shape = (2, 2, 1);
-        let data = WorldcoinData::new(
-            Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
-            Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4]).unwrap(),
-            vec![0],
-            vec![0, 1],
-            vec![0]
-        );
-        dbg!(&data);
-        (&data).into()
-    }
-
     #[test]
     fn test_worldcoin_circuit_toy_data() {
-        let circuit = build_circuit(toy_worldcoin_circuit_data());
+        let data = medium_worldcoin_data::<Fr>();
+        dbg!(&data);
+        let circuit = build_circuit(data);
         test_circuit(circuit, Some(Path::new("worldcoin_witness_data/blah.json")));
     }
     
