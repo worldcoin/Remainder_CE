@@ -3,7 +3,7 @@ use num_traits::sign;
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    expression::{abstract_expr::{calculate_selector_values, AbstractExpr}, generic_expr::Expression},
     layouter::{
         component::Component,
         nodes::{
@@ -14,6 +14,7 @@ use crate::{
     worldcoin::digit_decomposition::NUM_DIGITS,
 };
 
+// FIXME is this component even necessary?? not even being used, right?
 pub struct IdentityGateComponent<F: FieldExt> {
     pub identity_gate: IdentityGateNode<F>,
 }
@@ -36,6 +37,56 @@ where
 {
     fn yield_nodes(self) -> Vec<N> {
         vec![self.identity_gate.into()]
+    }
+}
+
+/// A component that concatenates all the separate digit MLEs (there is one for each digital place)
+/// into a single MLE using a selector tree.
+/// (Necessary to interact with logup).
+pub struct DigitsConcatenator<F: FieldExt> {
+    /// The sector that concatenates the digits (to be constrained by the lookup)
+    pub sector: Sector<F>,
+}
+
+impl<F: FieldExt> DigitsConcatenator<F> {
+    /// Create a new DigitsConcatenator component.
+    pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>]) -> Self {
+        let sector = Sector::new(
+            ctx,
+            mles,
+            |digital_places| {
+                assert_eq!(digital_places.len(), NUM_DIGITS);
+                Expression::<F, AbstractExpr>::selectors(
+                    digital_places
+                        .iter()
+                        .map(|node| node.expr())
+                        .collect(),
+                )
+            },
+            |digits_at_places| {
+                assert_eq!(digits_at_places.len(), NUM_DIGITS);
+                let all_digits = calculate_selector_values(
+                    digits_at_places
+                        .iter()
+                        .map(|digits_at_place| {
+                            digits_at_place.get_evals_vector().clone()
+                        })
+                        .collect(),
+                );
+                MultilinearExtension::new(all_digits)
+            },
+        );
+        println!("DigitsConcatenator sector = {:?}", sector.id());
+        Self { sector }
+    }
+}
+
+impl<F: FieldExt, N> Component<N> for DigitsConcatenator<F>
+where
+    N: CircuitNode + From<Sector<F>>,
+{
+    fn yield_nodes(self) -> Vec<N> {
+        vec![self.sector.into()]
     }
 }
 
@@ -86,7 +137,7 @@ impl<F: FieldExt> DigitRecompComponent<F> {
                 MultilinearExtension::new(result_iter)
             },
         );
-
+        println!("DigitsRecompComponent sector = {:?}", sector.id());
         Self { sector }
     }
 }
@@ -100,6 +151,7 @@ where
     }
 }
 
+// FIXME remove
 pub struct EqualityCheckerComponent<F: FieldExt> {
     pub sector: Sector<F>,
 }
@@ -146,13 +198,15 @@ where
     }
 }
 
+/// Ensures that each bit is either 0 or 1. Add self.sector to the circuit as an output layer to
+/// enforce this constraint.
 pub struct BitsAreBinary<F: FieldExt> {
+    /// To be added to the circuit as an output layer by the caller.
     pub sector: Sector<F>,
 }
 
 impl<F: FieldExt> BitsAreBinary<F> {
-    /// Ensures that each bit is either 0 or 1. Add self.sector to the circuit as an output layer to
-    /// enforce this constraint.
+    /// Creates a new BitsAreBinary component.
     pub fn new(
         ctx: &Context,
         values_node: &dyn ClaimableNode<F = F>,
@@ -176,6 +230,7 @@ impl<F: FieldExt> BitsAreBinary<F> {
                 MultilinearExtension::new_sized_zero(data[0].num_vars())
             },
         );
+        println!("BitsAreBinary sector = {:?}", sector.id());
         Self { sector }
     }
 }
@@ -190,13 +245,15 @@ where
 }
 
 
+/// Calculates (values + abs_values) + -2 * sign_bits * abs_values
+/// (So sign bit of 0 indicates negative, 1 indicates positive).
+/// Add self.sector to the circuit as an output layer to enforce this constraint.
 pub struct SignCheckerComponent<F: FieldExt> {
+    /// To be added to the circuit as an output layer by the caller.
     pub sector: Sector<F>,
 }
 
 impl<F: FieldExt> SignCheckerComponent<F> {
-    /// Calculates (values + abs_values) + -2 * sign_bits * abs_values
-    /// (So sign bit of 0 indicates negative, 1 indicates positive).
     pub fn new(
         ctx: &Context,
         values: &dyn ClaimableNode<F = F>,
@@ -241,10 +298,8 @@ impl<F: FieldExt> SignCheckerComponent<F> {
                 MultilinearExtension::new_sized_zero(data[0].num_vars())
             },
         );
-
-        Self {
-            sector,
-        }
+        println!("SignCheckerComponent sector = {:?}", sector.id());
+        Self { sector }
     }
 }
 

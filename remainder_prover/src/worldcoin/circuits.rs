@@ -3,9 +3,10 @@ use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::identity_gate::IdentityGateNode;
+use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::{ClaimableNode, Context};
+use crate::layouter::nodes::{lookup, CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::get_input_shred_from_vec;
 use crate::utils::pad_to_nearest_power_of_two;
@@ -16,7 +17,7 @@ use crate::worldcoin::digit_decomposition::BASE;
 use itertools::Itertools;
 use remainder_shared_types::Fr;
 
-use super::components::BitsAreBinary;
+use super::components::{BitsAreBinary, DigitsConcatenator};
 
 /// Builds the worldcoin circuit.
 pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
@@ -26,7 +27,7 @@ pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
             image_matrix_mle,
             reroutings: wirings,
             num_placements,
-            kernel_matrix_mle,
+            kernel_matrix_mle: kernel_matrix,
             kernel_matrix_dims,
             digits,
             iris_code,
@@ -35,62 +36,98 @@ pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
         let mut output_nodes = vec![];
 
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        println!("Input layer = {:?}", input_layer.id());
         let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
-        let matrix_a = IdentityGateNode::new(ctx, &image, wirings.clone());
+        println!("Image input = {:?}", image.id());
+        let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
+        println!("Identity gate = {:?}", rerouted_image.id());
 
         let (filter_num_rows, _) = kernel_matrix_dims;
         let matrix_a_num_rows_cols = (*num_placements, *filter_num_rows);
-        let matrix_b = get_input_shred_from_vec(kernel_matrix_mle.clone(), ctx, &input_layer);
+        let kernel_matrix = get_input_shred_from_vec(kernel_matrix.clone(), ctx, &input_layer);
+        println!("Kernel values input = {:?}", kernel_matrix.id());
 
         let matmult = MatMultNode::new(
             ctx,
-            &matrix_a,
+            &rerouted_image,
             matrix_a_num_rows_cols,
-            &matrix_b,
+            &kernel_matrix,
             *kernel_matrix_dims,
         );
+        println!("Matmult = {:?}", matmult.id());
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
-        let digits_input_refs = digits_input_shreds
+        for (i, shred) in digits_input_shreds.iter().enumerate() {
+            println!("{}th digit input = {:?}", i, shred.id());
+        }
+        let digits_refs = digits_input_shreds
             .iter()
             .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
             .collect_vec();
-        let recomp_of_abs_value =
-            DigitRecompComponent::new(ctx, &digits_input_refs, BASE as u64);
+        // Concatenate the digits (which are stored for each digital place separately) into a single
+        // MLE
+        let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
-        let iris_code_input_shred = get_input_shred_from_vec(
+        // Use a lookup to range check the digits to the range 0..BASE
+        let lookup_table_values = get_input_shred_from_vec((0..BASE as u64).map(Fr::from).collect(), ctx, &input_layer);
+        println!("Digit range check input = {:?}", lookup_table_values.id());
+        let lookup_table = LookupTable::new(ctx, &lookup_table_values, false);
+        println!("Lookup table = {:?}", lookup_table.id());
+        let digit_multiplicities = get_input_shred_from_vec(digit_multiplicities.clone(), ctx, &input_layer);
+        println!("Digit multiplicities = {:?}", digit_multiplicities.id());
+        let lookup_constraint = LookupConstraint::new(
+            ctx,
+            &lookup_table,
+            &digits_concatenator.sector,
+            &digit_multiplicities
+        );
+        println!("Lookup constraint = {:?}", lookup_constraint.id());
+
+        let recomp_of_abs_value = DigitRecompComponent::new(ctx, &digits_refs, BASE as u64);
+
+        let iris_code = get_input_shred_from_vec(
             pad_to_nearest_power_of_two(iris_code.clone()),
             ctx,
             &input_layer,
         );
-        let recomp_check_builder = SignCheckerComponent::new(
+        println!("Iris code input = {:?}", iris_code.id());
+        let sign_checker = SignCheckerComponent::new(
             ctx,
             &matmult,
-            &iris_code_input_shred,
+            &iris_code,
             &recomp_of_abs_value.sector,
         );
-        output_nodes.push(OutputNode::new_zero(ctx, &recomp_check_builder.sector));
+        output_nodes.push(OutputNode::new_zero(ctx, &sign_checker.sector));
 
-        let bits_are_binary = BitsAreBinary::new(ctx, &iris_code_input_shred);
+        let bits_are_binary = BitsAreBinary::new(ctx, &iris_code);
         output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
 
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
             image.into(),
-            matrix_a.into(),
-            matrix_b.into(),
-            iris_code_input_shred.into(),
+            kernel_matrix.into(),
+            iris_code.into(),
+            digit_multiplicities.into(),
+            lookup_table_values.into(),
         ];
         all_nodes.extend(digits_input_shreds.into_iter().map(|node| node.into()));
+
+        // Add the identity gate node
+        all_nodes.push(rerouted_image.into());
 
         // Add matmult node
         all_nodes.push(matmult.into());
 
+        // Add the lookup nodes
+        all_nodes.push(lookup_table.into());
+        all_nodes.push(lookup_constraint.into());
+
         // Add nodes from components
+        all_nodes.extend(digits_concatenator.yield_nodes().into_iter());
         all_nodes.extend(bits_are_binary.yield_nodes().into_iter());
         all_nodes.extend(recomp_of_abs_value.yield_nodes().into_iter());
-        all_nodes.extend(recomp_check_builder.yield_nodes().into_iter());
+        all_nodes.extend(sign_checker.yield_nodes().into_iter());
 
         // Add output nodes
         all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
