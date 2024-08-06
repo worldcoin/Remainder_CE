@@ -171,7 +171,7 @@ fn test_worldcoin_data_creation() {
     // rewirings should transpose the matrix
     let expected_wirings = vec![(0, 0, 0, 0), (0, 1, 1, 0), (1, 0, 0, 1), (1, 1, 1, 1)];
     assert_eq!(expected_wirings, data.wirings);
-    // Both response values are positive, so expectet iris code is [true, true]
+    // Both response values are positive, so expected iris code is [true, true]
     let expected_iris_code = vec![true, true];
     assert_eq!(expected_iris_code, data.iris_code);
 }

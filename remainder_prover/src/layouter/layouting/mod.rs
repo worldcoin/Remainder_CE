@@ -235,22 +235,6 @@ pub fn layout<
     let mut dag = NodeEnumGroup::new(nodes);
 
     let out = {
-        // Build a map node id -> LookupTable
-        let mut lookup_table_map: HashMap<NodeId, &mut LookupTable> = HashMap::new();
-        let mut lookup_tables: Vec<LookupTable> = dag.get_nodes();
-        for lookup_table in lookup_tables.iter_mut() {
-            lookup_table_map.insert(lookup_table.id(), lookup_table);
-        }
-        // Add LookupConstraints to their respective LookupTables
-        let lookup_constraints: Vec<LookupConstraint> = dag.get_nodes();
-        for lookup_constraint in lookup_constraints {
-            let lookup_table_id = lookup_constraint.table_node_id;
-            let lookup_table = lookup_table_map
-                .get_mut(&lookup_table_id)
-                .ok_or(DAGError::DanglingNodeId(lookup_table_id))?;
-            lookup_table.add_lookup_constraint(lookup_constraint);
-        }
-
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
         let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
 
@@ -273,14 +257,9 @@ pub fn layout<
         input_layers
             .into_iter()
             .map(|input| Box::new(input) as Box<dyn CompilableNode<F, Pf>>)
-            .chain(
-                lookup_tables
-                    .into_iter()
-                    .map(|node| Box::new(node) as Box<dyn CompilableNode<F, Pf>>),
-            )
     };
 
-    //handle intermediate layers
+    // handle intermediate layers
     let out = {
         let sector_groups: Vec<SectorGroup<F>> = dag.get_nodes();
         let sectors: Vec<Sector<F>> = dag.get_nodes();
@@ -304,10 +283,11 @@ pub fn layout<
             )
             .collect_vec();
 
-        //topo_sort all the nodes which can be immediently compiled and the sectors that need to be layedout before compilation
+        // topo_sort all the nodes which can be immediately compiled and the sectors that need to be
+        // laid out before compilation
         let intermediate_nodes = topo_sort(intermediate_nodes)?;
 
-        //collapse the sectors into sector_groups
+        // collapse the sectors into sector_groups
         let (mut intermediate_nodes, final_sector_group) = intermediate_nodes.into_iter().fold(
             (vec![], None::<SectorGroup<F>>),
             |(mut layedout_nodes, curr_sector_group), node| {
@@ -337,10 +317,34 @@ pub fn layout<
         if let Some(final_sector_group) = final_sector_group {
             intermediate_nodes.push(Box::new(final_sector_group));
         }
-        out.chain(intermediate_nodes)
+        out.chain(intermediate_nodes.into_iter())
     };
 
-    //handle output layers
+    let out = {
+        // Build a map node id -> LookupTable
+        let mut lookup_table_map: HashMap<NodeId, &mut LookupTable> = HashMap::new();
+        let mut lookup_tables: Vec<LookupTable> = dag.get_nodes();
+        for lookup_table in lookup_tables.iter_mut() {
+            lookup_table_map.insert(lookup_table.id(), lookup_table);
+        }
+        // Add LookupConstraints to their respective LookupTables
+        let lookup_constraints: Vec<LookupConstraint> = dag.get_nodes();
+        for lookup_constraint in lookup_constraints {
+            let lookup_table_id = lookup_constraint.table_node_id;
+            let lookup_table = lookup_table_map
+                .get_mut(&lookup_table_id)
+                .ok_or(DAGError::DanglingNodeId(lookup_table_id))?;
+            lookup_table.add_lookup_constraint(lookup_constraint);
+        }
+
+        let lookup_tables = lookup_tables
+                .into_iter()
+                .map(|node| Box::new(node) as Box<dyn CompilableNode<F, Pf>>);
+
+        out.chain(lookup_tables)
+    };
+
+    // handle output layers
     let out = {
         let output_layers: Vec<OutputNode<F>> = dag.get_nodes();
 

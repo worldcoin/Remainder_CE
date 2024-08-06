@@ -31,9 +31,11 @@ pub struct LookupConstraint {
 }
 
 impl LookupConstraint {
-    /// Creates a new LookupConstraint, constraining the data of `constrained` to form a subset of the
-    /// data in `lookup_table` with multiplicities given by `multiplicities`. Caller is responsible for the
-    /// yielding of all nodes (including `constrained` and `multiplicities`).
+    /// Creates a new LookupConstraint, constraining the data of `constrained` to form a subset of
+    /// the data in `lookup_table` with multiplicities given by `multiplicities`. Caller is
+    /// responsible for the yielding of all nodes (including `constrained` and `multiplicities`).
+    /// The adding of lookup specific input- and output layers is handled automatically by
+    /// compile().
     pub fn new<F: FieldExt>(
         ctx: &Context,
         lookup_table: &LookupTable,
@@ -56,7 +58,9 @@ impl CircuitNode for LookupConstraint {
     }
 
     fn sources(&self) -> Vec<NodeId> {
-        vec![]
+        // NB this function never gets called, since lookup tables and constraints are placed after
+        // the intermediate nodes in the toposort
+        vec![self.constrained_node_id, self.multiplicities_node_id]
     }
 }
 
@@ -116,7 +120,11 @@ impl CircuitNode for LookupTable {
     }
 
     fn sources(&self) -> Vec<NodeId> {
-        self.constraints.iter().map(|constraint| constraint.id()).collect()
+        // NB this function never gets called, since lookup tables and constraints are placed after
+        // the intermediate nodes in the toposort
+        self.constraints.iter().map(|constraint| constraint.id()).chain(
+            self.constraints.iter().map(|constraint| constraint.sources()).flatten()
+        ).collect()
     }
 }
 
@@ -134,7 +142,7 @@ where
     ) -> Result<(), crate::layouter::layouting::DAGError> {
         type AE<F> = Expression<F, AbstractExpr>;
         type PE<F> = Expression<F, ProverExpr>;
-
+        
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
         // table
