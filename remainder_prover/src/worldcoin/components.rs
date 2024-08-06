@@ -1,5 +1,4 @@
 use itertools::{all, Itertools};
-use num_traits::sign;
 use remainder_shared_types::FieldExt;
 
 use crate::{
@@ -7,38 +6,12 @@ use crate::{
     layouter::{
         component::Component,
         nodes::{
-            identity_gate::IdentityGateNode, sector::Sector, CircuitNode, ClaimableNode, Context,
+            sector::Sector, CircuitNode, ClaimableNode, Context,
         },
     },
     mle::evals::MultilinearExtension,
     worldcoin::digit_decomposition::NUM_DIGITS,
 };
-
-// FIXME is this component even necessary?? not even being used, right?
-pub struct IdentityGateComponent<F: FieldExt> {
-    pub identity_gate: IdentityGateNode<F>,
-}
-
-impl<F: FieldExt> IdentityGateComponent<F> {
-    pub fn new(
-        ctx: &Context,
-        mle: &impl ClaimableNode<F = F>,
-        wirings: Vec<(usize, usize)>,
-    ) -> Self {
-        let identity_gate = IdentityGateNode::new(ctx, mle, wirings);
-
-        Self { identity_gate }
-    }
-}
-
-impl<F: FieldExt, N> Component<N> for IdentityGateComponent<F>
-where
-    N: CircuitNode + From<IdentityGateNode<F>>,
-{
-    fn yield_nodes(self) -> Vec<N> {
-        vec![self.identity_gate.into()]
-    }
-}
 
 /// A component that concatenates all the separate digit MLEs (there is one for each digital place)
 /// into a single MLE using a selector tree.
@@ -90,11 +63,13 @@ where
     }
 }
 
-pub struct DigitRecompComponent<F: FieldExt> {
+/// Component performing digital recomposition, i.e. deriving the number from its digits.
+pub struct DigitalRecompositionComponent<F: FieldExt> {
+    /// The recomposed numbers
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> DigitRecompComponent<F> {
+impl<F: FieldExt> DigitalRecompositionComponent<F> {
     /// Each of the Nodes in `mles` specifies the digits for a different "decimal place".  Most
     /// significant digit comes first.
     pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>], base: u64) -> Self {
@@ -142,54 +117,7 @@ impl<F: FieldExt> DigitRecompComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DigitRecompComponent<F>
-where
-    N: CircuitNode + From<Sector<F>>,
-{
-    fn yield_nodes(self) -> Vec<N> {
-        vec![self.sector.into()]
-    }
-}
-
-// FIXME remove
-pub struct EqualityCheckerComponent<F: FieldExt> {
-    pub sector: Sector<F>,
-}
-impl<F: FieldExt> EqualityCheckerComponent<F> {
-    /// Checks if two MLEs are equal.
-    pub fn new(
-        ctx: &Context,
-        lhs: &dyn ClaimableNode<F = F>,
-        rhs: &dyn ClaimableNode<F = F>,
-    ) -> Self {
-        let sector = Sector::new(
-            ctx,
-            &[lhs, rhs],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 2);
-                input_nodes[0].expr() - input_nodes[1].expr()
-            },
-            |data| {
-                assert_eq!(data.len(), 2);
-                let values = data[0].get_evals_vector()
-                    .iter()
-                    .zip(data[1].get_evals_vector())
-                    .map(|((value_lhs, value_rhs))| {
-                        *value_lhs - *value_rhs
-                    })
-                    .collect_vec();
-                assert!(all(values.into_iter(), |val| val == F::ZERO));
-                MultilinearExtension::new_sized_zero(data[0].num_vars())
-            },
-        );
-
-        Self {
-            sector,
-        }
-    }
-}
-
-impl<F: FieldExt, N> Component<N> for EqualityCheckerComponent<F>
+impl<F: FieldExt, N> Component<N> for DigitalRecompositionComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -245,8 +173,8 @@ where
 }
 
 
-/// Calculates (values + abs_values) + -2 * sign_bits * abs_values
-/// (So sign bit of 0 indicates negative, 1 indicates positive).
+/// Component that checks that the decomposition of a number into (sign bit, absolute value) is
+/// correct. Sign bit of 0 indicates negative, 1 indicates positive.
 /// Add self.sector to the circuit as an output layer to enforce this constraint.
 pub struct SignCheckerComponent<F: FieldExt> {
     /// To be added to the circuit as an output layer by the caller.
@@ -254,6 +182,9 @@ pub struct SignCheckerComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> SignCheckerComponent<F> {
+    /// Create a new SignCheckerComponent. Checks that `abs_values` are the absolute value of
+    /// `values` and that the sign bits of `values` are given by `sign_bits`, where 0 indicates
+    /// negative and 1 indicates positive.
     pub fn new(
         ctx: &Context,
         values: &dyn ClaimableNode<F = F>,

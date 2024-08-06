@@ -6,13 +6,13 @@ use crate::layouter::nodes::identity_gate::IdentityGateNode;
 use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::{lookup, CircuitNode, ClaimableNode, Context};
+use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::get_input_shred_from_vec;
 use crate::utils::pad_to_nearest_power_of_two;
-use crate::worldcoin::components::DigitRecompComponent;
+use crate::worldcoin::components::DigitalRecompositionComponent;
 use crate::worldcoin::components::SignCheckerComponent;
-use crate::worldcoin::data::{WorldcoinCircuitData, WorldcoinData};
+use crate::worldcoin::data::WorldcoinCircuitData;
 use crate::worldcoin::digit_decomposition::BASE;
 use itertools::Itertools;
 use remainder_shared_types::Fr;
@@ -83,7 +83,7 @@ pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
         );
         println!("Lookup constraint = {:?}", lookup_constraint.id());
 
-        let recomp_of_abs_value = DigitRecompComponent::new(ctx, &digits_refs, BASE as u64);
+        let recomp_of_abs_value = DigitalRecompositionComponent::new(ctx, &digits_refs, BASE as u64);
 
         let iris_code = get_input_shred_from_vec(
             pad_to_nearest_power_of_two(iris_code.clone()),

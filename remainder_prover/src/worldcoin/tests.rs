@@ -4,68 +4,20 @@ mod tests {
     use crate::layouter::component::ComponentSet;
     use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
     use crate::layouter::nodes::circuit_outputs::OutputNode;
-    use crate::layouter::nodes::identity_gate::IdentityGateNode;
-    use crate::layouter::nodes::matmult::MatMultNode;
     use crate::layouter::nodes::node_enum::NodeEnum;
     use crate::layouter::nodes::ClaimableNode;
-    use crate::mle::circuit_mle::CircuitMle;
     use crate::prover::helpers::test_circuit;
     use crate::utils::get_input_shred_from_vec;
-    use crate::utils::pad_to_nearest_power_of_two;
     use crate::worldcoin::circuits::build_circuit;
-    use crate::worldcoin::components::{BitsAreBinary, DigitRecompComponent};
-    use crate::worldcoin::components::EqualityCheckerComponent;
+    use crate::worldcoin::components::{BitsAreBinary, DigitalRecompositionComponent};
     use crate::worldcoin::components::SignCheckerComponent;
-    // use crate::worldcoin::circuits::{WorldcoinCircuit, WorldcoinCircuitPrecommit};
     use crate::worldcoin::data::{
         load_data, WorldcoinCircuitData, WorldcoinData,
     };
-    // use crate::worldcoin::data_v3::{
-    //     convert_to_circuit_data, load_data_from_serialized_inputs_iriscode_v3,
-    //     load_kernel_data_iriscode_v3, IrisCodeV3KernelData, WorldcoinDataV3, IRIS_CODE_V3_IMG_COLS,
-    //     IRIS_CODE_V3_IMG_ROWS,
-    // };
-    use crate::worldcoin::digit_decomposition::BASE;
     use itertools::Itertools;
     use ndarray::{Array2, Array3};
     use remainder_shared_types::Fr;
-    use std::marker::PhantomData;
     use std::path::Path;
-
-    use chrono;
-    use log::LevelFilter;
-    use std::io::Write;
-
-    #[test]
-    fn test_equality_checker() {
-        let values = vec![ Fr::from(1u64), Fr::from(6u64), Fr::from(3u64), Fr::from(2u64).neg() ];
-
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let lhs = get_input_shred_from_vec(values.clone(), ctx, &input_layer);
-            let rhs = get_input_shred_from_vec(values.clone(), ctx, &input_layer);
-
-            let component = EqualityCheckerComponent::new(
-                ctx,
-                &lhs,
-                &rhs,
-            );
-
-            let output = OutputNode::new_zero(ctx, &component.sector);
-
-            let all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                lhs.into(),
-                rhs.into(),
-                component.sector.into(),
-                output.into(),
-            ];
-
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
-        });
-
-        test_circuit(circuit, None);
-    }
 
     #[test]
     fn test_sign_checker() {
@@ -147,7 +99,7 @@ mod tests {
                 .iter()
                 .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
                 .collect_vec();
-            let recomp_of_abs_value = DigitRecompComponent::new(ctx, &digits_input_refs, base);
+            let recomp_of_abs_value = DigitalRecompositionComponent::new(ctx, &digits_input_refs, base);
 
             let signed_recomp_checker = SignCheckerComponent::new(
                 ctx,

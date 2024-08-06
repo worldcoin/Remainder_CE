@@ -19,10 +19,7 @@ use crate::{
     mle::circuit_mle::{to_flat_mles, FlatMles},
     worldcoin::digit_decomposition::digital_decomposition,
 };
-use crate::{
-    mle::dense::DenseMle,
-    worldcoin::digit_decomposition::{BASE, NUM_DIGITS},
-};
+use crate::worldcoin::digit_decomposition::{BASE, NUM_DIGITS};
 use remainder_shared_types::HasByteRepresentation;
 
 #[derive(Debug, Clone)]
@@ -176,6 +173,8 @@ fn test_worldcoin_data_creation() {
     assert_eq!(expected_iris_code, data.iris_code);
 }
 
+/// Loads the v2 Worldcoin data from disk, and checks our computation of the iris code against the
+/// expected iris code.
 pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinData<F> {
     let image: Array2<i64> =
         read_npy(Path::new(&data_directory.join("quantized_image.npy"))).unwrap();
