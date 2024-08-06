@@ -46,7 +46,7 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
 
 /// Witness data for the Worldcoin circuit, before conversion to MLEs.
 #[derive(Debug)]
-pub struct WorldcoinData<F: FieldExt> {
+pub struct WorldcoinData {
     /// Quantized input image (typically 100x400)
     pub image: Array2<i64>,
     /// Matrix of quantized kernel values of shape (kernel_num_rows * kernel_num_cols, num_kernels)
@@ -64,11 +64,9 @@ pub struct WorldcoinData<F: FieldExt> {
     /// Result of thresholding the responses.
     /// Has dimensions (number of placements * num_kernels)
     pub iris_code: Vec<bool>,
-    pub _marker: PhantomData<F>,
-    // FIXME PhantomData needed?
 }
 
-impl<F: FieldExt> WorldcoinData<F> {
+impl WorldcoinData {
     /// Create a new instance of WorldcoinData. kernel_values has dimensions (num_kernels,
     /// kernel_num_rows, kernel_num_cols). Every _combination_ from placements_row_idxs x
     /// placements_col_idxs specifies a kernel placement in the image (via the top-left coordinate).
@@ -145,7 +143,6 @@ impl<F: FieldExt> WorldcoinData<F> {
             wirings,
             responses,
             iris_code: flattened_iris_code,
-            _marker: PhantomData,
         }
     }
 }
@@ -153,11 +150,10 @@ impl<F: FieldExt> WorldcoinData<F> {
 /// Test that WorldcoinData::new() derives data as expected.
 #[test]
 fn test_worldcoin_data_creation() {
-    use remainder_shared_types::Fr;
     let image_shape = (2, 2);
     let kernel_shape = (1, 2, 1);
     let response_shape = (image_shape.0, kernel_shape.2);
-    let data = WorldcoinData::<Fr>::new(
+    let data = WorldcoinData::new(
         Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
         Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
         vec![0],
@@ -175,7 +171,7 @@ fn test_worldcoin_data_creation() {
 
 /// Loads the v2 Worldcoin data from disk, and checks our computation of the iris code against the
 /// expected iris code.
-pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinData<F> {
+pub fn load_data(data_directory: PathBuf) -> WorldcoinData {
     let image: Array2<i64> =
         read_npy(Path::new(&data_directory.join("quantized_image.npy"))).unwrap();
 
@@ -221,8 +217,8 @@ pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinData<F> {
     result
 }
 
-impl<F: FieldExt> From<&WorldcoinData<F>> for WorldcoinCircuitData<F> {
-    fn from(data: &WorldcoinData<F>) -> Self {
+impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
+    fn from(data: &WorldcoinData) -> Self {
         let mut flattened_input_image: Vec<F> = data
             .image
             .outer_iter()
@@ -445,7 +441,7 @@ mod test {
 
     #[test]
     fn test_load_data() {
-        let data: WorldcoinData<Fr> = load_data(Path::new("worldcoin_witness_data").to_path_buf());
+        let data: WorldcoinData = load_data(Path::new("worldcoin_witness_data").to_path_buf());
         let num_placements = data.placements_row_idxs.len() * data.placements_col_idxs.len();
         let num_kernels = data.kernel_matrix.dim().1;
         assert_eq!(data.responses.dim(), (num_placements, num_kernels));
@@ -454,7 +450,7 @@ mod test {
 
     #[test]
     fn test_conversion_to_circuit_data() {
-        let data: WorldcoinData<Fr> = load_data(Path::new("worldcoin_witness_data").to_path_buf());
+        let data: WorldcoinData = load_data(Path::new("worldcoin_witness_data").to_path_buf());
         let _circuit_data: WorldcoinCircuitData<Fr> = (&data).into();
     }
 }

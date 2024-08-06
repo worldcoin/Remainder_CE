@@ -15,13 +15,13 @@ use crate::worldcoin::components::SignCheckerComponent;
 use crate::worldcoin::data::WorldcoinCircuitData;
 use crate::worldcoin::digit_decomposition::BASE;
 use itertools::Itertools;
-use remainder_shared_types::Fr;
+use remainder_shared_types::FieldExt;
 
 use super::components::{BitsAreBinary, DigitsConcatenator};
 
 /// Builds the worldcoin circuit.
-pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
-    -> LayouterCircuit<Fr, ComponentSet<NodeEnum<Fr>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<Fr>>> {
+pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
+    -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>> {
     LayouterCircuit::new(move |ctx| {
         let WorldcoinCircuitData {
             image_matrix_mle,
@@ -62,14 +62,14 @@ pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
         }
         let digits_refs = digits_input_shreds
             .iter()
-            .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+            .map(|shred| shred as &dyn ClaimableNode<F = F>)
             .collect_vec();
         // Concatenate the digits (which are stored for each digital place separately) into a single
         // MLE
         let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
         // Use a lookup to range check the digits to the range 0..BASE
-        let lookup_table_values = get_input_shred_from_vec((0..BASE as u64).map(Fr::from).collect(), ctx, &input_layer);
+        let lookup_table_values = get_input_shred_from_vec((0..BASE as u64).map(F::from).collect(), ctx, &input_layer);
         println!("Digit range check input = {:?}", lookup_table_values.id());
         let lookup_table = LookupTable::new(ctx, &lookup_table_values, false);
         println!("Lookup table = {:?}", lookup_table.id());
@@ -103,7 +103,7 @@ pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
         output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
 
         // Collect all the nodes, starting with the input nodes
-        let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+        let mut all_nodes: Vec<NodeEnum<F>> = vec![
             input_layer.into(),
             image.into(),
             kernel_matrix.into(),
@@ -132,6 +132,6 @@ pub fn build_circuit(data: WorldcoinCircuitData<Fr>)
         // Add output nodes
         all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-        ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        ComponentSet::<NodeEnum<F>>::new_raw(all_nodes)
     })
 }

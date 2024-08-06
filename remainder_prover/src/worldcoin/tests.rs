@@ -189,8 +189,8 @@ mod tests {
     
     #[test]
     fn test_worldcoin_circuit() {
-        let data: WorldcoinData<Fr> = load_data(Path::new("worldcoin_witness_data").to_path_buf());
-        let circuit = build_circuit((&data).into());
+        let data: WorldcoinData = load_data(Path::new("worldcoin_witness_data").to_path_buf());
+        let circuit = build_circuit::<Fr>((&data).into());
         test_circuit(circuit, None);
     }
 

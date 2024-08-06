@@ -26,11 +26,11 @@ use crate::{
 pub(crate) mod test_utils;
 
 /// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
-pub fn get_input_shred_from_vec(
-    mle_vec: Vec<Fr>,
+pub fn get_input_shred_from_vec<F: FieldExt>(
+    mle_vec: Vec<F>,
     ctx: &Context,
-    input_node: &InputLayerNode<Fr>,
-) -> InputShred<Fr> {
+    input_node: &InputLayerNode<F>,
+) -> InputShred<F> {
     assert!(mle_vec.len().is_power_of_two());
     InputShred::new(
         ctx,
