@@ -518,8 +518,7 @@ impl<F: FieldExt> MultilinearExtension<F> {
         let num_vars = self.num_vars();
         let num_pairs = 1_usize << (num_vars - 1);
 
-        let new_evals: Vec<F> = (0..num_pairs)
-            .into_par_iter()
+        let new_evals: Vec<F> = cfg_into_iter!(0..num_pairs)
             .map(|idx| {
                 // Compute the two indices by inserting a `0` and a `1` respectively
                 // in the appropriate position of `current_pair_index`.
