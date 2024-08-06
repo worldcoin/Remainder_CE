@@ -1,13 +1,14 @@
 use std::path::{Path, PathBuf};
 
+use ark_std::cfg_into_iter;
 use itertools::Itertools;
 use ndarray::{Array, Array1, Array2, Array3};
 use ndarray_npy::read_npy;
 use remainder_shared_types::FieldExt;
 
+use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::layer::LayerId;
 use crate::mle::circuit_mle::{to_slice_of_vectors, FlatMles};
-use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::mle::pad_with;
 use crate::worldcoin::parameters_v2::{NUM_KERNELS, NUM_KERNEL_COLS, NUM_KERNEL_ROWS};
@@ -66,12 +67,11 @@ pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16u64, 2>
         .unwrap(),
         &vec![0, 2],
         &vec![0, 2],
-        Array2::from_shape_vec(response_shape, vec![
-            5, 5, 5, 5,
-            5, 5, 5, 5,
-            -5, -5, -5, -5,
-            -5, -5, -5, -5,
-            ]).unwrap(),
+        Array2::from_shape_vec(
+            response_shape,
+            vec![5, 5, 5, 5, 5, 5, 5, 5, -5, -5, -5, -5, -5, -5, -5, -5],
+        )
+        .unwrap(),
     )
 }
 
@@ -108,20 +108,27 @@ pub struct WorldcoinCircuitData<F: FieldExt, const BASE: u64, const NUM_DIGITS: 
 }
 
 /// Loads the witnesses for a run of the iris code circuit from disk for either the iris or mask case.
-/// 
+///
 /// # Arguments:
 ///   `image_path` is the path to a quantized image file (could be the iris or the mask).
 ///   `is_mask` indicates whether to load the files for the mask or the iris.
-pub fn load_data<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(constant_data_folder: PathBuf, image_path: PathBuf, is_mask: bool) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
+pub fn load_data<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(
+    constant_data_folder: PathBuf,
+    image_path: PathBuf,
+    is_mask: bool,
+) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
     let constant_data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
     let image: Array2<u8> = read_npy(image_path).unwrap();
 
     let kernel_values: Array3<i64> =
         read_npy(&constant_data_folder.join("padded_kernel_values.npy")).unwrap();
-    assert_eq!(kernel_values.dim(), (NUM_KERNELS, NUM_KERNEL_ROWS, NUM_KERNEL_COLS));
+    assert_eq!(
+        kernel_values.dim(),
+        (NUM_KERNELS, NUM_KERNEL_ROWS, NUM_KERNEL_COLS)
+    );
 
     let thresholds: Array2<i64> = read_npy(&constant_data_folder.join("thresholds.npy")).unwrap();
-    use crate::worldcoin::parameters_v2::{PLACEMENTS_ROW_IDXS, PLACEMENTS_COL_IDXS};
+    use crate::worldcoin::parameters_v2::{PLACEMENTS_COL_IDXS, PLACEMENTS_ROW_IDXS};
     let num_placements = PLACEMENTS_ROW_IDXS.len() * PLACEMENTS_COL_IDXS.len();
     assert_eq!(thresholds.dim(), (num_placements, NUM_KERNELS));
 
@@ -134,7 +141,9 @@ pub fn load_data<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(constant
     )
 }
 
-impl<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
+impl<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>
+    WorldcoinCircuitData<F, BASE, NUM_DIGITS>
+{
     /// Create a new instance. Note that every _combination_ from placements_row_idxs x
     /// placements_col_idxs specifies a kernel placement in the image (via the top-left coordinate).
     ///
@@ -233,7 +242,10 @@ impl<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize> WorldcoinCircuitData
         // We pad the thresholded responses to the nearest power of two, since the number of
         // placements is not necessarily a power of two, and this will otherwise cause an issue for
         // logup (which expects the number of constrained values to be a power of two).
-        let thres_resp = pad_with(0, &(responses - &thresholds_matrix).into_iter().collect_vec());
+        let thres_resp = pad_with(
+            0,
+            &(responses - &thresholds_matrix).into_iter().collect_vec(),
+        );
 
         // Calculate the complementary digital decompositions of the thresholded responses.
         // Both vectors have the same length as thres_resp.
@@ -244,13 +256,18 @@ impl<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize> WorldcoinCircuitData
 
         // Count the number of times each digit occurs.
         let mut digit_multiplicities: Vec<usize> = vec![0; BASE as usize];
-        digits.iter().for_each(|decomp| decomp.iter().for_each(|&digit| {
-            digit_multiplicities[digit as usize] += 1;
-        }));
+        digits.iter().for_each(|decomp| {
+            decomp.iter().for_each(|&digit| {
+                digit_multiplicities[digit as usize] += 1;
+            })
+        });
 
         // Derive the padded image MLE.
         // Note that this padding has nothing to do with the padding of the thresholded responses.
-        let image_matrix_mle: Vec<F> = pad_with(0, &image.into_iter().collect_vec()).into_iter().map(i64_to_field).collect_vec();
+        let image_matrix_mle: Vec<F> = pad_with(0, &image.into_iter().collect_vec())
+            .into_iter()
+            .map(i64_to_field)
+            .collect_vec();
 
         // Convert the iris code to field elements (this is already padded by construction).
         let code: Vec<F> = code
@@ -259,19 +276,18 @@ impl<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize> WorldcoinCircuitData
             .collect_vec();
 
         // Flatten the kernel values, convert to field and pad.
-        let kernel_values: Vec<F> = pad_with(F::ZERO,
-            &kernel_matrix
-            .into_iter()
-            .map(i64_to_field)
-            .collect_vec()
+        let kernel_values: Vec<F> = pad_with(
+            F::ZERO,
+            &kernel_matrix.into_iter().map(i64_to_field).collect_vec(),
         );
 
         // Flatten the thresholds matrix, convert to field and pad.
-        let thresholds_matrix: Vec<F> = pad_with(F::ZERO,
+        let thresholds_matrix: Vec<F> = pad_with(
+            F::ZERO,
             &thresholds_matrix
-            .into_iter()
-            .map(i64_to_field)
-            .collect_vec()
+                .into_iter()
+                .map(i64_to_field)
+                .collect_vec(),
         );
 
         // Convert the digit multiplicities to field elements.
@@ -307,15 +323,22 @@ mod test {
     use remainder_shared_types::Fr;
     use std::path::Path;
 
-    use crate::{
-        mle::{circuit_mle::CircuitMle, Mle}, utils::mle::pad_with, worldcoin::parameters_v2::{CONSTANT_DATA_FOLDER, NUM_KERNELS, NUM_KERNEL_COLS, NUM_KERNEL_ROWS, PLACEMENTS_COL_IDXS, PLACEMENTS_ROW_IDXS}
-    };
     use crate::worldcoin::parameters_v2::{WC_BASE, WC_NUM_DIGITS};
+    use crate::{
+        mle::{circuit_mle::CircuitMle, Mle},
+        utils::mle::pad_with,
+        worldcoin::parameters_v2::{
+            CONSTANT_DATA_FOLDER, NUM_KERNELS, NUM_KERNEL_COLS, NUM_KERNEL_ROWS,
+            PLACEMENTS_COL_IDXS, PLACEMENTS_ROW_IDXS,
+        },
+    };
 
     use super::{load_data, medium_worldcoin_data, WorldcoinCircuitData};
 
     // Check things that should be generically true for a WorldcoinCircuitData instance.
-    fn check_worldcoin_circuit_data_promises<const BASE: u64, const NUM_DIGITS: usize>(data: &WorldcoinCircuitData<Fr, BASE, NUM_DIGITS>) {
+    fn check_worldcoin_circuit_data_promises<const BASE: u64, const NUM_DIGITS: usize>(
+        data: &WorldcoinCircuitData<Fr, BASE, NUM_DIGITS>,
+    ) {
         // Check padding to a power of two
         assert!(data.image.len().is_power_of_two());
         assert!(data.kernel_values.len().is_power_of_two());
@@ -346,16 +369,23 @@ mod test {
             } else {
                 path.clone().join("iris/test_image.npy")
             };
-            let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), image_path, is_mask);
+            let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> =
+                load_data(path.clone(), image_path, is_mask);
             check_worldcoin_circuit_data_promises(&data);
             // Check things that should be true for this dataset
-            assert_eq!(data.num_placements, PLACEMENTS_ROW_IDXS.len() * PLACEMENTS_COL_IDXS.len());
-            assert_eq!(data.code.len(), ((PLACEMENTS_ROW_IDXS.len() * PLACEMENTS_COL_IDXS.len() * NUM_KERNELS) as usize).next_power_of_two());
+            assert_eq!(data.num_placements, 16 * 200);
             assert_eq!(
-                data.image.len(),
-                ((100 * 400) as usize).next_power_of_two()
+                data.code.len(),
+                ((16 * 200 * 4) as usize).next_power_of_two()
             );
-            assert_eq!(data.kernel_values.len(), NUM_KERNELS * NUM_KERNEL_ROWS * NUM_KERNEL_COLS);
+            assert_eq!(
+                data.code.len(),
+                ((16 * 200 * 4) as usize).next_power_of_two()
+            );
+            assert_eq!(
+                data.kernel_values.len(),
+                NUM_KERNELS * NUM_KERNEL_ROWS * NUM_KERNEL_COLS
+            );
 
             // Load the iris code as calculated in Python, check it's the same as we derive.
             let num_kernels = data.kernel_matrix_dims.1;
@@ -382,7 +412,10 @@ mod test {
                 .collect();
             let expected_flattened_padded = pad_with(Fr::from(0), &expected_flattened);
             if data.code != expected_flattened_padded {
-                println!("Expected code (length {}):", expected_flattened_padded.len());
+                println!(
+                    "Expected code (length {}):",
+                    expected_flattened_padded.len()
+                );
                 print_code(&expected_flattened_padded);
                 println!("\nActual code (length {}):", data.code.len());
                 print_code(&data.code);
@@ -405,7 +438,7 @@ mod test {
     fn test_circuit_data_creation_medium_dataset() {
         let data = medium_worldcoin_data::<Fr>();
         // Check things that should be generically true
-        check_worldcoin_circuit_data_promises(&data); 
+        check_worldcoin_circuit_data_promises(&data);
         // Check things that should be true for this dataset
         assert_eq!(data.num_placements, 4);
         assert_eq!(data.code.len(), 16);

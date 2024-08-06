@@ -58,6 +58,7 @@ use crate::structs::{
 };
 
 use ark_serialize::Read;
+use ark_std::cfg_into_iter;
 use ndarray::Array2;
 use ndarray_npy::read_npy;
 use num_bigint::{BigInt, Sign};
@@ -248,9 +249,7 @@ impl<F: FieldExt> From<&TreePath<i64>> for LeafNode<F> {
 
 impl<F: FieldExt> From<&Samples> for CircuitizedSamples<F> {
     fn from(samples: &Samples) -> Self {
-        samples
-            .values
-            .par_iter()
+        cfg_into_iter!(&samples.values)
             .map(build_sample_witness)
             .collect()
     }
@@ -365,50 +364,43 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
     //
     assert!(trees_model.trees.len() <= 32);
     assert!(trees_model.depth <= 9);
-    let paths: Vec<Vec<TreePath<i64>>> = trees_model
-        .trees
-        .par_iter()
+    let paths: Vec<Vec<TreePath<i64>>> = cfg_into_iter!(&trees_model.trees)
         .map(|tree| {
-            samples_in
-                .values
-                .par_iter()
+            cfg_into_iter!(&samples_in.values)
                 .map(|sample| tree.get_tree_path(&sample))
                 .collect()
         })
         .collect();
 
-    let decision_paths: Vec<Vec<DecisionPath<F>>> = paths
-        .par_iter()
-        .map(|tree_paths| tree_paths.par_iter().map(DecisionPath::<F>::from).collect())
+    let decision_paths: Vec<Vec<DecisionPath<F>>> = cfg_into_iter!(&paths)
+        .map(|tree_paths| {
+            cfg_into_iter!(tree_paths)
+                .map(DecisionPath::<F>::from)
+                .collect()
+        })
         .collect();
 
-    let attributes_on_paths: Vec<Vec<AttributesOnPath<F>>> = paths
-        .par_iter()
+    let attributes_on_paths: Vec<Vec<AttributesOnPath<F>>> = cfg_into_iter!(&paths)
         .map(|tree_paths| {
-            tree_paths
-                .par_iter()
+            cfg_into_iter!(tree_paths)
                 .map(AttributesOnPath::<F>::from)
                 .collect()
         })
         .collect();
 
-    let differences: Vec<Vec<DifferencesBits<F>>> = paths
-        .par_iter()
+    let differences: Vec<Vec<DifferencesBits<F>>> = cfg_into_iter!(&paths)
         .map(|tree_paths| {
-            tree_paths
-                .par_iter()
+            cfg_into_iter!(tree_paths)
                 .map(DifferencesBits::<F>::from)
                 .collect()
         })
         .collect();
 
-    let path_ends: Vec<Vec<LeafNode<F>>> = paths
-        .par_iter()
+    let path_ends: Vec<Vec<LeafNode<F>>> = cfg_into_iter!(&paths)
         .map(|tree_paths| tree_paths.iter().map(LeafNode::<F>::from).collect())
         .collect();
 
-    let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = paths
-        .par_iter()
+    let attribute_multiplicities: Vec<Vec<Vec<BinDecomp4Bit<F>>>> = cfg_into_iter!(&paths)
         .map(|tree_paths| {
             tree_paths
                 .iter()
@@ -433,7 +425,7 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         .iter()
         .all(|paths_for_tree| paths_for_tree.len() == sample_count));
     // ... so that the nesting can be reversed, to become: samples first, then trees
-    let _paths_per_sample: Vec<Vec<TreePath<i64>>> = (0..sample_count)
+    let paths_per_sample: Vec<Vec<TreePath<i64>>> = (0..sample_count)
         .map(|sample_idx| {
             paths
                 .iter()
@@ -443,31 +435,29 @@ pub fn circuitize_auxiliaries<F: FieldExt>(
         })
         .collect();
 
-    let attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>> = _paths_per_sample
-        .par_iter()
-        .map(|paths_of_sample| {
-            let mut multiplicities = vec![0_usize; samples_in.sample_length];
-            paths_of_sample.iter().for_each(|path_of_sample_thru_tree| {
-                path_of_sample_thru_tree
-                    .path_steps
-                    .iter()
-                    .for_each(|step| multiplicities[step.feature_index as usize] += 1);
-            });
-            multiplicities
-        })
-        .map(|multiplicities| {
-            multiplicities
-                .into_iter()
-                .map(build_8bit_attribute_multiplicity_bindecomp)
-                .collect()
-        })
-        .collect();
+    let attribute_multiplicities_per_sample: Vec<Vec<BinDecomp8Bit<F>>> =
+        cfg_into_iter!(paths_per_sample)
+            .map(|paths_of_sample| {
+                let mut multiplicities = vec![0_usize; samples_in.sample_length];
+                paths_of_sample.iter().for_each(|path_of_sample_thru_tree| {
+                    path_of_sample_thru_tree
+                        .path_steps
+                        .iter()
+                        .for_each(|step| multiplicities[step.feature_index as usize] += 1);
+                });
+                multiplicities
+            })
+            .map(|multiplicities| {
+                multiplicities
+                    .into_iter()
+                    .map(build_8bit_attribute_multiplicity_bindecomp)
+                    .collect()
+            })
+            .collect();
 
-    let node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = paths
-        .par_iter()
+    let node_multiplicities: Vec<Vec<BinDecomp16Bit<F>>> = cfg_into_iter!(&paths)
         .map(|tree_paths| {
-            count_node_multiplicities(tree_paths, trees_model.depth)
-                .into_par_iter()
+            cfg_into_iter!(count_node_multiplicities(tree_paths, trees_model.depth))
                 .map(build_node_multiplicity_bindecomp)
                 .collect()
         })
