@@ -70,16 +70,23 @@ impl NodeId {
     }
 }
 
-/// A Node that can exist w/ dependencies in the circuit DAG
+/// A Node in the directed acyclic graph (DAG). The directed edges in the DAG model the dependencies
+/// between nodes, with the dependent node being the target of the edge and the dependency being the
+/// source.
 pub trait CircuitNode {
     /// The unique ID of this node
     fn id(&self) -> NodeId;
 
-    /// The children of this node
+    // FIXME rename to e.g. "subnodes".
+    /// Return the "sub-nodes" of this node.  These are nodes that are "owned" by this node.  Note
+    /// that this is not a relationship in the DAG.
+    /// e.g. [InputLayerNode] owns the [InputShredNode]s that are its children.
     fn children(&self) -> Option<Vec<NodeId>> {
         None
     }
-    /// The sources of this node in the DAG
+    /// Return the ids of the nodes that this node depends upon, i.e. nodes whose values must be
+    /// known before the values of this node can be node.  These are the source nodes of the
+    /// directed edges of the DAG that terminate at this node.
     fn sources(&self) -> Vec<NodeId>;
 }
 

@@ -218,13 +218,13 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CircuitNode for IntermediateNode<F, Pf> {
 
 /// Current Core Layouter
 /// Assigns circuit nodes in the circuit to different layers based on their dependencies
-/// assumes that the nodes are topologically sorted
 /// this algorithm is greedy and assigns nodes to the first available layer that it can,
 /// without breaking any dependencies, and any restrictions that are imposed by the node type
 /// (such as matmal / gate nodes cannot be combined with other nodes in the same layer)
 /// This algorithm currently minimizes the number of layers, and does not account for
 /// specific layer size / its constituent nodes's numvars, etc.
-
+/// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
+/// (topologically sorted), then lookups, then outputs.
 pub fn layout<
     F: FieldExt,
     Pf: ProofSystem<F, Layer = LayerEnum<F>, InputLayer = InputLayerEnum<F>, OutputLayer = MleEnum<F>>,
@@ -234,6 +234,7 @@ pub fn layout<
 ) -> Result<Vec<Box<dyn CompilableNode<F, Pf>>>, DAGError> {
     let mut dag = NodeEnumGroup::new(nodes);
 
+    // Handle input layers
     let out = {
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
         let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
@@ -320,6 +321,7 @@ pub fn layout<
         out.chain(intermediate_nodes.into_iter())
     };
 
+    // Handle lookup tables
     let out = {
         // Build a map node id -> LookupTable
         let mut lookup_table_map: HashMap<NodeId, &mut LookupTable> = HashMap::new();
