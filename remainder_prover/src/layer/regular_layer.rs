@@ -8,8 +8,7 @@ mod tests;
 
 use itertools::Itertools;
 use remainder_shared_types::{
-    curves::PrimeOrderCurve,
-    transcript::{ec_transcript::ECProverTranscript, ProverTranscript, VerifierTranscript},
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -25,7 +24,7 @@ use crate::{
         verifier_expr::VerifierExpr,
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
-    mle::{betavalues::BetaValues, dense::DenseMle, Mle},
+    mle::{betavalues::BetaValues, dense::DenseMle},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
@@ -396,9 +395,6 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
         // Compute beta over these and the sumcheck challenges.
         let fully_bound_beta =
             BetaValues::compute_beta_over_two_challenges(round_challenges, &nonlinear_claim_points);
-        dbg!(&claim_challenges);
-        dbg!(&round_challenges);
-        dbg!(&nonlinear_round_indices);
 
         // Compute the fully bound challenges, which include those pre-fixed for linear rounds
         // and the sumcheck rounds.
@@ -416,7 +412,6 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
             .collect_vec();
 
         assert_eq!(nonlinear_round_index_counter, nonlinear_round_indices.len());
-        dbg!(&all_bound_challenges);
 
         self.expression
             .get_post_sumcheck_layer(fully_bound_beta, &all_bound_challenges)
@@ -490,7 +485,6 @@ impl<F: FieldExt> RegularLayer<F> {
 
         // Grabs the degree of univariate polynomial we are sending over.
         let degree = get_round_degree(&self.expression, round_index);
-        dbg!(&degree);
 
         // Compute the sumcheck message for this round.
         let prover_sumcheck_message = compute_sumcheck_message_beta_cascade(
@@ -500,21 +494,17 @@ impl<F: FieldExt> RegularLayer<F> {
             self.beta_vals.as_ref().unwrap(),
         )?
         .0;
-        dbg!(&prover_sumcheck_message);
 
         transcript_writer.append_elements("Sumcheck message", &prover_sumcheck_message);
 
         let challenge = transcript_writer.get_challenge("Sumcheck challenge");
-        dbg!(&challenge);
 
         self.expression.fix_variable(round_index, challenge);
-        dbg!(&self.expression);
 
         self.beta_vals
             .as_mut()
             .unwrap()
             .beta_update(round_index, challenge);
-        dbg!(&self.beta_vals);
 
         Ok(())
     }

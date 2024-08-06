@@ -214,7 +214,6 @@ fn test_example_with_regular_layer() {
     mle_ref.fix_variable(1, r2);
 
     let mle_eval = mle_ref.bookkeeping_table()[0] * equality_mle.bookkeeping_table()[0];
-    dbg!(&mle_eval);
     let post_sumcheck_layer = commit_to_post_sumcheck_layer(
         &PostSumcheckLayer(vec![Product::<Fr, Fr>::new(
             &vec![mle_ref.clone()],

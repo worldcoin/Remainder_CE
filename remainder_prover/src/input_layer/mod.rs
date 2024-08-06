@@ -147,6 +147,7 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     num_claims: usize,
     num_idx: usize,
 ) -> Result<Vec<F>, crate::claims::ClaimError> {
+    dbg!(claim_vecs);
     let prep_timer = start_timer!(|| "Claim wlx prep");
     end_timer!(prep_timer);
     info!("Wlx MLE len: {}", mle_ref.get_evals_vector().len());

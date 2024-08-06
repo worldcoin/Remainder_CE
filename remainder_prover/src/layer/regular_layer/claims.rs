@@ -9,13 +9,13 @@ use crate::{
         ClaimError, YieldClaim,
     },
     expression::{
-        generic_expr::{Expression, ExpressionNode, ExpressionType},
+        generic_expr::{ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
     },
     layer::{
         combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
-        CircuitLayer, LayerError, VerifierLayer,
+        LayerError, VerifierLayer,
     },
     mle::{dense::DenseMle, mle_enum::MleEnum},
     sumcheck::evaluate_at_a_point,
@@ -24,6 +24,10 @@ use crate::{
 use crate::mle::Mle;
 
 use super::{RegularLayer, VerifierRegularLayer};
+
+/// A flag representing whether we are using the constant
+/// column optimization for claim aggregation.
+pub const CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION: bool = false;
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for RegularLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
@@ -137,7 +141,14 @@ impl<F: FieldExt> YieldWLXEvals<F> for RegularLayer<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
-        let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
+
+        let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+            let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
+            (num_evals, common_idx)
+        } else {
+            assert!(claim_vecs.len() > 1);
+            (((num_claims - 1) * num_idx) + 1, None)
+        };
 
         let mut claim_mle_refs = claim_mle_refs;
 

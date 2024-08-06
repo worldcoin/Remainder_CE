@@ -1,12 +1,17 @@
+use std::process::Output;
+
 use crate::hyrax_gkr::hyrax_input_layer::{HyraxCircuitInputLayerEnum, HyraxInputLayerProof};
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use crate::hyrax_gkr::hyrax_output_layer::HyraxOutputLayer;
 // use crate::hyrax_gkr::{HyraxCircuit, HyraxProof};
 
+use crate::hyrax_gkr::HyraxCircuit;
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
 
+use itertools::Itertools;
 use rand::RngCore;
+use remainder::expression::abstract_expr::ExprBuilder;
 use remainder::expression::generic_expr::Expression;
 use remainder::expression::prover_expr::ProverExpr;
 use remainder::layer::identity_gate::IdentityGate;
@@ -15,7 +20,13 @@ use remainder::layer::matmult::{MatMult, Matrix};
 use remainder::layer::regular_layer::RegularLayer;
 use remainder::layer::{Layer, LayerId};
 use remainder::layouter::compiling::LayouterCircuit;
-use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
+use remainder::layouter::component::ComponentSet;
+use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType, InputShred};
+use remainder::layouter::nodes::circuit_outputs::OutputNode;
+use remainder::layouter::nodes::identity_gate::IdentityGateNode;
+use remainder::layouter::nodes::matmult::MatMultNode;
+use remainder::layouter::nodes::node_enum::NodeEnum;
+use remainder::layouter::nodes::sector::Sector;
 use remainder::mle::dense::DenseMle;
 use remainder::mle::evals::{Evaluations, MultilinearExtension};
 use remainder::mle::mle_enum::MleEnum;
@@ -603,7 +614,7 @@ fn hyrax_input_layer_proof_test() {
     );
 
     // --- Create input layer and generate commitment, then add to transcript ---
-    let input_layer: HyraxInputLayer<Bn256Point> =
+    let mut input_layer: HyraxInputLayer<Bn256Point> =
         HyraxInputLayer::new_with_committer(input_mle, layer_id, &committer);
     let hyrax_commitment = input_layer.commit();
     prover_transcript.append_ec_points("Hyrax PCS commit", &hyrax_commitment);
@@ -644,578 +655,741 @@ fn hyrax_input_layer_proof_test() {
     )
 }
 
-// #[test]
-// fn small_regular_circuit_hyrax_input_layer_test() {
-//     let mut blinding_rng = &mut rand::thread_rng();
-//     let prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
-//         ECTranscriptWriter::new("Test small regular circuit");
-//     const NUM_GENERATORS: usize = 10;
-//     let committer = PedersenCommitter::<Bn256Point>::new(
-//         NUM_GENERATORS + 1,
-//         "hi why is this not working, please help me",
-//         None,
-//     );
+#[test]
+fn small_regular_circuit_hyrax_input_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test small regular circuit");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    const NUM_GENERATORS: usize = 10;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        NUM_GENERATORS + 1,
+        "hi why is this not working, please help me",
+        None,
+    );
 
-//     let circuit = LayouterCircuit::new(|ctx| {
-// // INPUT LAYER CONSTRUCTION
-//         let input_multilinear_extension = MultilinearExtension::new(vec![
-//             Scalar::from(8797),
-//             Scalar::from(7308),
-//             Scalar::from(94),
-//             Scalar::from(67887),
-//         ]);
-//         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+    let mut circuit = LayouterCircuit::new(|ctx| {
+        // INPUT LAYER CONSTRUCTION
+        let input_multilinear_extension = MultilinearExtension::new(vec![
+            Scalar::from(8797),
+            Scalar::from(7308),
+            Scalar::from(94),
+            Scalar::from(67887),
+        ]);
+        let input_layer =
+            InputLayerNode::new(ctx, None, InputLayerType::HyraxPlaceholderInputLayer);
+        let input_shred = InputShred::new(ctx, input_multilinear_extension, &input_layer);
 
-//         let input_shred = InputShred::new(
-//         );
+        // Middle layer 1: square the input.
+        let squaring_sector = Sector::new(
+            ctx,
+            &[&input_shred],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                ExprBuilder::products(vec![mle, mle])
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let squared_data = data
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| elem * elem)
+                    .collect_vec();
+                let new_mle = MultilinearExtension::new(squared_data);
+                new_mle
+            },
+        );
 
-//         todo!()
-//     })
+        // Middle layer 2: subtract middle layer 1 from itself.
+        let subtract_sector = Sector::new(
+            ctx,
+            &[&squaring_sector],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                mle.expr() - mle.expr()
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let new_mle = MultilinearExtension::new_sized_zero(data.num_vars());
+                new_mle
+            },
+        );
 
-//     let input_layer: HyraxInputLayer<Bn256Point> = HyraxInputLayer::new_with_committer(
-//         input_multilinear_extension.clone(),
-//         LayerId::Input(0),
-//         &committer,
-//     );
-//     let mut input_enum = HyraxCircuitInputLayerEnum::HyraxInputLayer(input_layer);
-//     let input_commit = input_enum.commit().unwrap();
-//     let input_layers = vec![input_enum];
-//     let input_commitments = vec![input_commit];
+        // Make this an output node.
+        let output_node = OutputNode::new_zero(ctx, &subtract_sector);
 
-//     // INTERMEDIATE LAYERS CONSTRUCTION
-//     let mut layers: Layers<Scalar, Base, Transcript> = Layers::new();
-//     // Create a layer builder which is input_mle * input_mle
-//     let squaring_builder = from_mle(
-//         input_mle,
-//         // Expression to build
-//         |mle| ExpressionStandard::products(vec![mle, mle]),
-//         // Expected output
-//         |mle, layer_id, prefix_bits| {
-//             DenseMle::new_from_iter(
-//                 mle.mle.iter().map(|eval| eval * eval),
-//                 layer_id,
-//                 prefix_bits,
-//             )
-//         },
-//     );
-//     let square_output = layers.add_gkr(squaring_builder);
-//     let layers = layers.0;
+        ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+            input_layer.into(),
+            input_shred.into(),
+            squaring_sector.into(),
+            subtract_sector.into(),
+            output_node.into(),
+        ])
+    });
 
-//     // OUTPUT LAYER CONSTRUCTION
-//     let output_layer: HyraxOutputLayer<Bn256Point> = HyraxOutputLayer {
-//         underlying_mle: MleEnum::Dense(square_output),
-//     };
-//     let output_layers = vec![output_layer];
+    let (hyrax_proof, input_commits, circuit_description) = HyraxCircuit::prove_gkr_circuit(
+        &mut circuit,
+        &committer,
+        None,
+        None,
+        None,
+        blinding_rng,
+        converter,
+        &mut prover_transcript,
+    );
 
-//     // FULL CIRCUIT
-//     let mut circuit = HyraxCircuit {
-//         input_layers,
-//         layers,
-//         output_layers,
-//         input_commitments,
-//     };
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
 
-//     // PROVE
-//     let proof = HyraxProof::prove(
-//         &mut circuit,
-//         &committer,
-//         &mut blinding_rng,
-//         prover_transcript,
-//         &mut VandermondeInverse::new(),
-//     );
+    HyraxCircuit::verify_gkr_circuit(
+        hyrax_proof,
+        input_commits,
+        &circuit_description,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
 
-//     // VERIFY
-//     let circuit_description: CircuitDescription<Bn256Point> = circuit.into();
-//     HyraxProof::verify(
-//         &proof,
-//         &circuit_description,
-//         &committer,
-//         &mut Transcript::new(""),
-//     )
-// }
+#[test]
+fn small_regular_circuit_public_input_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test small regular circuit");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    const NUM_GENERATORS: usize = 10;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        NUM_GENERATORS + 1,
+        "hi why is this not working, please help me",
+        None,
+    );
 
-// #[test]
-// fn small_regular_circuit_public_input_layer_test() {
-//     let mut blinding_rng = &mut rand::thread_rng();
-//     type Transcript = PoseidonTranscript<Scalar, Base>;
-//     const NUM_GENERATORS: usize = 10;
-//     let committer = PedersenCommitter::<Bn256Point>::new(
-//         NUM_GENERATORS + 1,
-//         "hi why is this not working, please help me",
-//         None,
-//     );
-//     let prover_transcript = &mut Transcript::new("");
+    let mut circuit = LayouterCircuit::new(|ctx| {
+        // INPUT LAYER CONSTRUCTION
+        let input_multilinear_extension = MultilinearExtension::new(vec![
+            Scalar::from(8797),
+            Scalar::from(7308),
+            Scalar::from(94),
+            Scalar::from(67887),
+        ]);
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_shred = InputShred::new(ctx, input_multilinear_extension, &input_layer);
 
-//     // INPUT LAYER CONSTRUCTION
-//     let input_mle = DenseMle::<Scalar, Scalar>::new_from_raw(
-//         vec![
-//             Scalar::from(8797),
-//             Scalar::from(7308),
-//             Scalar::from(94),
-//             Scalar::from(67887),
-//         ],
-//         LayerId::Input(0),
-//         None,
-//     );
-//     let input_layer =
-//         PublicInputLayer::<Bn256Point, _, _>::new(input_mle.clone(), LayerId::Input(0));
-//     let mut input_enum = InputLayerEnum::PublicInputLayer(input_layer);
-//     let input_commit = input_enum.commit().unwrap();
-//     let input_layers = vec![input_enum];
-//     let input_commitments = vec![input_commit.clone()];
+        // Middle layer 1: square the input.
+        let squaring_sector = Sector::new(
+            ctx,
+            &[&input_shred],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                ExprBuilder::products(vec![mle, mle])
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let squared_data = data
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| elem * elem)
+                    .collect_vec();
+                let new_mle = MultilinearExtension::new(squared_data);
+                new_mle
+            },
+        );
 
-//     // INTERMEDIATE LAYERS CONSTRUCTION
-//     let mut layers: Layers<Scalar, Base, Transcript> = Layers::new();
-//     // Create a layer builder which is input_mle * input_mle
-//     let squaring_builder = from_mle(
-//         input_mle,
-//         // Expression to build
-//         |mle| ExpressionStandard::products(vec![mle, mle]),
-//         // Expected output
-//         |mle, layer_id, prefix_bits| {
-//             DenseMle::new_from_iter(
-//                 mle.mle.iter().map(|eval| eval * eval),
-//                 layer_id,
-//                 prefix_bits,
-//             )
-//         },
-//     );
-//     let square_output = layers.add_gkr(squaring_builder);
-//     let layers = layers.0;
+        // Middle layer 2: subtract middle layer 1 from itself.
+        let subtract_sector = Sector::new(
+            ctx,
+            &[&squaring_sector],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                mle.expr() - mle.expr()
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let new_mle = MultilinearExtension::new_sized_zero(data.num_vars());
+                new_mle
+            },
+        );
 
-//     // OUTPUT LAYER CONSTRUCTION
-//     let output_layer: HyraxOutputLayer<Bn256Point> = HyraxOutputLayer {
-//         underlying_mle: MleEnum::Dense(square_output),
-//     };
-//     let output_layers = vec![output_layer];
+        // Make this an output node.
+        let output_node = OutputNode::new_zero(ctx, &subtract_sector);
 
-//     // FULL CIRCUIT
-//     let mut circuit = HyraxCircuit {
-//         input_layers,
-//         layers,
-//         output_layers,
-//         input_commitments,
-//     };
+        ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+            input_layer.into(),
+            input_shred.into(),
+            squaring_sector.into(),
+            subtract_sector.into(),
+            output_node.into(),
+        ])
+    });
 
-//     // PROVE
-//     let proof = HyraxProof::prove(
-//         &mut circuit,
-//         &committer,
-//         &mut blinding_rng,
-//         prover_transcript,
-//         &mut VandermondeInverse::new(),
-//     );
+    let (hyrax_proof, input_commits, circuit_description) = HyraxCircuit::prove_gkr_circuit(
+        &mut circuit,
+        &committer,
+        None,
+        None,
+        None,
+        blinding_rng,
+        converter,
+        &mut prover_transcript,
+    );
 
-//     // VERIFY
-//     let circuit_description: CircuitDescription<Bn256Point> = circuit.into();
-//     HyraxProof::verify(
-//         &proof,
-//         &circuit_description,
-//         &committer,
-//         &mut Transcript::new(""),
-//     )
-// }
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
 
-// #[test]
-// fn medium_regular_circuit_hyrax_input_layer_test() {
-//     let mut blinding_rng = &mut rand::thread_rng();
-//     type Transcript = PoseidonTranscript<Scalar, Base>;
-//     let prover_transcript = &mut Transcript::new("");
-//     let verifier_transcript = &mut Transcript::new("");
-//     const NUM_GENERATORS: usize = 10;
-//     let committer = PedersenCommitter::<Bn256Point>::new(
-//         NUM_GENERATORS + 1,
-//         "hi why is this not working, please help me",
-//         None,
-//     );
+    HyraxCircuit::verify_gkr_circuit(
+        hyrax_proof,
+        input_commits,
+        &circuit_description,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
 
-//     // INPUT LAYER CONSTRUCTION
-//     let input_mle = DenseMle::<Scalar, Scalar>::new_from_raw(
-//         vec![
-//             Scalar::from(8797),
-//             Scalar::from(7308),
-//             Scalar::from(94),
-//             Scalar::from(67887),
-//         ],
-//         LayerId::Input(0),
-//         None,
-//     );
-//     let input_layer: HyraxInputLayer<Bn256Point, Transcript> = HyraxInputLayer::new_with_committer(
-//         input_mle.clone(),
-//         LayerId::Input(0),
-//         committer.clone(),
-//     );
-//     let mut input_enum = InputLayerEnum::HyraxInputLayer(input_layer);
-//     let input_commit = input_enum.commit().unwrap();
-//     let input_layers = vec![input_enum];
-//     let input_commitments = vec![input_commit];
+#[test]
+fn medium_regular_circuit_hyrax_input_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test medium regular circuit hyrax IL");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    const NUM_GENERATORS: usize = 10;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        NUM_GENERATORS + 1,
+        "hi why is this not working, please help me",
+        None,
+    );
 
-//     // INTERMEDIATE LAYERS CONSTRUCTION
-//     let mut layers: Layers<Scalar, Base, Transcript> = Layers::new();
+    let mut circuit = LayouterCircuit::new(|ctx| {
+        // INPUT LAYER CONSTRUCTION
+        let input_multilinear_extension = MultilinearExtension::new(vec![
+            Scalar::from(8797),
+            Scalar::from(7308),
+            Scalar::from(94),
+            Scalar::from(67887),
+        ]);
+        let input_layer =
+            InputLayerNode::new(ctx, None, InputLayerType::HyraxPlaceholderInputLayer);
+        let input_shred = InputShred::new(ctx, input_multilinear_extension, &input_layer);
 
-//     // Create a layer builder which is input_mle * input_mle
-//     let squaring_builder = from_mle(
-//         input_mle,
-//         // Expression to build
-//         |mle| ExpressionStandard::products(vec![mle, mle]),
-//         // Expected output
-//         |mle, layer_id, prefix_bits| {
-//             DenseMle::new_from_iter(
-//                 mle.mle.iter().map(|eval| eval * eval),
-//                 layer_id,
-//                 prefix_bits,
-//             )
-//         },
-//     );
-//     let square_output = layers.add_gkr(squaring_builder);
+        // Middle layer 1: square the input.
+        let squaring_sector = Sector::new(
+            ctx,
+            &[&input_shred],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                ExprBuilder::products(vec![mle, mle])
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let squared_data = data
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| elem * elem)
+                    .collect_vec();
+                let new_mle = MultilinearExtension::new(squared_data);
+                new_mle
+            },
+        );
 
-//     // Create a layer builder which is sel(square_output + square_output, square_output)
-//     let selector_square_builder = from_mle(
-//         square_output,
-//         // Expression to build
-//         |mle| {
-//             ExpressionStandard::Mle(mle).concat_expr(
-//                 ExpressionStandard::Mle(mle) + ExpressionStandard::Mle(mle),
-//             )
-//         },
-//         // Expected output
-//         |mle, layer_id, prefix_bits| {
-//             DenseMle::new_from_iter(
-//                 mle.mle.iter().flat_map(|eval| vec![eval + eval, *eval]),
-//                 layer_id,
-//                 prefix_bits,
-//             )
-//         },
-//     );
-//     let selector_square_output = layers.add_gkr(selector_square_builder);
+        // Middle layer 2: Create a layer builder which is sel(square_output + square_output, square_output)
+        let selector_squaring_sector = Sector::new(
+            ctx,
+            &[&squaring_sector],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
 
-//     let layers = layers.0;
+                mle.expr().concat_expr(mle.expr() + mle.expr())
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let selector_squared_data = data
+                    .get_evals_vector()
+                    .iter()
+                    .flat_map(|eval| vec![eval + eval, *eval])
+                    .collect_vec();
+                let new_mle = MultilinearExtension::new(selector_squared_data);
+                new_mle
+            },
+        );
 
-//     // OUTPUT LAYER CONSTRUCTION
-//     let output_layer: HyraxOutputLayer<Bn256Point> = HyraxOutputLayer {
-//         underlying_mle: MleEnum::Dense(selector_square_output),
-//     };
-//     let output_layers = vec![output_layer];
+        // Middle layer 3: subtract middle layer 2 from itself.
+        let subtract_sector = Sector::new(
+            ctx,
+            &[&selector_squaring_sector],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                mle.expr() - mle.expr()
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let new_mle = MultilinearExtension::new_sized_zero(data.num_vars());
+                new_mle
+            },
+        );
 
-//     // FULL CIRCUIT
-//     let mut circuit = HyraxCircuit {
-//         input_layers,
-//         layers,
-//         output_layers,
-//         input_commitments,
-//     };
+        // Make this an output node.
+        let output_node = OutputNode::new_zero(ctx, &subtract_sector);
 
-//     // PROVE
-//     let proof = HyraxProof::prove(
-//         &mut circuit,
-//         &committer,
-//         &mut blinding_rng,
-//         prover_transcript,
-//         &mut VandermondeInverse::new(),
-//     );
+        ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+            input_layer.into(),
+            input_shred.into(),
+            squaring_sector.into(),
+            selector_squaring_sector.into(),
+            subtract_sector.into(),
+            output_node.into(),
+        ])
+    });
 
-//     // VERIFY
-//     let circuit_description: CircuitDescription<Bn256Point> = circuit.into();
-//     HyraxProof::verify(
-//         &proof,
-//         &circuit_description,
-//         &committer,
-//         verifier_transcript,
-//     )
-// }
+    let (hyrax_proof, input_commits, circuit_description) = HyraxCircuit::prove_gkr_circuit(
+        &mut circuit,
+        &committer,
+        None,
+        None,
+        None,
+        blinding_rng,
+        converter,
+        &mut prover_transcript,
+    );
 
-// #[test]
-// fn medium_regular_circuit_public_input_layer_test() {
-//     let mut blinding_rng = &mut rand::thread_rng();
-//     type Transcript = PoseidonTranscript<Scalar, Base>;
-//     let prover_transcript = &mut Transcript::new("");
-//     let verifier_transcript = &mut Transcript::new("");
-//     const NUM_GENERATORS: usize = 10;
-//     let committer = PedersenCommitter::<Bn256Point>::new(
-//         NUM_GENERATORS + 1,
-//         "hi why is this not working, please help me",
-//         None,
-//     );
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
 
-//     // INPUT LAYER CONSTRUCTION
-//     let input_mle = DenseMle::<Scalar, Scalar>::new_from_raw(
-//         vec![
-//             Scalar::from(8797),
-//             Scalar::from(7308),
-//             Scalar::from(94),
-//             Scalar::from(67887),
-//         ],
-//         LayerId::Input(0),
-//         None,
-//     );
-//     let input_layer =
-//         PublicInputLayer::<Bn256Point, _, _>::new(input_mle.clone(), LayerId::Input(0));
-//     let mut input_enum = InputLayerEnum::PublicInputLayer(input_layer);
-//     let input_commit = input_enum.commit().unwrap();
-//     let input_layers = vec![input_enum];
-//     let input_commitments = vec![input_commit.clone()];
+    HyraxCircuit::verify_gkr_circuit(
+        hyrax_proof,
+        input_commits,
+        &circuit_description,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
 
-//     // INTERMEDIATE LAYERS CONSTRUCTION
-//     let mut layers: Layers<Scalar, Base, Transcript> = Layers::new();
+#[test]
+fn medium_regular_circuit_public_input_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test medium regular circuit public IL");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    const NUM_GENERATORS: usize = 10;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        NUM_GENERATORS + 1,
+        "hi why is this not working, please help me",
+        None,
+    );
 
-//     // Create a layer builder which is input_mle * input_mle
-//     let squaring_builder = from_mle(
-//         input_mle,
-//         // Expression to build
-//         |mle| ExpressionStandard::products(vec![mle, mle]),
-//         // Expected output
-//         |mle, layer_id, prefix_bits| {
-//             DenseMle::new_from_iter(
-//                 mle.mle.iter().map(|eval| eval * eval),
-//                 layer_id,
-//                 prefix_bits,
-//             )
-//         },
-//     );
-//     let square_output = layers.add_gkr(squaring_builder);
+    let mut circuit = LayouterCircuit::new(|ctx| {
+        // INPUT LAYER CONSTRUCTION
+        let input_multilinear_extension = MultilinearExtension::new(vec![
+            Scalar::from(8797),
+            Scalar::from(7308),
+            Scalar::from(94),
+            Scalar::from(67887),
+        ]);
+        let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+        let input_shred = InputShred::new(ctx, input_multilinear_extension, &input_layer);
 
-//     // Create a layer builder which is sel(square_output + square_output, square_output)
-//     let selector_square_builder = from_mle(
-//         square_output,
-//         // Expression to build
-//         |mle| {
-//             ExpressionStandard::Mle(mle).concat_expr(
-//                 ExpressionStandard::Mle(mle) + ExpressionStandard::Mle(mle),
-//             )
-//         },
-//         // Expected output
-//         |mle, layer_id, prefix_bits| {
-//             DenseMle::new_from_iter(
-//                 mle.mle.iter().flat_map(|eval| vec![eval + eval, *eval]),
-//                 layer_id,
-//                 prefix_bits,
-//             )
-//         },
-//     );
-//     let selector_square_output = layers.add_gkr(selector_square_builder);
+        // Middle layer 1: square the input.
+        let squaring_sector = Sector::new(
+            ctx,
+            &[&input_shred],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                ExprBuilder::products(vec![mle, mle])
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let squared_data = data
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| elem * elem)
+                    .collect_vec();
+                let new_mle = MultilinearExtension::new(squared_data);
+                new_mle
+            },
+        );
 
-//     let layers = layers.0;
+        // Middle layer 2: Create a layer builder which is sel(square_output * square_output, square_output)
+        let selector_squaring_sector = Sector::new(
+            ctx,
+            &[&squaring_sector],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
 
-//     // OUTPUT LAYER CONSTRUCTION
-//     let output_layer: HyraxOutputLayer<Bn256Point> = HyraxOutputLayer {
-//         underlying_mle: MleEnum::Dense(selector_square_output),
-//     };
-//     let output_layers = vec![output_layer];
+                mle.expr()
+                    .concat_expr(ExprBuilder::products(vec![mle, mle]))
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let selector_squared_data = data
+                    .get_evals_vector()
+                    .iter()
+                    .flat_map(|eval| vec![eval * eval, *eval])
+                    .collect_vec();
+                let new_mle = MultilinearExtension::new(selector_squared_data);
+                new_mle
+            },
+        );
 
-//     // FULL CIRCUIT
-//     let mut circuit = HyraxCircuit {
-//         input_layers,
-//         layers,
-//         output_layers,
-//         input_commitments,
-//     };
+        // Middle layer 3: subtract middle layer 2 from itself.
+        let subtract_sector = Sector::new(
+            ctx,
+            &[&selector_squaring_sector],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                mle.expr() - mle.expr()
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let new_mle = MultilinearExtension::new_sized_zero(data.num_vars());
+                new_mle
+            },
+        );
 
-//     // PROVE
-//     let proof = HyraxProof::prove(
-//         &mut circuit,
-//         &committer,
-//         &mut blinding_rng,
-//         prover_transcript,
-//         &mut VandermondeInverse::new(),
-//     );
+        // Make this an output node.
+        let output_node = OutputNode::new_zero(ctx, &subtract_sector);
 
-//     // VERIFY
-//     let circuit_description: CircuitDescription<Bn256Point> = circuit.into();
-//     HyraxProof::verify(
-//         &proof,
-//         &circuit_description,
-//         &committer,
-//         verifier_transcript,
-//     )
-// }
+        ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+            input_layer.into(),
+            input_shred.into(),
+            squaring_sector.into(),
+            selector_squaring_sector.into(),
+            subtract_sector.into(),
+            output_node.into(),
+        ])
+    });
 
-// #[test]
-// fn regular_identity_circuit_test() {
-//     let mut blinding_rng = &mut rand::thread_rng();
-//     type Transcript = PoseidonTranscript<Scalar, Base>;
-//     let prover_transcript = &mut Transcript::new("");
-//     let verifier_transcript = &mut Transcript::new("");
-//     const NUM_GENERATORS: usize = 10;
-//     let committer = PedersenCommitter::<Bn256Point>::new(
-//         NUM_GENERATORS + 1,
-//         "hi why is this not working, please help me",
-//         None,
-//     );
+    let (hyrax_proof, input_commits, circuit_description) = HyraxCircuit::prove_gkr_circuit(
+        &mut circuit,
+        &committer,
+        None,
+        None,
+        None,
+        blinding_rng,
+        converter,
+        &mut prover_transcript,
+    );
 
-//     // INPUT LAYER CONSTRUCTION
-//     let input_mle = DenseMle::<Scalar, Scalar>::new_from_raw(
-//         vec![
-//             Scalar::from(8797),
-//             Scalar::from(7308),
-//             Scalar::from(94),
-//             Scalar::from(67887),
-//         ],
-//         LayerId::Input(0),
-//         None,
-//     );
-//     let input_layer: HyraxInputLayer<Bn256Point, Transcript> = HyraxInputLayer::new_with_committer(
-//         input_mle.clone(),
-//         LayerId::Input(0),
-//         committer.clone(),
-//     );
-//     let mut input_enum = InputLayerEnum::HyraxInputLayer(input_layer);
-//     let input_commit = input_enum.commit().unwrap();
-//     let input_layers = vec![input_enum];
-//     let input_commitments = vec![input_commit];
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
 
-//     // INTERMEDIATE LAYERS CONSTRUCTION
-//     let mut layers: Layers<Scalar, Base, Transcript> = Layers::new();
-//     // Create a layer builder which is input_mle * input_mle
-//     let squaring_builder = from_mle(
-//         input_mle,
-//         // Expression to build
-//         |mle| ExpressionStandard::products(vec![mle, mle]),
-//         // Expected output
-//         |mle, layer_id, prefix_bits| {
-//             DenseMle::new_from_iter(
-//                 mle.mle.iter().map(|eval| eval * eval),
-//                 layer_id,
-//                 prefix_bits,
-//             )
-//         },
-//     );
-//     let square_output = layers.add_gkr(squaring_builder);
+    HyraxCircuit::verify_gkr_circuit(
+        hyrax_proof,
+        input_commits,
+        &circuit_description,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
 
-//     // Create identity gate layer
-//     let nonzero_gate_wiring = vec![(0, 2), (1, 1)];
-//     let id_output = layers.add_identity_gate(nonzero_gate_wiring, square_output);
-//     let layers = layers.0;
+#[test]
+fn matmult_hyrax_input_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test small matmult circuit");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    const NUM_GENERATORS: usize = 10;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        NUM_GENERATORS + 1,
+        "hi why is this not working, please help me",
+        None,
+    );
 
-//     // OUTPUT LAYER CONSTRUCTION
-//     let output_layer: HyraxOutputLayer<Bn256Point> = HyraxOutputLayer {
-//         underlying_mle: MleEnum::Dense(id_output),
-//     };
-//     let output_layers = vec![output_layer];
+    let mut circuit = LayouterCircuit::new(|ctx| {
+        // INPUT LAYER CONSTRUCTION
+        let input_multilinear_extension = MultilinearExtension::new(vec![
+            Scalar::from(8797),
+            Scalar::from(7308),
+            Scalar::from(94),
+            Scalar::from(67887),
+        ]);
+        let input_layer =
+            InputLayerNode::new(ctx, None, InputLayerType::HyraxPlaceholderInputLayer);
+        let input_shred = InputShred::new(ctx, input_multilinear_extension, &input_layer);
 
-//     // FULL CIRCUIT
-//     let mut circuit = HyraxCircuit {
-//         input_layers,
-//         layers,
-//         output_layers,
-//         input_commitments,
-//     };
+        let matmult_layer = MatMultNode::new(ctx, &input_shred, (2, 2), &input_shred, (2, 2));
 
-//     // PROVE
-//     let proof = HyraxProof::prove(
-//         &mut circuit,
-//         &committer,
-//         &mut blinding_rng,
-//         prover_transcript,
-//         &mut VandermondeInverse::new(),
-//     );
+        // Middle layer 1: subtract middle layer 0 from itself.
+        let subtract_sector = Sector::new(
+            ctx,
+            &[&matmult_layer],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                mle.expr() - mle.expr()
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let new_mle = MultilinearExtension::new_sized_zero(data.num_vars());
+                new_mle
+            },
+        );
 
-//     // VERIFY
-//     let circuit_description: CircuitDescription<Bn256Point> = circuit.into();
-//     HyraxProof::verify(
-//         &proof,
-//         &circuit_description,
-//         &committer,
-//         verifier_transcript,
-//     )
-// }
+        // Make this an output node.
+        let output_node = OutputNode::new_zero(ctx, &subtract_sector);
 
-// #[test]
-// fn regular_identity_matmult_circuit_test() {
-//     let mut blinding_rng = &mut rand::thread_rng();
-//     type Transcript = PoseidonTranscript<Scalar, Base>;
-//     let prover_transcript = &mut Transcript::new("");
-//     let verifier_transcript = &mut Transcript::new("");
-//     const NUM_GENERATORS: usize = 10;
-//     let committer = PedersenCommitter::<Bn256Point>::new(
-//         NUM_GENERATORS + 1,
-//         "hi why is this not working, please help me",
-//         None,
-//     );
+        ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+            input_layer.into(),
+            input_shred.into(),
+            matmult_layer.into(),
+            subtract_sector.into(),
+            output_node.into(),
+        ])
+    });
 
-//     // INPUT LAYER CONSTRUCTION
-//     let input_mle = DenseMle::<Scalar, Scalar>::new_from_raw(
-//         vec![
-//             Scalar::from(8797),
-//             Scalar::from(7308),
-//             Scalar::from(94),
-//             Scalar::from(67887),
-//         ],
-//         LayerId::Input(0),
-//         None,
-//     );
-//     let input_layer: HyraxInputLayer<Bn256Point, Transcript> = HyraxInputLayer::new_with_committer(
-//         input_mle.clone(),
-//         LayerId::Input(0),
-//         committer.clone(),
-//     );
-//     let mut input_enum = InputLayerEnum::HyraxInputLayer(input_layer);
-//     let input_commit = input_enum.commit().unwrap();
-//     let input_layers = vec![input_enum];
-//     let input_commitments = vec![input_commit];
+    let (hyrax_proof, input_commits, circuit_description) = HyraxCircuit::prove_gkr_circuit(
+        &mut circuit,
+        &committer,
+        None,
+        None,
+        None,
+        blinding_rng,
+        converter,
+        &mut prover_transcript,
+    );
 
-//     // INTERMEDIATE LAYERS CONSTRUCTION
-//     let mut layers: Layers<Scalar, Base, Transcript> = Layers::new();
-//     // Create a layer builder which is input_mle * input_mle
-//     let squaring_builder = from_mle(
-//         input_mle,
-//         // Expression to build
-//         |mle| ExpressionStandard::products(vec![mle, mle]),
-//         // Expected output
-//         |mle, layer_id, prefix_bits| {
-//             DenseMle::new_from_iter(
-//                 mle.mle.iter().map(|eval| eval * eval),
-//                 layer_id,
-//                 prefix_bits,
-//             )
-//         },
-//     );
-//     let square_output = layers.add_gkr(squaring_builder);
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
 
-//     // Create identity gate layer
-//     let nonzero_gate_wiring = vec![(0, 2), (1, 1), (2, 0), (3, 1)];
-//     let id_output_for_matrix_a =
-//         layers.add_identity_gate(nonzero_gate_wiring, square_output);
+    HyraxCircuit::verify_gkr_circuit(
+        hyrax_proof,
+        input_commits,
+        &circuit_description,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
 
-//     // Create identity gate layer
-//     let nonzero_gate_wiring = vec![(0, 3), (1, 0), (2, 1), (3, 1)];
-//     let id_output_for_matrix_b =
-//         layers.add_identity_gate(nonzero_gate_wiring, square_output);
+#[test]
+fn regular_identity_hyrax_input_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test small regular identity circuit");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    const NUM_GENERATORS: usize = 10;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        NUM_GENERATORS + 1,
+        "hi why is this not working, please help me",
+        None,
+    );
 
-//     // Create matmult layer, multiply id_output by itself
-//     let matrix_a = Matrix::new(id_output_for_matrix_a, 1, 1);
-//     let matrix_b = Matrix::new(id_output_for_matrix_b, 1, 1);
-//     let matmult_output = layers.add_matmult_layer(matrix_a, matrix_b);
-//     let layers = layers.0;
+    let mut circuit = LayouterCircuit::new(|ctx| {
+        // INPUT LAYER CONSTRUCTION
+        let input_multilinear_extension = MultilinearExtension::new(vec![
+            Scalar::from(8797),
+            Scalar::from(7308),
+            Scalar::from(94),
+            Scalar::from(67887),
+        ]);
+        let input_layer =
+            InputLayerNode::new(ctx, None, InputLayerType::HyraxPlaceholderInputLayer);
+        let input_shred = InputShred::new(ctx, input_multilinear_extension, &input_layer);
 
-//     // OUTPUT LAYER CONSTRUCTION
-//     let output_layer: HyraxOutputLayer<Bn256Point> = HyraxOutputLayer {
-//         underlying_mle: MleEnum::Dense(matmult_output),
-//     };
-//     let output_layers = vec![output_layer];
+        // Middle layer 1: square the input.
+        let squaring_sector = Sector::new(
+            ctx,
+            &[&input_shred],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                ExprBuilder::products(vec![mle, mle])
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let squared_data = data
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| elem * elem)
+                    .collect_vec();
+                let new_mle = MultilinearExtension::new(squared_data);
+                new_mle
+            },
+        );
 
-//     // FULL CIRCUIT
-//     let mut circuit = HyraxCircuit {
-//         input_layers,
-//         layers,
-//         output_layers,
-//         input_commitments,
-//     };
+        // Create identity gate layer
+        let nonzero_gate_wiring = vec![(0, 2), (1, 1)];
+        let id_layer = IdentityGateNode::new(ctx, &squaring_sector, nonzero_gate_wiring);
 
-//     // PROVE
-//     let proof = HyraxProof::prove(
-//         &mut circuit,
-//         &committer,
-//         &mut blinding_rng,
-//         prover_transcript,
-//         &mut VandermondeInverse::new(),
-//     );
+        // Middle layer 2: subtract middle layer 1 from itself.
+        let subtract_sector = Sector::new(
+            ctx,
+            &[&id_layer],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                mle.expr() - mle.expr()
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let new_mle = MultilinearExtension::new_sized_zero(data.num_vars());
+                new_mle
+            },
+        );
 
-//     // VERIFY
-//     let circuit_description: CircuitDescription<Bn256Point> = circuit.into();
-//     HyraxProof::verify(
-//         &proof,
-//         &circuit_description,
-//         &committer,
-//         verifier_transcript,
-//     )
-// }
+        // Make this an output node.
+        let output_node = OutputNode::new_zero(ctx, &subtract_sector);
+
+        ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+            input_layer.into(),
+            input_shred.into(),
+            squaring_sector.into(),
+            id_layer.into(),
+            subtract_sector.into(),
+            output_node.into(),
+        ])
+    });
+
+    let (hyrax_proof, input_commits, circuit_description) = HyraxCircuit::prove_gkr_circuit(
+        &mut circuit,
+        &committer,
+        None,
+        None,
+        None,
+        blinding_rng,
+        converter,
+        &mut prover_transcript,
+    );
+
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
+
+    HyraxCircuit::verify_gkr_circuit(
+        hyrax_proof,
+        input_commits,
+        &circuit_description,
+        &committer,
+        &mut verifier_transcript,
+    );
+}
+
+#[test]
+fn regular_identity_matmult_hyrax_input_layer_test() {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("Test small regular identity matmult circuit");
+    let blinding_rng = &mut rand::thread_rng();
+    let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
+    const NUM_GENERATORS: usize = 10;
+    let committer = PedersenCommitter::<Bn256Point>::new(
+        NUM_GENERATORS + 1,
+        "hi why is this not working, please help me",
+        None,
+    );
+
+    let mut circuit = LayouterCircuit::new(|ctx| {
+        // INPUT LAYER CONSTRUCTION
+        let input_multilinear_extension = MultilinearExtension::new(vec![
+            Scalar::from(8797),
+            Scalar::from(7308),
+            Scalar::from(94),
+            Scalar::from(67887),
+        ]);
+        let input_layer =
+            InputLayerNode::new(ctx, None, InputLayerType::HyraxPlaceholderInputLayer);
+        let input_shred = InputShred::new(ctx, input_multilinear_extension, &input_layer);
+
+        // Middle layer 1: square the input.
+        let squaring_sector = Sector::new(
+            ctx,
+            &[&input_shred],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                ExprBuilder::products(vec![mle, mle])
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let squared_data = data
+                    .get_evals_vector()
+                    .iter()
+                    .map(|elem| elem * elem)
+                    .collect_vec();
+                let new_mle = MultilinearExtension::new(squared_data);
+                new_mle
+            },
+        );
+
+        // Create identity gate layer A
+        let nonzero_gate_wiring_a = vec![(0, 2), (1, 1), (2, 0), (3, 1)];
+        let id_layer_a = IdentityGateNode::new(ctx, &squaring_sector, nonzero_gate_wiring_a);
+
+        // Create identity gate layer B
+        let nonzero_gate_wiring_b = vec![(0, 3), (1, 0), (2, 1), (3, 1)];
+        let id_layer_b = IdentityGateNode::new(ctx, &squaring_sector, nonzero_gate_wiring_b);
+
+        // Create matmult layer, multiply id_output by itself
+        let matmult_layer = MatMultNode::new(ctx, &id_layer_a, (2, 2), &id_layer_b, (2, 2));
+
+        // Middle layer 5: subtract middle layer 4 from itself.
+        let subtract_sector = Sector::new(
+            ctx,
+            &[&matmult_layer],
+            |mle_vec| {
+                assert_eq!(mle_vec.len(), 1);
+                let mle = mle_vec[0];
+                mle.expr() - mle.expr()
+            },
+            |data_vec| {
+                assert_eq!(data_vec.len(), 1);
+                let data = data_vec[0];
+                let new_mle = MultilinearExtension::new_sized_zero(data.num_vars());
+                new_mle
+            },
+        );
+
+        // Make this an output node.
+        let output_node = OutputNode::new_zero(ctx, &subtract_sector);
+
+        ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+            input_layer.into(),
+            input_shred.into(),
+            squaring_sector.into(),
+            id_layer_a.into(),
+            id_layer_b.into(),
+            matmult_layer.into(),
+            subtract_sector.into(),
+            output_node.into(),
+        ])
+    });
+
+    let (hyrax_proof, input_commits, circuit_description) = HyraxCircuit::prove_gkr_circuit(
+        &mut circuit,
+        &committer,
+        None,
+        None,
+        None,
+        blinding_rng,
+        converter,
+        &mut prover_transcript,
+    );
+
+    let mut verifier_transcript: ECTranscriptReader<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptReader::new(prover_transcript.get_transcript());
+
+    HyraxCircuit::verify_gkr_circuit(
+        hyrax_proof,
+        input_commits,
+        &circuit_description,
+        &committer,
+        &mut verifier_transcript,
+    );
+}

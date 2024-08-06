@@ -51,7 +51,6 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
 
         // Add the commitments to the coefficients to the transcript
         coeffs.iter().enumerate().for_each(|(i, commit_triple)| {
-            dbg!(commit_triple);
             let label = format!("PROVER coeff {}", i);
             transcript.append_ec_point(Box::leak(label.into_boxed_str()), commit_triple.commitment);
         });
@@ -133,8 +132,6 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
         let n_bits = claims[0].point.len();
         let expected_num_coeffs = (n_claims - 1) * n_bits + 1;
         assert_eq!(expected_num_coeffs, self.interpolant_coeffs.len());
-
-        dbg!(&self.interpolant_coeffs);
 
         // Check that all claims are on the same layer
         let layer_id: LayerId = claims[0].to_layer_id;

@@ -13,6 +13,7 @@ use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::compute_sumcheck_message_no_beta_table,
     product::{PostSumcheckLayer, Product},
+    regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     CircuitLayer, Layer, LayerError, LayerId, VerifierLayer,
 };
 use crate::{
@@ -313,18 +314,7 @@ pub struct CircuitMatrix<F: FieldExt> {
 impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
     fn from(matrix: Matrix<F>) -> Self {
         let mut indexed_mle = matrix.mle.clone();
-        indexed_mle.mle_indices = indexed_mle
-            .mle_indices
-            .iter()
-            .enumerate()
-            .map(|(bit_idx, _)| {
-                if bit_idx >= matrix.num_rows_vars {
-                    MleIndex::IndexedBit(bit_idx - matrix.num_rows_vars)
-                } else {
-                    MleIndex::IndexedBit(bit_idx)
-                }
-            })
-            .collect();
+        indexed_mle.index_mle_indices(0);
         CircuitMatrix {
             mle: CircuitMle::from_dense_mle(&indexed_mle).unwrap(),
             num_rows_vars: matrix.num_rows_vars,
@@ -450,11 +440,14 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .into_iter()
             .chain(claim_a.into_iter())
             .collect_vec();
+
+        dbg!(&full_claim_chals_a);
         // Construct the full claim made on B using the claim made on the layer and the sumcheck bindings.
         let full_claim_chals_b = claim_b
             .into_iter()
             .chain(sumcheck_bindings.to_vec().into_iter())
             .collect_vec();
+        dbg!(&full_claim_chals_b);
 
         // Shape checks.
         assert_eq!(
@@ -476,6 +469,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             num_rows_vars: self.matrix_a.num_rows_vars,
             num_cols_vars: self.matrix_a.num_cols_vars,
         };
+        dbg!(&self.matrix_b.mle);
         let matrix_b = VerifierMatrix {
             mle: self
                 .matrix_b
@@ -501,29 +495,30 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
     ) -> PostSumcheckLayer<F, Option<F>> {
         let mut pre_bound_matrix_a_mle = self.matrix_a.mle.clone();
         pre_bound_matrix_a_mle.set_mle_indices(
-            claim_challenges[0..self.matrix_a.num_rows_vars]
-                .iter()
-                .enumerate()
-                .map(|(challenge_idx, challenge)| MleIndex::Bound(*challenge, challenge_idx))
-                .chain(
-                    self.matrix_a.mle.mle_indices()[self.matrix_a.num_rows_vars..]
-                        .to_vec()
-                        .into_iter(),
-                )
-                .collect(),
-        );
-        let mut pre_bound_matrix_b_mle = self.matrix_b.mle.clone();
-        pre_bound_matrix_b_mle.set_mle_indices(
-            self.matrix_b.mle.mle_indices()[0..self.matrix_b.num_rows_vars]
+            self.matrix_a.mle.mle_indices()[..self.matrix_a.num_cols_vars]
                 .to_vec()
                 .into_iter()
                 .chain(
-                    claim_challenges[self.matrix_b.num_rows_vars..]
+                    claim_challenges[self.matrix_b.num_cols_vars..]
                         .iter()
                         .enumerate()
                         .map(|(challenge_idx, challenge)| {
                             MleIndex::Bound(*challenge, challenge_idx)
                         }),
+                )
+                .collect(),
+        );
+
+        let mut pre_bound_matrix_b_mle = self.matrix_b.mle.clone();
+        pre_bound_matrix_b_mle.set_mle_indices(
+            claim_challenges[..self.matrix_b.num_cols_vars]
+                .iter()
+                .enumerate()
+                .map(|(challenge_idx, challenge)| MleIndex::Bound(*challenge, challenge_idx))
+                .chain(
+                    self.matrix_b.mle.mle_indices()[..self.matrix_b.num_rows_vars]
+                        .to_vec()
+                        .into_iter(),
                 )
                 .collect(),
         );
@@ -577,6 +572,7 @@ impl<F: FieldExt> VerifierMatMultLayer<F> {
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        dbg!(vec![&self.matrix_a.mle, &self.matrix_b.mle]);
         let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
             .map(|matrix| {
@@ -620,6 +616,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MatMult<F> {
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
+        dbg!(vec![&self.matrix_a.mle, &self.matrix_b.mle]);
         let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
             .into_iter()
             .map(|matrix_mle| {
@@ -660,7 +657,12 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
-        let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
+        let (num_evals, common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+            let (num_evals, common_idx, _) = get_num_wlx_evaluations(claim_vecs);
+            (num_evals, common_idx)
+        } else {
+            (((num_claims - 1) * num_idx) + 1, None)
+        };
 
         let mut claim_mles = claim_mles.clone();
 
@@ -951,6 +953,6 @@ mod test {
 
         let matrix_out = Matrix::new(DenseMle::new_from_raw(exp_product, LayerId::Layer(0)), 5, 3);
 
-        assert_eq!(res_product, matrix_out.mle.bookkeeping_table().clone());
+        assert_eq!(res_product, matrix_out.mle.bookkeeping_table());
     }
 }

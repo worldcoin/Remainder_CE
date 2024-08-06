@@ -89,8 +89,6 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<IdentityGate<F>>> Compi
         witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
     ) -> Result<(), crate::layouter::layouting::DAGError> {
-        dbg!(&self.pre_routed_data);
-        dbg!("HIIII");
         let (pre_routed_data_location, pre_routed_data) = circuit_map
             .0
             .get(&self.pre_routed_data)
@@ -162,14 +160,10 @@ mod test {
             });
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            dbg!(&input_layer.id());
             let input_shred_pre_routed = InputShred::new(ctx, mle, &input_layer);
-            dbg!(&input_shred_pre_routed.id());
             let input_shred_expected = InputShred::new(ctx, shifted_mle, &input_layer);
-            dbg!(&input_shred_expected.id());
 
             let gate_sector = IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates);
-            dbg!(&gate_sector.id());
             let diff_sector = Sector::new(
                 ctx,
                 &[&gate_sector, &input_shred_expected],

@@ -49,7 +49,6 @@ impl<F: FieldExt> MatMultNode<F> {
             matrix_node_a.get_data().get_evals_vector().to_vec(),
             LayerId::Layer(0),
         );
-        dbg!(&matrix_a_mle.bookkeeping_table().len());
         let matrix_a = Matrix::new(matrix_a_mle, num_rows_cols_a.0, num_rows_cols_a.1);
 
         let matrix_b_mle = DenseMle::new_from_raw(
@@ -101,8 +100,6 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
 
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
         let matrix_a = Matrix::new(mle_a, self.num_rows_cols_a.0, self.num_rows_cols_a.1);
-        dbg!(&matrix_a.mle.bookkeeping_table().len());
-        dbg!(&matrix_a.num_vars_rows_cols());
         let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
 
         let mle_b = DenseMle::new_with_prefix_bits(

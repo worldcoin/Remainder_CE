@@ -44,7 +44,7 @@ pub struct HyraxPCSProof<C: PrimeOrderCurve> {
 /// an enum representing how the user can specify their MLE coefficients. at least for our pedersen
 /// commitments, the distinction matters between u8, i8, and scalar field elements because of the
 /// precomputations.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum MleCoefficientsVector<C: PrimeOrderCurve> {
     U8Vector(Vec<u8>),
     I8Vector(Vec<i8>),
@@ -267,7 +267,8 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
 
         // commit to t_prime_vector and add to the transcript
         let t_prime_commit = committer.committed_vector(&t_prime, &blinding_factor_t_prime);
-        prover_transcript.append_ec_point("commitment to x", t_prime_commit.commitment);
+        prover_transcript
+            .append_ec_point("commitment to x VISHRUTI STYLE", t_prime_commit.commitment);
         // Self::append_x_y_to_transcript_single(
         //     &t_prime_commit.commitment,
         //     prover_transcript,
@@ -326,7 +327,6 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             aux: _,
             blinding_factor_evaluation: _,
         } = &self;
-
         let (l_vector, r_vector) =
             HyraxPCSProof::<C>::compute_l_r_from_log_n_cols(log_n_cols, challenge_coordinates);
 
@@ -340,19 +340,10 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             });
 
         // add PoDP commitments to the transcript
-        let transcript_t_prime_commit_from_t_commit = verifier_transcript
-            .consume_ec_point("commitment to x")
+        let transcript_t_prime_commit = verifier_transcript
+            .consume_ec_point("commitment to x RYAN STYLE")
             .unwrap();
-        assert_eq!(
-            t_prime_commit_from_t_commit,
-            transcript_t_prime_commit_from_t_commit
-        );
-        // Self::append_x_y_to_transcript_single(
-        //     &t_prime_commit_from_t_commit,
-        //     verifier_transcript,
-        //     "commitment to x, x-coord",
-        //     "commitment to x, y-coord",
-        // );
+        assert_eq!(t_prime_commit_from_t_commit, transcript_t_prime_commit);
 
         let transcript_commitment_to_evaluation = verifier_transcript
             .consume_ec_point("commitment to y")
@@ -361,12 +352,6 @@ impl<C: PrimeOrderCurve> HyraxPCSProof<C> {
             commitment_to_evaluation.commitment,
             transcript_commitment_to_evaluation
         );
-        // Self::append_x_y_to_transcript_single(
-        //     &commitment_to_evaluation.commitment,
-        //     verifier_transcript,
-        //     "commitment to y, x-coord",
-        //     "commitment to y, y-coord",
-        // );
 
         // using this commitment, the verifier can then do a proof of dot product verification given the evaluation proof
         // and the prover's claimed commitment to the evaluation of the MLE.

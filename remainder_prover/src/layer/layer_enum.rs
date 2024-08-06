@@ -2,7 +2,6 @@
 //! a single struct that can represent many types of `Layer`
 
 use remainder_shared_types::FieldExt;
-use tracing_subscriber::fmt::Layer;
 
 use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::claims::YieldClaim;

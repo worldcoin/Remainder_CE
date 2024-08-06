@@ -117,7 +117,6 @@ impl<F: FieldExt> Expression<F, VerifierExpr> {
             if let MleIndex::Bound(val, _) = idx {
                 return Ok(*val * rhs? + (F::ONE - val) * lhs?);
             }
-            dbg!("It was here three");
             Err(ExpressionError::SelectorBitNotBoundError)
         };
         let mle_eval =

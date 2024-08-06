@@ -16,10 +16,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    claims::{wlx_eval::WLXAggregator, Claim, ClaimAggregator, ClaimError},
-    expression::{
-        expr_errors::ExpressionError, generic_expr::Expression, verifier_expr::VerifierExpr,
-    },
+    claims::{Claim, ClaimError},
+    expression::expr_errors::ExpressionError,
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
@@ -83,7 +81,7 @@ pub enum VerificationError {
     #[error("Error with underlying expression: {0}")]
     ExpressionError(#[from] ExpressionError),
 
-    // Error while reading the transcript proof.
+    /// Error while reading the transcript proof.
     #[error("Error while reading the transcript proof")]
     TranscriptError(#[from] TranscriptReaderError),
 

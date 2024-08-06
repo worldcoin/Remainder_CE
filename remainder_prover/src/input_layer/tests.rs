@@ -114,7 +114,6 @@ impl<F: FieldExt> GKRCircuit<F> for RandomCircuit<F> {
         };
         let commitments = vec![input_commit, random_commit, input_layer_2_commit];
         let verifier_key = witness.generate_verifier_key().unwrap();
-        // dbg!(&verifier_key);
 
         Ok((witness, commitments, verifier_key))
     }
@@ -259,7 +258,6 @@ impl<F: FieldExt> GKRCircuit<F> for MultiInputLayerCircuit<F> {
             output_layers,
             input_layers: vec![input_layer_1, input_layer_2],
         };
-        dbg!(&witness);
         let commitments = vec![input_layer_1_commitment, input_layer_2_commitment];
         let verifier_key = witness.generate_verifier_key().unwrap();
 

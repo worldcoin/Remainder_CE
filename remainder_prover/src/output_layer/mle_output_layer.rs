@@ -188,7 +188,6 @@ impl<F: FieldExt> CircuitOutputLayer<F> for CircuitMleOutputLayer<F> {
         }
 
         let bits = self.mle.num_iterated_vars();
-        dbg!(bits);
 
         let mut mle = self.mle.clone();
 

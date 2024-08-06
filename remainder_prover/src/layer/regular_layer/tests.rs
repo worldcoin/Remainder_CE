@@ -1,15 +1,12 @@
 use ark_std::test_rng;
 use remainder_shared_types::{
-    transcript::{
-        poseidon_transcript::PoseidonSponge, test_transcript::TestSponge, TranscriptReader,
-        TranscriptWriter,
-    },
+    transcript::{poseidon_transcript::PoseidonSponge, TranscriptReader, TranscriptWriter},
     Fr,
 };
 
 use crate::{
     claims::Claim,
-    expression::{circuit_expr::CircuitExpr, generic_expr::Expression, prover_expr::ProverExpr},
+    expression::{generic_expr::Expression, prover_expr::ProverExpr},
     layer::{CircuitLayer, Layer, LayerId},
     mle::dense::DenseMle,
 };
@@ -46,7 +43,7 @@ fn regular_layer_test_prove_verify_product() {
     expression.index_mle_indices(0);
     let circuit_expression = expression.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
-    let mut verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -56,7 +53,6 @@ fn regular_layer_test_prove_verify_product() {
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
 fn regular_layer_test_prove_verify_sum() {
-    let mut rng = test_rng();
     let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
 
     let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
@@ -86,7 +82,7 @@ fn regular_layer_test_prove_verify_sum() {
     expression.index_mle_indices(0);
     let circuit_expression = expression.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
-    let mut verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -96,7 +92,6 @@ fn regular_layer_test_prove_verify_sum() {
 #[test]
 /// E2E test of Proving/Verifying a `RegularLayer`
 fn regular_layer_test_prove_verify_selector() {
-    let mut rng = test_rng();
     let mle_vec = vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)];
 
     let mle_new: DenseMle<Fr> = DenseMle::new_from_raw(mle_vec, LayerId::Input(0));
@@ -126,7 +121,7 @@ fn regular_layer_test_prove_verify_selector() {
     expression.index_mle_indices(0);
     let circuit_expression = expression.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
-    let mut verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)
@@ -135,8 +130,6 @@ fn regular_layer_test_prove_verify_selector() {
 
 #[test]
 fn regular_layer_test_prove_verify_complex() {
-    let mut rng = test_rng();
-
     let mle_1: DenseMle<Fr> = DenseMle::new_from_raw(
         vec![Fr::from(2), Fr::from(3), Fr::from(1), Fr::from(2)],
         LayerId::Input(0),
@@ -170,7 +163,7 @@ fn regular_layer_test_prove_verify_complex() {
     root.index_mle_indices(0);
     let circuit_expression = root.transform_to_circuit_expression().unwrap();
     dbg!(&circuit_expression);
-    let mut verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
+    let verifier_layer = CircuitRegularLayer::new_raw(LayerId::Layer(0), circuit_expression);
 
     verifier_layer
         .verify_rounds(claim, &mut transcript)

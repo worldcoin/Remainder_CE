@@ -167,8 +167,6 @@ pub fn check_fully_bound<F: FieldExt>(
     mle_refs: &mut [impl Mle<F>],
     challenges: Vec<F>,
 ) -> Result<F, GateError> {
-    dbg!(&mle_refs);
-    dbg!(&challenges);
     let mles_bound: Vec<bool> = mle_refs
         .iter()
         .map(|mle_ref| {
@@ -324,6 +322,7 @@ pub fn compute_full_gate<F: FieldExt>(
     }
 }
 
+/// Compute the full value of the gate wiring function for an identity gate.
 pub fn compute_full_gate_identity<F: FieldExt>(
     challenges: Vec<F>,
     mle_ref: &mut DenseMle<F>,

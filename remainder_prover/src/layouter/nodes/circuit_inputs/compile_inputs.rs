@@ -4,6 +4,8 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     input_layer::{
+        hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
+        hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
         ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer,
         MleInputLayer,
     },
@@ -157,7 +159,11 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
 impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL>, IL> CompilableNode<F, Pf>
     for InputLayerNode<F>
 where
-    IL: InputLayer<F> + From<PublicInputLayer<F>> + From<LigeroInputLayer<F>>,
+    IL: InputLayer<F>
+        + From<PublicInputLayer<F>>
+        + From<LigeroInputLayer<F>>
+        + From<HyraxPlaceholderInputLayer<F>>
+        + From<HyraxPrecommitPlaceholderInputLayer<F>>,
 {
     fn compile<'a>(
         &'a self,
@@ -182,7 +188,13 @@ where
         let out: IL = match input_layer_type {
             InputLayerType::LigeroInputLayer => LigeroInputLayer::new(mle, layer_id).into(),
             InputLayerType::PublicInputLayer => PublicInputLayer::new(mle, layer_id).into(),
-            InputLayerType::Default => LigeroInputLayer::new(mle, layer_id).into(),
+            InputLayerType::Default => PublicInputLayer::new(mle, layer_id).into(),
+            InputLayerType::HyraxPlaceholderInputLayer => {
+                HyraxPlaceholderInputLayer::new(mle, layer_id).into()
+            }
+            InputLayerType::HyraxPrecommitPlaceholderInputLayer => {
+                HyraxPrecommitPlaceholderInputLayer::new(mle, layer_id).into()
+            }
         };
 
         witness.add_input_layer(out);

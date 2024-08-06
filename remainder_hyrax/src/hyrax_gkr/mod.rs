@@ -95,6 +95,7 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
             gkr_circuit.synthesize();
 
         let circuit_description = witness.generate_verifier_key().unwrap();
+
         // TODO(ryancao, vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT!
 
         let Witness {
@@ -136,10 +137,11 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
                     ))
                 }
                 InputLayerEnum::HyraxPlaceholderInputLayer(hyrax_placeholder_input_layer) => {
-                    let hyrax_input_layer = HyraxInputLayer::new_from_placeholder_with_committer(
-                        *hyrax_placeholder_input_layer,
-                        committer,
-                    );
+                    let mut hyrax_input_layer =
+                        HyraxInputLayer::new_from_placeholder_with_committer(
+                            *hyrax_placeholder_input_layer,
+                            committer,
+                        );
                     let hyrax_commit = hyrax_input_layer.commit();
                     prover_transcript.append_ec_points("hyrax pcs commitment", &hyrax_commit);
                     Some((
@@ -218,8 +220,8 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
         });
     }
 
-    /// Proves and verifies a circuit using the Hyrax IP given a GKR circuit!
-    pub fn prove_and_verify_gkr_circuit(
+    /// Proves a circuit using the Hyrax IP given a GKR circuit!
+    pub fn prove_gkr_circuit(
         gkr_circuit: &mut LayouterCircuit<C::Scalar, ComponentSet<NodeEnum<C::Scalar>>, Fn>,
         committer: &PedersenCommitter<C>,
         blinding_factors_matrix: Option<Vec<<C as PrimeOrderCurve>::Scalar>>,
@@ -228,7 +230,10 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
         blinding_rng: &mut impl Rng,
         converter: &mut VandermondeInverse<C::Scalar>,
         prover_transcript: &mut impl ECProverTranscript<C>,
-        verifier_transcript: &mut impl ECVerifierTranscript<C>,
+    ) -> (
+        HyraxProof<C, Fn>,
+        Vec<CommitmentEnum<C>>,
+        GKRVerifierKey<C::Scalar, DefaultProofSystem>,
     ) {
         // Create the hyrax circuit from the GKR circuit
         let (mut hyrax_circuit, input_commits, circuit_description) =
@@ -250,6 +255,17 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
             converter,
         );
 
+        (hyrax_proof, input_commits, circuit_description)
+    }
+
+    /// Verifies a circuit using the Hyrax IP given a [HyraxProof]!!
+    pub fn verify_gkr_circuit(
+        hyrax_proof: HyraxProof<C, Fn>,
+        input_commits: Vec<CommitmentEnum<C>>,
+        circuit_description: &GKRVerifierKey<C::Scalar, DefaultProofSystem>,
+        committer: &PedersenCommitter<C>,
+        verifier_transcript: &mut impl ECVerifierTranscript<C>,
+    ) {
         // Setup verification by adding necessary commitments to transcript
         HyraxCircuit::<C, Fn>::setup_verification(
             &circuit_description,

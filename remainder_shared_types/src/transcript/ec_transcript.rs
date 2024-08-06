@@ -469,6 +469,8 @@ impl<
             Some(Operation::Squeeze(_, _)) => Err(TranscriptReaderError::ConsumeError),
             Some(Operation::Append(expected_label, v)) => {
                 if label != expected_label {
+                    // dbg!("Label mismatch on TranscriptReader consume_element. Expected \"{}\" but instead got \"{}\".", expected_label, label);
+
                     warn!("Label mismatch on TranscriptReader consume_element. Expected \"{}\" but instead got \"{}\".", expected_label, label);
                 }
                 match v.get(element_idx) {

@@ -31,9 +31,11 @@ use super::{
         index_mle_indices_gate, GateError,
     },
     product::{PostSumcheckLayer, Product},
+    regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     CircuitLayer, Layer, LayerId, VerifierLayer,
 };
 
+/// The Circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
 pub struct IdentityGateCircuitLayer<F: FieldExt> {
@@ -52,8 +54,7 @@ pub struct IdentityGateCircuitLayer<F: FieldExt> {
 
 /// Degree of independent variable is always quadratic!
 ///
-/// V_i(g_2, g_1) = \sum_{p_2, x} \beta(g_2, p_2) f_1(g_1, x) (V_{i + 1}(p_2, x))
-const DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
+/// V_i(g_1) = \sum_{x} f_1(g_1, x) (V_{i + 1}(x))
 const NON_DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
 
 impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
@@ -91,7 +92,7 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
             return Err(VerificationError::SumcheckStartFailed);
         }
 
-        for sumcheck_round_idx in 1..num_sumcheck_rounds {
+        for _sumcheck_round_idx in 1..num_sumcheck_rounds {
             // --- Read challenge r_{i - 1} from transcript ---
             let challenge = transcript_reader
                 .get_challenge("Sumcheck challenge")
@@ -134,9 +135,9 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
         let prev_at_r = evaluate_at_a_point(&g_n_evals, final_chal).unwrap();
 
         // error if this doesn't match the last round of sumcheck
-        dbg!(&final_result);
-        dbg!(&prev_at_r);
         if final_result != prev_at_r {
+            dbg!(&final_result);
+            dbg!(&prev_at_r);
             return Err(VerificationError::FinalSumcheckFailed);
         }
 
@@ -238,6 +239,7 @@ impl<F: FieldExt> VerifierIdentityGateLayer<F> {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
+/// The layer representing a fully bound [IdentityGate].
 pub struct VerifierIdentityGateLayer<F: FieldExt> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
@@ -313,8 +315,6 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             "Evaluation of V_{i + 1}(g_2, u)",
             source_mle_reduced.bookkeeping_table()[0],
         );
-        dbg!(&source_mle_reduced.bookkeeping_table()[0]);
-
         Ok(())
     }
 
@@ -459,7 +459,12 @@ impl<F: FieldExt> YieldWLXEvals<F> for IdentityGate<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, ClaimError> {
         // get the number of evaluations
-        let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
+        let num_evals = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+            let (num_evals, _, _) = get_num_wlx_evaluations(claim_vecs);
+            num_evals
+        } else {
+            ((num_claims - 1) * num_idx) + 1
+        };
 
         // we already have the first #claims evaluations, get the next num_evals - #claims evaluations
         let next_evals: Vec<F> = (num_claims..num_evals)
