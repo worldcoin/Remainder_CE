@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use ark_serialize::Read;
 use ark_std::cfg_into_iter;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use itertools::Itertools;
 use ndarray::{Array, Array1, Array2, Array3};
 use ndarray_npy::read_npy;

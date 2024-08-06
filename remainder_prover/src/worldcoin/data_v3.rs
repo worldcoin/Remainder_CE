@@ -8,7 +8,7 @@
 // };
 
 // use ark_serialize::Read;
-// use ark_std::log2;
+// use ark_std::{cfg_into_iter, log2};
 // use base64::{engine::general_purpose::STANDARD, Engine};
 // use itertools::Itertools;
 // use ndarray::{Array, Array1, Array2, Array3, Axis};
@@ -284,18 +284,17 @@
 //         .chain(vec![vec![0i64; num_filters]; pad_length].into_iter())
 //         .collect();
 
-//     let responses_digital_decomps: Vec<Vec<[u16; NUM_DIGITS]>> = responses_vec_vec
-//         .into_par_iter()
-//         .map(|row| {
-//             row.into_par_iter()
-//                 .map(|value| digital_decomposition(value.abs() as u64))
-//                 .collect()
-//         })
-//         .collect();
-//     let responses_digital_decomps: Vec<[u16; NUM_DIGITS]> = responses_digital_decomps
-//         .into_iter()
-//         .flat_map(|x| x)
-//         .collect();
+//    let responses_digital_decomps: Vec<Vec<[u16; NUM_DIGITS]>> = cfg_into_iter!(responses_vec_vec)
+//        .map(|row| {
+//            cfg_into_iter!(row)
+//                .map(|value| digital_decomposition(value.abs() as u64))
+//                .collect()
+//        })
+//        .collect();
+//    let responses_digital_decomps: Vec<[u16; NUM_DIGITS]> = responses_digital_decomps
+//        .into_iter()
+//        .flat_map(|x| x)
+//        .collect();
 
 //     // count the number of times each digit appears in the digits
 //     let mut digit_multiplicities: Vec<usize> = vec![0; BASE as usize];

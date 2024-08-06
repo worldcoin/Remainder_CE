@@ -1014,9 +1014,7 @@ where
             .collect();
 
         // --- Send columns + Merkle paths to verifier ---
-        cols_to_open
-            // .par_iter()
-            .iter()
+        cfg_into_iter!(&cols_to_open)
             .map(|&col| open_column(tr, comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
     };
