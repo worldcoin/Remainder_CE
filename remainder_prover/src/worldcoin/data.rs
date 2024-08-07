@@ -82,7 +82,8 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
     pub code: Vec<F>,
     /// The number of times each digit 0 .. BASE - 1 occurs in the digital decompositions
     pub digit_multiplicities: Vec<F>,
-    /// An entire matrix of thresholds! FIXME
+    /// The matrix of thresholds of dimensions num_placements x num_kernels
+    /// (Ideally, a less redundant representation would be used, but this is not possible because of endianness).
     pub thresholds_matrix: Vec<F>,
 }
 
@@ -413,7 +414,6 @@ impl<F: FieldExt> From<&WorldcoinData> for WorldcoinCircuitData<F> {
             digits,
             code: iris_code,
             digit_multiplicities,
-            // FIXME
             thresholds_matrix: thresholds_matrix.into_iter().flatten().map(|v| i64_to_field(v)).collect(),
         }
     }

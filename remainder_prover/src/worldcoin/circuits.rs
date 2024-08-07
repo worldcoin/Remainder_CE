@@ -10,7 +10,7 @@ use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::get_input_shred_from_vec;
 use crate::utils::pad_to_nearest_power_of_two;
-use crate::worldcoin::components::{DigitalRecompositionComponent, SubtractThresholdsComponent};
+use crate::worldcoin::components::{DigitalRecompositionComponent, SubtractionComponent};
 use crate::worldcoin::components::SignCheckerComponent;
 use crate::worldcoin::data::WorldcoinCircuitData;
 use crate::worldcoin::digit_decomposition::BASE;
@@ -59,7 +59,7 @@ pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
         );
         println!("Matmult = {:?}", matmult.id());
 
-        let subtract_thresholds = SubtractThresholdsComponent::new(ctx, &matmult, &thresholds);
+        let subtract_thresholds = SubtractionComponent::new(ctx, &matmult, &thresholds);
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {

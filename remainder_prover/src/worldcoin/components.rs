@@ -13,36 +13,36 @@ use crate::{
     worldcoin::digit_decomposition::NUM_DIGITS,
 };
 
-pub struct SubtractThresholdsComponent<F: FieldExt> {
+/// Calculates LHS - RHS, making the result available as self.sector.
+pub struct SubtractionComponent<F: FieldExt> {
+    /// The sector that calculates LHS - RHS.
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> SubtractThresholdsComponent<F> {
-    /// Create a new SubtractThresholdsComponent component.
-    pub fn new(ctx: &Context, responses: &dyn ClaimableNode<F = F>, thresholds: &dyn ClaimableNode<F = F>) -> Self {
+impl<F: FieldExt> SubtractionComponent<F> {
+    /// Create a new [SubtractionComponent] component.
+    pub fn new(ctx: &Context, lhs: &dyn ClaimableNode<F = F>, rhs: &dyn ClaimableNode<F = F>) -> Self {
         let sector = Sector::new(
             ctx,
-            &[responses, thresholds],
+            &[lhs, rhs],
             |nodes| {
                 assert_eq!(nodes.len(), 2);
-                let (responses, thresholds) = (nodes[0], nodes[1]);
-                responses.expr() - thresholds.expr() // FIXME use selectors so we don't need the thresholds in expanded form
+                nodes[0].expr() - nodes[1].expr()
             },
             |data| {
                 assert_eq!(data.len(), 2);
-                let (responses, thresholds) = (data[0], data[1]);
-                let result = responses.get_evals_vector().iter().zip(thresholds.get_evals_vector())
-                    .map(|(response, threshold)| *response - *threshold)
+                let result = data[0].get_evals_vector().iter().zip(data[1].get_evals_vector())
+                    .map(|(lhs, rhs)| *lhs - *rhs)
                     .collect_vec();
                 MultilinearExtension::new(result)
             },
         );
-        println!("SubtractThresholdsComponent sector = {:?}", sector.id());
+        println!("SubtractionComponent sector = {:?}", sector.id());
         Self { sector }
     }
 }
 
-impl<F: FieldExt, N> Component<N> for SubtractThresholdsComponent<F>
+impl<F: FieldExt, N> Component<N> for SubtractionComponent<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -50,6 +50,7 @@ where
         vec![self.sector.into()]
     }
 }
+
 /// A component that concatenates all the separate digit MLEs (there is one for each digital place)
 /// into a single MLE using a selector tree.
 /// (Necessary to interact with logup).
