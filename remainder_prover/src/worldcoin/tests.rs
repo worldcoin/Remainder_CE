@@ -12,7 +12,7 @@ mod tests {
     use crate::worldcoin::components::{BitsAreBinary, DigitalRecompositionComponent};
     use crate::worldcoin::components::SignCheckerComponent;
     use crate::worldcoin::data::{
-        load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinData
+        load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData
     };
     use itertools::Itertools;
     use remainder_shared_types::Fr;
@@ -175,8 +175,8 @@ mod tests {
     
     #[test]
     fn test_worldcoin_circuit() {
-        let data: WorldcoinData = load_data(Path::new("worldcoin_witness_data").to_path_buf());
-        let circuit = build_circuit::<Fr>((&data).into());
+        let data: WorldcoinCircuitData<Fr> = load_data(Path::new("worldcoin_witness_data").to_path_buf());
+        let circuit = build_circuit(data);
         test_circuit(circuit, None);
     }
 
