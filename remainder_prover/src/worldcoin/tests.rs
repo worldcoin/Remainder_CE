@@ -166,9 +166,16 @@ mod tests {
     }
 
     #[test]
-    fn test_worldcoin_circuit_toy_data() {
-        let data = medium_worldcoin_data::<Fr>();
+    fn test_worldcoin_circuit_tiny() {
+        let data = tiny_worldcoin_data::<Fr>();
         dbg!(&data);
+        let circuit = build_circuit(data);
+        test_circuit(circuit, Some(Path::new("worldcoin_witness_data/blah.json")));
+    }
+
+    #[test]
+    fn test_worldcoin_circuit_medium() {
+        let data = medium_worldcoin_data::<Fr>();
         let circuit = build_circuit(data);
         test_circuit(circuit, Some(Path::new("worldcoin_witness_data/blah.json")));
     }

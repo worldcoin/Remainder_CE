@@ -1,23 +1,17 @@
-use std::{
-    fs, io::BufWriter, marker::PhantomData, num, path::{Path, PathBuf}
-};
+use std::path::{Path, PathBuf};
 
-use ark_serialize::Read;
-use base64::{engine::general_purpose::STANDARD, Engine};
 use itertools::Itertools;
 use ndarray::{Array, Array1, Array2, Array3};
 use ndarray_npy::read_npy;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::FieldExt;
-use remainder_shared_types::{curves::PrimeOrderCurve, layer::LayerId};
-use serde_json::Value;
+use remainder_shared_types::layer::LayerId;
 
 use crate::{
     mle::circuit_mle::{to_flat_mles, FlatMles},
     worldcoin::digit_decomposition::digital_decomposition,
 };
 use crate::worldcoin::digit_decomposition::{BASE, NUM_DIGITS};
-use remainder_shared_types::HasByteRepresentation;
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
@@ -73,7 +67,7 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
     /// The digital decompositions base BASE of the abs value of the responses
     pub digits: FlatMles<F, NUM_DIGITS>,
     /// The resulting binary code (=the sign bits of the responses)
-    /// Has dimensions num_placements x num_kernels.
+    /// Has dimensions num_placements x num_kernels (it is not padded).
     /// (In the case we are processing the image (not the mask), this is the iris code.)
     pub code: Vec<F>,
     /// The number of times each digit 0 .. BASE - 1 occurs in the digital decompositions
@@ -103,10 +97,7 @@ pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinCircuitData<F
             .unwrap()
             .to_vec();
 
-    let (num_kernels, _, _) = kernel_values.dim();
-    let num_placements = placements_row_idxs.len() * placements_col_idxs.len();
     let num_thresholds = placements_row_idxs.len();
-
     WorldcoinCircuitData::new(
         image,
         kernel_values,
@@ -215,13 +206,6 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
         let responses = rerouted_matrix.dot(&kernel_matrix);
 
         // Build a matrix from the thresholds for subtraction from the responses
-        // FIXME
-        // let mut thresholds_matrix: Vec<Vec<i64>> = vec![];
-        // for threshold in thresholds.iter() {
-        //     for _ in 0..placements_col_idxs.len() {
-        //         thresholds_matrix.push(vec![*threshold; num_kernels]);
-        //     }
-        // }
         let expansion_factor = placements_col_idxs.len() * num_kernels;
         let expanded_thresholds = thresholds
             .iter()
@@ -370,66 +354,6 @@ pub fn next_power_of_two(n: usize) -> Option<usize> {
     None
 }
 
-/// Helper function for buffered writing to file.
-pub fn write_bytes_to_file(filename: &str, bytes: &[u8]) {
-    let file = fs::File::create(filename).unwrap();
-    let bw = BufWriter::new(file);
-    serde_json::to_writer(bw, &bytes).unwrap();
-}
-
-/// Helper function for buffered reading from file.
-pub fn read_bytes_from_file(filename: &str) -> Vec<u8> {
-    let mut file = std::fs::File::open(filename).unwrap();
-    let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
-    let mut bufreader = Vec::with_capacity(initial_buffer_size);
-    file.read_to_end(&mut bufreader).unwrap();
-    serde_json::de::from_slice(&bufreader[..]).unwrap()
-}
-
-/// Helper function to get iris code specifically by deserializing base64 and the speciifc key in json
-pub fn read_iris_code_from_file_with_key(filename: &str, key: &str) -> Vec<bool> {
-    let mut file = std::fs::File::open(filename).unwrap();
-    let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
-    let mut bufreader = Vec::with_capacity(initial_buffer_size);
-    file.read_to_end(&mut bufreader).unwrap();
-    let v: Value = serde_json::de::from_slice(&bufreader[..]).unwrap();
-    let base64_string = v[key].as_str().unwrap();
-
-    let bits: Vec<bool> = STANDARD
-        .decode(base64_string)
-        .unwrap()
-        .iter()
-        .flat_map(|byte| (0..8).rev().map(move |i| byte & (1 << i) != 0))
-        .collect();
-    bits
-}
-
-/// Helper function for buffered reading from file.
-pub fn read_bytes_from_file_bin(filename: &str) -> Vec<u8> {
-    let mut file = std::fs::File::open(filename).unwrap();
-    let initial_buffer_size = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
-    let mut bufreader = Vec::with_capacity(initial_buffer_size);
-    file.read_to_end(&mut bufreader).unwrap();
-    bufreader
-}
-
-/// helper function to read a stream of bytes as a hyrax commitment
-pub fn deserialize_commitment_from_bytes<C: PrimeOrderCurve>(bytes: &[u8]) -> Vec<C> {
-    let commitment: Vec<C> = bytes
-        .chunks(C::COMPRESSED_CURVE_POINT_BYTEWIDTH)
-        .map(|chunk| C::from_bytes_compressed(chunk))
-        .collect_vec();
-    commitment
-}
-
-/// helper function to read a stream of bytes as blinding factors
-pub fn deserialize_blinding_factors_from_bytes<C: PrimeOrderCurve>(bytes: &[u8]) -> Vec<C::Scalar> {
-    let blinding_factors: Vec<C::Scalar> = bytes
-        .chunks(C::SCALAR_ELEM_BYTEWIDTH)
-        .map(|chunk| C::Scalar::from_bytes_le(chunk.to_vec()))
-        .collect_vec();
-    blinding_factors
-}
 #[cfg(test)]
 mod test {
     use ndarray::{Array2, Array3};
@@ -437,9 +361,9 @@ mod test {
     use remainder_shared_types::Fr;
     use std::path::Path;
 
-    use crate::{mle::{circuit_mle::CircuitMle, Mle}, worldcoin::digit_decomposition::NUM_DIGITS};
+    use crate::{mle::{circuit_mle::CircuitMle, Mle}, worldcoin::data::next_power_of_two};
 
-    use super::{load_data, tiny_worldcoin_data, medium_worldcoin_data, WorldcoinCircuitData};
+    use super::{load_data, medium_worldcoin_data, WorldcoinCircuitData};
 
     #[test]
     fn test_circuit_data_creation_v2() {
@@ -448,17 +372,17 @@ mod test {
         // Check things that should be generically true
         assert_eq!(data.code.len(), data.thresholds_matrix.len());
         assert_eq!(data.kernel_matrix_mle.len(), data.kernel_matrix_dims.0 * data.kernel_matrix_dims.1);
+        // there should be any many digits in the kth position as there are elements in the _padded_ iris code
+        let expected_digits_length = next_power_of_two(data.code.len()).unwrap();
         for digits in data.digits.get_mle_refs().iter() {
-            assert_eq!(digits.get_padded_evaluations().len(), data.code.len());
+            assert_eq!(digits.get_padded_evaluations().len(), expected_digits_length);
         }
         // Check things that should be true for this dataset
-        // FIXME
-        // assert_eq!(data.num_placements, 4);
-        // assert_eq!(data.code.len(), 16);
-        // assert_eq!(data.image_matrix_mle.len(), 16); // 16 is the nearest power of two to 9
-        // assert_eq!(data.kernel_matrix_mle.len(), 16);
+        assert_eq!(data.num_placements, 16 * 200);
+        assert_eq!(data.code.len(), 16 * 200 * 4);
+        assert_eq!(data.image_matrix_mle.len(), next_power_of_two(100 * 400).unwrap());
+        assert_eq!(data.kernel_matrix_mle.len(), 32 * 64 * 4);
 
-        // FIXME will need to pad the Python iris code!
         // Load the iris code as calculated in Python, check it's the same as we derive.
         let num_kernels = data.kernel_matrix_dims.1;
         let expected_iris_code3d: Array3<bool> =
@@ -482,7 +406,7 @@ mod test {
     }
 
     #[test]
-    fn test_circuit_data_creation() {
+    fn test_circuit_data_creation_medium_dataset() {
         let data = medium_worldcoin_data::<Fr>();
         // Check things that should be generically true
         assert_eq!(data.code.len(), data.thresholds_matrix.len());

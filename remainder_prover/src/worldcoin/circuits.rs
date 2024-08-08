@@ -40,7 +40,7 @@ pub fn build_circuit<F: FieldExt>(data: WorldcoinCircuitData<F>)
         println!("Input layer = {:?}", input_layer.id());
         let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
         println!("Image input = {:?}", image.id());
-        let thresholds = get_input_shred_from_vec(thresholds_matrix.clone(), ctx, &input_layer);
+        let thresholds = get_input_shred_from_vec(pad_to_nearest_power_of_two(thresholds_matrix.clone()), ctx, &input_layer);
         println!("Thresholds input = {:?}", thresholds.id());
         let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
         println!("Identity gate = {:?}", rerouted_image.id());
