@@ -576,7 +576,7 @@ impl<F: FieldExt> IdentityGate<F> {
     /// initialize necessary bookkeeping tables by traversing the nonzero gates
     pub fn init_phase_1(&mut self, claim: Claim<F>) -> Result<Vec<F>, GateError> {
         let beta_g = BetaValues::new_beta_equality_mle(claim.get_point().clone());
-        self.set_beta_g(beta_g.clone());
+        self.set_beta_g(beta_g);
 
         self.mle_ref.index_mle_indices(0);
         let num_vars = self.mle_ref.num_iterated_vars();
@@ -587,7 +587,13 @@ impl<F: FieldExt> IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let beta_g_at_z = *self
+                    .beta_g
+                    .as_ref()
+                    .unwrap()
+                    .bookkeeping_table()
+                    .get(z_ind)
+                    .unwrap_or(&F::ZERO);
                 a_hg_mle_ref[x_ind] += beta_g_at_z;
             });
 
