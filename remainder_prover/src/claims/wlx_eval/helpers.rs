@@ -14,7 +14,10 @@ use crate::{
         wlx_eval::{claim_group::form_claim_groups, get_num_wlx_evaluations, ClaimMle},
         Claim, ClaimError,
     },
-    layer::{combine_mle_refs::get_og_mle_refs, LayerError},
+    layer::{
+        combine_mle_refs::get_og_mle_refs,
+        regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerError,
+    },
     mle::mle_enum::MleEnum,
     prover::GKRError,
 };
@@ -291,7 +294,14 @@ fn verifier_aggregate_claims_in_one_round<F: FieldExt>(
 
     // Aggregate claims by performing the claim aggregation protocol.
     // First retrieve V_i(l(x)).
-    let (num_wlx_evaluations, _, _) = get_num_wlx_evaluations(claims.get_claim_points_matrix());
+
+    let num_wlx_evaluations = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION {
+        let (num_wlx_evaluations, _, _) = get_num_wlx_evaluations(claims.get_claim_points_matrix());
+        num_wlx_evaluations
+    } else {
+        ((num_claims - 1) * claims.get_num_vars()) + 1
+    };
+
     let num_relevant_wlx_evaluations = num_wlx_evaluations - num_claims;
     let relevant_wlx_evaluations = transcript_reader.consume_elements(
         "Claim Aggregation Wlx_evaluations",

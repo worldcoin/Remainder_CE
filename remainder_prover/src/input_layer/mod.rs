@@ -1,8 +1,10 @@
 //! Trait for dealing with InputLayer
 
 use ark_std::cfg_into_iter;
+use itertools::Itertools;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 
+use crate::layer::regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION;
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use rayon::prelude::*;
@@ -152,7 +154,17 @@ fn get_wlx_evaluations_helper<F: FieldExt>(
     end_timer!(prep_timer);
     info!("Wlx MLE len: {}", mle_ref.get_evals_vector().len());
     // Get the number of evaluations needed depending on the claim vectors.
-    let (num_evals, common_idx, non_common_idx) = get_num_wlx_evaluations(claim_vecs);
+    let (num_evals, common_idx, non_common_idx) = if CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION
+    {
+        let (num_evals, common_idx, non_common_idx) = get_num_wlx_evaluations(claim_vecs);
+        (num_evals, common_idx, non_common_idx)
+    } else {
+        let num_evals = ((num_claims - 1) * num_idx) + 1;
+        let common_idx = None;
+        let non_common_idx = (0..num_idx).collect_vec();
+        (num_evals, common_idx, non_common_idx)
+    };
+
     let chal_point = &claim_vecs[0];
 
     if let Some(common_idx) = common_idx {

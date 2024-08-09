@@ -11,6 +11,8 @@ use sha3::digest::ExtendableOutput;
 use sha3::digest::Update;
 use sha3::Shake256;
 
+pub mod tests;
+
 /// For committing to vectors of integers and scalars using the Pedersen commitment scheme.
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "C: PrimeOrderCurve")]
@@ -66,8 +68,10 @@ impl<C: PrimeOrderCurve> PedersenCommitter<C> {
     /// TODO: make seekable (block cipher)
     fn sample_generators(num_generators: usize, public_string: &str) -> Vec<C> {
         assert!(public_string.len() >= 32);
+        let mut public_string_array: [u8; 32] = [0; 32];
+        public_string_array.copy_from_slice(&public_string.as_bytes()[..32]);
         let mut shake = Shake256::default();
-        shake.update(public_string.as_bytes());
+        shake.update(&public_string_array);
         let reader = shake.finalize_xof();
         let mut reader_wrapper = Sha3XofReaderWrapper::new(reader);
         let generators: Vec<_> = (0..num_generators)
