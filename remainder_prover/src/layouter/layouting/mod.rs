@@ -22,6 +22,7 @@ use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     gate::GateNode,
+    lookup::{LookupConstraint, LookupTable},
     identity_gate::IdentityGateNode,
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
@@ -218,13 +219,13 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CircuitNode for IntermediateNode<F, Pf> {
 
 /// Current Core Layouter
 /// Assigns circuit nodes in the circuit to different layers based on their dependencies
-/// assumes that the nodes are topologically sorted
 /// this algorithm is greedy and assigns nodes to the first available layer that it can,
 /// without breaking any dependencies, and any restrictions that are imposed by the node type
 /// (such as matmal / gate nodes cannot be combined with other nodes in the same layer)
 /// This algorithm currently minimizes the number of layers, and does not account for
 /// specific layer size / its constituent nodes's numvars, etc.
-
+/// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
+/// (topologically sorted), then lookups, then outputs.
 pub fn layout<
     F: FieldExt,
     Pf: ProofSystem<
@@ -239,6 +240,7 @@ pub fn layout<
 ) -> Result<Vec<Box<dyn CompilableNode<F, Pf>>>, DAGError> {
     let mut dag = NodeEnumGroup::new(nodes);
 
+    // Handle input layers
     let out = {
         let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
         let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
@@ -264,7 +266,7 @@ pub fn layout<
             .map(|input| Box::new(input) as Box<dyn CompilableNode<F, Pf>>)
     };
 
-    //handle intermediate layers
+    // handle intermediate layers
     let out = {
         let sector_groups: Vec<SectorGroup<F>> = dag.get_nodes();
         let sectors: Vec<Sector<F>> = dag.get_nodes();
@@ -288,10 +290,11 @@ pub fn layout<
             )
             .collect_vec();
 
-        //topo_sort all the nodes which can be immediently compiled and the sectors that need to be layedout before compilation
+        // topo_sort all the nodes which can be immediately compiled and the sectors that need to be
+        // laid out before compilation
         let intermediate_nodes = topo_sort(intermediate_nodes)?;
 
-        //collapse the sectors into sector_groups
+        // collapse the sectors into sector_groups
         let (mut intermediate_nodes, final_sector_group) = intermediate_nodes.into_iter().fold(
             (vec![], None::<SectorGroup<F>>),
             |(mut layedout_nodes, curr_sector_group), node| {
@@ -321,10 +324,35 @@ pub fn layout<
         if let Some(final_sector_group) = final_sector_group {
             intermediate_nodes.push(Box::new(final_sector_group));
         }
-        out.chain(intermediate_nodes)
+        out.chain(intermediate_nodes.into_iter())
     };
 
-    //handle output layers
+    // Handle lookup tables
+    let out = {
+        // Build a map node id -> LookupTable
+        let mut lookup_table_map: HashMap<NodeId, &mut LookupTable> = HashMap::new();
+        let mut lookup_tables: Vec<LookupTable> = dag.get_nodes();
+        for lookup_table in lookup_tables.iter_mut() {
+            lookup_table_map.insert(lookup_table.id(), lookup_table);
+        }
+        // Add LookupConstraints to their respective LookupTables
+        let lookup_constraints: Vec<LookupConstraint> = dag.get_nodes();
+        for lookup_constraint in lookup_constraints {
+            let lookup_table_id = lookup_constraint.table_node_id;
+            let lookup_table = lookup_table_map
+                .get_mut(&lookup_table_id)
+                .ok_or(DAGError::DanglingNodeId(lookup_table_id))?;
+            lookup_table.add_lookup_constraint(lookup_constraint);
+        }
+
+        let lookup_tables = lookup_tables
+                .into_iter()
+                .map(|node| Box::new(node) as Box<dyn CompilableNode<F, Pf>>);
+
+        out.chain(lookup_tables)
+    };
+
+    // handle output layers
     let out = {
         let output_layers: Vec<OutputNode<F>> = dag.get_nodes();
 

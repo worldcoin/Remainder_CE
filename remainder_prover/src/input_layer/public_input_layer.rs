@@ -136,14 +136,11 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
                 eval = mle_ref.fix_variable(curr_bit, chal);
             }
             debug_assert_eq!(mle_ref.bookkeeping_table().len(), 1);
-            dbg!(&mle_ref.bookkeeping_table());
             eval.ok_or(InputLayerError::PublicInputVerificationFailed)?
         } else {
             Claim::new(vec![], mle_ref.current_mle[0])
         };
 
-        dbg!(&eval);
-        dbg!(&claim);
         if eval.get_point() == claim.get_point() && eval.get_result() == claim.get_result() {
             Ok(())
         } else {

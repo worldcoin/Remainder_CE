@@ -111,18 +111,12 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
         let ctx = Context::new();
         let component = (self.witness_builder)(&ctx);
         let nodes = component.yield_nodes();
-        for node in nodes.iter() {
-            println!("node id {:?}", node.id());
-        }
-        let compiled_nodes = layout(ctx, nodes).unwrap();
-        for node in compiled_nodes.iter() {
-            println!("node id {:?}", node.id());
-        }
+        let compilable_nodes = layout(ctx, nodes).unwrap();
 
         let mut witness_builder = WitnessBuilder::new();
         let mut circuit_map = CircuitMap::new();
 
-        for node in &compiled_nodes {
+        for node in &compilable_nodes {
             node.compile(&mut witness_builder, &mut circuit_map)
                 .unwrap()
         }

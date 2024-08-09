@@ -42,6 +42,8 @@ quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
 derive_more = "0.99.17"
 enum_dispatch = "0.3.13"
+base64 = "0.22.0"
+ark-serialize = { version = "0.4", features = ["derive"] } # For serialization
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"

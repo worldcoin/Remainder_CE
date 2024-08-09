@@ -17,20 +17,34 @@ use super::{
 
 use itertools::Itertools;
 
-/// helper function for converting Field Elements into FlatMles
-/// essentially
+/// Helper function that converts a [Vec<F; N>] into a [Vec<F>; N]
 pub fn to_flat_mles<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>; N] {
     // converts a [Vec<F; N>] into a [Vec<F>; N]
-    let out: [Vec<F>; N] = {
-        let mut iters = inputs.into_iter().map(|arr| arr.into_iter());
-        std::array::from_fn(|_| {
-            iters
-                .by_ref()
-                .map(|mut iter| iter.next().unwrap())
-                .collect()
-        })
-    };
-    out
+    let mut result: [Vec<F>; N] = vec![Vec::new(); N].try_into().unwrap();
+    for subarray in inputs {
+        for (i, element) in subarray.iter().enumerate() {
+            result[i].push(*element);
+        }
+    }
+    result
+
+}
+
+// Test that demonstrates the incorrectness of the previous implementation of to_flat_mles.
+#[test]
+fn test_to_flat_mles() {
+    use remainder_shared_types::Fr;
+    let inputs = vec![
+        [Fr::from(1), Fr::from(2), Fr::from(3)],
+        [Fr::from(4), Fr::from(5), Fr::from(6)],
+    ];
+    let expected = [
+        vec![Fr::from(1), Fr::from(4)],
+        vec![Fr::from(2), Fr::from(5)],
+        vec![Fr::from(3), Fr::from(6)],
+    ];
+    let actual = to_flat_mles(inputs);
+    assert_eq!(actual, expected);
 }
 
 /// A trait for a MLE(s) that are the input(s) to a circuit,
@@ -73,20 +87,10 @@ impl<F: FieldExt, const N: usize> CircuitMle<F, N> for FlatMles<F, N> {
 
 impl<F: FieldExt, const N: usize> FlatMles<F, N> {
     /// Creates a new [FlatMles] from raw data.
-    pub fn new_from_raw(
-        data: [Vec<F>; N],
-        layer_id: LayerId,
-        prefix_bits: Option<Vec<MleIndex<F>>>,
-    ) -> Self {
+    pub fn new_from_raw(data: [Vec<F>; N], layer_id: LayerId) -> Self {
         let mles = data
             .into_iter()
-            .map(|data| {
-                let mut out = DenseMle::new_from_raw(data, layer_id);
-                if let Some(prefix_bits) = prefix_bits.clone() {
-                    out.add_prefix_bits(prefix_bits);
-                }
-                out
-            })
+            .map(|data| DenseMle::new_from_raw(data, layer_id))
             .collect_vec()
             .try_into()
             .unwrap();
@@ -112,8 +116,7 @@ mod tests {
             vec![Fr::from(1), Fr::from(3), Fr::from(5), Fr::from(7)],
         ];
 
-        let tuple2_mle =
-            FlatMles::<Fr, 2>::new_from_raw(tuple_vec.clone(), LayerId::Input(0), None);
+        let tuple2_mle = FlatMles::<Fr, 2>::new_from_raw(tuple_vec.clone(), LayerId::Input(0));
 
         let mles = tuple2_mle.get_mle_refs();
 

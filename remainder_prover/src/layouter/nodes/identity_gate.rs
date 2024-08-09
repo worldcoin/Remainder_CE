@@ -47,7 +47,7 @@ impl<F: FieldExt> IdentityGateNode<F> {
             .into_iter()
             .fold(0, |acc, (z, _)| std::cmp::max(acc, z));
 
-        let mut remap_table = vec![F::ZERO; max_gate_val + 1];
+        let mut remap_table = vec![F::ZERO; (max_gate_val + 1).next_power_of_two()];
         nonzero_gates.iter().for_each(|(z, x)| {
             let id_val = *pre_routed_data
                 .get_data()

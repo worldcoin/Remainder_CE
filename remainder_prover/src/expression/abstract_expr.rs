@@ -11,11 +11,10 @@ use std::{
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    layouter::{
+    expression, layouter::{
         layouting::{CircuitMap, DAGError},
         nodes::NodeId,
-    },
-    mle::{dense::DenseMle, MleIndex},
+    }, mle::{dense::DenseMle, MleIndex}
 };
 
 use super::{
@@ -115,6 +114,37 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
             ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));
 
         Expression::new(concat_node, ())
+    }
+
+    /// Create a nested selector Expression that selects between 2^k Expressions
+    /// by creating a binary tree of Selector Expressions.
+    /// The order of the leaves is the order of the input expressions.
+    /// (Note that this is very different from calling concat_expr consecutively.)
+    /// See also [calculate_selector_values].
+    pub fn selectors(expressions: Vec<Self>) -> Self {
+        // Ensure length is a power of two
+        assert!(expressions.len().is_power_of_two());
+        let mut expressions = expressions;
+        while expressions.len() > 1 {
+            // Iterate over consecutive pairs of expressions, creating a new expression that selects between them
+            expressions = expressions
+                .into_iter()
+                .tuples()
+                .map(|(lhs, rhs)| {
+                    let (lhs_node, _) = lhs.deconstruct();
+                    let (rhs_node, _) = rhs.deconstruct();
+
+                    let selector_node = ExpressionNode::Selector(
+                        MleIndex::Iterated,
+                        Box::new(lhs_node),
+                        Box::new(rhs_node),
+                    );
+
+                    Expression::new(selector_node, ())
+                })
+                .collect();
+        }
+        expressions[0].clone()
     }
 
     /// Create a product Expression that raises one MLE to a given power
@@ -386,4 +416,25 @@ impl<F: std::fmt::Debug + FieldExt> Expression<F, AbstractExpr> {
 
         CircuitDesc(&self.expression_node, &self.mle_vec)
     }
+}
+
+/// Companion function to [selectors] that calculates the resulting MLE from the MLEs of the
+/// expressions that make up the selector tree.
+pub fn calculate_selector_values<F: FieldExt>(mles: Vec<Vec<F>>) -> Vec<F> {
+    let mut mles = mles;
+    assert!(mles.len().is_power_of_two());
+
+    while mles.len() > 1 {
+        mles = mles
+            .into_iter()
+            .tuples()
+            .map(|(mle1, mle2)| {
+                mle1.into_iter()
+                    .zip(mle2.into_iter())
+                    .flat_map(|(a, b)| vec![a, b])
+                    .collect()
+            })
+            .collect();
+    }
+    mles[0].clone()
 }
