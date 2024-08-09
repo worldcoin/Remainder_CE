@@ -494,34 +494,66 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, Option<F>> {
         let mut pre_bound_matrix_a_mle = self.matrix_a.mle.clone();
-        pre_bound_matrix_a_mle.set_mle_indices(
-            self.matrix_a.mle.mle_indices()[..self.matrix_a.num_cols_vars]
-                .to_vec()
-                .into_iter()
-                .chain(
-                    claim_challenges[self.matrix_b.num_cols_vars..]
-                        .iter()
-                        .enumerate()
-                        .map(|(challenge_idx, challenge)| {
-                            MleIndex::Bound(*challenge, challenge_idx)
-                        }),
-                )
-                .collect(),
-        );
+        let claim_chals_matrix_a = claim_challenges[self.matrix_b.num_cols_vars..].to_vec();
+        let mut indexed_index_counter = 0;
+        let mut bound_index_counter = 0;
+        let matrix_a_new_indices = self
+            .matrix_a
+            .mle
+            .mle_indices()
+            .iter()
+            .map(|mle_idx| match mle_idx {
+                &MleIndex::IndexedBit(_) => {
+                    if indexed_index_counter < self.matrix_b.num_cols_vars {
+                        let ret = MleIndex::IndexedBit(indexed_index_counter);
+                        indexed_index_counter += 1;
+                        ret
+                    } else {
+                        let ret = MleIndex::Bound(
+                            claim_chals_matrix_a[bound_index_counter],
+                            bound_index_counter,
+                        );
+                        bound_index_counter += 1;
+                        ret
+                    }
+                }
+                MleIndex::Fixed(_) => mle_idx.clone(),
+                MleIndex::Iterated => panic!("should not have any iterated indices"),
+                MleIndex::Bound(_, _) => panic!("should not have any bound indices"),
+            })
+            .collect_vec();
+        pre_bound_matrix_a_mle.set_mle_indices(matrix_a_new_indices);
 
         let mut pre_bound_matrix_b_mle = self.matrix_b.mle.clone();
-        pre_bound_matrix_b_mle.set_mle_indices(
-            claim_challenges[..self.matrix_b.num_cols_vars]
-                .iter()
-                .enumerate()
-                .map(|(challenge_idx, challenge)| MleIndex::Bound(*challenge, challenge_idx))
-                .chain(
-                    self.matrix_b.mle.mle_indices()[..self.matrix_b.num_rows_vars]
-                        .to_vec()
-                        .into_iter(),
-                )
-                .collect(),
-        );
+        let claim_chals_matrix_b = claim_challenges[..self.matrix_b.num_cols_vars].to_vec();
+        let mut bound_index_counter = 0;
+        let mut indexed_index_counter = 0;
+        let matrix_b_new_indices = self
+            .matrix_b
+            .mle
+            .mle_indices()
+            .iter()
+            .map(|mle_idx| match mle_idx {
+                &MleIndex::IndexedBit(_) => {
+                    if bound_index_counter < self.matrix_b.num_cols_vars {
+                        let ret = MleIndex::Bound(
+                            claim_chals_matrix_b[bound_index_counter],
+                            bound_index_counter,
+                        );
+                        bound_index_counter += 1;
+                        ret
+                    } else {
+                        let ret = MleIndex::IndexedBit(indexed_index_counter);
+                        indexed_index_counter += 1;
+                        ret
+                    }
+                }
+                MleIndex::Fixed(_) => mle_idx.clone(),
+                MleIndex::Iterated => panic!("should not have any iterated indices"),
+                MleIndex::Bound(_, _) => panic!("should not have any bound indices"),
+            })
+            .collect_vec();
+        pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
         let mle_refs = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
         PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &mle_refs,
