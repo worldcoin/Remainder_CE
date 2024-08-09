@@ -30,6 +30,8 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Used to represent a matrix, along with its optional prefix bits (in circuit)
 /// basically an equivalence of DenseMle<F>, but uninstantiated, until preprocessing
+/// TODO(vishady): NEED TO PAD THIS BEFORE CALLING `::new` SO IT SHOULD ALWAYS TAKE IN LOG DIMENSIONS!
+/// ASSERT THAT THE BOOKKEEPING TABLE IS A POWER OF TWO WITH CORRECT DIMS
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct Matrix<F: FieldExt> {
@@ -441,13 +443,11 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .chain(claim_a.into_iter())
             .collect_vec();
 
-        dbg!(&full_claim_chals_a);
         // Construct the full claim made on B using the claim made on the layer and the sumcheck bindings.
         let full_claim_chals_b = claim_b
             .into_iter()
             .chain(sumcheck_bindings.to_vec().into_iter())
             .collect_vec();
-        dbg!(&full_claim_chals_b);
 
         // Shape checks.
         assert_eq!(
@@ -469,7 +469,6 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             num_rows_vars: self.matrix_a.num_rows_vars,
             num_cols_vars: self.matrix_a.num_cols_vars,
         };
-        dbg!(&self.matrix_b.mle);
         let matrix_b = VerifierMatrix {
             mle: self
                 .matrix_b
@@ -604,7 +603,6 @@ impl<F: FieldExt> VerifierMatMultLayer<F> {
 
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        dbg!(vec![&self.matrix_a.mle, &self.matrix_b.mle]);
         let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
             .map(|matrix| {

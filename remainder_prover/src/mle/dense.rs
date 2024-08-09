@@ -453,4 +453,15 @@ impl<F: FieldExt> DenseMle<F> {
             DenseMle::new_from_iter(second_iter, self.layer_id),
         ]
     }
+
+    pub fn get_claim_point(&self) -> Vec<F> {
+        self.mle_indices()
+            .iter()
+            .map(|index| match index {
+                MleIndex::Bound(chal, _) => *chal,
+                MleIndex::Fixed(chal) => F::from(*chal as u64),
+                _ => panic!("MLE index not bound"),
+            })
+            .collect()
+    }
 }
