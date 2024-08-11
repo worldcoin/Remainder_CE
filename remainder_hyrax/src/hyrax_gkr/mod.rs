@@ -444,6 +444,7 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
             .into_iter()
             .zip(circuit_description.intermediate_layers.iter().rev()))
         .for_each(|(layer_proof, layer_desc)| {
+            dbg!(&layer_desc.layer_id());
             // Get the unaggregated claims for this layer
             // V checked that these claims had the expected form before adding them to the claim tracking table
             let layer_claims_vec = claim_tracker

@@ -413,8 +413,10 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
 
         assert_eq!(nonlinear_round_index_counter, nonlinear_round_indices.len());
 
-        self.expression
-            .get_post_sumcheck_layer(fully_bound_beta, &all_bound_challenges)
+        let res = self
+            .expression
+            .get_post_sumcheck_layer(fully_bound_beta, &all_bound_challenges);
+        res
     }
 
     fn max_degree(&self) -> usize {

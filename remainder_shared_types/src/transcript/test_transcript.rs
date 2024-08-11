@@ -10,6 +10,7 @@ use itertools::Itertools;
 /// An implementation of a transcript sponge that always returns 1.
 #[derive(Clone, Default)]
 pub struct TestSponge<F: FieldExt> {
+    counter: usize,
     _marker: PhantomData<F>,
 }
 
@@ -19,10 +20,12 @@ impl<F: FieldExt> TranscriptSponge<F> for TestSponge<F> {
     fn absorb_elements(&mut self, _elements: &[F]) {}
 
     fn squeeze(&mut self) -> F {
-        F::ONE
+        let res = self.counter;
+        self.counter += 1;
+        F::from(res as u64)
     }
 
     fn squeeze_elements(&mut self, num_elements: usize) -> Vec<F> {
-        (0..num_elements).map(|_| F::ONE).collect_vec()
+        (0..num_elements).map(|_| F::ONE + F::ONE).collect_vec()
     }
 }

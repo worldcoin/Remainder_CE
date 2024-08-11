@@ -200,11 +200,12 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
                 acc + gz * ux
             });
 
-        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
+        let res = PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &vec![self.source_mle.clone()],
             f_1_uv,
             round_challenges,
-        )])
+        )]);
+        res
     }
 
     fn max_degree(&self) -> usize {

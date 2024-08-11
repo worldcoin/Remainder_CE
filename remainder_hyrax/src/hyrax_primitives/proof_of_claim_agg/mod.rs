@@ -1,5 +1,6 @@
 use crate::hyrax_gkr::hyrax_layer::HyraxClaim;
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
+use ark_std::log2;
 use rand::Rng;
 use remainder::layer::LayerId;
 use remainder_shared_types::curves::PrimeOrderCurve;
@@ -131,10 +132,10 @@ impl<C: PrimeOrderCurve> ProofOfClaimAggregation<C> {
         let n_claims = claims.len();
         let n_bits = claims[0].point.len();
         let expected_num_coeffs = (n_claims - 1) * n_bits + 1;
+        let layer_id: LayerId = claims[0].to_layer_id;
         assert_eq!(expected_num_coeffs, self.interpolant_coeffs.len());
 
         // Check that all claims are on the same layer
-        let layer_id: LayerId = claims[0].to_layer_id;
         assert!(claims.iter().all(|claim| claim.to_layer_id == layer_id));
 
         // Add the commitments to the coefficients to the transcript

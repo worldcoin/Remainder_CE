@@ -496,6 +496,17 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         let claim_chals_matrix_a = claim_challenges[self.matrix_b.num_cols_vars..].to_vec();
         let mut indexed_index_counter = 0;
         let mut bound_index_counter = 0;
+        dbg!(&self.matrix_a.num_rows_vars);
+        dbg!(&self.matrix_a.num_cols_vars);
+
+        dbg!(&self.matrix_b.num_rows_vars);
+        dbg!(&self.matrix_b.num_cols_vars);
+
+        dbg!(&self.matrix_a.mle.mle_indices());
+        dbg!(&claim_challenges);
+        dbg!(&round_challenges);
+        dbg!(&claim_chals_matrix_a.len());
+
         let matrix_a_new_indices = self
             .matrix_a
             .mle
@@ -503,11 +514,13 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .iter()
             .map(|mle_idx| match mle_idx {
                 &MleIndex::IndexedBit(_) => {
-                    if indexed_index_counter < self.matrix_b.num_cols_vars {
+                    if indexed_index_counter < self.matrix_a.num_cols_vars {
                         let ret = MleIndex::IndexedBit(indexed_index_counter);
                         indexed_index_counter += 1;
                         ret
                     } else {
+                        dbg!(indexed_index_counter);
+                        dbg!(bound_index_counter);
                         let ret = MleIndex::Bound(
                             claim_chals_matrix_a[bound_index_counter],
                             bound_index_counter,
@@ -554,11 +567,13 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             .collect_vec();
         pre_bound_matrix_b_mle.set_mle_indices(matrix_b_new_indices);
         let mle_refs = vec![pre_bound_matrix_a_mle, pre_bound_matrix_b_mle];
-        PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
+        let res = PostSumcheckLayer(vec![Product::<F, Option<F>>::new(
             &mle_refs,
             F::ONE,
             round_challenges,
-        )])
+        )]);
+        dbg!(&res);
+        res
     }
 
     fn max_degree(&self) -> usize {
@@ -646,7 +661,6 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MatMult<F> {
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
-        dbg!(vec![&self.matrix_a.mle, &self.matrix_b.mle]);
         let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
             .into_iter()
             .map(|matrix_mle| {

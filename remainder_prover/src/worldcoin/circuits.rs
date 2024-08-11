@@ -51,8 +51,8 @@ pub fn build_circuit<F: FieldExt>(
         let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
         println!("Identity gate = {:?}", rerouted_image.id());
 
-        let (filter_num_rows, _) = kernel_matrix_dims;
-        let matrix_a_num_rows_cols = (*num_placements, *filter_num_rows);
+        let (filter_num_values, _) = kernel_matrix_dims;
+        let matrix_a_num_rows_cols = (num_placements.next_power_of_two(), *filter_num_values);
         let kernel_matrix = get_input_shred_from_vec(kernel_matrix.clone(), ctx, &input_layer);
         println!("Kernel values input = {:?}", kernel_matrix.id());
 
