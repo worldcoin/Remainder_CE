@@ -198,6 +198,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 
         // Proof of sumcheck
         // Note that product_evaluations have already been added to the transcript (along with the rest of the commitments)
+        dbg!(&layer.layer_id());
         let proof_of_sumcheck = ProofOfSumcheck::prove(
             &agg_claim.evaluation,
             &messages,
@@ -317,6 +318,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             new_with_values(&post_sumcheck_layer_desc, commitments);
 
         // Verify the proof of sumcheck!
+        dbg!(&layer_desc.layer_id());
         proof_of_sumcheck.verify(
             &agg_claim.evaluation,
             layer_desc.max_degree(),

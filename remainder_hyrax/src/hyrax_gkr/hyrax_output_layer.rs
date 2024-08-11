@@ -6,7 +6,7 @@ use remainder::claims::{Claim, ClaimAggregator, YieldClaim};
 use remainder::expression::circuit_expr::CircuitMle;
 use remainder::mle::dense::DenseMle;
 use remainder::mle::mle_enum::MleEnum;
-use remainder::mle::Mle;
+use remainder::mle::{Mle, MleIndex};
 use remainder::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVerifierTranscript};
 use remainder_shared_types::{curves::PrimeOrderCurve, halo2curves::group::ff::Field};
@@ -120,12 +120,23 @@ impl<C: PrimeOrderCurve> HyraxOutputLayerProof<C> {
         transcript: &mut impl ECVerifierTranscript<C>,
     ) -> HyraxClaim<C::Scalar, C> {
         // Get the first set of challenges needed for the output layer.
-        let bindings = (0..layer_desc.mle.num_iterated_vars())
-            .map(|_| {
-                let challenge = transcript
-                    .get_scalar_field_challenge("output claim point")
-                    .unwrap();
-                challenge
+
+        let bindings = layer_desc
+            .mle
+            .mle_indices()
+            .iter()
+            .map(|mle_index| match mle_index {
+                MleIndex::Fixed(val) => C::Scalar::from(*val as u64),
+                MleIndex::IndexedBit(_) => {
+                    let challenge = transcript
+                        .get_scalar_field_challenge("output claim point")
+                        .unwrap();
+                    challenge
+                }
+
+                _ => {
+                    panic!("should not have bound or iterated bits here!")
+                }
             })
             .collect_vec();
 
