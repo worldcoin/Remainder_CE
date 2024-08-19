@@ -163,19 +163,7 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             });
 
         // Get the post sumcheck layer
-        let nonlinear_claim_points = agg_claim
-            .point
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, point)| {
-                if sumcheck_round_indices.contains(&idx) {
-                    Some(*point)
-                } else {
-                    None
-                }
-            })
-            .collect_vec();
-        let post_sumcheck_layer = layer.get_post_sumcheck_layer(&bindings, &nonlinear_claim_points);
+        let post_sumcheck_layer = layer.get_post_sumcheck_layer(&bindings, &agg_claim.point);
 
         // Commit to all the necessary values
         let post_sumcheck_layer_committed =
@@ -198,7 +186,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
 
         // Proof of sumcheck
         // Note that product_evaluations have already been added to the transcript (along with the rest of the commitments)
-        dbg!(&layer.layer_id());
         let proof_of_sumcheck = ProofOfSumcheck::prove(
             &agg_claim.evaluation,
             &messages,
@@ -318,7 +305,6 @@ impl<C: PrimeOrderCurve> HyraxLayerProof<C> {
             new_with_values(&post_sumcheck_layer_desc, commitments);
 
         // Verify the proof of sumcheck!
-        dbg!(&layer_desc.layer_id());
         proof_of_sumcheck.verify(
             &agg_claim.evaluation,
             layer_desc.max_degree(),

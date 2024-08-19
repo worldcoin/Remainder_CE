@@ -216,8 +216,25 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F> {
+        let nonlinear_round_indices = self.sumcheck_round_indices();
+        // Filter the claim to get the values of the claim pertaining to the nonlinear rounds.
+        let nonlinear_claim_points = claim_challenges
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, point)| {
+                if nonlinear_round_indices.contains(&idx) {
+                    Some(*point)
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+        assert_eq!(round_challenges.len(), nonlinear_claim_points.len());
+
+        // Compute beta over these and the sumcheck challenges.
         let fully_bound_beta =
-            BetaValues::compute_beta_over_two_challenges(round_challenges, claim_challenges);
+            BetaValues::compute_beta_over_two_challenges(round_challenges, &nonlinear_claim_points);
+
         self.expression.get_post_sumcheck_layer(fully_bound_beta)
     }
 }

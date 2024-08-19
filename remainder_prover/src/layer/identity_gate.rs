@@ -136,8 +136,6 @@ impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
 
         // error if this doesn't match the last round of sumcheck
         if final_result != prev_at_r {
-            dbg!(&final_result);
-            dbg!(&prev_at_r);
             return Err(VerificationError::FinalSumcheckFailed);
         }
 
