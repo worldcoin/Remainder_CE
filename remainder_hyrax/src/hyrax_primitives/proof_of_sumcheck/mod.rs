@@ -172,7 +172,6 @@ impl<C: PrimeOrderCurve> ProofOfSumcheck<C> {
         // calculate a commitment to the expected dot product
         let oracle_eval = evaluate_committed_psl(post_sumcheck_layer);
         let dot_product: C = self.sum * rhos[0] + oracle_eval * rhos[rhos.len() - 1].neg();
-        dbg!(&dot_product);
 
         self.podp
             .verify(&alpha, &dot_product, &j_star, &committer, transcript);

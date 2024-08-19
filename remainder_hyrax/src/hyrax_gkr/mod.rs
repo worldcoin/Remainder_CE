@@ -3,6 +3,7 @@ use std::{collections::HashMap, marker::PhantomData};
 
 use crate::pedersen::{CommittedScalar, PedersenCommitter};
 use crate::utils::vandermonde::VandermondeInverse;
+use ark_std::{end_timer, start_timer};
 use hyrax_input_layer::{
     verify_public_and_random_input_layer, CommitmentEnum, HyraxCircuitInputLayerEnum,
     HyraxInputLayer, HyraxInputLayerProof, InputProofEnum,
@@ -91,6 +92,7 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
         Vec<CommitmentEnum<C>>,
         GKRVerifierKey<C::Scalar, DefaultProofSystem>,
     ) {
+        let gkr_circ_gen_timer = start_timer!(|| "generate gkr circuit");
         let witness: Witness<<C as PrimeOrderCurve>::Scalar, DefaultProofSystem> =
             gkr_circuit.synthesize();
 
@@ -103,7 +105,9 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
             layers,
             output_layers,
         } = witness;
+        end_timer!(gkr_circ_gen_timer);
 
+        let hyrax_circ_gen_timer = start_timer!(|| "generate hyrax circuit");
         let hyrax_output_layers = output_layers
             .iter()
             .map(|output_layer| HyraxOutputLayer {
@@ -177,6 +181,8 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
             panic!("ERROR: MORE THAN ONE HYRAX PRECOMMIT LAYER FOUND IN CIRCUIT! THIS IS NOT SUPPORTED AT THE MOMENT (READ THE ERROR)");
         }
 
+        end_timer!(hyrax_circ_gen_timer);
+
         (
             Self {
                 input_layers: hyrax_input_layers,
@@ -246,6 +252,7 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
                 prover_transcript,
             );
 
+        let prove_timer = start_timer!(|| "prove timer");
         // Create the hyrax proof from the Hyrax circuit
         let hyrax_proof = HyraxProof::prove(
             &mut hyrax_circuit,
@@ -254,6 +261,7 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
             prover_transcript,
             converter,
         );
+        end_timer!(prove_timer);
 
         (hyrax_proof, input_commits, circuit_description)
     }
@@ -444,7 +452,6 @@ impl<C: PrimeOrderCurve, Fn: FnMut(&Context) -> ComponentSet<NodeEnum<C::Scalar>
             .into_iter()
             .zip(circuit_description.intermediate_layers.iter().rev()))
         .for_each(|(layer_proof, layer_desc)| {
-            dbg!(&layer_desc.layer_id());
             // Get the unaggregated claims for this layer
             // V checked that these claims had the expected form before adding them to the claim tracking table
             let layer_claims_vec = claim_tracker

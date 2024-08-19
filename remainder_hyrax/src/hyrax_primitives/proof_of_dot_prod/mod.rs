@@ -45,8 +45,6 @@ impl<C: PrimeOrderCurve> ProofOfDotProduct<C> {
         // in the interactive version
         transcript: &mut impl ECProverTranscript<C>,
     ) -> Self {
-        dbg!(ProofOfDotProduct::<C>::compute_dot_product(&x.value, &a));
-        dbg!(&y);
         // the prover randomly samples the d vector
         let d_vec: Vec<C::Scalar> = (0..x.value.len())
             .map(|_idx| C::Scalar::random(&mut rng))

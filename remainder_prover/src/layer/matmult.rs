@@ -143,9 +143,7 @@ impl<F: FieldExt> MatMult<F> {
             panic!("Matrix dimensions do not match")
         }
 
-        let transpose_timer = start_timer!(|| "transpose matrix");
         let matrix_a_transp = gen_transpose_matrix(&self.matrix_a);
-        end_timer!(transpose_timer);
 
         let mut matrix_a_transp = matrix_a_transp.mle;
 
@@ -496,16 +494,6 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         let claim_chals_matrix_a = claim_challenges[self.matrix_b.num_cols_vars..].to_vec();
         let mut indexed_index_counter = 0;
         let mut bound_index_counter = 0;
-        dbg!(&self.matrix_a.num_rows_vars);
-        dbg!(&self.matrix_a.num_cols_vars);
-
-        dbg!(&self.matrix_b.num_rows_vars);
-        dbg!(&self.matrix_b.num_cols_vars);
-
-        dbg!(&self.matrix_a.mle.mle_indices());
-        dbg!(&claim_challenges);
-        dbg!(&round_challenges);
-        dbg!(&claim_chals_matrix_a.len());
 
         let matrix_a_new_indices = self
             .matrix_a
@@ -519,8 +507,6 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
                         indexed_index_counter += 1;
                         ret
                     } else {
-                        dbg!(indexed_index_counter);
-                        dbg!(bound_index_counter);
                         let ret = MleIndex::Bound(
                             claim_chals_matrix_a[bound_index_counter],
                             bound_index_counter,
@@ -572,7 +558,6 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             F::ONE,
             round_challenges,
         )]);
-        dbg!(&res);
         res
     }
 
