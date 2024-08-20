@@ -65,7 +65,7 @@ pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
 /// Used for instantiating the Worldcoin circuit.
 /// Kernel placements are specified by the _product_ placements_row_idxs x placements_col_idxs.
 pub struct WorldcoinCircuitData<F: FieldExt> {
-    /// Row-major flattening of the input image.
+    /// Row-major flattening of the input image (with no padding applied before or after).
     pub image_matrix_mle: Vec<F>,
     /// The reroutings from the input image to the matrix multiplicand "A", as pairs of gate labels.
     pub reroutings: Vec<(usize, usize)>,
@@ -87,8 +87,14 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
     pub thresholds_matrix: Vec<F>,
 }
 
-/// Loads the v2 Worldcoin data from disk, and checks our computation of the iris code against the
-/// expected iris code.
+/// Loads the witness for the v2 Worldcoin data from disk for either the iris or mask case.
+/// Expects the following files:
+/// + `image.npy` - (i64) the quantized input image (could be the iris or the mask)
+/// + `padded_kernel_values.npy` - (i64) the padded kernel values (quantized)
+/// + Placements, specified by the product of placements_row_idxs x placements_col_idxs:
+///   - `placements_top_left_row_idxs.npy` - (i32) the row indices of the top-left corner of the placements of the padded kernels
+///   - `placements_top_left_col_idxs.npy` - (i32) the column indices of the top-left corner of the placements of the padded kernels
+/// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has shape (num_placements, num_kernels)).
 pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinCircuitData<F> {
     let image: Array2<i64> =
         read_npy(Path::new(&data_directory.join("image.npy"))).unwrap();
@@ -143,6 +149,8 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
     ///
     /// # Requires:
     /// + `thresholds_matrix.dim() == (num_placements, num_kernels)`
+    /// + `num_kernels.is_power_of_two()`
+    /// + The dimensions of all kernels are the same, and are each a power of two.
     pub fn new(
         image: Array2<i64>,
         kernel_values: Array3<i64>,
@@ -155,6 +163,8 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
         let num_placements = placements_row_idxs.len() * placements_col_idxs.len();
         let num_kernel_values = kernel_num_rows * kernel_num_cols;
         assert_eq!(thresholds_matrix.dim(), (num_placements, num_kernels));
+        assert!(num_kernels.is_power_of_two());
+        assert!(num_kernel_values.is_power_of_two());
 
         // convert the kernel placements to wirings
         let mut wirings: Vec<(usize, usize, usize, usize)> = Vec::new();
