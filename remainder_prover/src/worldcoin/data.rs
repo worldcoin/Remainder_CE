@@ -18,12 +18,13 @@ use crate::{
 pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
     let image_shape = (2, 2);
     let kernel_shape = (2, 2, 1);
+    let response_shape = (2, 2);
     WorldcoinCircuitData::new(
         Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
         Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4]).unwrap(),
         vec![0],
         vec![0, 1],
-        vec![0],
+        Array2::from_shape_vec(response_shape, vec![0, 0, 0, 0]).unwrap(),
     )
 }
 
@@ -41,6 +42,7 @@ pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
 pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
     let image_shape = (3, 3);
     let kernel_shape = (4, 2, 2);
+    let response_shape = (4, 4);
     WorldcoinCircuitData::new(
         Array2::from_shape_vec(image_shape, vec![3, 1, 4, 1, 5, 9, 2, 6, 5]).unwrap(),
         Array3::from_shape_vec(
@@ -50,7 +52,12 @@ pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
         .unwrap(),
         vec![0, 2],
         vec![0, 2],
-        vec![5, -5],
+        Array2::from_shape_vec(response_shape, vec![
+            5, 5, 5, 5,
+            5, 5, 5, 5,
+            -5, -5, -5, -5,
+            -5, -5, -5, -5,
+            ]).unwrap()
     )
 }
 
@@ -77,7 +84,6 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
     /// The number of times each digit 0 .. BASE - 1 occurs in the digital decompositions
     pub digit_multiplicities: Vec<F>,
     /// The matrix of thresholds of dimensions num_placements x num_kernels
-    /// (Ideally, a less redundant representation would be used, but this is not possible because of endianness).
     pub thresholds_matrix: Vec<F>,
 }
 
@@ -85,12 +91,11 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
 /// expected iris code.
 pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinCircuitData<F> {
     let image: Array2<i64> =
-        read_npy(Path::new(&data_directory.join("quantized_image.npy"))).unwrap();
+        read_npy(Path::new(&data_directory.join("image.npy"))).unwrap();
 
     let kernel_values: Array3<i64> =
-        read_npy(&data_directory.join("quantized_kernels.npy")).unwrap();
+        read_npy(&data_directory.join("padded_kernel_values.npy")).unwrap();
 
-    // read in the kernel placements
     let placements_row_idxs: Vec<i32> =
         read_npy::<&PathBuf, Array1<i32>>(&data_directory.join("placements_top_left_row_idxs.npy"))
             .unwrap()
@@ -101,13 +106,14 @@ pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinCircuitData<F
             .unwrap()
             .to_vec();
 
-    let num_thresholds = placements_row_idxs.len();
+    let thresholds: Array2<i64> = read_npy(&data_directory.join("thresholds.npy")).unwrap();
+
     WorldcoinCircuitData::new(
         image,
         kernel_values,
         placements_row_idxs,
         placements_col_idxs,
-        vec![0; num_thresholds], // FIXME load the thresholds (all zeroes for the iris code, non-zero for the mask)
+        thresholds,
     )
 }
 
@@ -121,37 +127,36 @@ pub fn i64_to_field<F: FieldExt>(value: i64) -> F {
 }
 
 impl<F: FieldExt> WorldcoinCircuitData<F> {
-    /// Create a new instance.
-    /// Note that every _combination_ from placements_row_idxs x placements_col_idxs specifies a kernel
-    /// placement in the image (via the top-left coordinate).
+    /// Create a new instance. Note that every _combination_ from placements_row_idxs x
+    /// placements_col_idxs specifies a kernel placement in the image (via the top-left coordinate).
     ///
     /// # Arguments:
     /// + `image` is the quantized input image (100x400 for v2).
-    /// + `kernel_values` is the matrix of quantized kernel values of shape (kernel_num_rows * kernel_num_cols, num_kernels)
-    /// + `placements_row_idxs` gives the row coordinate of the top-left corner of each placement of the kernels (can be negative)
-    /// + `placements_col_idxs` gives the column coordinate of the top-left corner of each placement of the kernels (can be negative)
-    /// + `thresholds` specifies the threshold to use for each kernel placement (rather row of kernel
-    ///    placement); these will be all zeroes for the iris code, but non-zero values for the mask.
+    /// + `kernel_values` is the matrix of padded, quantized kernel values of shape (kernel_num_rows *
+    ///   kernel_num_cols, num_kernels).
+    /// + `placements_row_idxs` gives the row coordinate of the top-left corner of each placement of
+    ///   the kernels (can be negative)
+    /// + `placements_col_idxs` gives the column coordinate of the top-left corner of each placement
+    ///   of the kernels (can be negative)
+    /// + `thresholds_matrix` specifies the threshold to use for each kernel and kernel placement; these
+    ///   will be all zeroes for the iris code, but non-zero values for the mask.
     ///
     /// # Requires:
-    /// `thresholds.len() == placements_row_idxs.len()`.
+    /// + `thresholds_matrix.dim() == (num_placements, num_kernels)`
     pub fn new(
-        // FIXME do we assume (or can we assume) that the kernel dimensions are a power of two?
         image: Array2<i64>,
         kernel_values: Array3<i64>,
         placements_row_idxs: Vec<i32>,
         placements_col_idxs: Vec<i32>,
-        thresholds: Vec<i64>,
+        thresholds_matrix: Array2<i64>,
     ) -> Self {
-        assert!(thresholds.len() == placements_row_idxs.len());
-        // Determine dimensions
         let (im_num_rows, im_num_cols) = image.dim();
         let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
         let num_placements = placements_row_idxs.len() * placements_col_idxs.len();
         let num_kernel_values = kernel_num_rows * kernel_num_cols;
+        assert_eq!(thresholds_matrix.dim(), (num_placements, num_kernels));
 
         // convert the kernel placements to wirings
-        // FIXME describe
         let mut wirings: Vec<(usize, usize, usize, usize)> = Vec::new();
         for (i, placement_row_idx) in placements_row_idxs.iter().enumerate() {
             for (j, placement_col_idx) in placements_col_idxs.iter().enumerate() {
@@ -208,18 +213,6 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
 
         // Calculate the matrix product. Has dimensions (num_placements, num_kernels).
         let responses = rerouted_matrix.dot(&kernel_matrix);
-
-        // Build a matrix from the thresholds for subtraction from the responses
-        let expansion_factor = placements_col_idxs.len() * num_kernels;
-        let expanded_thresholds = thresholds
-            .iter()
-            .flat_map(|&thresh| std::iter::repeat(thresh).take(expansion_factor))
-            .collect::<Vec<i64>>();
-        let thresholds_matrix = Array2::from_shape_vec(
-            (responses.shape()[0], responses.shape()[1]),
-            expanded_thresholds,
-        )
-        .unwrap();
 
         let thres_resp = responses - &thresholds_matrix;
 
@@ -367,52 +360,56 @@ mod test {
     use super::{load_data, medium_worldcoin_data, WorldcoinCircuitData};
 
     #[test]
-    fn test_circuit_data_creation_v2() {
-        let path = Path::new("worldcoin_witness_data").to_path_buf();
-        let data: WorldcoinCircuitData<Fr> = load_data(path.clone());
-        // Check things that should be generically true
-        assert_eq!(data.code.len(), data.thresholds_matrix.len());
-        assert_eq!(
-            data.kernel_matrix_mle.len(),
-            data.kernel_matrix_dims.0 * data.kernel_matrix_dims.1
-        );
-        // there should be any many digits in the kth position as there are elements in the _padded_ iris code
-        let expected_digits_length = next_power_of_two(data.code.len()).unwrap();
-        for digits in data.digits.get_mle_refs().iter() {
+    fn test_circuit_data_creation_v2_iris_and_mask() {
+        let iris_path = Path::new("worldcoin_witness_data/iris").to_path_buf();
+        let mask_path = Path::new("worldcoin_witness_data/mask").to_path_buf();
+        for path in vec![iris_path, mask_path] {
+            dbg!(&path);
+            let data: WorldcoinCircuitData<Fr> = load_data(path.clone());
+            // Check things that should be generically true
+            assert_eq!(data.code.len(), data.thresholds_matrix.len());
             assert_eq!(
-                digits.get_padded_evaluations().len(),
-                expected_digits_length
+                data.kernel_matrix_mle.len(),
+                data.kernel_matrix_dims.0 * data.kernel_matrix_dims.1
             );
-        }
-        // Check things that should be true for this dataset
-        assert_eq!(data.num_placements, 16 * 200);
-        assert_eq!(data.code.len(), 16 * 200 * 4);
-        assert_eq!(
-            data.image_matrix_mle.len(),
-            next_power_of_two(100 * 400).unwrap()
-        );
-        assert_eq!(data.kernel_matrix_mle.len(), 32 * 64 * 4);
+            // there should be any many digits in the kth position as there are elements in the _padded_ iris code
+            let expected_digits_length = next_power_of_two(data.code.len()).unwrap();
+            for digits in data.digits.get_mle_refs().iter() {
+                assert_eq!(
+                    digits.get_padded_evaluations().len(),
+                    expected_digits_length
+                );
+            }
+            // Check things that should be true for this dataset
+            assert_eq!(data.num_placements, 16 * 200);
+            assert_eq!(data.code.len(), 16 * 200 * 4);
+            assert_eq!(
+                data.image_matrix_mle.len(),
+                next_power_of_two(100 * 400).unwrap()
+            );
+            assert_eq!(data.kernel_matrix_mle.len(), 32 * 64 * 4);
 
-        // Load the iris code as calculated in Python, check it's the same as we derive.
-        let num_kernels = data.kernel_matrix_dims.1;
-        let expected_iris_code3d: Array3<bool> =
-            read_npy(&path.join("iris_code_for_sanity_check.npy")).unwrap();
-        let expected_iris_code: Array2<bool> = expected_iris_code3d
-            .into_shape((num_kernels, data.num_placements))
-            .unwrap()
-            .into_dimensionality::<ndarray::Ix2>()
-            .unwrap()
-            .t()
-            .to_owned();
-        let expected_flattened = expected_iris_code
-            .outer_iter()
-            .flat_map(|row| row.to_vec())
-            .collect::<Vec<bool>>();
-        let expected_flattened: Vec<Fr> = expected_flattened
-            .iter()
-            .map(|&b| Fr::from(b as u64))
-            .collect();
-        assert_eq!(data.code, expected_flattened);
+            // Load the iris code as calculated in Python, check it's the same as we derive.
+            let num_kernels = data.kernel_matrix_dims.1;
+            let expected_iris_code3d: Array3<bool> =
+                read_npy(&path.join("code.npy")).unwrap();
+            let expected_iris_code: Array2<bool> = expected_iris_code3d
+                .into_shape((num_kernels, data.num_placements))
+                .unwrap()
+                .into_dimensionality::<ndarray::Ix2>()
+                .unwrap()
+                .t()
+                .to_owned();
+            let expected_flattened = expected_iris_code
+                .outer_iter()
+                .flat_map(|row| row.to_vec())
+                .collect::<Vec<bool>>();
+            let expected_flattened: Vec<Fr> = expected_flattened
+                .iter()
+                .map(|&b| Fr::from(b as u64))
+                .collect();
+            assert_eq!(data.code, expected_flattened);
+        }
     }
 
     #[test]
