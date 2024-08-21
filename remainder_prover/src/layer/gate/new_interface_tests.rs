@@ -89,27 +89,20 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let neg_mle = DenseMle::new_from_iter(
-            mle.mle
-                .get_evals_vector()
-                .clone()
-                .into_iter()
-                .map(|elem| -elem),
-            LayerId::Input(0),
-        );
+        let neg_mle = DenseMle::new_from_iter(mle.mle.iter().map(|elem| -elem), LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let mle_input_shred = InputShred::new(ctx, mle.mle.clone().num_vars(), &input_layer);
             let mle_input_shred_data = InputShredData::new(
                 mle_input_shred.id(),
-                MultilinearExtension::new(mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(mle.mle.to_vec()),
             );
             let neg_mle_input_shred =
                 InputShred::new(ctx, neg_mle.mle.clone().num_vars(), &input_layer);
             let neg_mle_input_shred_data = InputShredData::new(
                 neg_mle_input_shred.id(),
-                MultilinearExtension::new(neg_mle.mle.get_evals_vector().to_vec()),
+                MultilinearExtension::new(neg_mle.mle.to_vec()),
             );
 
             let input_layer_data = InputLayerData::new(
@@ -176,30 +169,17 @@ mod tests {
         );
 
         let neg_mle_dataparallel = DenseMle::new_from_iter(
-            mle_dataparallel
-                .mle
-                .get_evals_vector()
-                .clone()
-                .into_iter()
-                .map(|elem| -elem),
+            mle_dataparallel.mle.iter().map(|elem| -elem),
             LayerId::Input(0),
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(mle_dataparallel.mle.to_vec(), ctx, &input_layer);
 
             let (dataparallel_neg_mle_input_shred, dataparallel_neg_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(neg_mle_dataparallel.mle.to_vec(), ctx, &input_layer);
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),
                 vec![
@@ -264,18 +244,14 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let neg_mle =
-            DenseMle::new_from_raw(vec![mle.bookkeeping_table()[0].neg()], LayerId::Input(0));
+        let neg_mle = DenseMle::new_from_raw(vec![mle.get(0).unwrap().neg()], LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (mle_input_shred, mle_input_shred_data) =
-                get_input_shred_and_data(mle.mle.get_evals_vector().to_vec(), ctx, &input_layer);
-            let (neg_mle_input_shred, neg_mle_input_shred_data) = get_input_shred_and_data(
-                neg_mle.mle.get_evals_vector().to_vec(),
-                ctx,
-                &input_layer,
-            );
+                get_input_shred_and_data(mle.mle.to_vec(), ctx, &input_layer);
+            let (neg_mle_input_shred, neg_mle_input_shred_data) =
+                get_input_shred_and_data(neg_mle.mle.to_vec(), ctx, &input_layer);
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),
                 vec![mle_input_shred_data, neg_mle_input_shred_data],
@@ -327,23 +303,17 @@ mod tests {
             LayerId::Input(0),
         );
 
-        let neg_mle_2 = DenseMle::new_from_iter(
-            mle_2.bookkeeping_table().iter().map(|elem| -elem),
-            LayerId::Input(0),
-        );
+        let neg_mle_2 = DenseMle::new_from_iter(mle_2.iter().map(|elem| -elem), LayerId::Input(0));
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (mle_1_input_shred, mle_1_input_shred_data) =
-                get_input_shred_and_data(mle_1.mle.get_evals_vector().to_vec(), ctx, &input_layer);
+                get_input_shred_and_data(mle_1.mle.to_vec(), ctx, &input_layer);
 
             let (mle_2_input_shred, mle_2_input_shred_data) =
-                get_input_shred_and_data(mle_2.mle.get_evals_vector().to_vec(), ctx, &input_layer);
-            let (neg_mle_2_input_shred, neg_mle_2_input_shred_data) = get_input_shred_and_data(
-                neg_mle_2.mle.get_evals_vector().to_vec(),
-                ctx,
-                &input_layer,
-            );
+                get_input_shred_and_data(mle_2.mle.to_vec(), ctx, &input_layer);
+            let (neg_mle_2_input_shred, neg_mle_2_input_shred_data) =
+                get_input_shred_and_data(neg_mle_2.mle.to_vec(), ctx, &input_layer);
 
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),
@@ -435,28 +405,16 @@ mod tests {
         );
 
         let neg_mle_dataparallel = DenseMle::new_from_iter(
-            mle_dataparallel
-                .mle
-                .get_evals_vector()
-                .iter()
-                .map(|elem| -elem),
+            mle_dataparallel.mle.iter().map(|elem| -elem),
             LayerId::Input(0),
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_input_shred, dataparallel_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(mle_dataparallel.mle.to_vec(), ctx, &input_layer);
             let (dataparallel_neg_mle_input_shred, dataparallel_neg_mle_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(neg_mle_dataparallel.mle.to_vec(), ctx, &input_layer);
 
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),
@@ -514,34 +472,19 @@ mod tests {
         );
 
         let neg_mle_2_dataparallel = DenseMle::new_from_iter(
-            mle_2_dataparallel
-                .bookkeeping_table()
-                .iter()
-                .map(|elem| -elem),
+            mle_2_dataparallel.iter().map(|elem| -elem),
             LayerId::Input(0),
         );
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let (dataparallel_mle_1_input_shred, dataparallel_mle_1_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_1_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(mle_1_dataparallel.mle.to_vec(), ctx, &input_layer);
             let (dataparallel_mle_2_input_shred, dataparallel_mle_2_input_shred_data) =
-                get_input_shred_and_data(
-                    mle_2_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(mle_2_dataparallel.mle.to_vec(), ctx, &input_layer);
 
             let (dataparallel_neg_mle_2_input_shred, dataparallel_neg_mle_2_input_shred_data) =
-                get_input_shred_and_data(
-                    neg_mle_2_dataparallel.mle.get_evals_vector().to_vec(),
-                    ctx,
-                    &input_layer,
-                );
+                get_input_shred_and_data(neg_mle_2_dataparallel.mle.to_vec(), ctx, &input_layer);
 
             let input_layer_data = InputLayerData::new(
                 input_layer.id(),

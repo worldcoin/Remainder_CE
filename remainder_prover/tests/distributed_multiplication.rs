@@ -109,36 +109,41 @@ fn test_batching_wraparound_newmainder() {
         .iter()
         .zip(bigger_mles_vec.iter())
         .map(|(small_mle, big_mle)| {
-            let small_mle_bt = small_mle.bookkeeping_table();
-            let big_mle_bt = big_mle.bookkeeping_table();
-            let prod_bt = big_mle_bt
-                .iter()
-                .zip(small_mle_bt.iter().cycle())
-                .map(|(big_elem, small_elem)| *big_elem * *small_elem);
+            let small_mle_bt_iter = small_mle.iter();
+            let big_mle_bt_iter = big_mle.iter();
+            let prod_bt = big_mle_bt_iter
+                .zip(small_mle_bt_iter.cycle())
+                .map(|(big_elem, small_elem)| big_elem * small_elem);
             DenseMle::new_from_iter(prod_bt, small_mle.layer_id)
         })
         .collect_vec();
 
     let combined_prod_mle_expected = DenseMle::batch_mles_lil(prod_mles); // This works
                                                                           // let combined_prod_mle_expected = DenseMle::batch_mles(prod_mles); // This fails
-    let combined_prod_mle_expected_vec = combined_prod_mle_expected.bookkeeping_table();
+    let combined_prod_mle_expected_vec_iter = combined_prod_mle_expected.iter();
 
     let smaller_combined_mle = DenseMle::batch_mles_lil(smaller_mles_vec); // This works
                                                                            // let smaller_combined_mle = DenseMle::batch_mles(smaller_mles_vec); // This fails
-    let smaller_combined_mle_vec = smaller_combined_mle.bookkeeping_table();
+    let smaller_combined_mle_vec_iter = smaller_combined_mle.iter();
 
     let bigger_combined_mle = DenseMle::batch_mles_lil(bigger_mles_vec); // This works
                                                                          // let bigger_combined_mle = DenseMle::batch_mles(bigger_mles_vec); // This fails
-    let bigger_combined_mle_vec = bigger_combined_mle.bookkeeping_table();
+    let bigger_combined_mle_vec_iter = bigger_combined_mle.iter();
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let (input_shred_1, input_shred_1_data) =
-            get_input_shred_and_data_from_vec(smaller_combined_mle_vec.to_vec(), ctx, &input_layer);
-        let (input_shred_2, input_shred_2_data) =
-            get_input_shred_and_data_from_vec(bigger_combined_mle_vec.to_vec(), ctx, &input_layer);
+        let (input_shred_1, input_shred_1_data) = get_input_shred_and_data_from_vec(
+            smaller_combined_mle_vec_iter.clone().collect(),
+            ctx,
+            &input_layer,
+        );
+        let (input_shred_2, input_shred_2_data) = get_input_shred_and_data_from_vec(
+            bigger_combined_mle_vec_iter.clone().collect(),
+            ctx,
+            &input_layer,
+        );
         let (input_shred_3, input_shred_3_data) = get_input_shred_and_data_from_vec(
-            combined_prod_mle_expected_vec.to_vec(),
+            combined_prod_mle_expected_vec_iter.clone().collect(),
             ctx,
             &input_layer,
         );

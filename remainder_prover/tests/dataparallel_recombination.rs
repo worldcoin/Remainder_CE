@@ -153,14 +153,14 @@ fn test_dataparallel_recombination_newmainder() {
         .map(|_| {
             let mle = get_dummy_random_mle(FREE_VARS, &mut rng);
             let mle_copy = mle.clone();
-            let mle_vec = mle_copy.bookkeeping_table();
-            (mle, mle_vec.to_vec())
+            let mle_vec = mle_copy.iter().collect();
+            (mle, mle_vec)
         })
         .unzip();
 
     let combined_mle = DenseMle::batch_mles_lil(mles_vec); // This works
                                                            // let combined_mle = DenseMle::batch_mles(mles_vec); // This fails
-    let combined_mle_vec = combined_mle.bookkeeping_table();
+    let combined_mle_vec_iter = combined_mle.iter();
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
@@ -172,8 +172,11 @@ fn test_dataparallel_recombination_newmainder() {
             get_input_shred_and_data_from_vec(vecs_vec[2].clone(), ctx, &input_layer);
         let (input_shred_4, input_shred_4_data) =
             get_input_shred_and_data_from_vec(vecs_vec[3].clone(), ctx, &input_layer);
-        let (dataparallel_shred, dataparallel_shred_data) =
-            get_input_shred_and_data_from_vec(combined_mle_vec.to_vec(), ctx, &input_layer);
+        let (dataparallel_shred, dataparallel_shred_data) = get_input_shred_and_data_from_vec(
+            combined_mle_vec_iter.clone().collect(),
+            ctx,
+            &input_layer,
+        );
         let input_data = InputLayerData::new(
             input_layer.id(),
             vec![
