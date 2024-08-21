@@ -22,6 +22,8 @@ use crate::{
     prover::layers::Layers,
 };
 
+pub mod digital_decomposition;
+
 #[cfg(test)]
 pub(crate) mod test_utils;
 
