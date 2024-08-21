@@ -1,9 +1,7 @@
 /// Decompose a number into N digits in a given base, MSB first.
 /// Returns None iff the number is too large to fit in N digits.
-/// # Requires:
-/// + base is at most 2 ** 16.
-pub fn unsigned_decomposition<const N: usize>(value: u64, base: u64) -> Option<[u16; N]> {
-    debug_assert!(base <= 1 << 16, "Base {} too large", base);
+pub fn unsigned_decomposition<const BASE: u16, const N: usize>(value: u64) -> Option<[u16; N]> {
+    let base = BASE as u64;
     let mut value = value;
     let mut result = [0; N];
     for i in (0..N).rev() {
@@ -16,15 +14,12 @@ pub fn unsigned_decomposition<const N: usize>(value: u64, base: u64) -> Option<[
     Some(result)
 }
 
-/// Decompose a number into N digits in a given base, MSB first, in the complementary representation, i.e.
-///   value = b * base^N - (d[0] * base^(N-1) + d[1] * base^(N-2) + ... + d[N-1] * base^0)
+/// Decompose a number into N digits in a given BASE, MSB first, in the complementary representation, i.e.
+///   value = b * BASE^N - (d[0] * BASE^(N-1) + d[1] * BASE^(N-2) + ... + d[N-1] * BASE^0)
 /// where (d, b) is the result.
 /// Returns None iff value is out of range.
-/// # Requires:
-/// + base is at most 2 ** 16.
-pub fn complementary_decomposition<const N: usize>(value: i64, base: u64) -> Option<([u16; N], bool)> {
-    debug_assert!(base <= 1 << 16, "Base {} too large", base);
-    let pow = base.pow(N as u32) as i64;
+pub fn complementary_decomposition<const BASE: u16, const N: usize>(value: i64) -> Option<([u16; N], bool)> {
+    let pow = (BASE as u64).pow(N as u32) as i64;
     if value > pow || value < -pow + 1 {
         return None;
     }
@@ -33,7 +28,7 @@ pub fn complementary_decomposition<const N: usize>(value: i64, base: u64) -> Opt
     } else {
         ((-value) as u64, false)
     };
-    match unsigned_decomposition(val_to_decomp, base) {
+    match unsigned_decomposition::<BASE, N>(val_to_decomp) {
         Some(decomp) => Some((decomp, bit)),
         None => None,
     }
@@ -41,9 +36,28 @@ pub fn complementary_decomposition<const N: usize>(value: i64, base: u64) -> Opt
 
 #[test]
 fn test_unsigned_decomposition() {
-    assert_eq!(unsigned_decomposition::<3>(987, 10), Some([9, 8, 7]));
-    assert_eq!(unsigned_decomposition::<3>(0, 10), Some([0, 0, 0]));
-    assert_eq!(unsigned_decomposition::<3>(1, 2), Some([0, 0, 1]));
-    assert_eq!(unsigned_decomposition::<3>(4, 2), Some([1, 0, 0]));
-    assert_eq!(unsigned_decomposition::<3>(8, 2), None);
+    assert_eq!(unsigned_decomposition::<10, 3>(987), Some([9, 8, 7]));
+    assert_eq!(unsigned_decomposition::<10, 3>(0), Some([0, 0, 0]));
+    assert_eq!(unsigned_decomposition::<2, 3>(1), Some([0, 0, 1]));
+    assert_eq!(unsigned_decomposition::<2, 3>(4), Some([1, 0, 0]));
+    assert_eq!(unsigned_decomposition::<2, 3>(8), None);
+}
+
+#[test]
+fn test_complementary_decomposition() {
+    // base 2
+    assert_eq!(complementary_decomposition::<2, 3>(1), Some(([1, 1, 1], true)));
+    assert_eq!(complementary_decomposition::<2, 3>(3), Some(([1, 0, 1], true)));
+    assert_eq!(complementary_decomposition::<2, 3>(8), Some(([0, 0, 0], true)));
+    assert_eq!(complementary_decomposition::<2, 3>(0), Some(([0, 0, 0], false)));
+    assert_eq!(complementary_decomposition::<2, 3>(-1), Some(([0, 0, 1], false)));
+    assert_eq!(complementary_decomposition::<2, 3>(-3), Some(([0, 1, 1], false)));
+    assert_eq!(complementary_decomposition::<2, 3>(-8), None);
+    assert_eq!(complementary_decomposition::<2, 3>(9), None);
+    // base 10
+    assert_eq!(complementary_decomposition::<10, 3>(-987), Some(([9, 8, 7], false)));
+    assert_eq!(complementary_decomposition::<10, 3>(987), Some(([0, 1, 3], true)));
+    assert_eq!(complementary_decomposition::<10, 3>(0), Some(([0, 0, 0], false)));
+    assert_eq!(complementary_decomposition::<10, 3>(-1000), None);
+    assert_eq!(complementary_decomposition::<10, 3>(1001), None);
 }
