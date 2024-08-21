@@ -211,8 +211,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
             .clone()
             .into_iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                let gz = beta_g.mle.get(z_ind).unwrap_or(F::ZERO);
+                let ux = beta_u.mle.get(x_ind).unwrap_or(F::ZERO);
                 acc + gz * ux
             });
 
@@ -261,8 +261,8 @@ impl<F: Field> LayerDescription<F> for IdentityGateLayerDescription<F> {
 
         self.wiring.iter().for_each(|(z, x)| {
             let zero = F::ZERO;
-            let id_val = source_mle_data.get_evals_vector().get(*x).unwrap_or(&zero);
-            remap_table[*z] = *id_val;
+            let id_val = source_mle_data.f.get(*x).unwrap_or(zero);
+            remap_table[*z] = id_val;
         });
 
         let output_data = MultilinearExtension::new(remap_table);
@@ -287,8 +287,8 @@ impl<F: Field> VerifierIdentityGateLayer<F> {
             .clone()
             .into_iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                let gz = beta_g.mle.get(z_ind).unwrap_or(F::ZERO);
+                let ux = beta_u.mle.get(x_ind).unwrap_or(F::ZERO);
 
                 acc + gz * ux
             });
@@ -373,10 +373,10 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
         // --- Finally, send the claimed values for each of the bound MLE to the verifier ---
         // First, send the claimed value of V_{i + 1}(u)
         let source_mle_reduced = self.phase_1_mles.clone().unwrap()[1].clone();
-        debug_assert!(source_mle_reduced.bookkeeping_table().len() == 1);
+        debug_assert!(source_mle_reduced.len() == 1);
         transcript_writer.append(
             "Evaluation of V_{i + 1}(g_2, u)",
-            source_mle_reduced.bookkeeping_table()[0],
+            source_mle_reduced.first(),
         );
         Ok(())
     }
@@ -398,13 +398,7 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = *self
-                    .beta_g
-                    .as_ref()
-                    .unwrap()
-                    .bookkeeping_table()
-                    .get(z_ind)
-                    .unwrap_or(&F::ZERO);
+                let beta_g_at_z = self.beta_g.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO);
                 a_hg_mle_ref[x_ind] += beta_g_at_z;
             });
 
@@ -465,14 +459,8 @@ impl<F: Field> Layer<F> for IdentityGate<F> {
             .clone()
             .into_iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *self
-                    .beta_g
-                    .as_ref()
-                    .unwrap()
-                    .bookkeeping_table()
-                    .get(z_ind)
-                    .unwrap_or(&F::ZERO);
-                let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
+                let gz = self.beta_g.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO);
+                let ux = beta_u.mle.get(x_ind).unwrap_or(F::ZERO);
 
                 acc + gz * ux
             });
@@ -496,7 +484,7 @@ impl<F: Field> YieldClaim<ClaimMle<F>> for IdentityGate<F> {
                         .ok_or(LayerError::ClaimError(ClaimError::ClaimMleIndexError))?,
                 );
             }
-            let val = mle_ref.bookkeeping_table()[0];
+            let val = mle_ref.first();
             let claim: ClaimMle<F> = ClaimMle::new(
                 fixed_mle_indices_u,
                 val,
@@ -647,13 +635,7 @@ impl<F: Field> IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = *self
-                    .beta_g
-                    .as_ref()
-                    .unwrap()
-                    .bookkeeping_table()
-                    .get(z_ind)
-                    .unwrap_or(&F::ZERO);
+                let beta_g_at_z = self.beta_g.as_ref().unwrap().get(z_ind).unwrap_or(F::ZERO);
                 a_hg_mle_ref[x_ind] += beta_g_at_z;
             });
 

@@ -9,6 +9,7 @@ use remainder_shared_types::{
     Fr,
 };
 
+use crate::mle::evals::Evaluations;
 use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
     layer::LayerId,

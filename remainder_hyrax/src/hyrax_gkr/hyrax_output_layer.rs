@@ -47,7 +47,7 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
         blinding_rng: &mut impl Rng,
         scalar_committer: &PedersenCommitter<C>,
     ) -> HyraxClaim<C::Scalar, CommittedScalar<C>> {
-        assert_eq!(self.underlying_mle.bookkeeping_table().len(), 1);
+        assert_eq!(self.underlying_mle.len(), 1);
 
         let layer_id = self.underlying_mle.layer_id();
         let claim_chal = if !self.underlying_mle.mle_indices().is_empty() {
@@ -60,8 +60,8 @@ impl<C: PrimeOrderCurve> HyraxOutputLayer<C> {
             vec![]
         };
         let blinding_factor = &C::Scalar::random(blinding_rng);
-        let claim_commit = scalar_committer
-            .committed_scalar(&self.underlying_mle.bookkeeping_table()[0], blinding_factor);
+        let claim_commit =
+            scalar_committer.committed_scalar(&self.underlying_mle.first(), blinding_factor);
 
         HyraxClaim {
             point: claim_chal,

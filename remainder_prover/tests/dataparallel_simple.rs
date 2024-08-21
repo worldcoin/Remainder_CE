@@ -104,17 +104,9 @@ fn test_dataparallel_simple_newmainder() {
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         let (dataparallel_input_mle_1, dataparallel_input_mle_1_data) =
-            get_input_shred_and_data_from_vec(
-                dataparallel_mle_1.bookkeeping_table().to_vec(),
-                ctx,
-                &input_layer,
-            );
+            get_input_shred_and_data_from_vec(dataparallel_mle_1.mle.to_vec(), ctx, &input_layer);
         let (dataparallel_input_mle_2, dataparallel_input_mle_2_data) =
-            get_input_shred_and_data_from_vec(
-                dataparallel_mle_2.bookkeeping_table().to_vec(),
-                ctx,
-                &input_layer,
-            );
+            get_input_shred_and_data_from_vec(dataparallel_mle_2.mle.to_vec(), ctx, &input_layer);
         let input_data = InputLayerData::new(
             input_layer.id(),
             vec![dataparallel_input_mle_1_data, dataparallel_input_mle_2_data],

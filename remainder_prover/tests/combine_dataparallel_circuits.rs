@@ -210,8 +210,8 @@ fn test_combined_dataparallel_circuit_alt_newmainder() {
 
     let mle_1_vec_batched = DenseMle::batch_mles(mle_1_vec.clone());
     let mle_2_vec_batched = DenseMle::batch_mles(mle_2_vec.clone());
-    let mle_1_vec_raw = mle_1_vec_batched.bookkeeping_table();
-    let mle_2_vec_raw = mle_2_vec_batched.bookkeeping_table();
+    let mle_1_vec_iter = mle_1_vec_batched.iter();
+    let mle_2_vec_iter = mle_2_vec_batched.iter();
 
     // These checks can possibly be done with the newly designed batching bits/system
     let all_num_vars: Vec<usize> = mle_1_vec
@@ -229,10 +229,11 @@ fn test_combined_dataparallel_circuit_alt_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+
         let (dataparallel_input_mle_1, dataparallel_input_mle_1_data) =
-            get_input_shred_and_data_from_vec(mle_1_vec_raw.to_vec(), ctx, &input_layer);
+            get_input_shred_and_data_from_vec(mle_1_vec_iter.clone().collect(), ctx, &input_layer);
         let (dataparallel_input_mle_2, dataparallel_input_mle_2_data) =
-            get_input_shred_and_data_from_vec(mle_2_vec_raw.to_vec(), ctx, &input_layer);
+            get_input_shred_and_data_from_vec(mle_2_vec_iter.clone().collect(), ctx, &input_layer);
         let input_data = InputLayerData::new(
             input_layer.id(),
             vec![dataparallel_input_mle_1_data, dataparallel_input_mle_2_data],

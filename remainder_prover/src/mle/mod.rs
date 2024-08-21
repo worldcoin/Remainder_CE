@@ -3,6 +3,7 @@
 
 use core::fmt::Debug;
 
+use evals::EvaluationsIterator;
 use serde::{Deserialize, Serialize};
 
 use crate::{claims::Claim, layer::LayerId};
@@ -61,8 +62,19 @@ pub trait Mle<F: Field>: Clone + Debug + Send + Sync {
 
     /// below are methods that belonged to MleRef originally
 
-    /// Gets reference to the current bookkeeping tables.
-    fn bookkeeping_table(&self) -> &[F];
+    /// Returns the length of the current bookkeeping table.
+    fn len(&self) -> usize;
+
+    /// Returns an iterator over the evaluations of the current MLE.
+    fn iter(&self) -> EvaluationsIterator<F>;
+
+    /// Returns the first element in the evaluations table represention.
+    /// # Panics
+    /// If the evaluations table is empty.
+    fn first(&self) -> F;
+
+    /// Returns the first element of the evaluations table (if any).
+    fn get(&self, index: usize) -> Option<F>;
 
     /// Get the indicies of the `Mle` that this `MleRef` represents.
     fn mle_indices(&self) -> &[MleIndex<F>];
