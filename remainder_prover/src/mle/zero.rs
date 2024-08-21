@@ -8,18 +8,21 @@ use crate::claims::{ClaimError, YieldClaim};
 use crate::layer::{LayerError, LayerId};
 use remainder_shared_types::Field;
 
+use super::evals::{Evaluations, EvaluationsIterator};
 use super::Mle;
 use super::{mle_enum::MleEnum, MleIndex};
 
 /// An [MleRef] that contains only zeros; typically used for the output layer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ZeroMle<F> {
+#[serde(bound = "F: Field")]
+pub struct ZeroMle<F: Field> {
     pub(crate) mle_indices: Vec<MleIndex<F>>,
     /// Number of non-fixed variables within this MLE
     /// (warning: this gets modified destructively DURING sumcheck).
     pub(crate) num_vars: usize,
     pub(crate) layer_id: LayerId,
     pub(crate) zero: [F; 1],
+    pub(crate) zero_eval: Evaluations<F>,
     pub(crate) indexed: bool,
 }
 
@@ -38,16 +41,13 @@ impl<F: Field> ZeroMle<F> {
             num_vars,
             layer_id,
             zero: [F::ZERO],
+            zero_eval: Evaluations::new(num_vars, vec![F::ZERO]),
             indexed: false,
         }
     }
 }
 
 impl<F: Field> Mle<F> for ZeroMle<F> {
-    fn bookkeeping_table(&self) -> &[F] {
-        &self.zero
-    }
-
     fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.mle_indices
     }
@@ -115,11 +115,31 @@ impl<F: Field> Mle<F> for ZeroMle<F> {
     fn add_prefix_bits(&mut self, _new_bits: Vec<MleIndex<F>>) {
         todo!()
     }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn iter(&self) -> EvaluationsIterator<F> {
+        self.zero_eval.iter()
+    }
+
+    fn first(&self) -> F {
+        F::ZERO
+    }
+
+    fn get(&self, index: usize) -> Option<F> {
+        if index < self.len() {
+            Some(F::ZERO)
+        } else {
+            None
+        }
+    }
 }
 
 impl<F: Field> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
-        if self.bookkeeping_table().len() != 1 {
+        if self.len() != 1 {
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
         let mle_indices: Result<Vec<F>, _> = self

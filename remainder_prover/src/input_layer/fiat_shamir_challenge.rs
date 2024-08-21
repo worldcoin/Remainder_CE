@@ -70,7 +70,7 @@ impl<F: Field> FiatShamirChallenge<F> {
 
     /// Return the MLE stored in self as a DenseMle with the correct layer ID.
     pub fn get_mle(&self) -> DenseMle<F> {
-        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
+        DenseMle::new_from_raw(self.mle.to_vec(), self.layer_id)
     }
 
     /// Return the layer id.
@@ -82,7 +82,7 @@ impl<F: Field> FiatShamirChallenge<F> {
     /// in `claim`, and check whether the single element left in the bookkeeping table is equal to
     /// the claimed value in `claim`.
     pub fn verify(&self, claim: &Claim<F>) -> Result<(), FiatShamirChallengeError> {
-        let mle_evals = self.mle.get_evals_vector().clone();
+        let mle_evals = self.mle.to_vec();
         let mut mle = DenseMle::<F>::new_from_raw(mle_evals, self.layer_id);
         mle.index_mle_indices(0);
 
@@ -100,7 +100,7 @@ impl<F: Field> FiatShamirChallenge<F> {
             }
             eval.unwrap()
         } else {
-            Claim::new(vec![], mle.mle[0])
+            Claim::new(vec![], mle.first())
         };
 
         // This is an internal error as it should never happen.

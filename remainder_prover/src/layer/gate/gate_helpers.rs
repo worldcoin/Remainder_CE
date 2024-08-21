@@ -84,9 +84,9 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                         } else {
                             index * 2
                         };
-                        let first = *mle_ref.bookkeeping_table().get(index).unwrap_or(&zero);
+                        let first = mle_ref.get(index).unwrap_or(zero);
                         let second = if mle_ref.num_free_vars() != 0 {
-                            *mle_ref.bookkeeping_table().get(index + 1).unwrap_or(&zero)
+                            mle_ref.get(index + 1).unwrap_or(zero)
                         } else {
                             first
                         };
@@ -141,11 +141,7 @@ pub fn evaluate_mle_ref_product_no_beta_table<F: Field>(
                             index
                         };
                         // --- Access the MLE at that index. Pad with zeros ---
-                        mle_ref
-                            .bookkeeping_table()
-                            .get(index)
-                            .cloned()
-                            .unwrap_or(F::ZERO)
+                        mle_ref.get(index).unwrap_or(F::ZERO)
                     })
                     .reduce(|acc, eval| acc * eval)
                     .unwrap();
@@ -192,10 +188,10 @@ pub fn check_fully_bound<F: Field>(
 
     mle_refs.iter_mut().try_fold(F::ONE, |acc, mle_ref| {
         // --- Accumulate either errors or multiply ---
-        if mle_ref.bookkeeping_table().len() != 1 {
+        if mle_ref.len() != 1 {
             return Err(GateError::MleNotFullyBoundError);
         }
-        Ok(acc * mle_ref.bookkeeping_table()[0])
+        Ok(acc * mle_ref.first())
     })
 }
 
@@ -304,10 +300,10 @@ pub fn compute_full_gate<F: Field>(
             .iter()
             .copied()
             .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                let ux = lhs.bookkeeping_table().get(x_ind).unwrap_or(&zero);
-                let vy = rhs.bookkeeping_table().get(y_ind).unwrap_or(&zero);
-                acc + gz * (*ux + *vy)
+                let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
+                let ux = lhs.get(x_ind).unwrap_or(zero);
+                let vy = rhs.get(y_ind).unwrap_or(zero);
+                acc + gz * (ux + vy)
             })
     } else {
         let num_copy_idx = 1 << copy_bits;
@@ -316,22 +312,16 @@ pub fn compute_full_gate<F: Field>(
         {
             // Sum over everything else, outer sum being over p2, inner sum over (x, y).
             (0..(1 << num_copy_idx)).fold(F::ZERO, |acc_outer, idx| {
-                let g2 = *beta_g2.bookkeeping_table().get(idx).unwrap_or(&F::ZERO);
+                let g2 = beta_g2.get(idx).unwrap_or(F::ZERO);
                 let inner_sum =
                     nonzero_gates
                         .iter()
                         .copied()
                         .fold(F::ZERO, |acc, (z_ind, x_ind, y_ind)| {
-                            let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
-                            let ux = lhs
-                                .bookkeeping_table()
-                                .get(idx + (x_ind * num_copy_idx))
-                                .unwrap_or(&zero);
-                            let vy = rhs
-                                .bookkeeping_table()
-                                .get(idx + (y_ind * num_copy_idx))
-                                .unwrap_or(&zero);
-                            acc + gz * (*ux + *vy)
+                            let gz = beta_g.get(z_ind).unwrap_or(F::ZERO);
+                            let ux = lhs.get(idx + (x_ind * num_copy_idx)).unwrap_or(zero);
+                            let vy = rhs.get(idx + (y_ind * num_copy_idx)).unwrap_or(zero);
+                            acc + gz * (ux + vy)
                         });
                 acc_outer + (g2 * inner_sum)
             })
@@ -350,9 +340,9 @@ pub fn compute_full_gate_identity<F: Field>(
     let zero = F::ZERO;
 
     nonzero_gates.iter().fold(F::ZERO, |acc, (z_ind, x_ind)| {
-        let gz = *beta_g.bookkeeping_table().get(*z_ind).unwrap_or(&F::ZERO);
-        let ux = mle_ref.bookkeeping_table().get(*x_ind).unwrap_or(&zero);
-        acc + gz * (*ux)
+        let gz = beta_g.get(*z_ind).unwrap_or(F::ZERO);
+        let ux = mle_ref.get(*x_ind).unwrap_or(zero);
+        acc + gz * ux
     })
 }
 
@@ -440,9 +430,9 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
         |mut acc, p2_idx| {
             // Compute the beta successors the same way it's done for each mle. Do it outside the loop
             // because it only needs to be done once per product of mles.
-            let first = *beta_g2.bookkeeping_table().get(p2_idx * 2).unwrap();
+            let first = beta_g2.get(p2_idx * 2).unwrap();
             let second = if beta_g2.num_free_vars() != 0 {
-                *beta_g2.bookkeeping_table().get(p2_idx * 2 + 1).unwrap()
+                beta_g2.get(p2_idx * 2 + 1).unwrap()
             } else {
                 first
             };
@@ -459,18 +449,16 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
                 .iter()
                 .copied()
                 .map(|(z, x, y)| {
-                    let g1_z = beta_g1.mle[z];
+                    let g1_z = beta_g1.mle.get(z).unwrap();
                     let g1_z_successors = std::iter::successors(Some(g1_z), move |_| Some(g1_z));
 
                     // --- Compute f_2((A, p_2), x) ---
                     // --- Note that the bookkeeping table is little-endian, so we shift by `x * num_dataparallel_entries` ---
-                    let f2_0_p2_x = *f2_p2_x
-                        .bookkeeping_table()
+                    let f2_0_p2_x = f2_p2_x
                         .get((p2_idx * 2) + x * num_dataparallel_entries)
                         .unwrap();
                     let f2_1_p2_x = if f2_p2_x.num_free_vars() != 0 {
-                        *f2_p2_x
-                            .bookkeeping_table()
+                        f2_p2_x
                             .get((p2_idx * 2 + 1) + x * num_dataparallel_entries)
                             .unwrap()
                     } else {
@@ -486,13 +474,11 @@ pub fn compute_sumcheck_messages_data_parallel_gate<F: Field>(
 
                     // --- Compute f_3((A, p_2), y) ---
                     // --- Note that the bookkeeping table is little-endian, so we shift by `y * num_dataparallel_entries` ---
-                    let f3_0_p2_y = *f3_p2_y
-                        .bookkeeping_table()
+                    let f3_0_p2_y = f3_p2_y
                         .get((p2_idx * 2) + y * num_dataparallel_entries)
                         .unwrap();
                     let f3_1_p2_y = if f3_p2_y.num_free_vars() != 0 {
-                        *f3_p2_y
-                            .bookkeeping_table()
+                        f3_p2_y
                             .get((p2_idx * 2 + 1) + y * num_dataparallel_entries)
                             .unwrap()
                     } else {

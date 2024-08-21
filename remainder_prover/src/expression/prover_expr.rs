@@ -400,13 +400,13 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle_ref = mle_vec_idx.get_mle(mle_vec);
 
-                if mle_ref.bookkeeping_table().len() != 1 {
+                if mle_ref.len() != 1 {
                     return Err(ExpressionError::EvaluateNotFullyBoundError);
                 }
 
                 let layer_id = mle_ref.layer_id();
                 let mle_indices = mle_ref.mle_indices().to_vec();
-                let eval = mle_ref.bookkeeping_table()[0];
+                let eval = mle_ref.first();
 
                 Ok(ExpressionNode::Mle(VerifierMle::new(
                     layer_id,
@@ -428,7 +428,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                     .collect_vec();
 
                 for mle in mles.iter() {
-                    if mle.bookkeeping_table().len() != 1 {
+                    if mle.len() != 1 {
                         return Err(ExpressionError::EvaluateNotFullyBoundError);
                     }
                 }
@@ -439,7 +439,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
                             VerifierMle::new(
                                 mle.layer_id(),
                                 mle.mle_indices().to_vec(),
-                                mle.bookkeeping_table()[0],
+                                mle.first(),
                             )
                         })
                         .collect_vec(),
@@ -1017,7 +1017,7 @@ impl<F: Field> ExpressionNode<F, ProverExpr> {
             }
             ExpressionNode::Mle(mle_vec_idx) => {
                 let mle_ref = mle_vec_idx.get_mle(mle_vec);
-                assert_eq!(mle_ref.bookkeeping_table().len(), 1);
+                assert_eq!(mle_ref.len(), 1);
                 products.push(Product::<F, F>::new(&[mle_ref.clone()], multiplier));
             }
             ExpressionNode::Product(mle_vec_indices) => {
