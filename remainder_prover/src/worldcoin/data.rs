@@ -3,15 +3,12 @@ use std::path::{Path, PathBuf};
 use itertools::Itertools;
 use ndarray::{Array, Array1, Array2, Array3};
 use ndarray_npy::read_npy;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::FieldExt;
 
 use crate::layer::LayerId;
-use crate::worldcoin::digit_decomposition::{BASE, NUM_DIGITS};
-use crate::{
-    mle::circuit_mle::{to_flat_mles, FlatMles},
-    worldcoin::digit_decomposition::digital_decomposition,
-};
+use crate::mle::circuit_mle::{to_flat_mles, FlatMles};
+use crate::utils::digital_decomposition::complementary_decomposition;
+use super::{BASE, NUM_DIGITS};
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
@@ -25,6 +22,7 @@ pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
         vec![0],
         vec![0, 1],
         Array2::from_shape_vec(response_shape, vec![0, 0, 0, 0]).unwrap(),
+        false,
     )
 }
 
@@ -57,7 +55,8 @@ pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
             5, 5, 5, 5,
             -5, -5, -5, -5,
             -5, -5, -5, -5,
-            ]).unwrap()
+            ]).unwrap(),
+        false,
     )
 }
 
@@ -75,16 +74,20 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
     pub kernel_matrix_mle: Vec<F>,
     /// (num_kernel_values, num_kernels)
     pub kernel_matrix_dims: (usize, usize),
-    /// The digital decompositions base BASE of the abs value of the responses
+    /// The digits of the complementary digital decompositions (base BASE) of the response - threshold + int(equality_allowed).
     pub digits: FlatMles<F, NUM_DIGITS>,
-    /// The resulting binary code (=the sign bits of the responses)
+    /// The resulting binary code.  This is the iris code (if processing the iris image) or the mask
+    /// code (if processing the mask).
+    /// Equals the bits of the complementary digital decompositions of the values
+    ///     response - threshold + int(equality_allowed)).
     /// Has dimensions num_placements x num_kernels (it is not padded).
-    /// (In the case we are processing the image (not the mask), this is the iris code.)
     pub code: Vec<F>,
-    /// The number of times each digit 0 .. BASE - 1 occurs in the digital decompositions
+    /// The number of times each digit 0 .. BASE - 1 occurs in the complementary digital decompositions
     pub digit_multiplicities: Vec<F>,
     /// The matrix of thresholds of dimensions num_placements x num_kernels
     pub thresholds_matrix: Vec<F>,
+    /// Whether equality of response and threshold results in a 1 (true) or 0 (false)
+    pub equality_allowed: F,
 }
 
 /// Loads the witness for the v2 Worldcoin data from disk for either the iris or mask case.
@@ -120,6 +123,7 @@ pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinCircuitData<F
         placements_row_idxs,
         placements_col_idxs,
         thresholds,
+        false // FIXME differentiate between iris and mask
     )
 }
 
@@ -157,6 +161,7 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
         placements_row_idxs: Vec<i32>,
         placements_col_idxs: Vec<i32>,
         thresholds_matrix: Array2<i64>,
+        equality_allowed: bool,
     ) -> Self {
         let (im_num_rows, im_num_cols) = image.dim();
         let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
@@ -224,47 +229,19 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
         // Calculate the matrix product. Has dimensions (num_placements, num_kernels).
         let responses = rerouted_matrix.dot(&kernel_matrix);
 
-        let thres_resp = responses - &thresholds_matrix;
-
-        // Calculate (iris/mask) code. Has dimensions (kernel_placements.len(), num_kernels).
-        let code = (&thres_resp).mapv(|x| x > 0);
-
-        // The thresholded responses
-        let thres_resp_vec_vec: Vec<Vec<i64>> = thres_resp
-            .outer_iter()
-            .map(|row| row.to_vec())
-            .collect_vec();
-
-        // Pad the thresholded responses to the nearest power of two, so that the length
-        // of each of the digit MLEs is a power of two, also the iris code.
-        let pad_length =
-            next_power_of_two(thres_resp_vec_vec.len()).unwrap() - thres_resp_vec_vec.len();
-        let thres_resp_vec_vec: Vec<Vec<i64>> = thres_resp_vec_vec
+        // Calculate the complementary digital decompositions of the thresholded responses
+        // Both vectors have length num_placements * num_kernels.
+        let thres_resp = responses - &thresholds_matrix + (if equality_allowed { 1 } else { 0 });
+        let (digits, code): (Vec<_>, Vec<_>) = thres_resp
             .into_iter()
-            .chain(vec![vec![0i64; num_kernels]; pad_length].into_iter())
-            .collect();
+            .map(|value| complementary_decomposition::<BASE, NUM_DIGITS>(value).unwrap())
+            .unzip();
 
-        // Calculate the signed digital decompositions of the thresholded responses
-        let thres_resp_decomps: Vec<Vec<[u16; NUM_DIGITS]>> = thres_resp_vec_vec
-            .into_par_iter()
-            .map(|row| {
-                row.into_par_iter()
-                    .map(|value| digital_decomposition(value.abs() as u64))
-                    .collect()
-            })
-            .collect();
-        let thres_resp_decomps: Vec<[u16; NUM_DIGITS]> =
-            thres_resp_decomps.into_iter().flat_map(|x| x).collect();
-
-        // Count the number of times each digit appears in the digits
+        // Count the number of times each digit occurs
         let mut digit_multiplicities: Vec<usize> = vec![0; BASE as usize];
-        for digit in thres_resp_decomps
-            .clone()
-            .into_iter()
-            .flat_map(|x| x.into_iter())
-        {
+        digits.iter().for_each(|decomp| decomp.iter().for_each(|&digit| {
             digit_multiplicities[digit as usize] += 1;
-        }
+        }));
 
         // Derive the padded image MLE.
         // Note that this padding has nothing to do with the padding of the thresholded responses.
@@ -281,8 +258,7 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
 
         // Convert the iris code to field elements
         let code: Vec<F> = code
-            .outer_iter()
-            .flat_map(|row| row.to_vec())
+            .into_iter()
             .map(|elem| F::from(elem as u64))
             .collect_vec();
 
@@ -309,7 +285,7 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
         // FlatMles for the digits
         let digits: FlatMles<F, NUM_DIGITS> = FlatMles::new_from_raw(
             to_flat_mles(
-                thres_resp_decomps
+                digits
                     .into_iter()
                     .map(|vals| {
                         let vals: [F; NUM_DIGITS] = vals
@@ -325,6 +301,8 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
             LayerId::Input(0),
         );
 
+        let equality_allowed = if equality_allowed { F::ONE } else { F::ZERO };
+
         WorldcoinCircuitData {
             image_matrix_mle,
             reroutings,
@@ -335,6 +313,7 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
             code,
             digit_multiplicities,
             thresholds_matrix,
+            equality_allowed,
         }
     }
 }

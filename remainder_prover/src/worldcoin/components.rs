@@ -10,39 +10,39 @@ use crate::{
         },
     },
     mle::evals::MultilinearExtension,
-    worldcoin::digit_decomposition::NUM_DIGITS,
+    worldcoin::{BASE, NUM_DIGITS},
 };
 
-/// Calculates LHS - RHS, making the result available as self.sector.
-pub struct SubtractionComponent<F: FieldExt> {
-    /// The sector that calculates LHS - RHS.
+/// Calculates A - B + C, making the result available as self.sector.
+pub struct Thresholder<F: FieldExt> {
+    /// The sector that calculates A - B + C
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> SubtractionComponent<F> {
+impl<F: FieldExt> Thresholder<F> {
     /// Create a new [SubtractionComponent] component.
-    pub fn new(ctx: &Context, lhs: &dyn ClaimableNode<F = F>, rhs: &dyn ClaimableNode<F = F>) -> Self {
+    pub fn new(ctx: &Context, a: &dyn ClaimableNode<F = F>, b: &dyn ClaimableNode<F = F>, c: &dyn ClaimableNode<F = F>) -> Self {
         let sector = Sector::new(
             ctx,
-            &[lhs, rhs],
+            &[a, b, c],
             |nodes| {
-                assert_eq!(nodes.len(), 2);
-                nodes[0].expr() - nodes[1].expr()
+                assert_eq!(nodes.len(), 3);
+                nodes[0].expr() - nodes[1].expr() + nodes[2].expr()
             },
             |data| {
-                assert_eq!(data.len(), 2);
-                let result = data[0].get_evals_vector().iter().zip(data[1].get_evals_vector())
-                    .map(|(lhs, rhs)| *lhs - *rhs)
+                assert_eq!(data.len(), 3);
+                let result = data[0].get_evals_vector().iter().zip(data[1].get_evals_vector().iter()).zip(data[2].get_evals_vector().iter())
+                    .map(|((a, b), c)| *a - *b + *c)
                     .collect_vec();
                 MultilinearExtension::new(result)
             },
         );
-        println!("SubtractionComponent sector = {:?}", sector.id());
+        println!("Thresholder sector = {:?}", sector.id());
         Self { sector }
     }
 }
 
-impl<F: FieldExt, N> Component<N> for SubtractionComponent<F>
+impl<F: FieldExt, N> Component<N> for Thresholder<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -101,13 +101,13 @@ where
     }
 }
 
-/// Component performing digital recomposition, i.e. deriving the number from its digits.
-pub struct DigitalRecompositionComponent<F: FieldExt> {
+/// Component performing digital recomposition of an unsigned integer, i.e. deriving the number from its digits.
+pub struct UnsignedRecomposition<F: FieldExt> {
     /// The recomposed numbers
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> DigitalRecompositionComponent<F> {
+impl<F: FieldExt> UnsignedRecomposition<F> {
     /// Each of the Nodes in `mles` specifies the digits for a different "decimal place".  Most
     /// significant digit comes first.
     pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>], base: u64) -> Self {
@@ -155,7 +155,7 @@ impl<F: FieldExt> DigitalRecompositionComponent<F> {
     }
 }
 
-impl<F: FieldExt, N> Component<N> for DigitalRecompositionComponent<F>
+impl<F: FieldExt, N> Component<N> for UnsignedRecomposition<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
@@ -211,44 +211,37 @@ where
 }
 
 
-/// Component that checks that the decomposition of a number into (sign bit, absolute value) is
-/// correct. Sign bit of 0 indicates negative, 1 indicates positive.
+/// Component that checks that the complementary decomposition of a signed integer.
 /// Add self.sector to the circuit as an output layer to enforce this constraint.
-pub struct SignCheckerComponent<F: FieldExt> {
+pub struct ComplementaryDecompChecker<F: FieldExt> {
     /// To be added to the circuit as an output layer by the caller.
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> SignCheckerComponent<F> {
-    /// Create a new SignCheckerComponent. Checks that `abs_values` are the absolute value of
-    /// `values` and that the sign bits of `values` are given by `sign_bits`, where 0 indicates
-    /// negative and 1 indicates positive.
+impl<F: FieldExt> ComplementaryDecompChecker<F> {
+    // FIXME expand
+    /// Create a new ComplementaryDecompChecker.
+    /// `equality_allowed` is a bit that indicates whether equality of response and threshold results in a 1 (true) or 0 (false).
     pub fn new(
         ctx: &Context,
         values: &dyn ClaimableNode<F = F>,
-        sign_bits: &dyn ClaimableNode<F = F>,
-        abs_values: &dyn ClaimableNode<F = F>,
+        bits: &dyn ClaimableNode<F = F>,
+        unsigned_recomps: &dyn ClaimableNode<F = F>,
     ) -> Self {
+        let mut pow = F::from(1 as u64);
+        for _ in 0..NUM_DIGITS {
+            pow = pow * F::from(BASE as u64);
+        }
+
         let sector = Sector::new(
             ctx,
-            &[values, sign_bits, abs_values],
+            &[values, bits, unsigned_recomps],
             |input_nodes| {
                 assert_eq!(input_nodes.len(), 3);
-
                 let values_mle_ref = input_nodes[0];
-                let sign_bits_mle_ref = input_nodes[1];
-                let abs_values_mle_ref = input_nodes[2];
-
-                // (values + abs_values) + -2 * sign_bits * abs_values
-                let first_summand = abs_values_mle_ref.expr() + values_mle_ref.expr();
-                let second_summand = Expression::<F, AbstractExpr>::scaled(
-                    Expression::<F, AbstractExpr>::products(vec![
-                        abs_values_mle_ref,
-                        sign_bits_mle_ref,
-                    ]),
-                    F::from(2).neg(),
-                );
-                first_summand + second_summand
+                let bits_mle_ref = input_nodes[1];
+                let unsigned_recomps_mle_ref = input_nodes[2];
+                Expression::<F, AbstractExpr>::scaled(bits_mle_ref.expr(), pow) - unsigned_recomps_mle_ref.expr() - values_mle_ref.expr()
             },
             |data| {
                 assert_eq!(data.len(), 3);
@@ -258,8 +251,8 @@ impl<F: FieldExt> SignCheckerComponent<F> {
                     .iter()
                     .zip(data[1].get_evals_vector())
                     .zip(data[2].get_evals_vector())
-                    .map(|((val, sign_bit), abs_val)| {
-                        *val + *abs_val + F::from(2).neg() * sign_bit * abs_val
+                    .map(|((val, bit), recomp)| {
+                        *bit * pow - *recomp - *val
                     })
                     .collect_vec();
                 assert!(all(values.into_iter(), |val| val == F::ZERO));
@@ -267,12 +260,12 @@ impl<F: FieldExt> SignCheckerComponent<F> {
                 MultilinearExtension::new_sized_zero(data[0].num_vars())
             },
         );
-        println!("SignCheckerComponent sector = {:?}", sector.id());
+        println!("ComplementaryDecompChecker sector = {:?}", sector.id());
         Self { sector }
     }
 }
 
-impl<F: FieldExt, N> Component<N> for SignCheckerComponent<F>
+impl<F: FieldExt, N> Component<N> for ComplementaryDecompChecker<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {

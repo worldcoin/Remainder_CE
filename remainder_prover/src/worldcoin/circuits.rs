@@ -1,3 +1,5 @@
+use std::ops::Sub;
+
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
@@ -10,10 +12,10 @@ use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::get_input_shred_from_vec;
 use crate::utils::pad_to_nearest_power_of_two;
-use crate::worldcoin::components::SignCheckerComponent;
-use crate::worldcoin::components::{DigitalRecompositionComponent, SubtractionComponent};
+use crate::worldcoin::components::ComplementaryDecompChecker;
+use crate::worldcoin::components::{UnsignedRecomposition, Thresholder};
 use crate::worldcoin::data::WorldcoinCircuitData;
-use crate::worldcoin::digit_decomposition::BASE;
+use crate::worldcoin::BASE;
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
@@ -35,6 +37,7 @@ pub fn build_circuit<F: FieldExt>(
             code: iris_code,
             digit_multiplicities,
             thresholds_matrix,
+            equality_allowed,
         } = &data;
         let mut output_nodes = vec![];
 
@@ -48,6 +51,9 @@ pub fn build_circuit<F: FieldExt>(
             &input_layer,
         );
         println!("Thresholds input = {:?}", thresholds.id());
+        let equality_allowed = get_input_shred_from_vec(vec![equality_allowed.clone()], ctx, &input_layer);
+        println!("Equality allowed input = {:?}", equality_allowed.id());
+
         let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
         println!("Identity gate = {:?}", rerouted_image.id());
 
@@ -65,7 +71,7 @@ pub fn build_circuit<F: FieldExt>(
         );
         println!("Matmult = {:?}", matmult.id());
 
-        let subtract_thresholds = SubtractionComponent::new(ctx, &matmult, &thresholds);
+        let thresholder = Thresholder::new(ctx, &matmult, &thresholds, &equality_allowed);
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
@@ -96,8 +102,7 @@ pub fn build_circuit<F: FieldExt>(
         );
         println!("Lookup constraint = {:?}", lookup_constraint.id());
 
-        let recomp_of_abs_value =
-            DigitalRecompositionComponent::new(ctx, &digits_refs, BASE as u64);
+        let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE as u64);
 
         let iris_code = get_input_shred_from_vec(
             pad_to_nearest_power_of_two(iris_code.clone()),
@@ -105,13 +110,13 @@ pub fn build_circuit<F: FieldExt>(
             &input_layer,
         );
         println!("Iris code input = {:?}", iris_code.id());
-        let sign_checker = SignCheckerComponent::new(
+        let complementary_checker = ComplementaryDecompChecker::new(
             ctx,
-            &subtract_thresholds.sector,
+            &thresholder.sector, // FIXME
             &iris_code,
-            &recomp_of_abs_value.sector,
+            &unsigned_recomp.sector,
         );
-        output_nodes.push(OutputNode::new_zero(ctx, &sign_checker.sector));
+        output_nodes.push(OutputNode::new_zero(ctx, &complementary_checker.sector));
 
         let bits_are_binary = BitsAreBinary::new(ctx, &iris_code);
         output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
@@ -139,11 +144,11 @@ pub fn build_circuit<F: FieldExt>(
         all_nodes.push(lookup_constraint.into());
 
         // Add nodes from components
-        all_nodes.extend(subtract_thresholds.yield_nodes().into_iter());
+        all_nodes.extend(thresholder.yield_nodes().into_iter());
         all_nodes.extend(digits_concatenator.yield_nodes().into_iter());
         all_nodes.extend(bits_are_binary.yield_nodes().into_iter());
-        all_nodes.extend(recomp_of_abs_value.yield_nodes().into_iter());
-        all_nodes.extend(sign_checker.yield_nodes().into_iter());
+        all_nodes.extend(unsigned_recomp.yield_nodes().into_iter());
+        all_nodes.extend(complementary_checker.yield_nodes().into_iter());
 
         // Add output nodes
         all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));

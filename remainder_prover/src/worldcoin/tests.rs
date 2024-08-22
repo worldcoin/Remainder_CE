@@ -9,8 +9,8 @@ mod tests {
     use crate::prover::helpers::test_circuit;
     use crate::utils::get_input_shred_from_vec;
     use crate::worldcoin::circuits::build_circuit;
-    use crate::worldcoin::components::SignCheckerComponent;
-    use crate::worldcoin::components::{BitsAreBinary, DigitalRecompositionComponent};
+    use crate::worldcoin::components::ComplementaryDecompChecker;
+    use crate::worldcoin::components::{BitsAreBinary, UnsignedRecomposition};
     use crate::worldcoin::data::{
         load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData,
     };
@@ -34,7 +34,7 @@ mod tests {
                 get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
             let values_input_shred = get_input_shred_from_vec(values.clone(), ctx, &input_layer);
 
-            let sign_checker = SignCheckerComponent::new(
+            let sign_checker = ComplementaryDecompChecker::new(
                 ctx,
                 &values_input_shred,
                 &sign_bits_input_shred,
@@ -110,9 +110,9 @@ mod tests {
                 .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
                 .collect_vec();
             let recomp_of_abs_value =
-                DigitalRecompositionComponent::new(ctx, &digits_input_refs, base);
+                UnsignedRecomposition::new(ctx, &digits_input_refs, base);
 
-            let signed_recomp_checker = SignCheckerComponent::new(
+            let signed_recomp_checker = ComplementaryDecompChecker::new(
                 ctx,
                 &expected_input_shred,
                 &sign_bits_input_shred,
