@@ -130,6 +130,7 @@ pub fn build_circuit<F: FieldExt>(
             thresholds.into(),
             digit_multiplicities.into(),
             lookup_table_values.into(),
+            equality_allowed.into(),
         ];
         all_nodes.extend(digits_input_shreds.into_iter().map(|node| node.into()));
 

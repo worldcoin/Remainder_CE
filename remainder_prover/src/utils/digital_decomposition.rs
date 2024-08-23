@@ -19,22 +19,20 @@ pub fn unsigned_decomposition<const BASE: u16, const N: usize>(value: u64) -> Op
 /// where (d, b) is the result.
 /// Returns None iff value is out of range.
 /// # Requires:
-///   `log2(BASE) * N <= 128`
+///   `log2(BASE) * N <= 64`
 pub fn complementary_decomposition<const BASE: u16, const N: usize>(value: i64) -> Option<([u16; N], bool)> {
-    debug_assert!(BASE.ilog2() * (N as u32) <= 128, "BASE * N must be <= 128");
-    let pow = (BASE as u128).pow(N as u32) as i64;
-    if value > pow || value < -pow + 1 {
+    debug_assert!(BASE.ilog2() * (N as u32) <= 64, "BASE * N must be <= 64");
+    let pow = (BASE as u128).pow(N as u32) as u128;
+    if (value >= 0 && (value as u128) > pow) || (value < 0 && (-value as u128) > pow - 1) {
         return None;
     }
     let (val_to_decomp, bit) = if value > 0 {
-        ((pow - value) as u64, true)
+        ((pow - (value as u128)), true)
     } else {
-        ((-value) as u64, false)
+        ((-value) as u128, false)
     };
-    match unsigned_decomposition::<BASE, N>(val_to_decomp) {
-        Some(decomp) => Some((decomp, bit)),
-        None => None,
-    }
+    // unwrap() guaranteed given the checks on already made
+    Some((unsigned_decomposition::<BASE, N>(val_to_decomp as u64).unwrap(), bit))
 }
 
 #[test]

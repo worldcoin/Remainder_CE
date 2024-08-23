@@ -13,14 +13,14 @@ use crate::{
     worldcoin::{BASE, NUM_DIGITS},
 };
 
-/// Calculates A - B + C, making the result available as self.sector.
+/// Calculates `a - b + c`, making the result available as self.sector.
 pub struct Thresholder<F: FieldExt> {
-    /// The sector that calculates A - B + C
+    /// The sector that calculates a - b + c
     pub sector: Sector<F>,
 }
 
 impl<F: FieldExt> Thresholder<F> {
-    /// Create a new [SubtractionComponent] component.
+    /// Create a new [Thresholder] component.
     pub fn new(ctx: &Context, a: &dyn ClaimableNode<F = F>, b: &dyn ClaimableNode<F = F>, c: &dyn ClaimableNode<F = F>) -> Self {
         let sector = Sector::new(
             ctx,
