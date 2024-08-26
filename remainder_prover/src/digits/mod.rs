@@ -1,5 +1,8 @@
 use remainder_shared_types::FieldExt;
 
+/// Components for digital recomposition.
+pub mod components;
+
 /// Decompose a number into N digits in a given base, MSB first.
 /// Returns None iff the number is too large to fit in N digits.
 /// # Example

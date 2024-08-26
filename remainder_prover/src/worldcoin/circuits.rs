@@ -1,5 +1,3 @@
-use std::ops::Sub;
-
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
 use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
@@ -12,14 +10,13 @@ use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::get_input_shred_from_vec;
 use crate::utils::pad_to_nearest_power_of_two;
-use crate::worldcoin::components::ComplementaryRecompChecker;
-use crate::worldcoin::components::{UnsignedRecomposition, Thresholder};
+use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecomposition, BitsAreBinary, DigitsConcatenator};
+use crate::worldcoin::components::Thresholder;
 use crate::worldcoin::data::WorldcoinCircuitData;
 use crate::worldcoin::{BASE, NUM_DIGITS};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
-use super::components::{BitsAreBinary, DigitsConcatenator};
 
 /// Builds the worldcoin circuit.
 pub fn build_circuit<F: FieldExt>(

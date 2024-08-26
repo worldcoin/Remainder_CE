@@ -7,7 +7,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::layer::LayerId;
 use crate::mle::circuit_mle::{to_slice_of_vectors, FlatMles};
-use crate::utils::digital_decomposition::{complementary_decomposition, digits_to_field};
+use crate::digits::{complementary_decomposition, digits_to_field};
 use super::{BASE, NUM_DIGITS};
 
 /// Generate toy data for the worldcoin circuit.
