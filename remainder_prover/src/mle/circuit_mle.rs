@@ -17,8 +17,25 @@ use super::{
 
 use itertools::Itertools;
 
-/// Helper function that converts a [Vec<F; N>] into a [Vec<F>; N]
-pub fn to_flat_mles<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>; N] {
+/// Helper function that converts a `Vec<[F; N]>` into a `[Vec<F>; N]`, i.e. that changes the order
+/// of the enumeration by iterating first over the inner index, then the outer index.
+/// # Example:
+/// ```
+/// # use remainder::mle::circuit_mle::to_slice_of_vectors;
+/// use remainder_shared_types::Fr;
+/// let inputs = vec![
+///     [Fr::from(1), Fr::from(2), Fr::from(3)],
+///     [Fr::from(4), Fr::from(5), Fr::from(6)],
+/// ];
+/// let expected = [
+///     vec![Fr::from(1), Fr::from(4)],
+///     vec![Fr::from(2), Fr::from(5)],
+///     vec![Fr::from(3), Fr::from(6)],
+/// ];
+/// let actual = to_slice_of_vectors(inputs);
+/// assert_eq!(actual, expected);
+/// ```
+pub fn to_slice_of_vectors<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>; N] {
     // converts a [Vec<F; N>] into a [Vec<F>; N]
     let mut result: [Vec<F>; N] = vec![Vec::new(); N].try_into().unwrap();
     for subarray in inputs {
@@ -27,24 +44,6 @@ pub fn to_flat_mles<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>
         }
     }
     result
-
-}
-
-// Test that demonstrates the incorrectness of the previous implementation of to_flat_mles.
-#[test]
-fn test_to_flat_mles() {
-    use remainder_shared_types::Fr;
-    let inputs = vec![
-        [Fr::from(1), Fr::from(2), Fr::from(3)],
-        [Fr::from(4), Fr::from(5), Fr::from(6)],
-    ];
-    let expected = [
-        vec![Fr::from(1), Fr::from(4)],
-        vec![Fr::from(2), Fr::from(5)],
-        vec![Fr::from(3), Fr::from(6)],
-    ];
-    let actual = to_flat_mles(inputs);
-    assert_eq!(actual, expected);
 }
 
 /// A trait for a MLE(s) that are the input(s) to a circuit,

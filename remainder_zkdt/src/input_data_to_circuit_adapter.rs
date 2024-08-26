@@ -20,7 +20,7 @@ use super::{
     },
     structs::{BinDecomp16Bit, BinDecomp8Bit, DecisionNode, InputAttribute, LeafNode},
 };
-use remainder::{layer::LayerId, mle::circuit_mle::to_flat_mles};
+use remainder::{layer::LayerId, mle::circuit_mle::to_slice_of_vectors};
 
 #[derive(Clone)]
 pub struct BatchedZKDTCircuitMles<F: FieldExt> {
@@ -147,7 +147,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                 .map(|x| x.bits)
                 .collect_vec();
             let multiplicities_bin_decomp_decision =
-                to_flat_mles(multiplicities_bin_decomp_decision);
+                to_slice_of_vectors(multiplicities_bin_decomp_decision);
 
             BinDecomp16BitMle::<F>::new_from_raw(
                 multiplicities_bin_decomp_decision,
@@ -163,7 +163,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                 .into_iter()
                 .map(|x| x.bits)
                 .collect_vec();
-            let multiplicities_bin_decomp_leaf = to_flat_mles(multiplicities_bin_decomp_leaf);
+            let multiplicities_bin_decomp_leaf = to_slice_of_vectors(multiplicities_bin_decomp_leaf);
 
             BinDecomp16BitMle::<F>::new_from_raw(multiplicities_bin_decomp_leaf, LayerId::Input(0))
         })
@@ -177,7 +177,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                 .into_iter()
                 .map(|x| [x.attr_id, x.attr_val])
                 .collect_vec();
-            let input = to_flat_mles(input);
+            let input = to_slice_of_vectors(input);
             InputAttributeMle::<F>::new_from_raw(input, LayerId::Input(0))
         })
         .collect_vec();
@@ -193,7 +193,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                             .into_iter()
                             .map(|x| [x.attr_id, x.attr_val])
                             .collect_vec();
-                        let datum = to_flat_mles(datum);
+                        let datum = to_slice_of_vectors(datum);
                         InputAttributeMle::<F>::new_from_raw(datum, LayerId::Input(0))
                     })
                     .collect()
@@ -210,7 +210,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                         .into_iter()
                         .map(|x| [x.node_id, x.attr_id, x.threshold])
                         .collect_vec();
-                    let path = to_flat_mles(path);
+                    let path = to_slice_of_vectors(path);
                     DecisionNodeMle::<F>::new_from_raw(path, LayerId::Input(0))
                 })
                 .collect()
@@ -227,7 +227,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                         .into_iter()
                         .map(|x| [x.node_id, x.node_val])
                         .collect_vec();
-                    let path = to_flat_mles(path);
+                    let path = to_slice_of_vectors(path);
                     LeafNodeMle::<F>::new_from_raw(path, LayerId::Input(0))
                 })
                 .collect()
@@ -246,7 +246,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                         .collect_vec();
 
                     // converts a [Vec<F; N>] into a [Vec<F>; N]
-                    let binary_decomp_diff = to_flat_mles(binary_decomp_diff);
+                    let binary_decomp_diff = to_slice_of_vectors(binary_decomp_diff);
 
                     BinDecomp16BitMle::<F>::new_from_raw(binary_decomp_diff, LayerId::Input(0))
                 })
@@ -261,7 +261,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                 .into_iter()
                 .map(|x| [x.node_id, x.attr_id, x.threshold])
                 .collect_vec();
-            let decision_nodes = to_flat_mles(decision_nodes);
+            let decision_nodes = to_slice_of_vectors(decision_nodes);
             DecisionNodeMle::<F>::new_from_raw(decision_nodes, LayerId::Input(0))
         })
         .collect_vec();
@@ -273,7 +273,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                 .into_iter()
                 .map(|x| [x.node_id, x.node_val])
                 .collect_vec();
-            let leaf_nodes = to_flat_mles(leaf_nodes);
+            let leaf_nodes = to_slice_of_vectors(leaf_nodes);
             LeafNodeMle::<F>::new_from_raw(leaf_nodes, LayerId::Input(0))
         })
         .collect_vec();
@@ -287,7 +287,7 @@ pub fn convert_zkdt_circuit_data_multi_tree_into_mles<F: FieldExt>(
                 .collect_vec();
 
             // converts a [Vec<F; N>] into a [Vec<F>; N]
-            let datum = to_flat_mles(datum);
+            let datum = to_slice_of_vectors(datum);
 
             BinDecomp8BitMle::<F>::new_from_raw(datum, LayerId::Input(0))
         })
@@ -337,7 +337,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
                 .into_iter()
                 .map(|x| [x.attr_id, x.attr_val])
                 .collect_vec();
-            let input = to_flat_mles(input);
+            let input = to_slice_of_vectors(input);
             InputAttributeMle::<F>::new_from_raw(input, LayerId::Input(0))
         })
         .collect_vec();
@@ -348,7 +348,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
                 .into_iter()
                 .map(|x| [x.attr_id, x.attr_val])
                 .collect_vec();
-            let datum = to_flat_mles(datum);
+            let datum = to_slice_of_vectors(datum);
             InputAttributeMle::<F>::new_from_raw(datum, LayerId::Input(0))
         })
         .collect();
@@ -359,7 +359,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
                 .into_iter()
                 .map(|x| [x.node_id, x.attr_id, x.threshold])
                 .collect_vec();
-            let path = to_flat_mles(path);
+            let path = to_slice_of_vectors(path);
             DecisionNodeMle::<F>::new_from_raw(path, LayerId::Input(0))
         })
         .collect();
@@ -370,7 +370,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
                 .into_iter()
                 .map(|x| [x.node_id, x.node_val])
                 .collect_vec();
-            let path = to_flat_mles(path);
+            let path = to_slice_of_vectors(path);
             LeafNodeMle::<F>::new_from_raw(path, LayerId::Input(0))
         })
         .collect();
@@ -383,7 +383,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
                 .collect_vec();
 
             // converts a [Vec<F; N>] into a [Vec<F>; N]
-            let binary_decomp_diff = to_flat_mles(binary_decomp_diff);
+            let binary_decomp_diff = to_slice_of_vectors(binary_decomp_diff);
 
             BinDecomp16BitMle::<F>::new_from_raw(binary_decomp_diff, LayerId::Input(0))
         })
@@ -394,7 +394,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
         .map(|bin_decomp| bin_decomp.bits)
         .collect_vec();
     let multiplicities_bin_decomp_mle_decision = BinDecomp16BitMle::<F>::new_from_raw(
-        to_flat_mles(multiplicities_bin_decomp_decision),
+        to_slice_of_vectors(multiplicities_bin_decomp_decision),
         LayerId::Input(0),
     );
 
@@ -403,7 +403,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
         .map(|bin_decomp| bin_decomp.bits)
         .collect_vec();
     let multiplicities_bin_decomp_mle_leaf = BinDecomp16BitMle::<F>::new_from_raw(
-        to_flat_mles(multiplicities_bin_decomp_leaf),
+        to_slice_of_vectors(multiplicities_bin_decomp_leaf),
         LayerId::Input(0),
     );
 
@@ -411,7 +411,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
         .into_iter()
         .map(|x| [x.node_id, x.attr_id, x.threshold])
         .collect_vec();
-    let decision_nodes = to_flat_mles(decision_nodes);
+    let decision_nodes = to_slice_of_vectors(decision_nodes);
 
     let decision_nodes_mle = DecisionNodeMle::<F>::new_from_raw(decision_nodes, LayerId::Input(0));
 
@@ -419,7 +419,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
         .into_iter()
         .map(|x| [x.node_id, x.node_val])
         .collect_vec();
-    let leaf_nodes = to_flat_mles(leaf_nodes);
+    let leaf_nodes = to_slice_of_vectors(leaf_nodes);
     let leaf_nodes_mle = LeafNodeMle::<F>::new_from_raw(leaf_nodes, LayerId::Input(0));
 
     let multiplicities_bin_decomp_mle_input = multiplicities_bin_decomp_input
@@ -431,7 +431,7 @@ pub fn convert_zkdt_circuit_data_into_mles<F: FieldExt>(
                 .collect_vec();
 
             // converts a [Vec<F; N>] into a [Vec<F>; N]
-            let datum = to_flat_mles(datum);
+            let datum = to_slice_of_vectors(datum);
 
             BinDecomp8BitMle::<F>::new_from_raw(datum, LayerId::Input(0))
         })
