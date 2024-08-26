@@ -13,6 +13,10 @@ extern crate quickcheck_macros;
 // and generating proofs of aggregation
 pub mod claims;
 
+// Module containing functions for deriving digital decompositions and building associated circuit
+// components.
+pub mod digits;
+
 // module for defining the expressions (and relavant helper
 // functions) for which the prover and the verifier interact with
 pub mod expression;
