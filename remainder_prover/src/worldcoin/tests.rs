@@ -6,10 +6,10 @@ mod tests {
     use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
     use crate::layouter::nodes::circuit_outputs::OutputNode;
     use crate::layouter::nodes::node_enum::NodeEnum;
-    use crate::layouter::nodes::ClaimableNode;
-    use crate::mle::circuit_mle::{to_flat_mles, FlatMles};
+    use crate::layouter::nodes::{CircuitNode, ClaimableNode};
+    use crate::mle::circuit_mle::{to_slice_of_vectors, CircuitMle, FlatMles};
     use crate::prover::helpers::test_circuit;
-    use crate::utils::digital_decomposition::complementary_decomposition;
+    use crate::utils::digital_decomposition::{complementary_decomposition, digits_to_field};
     use crate::utils::get_input_shred_from_vec;
     use crate::worldcoin::circuits::build_circuit;
     use crate::worldcoin::components::ComplementaryRecompChecker;
@@ -17,82 +17,67 @@ mod tests {
     use crate::worldcoin::data::{
         i64_to_field, load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData
     };
+    use ark_std::iterable::Iterable;
     use itertools::Itertools;
     use remainder_shared_types::halo2curves::ff::Field;
-    use remainder_shared_types::Fr;
+    use remainder_shared_types::{FieldExt, Fr};
     use std::path::Path;
 
-    // #[test]
-    // fn test_complementary_recomposition() {
-    //     let values = [-3, -2, -1, 0, 1, 2, 3, 4];
-    //     let (digits, bits): (Vec<_>, Vec<_>) = values.clone()
-    //         .into_iter()
-    //         .map(|value| complementary_decomposition::<2, 2>(value).unwrap())
-    //         .unzip();
+    #[test]
+    fn test_complementary_recomposition_vertical() {
+        let values = [-3, -2, -1, 0, 1, 2, 3, 4];
+        let (digits_raw, bits): (Vec<_>, Vec<_>) = values.clone()
+            .into_iter()
+            .map(|value| complementary_decomposition::<2, 2>(value).unwrap())
+            .unzip();
 
-    //     // FIXME feels like this should be a library function
-    //     // FlatMles for the digits
-    //     let digits: FlatMles<Fr, 2> = FlatMles::new_from_raw(
-    //         to_flat_mles(
-    //             digits
-    //                 .into_iter()
-    //                 .map(|vals| {
-    //                     let vals: [Fr; 2] = vals
-    //                         .into_iter()
-    //                         .map(|x| Fr::from(x as u64))
-    //                         .collect_vec()
-    //                         .try_into()
-    //                         .unwrap();
-    //                     vals
-    //                 })
-    //                 .collect_vec(),
-    //         ),
-    //         LayerId::Input(0),
-    //     );
+        // FlatMles for the digits
+        let digits: FlatMles<Fr, 2> = FlatMles::new_from_raw(
+            to_slice_of_vectors(digits_raw.iter().map(digits_to_field).collect_vec()),
+            LayerId::Input(0),
+        );
 
-    //     let circuit = LayouterCircuit::new(|ctx| {
-    //         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-    //         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
-    //         for (i, shred) in digits_input_shreds.iter().enumerate() {
-    //             println!("{}th digit input = {:?}", i, shred.id());
-    //         }
-    //         let digits_refs = digits_input_shreds
-    //             .iter()
-    //             .map(|shred| shred as &dyn ClaimableNode<F = F>)
-    //             .collect_vec();
-    //         let bits_input_shred = get_input_shred_from_vec(
-    //             bits.iter().map(|b| if *b { Fr::ONE } else { Fr::ZERO }).collect(),
-    //              ctx, &input_layer);
-    //         let values_input_shred = get_input_shred_from_vec(
-    //             values.iter().map(|value| i64_to_field(*value)).collect(),
-    //             ctx, &input_layer);
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
+            let digits_refs = digits_input_shreds
+                .iter()
+                .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+                .collect_vec();
+            let bits_input_shred = get_input_shred_from_vec(
+                bits.iter().map(|b| if *b { Fr::ONE } else { Fr::ZERO }).collect(),
+                 ctx, &input_layer);
+            let values_input_shred = get_input_shred_from_vec(
+                values.iter().map(|value| i64_to_field(value)).collect(),
+                ctx, &input_layer);
 
-    //         let recomp = UnsignedRecomposition::new(ctx, &digits_refs, 2);
-    //         let comp_checker = ComplementaryDecompChecker::new(
-    //             ctx,
-    //             &values_input_shred,
-    //             &bits_input_shred,
-    //             &recomp.sector,
-    //             2,
-    //             2
-    //         );
+            let recomp = UnsignedRecomposition::new(ctx, &digits_refs, 2);
+            let comp_checker = ComplementaryRecompChecker::new(
+                ctx,
+                &values_input_shred,
+                &bits_input_shred,
+                &recomp.sector,
+                2,
+                2
+            );
 
-    //         let output = OutputNode::new_zero(ctx, &comp_checker.sector);
+            let output = OutputNode::new_zero(ctx, &comp_checker.sector);
 
-    //         let all_nodes: Vec<NodeEnum<Fr>> = vec![
-    //             input_layer.into(),
-    //             values_input_shred.into(),
-    //             bits_input_shred.into(),
-    //             recomp.sector.into(),
-    //             comp_checker.sector.into(),
-    //             output.into(),
-    //         ];
+            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                values_input_shred.into(),
+                bits_input_shred.into(),
+                recomp.sector.into(),
+                comp_checker.sector.into(),
+                output.into(),
+            ];
+            all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
 
-    //         ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
-    //     });
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        });
 
-    //     test_circuit(circuit, None);
-    // }
+        test_circuit(circuit, None);
+    }
 
     #[test]
     fn test_unsigned_recomposition() {
@@ -132,7 +117,6 @@ mod tests {
                 .collect_vec();
             let expected_input_shred = get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
 
-            // FIXME can't we .into() these?
             let digits_input_refs = digits_input_shreds
                 .iter()
                 .map(|shred| shred as &dyn ClaimableNode<F = Fr>)

@@ -6,8 +6,8 @@ use ndarray_npy::read_npy;
 use remainder_shared_types::FieldExt;
 
 use crate::layer::LayerId;
-use crate::mle::circuit_mle::{to_flat_mles, FlatMles};
-use crate::utils::digital_decomposition::complementary_decomposition;
+use crate::mle::circuit_mle::{to_slice_of_vectors, FlatMles};
+use crate::utils::digital_decomposition::{complementary_decomposition, digits_to_field};
 use super::{BASE, NUM_DIGITS};
 
 /// Generate toy data for the worldcoin circuit.
@@ -284,20 +284,7 @@ impl<F: FieldExt> WorldcoinCircuitData<F> {
 
         // FlatMles for the digits
         let digits: FlatMles<F, NUM_DIGITS> = FlatMles::new_from_raw(
-            to_flat_mles(
-                digits
-                    .into_iter()
-                    .map(|vals| {
-                        let vals: [F; NUM_DIGITS] = vals
-                            .into_iter()
-                            .map(|x| F::from(x as u64))
-                            .collect_vec()
-                            .try_into()
-                            .unwrap();
-                        vals
-                    })
-                    .collect_vec(),
-            ),
+            to_slice_of_vectors(digits.iter().map(digits_to_field).collect_vec()),
             LayerId::Input(0),
         );
 
