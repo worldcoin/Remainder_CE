@@ -1,67 +1,103 @@
 #[cfg(test)]
 mod tests {
+    use crate::layer::LayerId;
     use crate::layouter::compiling::LayouterCircuit;
     use crate::layouter::component::ComponentSet;
     use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
     use crate::layouter::nodes::circuit_outputs::OutputNode;
     use crate::layouter::nodes::node_enum::NodeEnum;
     use crate::layouter::nodes::ClaimableNode;
+    use crate::mle::circuit_mle::{to_flat_mles, FlatMles};
     use crate::prover::helpers::test_circuit;
+    use crate::utils::digital_decomposition::complementary_decomposition;
     use crate::utils::get_input_shred_from_vec;
     use crate::worldcoin::circuits::build_circuit;
-    use crate::worldcoin::components::ComplementaryDecompChecker;
-    use crate::worldcoin::components::{BitsAreBinary, UnsignedRecomposition};
+    use crate::worldcoin::components::ComplementaryRecompChecker;
+    use crate::worldcoin::components::{BitsAreBinary, UnsignedRecomposition, EqualityChecker};
     use crate::worldcoin::data::{
-        load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData,
+        i64_to_field, load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData
     };
     use itertools::Itertools;
+    use remainder_shared_types::halo2curves::ff::Field;
     use remainder_shared_types::Fr;
     use std::path::Path;
 
+    // #[test]
+    // fn test_complementary_recomposition() {
+    //     let values = [-3, -2, -1, 0, 1, 2, 3, 4];
+    //     let (digits, bits): (Vec<_>, Vec<_>) = values.clone()
+    //         .into_iter()
+    //         .map(|value| complementary_decomposition::<2, 2>(value).unwrap())
+    //         .unzip();
+
+    //     // FIXME feels like this should be a library function
+    //     // FlatMles for the digits
+    //     let digits: FlatMles<Fr, 2> = FlatMles::new_from_raw(
+    //         to_flat_mles(
+    //             digits
+    //                 .into_iter()
+    //                 .map(|vals| {
+    //                     let vals: [Fr; 2] = vals
+    //                         .into_iter()
+    //                         .map(|x| Fr::from(x as u64))
+    //                         .collect_vec()
+    //                         .try_into()
+    //                         .unwrap();
+    //                     vals
+    //                 })
+    //                 .collect_vec(),
+    //         ),
+    //         LayerId::Input(0),
+    //     );
+
+    //     let circuit = LayouterCircuit::new(|ctx| {
+    //         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+    //         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
+    //         for (i, shred) in digits_input_shreds.iter().enumerate() {
+    //             println!("{}th digit input = {:?}", i, shred.id());
+    //         }
+    //         let digits_refs = digits_input_shreds
+    //             .iter()
+    //             .map(|shred| shred as &dyn ClaimableNode<F = F>)
+    //             .collect_vec();
+    //         let bits_input_shred = get_input_shred_from_vec(
+    //             bits.iter().map(|b| if *b { Fr::ONE } else { Fr::ZERO }).collect(),
+    //              ctx, &input_layer);
+    //         let values_input_shred = get_input_shred_from_vec(
+    //             values.iter().map(|value| i64_to_field(*value)).collect(),
+    //             ctx, &input_layer);
+
+    //         let recomp = UnsignedRecomposition::new(ctx, &digits_refs, 2);
+    //         let comp_checker = ComplementaryDecompChecker::new(
+    //             ctx,
+    //             &values_input_shred,
+    //             &bits_input_shred,
+    //             &recomp.sector,
+    //             2,
+    //             2
+    //         );
+
+    //         let output = OutputNode::new_zero(ctx, &comp_checker.sector);
+
+    //         let all_nodes: Vec<NodeEnum<Fr>> = vec![
+    //             input_layer.into(),
+    //             values_input_shred.into(),
+    //             bits_input_shred.into(),
+    //             recomp.sector.into(),
+    //             comp_checker.sector.into(),
+    //             output.into(),
+    //         ];
+
+    //         ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+    //     });
+
+    //     test_circuit(circuit, None);
+    // }
+
     #[test]
-    fn test_sign_checker() {
-        let values = vec![Fr::from(3u64), Fr::from(2u64).neg()];
-        let abs_values = vec![Fr::from(3u64), Fr::from(2u64)];
-        let sign_bits = vec![
-            Fr::from(1u64), // positive
-            Fr::from(0u64), // negative
-        ];
-
-        let circuit = LayouterCircuit::new(|ctx| {
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let abs_values_shred = get_input_shred_from_vec(abs_values.clone(), ctx, &input_layer);
-            let sign_bits_input_shred =
-                get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
-            let values_input_shred = get_input_shred_from_vec(values.clone(), ctx, &input_layer);
-
-            let sign_checker = ComplementaryDecompChecker::new(
-                ctx,
-                &values_input_shred,
-                &sign_bits_input_shred,
-                &abs_values_shred,
-            );
-
-            let output = OutputNode::new_zero(ctx, &sign_checker.sector);
-
-            let all_nodes: Vec<NodeEnum<Fr>> = vec![
-                input_layer.into(),
-                abs_values_shred.into(),
-                sign_bits_input_shred.into(),
-                values_input_shred.into(),
-                sign_checker.sector.into(),
-                output.into(),
-            ];
-
-            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
-        });
-
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    fn test_recomposition() {
-        let base = 16;
-        // a length 2 decomposition of four values
+    fn test_unsigned_recomposition() {
+        let base: u64 = 16;
+        let num_digits = 2;
         let digits = vec![
             vec![
                 // MSBs
@@ -78,17 +114,83 @@ mod tests {
                 Fr::from(0u64),
             ],
         ];
-        let sign_bits = vec![
-            // 1 means positive, 0 means negative
+        assert_eq!(digits.len(), num_digits);
+        let expected = vec![
+            Fr::from(19),
+            Fr::from(2),
+            Fr::from(33),
+            Fr::from(48),
+        ];
+
+        let circuit = LayouterCircuit::new(|ctx| {
+            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
+            let digits_input_shreds = digits
+                .iter()
+                .map(|digits_at_place| {
+                    get_input_shred_from_vec(digits_at_place.clone(), ctx, &input_layer)
+                })
+                .collect_vec();
+            let expected_input_shred = get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
+
+            // FIXME can't we .into() these?
+            let digits_input_refs = digits_input_shreds
+                .iter()
+                .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+                .collect_vec();
+            let recomp = UnsignedRecomposition::new(ctx, &digits_input_refs, base);
+
+            let equality_checker = EqualityChecker::new(ctx, &expected_input_shred, &recomp.sector);
+            let output = OutputNode::new_zero(ctx, &equality_checker.sector);
+
+            let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
+                input_layer.into(),
+                expected_input_shred.into(),
+                recomp.sector.into(),
+                equality_checker.sector.into(),
+                output.into(),
+            ];
+
+            all_nodes.extend(digits_input_shreds.into_iter().map(|shred| shred.into()));
+
+            ComponentSet::<NodeEnum<Fr>>::new_raw(all_nodes)
+        });
+
+        test_circuit(circuit, None);
+    }
+
+    #[test]
+    fn test_complementary_recomposition() {
+        let base: u64 = 16;
+        let num_digits = 2;
+        let base_pow = base.pow(num_digits as u32);
+        let digits = vec![
+            vec![
+                // MSBs
+                Fr::from(1u64),
+                Fr::from(0u64),
+                Fr::from(2u64),
+                Fr::from(3u64),
+            ],
+            vec![
+                // LSBs
+                Fr::from(3u64),
+                Fr::from(2u64),
+                Fr::from(1u64),
+                Fr::from(0u64),
+            ],
+        ];
+        assert_eq!(digits.len(), num_digits);
+        let bits = vec![
+            // 1 iff strictly positive
             Fr::from(1u64),
             Fr::from(0u64),
             Fr::from(1u64),
             Fr::from(0u64),
         ];
         let expected = vec![
-            Fr::from(19u64),
+            Fr::from((base_pow - 19) as u64),
             Fr::from(2u64).neg(),
-            Fr::from(33u64),
+            Fr::from((base_pow - 33) as u64),
             Fr::from(48u64).neg(),
         ];
 
@@ -100,8 +202,8 @@ mod tests {
                     get_input_shred_from_vec(digits_at_place.clone(), ctx, &input_layer)
                 })
                 .collect_vec();
-            let sign_bits_input_shred =
-                get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
+            let bits_input_shred =
+                get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
             let expected_input_shred =
                 get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
 
@@ -109,23 +211,24 @@ mod tests {
                 .iter()
                 .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
                 .collect_vec();
-            let recomp_of_abs_value =
-                UnsignedRecomposition::new(ctx, &digits_input_refs, base);
+            let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_input_refs, base);
 
-            let signed_recomp_checker = ComplementaryDecompChecker::new(
+            let signed_recomp_checker = ComplementaryRecompChecker::new(
                 ctx,
                 &expected_input_shred,
-                &sign_bits_input_shred,
-                &recomp_of_abs_value.sector,
+                &bits_input_shred,
+                &unsigned_recomp.sector,
+                base,
+                num_digits,
             );
 
             let output = OutputNode::new_zero(ctx, &signed_recomp_checker.sector);
 
             let mut all_nodes: Vec<NodeEnum<Fr>> = vec![
                 input_layer.into(),
-                sign_bits_input_shred.into(),
+                bits_input_shred.into(),
                 expected_input_shred.into(),
-                recomp_of_abs_value.sector.into(),
+                unsigned_recomp.sector.into(),
                 signed_recomp_checker.sector.into(),
                 output.into(),
             ];

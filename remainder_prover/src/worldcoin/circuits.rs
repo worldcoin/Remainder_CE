@@ -12,10 +12,10 @@ use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::get_input_shred_from_vec;
 use crate::utils::pad_to_nearest_power_of_two;
-use crate::worldcoin::components::ComplementaryDecompChecker;
+use crate::worldcoin::components::ComplementaryRecompChecker;
 use crate::worldcoin::components::{UnsignedRecomposition, Thresholder};
 use crate::worldcoin::data::WorldcoinCircuitData;
-use crate::worldcoin::BASE;
+use crate::worldcoin::{BASE, NUM_DIGITS};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
@@ -110,11 +110,13 @@ pub fn build_circuit<F: FieldExt>(
             &input_layer,
         );
         println!("Iris code input = {:?}", iris_code.id());
-        let complementary_checker = ComplementaryDecompChecker::new(
+        let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
             &thresholder.sector, // FIXME
             &iris_code,
             &unsigned_recomp.sector,
+            BASE as u64,
+            NUM_DIGITS,
         );
         output_nodes.push(OutputNode::new_zero(ctx, &complementary_checker.sector));
 

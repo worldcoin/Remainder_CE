@@ -37,7 +37,7 @@ impl<F: FieldExt> Thresholder<F> {
                 MultilinearExtension::new(result)
             },
         );
-        println!("Thresholder sector = {:?}", sector.id());
+        println!("{:?} = Thresholder sector", sector.id());
         Self { sector }
     }
 }
@@ -87,7 +87,7 @@ impl<F: FieldExt> DigitsConcatenator<F> {
                 MultilinearExtension::new(all_digits)
             },
         );
-        println!("DigitsConcatenator sector = {:?}", sector.id());
+        println!("{:?} = DigitsConcatenator sector", sector.id());
         Self { sector }
     }
 }
@@ -117,11 +117,7 @@ impl<F: FieldExt> UnsignedRecomposition<F> {
             mles,
             |input_nodes| {
                 assert_eq!(input_nodes.len(), num_digits);
-
-                // --- Let's just do a linear accumulator for now ---
-                // TODO!(ryancao): Rewrite this expression but as a tree
                 let b_s_initial_acc = Expression::<F, AbstractExpr>::constant(F::ZERO);
-
                 input_nodes.into_iter().enumerate().fold(
                     b_s_initial_acc,
                     |acc_expr, (bit_idx, bin_decomp_mle)| {
@@ -150,7 +146,7 @@ impl<F: FieldExt> UnsignedRecomposition<F> {
                 MultilinearExtension::new(result_iter)
             },
         );
-        println!("DigitsRecompComponent sector = {:?}", sector.id());
+        println!("{:?} = UnsignedRecomposition sector", sector.id());
         Self { sector }
     }
 }
@@ -196,7 +192,7 @@ impl<F: FieldExt> BitsAreBinary<F> {
                 MultilinearExtension::new_sized_zero(data[0].num_vars())
             },
         );
-        println!("BitsAreBinary sector = {:?}", sector.id());
+        println!("{:?} = BitsAreBinary sector", sector.id());
         Self { sector }
     }
 }
@@ -210,27 +206,61 @@ where
     }
 }
 
-
-/// Component that checks that the complementary decomposition of a signed integer.
-/// Add self.sector to the circuit as an output layer to enforce this constraint.
-pub struct ComplementaryDecompChecker<F: FieldExt> {
+/// Use this component to check if the values of two ClaimableNodes are equal, by adding self.sector
+/// to the circuit as an output layer.
+pub struct EqualityChecker<F: FieldExt> {
     /// To be added to the circuit as an output layer by the caller.
     pub sector: Sector<F>,
 }
 
-impl<F: FieldExt> ComplementaryDecompChecker<F> {
+impl<F: FieldExt> EqualityChecker<F> {
+    /// Create a new EqualityChecker.
+    pub fn new(
+        ctx: &Context,
+        lhs: &dyn ClaimableNode<F = F>,
+        rhs: &dyn ClaimableNode<F = F>,
+    ) -> Self {
+        let sector = Sector::new(
+            ctx,
+            &[lhs, rhs],
+            |nodes| {
+                assert_eq!(nodes.len(), 2);
+                nodes[0].expr() - nodes[1].expr()
+            },
+            |data| {
+                assert_eq!(data.len(), 2);
+                let result = data[0].get_evals_vector().iter().zip(data[1].get_evals_vector().iter())
+                    .map(|(a, b)| *a - *b)
+                    .collect_vec();
+                MultilinearExtension::new(result)
+            },
+        );
+        println!("{:?} = EqualityChecker sector", sector.id());
+        Self { sector }
+    }
+}
+
+/// Component that checks that the complementary decomposition of a signed integer.
+/// Add self.sector to the circuit as an output layer to enforce this constraint.
+pub struct ComplementaryRecompChecker<F: FieldExt> {
+    /// To be added to the circuit as an output layer by the caller.
+    pub sector: Sector<F>,
+}
+
+impl<F: FieldExt> ComplementaryRecompChecker<F> {
     // FIXME expand
     /// Create a new ComplementaryDecompChecker.
-    /// `equality_allowed` is a bit that indicates whether equality of response and threshold results in a 1 (true) or 0 (false).
     pub fn new(
         ctx: &Context,
         values: &dyn ClaimableNode<F = F>,
         bits: &dyn ClaimableNode<F = F>,
         unsigned_recomps: &dyn ClaimableNode<F = F>,
+        base: u64,
+        num_digits: usize,
     ) -> Self {
         let mut pow = F::from(1 as u64);
-        for _ in 0..NUM_DIGITS {
-            pow = pow * F::from(BASE as u64);
+        for _ in 0..num_digits {
+            pow = pow * F::from(base);
         }
 
         let sector = Sector::new(
@@ -260,12 +290,12 @@ impl<F: FieldExt> ComplementaryDecompChecker<F> {
                 MultilinearExtension::new_sized_zero(data[0].num_vars())
             },
         );
-        println!("ComplementaryDecompChecker sector = {:?}", sector.id());
+        println!("{:?} = ComplemenaryRecompChecker sector", sector.id());
         Self { sector }
     }
 }
 
-impl<F: FieldExt, N> Component<N> for ComplementaryDecompChecker<F>
+impl<F: FieldExt, N> Component<N> for ComplementaryRecompChecker<F>
 where
     N: CircuitNode + From<Sector<F>>,
 {
