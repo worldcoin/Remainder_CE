@@ -1,5 +1,4 @@
 //! Module for supplying utilities for creating and combining sets of Nodes
-pub mod equality_check;
 use super::nodes::CircuitNode;
 
 /// A type that represents a collection of CircuitNodes, ready to be yielded
