@@ -36,6 +36,10 @@ impl LookupConstraint {
     /// responsible for the yielding of all nodes (including `constrained` and `multiplicities`).
     /// The adding of lookup specific input- and output layers is handled automatically by
     /// compile().
+    ///
+    /// # Requires:
+    ///   if `constrained` has length not a power of two, then `multiplicitites` must also count the
+    ///   implicit padding!
     pub fn new<F: FieldExt>(
         ctx: &Context,
         lookup_table: &LookupTable,
@@ -204,7 +208,7 @@ where
                 .collect(),
         );
         let mle =
-            MultilinearExtension::new(constrained_values.into_iter().map(|val| r - val).collect());
+            MultilinearExtension::new(constrained_values.iter().map(|val| r - val).collect());
         let denominator_length = mle.get_evals_vector().len();
         let lhs_denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
@@ -356,6 +360,9 @@ where
         // Add an output layer that checks that the result is zero
         let mle = ZeroMle::new(0, None, layer_id);
         witness_builder.add_output_layer(mle.into());
+        // Check that it really is true!
+        let fraction_check = lhs_numerator.current_mle.value() * rhs_denominator.current_mle.value() - rhs_numerator.current_mle.value() * lhs_denominator.current_mle.value();
+        assert_eq!(fraction_check, F::ZERO);
 
         Ok(())
     }

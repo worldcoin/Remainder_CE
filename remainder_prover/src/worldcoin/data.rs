@@ -26,6 +26,23 @@ pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
     )
 }
 
+/// Generate toy data for the worldcoin circuit in which the number of responses is not a power of
+/// two (this is the case for the true v2 data, but that test case takes 90 seconds).
+/// Image is 2x2, and there are three placements of one 2x1 kernel (1, 2).T
+pub fn tiny_worldcoin_data_non_power_of_two<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
+    let image_shape = (2, 2);
+    let kernel_shape = (1, 2, 1);
+    let response_shape = (3, 1);
+    WorldcoinCircuitData::new(
+        Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
+        Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
+        vec![0],
+        vec![0, 1, 1],
+        Array2::from_shape_vec(response_shape, vec![0, 0, 0]).unwrap(),
+        false,
+    )
+}
+
 // FIXME what should the iris code be?
 /// Generate toy data for the worldcoin circuit.
 /// Image is 3x3:
@@ -133,8 +150,8 @@ impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData
     ///
     /// # Arguments:
     /// + `image` is the quantized input image (100x400 for v2).
-    /// + `kernel_values` is the matrix of padded, quantized kernel values of shape (kernel_num_rows *
-    ///   kernel_num_cols, num_kernels).
+    /// + `kernel_values` is the matrix of padded, quantized kernel values of shape `(num_kernels, kernel_num_rows,
+    ///   kernel_num_cols)`.
     /// + `placements_row_idxs` gives the row coordinate of the top-left corner of each placement of
     ///   the kernels (can be negative)
     /// + `placements_col_idxs` gives the column coordinate of the top-left corner of each placement
@@ -220,9 +237,18 @@ impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData
         // Calculate the matrix product. Has dimensions (num_placements, num_kernels).
         let responses = rerouted_matrix.dot(&kernel_matrix);
 
-        // Calculate the complementary digital decompositions of the thresholded responses
+        // Calculate the thresholded responses, which are the responses minus the thresholds plus
+        // the equality_allowed indicator, to allow for the case where the inequality is not strict.
+        let mut thres_resp = (responses - &thresholds_matrix + (if equality_allowed { 1 } else { 0 })).into_iter().collect_vec();
+        // We pad the thresholded responses to the nearest power of two, since the number of
+        // placements is not necessarily a power of two, and this will otherwise cause an issue for
+        // logup (which expects the number of constrained values to be a power of two).
+        let padding_amount = thres_resp.len().next_power_of_two() - thres_resp.len();
+        let padding_values = vec![0; padding_amount];
+        thres_resp.extend(padding_values);
+
+        // Calculate the complementary digital decompositions of the thresholded responses.
         // Both vectors have length num_placements * num_kernels.
-        let thres_resp = responses - &thresholds_matrix + (if equality_allowed { 1 } else { 0 });
         let (digits, code): (Vec<_>, Vec<_>) = thres_resp
             .into_iter()
             .map(|value| complementary_decomposition::<BASE, NUM_DIGITS>(value).unwrap())
