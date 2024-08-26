@@ -11,9 +11,10 @@ use crate::{
     mle::evals::MultilinearExtension,
 };
 
-/// Calculates `a - b + c`, making the result available as self.sector.
+/// Calculates `matmult - thresholds + equality_allowed`, making the result available as self.sector.
+/// It is assumed that `matmult` and `thresholds` have the same length, while `equality_allowed` has length 1.
 pub struct Thresholder<F: FieldExt> {
-    /// The sector that calculates a - b + c
+    /// The sector that containing the result of the calculation.
     pub sector: Sector<F>,
 }
 
@@ -29,8 +30,12 @@ impl<F: FieldExt> Thresholder<F> {
             },
             |data| {
                 assert_eq!(data.len(), 3);
-                let result = data[0].get_evals_vector().iter().zip(data[1].get_evals_vector().iter()).zip(data[2].get_evals_vector().iter())
-                    .map(|((a, b), c)| *a - *b + *c)
+                let (matmult, thresholds, equality_allowed) = (data[0], data[1], data[2]);
+                assert_eq!(matmult.num_vars(), thresholds.num_vars());
+                assert_eq!(equality_allowed.num_vars(), 0);
+                let e = equality_allowed.get_evals_vector()[0];
+                let result = matmult.get_evals_vector().iter().zip(thresholds.get_evals_vector().iter())
+                    .map(|(m, t)| *m - *t + e)
                     .collect_vec();
                 MultilinearExtension::new(result)
             },
