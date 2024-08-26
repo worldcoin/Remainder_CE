@@ -75,6 +75,8 @@ where
 }
 
 /// Component that checks that the complementary decomposition of a signed integer.
+/// To be used in conjunction with [UnsignedRecomposition].
+/// See [digits::complementary_decomposition] and (Notion)[https://www.notion.so/Constraining-for-the-response-zero-case-using-the-complementary-representation-d77ddfe258a74a9ab949385cc6f7eda4].
 /// Add self.sector to the circuit as an output layer to enforce this constraint.
 pub struct ComplementaryRecompChecker<F: FieldExt> {
     /// To be added to the circuit as an output layer by the caller.
@@ -82,8 +84,10 @@ pub struct ComplementaryRecompChecker<F: FieldExt> {
 }
 
 impl<F: FieldExt> ComplementaryRecompChecker<F> {
-    // FIXME expand
     /// Create a new ComplementaryDecompChecker.
+    /// `values` are the original values.
+    /// `bits` are the bits of the complementary decomposition.
+    /// `unsigned_recomps` are the unsigned recompositions.
     pub fn new(
         ctx: &Context,
         values: &dyn ClaimableNode<F = F>,
@@ -124,7 +128,7 @@ impl<F: FieldExt> ComplementaryRecompChecker<F> {
                 MultilinearExtension::new_sized_zero(data[0].num_vars())
             },
         );
-        println!("{:?} = ComplemenaryRecompChecker sector", sector.id());
+        println!("{:?} = ComplementaryRecompChecker sector", sector.id());
         Self { sector }
     }
 }

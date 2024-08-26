@@ -8,6 +8,7 @@ use remainder_shared_types::FieldExt;
 use crate::layer::LayerId;
 use crate::mle::circuit_mle::{to_slice_of_vectors, FlatMles};
 use crate::digits::{complementary_decomposition, digits_to_field};
+use crate::utils::arithmetic::i64_to_field;
 use super::{BASE, NUM_DIGITS};
 
 /// Generate toy data for the worldcoin circuit.
@@ -125,15 +126,6 @@ pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinCircuitData<F
         thresholds,
         false // FIXME differentiate between iris and mask
     )
-}
-
-/// Helper function for conversion to field elements, handling negative values.
-pub fn i64_to_field<F: FieldExt>(value: i64) -> F {
-    if value >= 0 {
-        F::from(value as u64)
-    } else {
-        F::from(value.unsigned_abs()).neg()
-    }
 }
 
 impl<F: FieldExt> WorldcoinCircuitData<F> {

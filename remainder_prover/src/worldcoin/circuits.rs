@@ -109,7 +109,7 @@ pub fn build_circuit<F: FieldExt>(
         println!("Iris code input = {:?}", iris_code.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
-            &thresholder.sector, // FIXME
+            &thresholder.sector,
             &iris_code,
             &unsigned_recomp.sector,
             BASE as u64,

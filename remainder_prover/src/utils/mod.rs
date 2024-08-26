@@ -22,6 +22,9 @@ use crate::{
     prover::layers::Layers,
 };
 
+
+pub mod arithmetic;
+
 #[cfg(test)]
 pub(crate) mod test_utils;
 

@@ -10,12 +10,12 @@ use crate::prover::helpers::test_circuit;
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::utils::get_input_shred_from_vec;
 use super::{ComplementaryRecompChecker, BitsAreBinary, UnsignedRecomposition};
-use crate::worldcoin::components::EqualityChecker;
-use crate::worldcoin::data::i64_to_field;
+use crate::components::EqualityChecker;
+use crate::utils::arithmetic::i64_to_field;
 use ark_std::iterable::Iterable;
 use itertools::Itertools;
 use remainder_shared_types::halo2curves::ff::Field;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::Fr;
 
 #[test]
 fn test_complementary_recomposition_vertical() {
