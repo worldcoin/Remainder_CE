@@ -39,25 +39,25 @@ pub fn build_circuit<F: FieldExt>(
         let mut output_nodes = vec![];
 
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        println!("Input layer = {:?}", input_layer.id());
+        println!("{:?} = Input layer", input_layer.id());
         let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
-        println!("Image input = {:?}", image.id());
+        println!("{:?} = Image input", image.id());
         let thresholds = get_input_shred_from_vec(
             pad_to_nearest_power_of_two(thresholds_matrix.clone()),
             ctx,
             &input_layer,
         );
-        println!("Thresholds input = {:?}", thresholds.id());
+        println!("{:?} = Thresholds input", thresholds.id());
         let equality_allowed = get_input_shred_from_vec(vec![equality_allowed.clone()], ctx, &input_layer);
-        println!("Equality allowed input = {:?}", equality_allowed.id());
+        println!("{:?} = Equality allowed input", equality_allowed.id());
 
         let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
-        println!("Identity gate = {:?}", rerouted_image.id());
+        println!("{:?} = Identity gate", rerouted_image.id());
 
         let (filter_num_values, _) = kernel_matrix_dims;
         let matrix_a_num_rows_cols = (num_placements.next_power_of_two(), *filter_num_values);
         let kernel_matrix = get_input_shred_from_vec(kernel_matrix.clone(), ctx, &input_layer);
-        println!("Kernel values input = {:?}", kernel_matrix.id());
+        println!("{:?} = Kernel values input", kernel_matrix.id());
 
         let matmult = MatMultNode::new(
             ctx,
@@ -66,13 +66,13 @@ pub fn build_circuit<F: FieldExt>(
             &kernel_matrix,
             *kernel_matrix_dims,
         );
-        println!("Matmult = {:?}", matmult.id());
+        println!("{:?} = Matmult", matmult.id());
 
         let thresholder = Thresholder::new(ctx, &matmult, &thresholds, &equality_allowed);
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
-            println!("{}th digit input = {:?}", i, shred.id());
+            println!("{:?} = {}th digit input", shred.id(), i);
         }
         let digits_refs = digits_input_shreds
             .iter()
@@ -85,19 +85,19 @@ pub fn build_circuit<F: FieldExt>(
         // Use a lookup to range check the digits to the range 0..BASE
         let lookup_table_values =
             get_input_shred_from_vec((0..BASE as u64).map(F::from).collect(), ctx, &input_layer);
-        println!("Digit range check input = {:?}", lookup_table_values.id());
+        println!("{:?} = Digit range check input", lookup_table_values.id());
         let lookup_table = LookupTable::new(ctx, &lookup_table_values, false);
-        println!("Lookup table = {:?}", lookup_table.id());
+        println!("{:?} = Lookup table", lookup_table.id());
         let digit_multiplicities =
             get_input_shred_from_vec(digit_multiplicities.clone(), ctx, &input_layer);
-        println!("Digit multiplicities = {:?}", digit_multiplicities.id());
+        println!("{:?} = Digit multiplicities", digit_multiplicities.id());
         let lookup_constraint = LookupConstraint::new(
             ctx,
             &lookup_table,
             &digits_concatenator.sector,
             &digit_multiplicities,
         );
-        println!("Lookup constraint = {:?}", lookup_constraint.id());
+        println!("{:?} = Lookup constraint", lookup_constraint.id());
 
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE as u64);
 
@@ -106,7 +106,7 @@ pub fn build_circuit<F: FieldExt>(
             ctx,
             &input_layer,
         );
-        println!("Iris code input = {:?}", iris_code.id());
+        println!("{:?} = Iris code input", iris_code.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
             &thresholder.sector,
