@@ -453,6 +453,7 @@ impl<F: FieldExt> RegularLayer<F> {
     /// layer which are linear, and then appropriately initializing the
     /// necessary beta values over the nonlinear rounds.
     fn start_sumcheck(&mut self, claim: &Claim<F>) -> Result<(), LayerError> {
+        println!("Starting sumcheck for layer: {:?}", self.id);
         let claim_point = claim.get_point();
 
         // Grab and index the expression.
