@@ -1,5 +1,13 @@
+use remainder_shared_types::FieldExt;
+
 /// Decompose a number into N digits in a given base, MSB first.
 /// Returns None iff the number is too large to fit in N digits.
+/// # Example
+/// ```
+/// # use remainder::utils::digital_decomposition::unsigned_decomposition;
+/// let decomp = unsigned_decomposition::<10, 3>(987);
+/// assert_eq!(decomp, Some([9, 8, 7]));
+/// ```
 pub fn unsigned_decomposition<const BASE: u16, const N: usize>(value: u64) -> Option<[u16; N]> {
     let base = BASE as u64;
     let mut value = value;
@@ -20,6 +28,12 @@ pub fn unsigned_decomposition<const BASE: u16, const N: usize>(value: u64) -> Op
 /// Returns None iff value is out of range.
 /// # Requires:
 ///   `log2(BASE) * N <= 64`
+/// # Example:
+/// ```
+/// # use remainder::utils::digital_decomposition::complementary_decomposition;
+/// let decomp = complementary_decomposition::<2, 3>(3);
+/// assert_eq!(decomp, Some(([1, 0, 1], true)));
+/// ```
 pub fn complementary_decomposition<const BASE: u16, const N: usize>(value: i64) -> Option<([u16; N], bool)> {
     debug_assert!(BASE.ilog2() * (N as u32) <= 64, "BASE * N must be <= 64");
     let pow = (BASE as u128).pow(N as u32) as u128;
@@ -33,6 +47,17 @@ pub fn complementary_decomposition<const BASE: u16, const N: usize>(value: i64) 
     };
     // unwrap() guaranteed given the checks on already made
     Some((unsigned_decomposition::<BASE, N>(val_to_decomp as u64).unwrap(), bit))
+}
+
+/// Convert a slice of digits to a slice of field elements.
+/// # Example:
+/// ```
+/// # use remainder::utils::digital_decomposition::digits_to_field;
+/// use remainder_shared_types::Fr;
+/// assert_eq!(digits_to_field::<Fr, 3>(&[1, 2, 3]), [Fr::from(1), Fr::from(2), Fr::from(3)]);
+/// ```
+pub fn digits_to_field<F: FieldExt, const N: usize>(digits: &[u16; N]) -> [F; N] {
+    digits.iter().map(|x| F::from(*x as u64)).collect::<Vec<_>>().try_into().unwrap()
 }
 
 #[test]
