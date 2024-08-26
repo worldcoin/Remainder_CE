@@ -13,14 +13,13 @@ use crate::utils::pad_to_nearest_power_of_two;
 use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecomposition, BitsAreBinary, DigitsConcatenator};
 use crate::worldcoin::components::Thresholder;
 use crate::worldcoin::data::WorldcoinCircuitData;
-use crate::worldcoin::{BASE, NUM_DIGITS};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
 
 /// Builds the worldcoin circuit.
-pub fn build_circuit<F: FieldExt>(
-    data: WorldcoinCircuitData<F>,
+pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
+    data: WorldcoinCircuitData<F, BASE, NUM_DIGITS>,
 ) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
 {
     LayouterCircuit::new(move |ctx| {

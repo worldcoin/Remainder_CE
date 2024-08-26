@@ -9,11 +9,10 @@ use crate::layer::LayerId;
 use crate::mle::circuit_mle::{to_slice_of_vectors, FlatMles};
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::utils::arithmetic::i64_to_field;
-use super::{BASE, NUM_DIGITS};
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
-pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
+pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
     let image_shape = (2, 2);
     let kernel_shape = (2, 2, 1);
     let response_shape = (2, 2);
@@ -38,7 +37,7 @@ pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
 ///  3 4    1 8    5 7    -2 0
 /// There are four placements of the kernels.
 /// Threshold values are non-trivial.
-pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
+pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
     let image_shape = (3, 3);
     let kernel_shape = (4, 2, 2);
     let response_shape = (4, 4);
@@ -64,7 +63,7 @@ pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F> {
 #[derive(Debug, Clone)]
 /// Used for instantiating the Worldcoin circuit.
 /// Kernel placements are specified by the _product_ placements_row_idxs x placements_col_idxs.
-pub struct WorldcoinCircuitData<F: FieldExt> {
+pub struct WorldcoinCircuitData<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> {
     /// Row-major flattening of the input image (with no padding applied before or after).
     pub image_matrix_mle: Vec<F>,
     /// The reroutings from the input image to the matrix multiplicand "A", as pairs of gate labels.
@@ -99,7 +98,7 @@ pub struct WorldcoinCircuitData<F: FieldExt> {
 ///   - `placements_top_left_row_idxs.npy` - (i32) the row indices of the top-left corner of the placements of the padded kernels
 ///   - `placements_top_left_col_idxs.npy` - (i32) the column indices of the top-left corner of the placements of the padded kernels
 /// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has shape (num_placements, num_kernels)).
-pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinCircuitData<F> {
+pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(data_directory: PathBuf) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
     let image: Array2<i64> =
         read_npy(Path::new(&data_directory.join("image.npy"))).unwrap();
 
@@ -128,7 +127,7 @@ pub fn load_data<F: FieldExt>(data_directory: PathBuf) -> WorldcoinCircuitData<F
     )
 }
 
-impl<F: FieldExt> WorldcoinCircuitData<F> {
+impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
     /// Create a new instance. Note that every _combination_ from placements_row_idxs x
     /// placements_col_idxs specifies a kernel placement in the image (via the top-left coordinate).
     ///
@@ -333,7 +332,8 @@ mod test {
         let mask_path = Path::new("worldcoin_witness_data/mask").to_path_buf();
         for path in vec![iris_path, mask_path] {
             dbg!(&path);
-            let data: WorldcoinCircuitData<Fr> = load_data(path.clone());
+            use crate::worldcoin::{WC_BASE, WC_NUM_DIGITS};
+            let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone());
             // Check things that should be generically true
             assert_eq!(data.code.len(), data.thresholds_matrix.len());
             assert_eq!(

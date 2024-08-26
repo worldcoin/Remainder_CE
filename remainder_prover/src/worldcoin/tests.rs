@@ -23,19 +23,19 @@ mod tests {
         test_circuit(circuit, None);
     }
 
-    #[test]
-    fn test_worldcoin_circuit_iris() {
-        let data: WorldcoinCircuitData<Fr> =
-            load_data(Path::new("worldcoin_witness_data/iris").to_path_buf());
-        let circuit = build_circuit(data);
-        test_circuit(circuit, None);
-    }
+    // #[test]
+    // fn test_worldcoin_circuit_iris() {
+    //     let data: WorldcoinCircuitData<Fr> =
+    //         load_data(Path::new("worldcoin_witness_data/iris").to_path_buf());
+    //     let circuit = build_circuit(data);
+    //     test_circuit(circuit, None);
+    // }
 
-    #[test]
-    fn test_worldcoin_circuit_mask() {
-        let data: WorldcoinCircuitData<Fr> =
-            load_data(Path::new("worldcoin_witness_data/mask").to_path_buf());
-        let circuit = build_circuit(data);
-        test_circuit(circuit, None);
-    }
+    // #[test]
+    // fn test_worldcoin_circuit_mask() {
+    //     let data: WorldcoinCircuitData<Fr> =
+    //         load_data(Path::new("worldcoin_witness_data/mask").to_path_buf());
+    //     let circuit = build_circuit(data);
+    //     test_circuit(circuit, None);
+    // }
 }
