@@ -43,6 +43,52 @@ pub fn tiny_worldcoin_data_non_power_of_two<F: FieldExt>() -> WorldcoinCircuitDa
     )
 }
 
+/// As per [tiny_worldcoin_data_non_power_of_two], but with the flag `equality_allowed` set to true.
+pub fn tiny_worldcoin_data_non_power_of_two_mask_case<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
+    let image_shape = (2, 2);
+    let kernel_shape = (1, 2, 1);
+    let response_shape = (3, 1);
+    WorldcoinCircuitData::new(
+        Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
+        Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
+        vec![0],
+        vec![0, 1, 1],
+        Array2::from_shape_vec(response_shape, vec![0, 0, 0]).unwrap(),
+        true,
+    )
+}
+
+/// Generate and return two WorldcoinCircuitData instances, both of which have all their responses that are
+/// on the threshold boundary, but which set the flag `equality_allowed` differently (this corresponds to the iris vs the
+/// mask case).
+/// Their respective codes are [0; 4] and [1; 4].
+/// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
+pub fn tiny_worldcoin_data_responses_on_threshold_boundary<F: FieldExt>() -> (WorldcoinCircuitData<F, 16, 2>, WorldcoinCircuitData<F, 16, 2>) {
+    let image_shape = (2, 2);
+    let kernel_shape = (2, 2, 1);
+    let response_shape = (2, 2);
+    let image = Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap();
+    let kernel_values = Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4]).unwrap();
+    let placements_row_idxs = vec![0];
+    let placements_col_idxs = vec![0, 1];
+    let thresholds = Array2::from_shape_vec(response_shape, vec![11, 25, 19, 39]).unwrap();
+    (WorldcoinCircuitData::new(
+        image.clone(),
+        kernel_values.clone(),
+        placements_row_idxs.clone(),
+        placements_col_idxs.clone(),
+        thresholds.clone(),
+        false),
+    WorldcoinCircuitData::new(
+        image.clone(),
+        kernel_values.clone(),
+        placements_row_idxs.clone(),
+        placements_col_idxs.clone(),
+        thresholds.clone(),
+        true)
+    )
+}
+
 // FIXME what should the iris code be?
 /// Generate toy data for the worldcoin circuit.
 /// Image is 3x3:
@@ -108,14 +154,16 @@ pub struct WorldcoinCircuitData<F: FieldExt, const BASE: u16, const NUM_DIGITS: 
 }
 
 /// Loads the witness for the v2 Worldcoin data from disk for either the iris or mask case.
-/// Expects the following files:
+/// Expects the following files to be available in either the "iris" or "mask" subfolder of `data_directory`:
 /// + `image.npy` - (i64) the quantized input image (could be the iris or the mask)
 /// + `padded_kernel_values.npy` - (i64) the padded kernel values (quantized)
 /// + Placements, specified by the product of placements_row_idxs x placements_col_idxs:
 ///   - `placements_top_left_row_idxs.npy` - (i32) the row indices of the top-left corner of the placements of the padded kernels
 ///   - `placements_top_left_col_idxs.npy` - (i32) the column indices of the top-left corner of the placements of the padded kernels
 /// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has shape (num_placements, num_kernels)).
-pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(data_directory: PathBuf) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
+/// The argument `is_mask` indicates whether the mask or the iris, and sets the `equality_allowed` flag accordingly.
+pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(data_directory: PathBuf, is_mask: bool) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
+    let data_directory = data_directory.join(if is_mask { "mask" } else { "iris" });
     let image: Array2<i64> =
         read_npy(Path::new(&data_directory.join("image.npy"))).unwrap();
 
@@ -140,7 +188,7 @@ pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(data_dir
         placements_row_idxs,
         placements_col_idxs,
         thresholds,
-        false // FIXME differentiate between iris and mask
+        is_mask
     )
 }
 
@@ -243,8 +291,9 @@ impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData
         // We pad the thresholded responses to the nearest power of two, since the number of
         // placements is not necessarily a power of two, and this will otherwise cause an issue for
         // logup (which expects the number of constrained values to be a power of two).
+        // The padding value is `equality_allowed`.
         let padding_amount = thres_resp.len().next_power_of_two() - thres_resp.len();
-        let padding_values = vec![0; padding_amount];
+        let padding_values = vec![ if equality_allowed { 1 } else { 0 }; padding_amount];
         thres_resp.extend(padding_values);
 
         // Calculate the complementary digital decompositions of the thresholded responses.
@@ -342,7 +391,7 @@ pub fn next_power_of_two(n: usize) -> Option<usize> {
 mod test {
     use ndarray::{Array2, Array3};
     use ndarray_npy::read_npy;
-    use remainder_shared_types::Fr;
+    use remainder_shared_types::{halo2curves::ff::Field, Fr};
     use std::path::Path;
 
     use crate::{
@@ -354,18 +403,18 @@ mod test {
 
     #[test]
     fn test_circuit_data_creation_v2_iris_and_mask() {
-        let iris_path = Path::new("worldcoin_witness_data/iris").to_path_buf();
-        let mask_path = Path::new("worldcoin_witness_data/mask").to_path_buf();
-        for path in vec![iris_path, mask_path] {
-            dbg!(&path);
+        let path = Path::new("worldcoin_witness_data").to_path_buf();
+        for is_mask in vec![false, true] {
+            dbg!(&is_mask);
             use crate::worldcoin::{WC_BASE, WC_NUM_DIGITS};
-            let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone());
+            let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), is_mask);
             // Check things that should be generically true
             assert_eq!(data.code.len(), data.thresholds_matrix.len());
             assert_eq!(
                 data.kernel_matrix_mle.len(),
                 data.kernel_matrix_dims.0 * data.kernel_matrix_dims.1
             );
+            assert_eq!(data.equality_allowed, if is_mask { Fr::ONE } else { Fr::ZERO });
             // there should be any many digits in the kth position as there are elements in the _padded_ iris code
             let expected_digits_length = next_power_of_two(data.code.len()).unwrap();
             for digits in data.digits.get_mle_refs().iter() {
