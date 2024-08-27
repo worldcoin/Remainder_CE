@@ -24,10 +24,10 @@ pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
 {
     LayouterCircuit::new(move |ctx| {
         let WorldcoinCircuitData {
-            image_matrix_mle,
+            image: image_matrix_mle,
             reroutings: wirings,
             num_placements,
-            kernel_matrix_mle: kernel_matrix,
+            kernel_values: kernel_matrix,
             kernel_matrix_dims,
             digits,
             code: iris_code,
