@@ -346,6 +346,11 @@ where
         // Add an output layer that checks that the result is zero
         let mle = ZeroMle::new(1, None, layer_id);
         witness_builder.add_output_layer(mle.into());
+        // Check that it really is true!
+        let inverse_check = lhs_denominator.current_mle.value() * lhs_inverse_densemle.current_mle.value() - F::ONE;
+        assert_eq!(inverse_check, F::ZERO);
+        let inverse_check = rhs_denominator.current_mle.value() * rhs_inverse_densemle.current_mle.value() - F::ONE;
+        assert_eq!(inverse_check, F::ZERO);
 
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
         let expr = PE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()])
