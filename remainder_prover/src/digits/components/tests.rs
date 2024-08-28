@@ -8,7 +8,7 @@ use crate::layouter::nodes::ClaimableNode;
 use crate::mle::circuit_mle::{to_slice_of_vectors, CircuitMle, FlatMles};
 use crate::prover::helpers::test_circuit;
 use crate::digits::{complementary_decomposition, digits_to_field};
-use crate::utils::get_input_shred_from_vec;
+use crate::utils::mle::get_input_shred_from_vec;
 use super::{ComplementaryRecompChecker, BitsAreBinary, UnsignedRecomposition};
 use crate::components::EqualityChecker;
 use crate::utils::arithmetic::i64_to_field;

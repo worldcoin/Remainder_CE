@@ -16,7 +16,7 @@ use crate::{
     },
     layer::{layer_enum::LayerEnum, regular_layer::RegularLayer},
     mle::{mle_enum::MleEnum, Mle, MleIndex},
-    utils::{argsort, bits_iter},
+    utils::mle::{argsort, bits_iter},
 };
 
 #[derive(Error, Debug)]

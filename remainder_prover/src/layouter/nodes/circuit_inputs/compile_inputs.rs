@@ -16,7 +16,7 @@ use crate::{
     },
     mle::evals::{Evaluations, MultilinearExtension},
     prover::proof_system::ProofSystem,
-    utils::{argsort, pad_to_nearest_power_of_two},
+    utils::mle::{argsort, pad_to_nearest_power_of_two},
 };
 
 use super::{InputLayerNode, InputLayerType};
@@ -132,7 +132,7 @@ fn combine_input_mles<F: FieldExt>(
 ///     result.
 fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F> {
     // --- This should only happen the first time!!! ---
-    let padded_bookkeeping_table = pad_to_nearest_power_of_two(bookkeeping_table);
+    let padded_bookkeeping_table = pad_to_nearest_power_of_two(&bookkeeping_table);
 
     // --- 2 or fewer elements: No-op ---
     if padded_bookkeeping_table.len() <= 2 {

@@ -19,7 +19,7 @@ use crate::{
         proof_system::{DefaultProofSystem, ProofSystem},
         CircuitInputLayer, GKRCircuit, GKRError, GKRVerifierKey, Witness,
     },
-    utils::get_random_mle,
+    utils::mle::get_random_mle,
 };
 
 use super::{

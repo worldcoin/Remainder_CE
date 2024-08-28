@@ -10,7 +10,7 @@ use remainder_shared_types::FieldExt;
 use crate::{
     layer::LayerId,
     mle::{dense::DenseMle, Mle, MleIndex},
-    utils::{argsort, pad_to_nearest_power_of_two},
+    utils::mle::{argsort, pad_to_nearest_power_of_two},
 };
 
 use crate::input_layer::{ligero_input_layer::LigeroInputLayer, MleInputLayer};
@@ -43,7 +43,7 @@ fn get_prefix_bits_from_capacity<F: FieldExt>(
 ///     result.
 fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F> {
     // --- This should only happen the first time!!! ---
-    let padded_bookkeeping_table = pad_to_nearest_power_of_two(bookkeeping_table);
+    let padded_bookkeeping_table = pad_to_nearest_power_of_two(&bookkeeping_table);
 
     // --- 2 or fewer elements: No-op ---
     if padded_bookkeeping_table.len() <= 2 {

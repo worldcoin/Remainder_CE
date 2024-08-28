@@ -8,8 +8,8 @@ use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
-use crate::utils::get_input_shred_from_vec;
-use crate::utils::pad_to_nearest_power_of_two;
+use crate::utils::mle::get_input_shred_from_vec;
+use crate::utils::mle::pad_with;
 use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecomposition, BitsAreBinary, DigitsConcatenator};
 use crate::worldcoin::components::Thresholder;
 use crate::worldcoin::data::WorldcoinCircuitData;
@@ -41,7 +41,7 @@ pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
         let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
         println!("{:?} = Image input", image.id());
         let thresholds = get_input_shred_from_vec(
-            pad_to_nearest_power_of_two(thresholds_matrix.clone()),
+            pad_with(F::ZERO, &thresholds_matrix),
             ctx,
             &input_layer,
         );
@@ -97,7 +97,7 @@ pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE as u64);
 
         let iris_code = get_input_shred_from_vec(
-            pad_to_nearest_power_of_two(iris_code.clone()),
+            pad_with(F::ZERO, &iris_code),
             ctx,
             &input_layer,
         );

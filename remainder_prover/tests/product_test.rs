@@ -9,7 +9,7 @@ use remainder::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType}
 use remainder::layouter::nodes::circuit_outputs::OutputNode;
 use remainder::layouter::component::{Component, ComponentSet};
 use remainder::layouter::nodes::node_enum::NodeEnum;
-use remainder::utils::get_input_shred_from_vec;
+use remainder::utils::mle::get_input_shred_from_vec;
 use remainder::prover::helpers::test_circuit;
 
 pub struct ProductCheckerComponent<F: FieldExt> {
