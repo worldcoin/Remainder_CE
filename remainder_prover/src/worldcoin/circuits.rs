@@ -33,7 +33,6 @@ pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
             code: iris_code,
             digit_multiplicities,
             thresholds_matrix,
-            equality_allowed,
         } = &data;
         let mut output_nodes = vec![];
 
@@ -47,9 +46,6 @@ pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
             &input_layer,
         );
         println!("{:?} = Thresholds input", thresholds.id());
-        let equality_allowed = get_input_shred_from_vec(vec![equality_allowed.clone()], ctx, &input_layer);
-        println!("{:?} = Equality allowed input", equality_allowed.id());
-
         let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
@@ -67,7 +63,7 @@ pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
         );
         println!("{:?} = Matmult", matmult.id());
 
-        let thresholder = Thresholder::new(ctx, &matmult, &thresholds, &equality_allowed);
+        let thresholder = Thresholder::new(ctx, &matmult, &thresholds);
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
@@ -128,7 +124,6 @@ pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
             thresholds.into(),
             digit_multiplicities.into(),
             lookup_table_values.into(),
-            equality_allowed.into(),
         ];
         all_nodes.extend(digits_input_shreds.into_iter().map(|node| node.into()));
 

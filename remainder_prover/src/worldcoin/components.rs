@@ -11,8 +11,8 @@ use crate::{
     mle::evals::MultilinearExtension,
 };
 
-/// Calculates `matmult - thresholds + equality_allowed`, making the result available as self.sector.
-/// It is assumed that `matmult` and `thresholds` have the same length, while `equality_allowed` has length 1.
+/// Calculates `matmult - thresholds`, making the result available as self.sector.
+/// It is assumed that `matmult` and `thresholds` have the same length.
 pub struct Thresholder<F: FieldExt> {
     /// The sector that containing the result of the calculation.
     pub sector: Sector<F>,
@@ -20,22 +20,20 @@ pub struct Thresholder<F: FieldExt> {
 
 impl<F: FieldExt> Thresholder<F> {
     /// Create a new [Thresholder] component.
-    pub fn new(ctx: &Context, a: &dyn ClaimableNode<F = F>, b: &dyn ClaimableNode<F = F>, c: &dyn ClaimableNode<F = F>) -> Self {
+    pub fn new(ctx: &Context, a: &dyn ClaimableNode<F = F>, b: &dyn ClaimableNode<F = F>) -> Self {
         let sector = Sector::new(
             ctx,
-            &[a, b, c],
+            &[a, b],
             |nodes| {
-                assert_eq!(nodes.len(), 3);
-                nodes[0].expr() - nodes[1].expr() + nodes[2].expr()
+                assert_eq!(nodes.len(), 2);
+                nodes[0].expr() - nodes[1].expr()
             },
             |data| {
-                assert_eq!(data.len(), 3);
-                let (matmult, thresholds, equality_allowed) = (data[0], data[1], data[2]);
+                assert_eq!(data.len(), 2);
+                let (matmult, thresholds) = (data[0], data[1]);
                 assert_eq!(matmult.num_vars(), thresholds.num_vars());
-                assert_eq!(equality_allowed.num_vars(), 0);
-                let e = equality_allowed.get_evals_vector()[0];
                 let result = matmult.get_evals_vector().iter().zip(thresholds.get_evals_vector().iter())
-                    .map(|(m, t)| *m - *t + e)
+                    .map(|(m, t)| *m - *t)
                     .collect_vec();
                 MultilinearExtension::new(result)
             },
