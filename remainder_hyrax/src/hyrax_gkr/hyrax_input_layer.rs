@@ -37,6 +37,8 @@ use crate::{
 
 use super::hyrax_layer::HyraxClaim;
 
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 /// FIXME: temporary fix to work with hyrax input layer proofs and the generic input layer proof for
 /// [HyraxCircuitInputLayerEnum]. Need this for circuits that use multiple different types of input layers.
 pub enum InputProofEnum<C: PrimeOrderCurve> {
