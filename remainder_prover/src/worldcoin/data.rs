@@ -9,6 +9,7 @@ use crate::layer::LayerId;
 use crate::mle::circuit_mle::{to_slice_of_vectors, FlatMles};
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::utils::arithmetic::i64_to_field;
+use crate::utils::mle::pad_with;
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
@@ -71,25 +72,6 @@ pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
             -5, -5, -5, -5,
             ]).unwrap(),
     )
-}
-
-/// Return a vector containing a padded version of the input data, with the padding value at the end
-/// of the vector, such that the length is `data.len().next_power_of_two()`.  This is a no-op if the
-/// length is already a power of two.
-/// # Examples:
-/// ```
-/// use remainder::worldcoin::data::pad;
-/// let data = vec![1, 2, 3];
-/// let padded_data = pad(0, &data);
-/// assert_eq!(padded_data, vec![1, 2, 3, 0]);
-/// assert_eq!(pad(0, &padded_data), vec![1, 2, 3, 0]); // length is already a power of two.
-/// ```
-pub fn pad<F: Clone>(padding_value: F, data: &[F]) -> Vec<F> {
-    let padded_length = data.len().next_power_of_two();
-    let mut padded_data = Vec::with_capacity(padded_length);
-    padded_data.extend_from_slice(data);
-    padded_data.extend(std::iter::repeat(padding_value).take(padded_length - data.len()));
-    padded_data
 }
 
 #[derive(Debug, Clone)]
@@ -261,7 +243,7 @@ impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData
         // We pad the thresholded responses to the nearest power of two, since the number of
         // placements is not necessarily a power of two, and this will otherwise cause an issue for
         // logup (which expects the number of constrained values to be a power of two).
-        let thres_resp = pad(0, &(responses - &thresholds_matrix).into_iter().collect_vec());
+        let thres_resp = pad_with(0, &(responses - &thresholds_matrix).into_iter().collect_vec());
 
         // Calculate the complementary digital decompositions of the thresholded responses.
         // Both vectors have the same length as thres_resp.
@@ -278,7 +260,7 @@ impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData
 
         // Derive the padded image MLE.
         // Note that this padding has nothing to do with the padding of the thresholded responses.
-        let image_matrix_mle: Vec<F> = pad(0, &image.into_iter().collect_vec()).into_iter().map(i64_to_field).collect_vec();
+        let image_matrix_mle: Vec<F> = pad_with(0, &image.into_iter().collect_vec()).into_iter().map(i64_to_field).collect_vec();
 
         // Convert the iris code to field elements (this is already padded by construction).
         let code: Vec<F> = code
@@ -287,7 +269,7 @@ impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData
             .collect_vec();
 
         // Flatten the kernel values, convert to field and pad.
-        let kernel_values: Vec<F> = pad(F::ZERO,
+        let kernel_values: Vec<F> = pad_with(F::ZERO,
             &kernel_matrix
             .into_iter()
             .map(i64_to_field)
@@ -295,7 +277,7 @@ impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData
         );
 
         // Flatten the thresholds matrix, convert to field and pad.
-        let thresholds_matrix: Vec<F> = pad(F::ZERO,
+        let thresholds_matrix: Vec<F> = pad_with(F::ZERO,
             &thresholds_matrix
             .into_iter()
             .map(i64_to_field)
@@ -336,8 +318,7 @@ mod test {
     use std::path::Path;
 
     use crate::{
-        mle::{circuit_mle::CircuitMle, Mle},
-        worldcoin::data::pad,
+        mle::{circuit_mle::CircuitMle, Mle}, utils::mle::pad_with
     };
 
     use super::{load_data, medium_worldcoin_data, WorldcoinCircuitData};
@@ -404,7 +385,7 @@ mod test {
                 .iter()
                 .map(|&b| Fr::from(b as u64))
                 .collect();
-            let expected_flattened_padded = pad(Fr::from(0), &expected_flattened);
+            let expected_flattened_padded = pad_with(Fr::from(0), &expected_flattened);
             if data.code != expected_flattened_padded {
                 println!("Expected code (length {}):", expected_flattened_padded.len());
                 print_code(&expected_flattened_padded);
