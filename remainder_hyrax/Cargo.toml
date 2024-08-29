@@ -24,4 +24,5 @@ ndarray-npy = "0.8.1"
 rayon = "1.7"
 
 [features]
+parallel = []
 print-trace = []
