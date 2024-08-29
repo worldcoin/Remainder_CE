@@ -74,14 +74,14 @@ fn test_hyrax_worldcoin_medium() {
 #[test]
 fn test_hyrax_worldcoin_v2_iris() {
     let data: WorldcoinCircuitData<Scalar, WC_BASE, WC_NUM_DIGITS> =
-        load_data(Path::new("../worldcoin_witness_data").to_path_buf(), false);
+        load_data(Path::new("../worldcoin_witness_data_v2_synthetic").to_path_buf(), false);
     test_hyrax_worldcoin(data, 100);
 }
 
 #[test]
 fn test_hyrax_worldcoin_v2_mask() {
     let data: WorldcoinCircuitData<Scalar, WC_BASE, WC_NUM_DIGITS> =
-        load_data(Path::new("../worldcoin_witness_data").to_path_buf(), true);
+        load_data(Path::new("../worldcoin_witness_data_v2_synthetic").to_path_buf(), true);
     test_hyrax_worldcoin(data, 100);
 }
 

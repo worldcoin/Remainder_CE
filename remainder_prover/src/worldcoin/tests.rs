@@ -36,7 +36,7 @@ mod tests {
     #[test]
     fn test_worldcoin_circuit_iris() {
         let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> =
-            load_data(Path::new("../worldcoin_witness_data").to_path_buf(), false);
+            load_data(Path::new("../worldcoin_witness_data_v2_synthetic").to_path_buf(), false);
         let circuit = build_circuit(data);
         test_circuit(circuit, None);
     }
@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn test_worldcoin_circuit_mask() {
         let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> =
-            load_data(Path::new("../worldcoin_witness_data").to_path_buf(), true);
+            load_data(Path::new("../worldcoin_witness_data_v2_synthetic").to_path_buf(), true);
         let circuit = build_circuit(data);
         test_circuit(circuit, None);
     }
