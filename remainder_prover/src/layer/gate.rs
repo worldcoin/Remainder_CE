@@ -4,8 +4,6 @@
 /// Helper functions used in the gate sumcheck algorithms.
 pub mod gate_helpers;
 mod new_interface_tests;
-#[cfg(test)]
-mod tests;
 
 use std::cmp::max;
 
