@@ -51,3 +51,7 @@ pretty_assertions = "1.4.0"
 [features]
 default = ["parallel"]
 parallel = []
+
+[[bin]]
+name = "run_iriscode_circuit"
+path = "src/bin/run_iriscode_circuit.rs"
