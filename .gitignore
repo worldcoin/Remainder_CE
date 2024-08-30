@@ -23,11 +23,9 @@ remainder_prover/*.json
 # darn macOS
 .DS_Store
 
-*.npy
 *.json
 scripts-ion/
 scripts-noya/
 scripts-upshot/
-remainder_prover/worldcoin_witness_data/
 
 *.bin
