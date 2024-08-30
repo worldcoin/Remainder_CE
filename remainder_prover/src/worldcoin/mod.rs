@@ -18,6 +18,9 @@ pub mod io;
 /// Parameters for the v2 circuit
 pub mod parameters_v2;
 
+/// Parameters for the v3 circuit
+pub mod parameters_v3;
+
 /// Tests
 #[cfg(test)]
 pub mod tests;

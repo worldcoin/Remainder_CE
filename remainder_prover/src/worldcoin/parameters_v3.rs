@@ -1,14 +1,16 @@
 // Constants defining the digit decomposition of the WC circuit.
-const WC_LOG_NUM_DIGITS: usize = 2;
+const WC_LOG_NUM_DIGITS: usize = 3;
 /// The number of digits in the complementary decomposition of the thresholded responses.
 pub const WC_NUM_DIGITS: usize = (1 << WC_LOG_NUM_DIGITS) as usize;
 /// The base of the complementary decomposition of the thresholded responses.
 pub const WC_BASE: u64 = 256;
 
+// FIXME
 /// The row coordinate of the top-left corner of each placement of the kernels (can be negative)
 pub const PLACEMENTS_ROW_IDXS: [i32; 16] = [
     -13,  -7,   0,   6,  12,  18,  25,  31,  37,  43,  50,  56,  62, 68,  75,  81];
 
+// FIXME
 /// The column coordinate of the top-left corner of each placement of the kernels (can be negative)
 pub const PLACEMENTS_COL_IDXS: [i32; 200] = [
     -32, -30, -28, -26, -24, -22, -20, -18, -16, -14, -12, -10,  -8,
@@ -37,11 +39,12 @@ pub const NUM_KERNEL_ROWS: usize = 32;
 /// The number of columns in the kernels (must be a power of two)
 pub const NUM_KERNEL_COLS: usize = 64;
 
+// FIXME
 /// The number of thresholds (= length of the result of matmult, flattened)
 pub const NUM_THRESHOLDS: usize = 1 << 14;
 
 /// Where to look for the thresholds and the kernel values, i.e. the data that is the same for every
-/// run of the v3 circuit.
+/// run of the v2 circuit.
 /// Contains two subfolders "iris" and "mask" each containing:
 /// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has shape (num_placements, num_kernels)).
 /// + `padded_kernel_values.npy` - (i64) the padded kernel values (quantized)
