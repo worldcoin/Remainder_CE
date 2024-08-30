@@ -10,6 +10,7 @@ use crate::mle::circuit_mle::{to_slice_of_vectors, FlatMles};
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::mle::pad_with;
+use crate::worldcoin::parameters_v2::{NUM_KERNELS, NUM_KERNEL_COLS, NUM_KERNEL_ROWS};
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
@@ -20,8 +21,8 @@ pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
     WorldcoinCircuitData::new(
         Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
         Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4]).unwrap(),
-        vec![0],
-        vec![0, 1],
+        &vec![0],
+        &vec![0, 1],
         Array2::from_shape_vec(response_shape, vec![0, 0, 0, 0]).unwrap(),
     )
 }
@@ -36,8 +37,8 @@ pub fn tiny_worldcoin_data_non_power_of_two<F: FieldExt>() -> WorldcoinCircuitDa
     WorldcoinCircuitData::new(
         Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
         Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
-        vec![0],
-        vec![0, 1, 1],
+        &vec![0],
+        &vec![0, 1, 1],
         Array2::from_shape_vec(response_shape, vec![0, 0, 0]).unwrap(),
     )
 }
@@ -63,8 +64,8 @@ pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
             vec![1, 2, 3, 4, 2, 7, 1, 8, 2, 3, 5, 7, 3, -3, -2, 0],
         )
         .unwrap(),
-        vec![0, 2],
-        vec![0, 2],
+        &vec![0, 2],
+        &vec![0, 2],
         Array2::from_shape_vec(response_shape, vec![
             5, 5, 5, 5,
             5, 5, 5, 5,
@@ -106,40 +107,30 @@ pub struct WorldcoinCircuitData<F: FieldExt, const BASE: u16, const NUM_DIGITS: 
     pub thresholds_matrix: Vec<F>,
 }
 
-/// Loads the witness for the v2 Worldcoin data from disk for either the iris or mask case.
-/// Expects the following files to be available in either the "iris" or "mask" subfolder of `data_directory`:
-/// + `image.npy` - (i64) the quantized input image (could be the iris or the mask)
-/// + `padded_kernel_values.npy` - (i64) the padded kernel values (quantized)
-/// + Placements, specified by the product of placements_row_idxs x placements_col_idxs:
-///   - `placements_top_left_row_idxs.npy` - (i32) the row indices of the top-left corner of the placements of the padded kernels
-///   - `placements_top_left_col_idxs.npy` - (i32) the column indices of the top-left corner of the placements of the padded kernels
-/// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has shape (num_placements, num_kernels)).
-/// The argument `is_mask` indicates whether to load the files for the mask or the iris.
-pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(data_directory: PathBuf, is_mask: bool) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
-    let data_directory = data_directory.join(if is_mask { "mask" } else { "iris" });
-    let image: Array2<i64> =
-        read_npy(Path::new(&data_directory.join("image.npy"))).unwrap();
+/// Loads the witnesses for a run of the iris code circuit from disk for either the iris or mask case.
+/// 
+/// # Arguments:
+///   `image_path` is the path to a quantized image file (could be the iris or the mask).
+///   `is_mask` indicates whether to load the files for the mask or the iris.
+pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(constant_data_folder: PathBuf, image_path: PathBuf, is_mask: bool) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
+    let constant_data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
+    // FIXME update dtype to u8
+    let image: Array2<i64> = read_npy(image_path).unwrap();
 
     let kernel_values: Array3<i64> =
-        read_npy(&data_directory.join("padded_kernel_values.npy")).unwrap();
+        read_npy(&constant_data_folder.join("padded_kernel_values.npy")).unwrap();
+    assert_eq!(kernel_values.dim(), (NUM_KERNELS, NUM_KERNEL_ROWS, NUM_KERNEL_COLS));
 
-    let placements_row_idxs: Vec<i32> =
-        read_npy::<&PathBuf, Array1<i32>>(&data_directory.join("placements_top_left_row_idxs.npy"))
-            .unwrap()
-            .to_vec();
-
-    let placements_col_idxs: Vec<i32> =
-        read_npy::<&PathBuf, Array1<i32>>(&data_directory.join("placements_top_left_col_idxs.npy"))
-            .unwrap()
-            .to_vec();
-
-    let thresholds: Array2<i64> = read_npy(&data_directory.join("thresholds.npy")).unwrap();
+    let thresholds: Array2<i64> = read_npy(&constant_data_folder.join("thresholds.npy")).unwrap();
+    use crate::worldcoin::parameters_v2::{PLACEMENTS_ROW_IDXS, PLACEMENTS_COL_IDXS};
+    let num_placements = PLACEMENTS_ROW_IDXS.len() * PLACEMENTS_COL_IDXS.len();
+    assert_eq!(thresholds.dim(), (num_placements, NUM_KERNELS));
 
     WorldcoinCircuitData::new(
         image,
         kernel_values,
-        placements_row_idxs,
-        placements_col_idxs,
+        &PLACEMENTS_ROW_IDXS,
+        &PLACEMENTS_COL_IDXS,
         thresholds,
     )
 }
@@ -167,8 +158,8 @@ impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData
     pub fn new(
         image: Array2<i64>,
         kernel_values: Array3<i64>,
-        placements_row_idxs: Vec<i32>,
-        placements_col_idxs: Vec<i32>,
+        placements_row_idxs: &[i32],
+        placements_col_idxs: &[i32],
         thresholds_matrix: Array2<i64>,
     ) -> Self {
         assert!(BASE.is_power_of_two());
@@ -318,8 +309,9 @@ mod test {
     use std::path::Path;
 
     use crate::{
-        mle::{circuit_mle::CircuitMle, Mle}, utils::mle::pad_with
+        mle::{circuit_mle::CircuitMle, Mle}, utils::mle::pad_with, worldcoin::parameters_v2::{CONSTANT_DATA_FOLDER, NUM_KERNELS, NUM_KERNEL_COLS, NUM_KERNEL_ROWS, PLACEMENTS_COL_IDXS, PLACEMENTS_ROW_IDXS}
     };
+    use crate::worldcoin::parameters_v2::{WC_BASE, WC_NUM_DIGITS};
 
     use super::{load_data, medium_worldcoin_data, WorldcoinCircuitData};
 
@@ -347,51 +339,56 @@ mod test {
 
     #[test]
     fn test_circuit_data_creation_v2_iris_and_mask() {
-        let path = Path::new("worldcoin_witness_data").to_path_buf();
+        let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
         for is_mask in vec![false, true] {
             dbg!(&is_mask);
-            use crate::worldcoin::{WC_BASE, WC_NUM_DIGITS};
-            let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), is_mask);
+            let image_path = if is_mask {
+                path.clone().join("mask/image.npy")
+            } else {
+                path.clone().join("iris/image.npy")
+            };
+            let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), image_path, is_mask);
             check_worldcoin_circuit_data_promises(&data);
             // Check things that should be true for this dataset
-            assert_eq!(data.num_placements, 16 * 200);
-            assert_eq!(data.code.len(), ((16 * 200 * 4) as usize).next_power_of_two());
+            assert_eq!(data.num_placements, PLACEMENTS_ROW_IDXS.len() * PLACEMENTS_COL_IDXS.len());
+            assert_eq!(data.code.len(), ((PLACEMENTS_ROW_IDXS.len() * PLACEMENTS_COL_IDXS.len() * NUM_KERNELS) as usize).next_power_of_two());
             assert_eq!(
                 data.image.len(),
                 ((100 * 400) as usize).next_power_of_two()
             );
-            assert_eq!(data.kernel_values.len(), 32 * 64 * 4);
+            assert_eq!(data.kernel_values.len(), NUM_KERNELS * NUM_KERNEL_ROWS * NUM_KERNEL_COLS);
 
-            // Load the iris code as calculated in Python, check it's the same as we derive.
-            let num_kernels = data.kernel_matrix_dims.1;
-            let code_path = if is_mask {
-                path.join("mask").join("code.npy")
-            } else {
-                path.join("iris").join("code.npy")
-            };
-            let expected_iris_code3d: Array3<bool> = read_npy(&code_path).unwrap();
-            let expected_iris_code: Array2<bool> = expected_iris_code3d
-                .into_shape((num_kernels, data.num_placements))
-                .unwrap()
-                .into_dimensionality::<ndarray::Ix2>()
-                .unwrap()
-                .t()
-                .to_owned();
-            let expected_flattened = expected_iris_code
-                .outer_iter()
-                .flat_map(|row| row.to_vec())
-                .collect::<Vec<bool>>();
-            let expected_flattened: Vec<Fr> = expected_flattened
-                .iter()
-                .map(|&b| Fr::from(b as u64))
-                .collect();
-            let expected_flattened_padded = pad_with(Fr::from(0), &expected_flattened);
-            if data.code != expected_flattened_padded {
-                println!("Expected code (length {}):", expected_flattened_padded.len());
-                print_code(&expected_flattened_padded);
-                println!("\nActual code (length {}):", data.code.len());
-                print_code(&data.code);
-            }
+            // FIXME
+            // // Load the iris code as calculated in Python, check it's the same as we derive.
+            // let num_kernels = data.kernel_matrix_dims.1;
+            // let code_path = if is_mask {
+            //     path.join("mask").join("code.npy")
+            // } else {
+            //     path.join("iris").join("code.npy")
+            // };
+            // let expected_iris_code3d: Array3<bool> = read_npy(&code_path).unwrap();
+            // let expected_iris_code: Array2<bool> = expected_iris_code3d
+            //     .into_shape((num_kernels, data.num_placements))
+            //     .unwrap()
+            //     .into_dimensionality::<ndarray::Ix2>()
+            //     .unwrap()
+            //     .t()
+            //     .to_owned();
+            // let expected_flattened = expected_iris_code
+            //     .outer_iter()
+            //     .flat_map(|row| row.to_vec())
+            //     .collect::<Vec<bool>>();
+            // let expected_flattened: Vec<Fr> = expected_flattened
+            //     .iter()
+            //     .map(|&b| Fr::from(b as u64))
+            //     .collect();
+            // let expected_flattened_padded = pad_with(Fr::from(0), &expected_flattened);
+            // if data.code != expected_flattened_padded {
+            //     println!("Expected code (length {}):", expected_flattened_padded.len());
+            //     print_code(&expected_flattened_padded);
+            //     println!("\nActual code (length {}):", data.code.len());
+            //     print_code(&data.code);
+            // }
         }
     }
 

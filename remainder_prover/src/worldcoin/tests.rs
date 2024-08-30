@@ -5,9 +5,9 @@ mod tests {
     use crate::worldcoin::data::{
         load_data, medium_worldcoin_data, tiny_worldcoin_data, tiny_worldcoin_data_non_power_of_two, WorldcoinCircuitData
     };
+    use crate::worldcoin::parameters_v2::{CONSTANT_DATA_FOLDER, WC_BASE, WC_NUM_DIGITS};
     use remainder_shared_types::Fr;
     use std::path::Path;
-    use crate::worldcoin::{WC_BASE, WC_NUM_DIGITS};
 
     #[test]
     fn test_worldcoin_circuit_tiny() {
@@ -35,8 +35,9 @@ mod tests {
     #[ignore] // takes 90 seconds!
     #[test]
     fn test_worldcoin_circuit_iris() {
-        let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> =
-            load_data(Path::new("../worldcoin_witness_data_v2_synthetic").to_path_buf(), false);
+        let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+        let image_path = path.clone().join("iris/image.npy");
+        let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), image_path, false);
         let circuit = build_circuit(data);
         test_circuit(circuit, None);
     }
@@ -44,8 +45,9 @@ mod tests {
     #[ignore] // takes 90 seconds!
     #[test]
     fn test_worldcoin_circuit_mask() {
-        let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> =
-            load_data(Path::new("../worldcoin_witness_data_v2_synthetic").to_path_buf(), true);
+        let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+        let image_path = path.clone().join("mask/image.npy");
+        let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), image_path, true);
         let circuit = build_circuit(data);
         test_circuit(circuit, None);
     }

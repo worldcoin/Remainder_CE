@@ -15,12 +15,9 @@ pub mod data_v3;
 /// IO helpers
 pub mod io;
 
+/// Parameters for the v2 circuit
+pub mod parameters_v2;
+
 /// Tests
 pub mod tests;
 
-// Constants defining the digit decomposition of the WC circuit.
-const WC_LOG_NUM_DIGITS: usize = 3;
-/// The number of digits in the complementary decomposition of the thresholded responses.
-pub const WC_NUM_DIGITS: usize = (1 << WC_LOG_NUM_DIGITS) as usize;
-/// The base of the complementary decomposition of the thresholded responses.
-pub const WC_BASE: u16 = 256;
