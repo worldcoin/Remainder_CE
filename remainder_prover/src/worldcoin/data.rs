@@ -114,8 +114,7 @@ pub struct WorldcoinCircuitData<F: FieldExt, const BASE: u16, const NUM_DIGITS: 
 ///   `is_mask` indicates whether to load the files for the mask or the iris.
 pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(constant_data_folder: PathBuf, image_path: PathBuf, is_mask: bool) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
     let constant_data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
-    // FIXME update dtype to u8
-    let image: Array2<i64> = read_npy(image_path).unwrap();
+    let image: Array2<u8> = read_npy(image_path).unwrap();
 
     let kernel_values: Array3<i64> =
         read_npy(&constant_data_folder.join("padded_kernel_values.npy")).unwrap();
@@ -127,7 +126,7 @@ pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(constant
     assert_eq!(thresholds.dim(), (num_placements, NUM_KERNELS));
 
     WorldcoinCircuitData::new(
-        image,
+        image.mapv(|x| x as i64),
         kernel_values,
         &PLACEMENTS_ROW_IDXS,
         &PLACEMENTS_COL_IDXS,
@@ -343,9 +342,9 @@ mod test {
         for is_mask in vec![false, true] {
             dbg!(&is_mask);
             let image_path = if is_mask {
-                path.clone().join("mask/image.npy")
+                path.clone().join("mask/test_image.npy")
             } else {
-                path.clone().join("iris/image.npy")
+                path.clone().join("iris/test_image.npy")
             };
             let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), image_path, is_mask);
             check_worldcoin_circuit_data_promises(&data);
@@ -358,37 +357,36 @@ mod test {
             );
             assert_eq!(data.kernel_values.len(), NUM_KERNELS * NUM_KERNEL_ROWS * NUM_KERNEL_COLS);
 
-            // FIXME
-            // // Load the iris code as calculated in Python, check it's the same as we derive.
-            // let num_kernels = data.kernel_matrix_dims.1;
-            // let code_path = if is_mask {
-            //     path.join("mask").join("code.npy")
-            // } else {
-            //     path.join("iris").join("code.npy")
-            // };
-            // let expected_iris_code3d: Array3<bool> = read_npy(&code_path).unwrap();
-            // let expected_iris_code: Array2<bool> = expected_iris_code3d
-            //     .into_shape((num_kernels, data.num_placements))
-            //     .unwrap()
-            //     .into_dimensionality::<ndarray::Ix2>()
-            //     .unwrap()
-            //     .t()
-            //     .to_owned();
-            // let expected_flattened = expected_iris_code
-            //     .outer_iter()
-            //     .flat_map(|row| row.to_vec())
-            //     .collect::<Vec<bool>>();
-            // let expected_flattened: Vec<Fr> = expected_flattened
-            //     .iter()
-            //     .map(|&b| Fr::from(b as u64))
-            //     .collect();
-            // let expected_flattened_padded = pad_with(Fr::from(0), &expected_flattened);
-            // if data.code != expected_flattened_padded {
-            //     println!("Expected code (length {}):", expected_flattened_padded.len());
-            //     print_code(&expected_flattened_padded);
-            //     println!("\nActual code (length {}):", data.code.len());
-            //     print_code(&data.code);
-            // }
+            // Load the iris code as calculated in Python, check it's the same as we derive.
+            let num_kernels = data.kernel_matrix_dims.1;
+            let code_path = if is_mask {
+                path.join("mask").join("test_code.npy")
+            } else {
+                path.join("iris").join("test_code.npy")
+            };
+            let expected_iris_code3d: Array3<bool> = read_npy(&code_path).unwrap();
+            let expected_iris_code: Array2<bool> = expected_iris_code3d
+                .into_shape((num_kernels, data.num_placements))
+                .unwrap()
+                .into_dimensionality::<ndarray::Ix2>()
+                .unwrap()
+                .t()
+                .to_owned();
+            let expected_flattened = expected_iris_code
+                .outer_iter()
+                .flat_map(|row| row.to_vec())
+                .collect::<Vec<bool>>();
+            let expected_flattened: Vec<Fr> = expected_flattened
+                .iter()
+                .map(|&b| Fr::from(b as u64))
+                .collect();
+            let expected_flattened_padded = pad_with(Fr::from(0), &expected_flattened);
+            if data.code != expected_flattened_padded {
+                println!("Expected code (length {}):", expected_flattened_padded.len());
+                print_code(&expected_flattened_padded);
+                println!("\nActual code (length {}):", data.code.len());
+                print_code(&data.code);
+            }
         }
     }
 
