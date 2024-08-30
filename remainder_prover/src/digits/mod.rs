@@ -5,24 +5,29 @@ pub mod components;
 
 /// Decompose a number into N digits in a given base, MSB first.
 /// Returns None iff the number is too large to fit in N digits.
+/// # Requires:
+///   + `log2(BASE) * N <= 64`
+///   + `BASE <= (1 << 16)`
 /// # Example
 /// ```
-/// # use remainder::utils::digital_decomposition::unsigned_decomposition;
-/// let decomp = unsigned_decomposition::<10, 3>(987);
-/// assert_eq!(decomp, Some([9, 8, 7]));
+/// # use remainder::digits::unsigned_decomposition;
+/// assert_eq!(unsigned_decomposition::<10, 3>(987), Some([9, 8, 7]));
+/// assert_eq!(unsigned_decomposition::<10, 3>(9870), None);
 /// ```
-pub fn unsigned_decomposition<const BASE: u16, const N: usize>(value: u64) -> Option<[u16; N]> {
-    let base = BASE as u64;
+pub fn unsigned_decomposition<const BASE: u64, const N: usize>(value: u64) -> Option<[u16; N]> {
+    debug_assert!(BASE <= (1 << 16));
+    debug_assert!(BASE.ilog2() * (N as u32) <= 64, "BASE * N must be <= 64");
     let mut value = value;
     let mut result = [0; N];
     for i in (0..N).rev() {
-        result[i] = (value % base) as u16;
-        value /= base;
+        result[i] = (value % BASE) as u16;
+        value /= BASE;
     }
-    if value > 0 {
-        return None;
+    if value != 0 {
+        None
+    } else {
+        Some(result)
     }
-    Some(result)
 }
 
 /// Decompose a number into N digits in a given BASE, MSB first, in the complementary representation, i.e.
@@ -30,14 +35,16 @@ pub fn unsigned_decomposition<const BASE: u16, const N: usize>(value: u64) -> Op
 /// where (d, b) is the result.
 /// Returns None iff value is out of range.
 /// # Requires:
-///   `log2(BASE) * N <= 64`
+///   + `log2(BASE) * N <= 64`
+///   + `BASE <= (1 << 16)`
 /// # Example:
 /// ```
-/// # use remainder::utils::digital_decomposition::complementary_decomposition;
+/// # use remainder::digits::complementary_decomposition;
 /// let decomp = complementary_decomposition::<2, 3>(3);
 /// assert_eq!(decomp, Some(([1, 0, 1], true)));
 /// ```
-pub fn complementary_decomposition<const BASE: u16, const N: usize>(value: i64) -> Option<([u16; N], bool)> {
+pub fn complementary_decomposition<const BASE: u64, const N: usize>(value: i64) -> Option<([u16; N], bool)> {
+    debug_assert!(BASE <= (1 << 16));
     debug_assert!(BASE.ilog2() * (N as u32) <= 64, "BASE * N must be <= 64");
     let pow = (BASE as u128).pow(N as u32) as u128;
     if (value >= 0 && (value as u128) > pow) || (value < 0 && (-value as u128) > pow - 1) {

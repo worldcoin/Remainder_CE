@@ -19,5 +19,6 @@ pub mod io;
 pub mod parameters_v2;
 
 /// Tests
+#[cfg(test)]
 pub mod tests;
 

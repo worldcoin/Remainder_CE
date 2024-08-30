@@ -18,7 +18,7 @@ use remainder_shared_types::FieldExt;
 
 
 /// Builds the worldcoin circuit.
-pub fn build_circuit<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(
+pub fn build_circuit<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(
     data: WorldcoinCircuitData<F, BASE, NUM_DIGITS>,
 ) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
 {

@@ -14,7 +14,7 @@ use crate::worldcoin::parameters_v2::{NUM_KERNELS, NUM_KERNEL_COLS, NUM_KERNEL_R
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
-pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
+pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16u64, 2> {
     let image_shape = (2, 2);
     let kernel_shape = (2, 2, 1);
     let response_shape = (2, 2);
@@ -30,7 +30,7 @@ pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
 /// Generate toy data for the worldcoin circuit in which the number of responses is not a power of
 /// two (this is the case for the true v2 data, but that test case takes 90 seconds).
 /// Image is 2x2, and there are three placements of one 2x1 kernel (1, 2).T
-pub fn tiny_worldcoin_data_non_power_of_two<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
+pub fn tiny_worldcoin_data_non_power_of_two<F: FieldExt>() -> WorldcoinCircuitData<F, 16u64, 2> {
     let image_shape = (2, 2);
     let kernel_shape = (1, 2, 1);
     let response_shape = (3, 1);
@@ -53,7 +53,7 @@ pub fn tiny_worldcoin_data_non_power_of_two<F: FieldExt>() -> WorldcoinCircuitDa
 ///  3 4    1 8    5 7    -2 0
 /// There are four placements of the kernels.
 /// Threshold values are non-trivial.
-pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
+pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16u64, 2> {
     let image_shape = (3, 3);
     let kernel_shape = (4, 2, 2);
     let response_shape = (4, 4);
@@ -78,7 +78,7 @@ pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16, 2> {
 #[derive(Debug, Clone)]
 /// Used for instantiating the Worldcoin circuit.
 /// Kernel placements are specified by the _product_ placements_row_idxs x placements_col_idxs.
-pub struct WorldcoinCircuitData<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> {
+pub struct WorldcoinCircuitData<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize> {
     /// The input image, flattened and then padded with zeros to the next power of two.
     pub image: Vec<F>,
     /// The reroutings from the input image to the matrix multiplicand "A", as pairs of gate labels.
@@ -112,7 +112,7 @@ pub struct WorldcoinCircuitData<F: FieldExt, const BASE: u16, const NUM_DIGITS: 
 /// # Arguments:
 ///   `image_path` is the path to a quantized image file (could be the iris or the mask).
 ///   `is_mask` indicates whether to load the files for the mask or the iris.
-pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(constant_data_folder: PathBuf, image_path: PathBuf, is_mask: bool) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
+pub fn load_data<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(constant_data_folder: PathBuf, image_path: PathBuf, is_mask: bool) -> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
     let constant_data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
     let image: Array2<u8> = read_npy(image_path).unwrap();
 
@@ -134,7 +134,7 @@ pub fn load_data<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize>(constant
     )
 }
 
-impl<F: FieldExt, const BASE: u16, const NUM_DIGITS: usize> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
+impl<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize> WorldcoinCircuitData<F, BASE, NUM_DIGITS> {
     /// Create a new instance. Note that every _combination_ from placements_row_idxs x
     /// placements_col_idxs specifies a kernel placement in the image (via the top-left coordinate).
     ///
@@ -315,7 +315,7 @@ mod test {
     use super::{load_data, medium_worldcoin_data, WorldcoinCircuitData};
 
     // Check things that should be generically true for a WorldcoinCircuitData instance.
-    fn check_worldcoin_circuit_data_promises<const BASE: u16, const NUM_DIGITS: usize>(data: &WorldcoinCircuitData<Fr, BASE, NUM_DIGITS>) {
+    fn check_worldcoin_circuit_data_promises<const BASE: u64, const NUM_DIGITS: usize>(data: &WorldcoinCircuitData<Fr, BASE, NUM_DIGITS>) {
         // Check padding to a power of two
         assert!(data.image.len().is_power_of_two());
         assert!(data.kernel_values.len().is_power_of_two());

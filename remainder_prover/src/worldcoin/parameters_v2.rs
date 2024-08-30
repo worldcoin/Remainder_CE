@@ -3,7 +3,7 @@ const WC_LOG_NUM_DIGITS: usize = 3;
 /// The number of digits in the complementary decomposition of the thresholded responses.
 pub const WC_NUM_DIGITS: usize = (1 << WC_LOG_NUM_DIGITS) as usize;
 /// The base of the complementary decomposition of the thresholded responses.
-pub const WC_BASE: u16 = 256;
+pub const WC_BASE: u64 = 256;
 
 /// The row coordinate of the top-left corner of each placement of the kernels (can be negative)
 pub const PLACEMENTS_ROW_IDXS: [i32; 16] = [

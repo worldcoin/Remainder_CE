@@ -24,7 +24,7 @@ type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
 
 /// Helper function that runs the Hyrax Worldcoin test against a given data set.
-fn test_hyrax_worldcoin<const BASE: u16, const NUM_DIGITS: usize>(data: WorldcoinCircuitData<Scalar, BASE, NUM_DIGITS>, num_generators: usize) {
+fn test_hyrax_worldcoin<const BASE: u64, const NUM_DIGITS: usize>(data: WorldcoinCircuitData<Scalar, BASE, NUM_DIGITS>, num_generators: usize) {
     let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> = ECTranscriptWriter::new("");
     let blinding_rng = &mut rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
