@@ -53,5 +53,5 @@ default = ["parallel"]
 parallel = []
 
 [[bin]]
-name = "run_iriscode_circuit"
-path = "src/bin/run_iriscode_circuit.rs"
+name = "run_iriscode_circuit_v2"
+path = "src/bin/run_iriscode_circuit_v2.rs"
