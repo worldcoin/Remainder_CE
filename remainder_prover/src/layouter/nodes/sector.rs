@@ -7,7 +7,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::regular_layer::RegularLayer,
+    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
     layouter::{
         compiling::WitnessBuilder,
         layouting::{topo_sort, CircuitLocation, CircuitMap, DAGError},
@@ -30,7 +30,7 @@ impl<F: FieldExt> Sector<F> {
     /// creates a new sector node
     pub fn new(
         ctx: &Context,
-        inputs: &[&dyn ClaimableNode<F = F>],
+        inputs: &[&dyn ClaimableNode<F>],
         expr_builder: impl FnOnce(Vec<NodeId>) -> Expression<F, AbstractExpr>,
         data_builder: impl FnOnce(Vec<&MultilinearExtension<F>>) -> MultilinearExtension<F>,
     ) -> Self {
@@ -68,14 +68,12 @@ impl<'a, F: FieldExt> CircuitNode for &'a Sector<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for Sector<F> {
-    type F = F;
-
-    fn get_data(&self) -> &MultilinearExtension<Self::F> {
+impl<F: FieldExt> ClaimableNode<F> for Sector<F> {
+    fn get_data(&self) -> &MultilinearExtension<F> {
         &self.data
     }
 
-    fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
+    fn get_expr(&self) -> Expression<F, AbstractExpr> {
         Expression::<F, AbstractExpr>::mle(self.id)
     }
 }
@@ -122,15 +120,12 @@ impl<F: FieldExt> CircuitNode for SectorGroup<F> {
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L> CompilableNode<F, Pf> for SectorGroup<F>
-where
-    L: From<RegularLayer<F>>,
-{
+impl<F: FieldExt> CompilableNode<F> for SectorGroup<F> {
     fn compile<'a>(
         &'a self,
-        witness_builder: &mut WitnessBuilder<F, Pf>,
+        layer_id: &mut LayerId,
         circuit_map: &mut CircuitMap<'a, F>,
-    ) -> Result<(), DAGError> {
+    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
         //topo sort the children
         let children = self.children.iter().collect_vec();
         let children = topo_sort(children)?;
@@ -160,23 +155,25 @@ where
             }
         }
 
-        //compile and add layers
-        for children in layers {
-            compile_layer(children.as_slice(), witness_builder, circuit_map)?;
-        }
-        Ok(())
+        // compile and add layers
+        let compiled_layers = layers
+            .into_iter()
+            .map(|children| {
+                let layer = compile_layer(children.as_slice(), layer_id, circuit_map).unwrap();
+                layer.into()
+            })
+            .collect_vec();
+        Ok(compiled_layers)
     }
 }
 
 /// Takes some sectors that all belong in a single layer and
 /// builds the layer/adds their locations to the circuit map
-fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<RegularLayer<F>>>(
+fn compile_layer<'a, F: FieldExt>(
     children: &[&'a Sector<F>],
-    witness_builder: &mut WitnessBuilder<F, Pf>,
+    layer_id: &mut LayerId,
     circuit_map: &mut CircuitMap<'a, F>,
-) -> Result<(), DAGError> {
-    let layer_id = witness_builder.next_layer();
-
+) -> Result<RegularLayer<F>, DAGError> {
     // This will store all the expression yet to be merged
     let mut expression = children
         .iter()
@@ -241,9 +238,8 @@ fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Regular
 
     let expr = new_expr.build_prover_expr(circuit_map)?;
 
-    let layer = RegularLayer::new_raw(layer_id, expr);
-
-    witness_builder.add_layer(layer.into());
+    let regular_layer_id = layer_id.get_and_inc();
+    let layer = RegularLayer::new_raw(regular_layer_id, expr);
 
     // Add the new sectors to the circuit map
     for (node_id, mut prefix_bits) in prefix_bits {
@@ -254,10 +250,13 @@ fn compile_layer<'a, F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Regular
             .filter(|item| item.id == node_id)
             .collect_vec()[0]
             .data;
-        circuit_map.add_node(node_id, (CircuitLocation::new(layer_id, prefix_bits), data));
+        circuit_map.add_node(
+            node_id,
+            (CircuitLocation::new(*layer_id, prefix_bits), data),
+        );
     }
 
-    Ok(())
+    Ok(layer)
 }
 
 #[cfg(test)]
@@ -266,7 +265,7 @@ mod tests {
 
     use crate::{
         expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-        layer::LayerId,
+        layer::{regular_layer::RegularLayer, LayerId},
         layouter::{
             compiling::WitnessBuilder,
             layouting::{CircuitLocation, CircuitMap},
@@ -316,7 +315,6 @@ mod tests {
         );
 
         let sector_group = SectorGroup::new(&ctx, vec![sector_1, sector_2, sector_out]);
-        let mut witness_builder: WitnessBuilder<Fr, DefaultProofSystem> = WitnessBuilder::new();
         let mut circuit_map = CircuitMap::new();
         circuit_map.add_node(
             input_shred_1.id(),
@@ -332,8 +330,8 @@ mod tests {
                 input_shred_2.get_data(),
             ),
         );
-        sector_group
-            .compile(&mut witness_builder, &mut circuit_map)
+        let layers = sector_group
+            .compile(&mut LayerId::Input(1), &mut circuit_map)
             .unwrap();
     }
 }

@@ -17,7 +17,7 @@ pub struct PosBinaryRecompComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> PosBinaryRecompComponent<F> {
-    pub fn new(ctx: &Context, bin_decomp_wo_sign_bit: [&dyn ClaimableNode<F = F>; 15]) -> Self {
+    pub fn new(ctx: &Context, bin_decomp_wo_sign_bit: [&dyn ClaimableNode<F>; 15]) -> Self {
         let bin_recomp_sector = Sector::new(
             ctx,
             &bin_decomp_wo_sign_bit,
@@ -82,7 +82,7 @@ pub struct EqualityComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> EqualityComponent<F> {
-    pub fn new(ctx: &Context, inputs: [&dyn ClaimableNode<F = F>; 2]) -> Self {
+    pub fn new(ctx: &Context, inputs: [&dyn ClaimableNode<F>; 2]) -> Self {
         let equality_sector = Sector::new(
             ctx,
             &inputs,
@@ -126,9 +126,9 @@ pub struct BinRecompCheckerComponent<F: FieldExt> {
 impl<F: FieldExt> BinRecompCheckerComponent<F> {
     pub fn new(
         ctx: &Context,
-        positive_recomp: impl ClaimableNode<F = F>,
-        signed_bit: impl ClaimableNode<F = F>,
-        diff: impl ClaimableNode<F = F>,
+        positive_recomp: impl ClaimableNode<F>,
+        signed_bit: impl ClaimableNode<F>,
+        diff: impl ClaimableNode<F>,
     ) -> Self {
         let bin_recomp_checker_sector = Sector::new(
             ctx,

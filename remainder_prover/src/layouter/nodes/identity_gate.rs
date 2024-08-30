@@ -5,7 +5,7 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::identity_gate::IdentityGate,
+    layer::{identity_gate::IdentityGate, layer_enum::LayerEnum, Layer, LayerId},
     layouter::layouting::{CircuitLocation, DAGError},
     mle::{
         dense::DenseMle,
@@ -39,7 +39,7 @@ impl<F: FieldExt> IdentityGateNode<F> {
     /// Constructs a new IdentityGateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        pre_routed_data: &impl ClaimableNode<F = F>,
+        pre_routed_data: &impl ClaimableNode<F>,
         nonzero_gates: Vec<(usize, usize)>,
     ) -> Self {
         let max_gate_val = nonzero_gates
@@ -69,26 +69,22 @@ impl<F: FieldExt> IdentityGateNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for IdentityGateNode<F> {
-    type F = F;
-
-    fn get_data(&self) -> &MultilinearExtension<Self::F> {
+impl<F: FieldExt> ClaimableNode<F> for IdentityGateNode<F> {
+    fn get_data(&self) -> &MultilinearExtension<F> {
         &self.data
     }
 
-    fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
+    fn get_expr(&self) -> Expression<F, AbstractExpr> {
         Expression::<F, AbstractExpr>::mle(self.id)
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<IdentityGate<F>>> CompilableNode<F, Pf>
-    for IdentityGateNode<F>
-{
+impl<F: FieldExt> CompilableNode<F> for IdentityGateNode<F> {
     fn compile<'a>(
         &'a self,
-        witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
+        layer_id: &mut LayerId,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<(), crate::layouter::layouting::DAGError> {
+    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
         let (pre_routed_data_location, pre_routed_data) = circuit_map
             .0
             .get(&self.pre_routed_data)
@@ -99,15 +95,15 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<IdentityGate<F>>> Compi
             pre_routed_data_location.prefix_bits.clone(),
         );
 
-        let layer_id = witness_builder.next_layer();
-        let id_gate_layer = IdentityGate::new(layer_id, self.nonzero_gates.clone(), pre_routed_mle);
-        witness_builder.add_layer(id_gate_layer.into());
+        let input_layer_id = layer_id.get_and_inc();
+        let id_gate_layer =
+            IdentityGate::new(input_layer_id, self.nonzero_gates.clone(), pre_routed_mle);
         circuit_map.0.insert(
             self.id,
-            (CircuitLocation::new(layer_id, vec![]), &self.data),
+            (CircuitLocation::new(input_layer_id, vec![]), &self.data),
         );
 
-        Ok(())
+        Ok(vec![id_gate_layer.into()])
     }
 }
 

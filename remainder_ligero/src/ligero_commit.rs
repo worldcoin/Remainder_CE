@@ -33,24 +33,10 @@ use super::{commit, prove};
 #[instrument(skip_all, level = "debug")]
 pub fn remainder_ligero_commit<F: FieldExt>(
     input_mle_bookkeeping_table: &[F],
-    rho_inv: u8,
-    ratio: f64,
-    maybe_num_cols_open: Option<usize>,
-) -> (
-    LigeroAuxInfo<F>,
-    LigeroCommit<PoseidonSpongeHasher<F>, F>,
-    LigeroRoot<F>,
-) {
+    aux: &LigeroAuxInfo<F>,
+) -> (LigeroCommit<PoseidonSpongeHasher<F>, F>, LigeroRoot<F>) {
     // --- Sanitycheck ---
     assert!(input_mle_bookkeeping_table.len().is_power_of_two());
-
-    // --- Create metadata struct ---
-    let aux = LigeroAuxInfo::<F>::new(
-        input_mle_bookkeeping_table.len(),
-        rho_inv,
-        ratio,
-        maybe_num_cols_open,
-    );
 
     // --- Create commitment ---
     let comm =
@@ -61,7 +47,7 @@ pub fn remainder_ligero_commit<F: FieldExt>(
     let root: LigeroRoot<F> = comm.get_root();
 
     // --- Return the auxiliaries + commitment ---
-    (aux, comm, root)
+    (comm, root)
 }
 
 /// API for Remainder's Ligero eval proof generation. Note that the entire
@@ -135,6 +121,7 @@ pub fn remainder_ligero_verify<F: FieldExt>(
 
 #[cfg(test)]
 pub mod tests {
+    use crate::ligero_structs::LigeroAuxInfo;
     use crate::utils::get_random_coeffs_for_multilinear_poly;
     use crate::{
         ligero_ml_helper::{get_ml_inner_outer_tensors, naive_eval_mle_at_challenge_point},
@@ -182,7 +169,8 @@ pub mod tests {
             TranscriptWriter::<Fr, PoseidonSponge<Fr>>::new("Test transcript");
 
         // --- Commit ---
-        let (aux, comm, root) = remainder_ligero_commit(&ml_coeffs, rho_inv, ratio, None);
+        let aux = LigeroAuxInfo::new(ml_coeffs.len().next_power_of_two(), rho_inv, ratio, None);
+        let (comm, root) = remainder_ligero_commit(&ml_coeffs, &aux);
 
         // --- Add commitment to transcript ---
         transcript_writer.append("root", root.root);

@@ -8,6 +8,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 use thiserror::Error;
+use utils::is_subset;
 
 use crate::{
     input_layer::enum_input_layer::InputLayerEnum,
@@ -22,13 +23,16 @@ use super::nodes::{
     circuit_inputs::{InputLayerNode, InputShred},
     circuit_outputs::OutputNode,
     gate::GateNode,
-    lookup::{LookupConstraint, LookupTable},
     identity_gate::IdentityGateNode,
+    lookup::{LookupConstraint, LookupTable},
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
+    random::VerifierChallengeNode,
     split_node::SplitNode,
     CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
 };
+
+pub mod utils;
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield
 #[derive(Debug)]
@@ -82,13 +86,13 @@ impl CircuitLocation {
 ///Errors to do with the DAG, sorting, assigning layers, etc.
 #[derive(Error, Debug, Clone)]
 pub enum DAGError {
-    ///The DAG has a cycle
+    /// The DAG has a cycle.
     #[error("The DAG has a cycle")]
     DAGCycle,
-    ///node has no parent
+    /// Node has no parent.
     #[error("Node has no parent")]
     NodeHasNoParent,
-    ///A NodeId exists that references a node that is not present in the DAG
+    /// A NodeId exists that references a node that is not present in the DAG.
     #[error("A NodeId exists that references a node that is not present in the DAG: Id = {0:?}")]
     DanglingNodeId(NodeId),
 }
@@ -183,18 +187,18 @@ pub fn topo_sort<N: CircuitNode>(nodes: Vec<N>) -> Result<Vec<N>, DAGError> {
     Ok(out)
 }
 
-enum IntermediateNode<F: FieldExt, Pf> {
-    CompilableNode(Box<dyn CompilableNode<F, Pf>>),
+enum IntermediateNode<F: FieldExt> {
+    CompilableNode(Box<dyn CompilableNode<F>>),
     Sector(Sector<F>),
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> IntermediateNode<F, Pf> {
-    fn new<N: CompilableNode<F, Pf> + 'static>(node: N) -> Self {
-        Self::CompilableNode(Box::new(node) as Box<dyn CompilableNode<F, Pf>>)
+impl<F: FieldExt> IntermediateNode<F> {
+    fn new<N: CompilableNode<F> + 'static>(node: N) -> Self {
+        Self::CompilableNode(Box::new(node) as Box<dyn CompilableNode<F>>)
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> CircuitNode for IntermediateNode<F, Pf> {
+impl<F: FieldExt> CircuitNode for IntermediateNode<F> {
     fn id(&self) -> NodeId {
         match self {
             IntermediateNode::CompilableNode(node) => node.id(),
@@ -226,142 +230,125 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CircuitNode for IntermediateNode<F, Pf> {
 /// specific layer size / its constituent nodes's numvars, etc.
 /// Returns a vector of [CompilableNode] in which inputs are first, then intermediates
 /// (topologically sorted), then lookups, then outputs.
-pub fn layout<
-    F: FieldExt,
-    Pf: ProofSystem<
-        F,
-        Layer = LayerEnum<F>,
-        InputLayer = InputLayerEnum<F>,
-        OutputLayer = MleOutputLayer<F>,
-    >,
->(
+pub fn layout<F: FieldExt>(
     ctx: Context,
     nodes: Vec<NodeEnum<F>>,
-) -> Result<Vec<Box<dyn CompilableNode<F, Pf>>>, DAGError> {
+) -> Result<
+    (
+        Vec<InputLayerNode<F>>,
+        Vec<VerifierChallengeNode<F>>,
+        Vec<Box<dyn CompilableNode<F>>>,
+        Vec<LookupTable>,
+        Vec<OutputNode<F>>,
+    ),
+    DAGError,
+> {
     let mut dag = NodeEnumGroup::new(nodes);
 
     // Handle input layers
-    let out = {
-        let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
-        let mut input_layers: Vec<InputLayerNode<F>> = dag.get_nodes();
+    let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
+    let mut input_layer_nodes: Vec<InputLayerNode<F>> = dag.get_nodes();
+    let verifier_challenge_nodes: Vec<VerifierChallengeNode<F>> = dag.get_nodes();
 
-        let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode<F>> = HashMap::new();
+    let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode<F>> = HashMap::new();
 
-        for layer in input_layers.iter_mut() {
-            input_layer_map.insert(layer.id(), layer);
-        }
+    for layer in input_layer_nodes.iter_mut() {
+        input_layer_map.insert(layer.id(), layer);
+    }
 
-        // Add InputShreds to specified parents
-        for input_shred in input_shreds {
-            let input_layer_id = input_shred.get_parent();
-            let input_layer = input_layer_map
-                .get_mut(&input_layer_id)
-                .ok_or(DAGError::DanglingNodeId(input_layer_id))?;
+    // Add InputShreds to specified parents
+    for input_shred in input_shreds {
+        let input_layer_id = input_shred.get_parent();
+        let input_layer = input_layer_map
+            .get_mut(&input_layer_id)
+            .ok_or(DAGError::DanglingNodeId(input_layer_id))?;
 
-            input_layer.add_shred(input_shred);
-        }
-
-        input_layers
-            .into_iter()
-            .map(|input| Box::new(input) as Box<dyn CompilableNode<F, Pf>>)
-    };
+        input_layer.add_shred(input_shred);
+    }
 
     // handle intermediate layers
-    let out = {
-        let sector_groups: Vec<SectorGroup<F>> = dag.get_nodes();
-        let sectors: Vec<Sector<F>> = dag.get_nodes();
-        let gates: Vec<GateNode<F>> = dag.get_nodes();
-        let id_gates: Vec<IdentityGateNode<F>> = dag.get_nodes();
-        let splits: Vec<SplitNode<F>> = dag.get_nodes();
-        let matmults: Vec<MatMultNode<F>> = dag.get_nodes();
-        let other_layers = sector_groups
-            .into_iter()
-            .map(|node| IntermediateNode::new(node))
-            .chain(gates.into_iter().map(|node| IntermediateNode::new(node)))
-            .chain(id_gates.into_iter().map(|node| IntermediateNode::new(node)))
-            .chain(splits.into_iter().map(|node| IntermediateNode::new(node)))
-            .chain(matmults.into_iter().map(|node| IntermediateNode::new(node)));
+    let sector_groups: Vec<SectorGroup<F>> = dag.get_nodes();
+    let sectors: Vec<Sector<F>> = dag.get_nodes();
+    let gates: Vec<GateNode<F>> = dag.get_nodes();
+    let id_gates: Vec<IdentityGateNode<F>> = dag.get_nodes();
+    let splits: Vec<SplitNode<F>> = dag.get_nodes();
+    let matmults: Vec<MatMultNode<F>> = dag.get_nodes();
+    let other_layers = sector_groups
+        .into_iter()
+        .map(|node| IntermediateNode::new(node))
+        .chain(gates.into_iter().map(|node| IntermediateNode::new(node)))
+        .chain(id_gates.into_iter().map(|node| IntermediateNode::new(node)))
+        .chain(splits.into_iter().map(|node| IntermediateNode::new(node)))
+        .chain(matmults.into_iter().map(|node| IntermediateNode::new(node)));
 
-        let intermediate_nodes = other_layers
-            .chain(
-                sectors
-                    .into_iter()
-                    .map(|sector| IntermediateNode::Sector(sector)),
-            )
-            .collect_vec();
+    let intermediate_nodes = other_layers
+        .chain(
+            sectors
+                .into_iter()
+                .map(|sector| IntermediateNode::Sector(sector)),
+        )
+        .collect_vec();
 
-        // topo_sort all the nodes which can be immediately compiled and the sectors that need to be
-        // laid out before compilation
-        let intermediate_nodes = topo_sort(intermediate_nodes)?;
+    // topo_sort all the nodes which can be immediately compiled and the sectors that need to be
+    // laid out before compilation
+    let intermediate_nodes = topo_sort(intermediate_nodes)?;
 
-        // collapse the sectors into sector_groups
-        let (mut intermediate_nodes, final_sector_group) = intermediate_nodes.into_iter().fold(
-            (vec![], None::<SectorGroup<F>>),
-            |(mut layedout_nodes, curr_sector_group), node| {
-                let curr_sector_group = match node {
-                    IntermediateNode::CompilableNode(node) => {
-                        if let Some(curr_sector_group) = curr_sector_group {
-                            layedout_nodes
-                                    .push(Box::new(curr_sector_group)
-                                        as Box<dyn CompilableNode<F, Pf>>);
-                        }
-                        layedout_nodes.push(node);
-                        None
+    // collapse the sectors into sector_groups
+    let (mut intermediate_nodes, final_sector_group) = intermediate_nodes.into_iter().fold(
+        (vec![], None::<SectorGroup<F>>),
+        |(mut layedout_nodes, curr_sector_group), node| {
+            let curr_sector_group = match node {
+                IntermediateNode::CompilableNode(node) => {
+                    if let Some(curr_sector_group) = curr_sector_group {
+                        layedout_nodes
+                            .push(Box::new(curr_sector_group) as Box<dyn CompilableNode<F>>);
                     }
-                    IntermediateNode::Sector(node) => {
-                        if let Some(mut sector_group) = curr_sector_group {
-                            sector_group.add_sector(node);
-                            Some(sector_group)
-                        } else {
-                            Some(SectorGroup::new(&ctx, vec![node]))
-                        }
+                    layedout_nodes.push(node);
+                    None
+                }
+                IntermediateNode::Sector(node) => {
+                    if let Some(mut sector_group) = curr_sector_group {
+                        sector_group.add_sector(node);
+                        Some(sector_group)
+                    } else {
+                        Some(SectorGroup::new(&ctx, vec![node]))
                     }
-                };
-                (layedout_nodes, curr_sector_group)
-            },
-        );
+                }
+            };
+            (layedout_nodes, curr_sector_group)
+        },
+    );
 
-        if let Some(final_sector_group) = final_sector_group {
-            intermediate_nodes.push(Box::new(final_sector_group));
-        }
-        out.chain(intermediate_nodes.into_iter())
-    };
+    if let Some(final_sector_group) = final_sector_group {
+        intermediate_nodes.push(Box::new(final_sector_group));
+    }
 
     // Handle lookup tables
-    let out = {
-        // Build a map node id -> LookupTable
-        let mut lookup_table_map: HashMap<NodeId, &mut LookupTable> = HashMap::new();
-        let mut lookup_tables: Vec<LookupTable> = dag.get_nodes();
-        for lookup_table in lookup_tables.iter_mut() {
-            lookup_table_map.insert(lookup_table.id(), lookup_table);
-        }
-        // Add LookupConstraints to their respective LookupTables
-        let lookup_constraints: Vec<LookupConstraint> = dag.get_nodes();
-        for lookup_constraint in lookup_constraints {
-            let lookup_table_id = lookup_constraint.table_node_id;
-            let lookup_table = lookup_table_map
-                .get_mut(&lookup_table_id)
-                .ok_or(DAGError::DanglingNodeId(lookup_table_id))?;
-            lookup_table.add_lookup_constraint(lookup_constraint);
-        }
 
-        let lookup_tables = lookup_tables
-                .into_iter()
-                .map(|node| Box::new(node) as Box<dyn CompilableNode<F, Pf>>);
-
-        out.chain(lookup_tables)
-    };
+    // Build a map node id -> LookupTable
+    let mut lookup_table_map: HashMap<NodeId, &mut LookupTable> = HashMap::new();
+    let mut lookup_tables: Vec<LookupTable> = dag.get_nodes();
+    for lookup_table in lookup_tables.iter_mut() {
+        lookup_table_map.insert(lookup_table.id(), lookup_table);
+    }
+    // Add LookupConstraints to their respective LookupTables
+    let lookup_constraints: Vec<LookupConstraint> = dag.get_nodes();
+    for lookup_constraint in lookup_constraints {
+        let lookup_table_id = lookup_constraint.table_node_id;
+        let lookup_table = lookup_table_map
+            .get_mut(&lookup_table_id)
+            .ok_or(DAGError::DanglingNodeId(lookup_table_id))?;
+        lookup_table.add_lookup_constraint(lookup_constraint);
+    }
 
     // handle output layers
-    let out = {
-        let output_layers: Vec<OutputNode<F>> = dag.get_nodes();
+    let output_layers: Vec<OutputNode<F>> = dag.get_nodes();
 
-        out.chain(
-            output_layers
-                .into_iter()
-                .map(|node| Box::new(node) as Box<dyn CompilableNode<F, Pf>>),
-        )
-    };
-
-    Ok(out.collect())
+    Ok((
+        input_layer_nodes,
+        verifier_challenge_nodes,
+        intermediate_nodes,
+        lookup_tables,
+        output_layers,
+    ))
 }

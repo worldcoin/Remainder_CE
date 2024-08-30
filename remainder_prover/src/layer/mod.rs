@@ -197,26 +197,44 @@ pub trait VerifierLayer<F: FieldExt> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, PartialOrd)]
 /// The location of a layer within the GKR circuit
 pub enum LayerId {
-    /// A random mle input layer
-    ///
-    /// TODO!(nick) Remove this once new batching code is implemented
-    RandomInput(usize),
     /// An Mle located in the input layer
     Input(usize),
     /// A layer between the output layer and input layers
     Layer(usize),
-    /// An MLE located in the output layer.
-    Output(usize),
+    /// A layer representing values sampled from the verifier via Fiat-Shamir
+    VerifierChallengeLayer(usize),
 }
 
 impl LayerId {
     /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number
     pub fn next(&self) -> LayerId {
         match self {
-            LayerId::RandomInput(id) => LayerId::RandomInput(id + 1),
             LayerId::Input(id) => LayerId::Input(id + 1),
             LayerId::Layer(id) => LayerId::Layer(id + 1),
-            LayerId::Output(id) => LayerId::Output(id + 1),
+            LayerId::VerifierChallengeLayer(id) => LayerId::VerifierChallengeLayer(id + 1),
         }
+    }
+
+    /// Gets a new LayerId which represents a layerid of the same type but with an incremented id number.
+    /// Mutates self to store the next layer id.
+    pub fn get_and_inc(&mut self) -> LayerId {
+        let ret = self.clone();
+        self.increment_self();
+        ret
+    }
+
+    /// Mutates self to store the next layer id.
+    pub fn increment_self(&mut self) {
+        match self {
+            LayerId::Input(ref mut id) => {
+                *id += 1;
+            }
+            LayerId::Layer(ref mut id) => {
+                *id += 1;
+            }
+            LayerId::VerifierChallengeLayer(ref mut id) => {
+                *id += 1;
+            }
+        };
     }
 }

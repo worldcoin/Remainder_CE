@@ -146,9 +146,8 @@ pub type CircuitInputLayer<F, C> =
 pub type CircuitClaimAggregator<F, C> =
     <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::ClaimAggregator;
 
-type WitnessCommitmentsKey<F, C> = (
+pub type WitnessAndCircuitDescription<F, C> = (
     Witness<F, <C as GKRCircuit<F>>::ProofSystem>,
-    Vec<<CircuitInputLayer<F, C> as InputLayer<F>>::Commitment>,
     GKRVerifierKey<F, <C as GKRCircuit<F>>::ProofSystem>,
 );
 
@@ -160,34 +159,11 @@ pub trait GKRCircuit<F: FieldExt> {
     /// The hash of the circuit, use to uniquely identify the circuit
     const CIRCUIT_HASH: Option<F::Repr> = None;
 
-    /// The forward pass, defining the layer relationships and generating the layers
-    fn synthesize(&mut self) -> Witness<F, Self::ProofSystem>;
-
     /// Calls `synthesize` and also generates commitments from each of the input layers
-    #[instrument(skip_all, err)]
     fn synthesize_and_commit(
         &mut self,
         transcript: &mut impl ProverTranscript<F>,
-    ) -> Result<WitnessCommitmentsKey<F, Self>, GKRError> {
-        let mut witness = self.synthesize();
-
-        let verifier_key = witness.generate_verifier_key()?;
-
-        let commitments = witness
-            .input_layers
-            .iter_mut()
-            .map(|input_layer| {
-                let commitment = input_layer.commit().map_err(GKRError::InputLayerError)?;
-                CircuitInputLayer::<F, Self>::append_commitment_to_transcript(
-                    &commitment,
-                    transcript,
-                );
-                Ok(commitment)
-            })
-            .try_collect()?;
-
-        Ok((witness, commitments, verifier_key))
-    }
+    ) -> Result<WitnessAndCircuitDescription<F, Self>, GKRError>;
 
     /// The backwards pass, creating the GKRProof.
     #[instrument(skip_all, err)]
@@ -213,7 +189,6 @@ pub trait GKRCircuit<F: FieldExt> {
                 mut output_layers,
                 layers,
             },
-            commitments,
             verifier_key,
         ) = self.synthesize_and_commit(&mut transcript_writer)?;
 
@@ -350,7 +325,7 @@ pub trait GKRCircuit<F: FieldExt> {
     {
         let mut transcript_writer =
             TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
-        let (Witness { layers, .. }, _, _) =
+        let (Witness { layers, .. }, _) =
             self.synthesize_and_commit(&mut transcript_writer).unwrap();
 
         hash_layers(&layers)

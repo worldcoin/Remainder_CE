@@ -27,8 +27,8 @@ pub struct DataparallelDistributedMultiplication<F: FieldExt> {
 impl<F: FieldExt> DataparallelDistributedMultiplication<F> {
     pub fn new(
         ctx: &Context,
-        smaller_mle: &dyn ClaimableNode<F = F>,
-        bigger_mle: &dyn ClaimableNode<F = F>,
+        smaller_mle: &dyn ClaimableNode<F>,
+        bigger_mle: &dyn ClaimableNode<F>,
     ) -> Self {
         let combine_sector = Sector::new(
             ctx,
@@ -80,11 +80,7 @@ pub struct DiffTwoInputsBuilder<F: FieldExt> {
 }
 
 impl<F: FieldExt> DiffTwoInputsBuilder<F> {
-    pub fn new(
-        ctx: &Context,
-        mle_1: &dyn ClaimableNode<F = F>,
-        mle_2: &dyn ClaimableNode<F = F>,
-    ) -> Self {
+    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
         let first_layer_sector = Sector::new(
             ctx,
             &[mle_1, mle_2],

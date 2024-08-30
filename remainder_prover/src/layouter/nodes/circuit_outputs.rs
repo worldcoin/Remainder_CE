@@ -5,8 +5,10 @@ use std::marker::PhantomData;
 use remainder_shared_types::FieldExt;
 
 use crate::{
+    layer::LayerId,
     layouter::layouting::CircuitLocation,
-    mle::{dense::DenseMle, zero::ZeroMle, MleIndex},
+    mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, MleIndex},
+    output_layer::mle_output_layer::MleOutputLayer,
     prover::proof_system::ProofSystem,
 };
 
@@ -33,7 +35,7 @@ impl<F: FieldExt> CircuitNode for OutputNode<F> {
 
 impl<F: FieldExt> OutputNode<F> {
     /// Creates a new OutputNode from a source w/ some data
-    pub fn new(ctx: &Context, source: &impl ClaimableNode<F = F>) -> Self {
+    pub fn new(ctx: &Context, source: &impl ClaimableNode<F>) -> Self {
         Self {
             id: ctx.get_new_id(),
             source: source.id(),
@@ -43,7 +45,7 @@ impl<F: FieldExt> OutputNode<F> {
     }
 
     /// Creates a new ZeroMleRef, which constrains the source to equal a Zero Mle
-    pub fn new_zero(ctx: &Context, source: &impl ClaimableNode<F = F>) -> Self {
+    pub fn new_zero(ctx: &Context, source: &impl ClaimableNode<F>) -> Self {
         Self {
             id: ctx.get_new_id(),
             source: source.id(),
@@ -51,16 +53,11 @@ impl<F: FieldExt> OutputNode<F> {
             _marker: PhantomData,
         }
     }
-}
 
-impl<F: FieldExt, Pf: ProofSystem<F, OutputLayer = O>, O: From<DenseMle<F>> + From<ZeroMle<F>>>
-    CompilableNode<F, Pf> for OutputNode<F>
-{
-    fn compile<'a>(
+    pub fn compile_output<'a>(
         &'a self,
-        witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<(), crate::layouter::layouting::DAGError> {
+    ) -> Result<MleOutputLayer<F>, crate::layouter::layouting::DAGError> {
         let (circuit_location, data) = circuit_map.get_node(&self.source)?;
 
         let CircuitLocation {
@@ -79,7 +76,6 @@ impl<F: FieldExt, Pf: ProofSystem<F, OutputLayer = O>, O: From<DenseMle<F>> + Fr
             DenseMle::new_with_prefix_bits((*data).clone(), *layer_id, prefix_bits.clone()).into()
         };
 
-        witness_builder.add_output_layer(out);
-        Ok(())
+        Ok(out)
     }
 }

@@ -6,6 +6,7 @@ use crate::layouter::nodes::identity_gate::IdentityGateNode;
 use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
+use crate::layouter::nodes::random::VerifierChallengeNode;
 use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::get_input_shred_from_vec;
@@ -19,8 +20,8 @@ use remainder_shared_types::FieldExt;
 
 use super::components::{BitsAreBinary, DigitsConcatenator};
 
-/// Builds the worldcoin circuit.
-pub fn build_circuit<F: FieldExt>(
+/// Builds the worldcoin circuit with all public input layers.
+pub fn build_circuit_public_il<F: FieldExt>(
     data: WorldcoinCircuitData<F>,
 ) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
 {
@@ -73,7 +74,7 @@ pub fn build_circuit<F: FieldExt>(
         }
         let digits_refs = digits_input_shreds
             .iter()
-            .map(|shred| shred as &dyn ClaimableNode<F = F>)
+            .map(|shred| shred as &dyn ClaimableNode<F>)
             .collect_vec();
         // Concatenate the digits (which are stored for each digital place separately) into a single
         // MLE
@@ -83,7 +84,10 @@ pub fn build_circuit<F: FieldExt>(
         let lookup_table_values =
             get_input_shred_from_vec((0..BASE as u64).map(F::from).collect(), ctx, &input_layer);
         println!("Digit range check input = {:?}", lookup_table_values.id());
-        let lookup_table = LookupTable::new(ctx, &lookup_table_values, false);
+
+        let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
+        let lookup_table =
+            LookupTable::new(ctx, &lookup_table_values, false, verifier_challenge_node);
         println!("Lookup table = {:?}", lookup_table.id());
         let digit_multiplicities =
             get_input_shred_from_vec(digit_multiplicities.clone(), ctx, &input_layer);

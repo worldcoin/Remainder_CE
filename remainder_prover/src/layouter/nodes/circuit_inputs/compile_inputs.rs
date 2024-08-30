@@ -1,18 +1,17 @@
 use ark_std::log2;
 use itertools::Itertools;
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::{transcript::ProverTranscript, FieldExt};
 
 use crate::{
     input_layer::{
-        hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
-        hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
-        ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer, InputLayer,
-        MleInputLayer,
+        enum_input_layer::InputLayerEnum, ligero_input_layer::LigeroInputLayer,
+        public_input_layer::PublicInputLayer, InputLayer,
     },
+    layer::LayerId,
     layouter::{
         compiling::WitnessBuilder,
         layouting::{CircuitLocation, CircuitMap, DAGError},
-        nodes::CompilableNode,
+        nodes::{CompilableNode, InputCompilableNode},
     },
     mle::evals::{Evaluations, MultilinearExtension},
     prover::proof_system::ProofSystem,
@@ -156,21 +155,14 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
         .collect()
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL>, IL> CompilableNode<F, Pf>
-    for InputLayerNode<F>
-where
-    IL: InputLayer<F>
-        + From<PublicInputLayer<F>>
-        + From<LigeroInputLayer<F>>
-        + From<HyraxPlaceholderInputLayer<F>>
-        + From<HyraxPrecommitPlaceholderInputLayer<F>>,
-{
-    fn compile<'a>(
+impl<F: FieldExt> InputLayerNode<F> {
+    pub fn compile_input<'a>(
         &'a self,
-        witness: &mut WitnessBuilder<F, Pf>,
+        layer_id: &mut LayerId,
         circuit_map: &mut CircuitMap<'a, F>,
-    ) -> Result<(), DAGError> {
-        let layer_id = witness.next_input_layer();
+        transcript: &mut impl ProverTranscript<F>,
+    ) -> Result<InputLayerEnum<F>, DAGError> {
+        let input_layer_id = layer_id.get_and_inc();
         let Self {
             id: _,
             children,
@@ -185,19 +177,28 @@ where
         let (prefix_bits, input_shred_indices) = index_input_mles(&input_mles);
         debug_assert_eq!(input_shred_indices.len(), children.len());
 
-        let out: IL = match input_layer_type {
-            InputLayerType::LigeroInputLayer => LigeroInputLayer::new(mle, layer_id).into(),
-            InputLayerType::PublicInputLayer => PublicInputLayer::new(mle, layer_id).into(),
-            InputLayerType::Default => PublicInputLayer::new(mle, layer_id).into(),
-            InputLayerType::HyraxPlaceholderInputLayer => {
-                HyraxPlaceholderInputLayer::new(mle, layer_id).into()
+        let out = match input_layer_type {
+            InputLayerType::LigeroInputLayer((rho_inv, ratio, precommit)) => {
+                let mut ligero_input_layer: LigeroInputLayer<F> = LigeroInputLayer::new(
+                    mle,
+                    input_layer_id.to_owned(),
+                    precommit.to_owned(),
+                    *rho_inv,
+                    *ratio,
+                )
+                .into();
+                let ligero_commitment = ligero_input_layer.commit().unwrap();
+                transcript.append("ligero commitment root", ligero_commitment.root);
+                ligero_input_layer.into()
             }
-            InputLayerType::HyraxPrecommitPlaceholderInputLayer => {
-                HyraxPrecommitPlaceholderInputLayer::new(mle, layer_id).into()
+            InputLayerType::PublicInputLayer => {
+                let mut public_input_layer = PublicInputLayer::new(mle, input_layer_id.to_owned());
+                let public_mle = public_input_layer.commit().unwrap();
+                transcript.append_elements("public mle", &public_mle);
+                public_input_layer.into()
             }
         };
 
-        witness.add_input_layer(out);
         input_shred_indices
             .iter()
             .zip(prefix_bits)
@@ -206,11 +207,11 @@ where
                 circuit_map.add_node(
                     input_shred.id,
                     (
-                        CircuitLocation::new(layer_id, prefix_bits),
+                        CircuitLocation::new(*layer_id, prefix_bits),
                         &input_shred.data,
                     ),
                 );
             });
-        Ok(())
+        Ok(out)
     }
 }

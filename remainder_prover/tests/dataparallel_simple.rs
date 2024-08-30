@@ -44,8 +44,8 @@ impl<F: FieldExt> NonSelectorDataparallelComponent<F> {
     /// additionally contains a [DifferenceBuilderComponent] for zero output
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F = F>,
-        mle_2_input: &dyn ClaimableNode<F = F>,
+        mle_1_input: &dyn ClaimableNode<F>,
+        mle_2_input: &dyn ClaimableNode<F>,
     ) -> Self {
         let first_layer_component =
             ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);

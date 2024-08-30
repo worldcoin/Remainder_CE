@@ -10,8 +10,9 @@ use super::{
     debug::DebugNode,
     gate::GateNode,
     identity_gate::IdentityGateNode,
-    lookup::{LookupTable, LookupConstraint},
+    lookup::{LookupConstraint, LookupTable},
     matmult::MatMultNode,
+    random::VerifierChallengeNode,
     sector::{Sector, SectorGroup},
     split_node::SplitNode,
     NodeGroup, YieldNode,
@@ -20,6 +21,7 @@ use super::{
 node_enum!(NodeEnum: FieldExt,
     (InputShred: InputShred<F>),
     (InputLayer: InputLayerNode<F>),
+    (VerifierChallengeNode: VerifierChallengeNode<F>),
     (Output: OutputNode<F>),
     (Debug: DebugNode),
     (Sector: Sector<F>),
@@ -36,6 +38,7 @@ node_enum!(NodeEnum: FieldExt,
 pub struct NodeEnumGroup<F: FieldExt> {
     input_shreds: Option<Vec<InputShred<F>>>,
     input_layers: Option<Vec<InputLayerNode<F>>>,
+    verifier_challenge_nodes: Option<Vec<VerifierChallengeNode<F>>>,
     output: Option<Vec<OutputNode<F>>>,
     debugs: Option<Vec<DebugNode>>,
     sectors: Option<Vec<Sector<F>>>,
@@ -55,6 +58,7 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
         let mut out = Self {
             input_shreds: Some(vec![]),
             input_layers: Some(vec![]),
+            verifier_challenge_nodes: Some(vec![]),
             output: Some(vec![]),
             debugs: Some(vec![]),
             sectors: Some(vec![]),
@@ -71,6 +75,9 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
             match node {
                 NodeEnum::InputShred(node) => out.input_shreds.as_mut().unwrap().push(node),
                 NodeEnum::InputLayer(node) => out.input_layers.as_mut().unwrap().push(node),
+                NodeEnum::VerifierChallengeNode(node) => {
+                    out.verifier_challenge_nodes.as_mut().unwrap().push(node)
+                }
                 NodeEnum::Output(node) => out.output.as_mut().unwrap().push(node),
                 NodeEnum::Debug(node) => out.debugs.as_mut().unwrap().push(node),
                 NodeEnum::Sector(node) => out.sectors.as_mut().unwrap().push(node),
@@ -82,7 +89,9 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
                 NodeEnum::SplitNode(node) => out.split_nodes.as_mut().unwrap().push(node),
                 NodeEnum::MatMultNode(node) => out.matmult_nodes.as_mut().unwrap().push(node),
                 NodeEnum::LookupTable(node) => out.lookup_tables.as_mut().unwrap().push(node),
-                NodeEnum::LookupConstraint(node) => out.lookup_constraints.as_mut().unwrap().push(node),
+                NodeEnum::LookupConstraint(node) => {
+                    out.lookup_constraints.as_mut().unwrap().push(node)
+                }
             }
         }
         out
@@ -100,6 +109,13 @@ impl<F: FieldExt> YieldNode<InputLayerNode<F>> for NodeEnumGroup<F> {
         self.input_layers.take().unwrap_or_default()
     }
 }
+
+impl<F: FieldExt> YieldNode<VerifierChallengeNode<F>> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<VerifierChallengeNode<F>> {
+        self.verifier_challenge_nodes.take().unwrap_or_default()
+    }
+}
+
 impl<F: FieldExt> YieldNode<OutputNode<F>> for NodeEnumGroup<F> {
     fn get_nodes(&mut self) -> Vec<OutputNode<F>> {
         self.output.take().unwrap_or_default()

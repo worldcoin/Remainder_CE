@@ -2,12 +2,13 @@ use itertools::{all, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression::{abstract_expr::{calculate_selector_values, AbstractExpr}, generic_expr::Expression},
+    expression::{
+        abstract_expr::{calculate_selector_values, AbstractExpr},
+        generic_expr::Expression,
+    },
     layouter::{
         component::Component,
-        nodes::{
-            sector::Sector, CircuitNode, ClaimableNode, Context,
-        },
+        nodes::{sector::Sector, CircuitNode, ClaimableNode, Context},
     },
     mle::evals::MultilinearExtension,
     worldcoin::digit_decomposition::NUM_DIGITS,
@@ -21,7 +22,7 @@ pub struct SubtractionComponent<F: FieldExt> {
 
 impl<F: FieldExt> SubtractionComponent<F> {
     /// Create a new [SubtractionComponent] component.
-    pub fn new(ctx: &Context, lhs: &dyn ClaimableNode<F = F>, rhs: &dyn ClaimableNode<F = F>) -> Self {
+    pub fn new(ctx: &Context, lhs: &dyn ClaimableNode<F>, rhs: &dyn ClaimableNode<F>) -> Self {
         let sector = Sector::new(
             ctx,
             &[lhs, rhs],
@@ -31,7 +32,10 @@ impl<F: FieldExt> SubtractionComponent<F> {
             },
             |data| {
                 assert_eq!(data.len(), 2);
-                let result = data[0].get_evals_vector().iter().zip(data[1].get_evals_vector())
+                let result = data[0]
+                    .get_evals_vector()
+                    .iter()
+                    .zip(data[1].get_evals_vector())
                     .map(|(lhs, rhs)| *lhs - *rhs)
                     .collect_vec();
                 MultilinearExtension::new(result)
@@ -61,17 +65,14 @@ pub struct DigitsConcatenator<F: FieldExt> {
 
 impl<F: FieldExt> DigitsConcatenator<F> {
     /// Create a new DigitsConcatenator component.
-    pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>]) -> Self {
+    pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F>]) -> Self {
         let sector = Sector::new(
             ctx,
             mles,
             |digital_places| {
                 assert_eq!(digital_places.len(), NUM_DIGITS);
                 Expression::<F, AbstractExpr>::selectors(
-                    digital_places
-                        .iter()
-                        .map(|node| node.expr())
-                        .collect(),
+                    digital_places.iter().map(|node| node.expr()).collect(),
                 )
             },
             |digits_at_places| {
@@ -79,9 +80,7 @@ impl<F: FieldExt> DigitsConcatenator<F> {
                 let all_digits = calculate_selector_values(
                     digits_at_places
                         .iter()
-                        .map(|digits_at_place| {
-                            digits_at_place.get_evals_vector().clone()
-                        })
+                        .map(|digits_at_place| digits_at_place.get_evals_vector().clone())
                         .collect(),
                 );
                 MultilinearExtension::new(all_digits)
@@ -110,7 +109,7 @@ pub struct DigitalRecompositionComponent<F: FieldExt> {
 impl<F: FieldExt> DigitalRecompositionComponent<F> {
     /// Each of the Nodes in `mles` specifies the digits for a different "decimal place".  Most
     /// significant digit comes first.
-    pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F = F>], base: u64) -> Self {
+    pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F>], base: u64) -> Self {
         let num_digits = mles.len();
         let sector = Sector::new(
             ctx,
@@ -137,16 +136,16 @@ impl<F: FieldExt> DigitalRecompositionComponent<F> {
                 assert_eq!(digit_positions.len(), num_digits);
                 let init_vec = vec![F::ZERO; digit_positions[0].get_evals_vector().len()];
 
-                let result_iter =
-                    digit_positions.into_iter()
-                        .enumerate()
-                        .fold(init_vec, |acc, (bit_idx, curr_bits)| {
-                            let base_power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));
-                            acc.into_iter()
-                                .zip(curr_bits.get_evals_vector().into_iter())
-                                .map(|(elem, curr_bit)| elem + base_power * curr_bit)
-                                .collect_vec()
-                        });
+                let result_iter = digit_positions.into_iter().enumerate().fold(
+                    init_vec,
+                    |acc, (bit_idx, curr_bits)| {
+                        let base_power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));
+                        acc.into_iter()
+                            .zip(curr_bits.get_evals_vector().into_iter())
+                            .map(|(elem, curr_bit)| elem + base_power * curr_bit)
+                            .collect_vec()
+                    },
+                );
                 MultilinearExtension::new(result_iter)
             },
         );
@@ -173,20 +172,15 @@ pub struct BitsAreBinary<F: FieldExt> {
 
 impl<F: FieldExt> BitsAreBinary<F> {
     /// Creates a new BitsAreBinary component.
-    pub fn new(
-        ctx: &Context,
-        values_node: &dyn ClaimableNode<F = F>,
-    ) -> Self {
+    pub fn new(ctx: &Context, values_node: &dyn ClaimableNode<F>) -> Self {
         let sector = Sector::new(
             ctx,
             &[values_node],
             |nodes| {
                 assert_eq!(nodes.len(), 1);
                 let values_mle_ref = nodes[0];
-                Expression::<F, AbstractExpr>::products(vec![
-                    values_mle_ref,
-                    values_mle_ref
-                ]) - values_mle_ref.expr()
+                Expression::<F, AbstractExpr>::products(vec![values_mle_ref, values_mle_ref])
+                    - values_mle_ref.expr()
             },
             |data| {
                 assert_eq!(data.len(), 1);
@@ -210,7 +204,6 @@ where
     }
 }
 
-
 /// Component that checks that the decomposition of a number into (sign bit, absolute value) is
 /// correct. Sign bit of 0 indicates negative, 1 indicates positive.
 /// Add self.sector to the circuit as an output layer to enforce this constraint.
@@ -225,9 +218,9 @@ impl<F: FieldExt> SignCheckerComponent<F> {
     /// negative and 1 indicates positive.
     pub fn new(
         ctx: &Context,
-        values: &dyn ClaimableNode<F = F>,
-        sign_bits: &dyn ClaimableNode<F = F>,
-        abs_values: &dyn ClaimableNode<F = F>,
+        values: &dyn ClaimableNode<F>,
+        sign_bits: &dyn ClaimableNode<F>,
+        abs_values: &dyn ClaimableNode<F>,
     ) -> Self {
         let sector = Sector::new(
             ctx,

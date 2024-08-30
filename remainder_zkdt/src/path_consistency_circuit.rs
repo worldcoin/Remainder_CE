@@ -33,9 +33,9 @@ pub struct PathCheckComponent<F: FieldExt> {
 impl<F: FieldExt> PathCheckComponent<F> {
     pub fn new(
         ctx: &Context,
-        decision_node_ids: impl ClaimableNode<F = F>,
-        leaf_node_ids: impl ClaimableNode<F = F>,
-        bin_decomp_diff_signed_bit: impl ClaimableNode<F = F>,
+        decision_node_ids: impl ClaimableNode<F>,
+        leaf_node_ids: impl ClaimableNode<F>,
+        bin_decomp_diff_signed_bit: impl ClaimableNode<F>,
         num_tree_bits: usize,
         num_dataparallel_bits: usize,
     ) -> Self {

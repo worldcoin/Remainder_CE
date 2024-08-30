@@ -4,9 +4,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub use itertools::Either;
+use remainder_shared_types::transcript::ProverTranscript;
 pub use remainder_shared_types::{FieldExt, Fr};
 use serde::{Deserialize, Serialize};
 
+use crate::input_layer::enum_input_layer::InputLayerEnum;
+use crate::layer::layer_enum::LayerEnum;
+use crate::layer::{Layer, LayerId};
 use crate::prover::proof_system::ProofSystem;
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
@@ -20,10 +24,11 @@ pub mod circuit_inputs;
 pub mod circuit_outputs;
 pub mod debug;
 pub mod gate;
-pub mod lookup;
 pub mod identity_gate;
+pub mod lookup;
 pub mod matmult;
 pub mod node_enum;
+pub mod random;
 pub mod sector;
 pub mod split_node;
 
@@ -93,31 +98,38 @@ pub trait CircuitNode {
 /// A circuit node that can have a Claim made against it.
 ///
 /// Yields the MLE that any claim made on this node would be the evaluation of
-pub trait ClaimableNode: CircuitNode {
-    /// The Field this node uses
-    type F: FieldExt;
+pub trait ClaimableNode<F: FieldExt>: CircuitNode {
     /// A function for getting the MLE that this node generates in the circuit
     ///
     /// Any claim made against this node will be evaluated on this MLE
-    fn get_data(&self) -> &MultilinearExtension<Self::F>;
+    fn get_data(&self) -> &MultilinearExtension<F>;
 
     /// An abstract expression node that will make a claim on this node
-    fn get_expr(&self) -> Expression<Self::F, AbstractExpr>;
+    fn get_expr(&self) -> Expression<F, AbstractExpr>;
 }
 
 /// A Node that contains the information neccessary to Compile itself
 ///
 /// Implement this for any node that does not need additional Layingout before compilation
-pub trait CompilableNode<F: FieldExt, Pf: ProofSystem<F>>: CircuitNode {
+pub trait CompilableNode<F: FieldExt>: CircuitNode {
     /// Compiles the node by adding any layers neccessary to the `WitnessBuilder`
     ///
     /// If any `ClaimableNode` is added to the witness it is the responsibility
     /// of this function to add that `NodeId` to the `CircuitMap`
     fn compile<'a>(
         &'a self,
-        witness_builder: &mut WitnessBuilder<F, Pf>,
+        layer_id: &mut LayerId,
         circuit_map: &mut CircuitMap<'a, F>,
-    ) -> Result<(), DAGError>;
+    ) -> Result<Vec<LayerEnum<F>>, DAGError>;
+}
+
+pub trait InputCompilableNode<F: FieldExt>: CircuitNode {
+    fn compile_input<'a>(
+        &'a self,
+        layer_id: &LayerId,
+        circuit_map: &mut CircuitMap<'a, F>,
+        transcript: impl ProverTranscript<F>,
+    ) -> Result<InputLayerEnum<F>, DAGError>;
 }
 
 /// An organized grouping of many node types

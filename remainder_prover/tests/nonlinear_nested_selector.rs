@@ -40,11 +40,11 @@ impl<F: FieldExt> NonlinearNestedSelectorBuilderComponent<F> {
     /// one more variable than `right_outer_sel_mle`.
     pub fn new(
         ctx: &Context,
-        left_inner_sel_mle: &dyn ClaimableNode<F = F>,
-        right_inner_sel_mle: &dyn ClaimableNode<F = F>,
-        right_outer_sel_mle: &dyn ClaimableNode<F = F>,
-        right_sum_mle_1: &dyn ClaimableNode<F = F>,
-        right_sum_mle_2: &dyn ClaimableNode<F = F>,
+        left_inner_sel_mle: &dyn ClaimableNode<F>,
+        right_inner_sel_mle: &dyn ClaimableNode<F>,
+        right_outer_sel_mle: &dyn ClaimableNode<F>,
+        right_sum_mle_1: &dyn ClaimableNode<F>,
+        right_sum_mle_2: &dyn ClaimableNode<F>,
     ) -> Self {
         let nonlinear_nested_selector_sector = Sector::new(
             ctx,

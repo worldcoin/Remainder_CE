@@ -1,11 +1,14 @@
 //! A node that can alter the claims made on it's source `ClaimableNode`
 
+use std::iter;
+
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layouter::layouting::CircuitLocation,
+    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
+    layouter::layouting::{CircuitLocation, DAGError},
     mle::evals::{Evaluations, MultilinearExtension},
     prover::proof_system::ProofSystem,
 };
@@ -27,7 +30,7 @@ pub struct SplitNode<F: FieldExt> {
 
 impl<F: FieldExt> SplitNode<F> {
     /// Creates 2^num_vars `SplitNodes` from a single ClaimableNode
-    pub fn new(ctx: &Context, node: &impl ClaimableNode<F = F>, num_vars: usize) -> Vec<Self> {
+    pub fn new(ctx: &Context, node: &impl ClaimableNode<F>, num_vars: usize) -> Vec<Self> {
         let data = node.get_data();
         let source = node.id();
         let step = 1 << num_vars;
@@ -66,29 +69,22 @@ impl<F: FieldExt> CircuitNode for SplitNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for SplitNode<F> {
-    type F = F;
-
-    fn get_data(&self) -> &MultilinearExtension<Self::F> {
+impl<F: FieldExt> ClaimableNode<F> for SplitNode<F> {
+    fn get_data(&self) -> &MultilinearExtension<F> {
         &self.data
     }
 
-    fn get_expr(
-        &self,
-    ) -> crate::expression::generic_expr::Expression<
-        Self::F,
-        crate::expression::abstract_expr::AbstractExpr,
-    > {
+    fn get_expr(&self) -> Expression<F, AbstractExpr> {
         Expression::<F, AbstractExpr>::mle(self.id)
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for SplitNode<F> {
+impl<F: FieldExt> CompilableNode<F> for SplitNode<F> {
     fn compile<'a>(
         &'a self,
-        _: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
+        _: &mut LayerId,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<(), crate::layouter::layouting::DAGError> {
+    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
         let data = &self.data;
         let (source_location, _) = circuit_map.get_node(&self.source)?;
 
@@ -102,7 +98,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> CompilableNode<F, Pf> for SplitNode<F> {
         let location = CircuitLocation::new(source_location.layer_id, prefix_bits);
 
         circuit_map.add_node(self.id, (location, data));
-        Ok(())
+        Ok(vec![])
     }
 }
 

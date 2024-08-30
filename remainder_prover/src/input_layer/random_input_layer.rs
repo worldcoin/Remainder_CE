@@ -22,7 +22,7 @@ use crate::mle::Mle;
 
 #[derive(Debug, Clone)]
 pub struct RandomInputLayer<F: FieldExt> {
-    mle: Vec<F>,
+    mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,
 }
 
@@ -54,18 +54,19 @@ impl<F: FieldExt> VerifierRandomInputLayer<F> {
 }
 
 impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
-    type Commitment = Vec<F>;
+    type ProverCommitment = Vec<F>;
+    type VerifierCommitment = Vec<F>;
 
     type VerifierInputLayer = VerifierRandomInputLayer<F>;
 
-    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
+    fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // We do not need to commit to the randomness, so we simply send it in
         // the clear.
-        Ok(self.mle.clone())
+        Ok(self.mle.get_evals_vector().clone())
     }
 
     fn append_commitment_to_transcript(
-        commitment: &Self::Commitment,
+        commitment: &Self::VerifierCommitment,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) {
         transcript_writer.append_elements("Random Layer Evaluations", commitment);
@@ -86,7 +87,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     }
 
     fn get_padded_mle(&self) -> DenseMle<F> {
-        DenseMle::new_from_raw(self.mle.clone(), self.layer_id)
+        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
 
     fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
@@ -148,15 +149,13 @@ impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
 }
 
 impl<F: FieldExt> RandomInputLayer<F> {
-    /// Generates a random MLE of size `size` that is generated from the FS Transcript
-    pub fn new(transcript: &mut impl ProverTranscript<F>, size: usize, layer_id: LayerId) -> Self {
-        let mle = transcript.get_challenges("Random Input Layer Challenges", size);
+    pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
 
     /// Return the MLE stored in self as a DenseMle with the correct layer ID.
     pub fn get_mle(&self) -> DenseMle<F> {
-        DenseMle::new_from_raw(self.mle.clone(), self.layer_id)
+        DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
 }
 
@@ -171,7 +170,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for RandomInputLayer<F> {
         num_idx: usize,
     ) -> Result<Vec<F>, crate::claims::ClaimError> {
         get_wlx_evaluations_helper(
-            MultilinearExtension::new(self.mle.clone()),
+            self.mle.clone(),
             claim_vecs,
             claimed_vals,
             claimed_mles,
@@ -202,7 +201,10 @@ mod tests {
         let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
             TranscriptWriter::new("Test Transcript Writer");
 
-        let random_input_layer = RandomInputLayer::new(&mut transcript_writer, num_evals, layer_id);
+        let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
+        let mle = MultilinearExtension::new(mle_vec);
+
+        let random_input_layer = RandomInputLayer::new(mle, layer_id);
         let verifier_random_input_layer = random_input_layer.into_verifier_input_layer();
 
         let expected_verifier_random_input_layer =
@@ -231,8 +233,10 @@ mod tests {
         let claim_result = Fr::from(1);
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
 
-        let mut random_input_layer =
-            RandomInputLayer::new(&mut transcript_writer, num_evals, layer_id);
+        let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
+        let mle = MultilinearExtension::new(mle_vec);
+
+        let mut random_input_layer = RandomInputLayer::new(mle, layer_id);
         let verifier_random_input_layer = random_input_layer.into_verifier_input_layer();
 
         // Prover phase.

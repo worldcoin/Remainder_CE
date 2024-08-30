@@ -23,19 +23,6 @@ pub mod public_input_layer;
 /// An input layer in order to generate random challenges for Fiat-Shamir.
 pub mod random_input_layer;
 
-/// An input layer in order to distinguish Hyrax input layers from others.
-/// NOTE: this input layer is just a placeholder to convert from impl [GKRCircuit]s to [HyraxCircuit]s, but
-/// the functionality should NOT be used in just a regular [GKRCircuit].
-pub mod hyrax_placeholder_input_layer;
-
-/// An input layer in order to distinguish Hyrax input layers with precommits from others.
-/// NOTE: this input layer is just a placeholder to convert from impl [GKRCircuit]s to [HyraxCircuit]s, but
-/// the functionality should NOT be used in just a regular [GKRCircuit].
-pub mod hyrax_precommit_placeholder_input_layer;
-
-#[cfg(test)]
-mod tests;
-
 use crate::{
     claims::wlx_eval::get_num_wlx_evaluations, mle::mle_enum::MleEnum,
     sumcheck::evaluate_at_a_point,
@@ -71,11 +58,15 @@ use log::{debug, info};
 /// The InputLayer trait in which the evaluation proof, commitment, and proof/verification
 /// process takes place for input layers.
 pub trait InputLayer<F: FieldExt> {
-    /// The struct that contains the commitment to the contents of the input_layer.
-    type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
+    /// The struct that contains the commitment to the contents of the input_layer in the prover's view.
+    type ProverCommitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
+
+    /// The struct that contains the commitment to the contents of the input_layer in the verifier's view.
+    /// This is what should be added to transcript, because
+    type VerifierCommitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
     /// The Verifier Key representation for this input layer.
-    type VerifierInputLayer: VerifierInputLayer<F, Commitment = Self::Commitment>
+    type VerifierInputLayer: VerifierInputLayer<F, Commitment = Self::VerifierCommitment>
         + Serialize
         + for<'a> Deserialize<'a>
         + core::fmt::Debug;
@@ -85,11 +76,11 @@ pub trait InputLayer<F: FieldExt> {
 
     /// Generates and returns a commitment.
     /// May also store it internally.
-    fn commit(&mut self) -> Result<Self::Commitment, InputLayerError>;
+    fn commit(&mut self) -> Result<Self::VerifierCommitment, InputLayerError>;
 
     /// Appends the commitment to the F-S Transcript.
     fn append_commitment_to_transcript(
-        commitment: &Self::Commitment,
+        commitment: &Self::VerifierCommitment,
         transcript_writer: &mut impl ProverTranscript<F>,
     );
 
@@ -132,12 +123,6 @@ pub trait VerifierInputLayer<F: FieldExt> {
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<(), InputLayerError>;
-}
-
-/// Adapter for InputLayerBuilder, implement for InputLayers that can be built out of flat MLEs.
-pub trait MleInputLayer<F: FieldExt>: InputLayer<F> {
-    /// Creates a new InputLayer from a flat mle.
-    fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self;
 }
 
 /// Computes the V_d(l(x)) evaluations for the input layer V_d.

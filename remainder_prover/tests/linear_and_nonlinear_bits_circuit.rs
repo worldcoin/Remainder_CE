@@ -37,8 +37,8 @@ pub struct LastBitLinearBuilderComponent<F: FieldExt> {
 impl<F: FieldExt> LastBitLinearBuilderComponent<F> {
     pub fn new(
         ctx: &Context,
-        sel_node: &dyn ClaimableNode<F = F>,
-        prod_node: &dyn ClaimableNode<F = F>,
+        sel_node: &dyn ClaimableNode<F>,
+        prod_node: &dyn ClaimableNode<F>,
     ) -> Self {
         let last_bit_linear_sector = Sector::new(
             ctx,
@@ -108,7 +108,7 @@ pub struct FirstBitLinearBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> FirstBitLinearBuilderComponent<F> {
-    pub fn new(ctx: &Context, sel_node: &dyn ClaimableNode<F = F>) -> Self {
+    pub fn new(ctx: &Context, sel_node: &dyn ClaimableNode<F>) -> Self {
         let last_bit_linear_sector = Sector::new(
             ctx,
             &[sel_node],

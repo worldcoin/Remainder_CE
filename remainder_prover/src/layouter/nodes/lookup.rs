@@ -1,11 +1,18 @@
 //! Nodes that implement LogUp.
-use crate::expression::abstract_expr::{AbstractExpr, calculate_selector_values};
+use std::io::Cursor;
+use std::thread::current;
+
+use crate::expression::abstract_expr::{calculate_selector_values, AbstractExpr};
 use crate::expression::prover_expr::ProverExpr;
+use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::public_input_layer::PublicInputLayer;
-use crate::input_layer::MleInputLayer;
+use crate::input_layer::random_input_layer::RandomInputLayer;
+use crate::layer::layer_enum::LayerEnum;
+use crate::layer::{Layer, LayerId};
 use crate::mle::zero::ZeroMle;
 use crate::mle::Mle;
 use crate::mle::{evals::Evaluations, MleIndex};
+use crate::output_layer::mle_output_layer::MleOutputLayer;
 
 use remainder_shared_types::FieldExt;
 
@@ -16,7 +23,8 @@ use crate::{
     prover::proof_system::ProofSystem,
 };
 
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
+use super::random::VerifierChallengeNode;
+use super::{CircuitNode, ClaimableNode, CompilableNode, Context, InputCompilableNode, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupTable).
 #[derive(Clone, Debug)]
@@ -39,8 +47,8 @@ impl LookupConstraint {
     pub fn new<F: FieldExt>(
         ctx: &Context,
         lookup_table: &LookupTable,
-        constrained: &dyn ClaimableNode<F = F>,
-        multiplicities: &dyn ClaimableNode<F = F>,
+        constrained: &dyn ClaimableNode<F>,
+        multiplicities: &dyn ClaimableNode<F>,
     ) -> Self {
         let id = ctx.get_new_id();
         LookupConstraint {
@@ -73,9 +81,11 @@ pub struct LookupTable {
     constraints: Vec<LookupConstraint>,
     /// The id of the node providing the table entries.
     table_node_id: NodeId,
+    /// The ID of the random input node for the FS challenge.
+    random_node_id: NodeId,
     /// Whether any of the values to be constrained by this LookupTable should be considered secret
     /// (Determines which InputLayer type is used for the denominator inverses.)
-    secret_constrained_values: bool
+    secret_constrained_values: bool,
 }
 
 impl LookupTable {
@@ -84,21 +94,25 @@ impl LookupTable {
     /// `secret_constrained_values` controls whether a public or a hiding input layer is used for
     /// the denominator inverse, which is derived from the constrained values (note that LookupTable
     /// does not hide the constrained values themselves - that is up to the caller).
-    /// 
+    ///
     /// # Requires
     ///     - `table` must have length a power of two.
     pub fn new<F: FieldExt>(
         ctx: &Context,
-        table: &dyn ClaimableNode<F = F>,
+        table: &dyn ClaimableNode<F>,
         secret_constrained_values: bool,
-     ) -> Self {
+        random_input_node: VerifierChallengeNode<F>,
+    ) -> Self {
         if secret_constrained_values {
-            unimplemented!("Secret constrained values not yet supported (requires HyraxInputLayer)");
+            unimplemented!(
+                "Secret constrained values not yet supported (requires HyraxInputLayer)"
+            );
         }
         LookupTable {
             id: ctx.get_new_id(),
             constraints: vec![],
             table_node_id: table.id(),
+            random_node_id: random_input_node.id(),
             secret_constrained_values: false,
         }
     }
@@ -108,41 +122,23 @@ impl LookupTable {
     pub fn add_lookup_constraint(&mut self, constraint: LookupConstraint) {
         self.constraints.push(constraint);
     }
-}
 
-impl CircuitNode for LookupTable {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-
-    fn children(&self) -> Option<Vec<NodeId>> {
-        Some(self.constraints.iter().map(|constraint| constraint.id()).collect())
-    }
-
-    fn sources(&self) -> Vec<NodeId> {
-        // NB this function never gets called, since lookup tables and constraints are placed after
-        // the intermediate nodes in the toposort
-        self.constraints.iter().map(|constraint| constraint.id()).chain(
-            self.constraints.iter().map(|constraint| constraint.sources()).flatten()
-        ).collect()
-    }
-}
-
-impl<F: FieldExt, Pf: ProofSystem<F, InputLayer = IL, Layer = L, OutputLayer = OL>, IL, L, OL>
-    CompilableNode<F, Pf> for LookupTable
-where
-    IL: From<PublicInputLayer<F>>,
-    L: From<RegularLayer<F>>,
-    OL: From<ZeroMle<F>>,
-{
-    fn compile<'a>(
+    pub fn compile_lookup<'a, F: FieldExt>(
         &'a self,
-        witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
+        input_layer_id: &mut LayerId,
+        intermediate_layer_id: &mut LayerId,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<(), crate::layouter::layouting::DAGError> {
+    ) -> Result<
+        (
+            Vec<InputLayerEnum<F>>,
+            Vec<LayerEnum<F>>,
+            Vec<MleOutputLayer<F>>,
+        ),
+        crate::layouter::layouting::DAGError,
+    > {
         type AE<F> = Expression<F, AbstractExpr>;
         type PE<F> = Expression<F, ProverExpr>;
-        
+
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
         // table
@@ -168,8 +164,9 @@ where
         // TODO (future) Draw a random value from the transcript
         let r = F::from(11111111u64); // FIXME @Nick
         let r_mle = MultilinearExtension::<F>::new(vec![r]);
-        let r_layer_id = witness_builder.next_input_layer();
-        witness_builder.add_input_layer(PublicInputLayer::new(r_mle.clone(), r_layer_id).into());
+        let r_layer_id = input_layer_id.get_and_inc();
+        let mut input_layers = vec![PublicInputLayer::new(r_mle.clone(), r_layer_id).into()];
+
         let r_densemle = DenseMle::new_with_prefix_bits(r_mle, r_layer_id, vec![]);
         println!(
             "Input layer for the would-be random value r has layer id: {:?}",
@@ -186,9 +183,9 @@ where
         );
         let expr =
             r_densemle.clone().expression() - constrained_expr.build_prover_expr(circuit_map)?;
-        let layer_id = witness_builder.next_layer();
+        let layer_id = intermediate_layer_id.get_and_inc();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
+        let mut intermediate_layers = vec![layer.into()];
         println!(
             "Layer that calcs r - constrained has layer id: {:?}",
             layer_id
@@ -210,19 +207,23 @@ where
 
         // Build the numerator: is all ones (create explicitly since don't want to pad with zeros)
         let expr = ExprBuilder::<F>::constant(F::from(1u64)).build_prover_expr(circuit_map)?;
-        let layer_id = witness_builder.next_layer();
+        let layer_id = intermediate_layer_id.get_and_inc();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
         println!(
             "Layer that sets the numerators to 1 has layer id: {:?}",
             layer_id
         );
+        intermediate_layers.push(layer.into());
         let mle = MultilinearExtension::new(vec![F::from(1u64); denominator_length]);
         let lhs_numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
         // Build the numerator and denominator of the sum of the fractions
-        let (lhs_numerator, lhs_denominator) =
-            build_fractional_sum(lhs_numerator, lhs_denominator, witness_builder);
+        let (lhs_numerator, lhs_denominator) = build_fractional_sum(
+            lhs_numerator,
+            lhs_denominator,
+            &mut intermediate_layers,
+            intermediate_layer_id,
+        );
 
         // Build the RHS of the equation (defined by the table values and multiplicities)
         println!("Build the RHS of the equation (defined by the table values and multiplicities)");
@@ -237,11 +238,9 @@ where
         );
         if self.constraints.len() > 1 {
             // Insert an extra layer that aggregates the multiplicities
-            let expr = self
-                .constraints
-                .iter()
-                .skip(1)
-                .fold(rhs_numerator.expression(), |acc, constraint| {
+            let expr = self.constraints.iter().skip(1).fold(
+                rhs_numerator.expression(),
+                |acc, constraint| {
                     let (multiplicities_location, multiplicities) =
                         &circuit_map.0[&constraint.multiplicities_node_id];
                     let mult_constraint_mle = DenseMle::new_with_prefix_bits(
@@ -250,10 +249,11 @@ where
                         multiplicities_location.prefix_bits.clone(),
                     );
                     acc + mult_constraint_mle.expression()
-                });
-            let layer_id = witness_builder.next_layer();
+                },
+            );
+            let layer_id = intermediate_layer_id.get_and_inc();
             let layer = RegularLayer::new_raw(layer_id, expr);
-            witness_builder.add_layer(layer.into());
+            intermediate_layers.push(layer.into());
             println!(
                 "Layer that aggs the multiplicities has layer id: {:?}",
                 layer_id
@@ -281,9 +281,9 @@ where
         // Build the denominator r - table
         let expr =
             r_densemle.expression() - self.table_node_id.expr().build_prover_expr(circuit_map)?;
-        let layer_id = witness_builder.next_layer();
+        let layer_id = intermediate_layer_id.get_and_inc();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
+        intermediate_layers.push(layer.into());
         println!(
             "Layer that calculates r - table has layer id: {:?}",
             layer_id
@@ -293,20 +293,24 @@ where
         let rhs_denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
 
         // Build the numerator and denominator of the sum of the fractions
-        let (rhs_numerator, rhs_denominator) =
-            build_fractional_sum(rhs_numerator, rhs_denominator, witness_builder);
+        let (rhs_numerator, rhs_denominator) = build_fractional_sum(
+            rhs_numerator,
+            rhs_denominator,
+            &mut intermediate_layers,
+            intermediate_layer_id,
+        );
 
         // Add an input layer for the inverse of the denominators of the LHS. This value holds
         // reveals some information about the constrained values, so we optionally use a
         // HyraxInputLayer.
         let mle =
             MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
-        let layer_id = witness_builder.next_input_layer();
+        let layer_id = input_layer_id.get_and_inc();
         if self.secret_constrained_values {
             // TODO use HyraxInputLayer, once it's implemented
             unimplemented!();
         } else {
-            witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into());
+            input_layers.push(PublicInputLayer::new(mle.clone(), layer_id).into());
         }
         let lhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
         println!(
@@ -317,8 +321,8 @@ where
         // any information about the constrained values, so it's OK to use PublicInputLayer.
         let mle =
             MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
-        let layer_id = witness_builder.next_input_layer();
-        witness_builder.add_input_layer(PublicInputLayer::new(mle.clone(), layer_id).into());
+        let layer_id = input_layer_id.get_and_inc();
+        input_layers.push(PublicInputLayer::new(mle.clone(), layer_id).into());
         let rhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
         println!(
             "Input layer that for RHS denom prod inverse has layer id: {:?}",
@@ -332,32 +336,62 @@ where
         let rhs_expr =
             PE::<F>::products(vec![rhs_denominator.clone(), rhs_inverse_densemle.clone()]);
         let expr = lhs_expr.concat_expr(rhs_expr) - PE::<F>::constant(F::from(1u64));
-        let layer_id = witness_builder.next_layer();
+        let layer_id = intermediate_layer_id.get_and_inc();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
+        intermediate_layers.push(layer.into());
         println!(
             "Layer calcs product of (product of denoms) and their inverses has layer id: {:?}",
             layer_id
         );
         // Add an output layer that checks that the result is zero
         let mle = ZeroMle::new(1, None, layer_id);
-        witness_builder.add_output_layer(mle.into());
+        let mut output_layers = vec![mle.into()];
 
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
         let expr = PE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()])
             - PE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()]);
-        let layer_id = witness_builder.next_layer();
+        let layer_id = intermediate_layer_id.get_and_inc();
         let layer = RegularLayer::new_raw(layer_id, expr);
-        witness_builder.add_layer(layer.into());
+        intermediate_layers.push(layer.into());
         println!(
             "Layer that checks that fractions are equal has layer id: {:?}",
             layer_id
         );
         // Add an output layer that checks that the result is zero
         let mle = ZeroMle::new(0, None, layer_id);
-        witness_builder.add_output_layer(mle.into());
+        output_layers.push(mle.into());
 
-        Ok(())
+        Ok((input_layers, intermediate_layers, output_layers))
+    }
+}
+
+impl CircuitNode for LookupTable {
+    fn id(&self) -> NodeId {
+        self.id
+    }
+
+    fn children(&self) -> Option<Vec<NodeId>> {
+        Some(
+            self.constraints
+                .iter()
+                .map(|constraint| constraint.id())
+                .collect(),
+        )
+    }
+
+    fn sources(&self) -> Vec<NodeId> {
+        // NB this function never gets called, since lookup tables and constraints are placed after
+        // the intermediate nodes in the toposort
+        self.constraints
+            .iter()
+            .map(|constraint| constraint.id())
+            .chain(
+                self.constraints
+                    .iter()
+                    .map(|constraint| constraint.sources())
+                    .flatten(),
+            )
+            .collect()
     }
 }
 
@@ -402,14 +436,12 @@ fn split_dense_mle<F: FieldExt>(mle: &DenseMle<F>) -> (DenseMle<F>, DenseMle<F>)
 /// Given two Mles of the same length representing the numerators and denominators of a sequence of
 /// fractions, add layers that perform a sum of the fractions, return a new pair of length-1 Mles
 /// representing the numerator and denominator of the sum.
-fn build_fractional_sum<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L>(
+fn build_fractional_sum<F: FieldExt>(
     numerator: DenseMle<F>,
     denominator: DenseMle<F>,
-    witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
-) -> (DenseMle<F>, DenseMle<F>)
-where
-    L: From<RegularLayer<F>>,
-{
+    layers: &mut Vec<LayerEnum<F>>,
+    current_layer_id: &mut LayerId,
+) -> (DenseMle<F>, DenseMle<F>) {
     type PE<F> = Expression<F, ProverExpr>;
     assert_eq!(
         numerator.num_iterated_vars(),
@@ -451,15 +483,15 @@ where
             .zip(denominators.1.clone().into_iter())
             .map(|(denom1, denom2)| denom1 * denom2)
             .collect();
-        let layer_id = witness_builder.next_layer();
+        let layer_id = current_layer_id.get_and_inc();
         let layer = RegularLayer::new_raw(
             layer_id,
             next_numerator_expr.concat_expr(next_denominator_expr),
         );
-        witness_builder.add_layer(layer.into());
+        layers.push(layer.into());
         println!(
             "Iteration {:?} of build_fractional_sumcheck has layer id: {:?}",
-            i, layer_id
+            i, current_layer_id
         );
 
         denominator = DenseMle::new_with_prefix_bits(

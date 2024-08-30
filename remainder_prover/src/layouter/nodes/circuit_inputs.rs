@@ -2,10 +2,12 @@
 
 mod compile_inputs;
 
+use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    input_layer::ligero_input_layer::LigeroCommitment,
     mle::evals::MultilinearExtension,
 };
 
@@ -29,14 +31,12 @@ impl<F: FieldExt> CircuitNode for InputShred<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for InputShred<F> {
-    type F = F;
-
-    fn get_data(&self) -> &MultilinearExtension<Self::F> {
+impl<F: FieldExt> ClaimableNode<F> for InputShred<F> {
+    fn get_data(&self) -> &MultilinearExtension<F> {
         &self.data
     }
 
-    fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
+    fn get_expr(&self) -> Expression<F, AbstractExpr> {
         Expression::<F, AbstractExpr>::mle(self.id)
     }
 }
@@ -62,17 +62,11 @@ impl<F: FieldExt> InputShred<F> {
 /// An enum representing the different types
 /// of InputLayer an InputLayerNode can be compiled into
 #[derive(Debug, Clone)]
-pub enum InputLayerType {
-    /// An InputLayer that will be compiled into a [HyraxPlaceholderInputLayer]
-    HyraxPlaceholderInputLayer,
-    /// An InputLayer that will be compiled into a [HyraxPrecommitPlaceholderInputLayer]
-    HyraxPrecommitPlaceholderInputLayer,
+pub enum InputLayerType<F: FieldExt> {
     /// An InputLayer that will be compiled into a [LigeroInputLayer]
-    LigeroInputLayer,
+    LigeroInputLayer((u8, f64, Option<LigeroCommitment<F>>)),
     /// An InputLayer that will be compiled into a [PublicInputLayer]
     PublicInputLayer,
-    /// A default InputLayerType
-    Default,
 }
 
 #[derive(Debug, Clone)]
@@ -80,10 +74,10 @@ pub enum InputLayerType {
 ///
 /// TODO! probably split this up into more node types
 /// that indicate different things to the layouter
-pub struct InputLayerNode<F> {
+pub struct InputLayerNode<F: FieldExt> {
     id: NodeId,
     children: Vec<InputShred<F>>,
-    pub(in crate::layouter) input_layer_type: InputLayerType,
+    pub(in crate::layouter) input_layer_type: InputLayerType<F>,
 }
 
 impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
@@ -106,7 +100,7 @@ impl<F: FieldExt> InputLayerNode<F> {
     pub fn new(
         ctx: &Context,
         children: Option<Vec<InputShred<F>>>,
-        input_layer_type: InputLayerType,
+        input_layer_type: InputLayerType<F>,
     ) -> Self {
         InputLayerNode {
             id: ctx.get_new_id(),

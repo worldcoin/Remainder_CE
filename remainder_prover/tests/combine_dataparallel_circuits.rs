@@ -44,8 +44,8 @@ impl<F: FieldExt> DataParallelConstantScaledCircuitAltComponent<F> {
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F = F>,
-        mle_2_input: &dyn ClaimableNode<F = F>,
+        mle_1_input: &dyn ClaimableNode<F>,
+        mle_2_input: &dyn ClaimableNode<F>,
     ) -> Self {
         let first_layer_component =
             ConstantScaledSumBuilderComponent::new(ctx, mle_1_input, mle_2_input);
@@ -100,8 +100,8 @@ impl<F: FieldExt> DataParallelSumConstantCircuitAltComponent<F> {
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F = F>,
-        mle_2_input: &dyn ClaimableNode<F = F>,
+        mle_1_input: &dyn ClaimableNode<F>,
+        mle_2_input: &dyn ClaimableNode<F>,
     ) -> Self {
         let first_layer_component = ProductSumBuilderComponent::new(ctx, mle_1_input, mle_2_input);
 
@@ -155,8 +155,8 @@ impl<F: FieldExt> DataParallelProductScaledSumCircuitAltComponent<F> {
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F = F>,
-        mle_2_input: &dyn ClaimableNode<F = F>,
+        mle_1_input: &dyn ClaimableNode<F>,
+        mle_2_input: &dyn ClaimableNode<F>,
     ) -> Self {
         let first_layer_component =
             ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);

@@ -21,9 +21,9 @@ pub struct InputExpoComponent<F: FieldExt> {
 impl<F: FieldExt> InputExpoComponent<F> {
     pub fn new(
         ctx: &Context,
-        attr_inputs: [&dyn ClaimableNode<F = F>; 2],
-        random_inputs: [&dyn ClaimableNode<F = F>; 2],
-        bin_decomp_inputs: [&dyn ClaimableNode<F = F>; 16],
+        attr_inputs: [&dyn ClaimableNode<F>; 2],
+        random_inputs: [&dyn ClaimableNode<F>; 2],
+        bin_decomp_inputs: [&dyn ClaimableNode<F>; 16],
     ) -> Self {
         let packing_sector_nodes = attr_inputs
             .into_iter()
@@ -42,9 +42,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
                 let r = packing_nodes[2];
                 let r_packing = packing_nodes[3];
 
-                r.expr()
-                    - (attr_id.expr()
-                        + ExprBuilder::<F>::products(vec![attr_val, r_packing]))
+                r.expr() - (attr_id.expr() + ExprBuilder::<F>::products(vec![attr_val, r_packing]))
             },
             |data| {
                 assert_eq!(data.len(), 4);
@@ -139,7 +137,7 @@ impl<F: FieldExt> InputExpoComponent<F> {
 
         let bit_exponentiation_sectors_as_claimable_nodes = bit_exponentiation_sectors
             .iter()
-            .map(|sector| sector as &dyn ClaimableNode<F = F>)
+            .map(|sector| sector as &dyn ClaimableNode<F>)
             .collect_vec();
 
         let product_sector = Sector::new(

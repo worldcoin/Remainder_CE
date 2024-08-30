@@ -15,7 +15,7 @@ pub struct BitsAreBinary16BitComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> BitsAreBinary16BitComponent<F> {
-    pub fn new(ctx: &Context, bin_decomp_16_bit: impl ClaimableNode<F = F>) -> Self {
+    pub fn new(ctx: &Context, bin_decomp_16_bit: impl ClaimableNode<F>) -> Self {
         let bin_decomp_16_bit_is_binary_sector = Sector::new(
             ctx,
             &[&bin_decomp_16_bit],

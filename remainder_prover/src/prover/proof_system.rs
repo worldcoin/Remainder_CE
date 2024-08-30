@@ -8,15 +8,15 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-use crate::layer::Layer;
 use crate::{
     claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
     input_layer::VerifierInputLayer,
     layer::{layer_enum::LayerEnum, CircuitLayer},
     output_layer::{mle_output_layer::MleOutputLayer, CircuitOutputLayer, OutputLayer},
 };
+use crate::{input_layer::enum_input_layer::InputLayerEnum, layer::Layer};
 
-use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
+use crate::input_layer::InputLayer;
 
 ///This macro generates a layer enum that represents all the possible layers
 /// Every layer variant of the enum needs to implement Layer, and the enum will also implement Layer and pass methods to it's variants
@@ -267,10 +267,20 @@ macro_rules! input_layer_enum {
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
             #[serde(bound = "F: FieldExt")]
             #[doc = r"Remainder generated commitment enum"]
-            pub enum [<$type_name Commitment>]<F: FieldExt> {
+            pub enum [<$type_name ProverCommitment>]<F: FieldExt> {
                 $(
                     #[doc = "Remainder generated Commitment variant"]
-                    $var_name(<$variant as InputLayer<F>>::Commitment),
+                    $var_name(<$variant as InputLayer<F>>::ProverCommitment),
+                )*
+            }
+
+            #[derive(serde::Serialize, serde::Deserialize, Debug)]
+            #[serde(bound = "F: FieldExt")]
+            #[doc = r"Remainder generated commitment enum"]
+            pub enum [<$type_name VerifierCommitment>]<F: FieldExt> {
+                $(
+                    #[doc = "Remainder generated Commitment variant"]
+                    $var_name(<$variant as InputLayer<F>>::VerifierCommitment),
                 )*
             }
 
@@ -287,7 +297,8 @@ macro_rules! input_layer_enum {
 
         impl<F: FieldExt> $crate::input_layer::InputLayer<F> for $type_name<F> {
             paste::paste! {
-                type Commitment = [<$type_name Commitment>]<F>;
+                type ProverCommitment = [<$type_name ProverCommitment>]<F>;
+                type VerifierCommitment = [<$type_name VerifierCommitment>]<F>;
                 type VerifierInputLayer = [<Verifier $type_name>]<F>;
             }
 
@@ -299,23 +310,23 @@ macro_rules! input_layer_enum {
                 }
             }
 
-            fn commit(&mut self) -> Result<Self::Commitment, $crate::input_layer::InputLayerError> {
+            fn commit(&mut self) -> Result<Self::VerifierCommitment, $crate::input_layer::InputLayerError> {
                 match self {
                     $(
                         Self::$var_name(layer) => {
-                            Ok(Self::Commitment::$var_name(layer.commit()?))
+                            Ok(Self::VerifierCommitment::$var_name(layer.commit()?))
                         }
                     )*
                 }
             }
 
             fn append_commitment_to_transcript(
-                commitment: &Self::Commitment,
+                commitment: &Self::VerifierCommitment,
                 transcript_writer: &mut impl $crate::remainder_shared_types::transcript::ProverTranscript<F>,
             ) {
                 match commitment {
                     $(
-                        Self::Commitment::$var_name(commitment) => <$variant as InputLayer<F>>::append_commitment_to_transcript(commitment, transcript_writer),
+                        Self::VerifierCommitment::$var_name(commitment) => <$variant as InputLayer<F>>::append_commitment_to_transcript(commitment, transcript_writer),
                     )*
                 }
             }
@@ -347,12 +358,13 @@ macro_rules! input_layer_enum {
                     )*
                 }
             }
-
         }
+        // LigeroInputLayer::new()
+        // InputLayerEnum::new()
 
         paste::paste! {
             impl<F: FieldExt> $crate::input_layer::VerifierInputLayer<F> for [<Verifier $type_name>]<F> {
-                type Commitment = [<$type_name Commitment>]<F>;
+                type Commitment = [<$type_name VerifierCommitment>]<F>;
 
                 fn layer_id(&self) -> $crate::layer::LayerId {
                     match self {

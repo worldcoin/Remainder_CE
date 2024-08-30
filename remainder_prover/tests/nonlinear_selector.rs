@@ -39,10 +39,10 @@ pub struct NonlinearSelectorBuilderComponent<F: FieldExt> {
 impl<F: FieldExt> NonlinearSelectorBuilderComponent<F> {
     pub fn new(
         ctx: &Context,
-        left_sel_mle: &dyn ClaimableNode<F = F>,
-        right_sel_mle: &dyn ClaimableNode<F = F>,
-        right_sum_mle_1: &dyn ClaimableNode<F = F>,
-        right_sum_mle_2: &dyn ClaimableNode<F = F>,
+        left_sel_mle: &dyn ClaimableNode<F>,
+        right_sel_mle: &dyn ClaimableNode<F>,
+        right_sum_mle_1: &dyn ClaimableNode<F>,
+        right_sum_mle_2: &dyn ClaimableNode<F>,
     ) -> Self {
         let nonlinear_selector_sector = Sector::new(
             ctx,

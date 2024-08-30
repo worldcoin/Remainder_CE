@@ -26,10 +26,10 @@ pub struct DataParallelRecombinationInterleaveBuilder<F: FieldExt> {
 impl<F: FieldExt> DataParallelRecombinationInterleaveBuilder<F> {
     pub fn new(
         ctx: &Context,
-        mle_1: &dyn ClaimableNode<F = F>,
-        mle_2: &dyn ClaimableNode<F = F>,
-        mle_3: &dyn ClaimableNode<F = F>,
-        mle_4: &dyn ClaimableNode<F = F>,
+        mle_1: &dyn ClaimableNode<F>,
+        mle_2: &dyn ClaimableNode<F>,
+        mle_3: &dyn ClaimableNode<F>,
+        mle_4: &dyn ClaimableNode<F>,
     ) -> Self {
         let combine_sector = Sector::new(
             ctx,
@@ -99,10 +99,10 @@ pub struct DataParallelRecombinationStackBuilder<F: FieldExt> {
 impl<F: FieldExt> DataParallelRecombinationStackBuilder<F> {
     pub fn new(
         ctx: &Context,
-        mle_1: &dyn ClaimableNode<F = F>,
-        mle_2: &dyn ClaimableNode<F = F>,
-        mle_3: &dyn ClaimableNode<F = F>,
-        mle_4: &dyn ClaimableNode<F = F>,
+        mle_1: &dyn ClaimableNode<F>,
+        mle_2: &dyn ClaimableNode<F>,
+        mle_3: &dyn ClaimableNode<F>,
+        mle_4: &dyn ClaimableNode<F>,
     ) -> Self {
         let combine_sector = Sector::new(
             ctx,
@@ -162,11 +162,7 @@ pub struct DiffTwoInputsBuilder<F: FieldExt> {
 }
 
 impl<F: FieldExt> DiffTwoInputsBuilder<F> {
-    pub fn new(
-        ctx: &Context,
-        mle_1: &dyn ClaimableNode<F = F>,
-        mle_2: &dyn ClaimableNode<F = F>,
-    ) -> Self {
+    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
         let first_layer_sector = Sector::new(
             ctx,
             &[mle_1, mle_2],

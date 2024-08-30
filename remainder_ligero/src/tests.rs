@@ -60,8 +60,13 @@ fn test_merkleize() {
     const RATIO: f64 = 4.0;
     let mut rng = test_rng();
     let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
-    let (_aux, mut test_comm, _root) =
-        remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO, None);
+    let aux = LigeroAuxInfo::new(
+        random_ml_coeffs.len().next_power_of_two(),
+        RHO_INV,
+        RATIO,
+        None,
+    );
+    let (mut test_comm, _root) = remainder_ligero_commit(&random_ml_coeffs, &aux);
     let mut test_comm_2 = test_comm.clone();
 
     merkleize(&mut test_comm);
@@ -91,7 +96,13 @@ fn test_eval_outer() {
     const RATIO: f64 = 4.0;
     let mut rng = test_rng();
     let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
-    let (_aux, test_comm, _root) = remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO, None);
+    let aux = LigeroAuxInfo::new(
+        random_ml_coeffs.len().next_power_of_two(),
+        RHO_INV,
+        RATIO,
+        None,
+    );
+    let (test_comm, _root) = remainder_ligero_commit(&random_ml_coeffs, &aux);
 
     let mut rng = rand::thread_rng();
     let tensor: Vec<Fr> = repeat_with(|| Fr::from(rng.gen::<u64>()))
@@ -124,8 +135,13 @@ fn test_open_column() {
         const RHO_INV: u8 = 4;
         const RATIO: f64 = 4.0;
         let random_ml_coeffs = get_random_coeffs_for_multilinear_poly(MLE_NUM_VARS, &mut rng);
-        let (_aux, mut tmp, _root) =
-            remainder_ligero_commit(&random_ml_coeffs, RHO_INV, RATIO, None);
+        let aux = LigeroAuxInfo::new(
+            random_ml_coeffs.len().next_power_of_two(),
+            RHO_INV,
+            RATIO,
+            None,
+        );
+        let (mut tmp, _root) = remainder_ligero_commit(&random_ml_coeffs, &aux);
         merkleize(&mut tmp);
         tmp
     };

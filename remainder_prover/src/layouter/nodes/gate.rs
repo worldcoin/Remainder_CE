@@ -5,8 +5,12 @@ use remainder_shared_types::FieldExt;
 
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::gate::{BinaryOperation, Gate},
-    layouter::layouting::CircuitLocation,
+    layer::{
+        gate::{BinaryOperation, Gate},
+        layer_enum::LayerEnum,
+        Layer, LayerId,
+    },
+    layouter::layouting::{CircuitLocation, DAGError},
     mle::{
         dense::DenseMle,
         evals::{Evaluations, MultilinearExtension},
@@ -42,8 +46,8 @@ impl<F: FieldExt> GateNode<F> {
     /// Constructs a new GateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        lhs: &dyn ClaimableNode<F = F>,
-        rhs: &dyn ClaimableNode<F = F>,
+        lhs: &dyn ClaimableNode<F>,
+        rhs: &dyn ClaimableNode<F>,
         nonzero_gates: Vec<(usize, usize, usize)>,
         gate_operation: BinaryOperation,
         num_dataparallel_bits: Option<usize>,
@@ -95,26 +99,22 @@ impl<F: FieldExt> GateNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for GateNode<F> {
-    type F = F;
-
-    fn get_data(&self) -> &MultilinearExtension<Self::F> {
+impl<F: FieldExt> ClaimableNode<F> for GateNode<F> {
+    fn get_data(&self) -> &MultilinearExtension<F> {
         &self.data
     }
 
-    fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
+    fn get_expr(&self) -> Expression<F, AbstractExpr> {
         Expression::<F, AbstractExpr>::mle(self.id)
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNode<F, Pf>
-    for GateNode<F>
-{
+impl<F: FieldExt> CompilableNode<F> for GateNode<F> {
     fn compile<'a>(
         &'a self,
-        witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
+        layer_id: &mut LayerId,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<(), crate::layouter::layouting::DAGError> {
+    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
         let (lhs_location, lhs_data) = circuit_map.get_node(&self.lhs)?;
         let lhs = DenseMle::new_with_prefix_bits(
             (*lhs_data).clone(),
@@ -127,22 +127,21 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<Gate<F>>> CompilableNod
             rhs_location.layer_id,
             rhs_location.prefix_bits.clone(),
         );
-        let layer_id = witness_builder.next_layer();
+        let gate_layer_id = layer_id.get_and_inc();
         let gate_layer = Gate::new(
             self.num_dataparallel_bits,
             self.nonzero_gates.clone(),
             lhs,
             rhs,
             self.gate_operation,
-            layer_id,
+            gate_layer_id,
         );
-        witness_builder.add_layer(gate_layer.into());
         circuit_map.add_node(
             self.id,
-            (CircuitLocation::new(layer_id, vec![]), &self.data),
+            (CircuitLocation::new(gate_layer_id, vec![]), &self.data),
         );
 
-        Ok(())
+        Ok(vec![gate_layer.into()])
     }
 }
 

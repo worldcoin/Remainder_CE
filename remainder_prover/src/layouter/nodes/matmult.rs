@@ -5,10 +5,11 @@ use remainder_shared_types::FieldExt;
 use crate::{
     expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     layer::{
+        layer_enum::LayerEnum,
         matmult::{product_two_matrices, MatMult, Matrix},
-        LayerId,
+        Layer, LayerId,
     },
-    layouter::layouting::CircuitLocation,
+    layouter::layouting::{CircuitLocation, DAGError},
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
     prover::proof_system::ProofSystem,
 };
@@ -40,9 +41,9 @@ impl<F: FieldExt> MatMultNode<F> {
     /// Constructs a new MatMultNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        matrix_node_a: &impl ClaimableNode<F = F>,
+        matrix_node_a: &impl ClaimableNode<F>,
         num_rows_cols_a: (usize, usize),
-        matrix_node_b: &impl ClaimableNode<F = F>,
+        matrix_node_b: &impl ClaimableNode<F>,
         num_rows_cols_b: (usize, usize),
     ) -> Self {
         let matrix_a_mle = DenseMle::new_from_raw(
@@ -70,26 +71,22 @@ impl<F: FieldExt> MatMultNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode for MatMultNode<F> {
-    type F = F;
-
-    fn get_data(&self) -> &MultilinearExtension<Self::F> {
+impl<F: FieldExt> ClaimableNode<F> for MatMultNode<F> {
+    fn get_data(&self) -> &MultilinearExtension<F> {
         &self.data
     }
 
-    fn get_expr(&self) -> Expression<Self::F, AbstractExpr> {
+    fn get_expr(&self) -> Expression<F, AbstractExpr> {
         Expression::<F, AbstractExpr>::mle(self.id)
     }
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> CompilableNode<F, Pf>
-    for MatMultNode<F>
-{
+impl<F: FieldExt> CompilableNode<F> for MatMultNode<F> {
     fn compile<'a>(
         &'a self,
-        witness_builder: &mut crate::layouter::compiling::WitnessBuilder<F, Pf>,
+        layer_id: &mut LayerId,
         circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<(), crate::layouter::layouting::DAGError> {
+    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
         let (matrix_a_location, matrix_a_data) = circuit_map.get_node(&self.matrix_a)?;
 
         let mle_a = DenseMle::new_with_prefix_bits(
@@ -111,15 +108,14 @@ impl<F: FieldExt, Pf: ProofSystem<F, Layer = L>, L: From<MatMult<F>>> Compilable
         // should already been padded
         let matrix_b = Matrix::new(mle_b, self.num_rows_cols_b.0, self.num_rows_cols_b.1);
 
-        let layer_id = witness_builder.next_layer();
-        let matmult_layer = MatMult::new(layer_id, matrix_a, matrix_b);
-        witness_builder.add_layer(matmult_layer.into());
+        let matmult_layer_id = layer_id.get_and_inc();
+        let matmult_layer = MatMult::new(matmult_layer_id, matrix_a, matrix_b);
         circuit_map.add_node(
             self.id,
-            (CircuitLocation::new(layer_id, vec![]), &self.data),
+            (CircuitLocation::new(matmult_layer_id, vec![]), &self.data),
         );
 
-        Ok(())
+        Ok(vec![matmult_layer.into()])
     }
 }
 

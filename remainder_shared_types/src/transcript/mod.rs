@@ -11,6 +11,7 @@ pub mod ec_transcript;
 pub mod keccak_transcript;
 pub mod poseidon_transcript;
 
+pub mod counting_transcript;
 pub mod test_transcript;
 
 /// A `TranscriptSponge` provides the basic interface for a cryptographic sponge

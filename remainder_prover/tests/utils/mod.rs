@@ -105,9 +105,9 @@ pub struct TripleNestedBuilderComponent<F: FieldExt> {
 impl<F: FieldExt> TripleNestedBuilderComponent<F> {
     pub fn new(
         ctx: &Context,
-        inner_inner_sel: &dyn ClaimableNode<F = F>,
-        inner_sel: &dyn ClaimableNode<F = F>,
-        outer_sel: &dyn ClaimableNode<F = F>,
+        inner_inner_sel: &dyn ClaimableNode<F>,
+        inner_sel: &dyn ClaimableNode<F>,
+        outer_sel: &dyn ClaimableNode<F>,
     ) -> Self {
         let triple_nested_selector_sector = Sector::new(
             ctx,
@@ -174,7 +174,7 @@ pub struct DifferenceBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> DifferenceBuilderComponent<F> {
-    pub fn new(ctx: &Context, input: &dyn ClaimableNode<F = F>) -> Self {
+    pub fn new(ctx: &Context, input: &dyn ClaimableNode<F>) -> Self {
         let zero_output_sector = Sector::new(
             ctx,
             &[input],
@@ -215,11 +215,7 @@ pub struct ProductScaledBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> ProductScaledBuilderComponent<F> {
-    pub fn new(
-        ctx: &Context,
-        mle_1: &dyn ClaimableNode<F = F>,
-        mle_2: &dyn ClaimableNode<F = F>,
-    ) -> Self {
+    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
         let product_scaled_sector = Sector::new(
             ctx,
             &[mle_1, mle_2],
@@ -285,11 +281,7 @@ pub struct ProductSumBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> ProductSumBuilderComponent<F> {
-    pub fn new(
-        ctx: &Context,
-        mle_1: &dyn ClaimableNode<F = F>,
-        mle_2: &dyn ClaimableNode<F = F>,
-    ) -> Self {
+    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
         let product_sum_sector = Sector::new(
             ctx,
             &[mle_1, mle_2],
@@ -355,11 +347,7 @@ pub struct ConstantScaledSumBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> ConstantScaledSumBuilderComponent<F> {
-    pub fn new(
-        ctx: &Context,
-        mle_1: &dyn ClaimableNode<F = F>,
-        mle_2: &dyn ClaimableNode<F = F>,
-    ) -> Self {
+    pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
         let constant_scaled_sector = Sector::new(
             ctx,
             &[mle_1, mle_2],

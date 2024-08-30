@@ -31,7 +31,7 @@ pub struct DifferenceBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> DifferenceBuilderComponent<F> {
-    pub fn new(ctx: &Context, input: &dyn ClaimableNode<F = F>) -> Self {
+    pub fn new(ctx: &Context, input: &dyn ClaimableNode<F>) -> Self {
         let zero_output_sector = Sector::new(
             ctx,
             &[input],

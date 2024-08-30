@@ -45,8 +45,8 @@ impl<F: FieldExt> DataParallelComponent<F> {
     /// * `mle_2_vec` - An MLE vec with arbitrary bookkeeping table values, same size as `mle_1_vec`.
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F = F>,
-        mle_2_input: &dyn ClaimableNode<F = F>,
+        mle_1_input: &dyn ClaimableNode<F>,
+        mle_2_input: &dyn ClaimableNode<F>,
     ) -> Self {
         let product_scaled_component =
             ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);
@@ -105,9 +105,9 @@ impl<F: FieldExt> TripleNestedSelectorComponent<F> {
     /// the size of `inner_sel_mle`
     pub fn new(
         ctx: &Context,
-        inner_inner_sel: &dyn ClaimableNode<F = F>,
-        inner_sel: &dyn ClaimableNode<F = F>,
-        outer_sel: &dyn ClaimableNode<F = F>,
+        inner_inner_sel: &dyn ClaimableNode<F>,
+        inner_sel: &dyn ClaimableNode<F>,
+        outer_sel: &dyn ClaimableNode<F>,
     ) -> Self {
         let triple_nested_selector_component =
             TripleNestedBuilderComponent::new(ctx, inner_inner_sel, inner_sel, outer_sel);
@@ -153,8 +153,8 @@ impl<F: FieldExt> ScaledProductComponent<F> {
     /// * `mle_2` - An MLE with arbitrary bookkeeping table values, same size as `mle_1`.
     pub fn new(
         ctx: &Context,
-        mle_1_input: &dyn ClaimableNode<F = F>,
-        mle_2_input: &dyn ClaimableNode<F = F>,
+        mle_1_input: &dyn ClaimableNode<F>,
+        mle_2_input: &dyn ClaimableNode<F>,
     ) -> Self {
         let product_scaled_component =
             ProductScaledBuilderComponent::new(ctx, mle_1_input, mle_2_input);

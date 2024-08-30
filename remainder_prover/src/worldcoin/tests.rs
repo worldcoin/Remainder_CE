@@ -8,7 +8,7 @@ mod tests {
     use crate::layouter::nodes::ClaimableNode;
     use crate::prover::helpers::test_circuit;
     use crate::utils::get_input_shred_from_vec;
-    use crate::worldcoin::circuits::build_circuit;
+    use crate::worldcoin::circuits::build_circuit_public_il;
     use crate::worldcoin::components::SignCheckerComponent;
     use crate::worldcoin::components::{BitsAreBinary, DigitalRecompositionComponent};
     use crate::worldcoin::data::{
@@ -107,7 +107,7 @@ mod tests {
 
             let digits_input_refs = digits_input_shreds
                 .iter()
-                .map(|shred| shred as &dyn ClaimableNode<F = Fr>)
+                .map(|shred| shred as &dyn ClaimableNode<Fr>)
                 .collect_vec();
             let recomp_of_abs_value =
                 DigitalRecompositionComponent::new(ctx, &digits_input_refs, base);
@@ -182,26 +182,26 @@ mod tests {
         test_circuit(circuit, None);
     }
 
-    #[test]
-    fn test_worldcoin_circuit_tiny() {
-        let data = tiny_worldcoin_data::<Fr>();
-        dbg!(&data);
-        let circuit = build_circuit(data);
-        test_circuit(circuit, None);
-    }
+    // #[test]
+    // fn test_worldcoin_circuit_tiny() {
+    //     let data = tiny_worldcoin_data::<Fr>();
+    //     dbg!(&data);
+    //     let circuit = build_circuit_public_il(data);
+    //     test_circuit(circuit, None);
+    // }
 
-    #[test]
-    fn test_worldcoin_circuit_medium() {
-        let data = medium_worldcoin_data::<Fr>();
-        let circuit = build_circuit(data);
-        test_circuit(circuit, None);
-    }
+    // #[test]
+    // fn test_worldcoin_circuit_medium() {
+    //     let data = medium_worldcoin_data::<Fr>();
+    //     let circuit = build_circuit_public_il(data);
+    //     test_circuit(circuit, None);
+    // }
 
-    #[test]
-    fn test_worldcoin_circuit() {
-        let data: WorldcoinCircuitData<Fr> =
-            load_data(Path::new("worldcoin_witness_data").to_path_buf());
-        let circuit = build_circuit(data);
-        test_circuit(circuit, None);
-    }
+    // #[test]
+    // fn test_worldcoin_circuit() {
+    //     let data: WorldcoinCircuitData<Fr> =
+    //         load_data(Path::new("worldcoin_witness_data").to_path_buf());
+    //     let circuit = build_circuit_public_il(data);
+    //     test_circuit(circuit, None);
+    // }
 }

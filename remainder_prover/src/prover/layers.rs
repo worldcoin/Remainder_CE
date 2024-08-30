@@ -118,6 +118,14 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         }
     }
 
+    /// Creates a new [Layers] struct with populated layers values.
+    pub fn new_with_layers(layers: Vec<T>) -> Self {
+        Self {
+            layers,
+            marker: PhantomData,
+        }
+    }
+
     /// Returns the number of layers in the GKR circuit
     pub fn num_layers(&self) -> usize {
         self.layers.len()

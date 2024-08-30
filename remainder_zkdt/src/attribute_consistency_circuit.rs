@@ -14,8 +14,8 @@ pub struct AttributeConsistencyComponent<F: FieldExt> {
 impl<F: FieldExt> AttributeConsistencyComponent<F> {
     pub fn new(
         ctx: &Context,
-        permuted_input: impl ClaimableNode<F = F>,
-        decision_node_paths: impl ClaimableNode<F = F>,
+        permuted_input: impl ClaimableNode<F>,
+        decision_node_paths: impl ClaimableNode<F>,
     ) -> Self {
         let attr_cons_sector = Sector::new(
             ctx,

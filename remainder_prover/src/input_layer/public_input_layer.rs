@@ -7,6 +7,7 @@ use remainder_shared_types::{
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
+use tracing_subscriber::Layer;
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
@@ -14,9 +15,7 @@ use crate::{
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{
-    get_wlx_evaluations_helper, InputLayer, InputLayerError, MleInputLayer, VerifierInputLayer,
-};
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, VerifierInputLayer};
 use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
@@ -50,11 +49,12 @@ impl<F: FieldExt> VerifierPublicInputLayer<F> {
 }
 
 impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
-    type Commitment = Vec<F>;
+    type ProverCommitment = Vec<F>;
+    type VerifierCommitment = Vec<F>;
 
     type VerifierInputLayer = VerifierPublicInputLayer<F>;
 
-    fn commit(&mut self) -> Result<Self::Commitment, super::InputLayerError> {
+    fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // Because this is a public input layer, we do not need to commit to the
         // MLE and the "commitment" is just the MLE evaluations themselves.
         Ok(self.mle.get_evals_vector().clone())
@@ -62,7 +62,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
 
     /// Append the commitment to the Fiat-Shamir transcript.
     fn append_commitment_to_transcript(
-        commitment: &Self::Commitment,
+        commitment: &Self::VerifierCommitment,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) {
         transcript_writer.append_elements("Public Input Commitment", commitment);
@@ -97,8 +97,8 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> MleInputLayer<F> for PublicInputLayer<F> {
-    fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
+impl<F: FieldExt> PublicInputLayer<F> {
+    pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
 }
