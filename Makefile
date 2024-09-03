@@ -14,7 +14,7 @@ prod:
 	cp target/release/worldcoin ./worldcoin_prod
 
 test:
-	cargo test --release --features parallel -- --num_threads=1
+	cargo test --release --features parallel -- --test-threads=1
 
 clean:
 	cargo clean
