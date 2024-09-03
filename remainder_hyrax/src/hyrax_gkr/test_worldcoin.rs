@@ -2,9 +2,11 @@
 use std::path::Path;
 
 use ark_std::{end_timer, start_timer};
+use remainder::worldcoin::parameters_v2::{WC_BASE, WC_NUM_DIGITS};
 use remainder::worldcoin::{
     circuits::build_circuit,
-    data::{load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData}, parameters_v2::CONSTANT_DATA_FOLDER,
+    data::{load_data, medium_worldcoin_data, tiny_worldcoin_data, WorldcoinCircuitData},
+    parameters_v2::CONSTANT_DATA_FOLDER,
 };
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
@@ -15,7 +17,6 @@ use remainder_shared_types::{
     },
     FieldExt, Poseidon,
 };
-use remainder::worldcoin::parameters_v2::{WC_BASE, WC_NUM_DIGITS};
 
 use crate::{
     hyrax_gkr::HyraxCircuit, pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
@@ -24,8 +25,12 @@ type Scalar = <Bn256Point as Group>::Scalar;
 type Base = <Bn256Point as CurveExt>::Base;
 
 /// Helper function that runs the Hyrax Worldcoin test against a given data set.
-fn test_hyrax_worldcoin<const BASE: u64, const NUM_DIGITS: usize>(data: WorldcoinCircuitData<Scalar, BASE, NUM_DIGITS>, num_generators: usize) {
-    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> = ECTranscriptWriter::new("");
+fn test_hyrax_worldcoin<const BASE: u64, const NUM_DIGITS: usize>(
+    data: WorldcoinCircuitData<Scalar, BASE, NUM_DIGITS>,
+    num_generators: usize,
+) {
+    let mut prover_transcript: ECTranscriptWriter<Bn256Point, PoseidonSponge<Base>> =
+        ECTranscriptWriter::new("");
     let blinding_rng = &mut rand::thread_rng();
     let converter: &mut VandermondeInverse<Scalar> = &mut VandermondeInverse::new();
     let committer = PedersenCommitter::<Bn256Point>::new(
@@ -73,17 +78,18 @@ fn test_hyrax_worldcoin_medium() {
 
 #[test]
 fn test_hyrax_worldcoin_v2_iris() {
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
-    let image_path = path.clone().join("iris/image.npy");
-    let data: WorldcoinCircuitData<Scalar, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), image_path, false);
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.clone().join("iris/test_image.npy");
+    let data: WorldcoinCircuitData<Scalar, WC_BASE, WC_NUM_DIGITS> =
+        load_data(path.clone(), image_path, false);
     test_hyrax_worldcoin(data, 100);
 }
 
 #[test]
 fn test_hyrax_worldcoin_v2_mask() {
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
-    let image_path = path.clone().join("mask/image.npy");
-    let data: WorldcoinCircuitData<Scalar, WC_BASE, WC_NUM_DIGITS> = load_data(path.clone(), image_path, true);
+    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.clone().join("mask/test_image.npy");
+    let data: WorldcoinCircuitData<Scalar, WC_BASE, WC_NUM_DIGITS> =
+        load_data(path.clone(), image_path, true);
     test_hyrax_worldcoin(data, 100);
 }
-
