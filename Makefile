@@ -10,11 +10,14 @@ bench:
 		ms_print massif.$(name).out | less
 
 prod:
-	cargo build --release --features "parallel" --bin worldcoin
+	RUSTFLAGS=-Awarnings cargo build --release --features "parallel" --bin worldcoin
 	cp target/release/worldcoin ./worldcoin_prod
 
 test:
-	cargo test --release --features parallel -- --test-threads=1
+	RUSTFLAGS=-Awarnings cargo test --release --features parallel -- --test-threads=1
+
+mobile:
+	RUSTFLAGS=-Awarnings cargo build --profile mobile --bin worldcoin
 
 clean:
 	cargo clean
