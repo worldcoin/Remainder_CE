@@ -11,8 +11,6 @@ use remainder::{
     input_layer::{
         // hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
         // hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
-        hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
-        hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
         public_input_layer::PublicInputLayer,
         random_input_layer::RandomInputLayer,
         InputLayer,
@@ -220,16 +218,16 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         comm
     }
 
-    pub fn new_from_placeholder_with_committer(
-        hyrax_placeholder_il: HyraxPlaceholderInputLayer<C::Scalar>,
-        committer: &PedersenCommitter<C>,
-    ) -> Self {
-        HyraxInputLayer::new_with_committer(
-            hyrax_placeholder_il.mle.clone(),
-            hyrax_placeholder_il.layer_id().clone(),
-            committer,
-        )
-    }
+    // pub fn new_from_placeholder_with_committer(
+    //     hyrax_placeholder_il: HyraxPlaceholderInputLayer<C::Scalar>,
+    //     committer: &PedersenCommitter<C>,
+    // ) -> Self {
+    //     HyraxInputLayer::new_with_committer(
+    //         hyrax_placeholder_il.mle.clone(),
+    //         hyrax_placeholder_il.layer_id().clone(),
+    //         committer,
+    //     )
+    // }
 
     pub fn new_with_committer(
         mle: MultilinearExtension<C::Scalar>,
@@ -302,22 +300,22 @@ impl<C: PrimeOrderCurve> HyraxInputLayer<C> {
         }
     }
 
-    pub fn new_from_placeholder_with_commitment(
-        hyrax_placeholder_il: HyraxPrecommitPlaceholderInputLayer<C::Scalar>,
-        committer: &PedersenCommitter<C>,
-        blinding_factors_matrix: Vec<C::Scalar>,
-        log_num_cols: usize,
-        commitment: Vec<C>,
-    ) -> Self {
-        HyraxInputLayer::new_with_hyrax_commitment(
-            MleCoefficientsVector::ScalarFieldVector(hyrax_placeholder_il.mle.f.to_vec()),
-            hyrax_placeholder_il.layer_id().clone(),
-            committer.clone(),
-            blinding_factors_matrix,
-            log_num_cols,
-            commitment,
-        )
-    }
+    // pub fn new_from_placeholder_with_commitment(
+    //     hyrax_placeholder_il: HyraxPrecommitPlaceholderInputLayer<C::Scalar>,
+    //     committer: &PedersenCommitter<C>,
+    //     blinding_factors_matrix: Vec<C::Scalar>,
+    //     log_num_cols: usize,
+    //     commitment: Vec<C>,
+    // ) -> Self {
+    //     HyraxInputLayer::new_with_hyrax_commitment(
+    //         MleCoefficientsVector::ScalarFieldVector(hyrax_placeholder_il.mle.f.to_vec()),
+    //         hyrax_placeholder_il.layer_id().clone(),
+    //         committer.clone(),
+    //         blinding_factors_matrix,
+    //         log_num_cols,
+    //         commitment,
+    //     )
+    // }
 
     /// Creates new Hyrax input layer WITH a precomputed Hyrax commitment
     pub fn new_with_hyrax_commitment(

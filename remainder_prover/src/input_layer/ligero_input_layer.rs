@@ -22,7 +22,7 @@ use crate::{
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, VerifierInputLayer};
+use super::{get_wlx_evaluations_helper, CircuitInputLayer, InputLayer, InputLayerError};
 
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
 /// commitment scheme.
@@ -59,7 +59,7 @@ pub type LigeroRoot<F> = LcRoot<LigeroAuxInfo<F>, F>;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: FieldExt")]
-pub struct VerifierLigeroInputLayer<F: FieldExt> {
+pub struct CircuitLigeroInputLayer<F: FieldExt> {
     /// The ID of this Ligero Input Layer.
     layer_id: LayerId,
 
@@ -72,12 +72,8 @@ pub struct VerifierLigeroInputLayer<F: FieldExt> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> VerifierLigeroInputLayer<F> {
-    /// To be used only for internal testing!
-    /// Generates a new [VerifierLigeroInputLayer] given raw data.
-    /// Normally, a [VerifierLigeroInputLayer] is generated through
-    /// the `LigeroInputLayer::into_verifier_input_layer()` method.
-    pub(crate) fn new_raw(layer_id: LayerId, num_bits: usize, aux: LigeroAuxInfo<F>) -> Self {
+impl<F: FieldExt> CircuitLigeroInputLayer<F> {
+    pub fn new(layer_id: LayerId, num_bits: usize, aux: LigeroAuxInfo<F>) -> Self {
         Self {
             layer_id,
             num_bits,
@@ -91,7 +87,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     type ProverCommitment = LigeroCommitment<F>;
     type VerifierCommitment = LigeroRoot<F>;
 
-    type VerifierInputLayer = VerifierLigeroInputLayer<F>;
+    type CircuitInputLayer = CircuitLigeroInputLayer<F>;
 
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // If we've already generated a commitment (i.e. through `new_with_ligero_commitment()`),
@@ -147,11 +143,11 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
         DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
 
-    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+    fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer {
         let layer_id = self.layer_id();
         let num_bits = self.mle.num_vars();
 
-        Self::VerifierInputLayer {
+        Self::CircuitInputLayer {
             layer_id,
             num_bits,
             aux: self.aux.clone(),
@@ -160,7 +156,7 @@ impl<F: FieldExt> InputLayer<F> for LigeroInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> VerifierInputLayer<F> for VerifierLigeroInputLayer<F> {
+impl<F: FieldExt> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
     type Commitment = LigeroRoot<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -273,7 +269,7 @@ mod tests {
         let verifier_ligero_input_layer = ligero_input_layer.into_verifier_input_layer();
 
         let expected_verifier_ligero_input_layer =
-            VerifierLigeroInputLayer::new_raw(layer_id, num_vars, aux);
+            CircuitLigeroInputLayer::new(layer_id, num_vars, aux);
 
         assert_eq!(
             verifier_ligero_input_layer,
@@ -299,7 +295,7 @@ mod tests {
         let verifier_ligero_input_layer = ligero_input_layer.into_verifier_input_layer();
 
         let expected_verifier_ligero_input_layer =
-            VerifierLigeroInputLayer::new_raw(layer_id, num_vars, expected_aux);
+            CircuitLigeroInputLayer::new(layer_id, num_vars, expected_aux);
 
         assert_eq!(
             verifier_ligero_input_layer,

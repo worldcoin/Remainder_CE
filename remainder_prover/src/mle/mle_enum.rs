@@ -9,6 +9,7 @@ use remainder_shared_types::{
 
 use crate::{
     claims::{wlx_eval::ClaimMle, YieldClaim},
+    expression::circuit_expr::CircuitMle,
     layer::{LayerError, LayerId},
     mle::Mle,
 };

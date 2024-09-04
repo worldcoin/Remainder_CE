@@ -10,7 +10,7 @@ use std::fmt::Debug;
 
 use crate::{
     claims::{wlx_eval::WLXAggregator, ClaimAggregator, YieldClaim},
-    input_layer::VerifierInputLayer,
+    input_layer::CircuitInputLayer,
     layer::{layer_enum::LayerEnum, CircuitLayer},
     output_layer::{mle_output_layer::MleOutputLayer, CircuitOutputLayer, OutputLayer},
 };
@@ -286,11 +286,11 @@ macro_rules! input_layer_enum {
 
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
             #[serde(bound = "F: FieldExt")]
-            #[doc = r"Verifier layer description enum"]
-            pub enum [<Verifier $type_name>]<F: FieldExt> {
+            #[doc = r"Layer description enum"]
+            pub enum [<Circuit $type_name>]<F: FieldExt> {
                 $(
-                    #[doc = "Verifier layer description variant"]
-                    $var_name(<$variant as InputLayer<F>>::VerifierInputLayer),
+                    #[doc = "Layer description variant"]
+                    $var_name(<$variant as InputLayer<F>>::CircuitInputLayer),
                 )*
             }
         }
@@ -299,13 +299,13 @@ macro_rules! input_layer_enum {
             paste::paste! {
                 type ProverCommitment = [<$type_name ProverCommitment>]<F>;
                 type VerifierCommitment = [<$type_name VerifierCommitment>]<F>;
-                type VerifierInputLayer = [<Verifier $type_name>]<F>;
+                type CircuitInputLayer = [<Circuit $type_name>]<F>;
             }
 
-            fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+            fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer {
                 match self {
                     $(
-                        Self::$var_name(layer) => Self::VerifierInputLayer::$var_name(layer.into_verifier_input_layer()),
+                        Self::$var_name(layer) => Self::CircuitInputLayer::$var_name(layer.into_verifier_input_layer()),
                     )*
                 }
             }
@@ -363,7 +363,7 @@ macro_rules! input_layer_enum {
         // InputLayerEnum::new()
 
         paste::paste! {
-            impl<F: FieldExt> $crate::input_layer::VerifierInputLayer<F> for [<Verifier $type_name>]<F> {
+            impl<F: FieldExt> $crate::input_layer::CircuitInputLayer<F> for [<Circuit $type_name>]<F> {
                 type Commitment = [<$type_name VerifierCommitment>]<F>;
 
                 fn layer_id(&self) -> $crate::layer::LayerId {
@@ -435,7 +435,7 @@ pub trait ProofSystem<F: FieldExt> {
         + YieldClaim<<Self::ClaimAggregator as ClaimAggregator<F>>::Claim>;
 
     /// A trait that defines the allowed InputLayer for this ProofSystem.
-    type InputLayer: InputLayer<F, VerifierInputLayer: VerifierInputLayer<F>> + Debug;
+    type InputLayer: InputLayer<F, CircuitInputLayer: CircuitInputLayer<F>> + Debug;
 
     /// The Transcript this proofsystem uses for Fiat-Shamir.
     type Transcript: TranscriptSponge<F>;
