@@ -2,17 +2,16 @@
 
 use std::marker::PhantomData;
 
+use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    layer::LayerId,
-    layouter::layouting::CircuitLocation,
-    mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, MleIndex},
-    output_layer::mle_output_layer::MleOutputLayer,
-    prover::proof_system::ProofSystem,
+    layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
+    mle::MleIndex,
+    output_layer::mle_output_layer::CircuitMleOutputLayer,
 };
 
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
 /// the node that represents the output of a circuit
@@ -31,11 +30,15 @@ impl<F: FieldExt> CircuitNode for OutputNode<F> {
     fn sources(&self) -> Vec<NodeId> {
         vec![self.source]
     }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> OutputNode<F> {
     /// Creates a new OutputNode from a source w/ some data
-    pub fn new(ctx: &Context, source: &impl ClaimableNode<F>) -> Self {
+    pub fn new(ctx: &Context, source: &impl CircuitNode) -> Self {
         Self {
             id: ctx.get_new_id(),
             source: source.id(),
@@ -45,7 +48,7 @@ impl<F: FieldExt> OutputNode<F> {
     }
 
     /// Creates a new ZeroMleRef, which constrains the source to equal a Zero Mle
-    pub fn new_zero(ctx: &Context, source: &impl ClaimableNode<F>) -> Self {
+    pub fn new_zero(ctx: &Context, source: &impl CircuitNode) -> Self {
         Self {
             id: ctx.get_new_id(),
             source: source.id(),
@@ -56,25 +59,22 @@ impl<F: FieldExt> OutputNode<F> {
 
     pub fn compile_output<'a>(
         &'a self,
-        circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<MleOutputLayer<F>, crate::layouter::layouting::DAGError> {
-        let (circuit_location, data) = circuit_map.get_node(&self.source)?;
+        circuit_map: &mut CircuitDescriptionMap,
+    ) -> Result<CircuitMleOutputLayer<F>, crate::layouter::layouting::DAGError> {
+        let (circuit_location, num_vars) = circuit_map.get_node(&self.source)?;
 
         let CircuitLocation {
             prefix_bits,
             layer_id,
         } = circuit_location;
 
-        let prefix_bits_mle_index = prefix_bits
+        let total_indices = prefix_bits
             .iter()
             .map(|bit| MleIndex::Fixed(*bit))
-            .collect();
+            .chain(repeat_n(MleIndex::Iterated, *num_vars))
+            .collect_vec();
 
-        let out = if self.zero {
-            ZeroMle::new(data.num_vars(), Some(prefix_bits_mle_index), *layer_id).into()
-        } else {
-            DenseMle::new_with_prefix_bits((*data).clone(), *layer_id, prefix_bits.clone()).into()
-        };
+        let out = CircuitMleOutputLayer::new_zero(*layer_id, &total_indices);
 
         Ok(out)
     }

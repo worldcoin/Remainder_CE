@@ -1,24 +1,28 @@
 //! A Module for adding `Gate` Layers to components
 
+use std::marker::PhantomData;
+
 use ark_std::log2;
+use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    expression::{abstract_expr::AbstractExpr, circuit_expr::CircuitMle, generic_expr::Expression},
     layer::{
-        gate::{BinaryOperation, Gate},
-        layer_enum::LayerEnum,
+        gate::{BinaryOperation, CircuitGateLayer, Gate},
+        layer_enum::{CircuitLayerEnum, LayerEnum},
         Layer, LayerId,
     },
     layouter::layouting::{CircuitLocation, DAGError},
     mle::{
         dense::DenseMle,
         evals::{Evaluations, MultilinearExtension},
+        MleIndex,
     },
     prover::proof_system::ProofSystem,
 };
 
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
@@ -29,7 +33,8 @@ pub struct GateNode<F: FieldExt> {
     lhs: NodeId,
     rhs: NodeId,
     gate_operation: BinaryOperation,
-    data: MultilinearExtension<F>,
+    num_vars: usize,
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt> CircuitNode for GateNode<F> {
@@ -40,14 +45,18 @@ impl<F: FieldExt> CircuitNode for GateNode<F> {
     fn sources(&self) -> Vec<NodeId> {
         vec![self.lhs, self.rhs]
     }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> GateNode<F> {
     /// Constructs a new GateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        lhs: &dyn ClaimableNode<F>,
-        rhs: &dyn ClaimableNode<F>,
+        lhs: &dyn CircuitNode,
+        rhs: &dyn CircuitNode,
         nonzero_gates: Vec<(usize, usize, usize)>,
         gate_operation: BinaryOperation,
         num_dataparallel_bits: Option<usize>,
@@ -62,30 +71,7 @@ impl<F: FieldExt> GateNode<F> {
         let num_dataparallel_vals = 1 << (num_dataparallel_bits.unwrap_or(0));
         let res_table_num_entries = (max_gate_val + 1) * num_dataparallel_vals;
 
-        let mut res_table = vec![F::ZERO; res_table_num_entries];
-        (0..num_dataparallel_vals).for_each(|idx| {
-            nonzero_gates
-                .clone()
-                .into_iter()
-                .for_each(|(z_ind, x_ind, y_ind)| {
-                    let f2_val = *lhs
-                        .get_data()
-                        .get_evals()
-                        .get(idx + (x_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::ZERO);
-                    let f3_val = *rhs
-                        .get_data()
-                        .get_evals()
-                        .get(idx + (y_ind * num_dataparallel_vals))
-                        .unwrap_or(&F::ZERO);
-                    res_table[idx + (z_ind * num_dataparallel_vals)] =
-                        gate_operation.perform_operation(f2_val, f3_val);
-                });
-        });
-
-        let num_vars = log2(res_table.len()) as usize;
-
-        let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, res_table));
+        let num_vars = log2(res_table_num_entries) as usize;
 
         Self {
             id: ctx.get_new_id(),
@@ -94,54 +80,54 @@ impl<F: FieldExt> GateNode<F> {
             gate_operation,
             lhs: lhs.id(),
             rhs: rhs.id(),
-            data,
+            num_vars,
+            _marker: PhantomData,
         }
     }
 }
 
-impl<F: FieldExt> ClaimableNode<F> for GateNode<F> {
-    fn get_data(&self) -> &MultilinearExtension<F> {
-        &self.data
-    }
-
-    fn get_expr(&self) -> Expression<F, AbstractExpr> {
-        Expression::<F, AbstractExpr>::mle(self.id)
-    }
-}
-
 impl<F: FieldExt> CompilableNode<F> for GateNode<F> {
-    fn compile<'a>(
-        &'a self,
+    fn generate_circuit_description(
+        &self,
         layer_id: &mut LayerId,
-        circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
-    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
-        let (lhs_location, lhs_data) = circuit_map.get_node(&self.lhs)?;
-        let lhs = DenseMle::new_with_prefix_bits(
-            (*lhs_data).clone(),
-            lhs_location.layer_id,
-            lhs_location.prefix_bits.clone(),
-        );
-        let (rhs_location, rhs_data) = circuit_map.get_node(&self.rhs)?;
-        let rhs = DenseMle::new_with_prefix_bits(
-            (*rhs_data).clone(),
-            rhs_location.layer_id,
-            rhs_location.prefix_bits.clone(),
-        );
+        circuit_description_map: &mut crate::layouter::layouting::CircuitDescriptionMap,
+    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
+        let (lhs_location, lhs_num_vars) = circuit_description_map.get_node(&self.lhs)?;
+        let total_indices = lhs_location
+            .prefix_bits
+            .iter()
+            .map(|bit| MleIndex::Fixed(*bit))
+            .chain(repeat_n(MleIndex::Iterated, *lhs_num_vars))
+            .collect_vec();
+        let lhs_circuit_mle = CircuitMle::new(lhs_location.layer_id, &total_indices);
+
+        let (rhs_location, rhs_num_vars) = circuit_description_map.get_node(&self.rhs)?;
+        let total_indices = rhs_location
+            .prefix_bits
+            .iter()
+            .map(|bit| MleIndex::Fixed(*bit))
+            .chain(repeat_n(MleIndex::Iterated, *rhs_num_vars))
+            .collect_vec();
+        let rhs_circuit_mle = CircuitMle::new(rhs_location.layer_id, &total_indices);
+
         let gate_layer_id = layer_id.get_and_inc();
-        let gate_layer = Gate::new(
+        let gate_circuit_description = CircuitGateLayer::new(
             self.num_dataparallel_bits,
             self.nonzero_gates.clone(),
-            lhs,
-            rhs,
-            self.gate_operation,
+            lhs_circuit_mle,
+            rhs_circuit_mle,
             gate_layer_id,
+            self.gate_operation,
         );
-        circuit_map.add_node(
+        circuit_description_map.add_node(
             self.id,
-            (CircuitLocation::new(gate_layer_id, vec![]), &self.data),
+            (
+                CircuitLocation::new(gate_layer_id, vec![]),
+                self.get_num_vars(),
+            ),
         );
 
-        Ok(vec![gate_layer.into()])
+        Ok(vec![CircuitLayerEnum::Gate(gate_circuit_description)])
     }
 }
 
@@ -196,8 +182,8 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-            let input_shred_pos = InputShred::new(ctx, mle, &input_layer);
-            let input_shred_neg = InputShred::new(ctx, neg_mle, &input_layer);
+            let input_shred_pos = InputShred::new(ctx, mle.num_vars(), &input_layer);
+            let input_shred_neg = InputShred::new(ctx, neg_mle.num_vars(), &input_layer);
 
             let gate_sector = GateNode::new(
                 ctx,
@@ -251,8 +237,8 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-            let input_shred_pos = InputShred::new(ctx, mle, &input_layer);
-            let input_shred_neg = InputShred::new(ctx, neg_mle, &input_layer);
+            let input_shred_pos = InputShred::new(ctx, mle.num_vars(), &input_layer);
+            let input_shred_neg = InputShred::new(ctx, neg_mle.num_vars(), &input_layer);
 
             let gate_sector = GateNode::new(
                 ctx,

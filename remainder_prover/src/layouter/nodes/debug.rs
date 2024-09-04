@@ -20,6 +20,10 @@ impl CircuitNode for DebugNode {
     fn sources(&self) -> Vec<NodeId> {
         self.sources.clone()
     }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl DebugNode {

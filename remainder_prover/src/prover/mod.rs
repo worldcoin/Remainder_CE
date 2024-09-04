@@ -11,7 +11,7 @@ pub mod layers;
 
 use self::{layers::Layers, proof_system::ProofSystem};
 use crate::expression::verifier_expr::VerifierMle;
-use crate::input_layer::VerifierInputLayer;
+use crate::input_layer::CircuitInputLayer;
 use crate::layer::CircuitLayer;
 use crate::mle::Mle;
 use crate::output_layer::{CircuitOutputLayer, OutputLayer};
@@ -342,8 +342,7 @@ where {
 /// It consists of consice GKR Circuit description to be use by the Verifier.
 #[derive(Debug)]
 pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
-    pub input_layers:
-        Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer>,
+    pub input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::CircuitInputLayer>,
     pub intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
     pub output_layers:
         Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer>,
@@ -370,7 +369,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
 
         let input_layer_commitments_timer = start_timer!(|| "Retrieve Input Layer Commitments");
 
-        let input_layer_commitments: Vec<<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::VerifierInputLayer as VerifierInputLayer<F>>::Commitment> = self
+        let input_layer_commitments: Vec<<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::CircuitInputLayer as CircuitInputLayer<F>>::Commitment> = self
             .input_layers
             .iter()
             .map(|input_layer| {

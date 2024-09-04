@@ -15,7 +15,7 @@ use crate::{
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, VerifierInputLayer};
+use super::{get_wlx_evaluations_helper, CircuitInputLayer, InputLayer, InputLayerError};
 use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
@@ -28,18 +28,14 @@ pub struct PublicInputLayer<F: FieldExt> {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(bound = "F: FieldExt")]
-pub struct VerifierPublicInputLayer<F: FieldExt> {
+pub struct CircuitPublicInputLayer<F: FieldExt> {
     layer_id: LayerId,
     num_bits: usize,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> VerifierPublicInputLayer<F> {
-    /// To be used only for internal testing!
-    /// Generates a new [VerifierPublicInputLayer] from given raw data.
-    /// Normally, such a layer would be produced through the
-    /// `PublicInputLayer::into_verifier_public_input_layer()` method.
-    pub(crate) fn new_raw(layer_id: LayerId, num_bits: usize) -> Self {
+impl<F: FieldExt> CircuitPublicInputLayer<F> {
+    pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
             layer_id,
             num_bits,
@@ -52,7 +48,7 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
-    type VerifierInputLayer = VerifierPublicInputLayer<F>;
+    type CircuitInputLayer = CircuitPublicInputLayer<F>;
 
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // Because this is a public input layer, we do not need to commit to the
@@ -86,10 +82,10 @@ impl<F: FieldExt> InputLayer<F> for PublicInputLayer<F> {
         DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
 
-    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+    fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer {
         let num_bits = self.mle.num_vars();
 
-        Self::VerifierInputLayer {
+        Self::CircuitInputLayer {
             layer_id: self.layer_id,
             num_bits,
             _marker: PhantomData,
@@ -103,7 +99,7 @@ impl<F: FieldExt> PublicInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> VerifierInputLayer<F> for VerifierPublicInputLayer<F> {
+impl<F: FieldExt> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -191,8 +187,7 @@ mod tests {
         let public_input_layer = PublicInputLayer::new(dense_mle.original_mle, layer_id);
         let verifier_public_input_layer = public_input_layer.into_verifier_input_layer();
 
-        let expected_verifier_public_input_layer =
-            VerifierPublicInputLayer::new_raw(layer_id, num_vars);
+        let expected_verifier_public_input_layer = CircuitPublicInputLayer::new(layer_id, num_vars);
 
         assert_eq!(
             verifier_public_input_layer,

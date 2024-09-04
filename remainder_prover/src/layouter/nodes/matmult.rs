@@ -14,7 +14,7 @@ use crate::{
     prover::proof_system::ProofSystem,
 };
 
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
@@ -35,15 +35,19 @@ impl<F: FieldExt> CircuitNode for MatMultNode<F> {
     fn sources(&self) -> Vec<NodeId> {
         vec![self.matrix_a, self.matrix_b]
     }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> MatMultNode<F> {
     /// Constructs a new MatMultNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        matrix_node_a: &impl ClaimableNode<F>,
+        matrix_node_a: &impl CircuitNode,
         num_rows_cols_a: (usize, usize),
-        matrix_node_b: &impl ClaimableNode<F>,
+        matrix_node_b: &impl CircuitNode,
         num_rows_cols_b: (usize, usize),
     ) -> Self {
         let matrix_a_mle = DenseMle::new_from_raw(
@@ -71,23 +75,14 @@ impl<F: FieldExt> MatMultNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode<F> for MatMultNode<F> {
-    fn get_data(&self) -> &MultilinearExtension<F> {
-        &self.data
-    }
-
-    fn get_expr(&self) -> Expression<F, AbstractExpr> {
-        Expression::<F, AbstractExpr>::mle(self.id)
-    }
-}
-
 impl<F: FieldExt> CompilableNode<F> for MatMultNode<F> {
-    fn compile<'a>(
+    fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,
-        circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
+        circuit_description_map: &mut crate::layouter::layouting::CircuitDescriptionMap<'a, F>,
     ) -> Result<Vec<LayerEnum<F>>, DAGError> {
-        let (matrix_a_location, matrix_a_data) = circuit_map.get_node(&self.matrix_a)?;
+        let (matrix_a_location, matrix_a_data) =
+            circuit_description_map.get_node(&self.matrix_a)?;
 
         let mle_a = DenseMle::new_with_prefix_bits(
             MultilinearExtension::new(matrix_a_data.get_evals_vector().clone()),
@@ -97,7 +92,8 @@ impl<F: FieldExt> CompilableNode<F> for MatMultNode<F> {
 
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
         let matrix_a = Matrix::new(mle_a, self.num_rows_cols_a.0, self.num_rows_cols_a.1);
-        let (matrix_b_location, matrix_b_data) = circuit_map.get_node(&self.matrix_b)?;
+        let (matrix_b_location, matrix_b_data) =
+            circuit_description_map.get_node(&self.matrix_b)?;
 
         let mle_b = DenseMle::new_with_prefix_bits(
             MultilinearExtension::new(matrix_b_data.get_evals_vector().clone()),
@@ -110,12 +106,13 @@ impl<F: FieldExt> CompilableNode<F> for MatMultNode<F> {
 
         let matmult_layer_id = layer_id.get_and_inc();
         let matmult_layer = MatMult::new(matmult_layer_id, matrix_a, matrix_b);
-        circuit_map.add_node(
+        circuit_description_map.add_node(
             self.id,
             (CircuitLocation::new(matmult_layer_id, vec![]), &self.data),
         );
 
-        Ok(vec![matmult_layer.into()])
+        Ok(vec![matmult_layer.into()]);
+        todo!()
     }
 }
 
@@ -183,24 +180,11 @@ mod test {
             let matmult_sector =
                 MatMultNode::new(ctx, &input_matrix_a, (4, 2), &input_matrix_b, (2, 2));
 
-            let difference_sector = Sector::new(
-                ctx,
-                &[&matmult_sector, &input_matrix_product],
-                |inputs| {
+            let difference_sector =
+                Sector::new(ctx, &[&matmult_sector, &input_matrix_product], |inputs| {
                     Expression::<Fr, AbstractExpr>::mle(inputs[0])
                         - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                },
-                |inputs| {
-                    let data: Vec<_> = inputs[0]
-                        .get_evals_vector()
-                        .iter()
-                        .zip(inputs[1].get_evals_vector().iter())
-                        .map(|(lhs, rhs)| lhs - rhs)
-                        .collect();
-
-                    MultilinearExtension::new(data)
-                },
-            );
+                });
 
             let output_node = OutputNode::new_zero(ctx, &difference_sector);
 
@@ -290,24 +274,11 @@ mod test {
                 ),
             );
 
-            let difference_sector = Sector::new(
-                ctx,
-                &[&matmult_sector, &input_matrix_product],
-                |inputs| {
+            let difference_sector =
+                Sector::new(ctx, &[&matmult_sector, &input_matrix_product], |inputs| {
                     Expression::<Fr, AbstractExpr>::mle(inputs[0])
                         - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                },
-                |inputs| {
-                    let data: Vec<_> = inputs[0]
-                        .get_evals_vector()
-                        .iter()
-                        .zip(inputs[1].get_evals_vector().iter())
-                        .map(|(lhs, rhs)| lhs - rhs)
-                        .collect();
-
-                    MultilinearExtension::new(data)
-                },
-            );
+                });
 
             let output_node = OutputNode::new_zero(ctx, &difference_sector);
 

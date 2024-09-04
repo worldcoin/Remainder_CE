@@ -14,7 +14,7 @@ use crate::{
     prover::proof_system::ProofSystem,
 };
 
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
@@ -33,13 +33,17 @@ impl<F: FieldExt> CircuitNode for IdentityGateNode<F> {
     fn sources(&self) -> Vec<NodeId> {
         vec![self.pre_routed_data]
     }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> IdentityGateNode<F> {
     /// Constructs a new IdentityGateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        pre_routed_data: &impl ClaimableNode<F>,
+        pre_routed_data: &impl CircuitNode<F>,
         nonzero_gates: Vec<(usize, usize)>,
     ) -> Self {
         let max_gate_val = nonzero_gates
@@ -69,23 +73,13 @@ impl<F: FieldExt> IdentityGateNode<F> {
     }
 }
 
-impl<F: FieldExt> ClaimableNode<F> for IdentityGateNode<F> {
-    fn get_data(&self) -> &MultilinearExtension<F> {
-        &self.data
-    }
-
-    fn get_expr(&self) -> Expression<F, AbstractExpr> {
-        Expression::<F, AbstractExpr>::mle(self.id)
-    }
-}
-
 impl<F: FieldExt> CompilableNode<F> for IdentityGateNode<F> {
-    fn compile<'a>(
+    fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,
-        circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
+        circuit_description_map: &mut crate::layouter::layouting::CircuitDescriptionMap<'a, F>,
     ) -> Result<Vec<LayerEnum<F>>, DAGError> {
-        let (pre_routed_data_location, pre_routed_data) = circuit_map
+        let (pre_routed_data_location, pre_routed_data) = circuit_description_map
             .0
             .get(&self.pre_routed_data)
             .ok_or(DAGError::DanglingNodeId(self.pre_routed_data))?;
@@ -98,12 +92,13 @@ impl<F: FieldExt> CompilableNode<F> for IdentityGateNode<F> {
         let input_layer_id = layer_id.get_and_inc();
         let id_gate_layer =
             IdentityGate::new(input_layer_id, self.nonzero_gates.clone(), pre_routed_mle);
-        circuit_map.0.insert(
+        circuit_description_map.0.insert(
             self.id,
             (CircuitLocation::new(input_layer_id, vec![]), &self.data),
         );
 
-        Ok(vec![id_gate_layer.into()])
+        Ok(vec![id_gate_layer.into()]);
+        todo!()
     }
 }
 
@@ -160,21 +155,14 @@ mod test {
             let input_shred_expected = InputShred::new(ctx, shifted_mle, &input_layer);
 
             let gate_sector = IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates);
-            let diff_sector = Sector::new(
-                ctx,
-                &[&gate_sector, &input_shred_expected],
-                |input_nodes| {
+            let diff_sector =
+                Sector::new(ctx, &[&gate_sector, &input_shred_expected], |input_nodes| {
                     assert_eq!(input_nodes.len(), 2);
                     let mle_1_id = input_nodes[0];
                     let mle_2_id = input_nodes[1];
 
                     mle_1_id.expr() - mle_2_id.expr()
-                },
-                |data| {
-                    let mle_1_data = data[0];
-                    MultilinearExtension::new_sized_zero(mle_1_data.num_vars())
-                },
-            );
+                });
 
             let output = OutputNode::new_zero(ctx, &diff_sector);
 

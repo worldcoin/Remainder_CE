@@ -3,6 +3,7 @@ use crate::{
         product::{PostSumcheckLayer, Product},
         LayerId,
     },
+    layouter::nodes::CircuitNode,
     mle::{dense::DenseMle, Mle, MleIndex},
 };
 use itertools::Itertools;
@@ -35,6 +36,20 @@ pub struct CircuitMle<F: FieldExt> {
 
     /// A list of indices where the free variables have been assigned an index.
     var_indices: Vec<MleIndex<F>>,
+}
+
+impl<F: FieldExt> CircuitNode for CircuitMle<F> {
+    fn id(&self) -> crate::layouter::nodes::NodeId {
+        todo!()
+    }
+
+    fn sources(&self) -> Vec<crate::layouter::nodes::NodeId> {
+        todo!()
+    }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> CircuitMle<F> {

@@ -125,26 +125,6 @@ impl<F: FieldExt> TripleNestedBuilderComponent<F> {
 
                 outer_sel_mle.expr().concat_expr(inner_sel)
             },
-            |data| {
-                let inner_inner_sel_data = data[0];
-                let inner_sel_data = data[1];
-                let outer_sel_data = data[2];
-                let inner_inner_sel_bt = inner_inner_sel_data
-                    .get_evals_vector()
-                    .iter()
-                    .flat_map(|elem| vec![*elem, *elem * elem]);
-
-                let inner_sel_bt = inner_inner_sel_bt
-                    .zip(inner_sel_data.get_evals_vector().iter())
-                    .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2]);
-
-                let final_bt = inner_sel_bt
-                    .zip(outer_sel_data.get_evals_vector().iter())
-                    .flat_map(|(elem_1, elem_2)| vec![elem_1, *elem_2])
-                    .collect_vec();
-
-                MultilinearExtension::new(final_bt)
-            },
         );
 
         Self {
@@ -175,16 +155,11 @@ pub struct DifferenceBuilderComponent<F: FieldExt> {
 
 impl<F: FieldExt> DifferenceBuilderComponent<F> {
     pub fn new(ctx: &Context, input: &dyn ClaimableNode<F>) -> Self {
-        let zero_output_sector = Sector::new(
-            ctx,
-            &[input],
-            |input_vec| {
-                assert_eq!(input_vec.len(), 1);
-                let input_data = input_vec[0];
-                input_data.expr() - input_data.expr()
-            },
-            |data| MultilinearExtension::new_sized_zero(data[0].num_vars()),
-        );
+        let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
+            assert_eq!(input_vec.len(), 1);
+            let input_data = input_vec[0];
+            input_data.expr() - input_data.expr()
+        });
 
         let output = OutputNode::new_zero(ctx, &zero_output_sector);
 
@@ -216,39 +191,14 @@ pub struct ProductScaledBuilderComponent<F: FieldExt> {
 
 impl<F: FieldExt> ProductScaledBuilderComponent<F> {
     pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
-        let product_scaled_sector = Sector::new(
-            ctx,
-            &[mle_1, mle_2],
-            |product_scaled_nodes| {
-                assert_eq!(product_scaled_nodes.len(), 2);
-                let mle_1 = product_scaled_nodes[0];
-                let mle_2 = product_scaled_nodes[1];
+        let product_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |product_scaled_nodes| {
+            assert_eq!(product_scaled_nodes.len(), 2);
+            let mle_1 = product_scaled_nodes[0];
+            let mle_2 = product_scaled_nodes[1];
 
-                ExprBuilder::<F>::products(vec![mle_1, mle_2])
-                    + ExprBuilder::<F>::scaled(mle_1.expr(), F::from(10_u64))
-            },
-            |data| {
-                let mle_1 = data[0];
-                let mle_2 = data[1];
-                let prod_bt = mle_1
-                    .get_evals_vector()
-                    .iter()
-                    .zip(mle_2.get_evals_vector().iter())
-                    .map(|(elem_1, elem_2)| *elem_1 * elem_2);
-
-                let scaled_bt = mle_1
-                    .get_evals_vector()
-                    .iter()
-                    .map(|elem| F::from(10_u64) * elem);
-
-                let final_bt = prod_bt
-                    .zip(scaled_bt)
-                    .map(|(elem_1, elem_2)| elem_1 + elem_2)
-                    .collect_vec();
-
-                MultilinearExtension::new(final_bt)
-            },
-        );
+            ExprBuilder::<F>::products(vec![mle_1, mle_2])
+                + ExprBuilder::<F>::scaled(mle_1.expr(), F::from(10_u64))
+        });
 
         Self {
             first_layer_sector: product_scaled_sector,
@@ -282,39 +232,13 @@ pub struct ProductSumBuilderComponent<F: FieldExt> {
 
 impl<F: FieldExt> ProductSumBuilderComponent<F> {
     pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
-        let product_sum_sector = Sector::new(
-            ctx,
-            &[mle_1, mle_2],
-            |product_sum_nodes| {
-                assert_eq!(product_sum_nodes.len(), 2);
-                let mle_1 = product_sum_nodes[0];
-                let mle_2 = product_sum_nodes[1];
+        let product_sum_sector = Sector::new(ctx, &[mle_1, mle_2], |product_sum_nodes| {
+            assert_eq!(product_sum_nodes.len(), 2);
+            let mle_1 = product_sum_nodes[0];
+            let mle_2 = product_sum_nodes[1];
 
-                ExprBuilder::<F>::products(vec![mle_1, mle_2]) + (mle_1.expr() + mle_2.expr())
-            },
-            |data| {
-                let mle_1 = data[0];
-                let mle_2 = data[1];
-                let prod_bt = mle_1
-                    .get_evals_vector()
-                    .iter()
-                    .zip(mle_2.get_evals_vector().iter())
-                    .map(|(elem_1, elem_2)| *elem_1 * elem_2);
-
-                let sum_bt = mle_1
-                    .get_evals_vector()
-                    .iter()
-                    .zip(mle_2.get_evals_vector().iter())
-                    .map(|(elem_1, elem_2)| *elem_1 + elem_2);
-
-                let final_bt = prod_bt
-                    .zip(sum_bt)
-                    .map(|(elem_1, elem_2)| elem_1 + elem_2)
-                    .collect_vec();
-
-                MultilinearExtension::new(final_bt)
-            },
-        );
+            ExprBuilder::<F>::products(vec![mle_1, mle_2]) + (mle_1.expr() + mle_2.expr())
+        });
 
         Self {
             first_layer_sector: product_sum_sector,
@@ -348,37 +272,14 @@ pub struct ConstantScaledSumBuilderComponent<F: FieldExt> {
 
 impl<F: FieldExt> ConstantScaledSumBuilderComponent<F> {
     pub fn new(ctx: &Context, mle_1: &dyn ClaimableNode<F>, mle_2: &dyn ClaimableNode<F>) -> Self {
-        let constant_scaled_sector = Sector::new(
-            ctx,
-            &[mle_1, mle_2],
-            |constant_scaled_nodes| {
-                assert_eq!(constant_scaled_nodes.len(), 2);
-                let mle_1 = constant_scaled_nodes[0];
-                let mle_2 = constant_scaled_nodes[1];
+        let constant_scaled_sector = Sector::new(ctx, &[mle_1, mle_2], |constant_scaled_nodes| {
+            assert_eq!(constant_scaled_nodes.len(), 2);
+            let mle_1 = constant_scaled_nodes[0];
+            let mle_2 = constant_scaled_nodes[1];
 
-                ExprBuilder::<F>::scaled(mle_2.expr(), F::from(10_u64))
-                    + (mle_1.expr() + ExprBuilder::constant(F::from(10_u64)))
-            },
-            |data| {
-                let mle_1 = data[0];
-                let mle_2 = data[1];
-                let constant_bt = mle_1
-                    .get_evals_vector()
-                    .iter()
-                    .map(|elem| *elem + F::from(10_u64));
-
-                let scaled_bt = mle_2
-                    .get_evals_vector()
-                    .iter()
-                    .map(|elem| F::from(10_u64) * elem);
-
-                let final_bt = constant_bt
-                    .zip(scaled_bt)
-                    .map(|(elem_1, elem_2)| elem_1 + elem_2)
-                    .collect_vec();
-                MultilinearExtension::new(final_bt)
-            },
-        );
+            ExprBuilder::<F>::scaled(mle_2.expr(), F::from(10_u64))
+                + (mle_1.expr() + ExprBuilder::constant(F::from(10_u64)))
+        });
 
         Self {
             first_layer_sector: constant_scaled_sector,

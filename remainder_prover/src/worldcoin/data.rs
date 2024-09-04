@@ -360,7 +360,7 @@ mod test {
     use std::path::Path;
 
     use crate::{
-        mle::{circuit_mle::CircuitMle, Mle},
+        mle::{circuit_mle::BundledInputMle, Mle},
         worldcoin::data::next_power_of_two,
     };
 

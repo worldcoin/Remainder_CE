@@ -27,7 +27,6 @@ pub fn to_flat_mles<F: FieldExt, const N: usize>(inputs: Vec<[F; N]>) -> [Vec<F>
         }
     }
     result
-
 }
 
 // Test that demonstrates the incorrectness of the previous implementation of to_flat_mles.
@@ -49,7 +48,7 @@ fn test_to_flat_mles() {
 
 /// A trait for a MLE(s) that are the input(s) to a circuit,
 /// but are bundled together for semantic reasons.
-pub trait CircuitMle<F: FieldExt, const N: usize> {
+pub trait BundledInputMle<F: FieldExt, const N: usize> {
     /// returns the references to all the underlying MLEs
     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
@@ -63,7 +62,7 @@ pub struct FlatMles<F: FieldExt, const N: usize> {
     mles: [DenseMle<F>; N],
 }
 
-impl<F: FieldExt, const N: usize> CircuitMle<F, N> for FlatMles<F, N> {
+impl<F: FieldExt, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
     fn get_mle_refs(&self) -> &[DenseMle<F>; N] {
         &self.mles
     }
@@ -105,7 +104,7 @@ mod tests {
     use crate::layer::LayerId;
     use remainder_shared_types::Fr;
 
-    use crate::mle::circuit_mle::CircuitMle;
+    use crate::mle::circuit_mle::BundledInputMle;
     use crate::mle::circuit_mle::FlatMles;
     use crate::mle::Mle;
 

@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use ark_std::log2;
 use remainder_shared_types::{transcript::ProverTranscript, FieldExt};
 
 use crate::{
@@ -10,14 +11,14 @@ use crate::{
     mle::evals::MultilinearExtension,
 };
 
-use super::{CircuitNode, ClaimableNode, Context, NodeId};
+use super::{CircuitNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
 /// The node representing the random challenge that the verifier supplies via Fiat-Shamir.
 pub struct VerifierChallengeNode<F: FieldExt> {
     id: NodeId,
     num_challenges: usize,
-    data: Option<MultilinearExtension<F>>,
+    num_vars: usize,
     _marker: PhantomData<F>,
 }
 
@@ -33,6 +34,10 @@ impl<F: FieldExt> CircuitNode for VerifierChallengeNode<F> {
     fn sources(&self) -> Vec<NodeId> {
         vec![]
     }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> VerifierChallengeNode<F> {
@@ -40,7 +45,7 @@ impl<F: FieldExt> VerifierChallengeNode<F> {
         Self {
             id: ctx.get_new_id(),
             num_challenges,
-            data: None,
+            num_vars: log2(num_challenges),
             _marker: PhantomData,
         }
     }
@@ -57,8 +62,6 @@ impl<F: FieldExt> VerifierChallengeNode<F> {
         let random_il_layer_id = layer_id.get_and_inc();
         let verifier_challenge_layer = RandomInputLayer::new(mle.clone(), random_il_layer_id);
 
-        self.data = Some(mle);
-
         circuit_map.add_node(
             self.id,
             (
@@ -68,16 +71,6 @@ impl<F: FieldExt> VerifierChallengeNode<F> {
         );
 
         verifier_challenge_layer
-    }
-}
-
-impl<F: FieldExt> ClaimableNode<F> for VerifierChallengeNode<F> {
-    fn get_data(&self) -> &MultilinearExtension<F> {
-        &self.data.as_ref().unwrap()
-    }
-
-    fn get_expr(&self) -> Expression<F, AbstractExpr> {
-        Expression::<F, AbstractExpr>::mle(self.id)
     }
 }
 
@@ -122,43 +115,17 @@ mod test {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let input_a = InputShred::new(ctx, mle_vec_a, &input_layer);
 
-            let product_sector = Sector::new(
-                ctx,
-                &[&input_a, &verifier_challenge_node],
-                |inputs| {
+            let product_sector =
+                Sector::new(ctx, &[&input_a, &verifier_challenge_node], |inputs| {
                     Expression::<Fr, AbstractExpr>::mle(inputs[0])
                         - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                },
-                |inputs| {
-                    let data: Vec<_> = inputs[0]
-                        .get_evals_vector()
-                        .iter()
-                        .zip(inputs[1].get_evals_vector().iter())
-                        .map(|(lhs, rhs)| lhs - rhs)
-                        .collect();
+                });
 
-                    MultilinearExtension::new(data)
-                },
-            );
-
-            let difference_sector = Sector::new(
-                ctx,
-                &[&product_sector, &product_sector],
-                |inputs| {
+            let difference_sector =
+                Sector::new(ctx, &[&product_sector, &product_sector], |inputs| {
                     Expression::<Fr, AbstractExpr>::mle(inputs[0])
                         - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                },
-                |inputs| {
-                    let data: Vec<_> = inputs[0]
-                        .get_evals_vector()
-                        .iter()
-                        .zip(inputs[1].get_evals_vector().iter())
-                        .map(|(lhs, rhs)| lhs - rhs)
-                        .collect();
-
-                    MultilinearExtension::new(data)
-                },
-            );
+                });
 
             let output_node = OutputNode::new_zero(ctx, &difference_sector);
 

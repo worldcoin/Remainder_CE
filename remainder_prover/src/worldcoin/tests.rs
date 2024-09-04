@@ -5,7 +5,7 @@ mod tests {
     use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
     use crate::layouter::nodes::circuit_outputs::OutputNode;
     use crate::layouter::nodes::node_enum::NodeEnum;
-    use crate::layouter::nodes::ClaimableNode;
+    use crate::layouter::nodes::CircuitNode;
     use crate::prover::helpers::test_circuit;
     use crate::utils::get_input_shred_from_vec;
     use crate::worldcoin::circuits::build_circuit_public_il;
@@ -107,7 +107,7 @@ mod tests {
 
             let digits_input_refs = digits_input_shreds
                 .iter()
-                .map(|shred| shred as &dyn ClaimableNode<Fr>)
+                .map(|shred| shred as &dyn CircuitNode)
                 .collect_vec();
             let recomp_of_abs_value =
                 DigitalRecompositionComponent::new(ctx, &digits_input_refs, base);

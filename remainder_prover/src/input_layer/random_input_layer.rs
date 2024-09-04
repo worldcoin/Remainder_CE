@@ -14,7 +14,7 @@ use crate::{
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, VerifierInputLayer};
+use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, CircuitInputLayer};
 use crate::mle::Mle;
 
 /// Represents a random input layer, where we generate random constants in the
@@ -57,7 +57,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
-    type VerifierInputLayer = VerifierRandomInputLayer<F>;
+    type CircuitInputLayer = VerifierRandomInputLayer<F>;
 
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // We do not need to commit to the randomness, so we simply send it in
@@ -90,11 +90,11 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
         DenseMle::new_from_raw(self.mle.get_evals_vector().clone(), self.layer_id)
     }
 
-    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer {
+    fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer {
         let layer_id = self.layer_id();
         let num_bits = self.get_mle().original_num_vars();
 
-        Self::VerifierInputLayer {
+        Self::CircuitInputLayer {
             layer_id,
             num_bits,
             _marker: PhantomData,
@@ -102,7 +102,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> VerifierInputLayer<F> for VerifierRandomInputLayer<F> {
+impl<F: FieldExt> CircuitInputLayer<F> for VerifierRandomInputLayer<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {

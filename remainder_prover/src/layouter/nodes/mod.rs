@@ -8,17 +8,12 @@ use remainder_shared_types::transcript::ProverTranscript;
 pub use remainder_shared_types::{FieldExt, Fr};
 use serde::{Deserialize, Serialize};
 
+use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
 use crate::input_layer::enum_input_layer::InputLayerEnum;
-use crate::layer::layer_enum::LayerEnum;
-use crate::layer::{Layer, LayerId};
-use crate::prover::proof_system::ProofSystem;
-use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    mle::evals::MultilinearExtension,
-};
+use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
+use crate::layer::LayerId;
 
-use super::compiling::WitnessBuilder;
-use super::layouting::{CircuitMap, DAGError};
+use super::layouting::{CircuitDescriptionMap, CircuitMap, DAGError};
 
 pub mod circuit_inputs;
 pub mod circuit_outputs;
@@ -93,34 +88,19 @@ pub trait CircuitNode {
     /// known before the values of this node can be node.  These are the source nodes of the
     /// directed edges of the DAG that terminate at this node.
     fn sources(&self) -> Vec<NodeId>;
-}
 
-/// A circuit node that can have a Claim made against it.
-///
-/// Yields the MLE that any claim made on this node would be the evaluation of
-pub trait ClaimableNode<F: FieldExt>: CircuitNode {
-    /// A function for getting the MLE that this node generates in the circuit
-    ///
-    /// Any claim made against this node will be evaluated on this MLE
-    fn get_data(&self) -> &MultilinearExtension<F>;
-
-    /// An abstract expression node that will make a claim on this node
-    fn get_expr(&self) -> Expression<F, AbstractExpr>;
+    fn get_num_vars(&self) -> usize;
 }
 
 /// A Node that contains the information neccessary to Compile itself
 ///
 /// Implement this for any node that does not need additional Layingout before compilation
 pub trait CompilableNode<F: FieldExt>: CircuitNode {
-    /// Compiles the node by adding any layers neccessary to the `WitnessBuilder`
-    ///
-    /// If any `ClaimableNode` is added to the witness it is the responsibility
-    /// of this function to add that `NodeId` to the `CircuitMap`
-    fn compile<'a>(
+    fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,
-        circuit_map: &mut CircuitMap<'a, F>,
-    ) -> Result<Vec<LayerEnum<F>>, DAGError>;
+        circuit_description_map: &mut CircuitDescriptionMap,
+    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError>;
 }
 
 pub trait InputCompilableNode<F: FieldExt>: CircuitNode {
@@ -187,6 +167,14 @@ macro_rules! node_enum {
                 match self {
                     $(
                         Self::$var_name(node) => node.sources(),
+                    )*
+                }
+            }
+
+            fn get_num_vars(&self) -> usize {
+                match self {
+                    $(
+                        Self::$var_name(node) => node.get_num_vars(),
                     )*
                 }
             }

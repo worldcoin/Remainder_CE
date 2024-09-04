@@ -11,6 +11,7 @@ use thiserror::Error;
 use utils::is_subset;
 
 use crate::{
+    expression::circuit_expr::CircuitMle,
     input_layer::enum_input_layer::InputLayerEnum,
     layer::{layer_enum::LayerEnum, LayerId},
     layouter::nodes::sector::{Sector, SectorGroup},
@@ -59,6 +60,23 @@ impl<'a, F> CircuitMap<'a, F> {
         node: NodeId,
         value: (CircuitLocation, &'a MultilinearExtension<F>),
     ) {
+        self.0.insert(node, value);
+    }
+}
+
+#[derive(Debug)]
+pub struct CircuitDescriptionMap(pub(crate) HashMap<NodeId, (CircuitLocation, usize)>);
+
+impl CircuitDescriptionMap {
+    pub(crate) fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn get_node(&self, node: &NodeId) -> Result<&(CircuitLocation, usize), DAGError> {
+        self.0.get(node).ok_or(DAGError::DanglingNodeId(*node))
+    }
+
+    pub fn add_node(&mut self, node: NodeId, value: (CircuitLocation, usize)) {
         self.0.insert(node, value);
     }
 }
@@ -219,6 +237,13 @@ impl<F: FieldExt> CircuitNode for IntermediateNode<F> {
             IntermediateNode::Sector(node) => node.children(),
         }
     }
+
+    fn get_num_vars(&self) -> usize {
+        match self {
+            IntermediateNode::CompilableNode(node) => node.get_num_vars(),
+            IntermediateNode::Sector(node) => node.get_num_vars(),
+        }
+    }
 }
 
 /// Current Core Layouter
@@ -235,7 +260,7 @@ pub fn layout<F: FieldExt>(
     nodes: Vec<NodeEnum<F>>,
 ) -> Result<
     (
-        Vec<InputLayerNode<F>>,
+        Vec<InputLayerNode>,
         Vec<VerifierChallengeNode<F>>,
         Vec<Box<dyn CompilableNode<F>>>,
         Vec<LookupTable>,
@@ -246,11 +271,11 @@ pub fn layout<F: FieldExt>(
     let mut dag = NodeEnumGroup::new(nodes);
 
     // Handle input layers
-    let input_shreds: Vec<InputShred<F>> = dag.get_nodes();
-    let mut input_layer_nodes: Vec<InputLayerNode<F>> = dag.get_nodes();
+    let input_shreds: Vec<InputShred> = dag.get_nodes();
+    let mut input_layer_nodes: Vec<InputLayerNode> = dag.get_nodes();
     let verifier_challenge_nodes: Vec<VerifierChallengeNode<F>> = dag.get_nodes();
 
-    let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode<F>> = HashMap::new();
+    let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode> = HashMap::new();
 
     for layer in input_layer_nodes.iter_mut() {
         input_layer_map.insert(layer.id(), layer);

@@ -8,7 +8,7 @@ use crate::{
     },
     layouter::{
         component::Component,
-        nodes::{sector::Sector, CircuitNode, ClaimableNode, Context},
+        nodes::{sector::Sector, CircuitNode, Context},
     },
     mle::evals::MultilinearExtension,
     worldcoin::digit_decomposition::NUM_DIGITS,
@@ -22,25 +22,11 @@ pub struct SubtractionComponent<F: FieldExt> {
 
 impl<F: FieldExt> SubtractionComponent<F> {
     /// Create a new [SubtractionComponent] component.
-    pub fn new(ctx: &Context, lhs: &dyn ClaimableNode<F>, rhs: &dyn ClaimableNode<F>) -> Self {
-        let sector = Sector::new(
-            ctx,
-            &[lhs, rhs],
-            |nodes| {
-                assert_eq!(nodes.len(), 2);
-                nodes[0].expr() - nodes[1].expr()
-            },
-            |data| {
-                assert_eq!(data.len(), 2);
-                let result = data[0]
-                    .get_evals_vector()
-                    .iter()
-                    .zip(data[1].get_evals_vector())
-                    .map(|(lhs, rhs)| *lhs - *rhs)
-                    .collect_vec();
-                MultilinearExtension::new(result)
-            },
-        );
+    pub fn new(ctx: &Context, lhs: &dyn CircuitNode, rhs: &dyn CircuitNode) -> Self {
+        let sector = Sector::new(ctx, &[lhs, rhs], |nodes| {
+            assert_eq!(nodes.len(), 2);
+            nodes[0].expr() - nodes[1].expr()
+        });
         println!("SubtractionComponent sector = {:?}", sector.id());
         Self { sector }
     }
@@ -65,27 +51,13 @@ pub struct DigitsConcatenator<F: FieldExt> {
 
 impl<F: FieldExt> DigitsConcatenator<F> {
     /// Create a new DigitsConcatenator component.
-    pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F>]) -> Self {
-        let sector = Sector::new(
-            ctx,
-            mles,
-            |digital_places| {
-                assert_eq!(digital_places.len(), NUM_DIGITS);
-                Expression::<F, AbstractExpr>::selectors(
-                    digital_places.iter().map(|node| node.expr()).collect(),
-                )
-            },
-            |digits_at_places| {
-                assert_eq!(digits_at_places.len(), NUM_DIGITS);
-                let all_digits = calculate_selector_values(
-                    digits_at_places
-                        .iter()
-                        .map(|digits_at_place| digits_at_place.get_evals_vector().clone())
-                        .collect(),
-                );
-                MultilinearExtension::new(all_digits)
-            },
-        );
+    pub fn new(ctx: &Context, mles: &[&dyn CircuitNode]) -> Self {
+        let sector = Sector::new(ctx, mles, |digital_places| {
+            assert_eq!(digital_places.len(), NUM_DIGITS);
+            Expression::<F, AbstractExpr>::selectors(
+                digital_places.iter().map(|node| node.expr()).collect(),
+            )
+        });
         println!("DigitsConcatenator sector = {:?}", sector.id());
         Self { sector }
     }
@@ -109,46 +81,26 @@ pub struct DigitalRecompositionComponent<F: FieldExt> {
 impl<F: FieldExt> DigitalRecompositionComponent<F> {
     /// Each of the Nodes in `mles` specifies the digits for a different "decimal place".  Most
     /// significant digit comes first.
-    pub fn new(ctx: &Context, mles: &[&dyn ClaimableNode<F>], base: u64) -> Self {
+    pub fn new(ctx: &Context, mles: &[&dyn CircuitNode], base: u64) -> Self {
         let num_digits = mles.len();
-        let sector = Sector::new(
-            ctx,
-            mles,
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), num_digits);
+        let sector = Sector::new(ctx, mles, |input_nodes| {
+            assert_eq!(input_nodes.len(), num_digits);
 
-                // --- Let's just do a linear accumulator for now ---
-                // TODO!(ryancao): Rewrite this expression but as a tree
-                let b_s_initial_acc = Expression::<F, AbstractExpr>::constant(F::ZERO);
+            // --- Let's just do a linear accumulator for now ---
+            // TODO!(ryancao): Rewrite this expression but as a tree
+            let b_s_initial_acc = Expression::<F, AbstractExpr>::constant(F::ZERO);
 
-                input_nodes.into_iter().enumerate().fold(
-                    b_s_initial_acc,
-                    |acc_expr, (bit_idx, bin_decomp_mle)| {
-                        let b_i_mle_expression_ptr = bin_decomp_mle.expr();
-                        let power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));
-                        let b_s_times_coeff_times_base =
-                            Expression::<F, AbstractExpr>::scaled(b_i_mle_expression_ptr, power);
-                        acc_expr + b_s_times_coeff_times_base
-                    },
-                )
-            },
-            |digit_positions| {
-                assert_eq!(digit_positions.len(), num_digits);
-                let init_vec = vec![F::ZERO; digit_positions[0].get_evals_vector().len()];
-
-                let result_iter = digit_positions.into_iter().enumerate().fold(
-                    init_vec,
-                    |acc, (bit_idx, curr_bits)| {
-                        let base_power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));
-                        acc.into_iter()
-                            .zip(curr_bits.get_evals_vector().into_iter())
-                            .map(|(elem, curr_bit)| elem + base_power * curr_bit)
-                            .collect_vec()
-                    },
-                );
-                MultilinearExtension::new(result_iter)
-            },
-        );
+            input_nodes.into_iter().enumerate().fold(
+                b_s_initial_acc,
+                |acc_expr, (bit_idx, bin_decomp_mle)| {
+                    let b_i_mle_expression_ptr = bin_decomp_mle.expr();
+                    let power = F::from(base.pow((num_digits - (bit_idx + 1)) as u32));
+                    let b_s_times_coeff_times_base =
+                        Expression::<F, AbstractExpr>::scaled(b_i_mle_expression_ptr, power);
+                    acc_expr + b_s_times_coeff_times_base
+                },
+            )
+        });
         println!("DigitsRecompComponent sector = {:?}", sector.id());
         Self { sector }
     }
@@ -172,24 +124,13 @@ pub struct BitsAreBinary<F: FieldExt> {
 
 impl<F: FieldExt> BitsAreBinary<F> {
     /// Creates a new BitsAreBinary component.
-    pub fn new(ctx: &Context, values_node: &dyn ClaimableNode<F>) -> Self {
-        let sector = Sector::new(
-            ctx,
-            &[values_node],
-            |nodes| {
-                assert_eq!(nodes.len(), 1);
-                let values_mle_ref = nodes[0];
-                Expression::<F, AbstractExpr>::products(vec![values_mle_ref, values_mle_ref])
-                    - values_mle_ref.expr()
-            },
-            |data| {
-                assert_eq!(data.len(), 1);
-                let values = data[0].get_evals_vector();
-                let result = values.iter().map(|val| *val * *val - *val).collect_vec();
-                assert!(all(result.into_iter(), |val| val == F::ZERO));
-                MultilinearExtension::new_sized_zero(data[0].num_vars())
-            },
-        );
+    pub fn new(ctx: &Context, values_node: &dyn CircuitNode) -> Self {
+        let sector = Sector::new(ctx, &[values_node], |nodes| {
+            assert_eq!(nodes.len(), 1);
+            let values_mle_ref = nodes[0];
+            Expression::<F, AbstractExpr>::products(vec![values_mle_ref, values_mle_ref])
+                - values_mle_ref.expr()
+        });
         println!("BitsAreBinary sector = {:?}", sector.id());
         Self { sector }
     }
@@ -218,48 +159,28 @@ impl<F: FieldExt> SignCheckerComponent<F> {
     /// negative and 1 indicates positive.
     pub fn new(
         ctx: &Context,
-        values: &dyn ClaimableNode<F>,
-        sign_bits: &dyn ClaimableNode<F>,
-        abs_values: &dyn ClaimableNode<F>,
+        values: &dyn CircuitNode,
+        sign_bits: &dyn CircuitNode,
+        abs_values: &dyn CircuitNode,
     ) -> Self {
-        let sector = Sector::new(
-            ctx,
-            &[values, sign_bits, abs_values],
-            |input_nodes| {
-                assert_eq!(input_nodes.len(), 3);
+        let sector = Sector::new(ctx, &[values, sign_bits, abs_values], |input_nodes| {
+            assert_eq!(input_nodes.len(), 3);
 
-                let values_mle_ref = input_nodes[0];
-                let sign_bits_mle_ref = input_nodes[1];
-                let abs_values_mle_ref = input_nodes[2];
+            let values_mle_ref = input_nodes[0];
+            let sign_bits_mle_ref = input_nodes[1];
+            let abs_values_mle_ref = input_nodes[2];
 
-                // (values + abs_values) + -2 * sign_bits * abs_values
-                let first_summand = abs_values_mle_ref.expr() + values_mle_ref.expr();
-                let second_summand = Expression::<F, AbstractExpr>::scaled(
-                    Expression::<F, AbstractExpr>::products(vec![
-                        abs_values_mle_ref,
-                        sign_bits_mle_ref,
-                    ]),
-                    F::from(2).neg(),
-                );
-                first_summand + second_summand
-            },
-            |data| {
-                assert_eq!(data.len(), 3);
-
-                let values = data[0]
-                    .get_evals_vector()
-                    .iter()
-                    .zip(data[1].get_evals_vector())
-                    .zip(data[2].get_evals_vector())
-                    .map(|((val, sign_bit), abs_val)| {
-                        *val + *abs_val + F::from(2).neg() * sign_bit * abs_val
-                    })
-                    .collect_vec();
-                assert!(all(values.into_iter(), |val| val == F::ZERO));
-
-                MultilinearExtension::new_sized_zero(data[0].num_vars())
-            },
-        );
+            // (values + abs_values) + -2 * sign_bits * abs_values
+            let first_summand = abs_values_mle_ref.expr() + values_mle_ref.expr();
+            let second_summand = Expression::<F, AbstractExpr>::scaled(
+                Expression::<F, AbstractExpr>::products(vec![
+                    abs_values_mle_ref,
+                    sign_bits_mle_ref,
+                ]),
+                F::from(2).neg(),
+            );
+            first_summand + second_summand
+        });
         println!("SignCheckerComponent sector = {:?}", sector.id());
         Self { sector }
     }

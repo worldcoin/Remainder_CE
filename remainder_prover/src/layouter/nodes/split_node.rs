@@ -1,19 +1,23 @@
 //! A node that can alter the claims made on it's source `ClaimableNode`
 
-use std::iter;
+use std::{iter, marker::PhantomData};
 
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    expression::{
+        abstract_expr::AbstractExpr,
+        circuit_expr::{CircuitExpr, CircuitMle},
+        generic_expr::Expression,
+    },
     layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
-    layouter::layouting::{CircuitLocation, DAGError},
+    layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
     mle::evals::{Evaluations, MultilinearExtension},
     prover::proof_system::ProofSystem,
 };
 
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that derives new `ClaimableNode`s from a single
 /// `ClaimableNode`.
@@ -23,37 +27,26 @@ use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
 #[derive(Clone, Debug)]
 pub struct SplitNode<F: FieldExt> {
     id: NodeId,
-    data: MultilinearExtension<F>,
+    num_vars: usize,
     source: NodeId,
     prefix_bits: Vec<bool>,
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt> SplitNode<F> {
     /// Creates 2^num_vars `SplitNodes` from a single ClaimableNode
-    pub fn new(ctx: &Context, node: &impl ClaimableNode<F>, num_vars: usize) -> Vec<Self> {
-        let data = node.get_data();
+    pub fn new(ctx: &Context, node: &impl CircuitNode, num_vars: usize) -> Vec<Self> {
+        let num_vars_node = node.get_num_vars();
         let source = node.id();
-        let step = 1 << num_vars;
-        let max_num_vars = data.num_vars() - num_vars;
+        let max_num_vars = num_vars_node - num_vars;
         (0..(1 << num_vars))
             .zip(bits_iter(num_vars))
-            .map(|(idx, prefix_bits)| {
-                let data = data
-                    .get_evals_vector()
-                    .iter()
-                    .skip(idx)
-                    .step_by(step)
-                    .cloned()
-                    .collect_vec();
-
-                let data =
-                    MultilinearExtension::new_from_evals(Evaluations::new(max_num_vars, data));
-                Self {
-                    id: ctx.get_new_id(),
-                    source,
-                    data,
-                    prefix_bits,
-                }
+            .map(|(_, prefix_bits)| Self {
+                id: ctx.get_new_id(),
+                source,
+                num_vars: max_num_vars,
+                prefix_bits,
+                _marker: PhantomData,
             })
             .collect()
     }
@@ -67,26 +60,19 @@ impl<F: FieldExt> CircuitNode for SplitNode<F> {
     fn sources(&self) -> Vec<NodeId> {
         vec![self.source]
     }
-}
 
-impl<F: FieldExt> ClaimableNode<F> for SplitNode<F> {
-    fn get_data(&self) -> &MultilinearExtension<F> {
-        &self.data
-    }
-
-    fn get_expr(&self) -> Expression<F, AbstractExpr> {
-        Expression::<F, AbstractExpr>::mle(self.id)
+    fn get_num_vars(&self) -> usize {
+        self.num_vars
     }
 }
 
 impl<F: FieldExt> CompilableNode<F> for SplitNode<F> {
-    fn compile<'a>(
+    fn generate_circuit_description<'a>(
         &'a self,
-        _: &mut LayerId,
-        circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
+        layer_id: &mut LayerId,
+        circuit_description_map: &mut CircuitDescriptionMap<'a, F>,
     ) -> Result<Vec<LayerEnum<F>>, DAGError> {
-        let data = &self.data;
-        let (source_location, _) = circuit_map.get_node(&self.source)?;
+        let (source_location, _) = circuit_description_map.get_node(&self.source)?;
 
         let prefix_bits = source_location
             .prefix_bits
@@ -97,7 +83,7 @@ impl<F: FieldExt> CompilableNode<F> for SplitNode<F> {
 
         let location = CircuitLocation::new(source_location.layer_id, prefix_bits);
 
-        circuit_map.add_node(self.id, (location, data));
+        circuit_description_map.add_node(self.id, location);
         Ok(vec![])
     }
 }
@@ -176,31 +162,14 @@ mod test {
             let input_shred_out = InputShred::new(ctx, mle_out, &input_layer);
 
             let split_sectors = SplitNode::new(ctx, &input_shred, 1);
-            let sector_prod = Sector::new(
-                ctx,
-                &[&split_sectors[0], &split_sectors[1]],
-                |inputs| Expression::<_, AbstractExpr>::products(vec![inputs[0], inputs[1]]),
-                |inputs| {
-                    let data: Vec<Fr> = inputs[0]
-                        .get_evals_vector()
-                        .iter()
-                        .zip(inputs[1].get_evals_vector().iter())
-                        .map(|(lhs, rhs)| *lhs * *rhs)
-                        .collect();
+            let sector_prod = Sector::new(ctx, &[&split_sectors[0], &split_sectors[1]], |inputs| {
+                Expression::<_, AbstractExpr>::products(vec![inputs[0], inputs[1]])
+            });
 
-                    MultilinearExtension::new(data)
-                },
-            );
-
-            let final_sector = Sector::new(
-                ctx,
-                &[&sector_prod, &input_shred_out],
-                |inputs| {
-                    Expression::<Fr, AbstractExpr>::mle(inputs[0])
-                        - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                },
-                |_| MultilinearExtension::new_sized_zero(2),
-            );
+            let final_sector = Sector::new(ctx, &[&&sector_prod, &input_shred_out], |inputs| {
+                Expression::<Fr, AbstractExpr>::mle(inputs[0])
+                    - Expression::<Fr, AbstractExpr>::mle(inputs[1])
+            });
 
             let output = OutputNode::new_zero(ctx, &final_sector);
 

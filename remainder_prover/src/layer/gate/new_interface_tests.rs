@@ -14,7 +14,7 @@ use crate::{
             gate::GateNode,
             node_enum::NodeEnum,
             sector::Sector,
-            CircuitNode, ClaimableNode, Context,
+            CircuitNode, Context,
         },
     },
     mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -31,17 +31,12 @@ pub struct DifferenceBuilderComponent<F: FieldExt> {
 }
 
 impl<F: FieldExt> DifferenceBuilderComponent<F> {
-    pub fn new(ctx: &Context, input: &dyn ClaimableNode<F>) -> Self {
-        let zero_output_sector = Sector::new(
-            ctx,
-            &[input],
-            |input_vec| {
-                assert_eq!(input_vec.len(), 1);
-                let input_data = input_vec[0];
-                input_data.expr() - input_data.expr()
-            },
-            |data| MultilinearExtension::new_sized_zero(data[0].num_vars()),
-        );
+    pub fn new(ctx: &Context, input: &dyn CircuitNode) -> Self {
+        let zero_output_sector = Sector::new(ctx, &[input], |input_vec| {
+            assert_eq!(input_vec.len(), 1);
+            let input_data = input_vec[0];
+            input_data.expr() - input_data.expr()
+        });
 
         let output = OutputNode::new_zero(ctx, &zero_output_sector);
 
@@ -99,7 +94,7 @@ fn test_add_gate_circuit_newmainder() {
         let neg_mle_input_shred = InputShred::new(ctx, neg_mle.current_mle.clone(), &input_layer);
 
         let mut nonzero_gates = vec![];
-        let total_num_elems = 1 << mle_input_shred.get_data().num_vars();
+        let total_num_elems = 1 << mle_input_shred.get_num_vars();
         (0..total_num_elems).for_each(|idx| {
             nonzero_gates.push((idx, idx, idx));
         });

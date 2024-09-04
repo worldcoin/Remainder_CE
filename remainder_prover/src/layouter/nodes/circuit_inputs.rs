@@ -2,23 +2,19 @@
 
 mod compile_inputs;
 
-use remainder_ligero::ligero_structs::LigeroAuxInfo;
+use std::marker::PhantomData;
+
 use remainder_shared_types::FieldExt;
 
-use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    input_layer::ligero_input_layer::LigeroCommitment,
-    mle::evals::MultilinearExtension,
-};
-
-use super::{CircuitNode, ClaimableNode, Context, NodeId};
+use super::{CircuitNode, Context, NodeId};
 
 /// A node that represents some Data that will eventually be added to an InputLayer
 #[derive(Debug, Clone)]
 pub struct InputShred<F> {
     id: NodeId,
     parent: NodeId,
-    data: MultilinearExtension<F>,
+    num_vars: usize,
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt> CircuitNode for InputShred<F> {
@@ -29,15 +25,9 @@ impl<F: FieldExt> CircuitNode for InputShred<F> {
     fn sources(&self) -> Vec<NodeId> {
         vec![]
     }
-}
 
-impl<F: FieldExt> ClaimableNode<F> for InputShred<F> {
-    fn get_data(&self) -> &MultilinearExtension<F> {
-        &self.data
-    }
-
-    fn get_expr(&self) -> Expression<F, AbstractExpr> {
-        Expression::<F, AbstractExpr>::mle(self.id)
+    fn get_num_vars(&self) -> usize {
+        self.num_vars
     }
 }
 
@@ -46,11 +36,16 @@ impl<F: FieldExt> InputShred<F> {
     ///
     /// Specifying a source indicates to the layouter that this
     /// InputShred should be appended to the source when laying out
-    pub fn new(ctx: &Context, data: MultilinearExtension<F>, source: &InputLayerNode<F>) -> Self {
+    pub fn new(ctx: &Context, num_vars: usize, source: &InputLayerNode<F>) -> Self {
         let id = ctx.get_new_id();
         let parent = source.id();
 
-        InputShred { id, parent, data }
+        InputShred {
+            id,
+            parent,
+            num_vars,
+            _marker: PhantomData,
+        }
     }
 
     /// Gets the parent NodeId of this InputShred. The InputLayerNode this InputShred will eventually be added to
@@ -62,9 +57,9 @@ impl<F: FieldExt> InputShred<F> {
 /// An enum representing the different types
 /// of InputLayer an InputLayerNode can be compiled into
 #[derive(Debug, Clone)]
-pub enum InputLayerType<F: FieldExt> {
+pub enum InputLayerType {
     /// An InputLayer that will be compiled into a [LigeroInputLayer]
-    LigeroInputLayer((u8, f64, Option<LigeroCommitment<F>>)),
+    LigeroInputLayer((u8, f64)),
     /// An InputLayer that will be compiled into a [PublicInputLayer]
     PublicInputLayer,
 }
@@ -77,7 +72,8 @@ pub enum InputLayerType<F: FieldExt> {
 pub struct InputLayerNode<F: FieldExt> {
     id: NodeId,
     children: Vec<InputShred<F>>,
-    pub(in crate::layouter) input_layer_type: InputLayerType<F>,
+    pub(in crate::layouter) input_layer_type: InputLayerType,
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
@@ -92,6 +88,10 @@ impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
     fn sources(&self) -> Vec<NodeId> {
         vec![]
     }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> InputLayerNode<F> {
@@ -100,12 +100,13 @@ impl<F: FieldExt> InputLayerNode<F> {
     pub fn new(
         ctx: &Context,
         children: Option<Vec<InputShred<F>>>,
-        input_layer_type: InputLayerType<F>,
+        input_layer_type: InputLayerType,
     ) -> Self {
         InputLayerNode {
             id: ctx.get_new_id(),
             children: children.unwrap_or_default(),
             input_layer_type,
+            _marker: PhantomData,
         }
     }
 

@@ -5,7 +5,7 @@
 pub mod gate_helpers;
 mod new_interface_tests;
 
-use std::cmp::max;
+use std::{cmp::max, fmt::Binary};
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -242,6 +242,26 @@ pub struct CircuitGateLayer<F: FieldExt> {
     /// The number of bits representing the number of "dataparallel" copies of
     /// the circuit.
     num_dataparallel_bits: usize,
+}
+
+impl<F: FieldExt> CircuitGateLayer<F> {
+    pub fn new(
+        num_dataparallel_bits: Option<usize>,
+        wiring: Vec<(usize, usize, usize)>,
+        lhs_circuit_mle: CircuitMle<F>,
+        rhs_circuit_mle: CircuitMle<F>,
+        gate_layer_id: LayerId,
+        gate_operation: BinaryOperation,
+    ) -> Self {
+        CircuitGateLayer {
+            id: gate_layer_id,
+            gate_operation,
+            wiring,
+            lhs_mle: lhs_circuit_mle,
+            rhs_mle: rhs_circuit_mle,
+            num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
+        }
+    }
 }
 
 /// Degree of independent variable is cubic for mul dataparallel binding and

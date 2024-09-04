@@ -11,10 +11,12 @@ use std::{
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression, layouter::{
+    expression,
+    layouter::{
         layouting::{CircuitMap, DAGError},
         nodes::NodeId,
-    }, mle::{dense::DenseMle, MleIndex}
+    },
+    mle::{dense::DenseMle, MleIndex},
 };
 
 use super::{
@@ -56,8 +58,8 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
     }
 
     /// Computes the num_vars of this expression (how many rounds of sumcheck it would take to prove)
-    pub fn num_vars(&self, circuit_map: &CircuitMap<'_, F>) -> Result<usize, DAGError> {
-        self.expression_node.get_num_vars(circuit_map)
+    pub fn num_vars(&self, num_vars_map: &HashMap<NodeId, usize>) -> Result<usize, DAGError> {
+        self.expression_node.get_num_vars(num_vars_map)
     }
 
     /// Builds the ProverExpression using the AbstractExpression as a template.
@@ -279,25 +281,25 @@ impl<F: FieldExt> ExpressionNode<F, AbstractExpr> {
         }
     }
 
-    fn get_num_vars(&self, circuit_map: &CircuitMap<'_, F>) -> Result<usize, DAGError> {
+    fn get_num_vars(&self, num_vars_map: &HashMap<NodeId, usize>) -> Result<usize, DAGError> {
         match self {
             ExpressionNode::Constant(_) => Ok(0),
             ExpressionNode::Selector(_, lhs, rhs) => Ok(max(
-                lhs.get_num_vars(circuit_map)? + 1,
-                rhs.get_num_vars(circuit_map)? + 1,
+                lhs.get_num_vars(num_vars_map)? + 1,
+                rhs.get_num_vars(num_vars_map)? + 1,
             )),
-            ExpressionNode::Mle(node_id) => Ok(circuit_map.get_node(node_id)?.1.num_vars()),
-            ExpressionNode::Negated(expr) => expr.get_num_vars(circuit_map),
+            ExpressionNode::Mle(node_id) => Ok(num_vars_map.get(node_id)),
+            ExpressionNode::Negated(expr) => expr.get_num_vars(num_vars_map),
             ExpressionNode::Sum(lhs, rhs) => Ok(max(
-                lhs.get_num_vars(circuit_map)?,
-                rhs.get_num_vars(circuit_map)?,
+                lhs.get_num_vars(num_vars_map)?,
+                rhs.get_num_vars(num_vars_map)?,
             )),
             ExpressionNode::Product(nodes) => Ok(nodes
                 .iter()
-                .map(|node_id| Ok(Some(circuit_map.get_node(node_id)?.1.num_vars())))
+                .map(|node_id| Ok(Some(num_vars_map.get(node_id))))
                 .fold_ok(None, max)?
                 .unwrap_or(0)),
-            ExpressionNode::Scaled(expr, _) => expr.get_num_vars(circuit_map),
+            ExpressionNode::Scaled(expr, _) => expr.get_num_vars(num_vars_map),
         }
     }
 }

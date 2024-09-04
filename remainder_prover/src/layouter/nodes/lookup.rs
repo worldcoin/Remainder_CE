@@ -24,7 +24,7 @@ use crate::{
 };
 
 use super::random::VerifierChallengeNode;
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, InputCompilableNode, NodeId};
+use super::{CircuitNode, CompilableNode, Context, InputCompilableNode, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupTable).
 #[derive(Clone, Debug)]
@@ -47,8 +47,8 @@ impl LookupConstraint {
     pub fn new<F: FieldExt>(
         ctx: &Context,
         lookup_table: &LookupTable,
-        constrained: &dyn ClaimableNode<F>,
-        multiplicities: &dyn ClaimableNode<F>,
+        constrained: &dyn CircuitNode,
+        multiplicities: &dyn CircuitNode,
     ) -> Self {
         let id = ctx.get_new_id();
         LookupConstraint {
@@ -69,6 +69,10 @@ impl CircuitNode for LookupConstraint {
         // NB this function never gets called, since lookup tables and constraints are placed after
         // the intermediate nodes in the toposort
         vec![self.constrained_node_id, self.multiplicities_node_id]
+    }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
     }
 }
 
@@ -99,7 +103,7 @@ impl LookupTable {
     ///     - `table` must have length a power of two.
     pub fn new<F: FieldExt>(
         ctx: &Context,
-        table: &dyn ClaimableNode<F>,
+        table: &dyn CircuitNode,
         secret_constrained_values: bool,
         random_input_node: VerifierChallengeNode<F>,
     ) -> Self {
@@ -392,6 +396,10 @@ impl CircuitNode for LookupTable {
                     .flatten(),
             )
             .collect()
+    }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
     }
 }
 

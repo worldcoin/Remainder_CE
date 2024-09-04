@@ -10,39 +10,41 @@ use crate::{
     layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
     layouter::{
         compiling::WitnessBuilder,
-        layouting::{topo_sort, CircuitLocation, CircuitMap, DAGError},
+        layouting::{topo_sort, CircuitDescriptionMap, CircuitLocation, CircuitMap, DAGError},
     },
     mle::evals::MultilinearExtension,
     prover::proof_system::ProofSystem,
 };
 
-use super::{CircuitNode, ClaimableNode, CompilableNode, Context, NodeId};
+use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
 /// A sector node in the circuit DAG, can have multiple inputs, and a single output
 pub struct Sector<F: FieldExt> {
     id: NodeId,
     expr: Expression<F, AbstractExpr>,
-    data: MultilinearExtension<F>,
+    num_vars: usize,
 }
 
 impl<F: FieldExt> Sector<F> {
     /// creates a new sector node
     pub fn new(
         ctx: &Context,
-        inputs: &[&dyn ClaimableNode<F>],
+        inputs: &[&dyn CircuitNode],
         expr_builder: impl FnOnce(Vec<NodeId>) -> Expression<F, AbstractExpr>,
-        data_builder: impl FnOnce(Vec<&MultilinearExtension<F>>) -> MultilinearExtension<F>,
     ) -> Self {
         let node_ids = inputs.iter().map(|node| node.id()).collect();
         let expr = expr_builder(node_ids);
-        let input_data = inputs.iter().map(|node| node.get_data()).collect();
-        let data = data_builder(input_data);
+        let num_vars_map = inputs
+            .iter()
+            .map(|node| (node.id(), node.get_num_vars()))
+            .collect();
+        let expr_num_vars = expr.num_vars(num_vars_map).unwrap();
 
         Self {
             id: ctx.get_new_id(),
             expr,
-            data,
+            num_vars: expr_num_vars,
         }
     }
 }
@@ -55,6 +57,10 @@ impl<F: FieldExt> CircuitNode for Sector<F> {
     fn sources(&self) -> Vec<NodeId> {
         self.expr.get_sources()
     }
+
+    fn get_num_vars(&self) -> usize {
+        self.num_vars
+    }
 }
 
 //todo remove this super jank workaround
@@ -66,15 +72,9 @@ impl<'a, F: FieldExt> CircuitNode for &'a Sector<F> {
     fn sources(&self) -> Vec<NodeId> {
         self.expr.get_sources()
     }
-}
 
-impl<F: FieldExt> ClaimableNode<F> for Sector<F> {
-    fn get_data(&self) -> &MultilinearExtension<F> {
-        &self.data
-    }
-
-    fn get_expr(&self) -> Expression<F, AbstractExpr> {
-        Expression::<F, AbstractExpr>::mle(self.id)
+    fn get_num_vars(&self) -> usize {
+        self.num_vars
     }
 }
 
@@ -118,13 +118,17 @@ impl<F: FieldExt> CircuitNode for SectorGroup<F> {
         let children = self.children.iter().map(|sector| sector.id()).collect();
         Some(children)
     }
+
+    fn get_num_vars(&self) -> usize {
+        todo!()
+    }
 }
 
 impl<F: FieldExt> CompilableNode<F> for SectorGroup<F> {
-    fn compile<'a>(
+    fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,
-        circuit_map: &mut CircuitMap<'a, F>,
+        circuit_description_map: &mut CircuitDescriptionMap<'a, F>,
     ) -> Result<Vec<LayerEnum<F>>, DAGError> {
         //topo sort the children
         let children = self.children.iter().collect_vec();
@@ -159,11 +163,13 @@ impl<F: FieldExt> CompilableNode<F> for SectorGroup<F> {
         let compiled_layers = layers
             .into_iter()
             .map(|children| {
-                let layer = compile_layer(children.as_slice(), layer_id, circuit_map).unwrap();
+                let layer =
+                    compile_layer(children.as_slice(), layer_id, circuit_description_map).unwrap();
                 layer.into()
             })
             .collect_vec();
-        Ok(compiled_layers)
+        Ok(compiled_layers);
+        todo!()
     }
 }
 
@@ -172,18 +178,12 @@ impl<F: FieldExt> CompilableNode<F> for SectorGroup<F> {
 fn compile_layer<'a, F: FieldExt>(
     children: &[&'a Sector<F>],
     layer_id: &mut LayerId,
-    circuit_map: &mut CircuitMap<'a, F>,
+    circuit_description_map: &mut CircuitDescriptionMap<'a, F>,
 ) -> Result<RegularLayer<F>, DAGError> {
     // This will store all the expression yet to be merged
     let mut expression = children
         .iter()
-        .map(|sector| {
-            Ok((
-                vec![sector.id],
-                sector.expr.clone(),
-                sector.expr.num_vars(circuit_map)?,
-            ))
-        })
+        .map(|sector| Ok((vec![sector.id], sector.expr.clone(), sector.get_num_vars())))
         .collect::<Result<Vec<_>, _>>()?;
 
     // These prefix bits will be stored in reverse order!
@@ -236,7 +236,7 @@ fn compile_layer<'a, F: FieldExt>(
     }
     .1;
 
-    let expr = new_expr.build_prover_expr(circuit_map)?;
+    let expr = new_expr.build_prover_expr(circuit_description_map)?;
 
     let regular_layer_id = layer_id.get_and_inc();
     let layer = RegularLayer::new_raw(regular_layer_id, expr);
@@ -250,7 +250,7 @@ fn compile_layer<'a, F: FieldExt>(
             .filter(|item| item.id == node_id)
             .collect_vec()[0]
             .data;
-        circuit_map.add_node(
+        circuit_description_map.add_node(
             node_id,
             (CircuitLocation::new(*layer_id, prefix_bits), data),
         );
@@ -271,7 +271,7 @@ mod tests {
             layouting::{CircuitLocation, CircuitMap},
             nodes::{
                 circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
-                CircuitNode, ClaimableNode, CompilableNode, Context,
+                CircuitNode, CompilableNode, Context,
             },
         },
         mle::evals::MultilinearExtension,
@@ -288,31 +288,18 @@ mod tests {
             InputShred::new(&ctx, MultilinearExtension::new_zero(), &input_node);
         let input_shred_2 = InputShred::new(&ctx, MultilinearExtension::new_zero(), &input_node);
 
-        let sector_1 = Sector::new(
-            &ctx,
-            &[&input_shred_1, &input_shred_2],
-            |inputs| {
-                Expression::<_, AbstractExpr>::mle(inputs[0])
-                    + Expression::<_, AbstractExpr>::mle(inputs[1])
-            },
-            |_| MultilinearExtension::new_zero(),
-        );
-        let sector_2 = Sector::new(
-            &ctx,
-            &[&input_shred_1, &input_shred_2],
-            |inputs| {
-                Expression::<_, AbstractExpr>::mle(inputs[0])
-                    - Expression::<_, AbstractExpr>::mle(inputs[1])
-            },
-            |_| MultilinearExtension::new_zero(),
-        );
+        let sector_1 = Sector::new(&ctx, &[&input_shred_1, &input_shred_2], |inputs| {
+            Expression::<_, AbstractExpr>::mle(inputs[0])
+                + Expression::<_, AbstractExpr>::mle(inputs[1])
+        });
+        let sector_2 = Sector::new(&ctx, &[&input_shred_1, &input_shred_2], |inputs| {
+            Expression::<_, AbstractExpr>::mle(inputs[0])
+                - Expression::<_, AbstractExpr>::mle(inputs[1])
+        });
 
-        let sector_out = Sector::new(
-            &ctx,
-            &[&sector_1, &sector_2],
-            |inputs| Expression::<_, AbstractExpr>::products(vec![inputs[0], inputs[1]]),
-            |_| MultilinearExtension::new_zero(),
-        );
+        let sector_out = Sector::new(&ctx, &[&sector_1, &sector_2], |inputs| {
+            Expression::<_, AbstractExpr>::products(vec![inputs[0], inputs[1]])
+        });
 
         let sector_group = SectorGroup::new(&ctx, vec![sector_1, sector_2, sector_out]);
         let mut circuit_map = CircuitMap::new();

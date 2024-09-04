@@ -7,8 +7,8 @@ use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::random::VerifierChallengeNode;
-use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
-use crate::mle::circuit_mle::CircuitMle;
+use crate::layouter::nodes::{CircuitNode, Context};
+use crate::mle::circuit_mle::BundledInputMle;
 use crate::utils::get_input_shred_from_vec;
 use crate::utils::pad_to_nearest_power_of_two;
 use crate::worldcoin::components::SignCheckerComponent;
@@ -74,7 +74,7 @@ pub fn build_circuit_public_il<F: FieldExt>(
         }
         let digits_refs = digits_input_shreds
             .iter()
-            .map(|shred| shred as &dyn ClaimableNode<F>)
+            .map(|shred| shred as &dyn CircuitNode)
             .collect_vec();
         // Concatenate the digits (which are stored for each digital place separately) into a single
         // MLE
@@ -85,17 +85,17 @@ pub fn build_circuit_public_il<F: FieldExt>(
             get_input_shred_from_vec((0..BASE as u64).map(F::from).collect(), ctx, &input_layer);
         println!("Digit range check input = {:?}", lookup_table_values.id());
 
-        let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
+        let verifier_challenge_node: VerifierChallengeNode<F> = VerifierChallengeNode::new(ctx, 1);
         let lookup_table =
             LookupTable::new(ctx, &lookup_table_values, false, verifier_challenge_node);
         println!("Lookup table = {:?}", lookup_table.id());
         let digit_multiplicities =
             get_input_shred_from_vec(digit_multiplicities.clone(), ctx, &input_layer);
         println!("Digit multiplicities = {:?}", digit_multiplicities.id());
-        let lookup_constraint = LookupConstraint::new(
+        let lookup_constraint = LookupConstraint::new::<F>(
             ctx,
             &lookup_table,
-            &digits_concatenator.sector,
+            &&digits_concatenator.sector,
             &digit_multiplicities,
         );
         println!("Lookup constraint = {:?}", lookup_constraint.id());
@@ -111,9 +111,9 @@ pub fn build_circuit_public_il<F: FieldExt>(
         println!("Iris code input = {:?}", iris_code.id());
         let sign_checker = SignCheckerComponent::new(
             ctx,
-            &subtract_thresholds.sector,
+            &&subtract_thresholds.sector,
             &iris_code,
-            &recomp_of_abs_value.sector,
+            &&recomp_of_abs_value.sector,
         );
         output_nodes.push(OutputNode::new_zero(ctx, &sign_checker.sector));
 

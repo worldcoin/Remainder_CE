@@ -66,13 +66,13 @@ pub trait InputLayer<F: FieldExt> {
     type VerifierCommitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
     /// The Verifier Key representation for this input layer.
-    type VerifierInputLayer: VerifierInputLayer<F, Commitment = Self::VerifierCommitment>
+    type CircuitInputLayer: CircuitInputLayer<F, Commitment = Self::VerifierCommitment>
         + Serialize
         + for<'a> Deserialize<'a>
         + core::fmt::Debug;
 
     /// Returns the circuit description of this layer for the verifier.
-    fn into_verifier_input_layer(&self) -> Self::VerifierInputLayer;
+    fn into_verifier_input_layer(&self) -> Self::CircuitInputLayer;
 
     /// Generates and returns a commitment.
     /// May also store it internally.
@@ -102,7 +102,7 @@ pub trait InputLayer<F: FieldExt> {
     fn get_padded_mle(&self) -> DenseMle<F>;
 }
 
-pub trait VerifierInputLayer<F: FieldExt> {
+pub trait CircuitInputLayer<F: FieldExt> {
     /// The struct that contains the commitment to the contents of the input_layer.
     type Commitment: Serialize + for<'a> Deserialize<'a> + core::fmt::Debug;
 
