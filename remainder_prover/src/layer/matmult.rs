@@ -273,7 +273,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     }
 
     fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
-        let mles = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
+        let mles = vec![&self.matrix_a.mle, &self.matrix_b.mle];
         let sumcheck_message =
             compute_sumcheck_message_no_beta_table(&mles, round_index, 2).unwrap();
         Ok(sumcheck_message)
