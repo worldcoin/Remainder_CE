@@ -50,7 +50,7 @@ pub enum GateError {
 /// * `independent_variable` - whether the `x` from above resides within at least one of the `mle_refs`
 /// * `degree` - degree of `g_k(x)`, i.e. number of evaluations to send (minus one!)
 pub fn evaluate_mle_ref_product_no_beta_table<F: FieldExt>(
-    mle_refs: &[impl Mle<F>],
+    mle_refs: &[&impl Mle<F>],
     independent_variable: bool,
     degree: usize,
 ) -> Result<Evals<F>, MleError> {
@@ -205,20 +205,27 @@ pub fn index_mle_indices_gate<F: FieldExt>(mle_refs: &mut [impl Mle<F>], index: 
     })
 }
 
-/// Computes a round of the sumcheck protocol on a binary gate layer.
-pub fn prove_round_gate<F: FieldExt>(
+/// Fixes variable for the MLEs of a round of sumcheck for add/mul gates.
+pub fn bind_round_gate<F: FieldExt>(
     round_index: usize,
     challenge: F,
     mle_refs: &mut [Vec<DenseMle<F>>],
-) -> Vec<F> {
+) {
     mle_refs.iter_mut().for_each(|mle_ref_vec| {
         mle_ref_vec.iter_mut().for_each(|mle_ref| {
             mle_ref.fix_variable(round_index - 1, challenge);
         })
     });
+}
+
+/// Computes a round of the sumcheck protocol on a binary gate layer.
+pub fn compute_sumcheck_message_gate<F: FieldExt>(
+    round_index: usize,
+    mle_refs: &[Vec<&DenseMle<F>>],
+) -> Vec<F> {
     let max_deg = mle_refs.iter().fold(0, |acc, elem| max(acc, elem.len()));
     let evals_vec = mle_refs
-        .iter_mut()
+        .iter()
         .map(|mle_vec| {
             compute_sumcheck_message_no_beta_table(mle_vec, round_index, max_deg).unwrap()
         })
@@ -233,15 +240,22 @@ pub fn prove_round_gate<F: FieldExt>(
     final_vec_evals
 }
 
-/// Computes a round of sumcheck protocol on a unary gate layer.
-pub fn prove_round_identity<F: FieldExt>(
+/// Fixes variable for the MLEs of a round of sumcheck for identity gates.
+pub fn bind_round_identity<F: FieldExt>(
     round_index: usize,
     challenge: F,
     mle_refs: &mut [DenseMle<F>],
-) -> Result<Vec<F>, GateError> {
+) {
     mle_refs.iter_mut().for_each(|mle_ref| {
         mle_ref.fix_variable(round_index - 1, challenge);
     });
+}
+
+/// Computes a round of sumcheck protocol on a unary gate layer.
+pub fn compute_sumcheck_message_identity<F: FieldExt>(
+    round_index: usize,
+    mle_refs: &[&DenseMle<F>],
+) -> Result<Vec<F>, GateError> {
     let independent_variable = mle_refs
         .iter()
         .map(|mle_ref| {
@@ -344,7 +358,7 @@ pub fn compute_full_gate_identity<F: FieldExt>(
 
 /// Compute sumcheck message without a beta table.
 pub fn compute_sumcheck_message_no_beta_table<F: FieldExt>(
-    mles: &[impl Mle<F>],
+    mles: &[&impl Mle<F>],
     round_index: usize,
     degree: usize,
 ) -> Result<Vec<F>, GateError> {
