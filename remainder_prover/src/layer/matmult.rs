@@ -242,7 +242,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 
         for round in 0..num_vars_middle {
             let message = compute_sumcheck_message_no_beta_table(
-                &[self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
+                &[&self.matrix_a.mle, &self.matrix_b.mle],
                 round,
                 2,
             )

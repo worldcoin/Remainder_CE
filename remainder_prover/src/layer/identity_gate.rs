@@ -12,7 +12,7 @@ use crate::{
         Claim, ClaimError, YieldClaim,
     },
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
-    layer::{LayerError, VerificationError},
+    layer::{gate::gate_helpers::bind_round_identity, LayerError, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     sumcheck::*,
 };
@@ -21,7 +21,7 @@ use remainder_shared_types::{
     FieldExt,
 };
 
-use crate::layer::gate::gate_helpers::prove_round_identity;
+use crate::layer::gate::gate_helpers::compute_sumcheck_message_identity;
 
 use thiserror::Error;
 
@@ -292,7 +292,10 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                 challenges.push(challenge);
                 // if there are copy bits, we want to start at that index
-                let eval = prove_round_identity(round, challenge, phase_1_mle_refs).unwrap();
+                bind_round_identity(round, challenge, phase_1_mle_refs);
+                let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1_mle_refs.iter().collect();
+                let eval =
+                    compute_sumcheck_message_identity(round, &phase_1_mle_references).unwrap();
                 transcript_writer.append_elements("Sumcheck evaluations", &eval);
                 Ok::<_, LayerError>(eval)
             }))
@@ -360,7 +363,7 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
     }
 
     fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
-        let mles = self.phase_1_mles.as_ref().unwrap();
+        let mles: Vec<&DenseMle<F>> = self.phase_1_mles.as_ref().unwrap().iter().collect();
         let independent_variable = mles
             .iter()
             .map(|mle_ref| {
@@ -370,8 +373,8 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             })
             .reduce(|acc, item| acc | item)
             .unwrap();
-        let evals =
-            evaluate_mle_ref_product_no_beta_table(mles, independent_variable, mles.len()).unwrap();
+        let evals = evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
+            .unwrap();
         let Evals(evaluations) = evals;
         Ok(evaluations)
     }
@@ -610,9 +613,13 @@ impl<F: FieldExt> IdentityGate<F> {
             .map(|mle_ref| mle_ref.mle_indices().contains(&MleIndex::IndexedBit(0)))
             .reduce(|acc, item| acc | item)
             .ok_or(GateError::EmptyMleList)?;
-        let evals =
-            evaluate_mle_ref_product_no_beta_table(&phase_1, independent_variable, phase_1.len())
-                .unwrap();
+        let phase_1_mle_references: Vec<&DenseMle<F>> = phase_1.iter().collect();
+        let evals = evaluate_mle_ref_product_no_beta_table(
+            &phase_1_mle_references,
+            independent_variable,
+            phase_1.len(),
+        )
+        .unwrap();
 
         let Evals(evaluations) = evals;
         Ok(evaluations)

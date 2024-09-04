@@ -10,6 +10,7 @@ mod tests;
 use std::cmp::max;
 
 use ark_std::cfg_into_iter;
+use gate_helpers::bind_round_gate;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::{
@@ -31,9 +32,9 @@ use crate::{
 };
 
 pub use self::gate_helpers::{
-    check_fully_bound, compute_full_gate, compute_sumcheck_message_no_beta_table,
-    index_mle_indices_gate, libra_giraffe, prove_round_dataparallel_phase, prove_round_gate,
-    GateError,
+    check_fully_bound, compute_full_gate, compute_sumcheck_message_gate,
+    compute_sumcheck_message_no_beta_table, index_mle_indices_gate, libra_giraffe,
+    prove_round_dataparallel_phase, GateError,
 };
 
 use super::{CircuitLayer, VerifierLayer};
@@ -891,8 +892,15 @@ impl<F: FieldExt> Gate<F> {
             .iter()
             .fold(0, |acc, elem| max(acc, elem.len()));
 
-        let evals_vec = phase_1_mles
-            .iter_mut()
+        let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
+            .iter()
+            .map(|mle_vec| {
+                let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                mle_references
+            })
+            .collect();
+        let evals_vec = init_mle_refs
+            .iter()
             .map(|mle_vec| {
                 compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg)
                     .unwrap()
@@ -969,8 +977,15 @@ impl<F: FieldExt> Gate<F> {
             .iter()
             .fold(0, |acc, elem| max(acc, elem.len()));
 
-        let evals_vec = phase_2_mles
-            .iter_mut()
+        let init_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
+            .iter()
+            .map(|mle_vec| {
+                let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                mle_references
+            })
+            .collect();
+        let evals_vec = init_mle_refs
+            .iter()
             .map(|mle_vec| {
                 compute_sumcheck_message_no_beta_table(mle_vec, self.num_dataparallel_bits, max_deg)
                     .unwrap()
@@ -1079,11 +1094,21 @@ impl<F: FieldExt> Gate<F> {
                 let challenge = transcript_writer.get_challenge("Sumcheck challenge PHASE 1");
                 challenges.push(challenge);
                 // If there are dataparallel bits, we want to start at that index.
-                let eval =
-                    prove_round_gate(round + self.num_dataparallel_bits, challenge, phase_1_mles)
-                        .into_iter()
-                        .map(|eval| eval * beta_g2_fully_bound)
-                        .collect_vec();
+                bind_round_gate(round + self.num_dataparallel_bits, challenge, phase_1_mles);
+                let phase_1_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_1_mles
+                    .iter()
+                    .map(|mle_vec| {
+                        let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                        mle_references
+                    })
+                    .collect();
+                let eval = compute_sumcheck_message_gate(
+                    round + self.num_dataparallel_bits,
+                    &phase_1_mle_refs,
+                )
+                .into_iter()
+                .map(|eval| eval * beta_g2_fully_bound)
+                .collect_vec();
                 transcript_writer.append_elements("Sumcheck evaluations PHASE 1", &eval);
                 Ok::<_, LayerError>(eval)
             }))
@@ -1148,10 +1173,17 @@ impl<F: FieldExt> Gate<F> {
                 .chain((1..num_rounds_phase2).map(|round| {
                     let challenge = transcript_writer.get_challenge("Sumcheck challenge");
                     challenges.push(challenge);
-                    let eval = prove_round_gate(
+                    bind_round_gate(round + self.num_dataparallel_bits, challenge, phase_2_mles);
+                    let phase_2_mle_refs: Vec<Vec<&DenseMle<F>>> = phase_2_mles
+                        .iter()
+                        .map(|mle_vec| {
+                            let mle_references: Vec<&DenseMle<F>> = mle_vec.iter().collect();
+                            mle_references
+                        })
+                        .collect();
+                    let eval = compute_sumcheck_message_gate(
                         round + self.num_dataparallel_bits,
-                        challenge,
-                        phase_2_mles,
+                        &phase_2_mle_refs,
                     )
                     .into_iter()
                     .map(|eval| eval * beta_g2_fully_bound)
