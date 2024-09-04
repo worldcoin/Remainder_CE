@@ -22,7 +22,7 @@ pub struct IdentityGateNode<F: FieldExt> {
     id: NodeId,
     nonzero_gates: Vec<(usize, usize)>,
     pre_routed_data: NodeId,
-    data: MultilinearExtension<F>,
+    num_vars: usize,
 }
 
 impl<F: FieldExt> CircuitNode for IdentityGateNode<F> {
@@ -43,7 +43,7 @@ impl<F: FieldExt> IdentityGateNode<F> {
     /// Constructs a new IdentityGateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
-        pre_routed_data: &impl CircuitNode<F>,
+        pre_routed_data: &impl CircuitNode,
         nonzero_gates: Vec<(usize, usize)>,
     ) -> Self {
         let max_gate_val = nonzero_gates
@@ -51,24 +51,14 @@ impl<F: FieldExt> IdentityGateNode<F> {
             .into_iter()
             .fold(0, |acc, (z, _)| std::cmp::max(acc, z));
 
-        let mut remap_table = vec![F::ZERO; (max_gate_val + 1).next_power_of_two()];
-        nonzero_gates.iter().for_each(|(z, x)| {
-            let id_val = *pre_routed_data
-                .get_data()
-                .get_evals()
-                .get(*x)
-                .unwrap_or(&F::ZERO);
-            remap_table[*z] = id_val;
-        });
-        let num_vars = log2(remap_table.len()) as usize;
-
-        let data = MultilinearExtension::new_from_evals(Evaluations::new(num_vars, remap_table));
+        let mut remap_table_len = (max_gate_val + 1).next_power_of_two();
+        let num_vars = log2(remap_table_len) as usize;
 
         Self {
             id: ctx.get_new_id(),
             nonzero_gates,
             pre_routed_data: pre_routed_data.id(),
-            data,
+            num_vars,
         }
     }
 }
