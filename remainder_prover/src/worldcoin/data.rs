@@ -12,6 +12,7 @@ use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::mle::pad_with;
+use crate::worldcoin::parameters_v2::{MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS};
 
 pub fn trivial_wiring_1x1_circuit_data<F: FieldExt>() -> CircuitData<F, 1, 1, 1, 16, 1> {
     CircuitData::build_worldcoin_circuit_data(
@@ -172,39 +173,48 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
         assert!(MATMULT_INTERNAL_DIM.is_power_of_two());
         let (_, im_num_cols) = image.dim();
         let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
+        // FIXME do we need num_kernel_values?
         let num_kernel_values = kernel_num_rows * kernel_num_cols;
-        let num_placements = thresholds_matrix.dim().0;
-        assert_eq!(thresholds_matrix.dim().1, num_kernels);
+        assert_eq!(num_kernels, MATMULT_NUM_COLS);
+        assert!(num_kernel_values <= MATMULT_INTERNAL_DIM);
+        assert_eq!(thresholds_matrix.dim(), (MATMULT_NUM_ROWS, MATMULT_NUM_COLS));
         assert_eq!(wirings.dim().1, 4);
 
         // Derive the re-routings from the wirings (this is what is needed for identity gate)
         // And calculate the left-hand side of the matrix multiplication
         let mut reroutings = Vec::new();
         let mut rerouted_matrix: Array2<i64> =
-            Array::zeros((num_placements, kernel_num_rows * kernel_num_cols));
-        let matrix_a_num_cols = num_kernel_values;
+            Array::zeros((MATMULT_NUM_ROWS, MATMULT_INTERNAL_DIM));
         wirings.outer_iter()
             .for_each(|row| {
                 let (im_row, im_col, a_row, a_col) = (row[0] as usize, row[1] as usize, row[2] as usize, row[3] as usize);
-                let a_gate_label = a_row * (matrix_a_num_cols) + a_col;
+                let a_gate_label = a_row * MATMULT_INTERNAL_DIM + a_col;
                 let im_gate_label = im_row * im_num_cols + im_col;
                 reroutings.push((a_gate_label, im_gate_label));
                 rerouted_matrix[[a_row, a_col]] = image[[im_row, im_col]] as i64;
             });
 
 
-        // Reshape kernel values to have dimensions (num_kernel_values, num_kernels).
-        // This is the RHS of the matrix multiplication.
-        let kernel_matrix: Array2<i64> = kernel_values.mapv(|elem| elem as i64)
-            .into_shape((num_kernels, num_kernel_values))
-            .unwrap()
-            .into_dimensionality::<ndarray::Ix2>()
-            .unwrap()
+        // FIXME tidy this up
+        // Reshape and pad kernel values to have dimensions (MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS).
+        // This is the RH multiplicand of the matrix multiplication.
+        let rh_multiplicand: Array2<i64> = Array::from_shape_vec((MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM),
+            kernel_values
+                .mapv(|elem| elem as i64)
+                .outer_iter()
+                .flat_map(|row| {
+                    row.iter()
+                        .cloned()
+                        .chain(std::iter::repeat(0i64).take(MATMULT_INTERNAL_DIM - num_kernel_values))
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+            ).unwrap()
             .t()
             .to_owned();
 
-        // Calculate the matrix product. Has dimensions (num_placements, num_kernels).
-        let responses = rerouted_matrix.dot(&kernel_matrix);
+        // Calculate the matrix product. Has dimensions (MATMULT_NUM_ROWS, MATMULT_NUM_COLS).
+        let responses = rerouted_matrix.dot(&rh_multiplicand);
 
         // Calculate the thresholded responses, which are the responses minus the thresholds. We pad
         // the thresholded responses to the nearest power of two, since logup expects the number of
@@ -235,13 +245,11 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
             .map(|elem| F::from(elem as u64))
             .collect_vec();
 
-        // Flatten the kernel values, convert to field and pad.
-        let kernel_values: Vec<F> = pad_with(F::ZERO,
-            &kernel_matrix
+        // Flatten the kernel values, convert to field.  (Already padded)
+        let kernel_values: Vec<F> = rh_multiplicand
             .into_iter()
             .map(i64_to_field)
-            .collect_vec()
-        );
+            .collect_vec();
 
         // Flatten the thresholds matrix, convert to field and pad.
         let thresholds_matrix: Vec<F> = pad_with(F::ZERO,
