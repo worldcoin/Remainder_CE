@@ -1,32 +1,25 @@
 //! A Module for adding `Gate` Layers to components
 
-use std::marker::PhantomData;
-
 use ark_std::log2;
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, circuit_expr::CircuitMle, generic_expr::Expression},
+    expression::circuit_expr::CircuitMle,
     layer::{
-        gate::{BinaryOperation, CircuitGateLayer, Gate},
-        layer_enum::{CircuitLayerEnum, LayerEnum},
-        Layer, LayerId,
+        gate::{BinaryOperation, CircuitGateLayer},
+        layer_enum::CircuitLayerEnum,
+        LayerId,
     },
     layouter::layouting::{CircuitLocation, DAGError},
-    mle::{
-        dense::DenseMle,
-        evals::{Evaluations, MultilinearExtension},
-        MleIndex,
-    },
-    prover::proof_system::ProofSystem,
+    mle::MleIndex,
 };
 
 use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
-pub struct GateNode<F: FieldExt> {
+pub struct GateNode {
     id: NodeId,
     num_dataparallel_bits: Option<usize>,
     nonzero_gates: Vec<(usize, usize, usize)>,
@@ -34,10 +27,9 @@ pub struct GateNode<F: FieldExt> {
     rhs: NodeId,
     gate_operation: BinaryOperation,
     num_vars: usize,
-    _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitNode for GateNode<F> {
+impl CircuitNode for GateNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -47,11 +39,11 @@ impl<F: FieldExt> CircuitNode for GateNode<F> {
     }
 
     fn get_num_vars(&self) -> usize {
-        todo!()
+        self.num_vars
     }
 }
 
-impl<F: FieldExt> GateNode<F> {
+impl GateNode {
     /// Constructs a new GateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
@@ -81,12 +73,11 @@ impl<F: FieldExt> GateNode<F> {
             lhs: lhs.id(),
             rhs: rhs.id(),
             num_vars,
-            _marker: PhantomData,
         }
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for GateNode<F> {
+impl<F: FieldExt> CompilableNode<F> for GateNode {
     fn generate_circuit_description(
         &self,
         layer_id: &mut LayerId,

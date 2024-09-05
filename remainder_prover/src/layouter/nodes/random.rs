@@ -1,13 +1,10 @@
-use std::marker::PhantomData;
-
 use ark_std::log2;
 use remainder_shared_types::{transcript::ProverTranscript, FieldExt};
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
     input_layer::random_input_layer::RandomInputLayer,
     layer::LayerId,
-    layouter::layouting::{CircuitLocation, CircuitMap},
+    layouter::layouting::{CircuitDescriptionMap, CircuitLocation},
     mle::evals::MultilinearExtension,
 };
 
@@ -15,14 +12,13 @@ use super::{CircuitNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
 /// The node representing the random challenge that the verifier supplies via Fiat-Shamir.
-pub struct VerifierChallengeNode<F: FieldExt> {
+pub struct VerifierChallengeNode {
     id: NodeId,
     num_challenges: usize,
     num_vars: usize,
-    _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitNode for VerifierChallengeNode<F> {
+impl CircuitNode for VerifierChallengeNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -36,24 +32,23 @@ impl<F: FieldExt> CircuitNode for VerifierChallengeNode<F> {
     }
 
     fn get_num_vars(&self) -> usize {
-        todo!()
+        self.num_vars
     }
 }
 
-impl<F: FieldExt> VerifierChallengeNode<F> {
+impl VerifierChallengeNode {
     pub fn new(ctx: &Context, num_challenges: usize) -> Self {
         Self {
             id: ctx.get_new_id(),
             num_challenges,
-            num_vars: log2(num_challenges),
-            _marker: PhantomData,
+            num_vars: log2(num_challenges) as usize,
         }
     }
 
-    pub fn compile<'a>(
-        &'a mut self,
+    pub fn compile<F: FieldExt>(
+        &mut self,
         layer_id: &mut LayerId,
-        circuit_map: &mut CircuitMap<'a, F>,
+        circuit_description_map: &mut CircuitDescriptionMap,
         transcript: &mut impl ProverTranscript<F>,
     ) -> RandomInputLayer<F> {
         let random_challenges_vec =
@@ -62,12 +57,9 @@ impl<F: FieldExt> VerifierChallengeNode<F> {
         let random_il_layer_id = layer_id.get_and_inc();
         let verifier_challenge_layer = RandomInputLayer::new(mle.clone(), random_il_layer_id);
 
-        circuit_map.add_node(
+        circuit_description_map.add_node(
             self.id,
-            (
-                CircuitLocation::new(*layer_id, vec![]),
-                &self.data.as_ref().unwrap(),
-            ),
+            (CircuitLocation::new(*layer_id, vec![]), self.get_num_vars()),
         );
 
         verifier_challenge_layer
@@ -113,7 +105,7 @@ mod test {
             let verifier_challenge_node = VerifierChallengeNode::new(ctx, 8);
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let input_a = InputShred::new(ctx, mle_vec_a, &input_layer);
+            let input_a = InputShred::new(ctx, mle_vec_a.num_vars(), &input_layer);
 
             let product_sector =
                 Sector::new(ctx, &[&input_a, &verifier_challenge_node], |inputs| {

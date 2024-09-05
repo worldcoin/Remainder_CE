@@ -261,10 +261,10 @@ pub fn layout<F: FieldExt>(
 ) -> Result<
     (
         Vec<InputLayerNode>,
-        Vec<VerifierChallengeNode<F>>,
+        Vec<VerifierChallengeNode>,
         Vec<Box<dyn CompilableNode<F>>>,
         Vec<LookupTable>,
-        Vec<OutputNode<F>>,
+        Vec<OutputNode>,
     ),
     DAGError,
 > {
@@ -273,7 +273,7 @@ pub fn layout<F: FieldExt>(
     // Handle input layers
     let input_shreds: Vec<InputShred> = dag.get_nodes();
     let mut input_layer_nodes: Vec<InputLayerNode> = dag.get_nodes();
-    let verifier_challenge_nodes: Vec<VerifierChallengeNode<F>> = dag.get_nodes();
+    let verifier_challenge_nodes: Vec<VerifierChallengeNode> = dag.get_nodes();
 
     let mut input_layer_map: HashMap<NodeId, &mut InputLayerNode> = HashMap::new();
 
@@ -294,10 +294,10 @@ pub fn layout<F: FieldExt>(
     // handle intermediate layers
     let sector_groups: Vec<SectorGroup<F>> = dag.get_nodes();
     let sectors: Vec<Sector<F>> = dag.get_nodes();
-    let gates: Vec<GateNode<F>> = dag.get_nodes();
-    let id_gates: Vec<IdentityGateNode<F>> = dag.get_nodes();
-    let splits: Vec<SplitNode<F>> = dag.get_nodes();
-    let matmults: Vec<MatMultNode<F>> = dag.get_nodes();
+    let gates: Vec<GateNode> = dag.get_nodes();
+    let id_gates: Vec<IdentityGateNode> = dag.get_nodes();
+    let splits: Vec<SplitNode> = dag.get_nodes();
+    let matmults: Vec<MatMultNode> = dag.get_nodes();
     let other_layers = sector_groups
         .into_iter()
         .map(|node| IntermediateNode::new(node))
@@ -367,7 +367,7 @@ pub fn layout<F: FieldExt>(
     }
 
     // handle output layers
-    let output_layers: Vec<OutputNode<F>> = dag.get_nodes();
+    let output_layers: Vec<OutputNode> = dag.get_nodes();
 
     Ok((
         input_layer_nodes,

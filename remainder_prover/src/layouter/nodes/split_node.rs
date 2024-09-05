@@ -1,20 +1,11 @@
 //! A node that can alter the claims made on it's source `ClaimableNode`
 
-use std::{iter, marker::PhantomData};
-
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression::{
-        abstract_expr::AbstractExpr,
-        circuit_expr::{CircuitExpr, CircuitMle},
-        generic_expr::Expression,
-    },
-    layer::{layer_enum::LayerEnum, regular_layer::RegularLayer, Layer, LayerId},
+    layer::{layer_enum::CircuitLayerEnum, LayerId},
     layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
-    mle::evals::{Evaluations, MultilinearExtension},
-    prover::proof_system::ProofSystem,
 };
 
 use super::{CircuitNode, CompilableNode, Context, NodeId};
@@ -25,15 +16,14 @@ use super::{CircuitNode, CompilableNode, Context, NodeId};
 /// The new nodes represent the input node split
 /// by a selector bit.
 #[derive(Clone, Debug)]
-pub struct SplitNode<F: FieldExt> {
+pub struct SplitNode {
     id: NodeId,
     num_vars: usize,
     source: NodeId,
     prefix_bits: Vec<bool>,
-    _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> SplitNode<F> {
+impl SplitNode {
     /// Creates 2^num_vars `SplitNodes` from a single ClaimableNode
     pub fn new(ctx: &Context, node: &impl CircuitNode, num_vars: usize) -> Vec<Self> {
         let num_vars_node = node.get_num_vars();
@@ -46,13 +36,12 @@ impl<F: FieldExt> SplitNode<F> {
                 source,
                 num_vars: max_num_vars,
                 prefix_bits,
-                _marker: PhantomData,
             })
             .collect()
     }
 }
 
-impl<F: FieldExt> CircuitNode for SplitNode<F> {
+impl CircuitNode for SplitNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -66,12 +55,12 @@ impl<F: FieldExt> CircuitNode for SplitNode<F> {
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for SplitNode<F> {
-    fn generate_circuit_description<'a>(
-        &'a self,
-        layer_id: &mut LayerId,
-        circuit_description_map: &mut CircuitDescriptionMap<'a, F>,
-    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
+impl<F: FieldExt> CompilableNode<F> for SplitNode {
+    fn generate_circuit_description(
+        &self,
+        _layer_id: &mut LayerId,
+        circuit_description_map: &mut CircuitDescriptionMap,
+    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
         let (source_location, _) = circuit_description_map.get_node(&self.source)?;
 
         let prefix_bits = source_location
@@ -83,7 +72,7 @@ impl<F: FieldExt> CompilableNode<F> for SplitNode<F> {
 
         let location = CircuitLocation::new(source_location.layer_id, prefix_bits);
 
-        circuit_description_map.add_node(self.id, location);
+        circuit_description_map.add_node(self.id, (location, self.get_num_vars()));
         Ok(vec![])
     }
 }
@@ -158,8 +147,8 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-            let input_shred = InputShred::new(ctx, mle, &input_layer);
-            let input_shred_out = InputShred::new(ctx, mle_out, &input_layer);
+            let input_shred = InputShred::new(ctx, mle.num_vars(), &input_layer);
+            let input_shred_out = InputShred::new(ctx, mle_out.num_vars(), &input_layer);
 
             let split_sectors = SplitNode::new(ctx, &input_shred, 1);
             let sector_prod = Sector::new(ctx, &[&split_sectors[0], &split_sectors[1]], |inputs| {

@@ -4,28 +4,24 @@ use ark_std::log2;
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
-    layer::{identity_gate::IdentityGate, layer_enum::LayerEnum, Layer, LayerId},
-    layouter::layouting::{CircuitLocation, DAGError},
-    mle::{
-        dense::DenseMle,
-        evals::{Evaluations, MultilinearExtension},
-    },
-    prover::proof_system::ProofSystem,
+    expression::circuit_expr::CircuitMle,
+    layer::{identity_gate::CircuitIdentityGateLayer, layer_enum::CircuitLayerEnum, LayerId},
+    layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
+    utils::get_total_mle_indices,
 };
 
 use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
-pub struct IdentityGateNode<F: FieldExt> {
+pub struct IdentityGateNode {
     id: NodeId,
     nonzero_gates: Vec<(usize, usize)>,
     pre_routed_data: NodeId,
     num_vars: usize,
 }
 
-impl<F: FieldExt> CircuitNode for IdentityGateNode<F> {
+impl CircuitNode for IdentityGateNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -35,11 +31,11 @@ impl<F: FieldExt> CircuitNode for IdentityGateNode<F> {
     }
 
     fn get_num_vars(&self) -> usize {
-        todo!()
+        self.num_vars
     }
 }
 
-impl<F: FieldExt> IdentityGateNode<F> {
+impl IdentityGateNode {
     /// Constructs a new IdentityGateNode and computes the data it generates
     pub fn new(
         ctx: &Context,
@@ -51,7 +47,7 @@ impl<F: FieldExt> IdentityGateNode<F> {
             .into_iter()
             .fold(0, |acc, (z, _)| std::cmp::max(acc, z));
 
-        let mut remap_table_len = (max_gate_val + 1).next_power_of_two();
+        let remap_table_len = (max_gate_val + 1).next_power_of_two();
         let num_vars = log2(remap_table_len) as usize;
 
         Self {
@@ -63,32 +59,35 @@ impl<F: FieldExt> IdentityGateNode<F> {
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for IdentityGateNode<F> {
+impl<F: FieldExt> CompilableNode<F> for IdentityGateNode {
     fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,
-        circuit_description_map: &mut crate::layouter::layouting::CircuitDescriptionMap<'a, F>,
-    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
-        let (pre_routed_data_location, pre_routed_data) = circuit_description_map
+        circuit_description_map: &mut CircuitDescriptionMap,
+    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
+        let (pre_routed_data_location, pre_routed_num_vars) = circuit_description_map
             .0
             .get(&self.pre_routed_data)
             .ok_or(DAGError::DanglingNodeId(self.pre_routed_data))?;
-        let pre_routed_mle = DenseMle::new_with_prefix_bits(
-            (*pre_routed_data).clone(),
-            pre_routed_data_location.layer_id,
-            pre_routed_data_location.prefix_bits.clone(),
-        );
+        let total_mle_indices =
+            get_total_mle_indices(&pre_routed_data_location.prefix_bits, *pre_routed_num_vars);
+        let pre_routed_mle = CircuitMle::new(pre_routed_data_location.layer_id, &total_mle_indices);
 
         let input_layer_id = layer_id.get_and_inc();
-        let id_gate_layer =
-            IdentityGate::new(input_layer_id, self.nonzero_gates.clone(), pre_routed_mle);
+        let id_gate_layer = CircuitIdentityGateLayer::new(
+            input_layer_id,
+            self.nonzero_gates.clone(),
+            pre_routed_mle,
+        );
         circuit_description_map.0.insert(
             self.id,
-            (CircuitLocation::new(input_layer_id, vec![]), &self.data),
+            (
+                CircuitLocation::new(input_layer_id, vec![]),
+                self.get_num_vars(),
+            ),
         );
 
-        Ok(vec![id_gate_layer.into()]);
-        todo!()
+        Ok(vec![CircuitLayerEnum::IdentityGate(id_gate_layer)])
     }
 }
 
@@ -96,23 +95,19 @@ impl<F: FieldExt> CompilableNode<F> for IdentityGateNode<F> {
 mod test {
 
     use ark_std::test_rng;
-    use itertools::Itertools;
     use rand::Rng;
     use remainder_shared_types::Fr;
 
     use crate::{
-        layer::gate::BinaryOperation,
         layouter::{
             compiling::LayouterCircuit,
             component::ComponentSet,
             nodes::{
                 circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
                 circuit_outputs::OutputNode,
-                gate::GateNode,
                 identity_gate::IdentityGateNode,
                 node_enum::NodeEnum,
                 sector::Sector,
-                CircuitNode,
             },
         },
         mle::evals::MultilinearExtension,
@@ -141,8 +136,8 @@ mod test {
             });
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let input_shred_pre_routed = InputShred::new(ctx, mle, &input_layer);
-            let input_shred_expected = InputShred::new(ctx, shifted_mle, &input_layer);
+            let input_shred_pre_routed = InputShred::new(ctx, mle.num_vars(), &input_layer);
+            let input_shred_expected = InputShred::new(ctx, shifted_mle.num_vars(), &input_layer);
 
             let gate_sector = IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates);
             let diff_sector =

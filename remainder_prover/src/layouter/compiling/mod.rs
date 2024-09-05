@@ -168,7 +168,7 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
             .map(|input_node| {
                 dbg!(&input_layer_id);
                 input_node
-                    .compile_input(&mut input_layer_id, &mut circuit_map, transcript)
+                    .generate_input_circuit_description(&mut input_layer_id, &mut circuit_map)
                     .unwrap()
             })
             .collect_vec();
@@ -194,7 +194,7 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
             |(mut lookup_input_acc, mut lookup_intermediate_acc, mut lookup_output_acc),
              lookup_node| {
                 let (input_layers, intermediate_layers, output_layers) = lookup_node
-                    .compile_lookup(
+                    .generate_lookup_circuit_description(
                         &mut input_layer_id,
                         &mut intermediate_layer_id,
                         &mut circuit_map,

@@ -9,7 +9,7 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::random::VerifierChallengeNode;
 use crate::layouter::nodes::{CircuitNode, Context};
 use crate::mle::circuit_mle::BundledInputMle;
-use crate::utils::get_input_shred_from_vec;
+use crate::utils::get_input_shred_from_num_vars;
 use crate::utils::pad_to_nearest_power_of_two;
 use crate::worldcoin::components::SignCheckerComponent;
 use crate::worldcoin::components::{DigitalRecompositionComponent, SubtractionComponent};
@@ -41,9 +41,9 @@ pub fn build_circuit_public_il<F: FieldExt>(
 
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         println!("Input layer = {:?}", input_layer.id());
-        let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
+        let image = get_input_shred_from_num_vars(image_matrix_mle.clone(), ctx, &input_layer);
         println!("Image input = {:?}", image.id());
-        let thresholds = get_input_shred_from_vec(
+        let thresholds = get_input_shred_from_num_vars(
             pad_to_nearest_power_of_two(thresholds_matrix.clone()),
             ctx,
             &input_layer,
@@ -54,7 +54,7 @@ pub fn build_circuit_public_il<F: FieldExt>(
 
         let (filter_num_values, _) = kernel_matrix_dims;
         let matrix_a_num_rows_cols = (num_placements.next_power_of_two(), *filter_num_values);
-        let kernel_matrix = get_input_shred_from_vec(kernel_matrix.clone(), ctx, &input_layer);
+        let kernel_matrix = get_input_shred_from_num_vars(kernel_matrix.clone(), ctx, &input_layer);
         println!("Kernel values input = {:?}", kernel_matrix.id());
 
         let matmult = MatMultNode::new(
@@ -81,8 +81,11 @@ pub fn build_circuit_public_il<F: FieldExt>(
         let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
         // Use a lookup to range check the digits to the range 0..BASE
-        let lookup_table_values =
-            get_input_shred_from_vec((0..BASE as u64).map(F::from).collect(), ctx, &input_layer);
+        let lookup_table_values = get_input_shred_from_num_vars(
+            (0..BASE as u64).map(F::from).collect(),
+            ctx,
+            &input_layer,
+        );
         println!("Digit range check input = {:?}", lookup_table_values.id());
 
         let verifier_challenge_node: VerifierChallengeNode<F> = VerifierChallengeNode::new(ctx, 1);
@@ -90,7 +93,7 @@ pub fn build_circuit_public_il<F: FieldExt>(
             LookupTable::new(ctx, &lookup_table_values, false, verifier_challenge_node);
         println!("Lookup table = {:?}", lookup_table.id());
         let digit_multiplicities =
-            get_input_shred_from_vec(digit_multiplicities.clone(), ctx, &input_layer);
+            get_input_shred_from_num_vars(digit_multiplicities.clone(), ctx, &input_layer);
         println!("Digit multiplicities = {:?}", digit_multiplicities.id());
         let lookup_constraint = LookupConstraint::new::<F>(
             ctx,
@@ -103,7 +106,7 @@ pub fn build_circuit_public_il<F: FieldExt>(
         let recomp_of_abs_value =
             DigitalRecompositionComponent::new(ctx, &digits_refs, BASE as u64);
 
-        let iris_code = get_input_shred_from_vec(
+        let iris_code = get_input_shred_from_num_vars(
             pad_to_nearest_power_of_two(iris_code.clone()),
             ctx,
             &input_layer,

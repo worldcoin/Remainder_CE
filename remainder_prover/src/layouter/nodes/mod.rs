@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::expression::{abstract_expr::AbstractExpr, generic_expr::Expression};
 use crate::input_layer::enum_input_layer::InputLayerEnum;
-use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
+use crate::layer::layer_enum::CircuitLayerEnum;
 use crate::layer::LayerId;
 
 use super::layouting::{CircuitDescriptionMap, CircuitMap, DAGError};

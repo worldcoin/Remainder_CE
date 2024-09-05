@@ -9,7 +9,7 @@ use remainder::layouter::nodes::sector::Sector;
 use remainder::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use remainder::mle::evals::MultilinearExtension;
 use remainder::prover::helpers::test_circuit;
-use remainder::utils::get_input_shred_from_vec;
+use remainder::utils::get_input_shred_from_num_vars;
 use remainder_shared_types::{FieldExt, Fr};
 
 pub struct ProductCheckerComponent<F: FieldExt> {
@@ -71,9 +71,9 @@ fn test_product_checker() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let factor1_shred = get_input_shred_from_vec(factor1.clone(), ctx, &input_layer);
-        let factor2_shred = get_input_shred_from_vec(factor2.clone(), ctx, &input_layer);
-        let product_shred = get_input_shred_from_vec(product.clone(), ctx, &input_layer);
+        let factor1_shred = get_input_shred_from_num_vars(factor1.clone(), ctx, &input_layer);
+        let factor2_shred = get_input_shred_from_num_vars(factor2.clone(), ctx, &input_layer);
+        let product_shred = get_input_shred_from_num_vars(product.clone(), ctx, &input_layer);
 
         let checker =
             ProductCheckerComponent::new(ctx, &factor1_shred, &factor2_shred, &product_shred);

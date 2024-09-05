@@ -7,7 +7,7 @@ mod tests {
     use crate::layouter::nodes::node_enum::NodeEnum;
     use crate::layouter::nodes::CircuitNode;
     use crate::prover::helpers::test_circuit;
-    use crate::utils::get_input_shred_from_vec;
+    use crate::utils::get_input_shred_from_num_vars;
     use crate::worldcoin::circuits::build_circuit_public_il;
     use crate::worldcoin::components::SignCheckerComponent;
     use crate::worldcoin::components::{BitsAreBinary, DigitalRecompositionComponent};
@@ -29,10 +29,12 @@ mod tests {
 
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let abs_values_shred = get_input_shred_from_vec(abs_values.clone(), ctx, &input_layer);
+            let abs_values_shred =
+                get_input_shred_from_num_vars(abs_values.clone(), ctx, &input_layer);
             let sign_bits_input_shred =
-                get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
-            let values_input_shred = get_input_shred_from_vec(values.clone(), ctx, &input_layer);
+                get_input_shred_from_num_vars(sign_bits.clone(), ctx, &input_layer);
+            let values_input_shred =
+                get_input_shred_from_num_vars(values.clone(), ctx, &input_layer);
 
             let sign_checker = SignCheckerComponent::new(
                 ctx,
@@ -97,13 +99,13 @@ mod tests {
             let digits_input_shreds = digits
                 .iter()
                 .map(|digits_at_place| {
-                    get_input_shred_from_vec(digits_at_place.clone(), ctx, &input_layer)
+                    get_input_shred_from_num_vars(digits_at_place.clone(), ctx, &input_layer)
                 })
                 .collect_vec();
             let sign_bits_input_shred =
-                get_input_shred_from_vec(sign_bits.clone(), ctx, &input_layer);
+                get_input_shred_from_num_vars(sign_bits.clone(), ctx, &input_layer);
             let expected_input_shred =
-                get_input_shred_from_vec(expected.clone(), ctx, &input_layer);
+                get_input_shred_from_num_vars(expected.clone(), ctx, &input_layer);
 
             let digits_input_refs = digits_input_shreds
                 .iter()
@@ -144,7 +146,7 @@ mod tests {
         let bits = vec![Fr::from(3u64)];
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let shred = get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
+            let shred = get_input_shred_from_num_vars(bits.clone(), ctx, &input_layer);
             let component = BitsAreBinary::new(ctx, &shred);
             let output = OutputNode::new_zero(ctx, &component.sector);
             let all_nodes: Vec<NodeEnum<Fr>> = vec![
@@ -168,7 +170,7 @@ mod tests {
         ];
         let circuit = LayouterCircuit::new(|ctx| {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let shred = get_input_shred_from_vec(bits.clone(), ctx, &input_layer);
+            let shred = get_input_shred_from_num_vars(bits.clone(), ctx, &input_layer);
             let component = BitsAreBinary::new(ctx, &shred);
             let output = OutputNode::new_zero(ctx, &component.sector);
             let all_nodes: Vec<NodeEnum<Fr>> = vec![

@@ -26,20 +26,12 @@ use crate::{
 pub(crate) mod test_utils;
 
 /// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
-pub fn get_input_shred_from_vec<F: FieldExt>(
-    mle_vec: Vec<F>,
+pub fn get_input_shred_from_num_vars<F: FieldExt>(
+    num_vars: usize,
     ctx: &Context,
     input_node: &InputLayerNode<F>,
 ) -> InputShred<F> {
-    assert!(mle_vec.len().is_power_of_two());
-    InputShred::new(
-        ctx,
-        MultilinearExtension::new_from_evals(Evaluations::new(
-            log2(mle_vec.len()) as usize,
-            mle_vec,
-        )),
-        input_node,
-    )
+    InputShred::new(ctx, num_vars, input_node)
 }
 
 /// Returns a zero-padded version of `coeffs` with length padded
@@ -161,6 +153,20 @@ pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Ve
             }
         },
     )
+}
+
+/// Returns the total MLE indices given a Vec<bool>
+/// for the prefix bits and then the number of iterated
+/// bits after.
+pub fn get_total_mle_indices<F: FieldExt>(
+    prefix_bits: &[bool],
+    num_iterated_bits: usize,
+) -> Vec<MleIndex<F>> {
+    prefix_bits
+        .iter()
+        .map(|bit| MleIndex::Fixed(*bit))
+        .chain(repeat_n(MleIndex::Iterated, num_iterated_bits))
+        .collect()
 }
 
 /// Returns the specific bit decomp for a given index,

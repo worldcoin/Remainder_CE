@@ -1,7 +1,5 @@
 //! The nodes that represent circuit outputs in the circuit DAG
 
-use std::marker::PhantomData;
-
 use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
@@ -15,14 +13,13 @@ use super::{CircuitNode, Context, NodeId};
 
 #[derive(Debug, Clone)]
 /// the node that represents the output of a circuit
-pub struct OutputNode<F> {
+pub struct OutputNode {
     id: NodeId,
     source: NodeId,
     zero: bool,
-    _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitNode for OutputNode<F> {
+impl CircuitNode for OutputNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -36,14 +33,13 @@ impl<F: FieldExt> CircuitNode for OutputNode<F> {
     }
 }
 
-impl<F: FieldExt> OutputNode<F> {
+impl OutputNode {
     /// Creates a new OutputNode from a source w/ some data
     pub fn new(ctx: &Context, source: &impl CircuitNode) -> Self {
         Self {
             id: ctx.get_new_id(),
             source: source.id(),
             zero: false,
-            _marker: PhantomData,
         }
     }
 
@@ -53,12 +49,11 @@ impl<F: FieldExt> OutputNode<F> {
             id: ctx.get_new_id(),
             source: source.id(),
             zero: true,
-            _marker: PhantomData,
         }
     }
 
-    pub fn compile_output<'a>(
-        &'a self,
+    pub fn compile_output<F: FieldExt>(
+        &self,
         circuit_map: &mut CircuitDescriptionMap,
     ) -> Result<CircuitMleOutputLayer<F>, crate::layouter::layouting::DAGError> {
         let (circuit_location, num_vars) = circuit_map.get_node(&self.source)?;

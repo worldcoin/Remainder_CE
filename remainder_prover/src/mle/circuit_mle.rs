@@ -53,7 +53,7 @@ pub trait BundledInputMle<F: FieldExt, const N: usize> {
     fn get_mle_refs(&self) -> &[DenseMle<F>; N];
 
     /// returns all the MLEs as InputShreds
-    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode<F>) -> [InputShred<F>; N];
+    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode) -> [InputShred; N];
 }
 
 /// A struct that bundles N MLEs together for semantic reasons.
@@ -67,7 +67,7 @@ impl<F: FieldExt, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
         &self.mles
     }
 
-    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode<F>) -> [InputShred<F>; N] {
+    fn make_input_shreds(&self, ctx: &Context, source: &InputLayerNode) -> [InputShred; N] {
         self.mles
             .clone()
             .into_iter()
@@ -76,7 +76,7 @@ impl<F: FieldExt, const N: usize> BundledInputMle<F, N> for FlatMles<F, N> {
                 let mle: MultilinearExtension<F> = MultilinearExtension::new_from_evals(
                     Evaluations::<F>::new(mle.num_iterated_vars(), mle.get_padded_evaluations()),
                 );
-                InputShred::new(ctx, mle, source)
+                InputShred::new(ctx, mle.num_vars(), source)
             })
             .collect_vec()
             .try_into()

@@ -19,34 +19,34 @@ use super::{
 };
 
 node_enum!(NodeEnum: FieldExt,
-    (InputShred: InputShred<F>),
-    (InputLayer: InputLayerNode<F>),
-    (VerifierChallengeNode: VerifierChallengeNode<F>),
-    (Output: OutputNode<F>),
+    (InputShred: InputShred),
+    (InputLayer: InputLayerNode),
+    (VerifierChallengeNode: VerifierChallengeNode),
+    (Output: OutputNode),
     (Debug: DebugNode),
     (Sector: Sector<F>),
     (SectorGroup: SectorGroup<F>),
-    (GateNode: GateNode<F>),
-    (IdentityGateNode: IdentityGateNode<F>),
-    (SplitNode: SplitNode<F>),
-    (MatMultNode: MatMultNode<F>),
+    (GateNode: GateNode),
+    (IdentityGateNode: IdentityGateNode),
+    (SplitNode: SplitNode),
+    (MatMultNode: MatMultNode),
     (LookupConstraint: LookupConstraint),
     (LookupTable: LookupTable)
 );
 
 /// Organizational wrapper for a vec of `NodeEnum`s
 pub struct NodeEnumGroup<F: FieldExt> {
-    input_shreds: Option<Vec<InputShred<F>>>,
-    input_layers: Option<Vec<InputLayerNode<F>>>,
-    verifier_challenge_nodes: Option<Vec<VerifierChallengeNode<F>>>,
-    output: Option<Vec<OutputNode<F>>>,
+    input_shreds: Option<Vec<InputShred>>,
+    input_layers: Option<Vec<InputLayerNode>>,
+    verifier_challenge_nodes: Option<Vec<VerifierChallengeNode>>,
+    output: Option<Vec<OutputNode>>,
     debugs: Option<Vec<DebugNode>>,
     sectors: Option<Vec<Sector<F>>>,
     sector_groups: Option<Vec<SectorGroup<F>>>,
-    gate_nodes: Option<Vec<GateNode<F>>>,
-    identity_gate_nodes: Option<Vec<IdentityGateNode<F>>>,
-    split_nodes: Option<Vec<SplitNode<F>>>,
-    matmult_nodes: Option<Vec<MatMultNode<F>>>,
+    gate_nodes: Option<Vec<GateNode>>,
+    identity_gate_nodes: Option<Vec<IdentityGateNode>>,
+    split_nodes: Option<Vec<SplitNode>>,
+    matmult_nodes: Option<Vec<MatMultNode>>,
     lookup_tables: Option<Vec<LookupTable>>,
     lookup_constraints: Option<Vec<LookupConstraint>>,
 }
@@ -98,26 +98,26 @@ impl<F: FieldExt> NodeGroup for NodeEnumGroup<F> {
     }
 }
 
-impl<F: FieldExt> YieldNode<InputShred<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<InputShred<F>> {
+impl<F: FieldExt> YieldNode<InputShred> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<InputShred> {
         self.input_shreds.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<InputLayerNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<InputLayerNode<F>> {
+impl<F: FieldExt> YieldNode<InputLayerNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<InputLayerNode> {
         self.input_layers.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<VerifierChallengeNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<VerifierChallengeNode<F>> {
+impl<F: FieldExt> YieldNode<VerifierChallengeNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<VerifierChallengeNode> {
         self.verifier_challenge_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<OutputNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<OutputNode<F>> {
+impl<F: FieldExt> YieldNode<OutputNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<OutputNode> {
         self.output.take().unwrap_or_default()
     }
 }
@@ -137,26 +137,26 @@ impl<F: FieldExt> YieldNode<SectorGroup<F>> for NodeEnumGroup<F> {
     }
 }
 
-impl<F: FieldExt> YieldNode<GateNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<GateNode<F>> {
+impl<F: FieldExt> YieldNode<GateNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<GateNode> {
         self.gate_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<IdentityGateNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<IdentityGateNode<F>> {
+impl<F: FieldExt> YieldNode<IdentityGateNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<IdentityGateNode> {
         self.identity_gate_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<SplitNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<SplitNode<F>> {
+impl<F: FieldExt> YieldNode<SplitNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<SplitNode> {
         self.split_nodes.take().unwrap_or_default()
     }
 }
 
-impl<F: FieldExt> YieldNode<MatMultNode<F>> for NodeEnumGroup<F> {
-    fn get_nodes(&mut self) -> Vec<MatMultNode<F>> {
+impl<F: FieldExt> YieldNode<MatMultNode> for NodeEnumGroup<F> {
+    fn get_nodes(&mut self) -> Vec<MatMultNode> {
         self.matmult_nodes.take().unwrap_or_default()
     }
 }

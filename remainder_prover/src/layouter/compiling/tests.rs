@@ -9,6 +9,7 @@ use crate::{
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
+            CircuitNode,
         },
     },
     mle::evals::{Evaluations, MultilinearExtension},
@@ -22,9 +23,9 @@ fn test_basic_circuit() {
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-        let input_shred_1 = InputShred::new(ctx, 2, input_layer);
+        let input_shred_1 = InputShred::new(ctx, 2, &input_layer);
 
-        let input_shred_2 = InputShred::new(ctx, 2, input_layer);
+        let input_shred_2 = InputShred::new(ctx, 2, &input_layer);
 
         let sector_1 = Sector::new(ctx, &[&input_shred_1, &input_shred_2], |inputs| {
             Expression::<Fr, AbstractExpr>::mle(inputs[0])
@@ -39,7 +40,7 @@ fn test_basic_circuit() {
             Expression::<_, AbstractExpr>::products(vec![inputs[0], inputs[1]])
         });
 
-        let output_input = InputShred::new(ctx, out_sector.get_data().clone(), &input_layer);
+        let output_input = InputShred::new(ctx, out_sector.get_num_vars(), &input_layer);
 
         let final_sector = Sector::new(ctx, &[&&out_sector, &output_input], |inputs| {
             Expression::<Fr, AbstractExpr>::mle(inputs[0])

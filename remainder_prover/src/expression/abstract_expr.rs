@@ -13,13 +13,15 @@ use remainder_shared_types::FieldExt;
 use crate::{
     expression,
     layouter::{
-        layouting::{CircuitMap, DAGError},
+        layouting::{CircuitDescriptionMap, CircuitLocation, CircuitMap, DAGError},
         nodes::NodeId,
     },
     mle::{dense::DenseMle, MleIndex},
+    utils::get_total_mle_indices,
 };
 
 use super::{
+    circuit_expr::{CircuitExpr, CircuitMle},
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     prover_expr::{MleVecIndex, ProverExpr},
 };
@@ -105,6 +107,29 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
             expression_node,
             mle_vec,
         })
+    }
+
+    pub fn build_circuit_expr(
+        self,
+        circuit_description_map: &CircuitDescriptionMap,
+    ) -> Result<Expression<F, CircuitExpr>, DAGError> {
+        // First we get all the mles that this expression will need to store
+        let mut nodes = self.expression_node.get_node_ids(vec![]);
+        nodes.sort();
+        nodes.dedup();
+
+        let mut node_map = HashMap::<NodeId, (usize, &CircuitLocation)>::new();
+
+        nodes.into_iter().enumerate().for_each(|(idx, node_id)| {
+            let (location, num_vars) = circuit_description_map.get_node(&node_id).unwrap();
+            node_map.insert(node_id, (*num_vars, location));
+        });
+
+        // Then we replace the NodeIds in the AbstractExpr w/ indices of our stored MLEs
+
+        let expression_node = self.expression_node.build_circuit_node(&node_map)?;
+
+        Ok(Expression::new(expression_node, ()))
     }
 
     /// Concatenates two expressions together
@@ -257,6 +282,71 @@ impl<F: FieldExt> ExpressionNode<F, AbstractExpr> {
         }
     }
 
+    fn build_circuit_node(
+        self,
+        node_map: &HashMap<NodeId, (usize, &CircuitLocation)>,
+    ) -> Result<ExpressionNode<F, CircuitExpr>, DAGError> {
+        // Note that the node_map is the map of node_ids to the internal vec of MLEs, not the circuit_map
+        match self {
+            ExpressionNode::Constant(val) => Ok(ExpressionNode::Constant(val)),
+            ExpressionNode::Selector(mle_index, lhs, rhs) => {
+                let lhs = lhs.build_circuit_node(node_map)?;
+                let rhs = rhs.build_circuit_node(node_map)?;
+                Ok(ExpressionNode::Selector(
+                    mle_index,
+                    Box::new(lhs),
+                    Box::new(rhs),
+                ))
+            }
+            ExpressionNode::Mle(node_id) => {
+                let (
+                    num_vars,
+                    CircuitLocation {
+                        prefix_bits,
+                        layer_id,
+                    },
+                ) = node_map
+                    .get(&node_id)
+                    .ok_or(DAGError::DanglingNodeId(node_id))?;
+                let total_indices = get_total_mle_indices(&prefix_bits, *num_vars);
+                let circuit_mle = CircuitMle::new(*layer_id, &total_indices);
+                Ok(ExpressionNode::Mle(circuit_mle))
+            }
+            ExpressionNode::Negated(expr) => Ok(ExpressionNode::Negated(Box::new(
+                expr.build_circuit_node(node_map)?,
+            ))),
+            ExpressionNode::Sum(lhs, rhs) => {
+                let lhs = lhs.build_circuit_node(node_map)?;
+                let rhs = rhs.build_circuit_node(node_map)?;
+                Ok(ExpressionNode::Sum(Box::new(lhs), Box::new(rhs)))
+            }
+            ExpressionNode::Product(nodes) => {
+                let circuit_mles = nodes
+                    .into_iter()
+                    .map(|node_id| {
+                        let (
+                            num_vars,
+                            CircuitLocation {
+                                prefix_bits,
+                                layer_id,
+                            },
+                        ) = node_map
+                            .get(&node_id)
+                            .ok_or(DAGError::DanglingNodeId(node_id))
+                            .unwrap();
+                        let total_indices = get_total_mle_indices::<F>(&prefix_bits, *num_vars);
+                        CircuitMle::new(*layer_id, &total_indices)
+                    })
+                    .collect::<Vec<CircuitMle<F>>>();
+                Ok(ExpressionNode::Product(circuit_mles))
+            }
+            ExpressionNode::Scaled(expr, scalar) => {
+                let expr = expr.build_circuit_node(node_map)?;
+                Ok(ExpressionNode::Scaled(Box::new(expr), scalar))
+            }
+        }
+    }
+
     fn get_node_ids(&self, mut node_ids: Vec<NodeId>) -> Vec<NodeId> {
         match self {
             ExpressionNode::Constant(_) => node_ids,
@@ -288,7 +378,7 @@ impl<F: FieldExt> ExpressionNode<F, AbstractExpr> {
                 lhs.get_num_vars(num_vars_map)? + 1,
                 rhs.get_num_vars(num_vars_map)? + 1,
             )),
-            ExpressionNode::Mle(node_id) => Ok(num_vars_map.get(node_id)),
+            ExpressionNode::Mle(node_id) => Ok(*num_vars_map.get(node_id).unwrap()),
             ExpressionNode::Negated(expr) => expr.get_num_vars(num_vars_map),
             ExpressionNode::Sum(lhs, rhs) => Ok(max(
                 lhs.get_num_vars(num_vars_map)?,
@@ -296,7 +386,7 @@ impl<F: FieldExt> ExpressionNode<F, AbstractExpr> {
             )),
             ExpressionNode::Product(nodes) => Ok(nodes
                 .iter()
-                .map(|node_id| Ok(Some(num_vars_map.get(node_id))))
+                .map(|node_id| Ok(Some(*num_vars_map.get(node_id).unwrap())))
                 .fold_ok(None, max)?
                 .unwrap_or(0)),
             ExpressionNode::Scaled(expr, _) => expr.get_num_vars(num_vars_map),

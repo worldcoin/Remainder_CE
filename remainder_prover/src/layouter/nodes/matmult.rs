@@ -1,33 +1,33 @@
 //! A Module for adding `Matmult` Layers to components
 
+use ark_std::log2;
 use remainder_shared_types::FieldExt;
 
 use crate::{
-    expression::{abstract_expr::AbstractExpr, generic_expr::Expression},
+    expression::circuit_expr::CircuitMle,
     layer::{
-        layer_enum::LayerEnum,
-        matmult::{product_two_matrices, MatMult, Matrix},
-        Layer, LayerId,
+        layer_enum::CircuitLayerEnum,
+        matmult::{CircuitMatMultLayer, CircuitMatrix},
+        LayerId,
     },
-    layouter::layouting::{CircuitLocation, DAGError},
-    mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
-    prover::proof_system::ProofSystem,
+    layouter::layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
+    utils::get_total_mle_indices,
 };
 
 use super::{CircuitNode, CompilableNode, Context, NodeId};
 
 /// A Node that represents a `Gate` layer
 #[derive(Clone, Debug)]
-pub struct MatMultNode<F: FieldExt> {
+pub struct MatMultNode {
     id: NodeId,
     matrix_a: NodeId,
     num_rows_cols_a: (usize, usize),
     matrix_b: NodeId,
     num_rows_cols_b: (usize, usize),
-    data: MultilinearExtension<F>,
+    num_vars: usize,
 }
 
-impl<F: FieldExt> CircuitNode for MatMultNode<F> {
+impl CircuitNode for MatMultNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -41,7 +41,7 @@ impl<F: FieldExt> CircuitNode for MatMultNode<F> {
     }
 }
 
-impl<F: FieldExt> MatMultNode<F> {
+impl MatMultNode {
     /// Constructs a new MatMultNode and computes the data it generates
     pub fn new(
         ctx: &Context,
@@ -50,19 +50,8 @@ impl<F: FieldExt> MatMultNode<F> {
         matrix_node_b: &impl CircuitNode,
         num_rows_cols_b: (usize, usize),
     ) -> Self {
-        let matrix_a_mle = DenseMle::new_from_raw(
-            matrix_node_a.get_data().get_evals_vector().to_vec(),
-            LayerId::Layer(0),
-        );
-        let matrix_a = Matrix::new(matrix_a_mle, num_rows_cols_a.0, num_rows_cols_a.1);
-
-        let matrix_b_mle = DenseMle::new_from_raw(
-            matrix_node_b.get_data().get_evals_vector().to_vec(),
-            LayerId::Layer(0),
-        );
-        let matrix_b = Matrix::new(matrix_b_mle, num_rows_cols_b.0, num_rows_cols_b.1);
-
-        let data = MultilinearExtension::new(product_two_matrices(&matrix_a, &matrix_b));
+        assert_eq!(num_rows_cols_a.1, num_rows_cols_b.0);
+        let num_product_vars = log2(num_rows_cols_a.1) as usize;
 
         Self {
             id: ctx.get_new_id(),
@@ -70,49 +59,54 @@ impl<F: FieldExt> MatMultNode<F> {
             num_rows_cols_a,
             matrix_b: matrix_node_b.id(),
             num_rows_cols_b,
-            data,
+            num_vars: num_product_vars,
         }
     }
 }
 
-impl<F: FieldExt> CompilableNode<F> for MatMultNode<F> {
+impl<F: FieldExt> CompilableNode<F> for MatMultNode {
     fn generate_circuit_description<'a>(
         &'a self,
         layer_id: &mut LayerId,
-        circuit_description_map: &mut crate::layouter::layouting::CircuitDescriptionMap<'a, F>,
-    ) -> Result<Vec<LayerEnum<F>>, DAGError> {
-        let (matrix_a_location, matrix_a_data) =
+        circuit_description_map: &mut CircuitDescriptionMap,
+    ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError> {
+        let (matrix_a_location, matrix_a_num_vars) =
             circuit_description_map.get_node(&self.matrix_a)?;
 
-        let mle_a = DenseMle::new_with_prefix_bits(
-            MultilinearExtension::new(matrix_a_data.get_evals_vector().clone()),
-            matrix_a_location.layer_id.clone(),
-            matrix_a_location.prefix_bits.clone(),
-        );
+        let mle_a_indices =
+            get_total_mle_indices(&matrix_a_location.prefix_bits, *matrix_a_num_vars);
+        let circuit_mle_a = CircuitMle::new(matrix_a_location.layer_id.clone(), &mle_a_indices);
 
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
-        let matrix_a = Matrix::new(mle_a, self.num_rows_cols_a.0, self.num_rows_cols_a.1);
-        let (matrix_b_location, matrix_b_data) =
-            circuit_description_map.get_node(&self.matrix_b)?;
-
-        let mle_b = DenseMle::new_with_prefix_bits(
-            MultilinearExtension::new(matrix_b_data.get_evals_vector().clone()),
-            matrix_b_location.layer_id,
-            matrix_b_location.prefix_bits.clone(),
+        let matrix_a = CircuitMatrix::new(
+            circuit_mle_a,
+            self.num_rows_cols_a.0,
+            self.num_rows_cols_a.1,
         );
+        let (matrix_b_location, matrix_b_num_vars) =
+            circuit_description_map.get_node(&self.matrix_b)?;
+        let mle_b_indices =
+            get_total_mle_indices(&matrix_b_location.prefix_bits, *matrix_b_num_vars);
+        let circuit_mle_b = CircuitMle::new(matrix_b_location.layer_id.clone(), &mle_b_indices);
 
         // should already been padded
-        let matrix_b = Matrix::new(mle_b, self.num_rows_cols_b.0, self.num_rows_cols_b.1);
-
-        let matmult_layer_id = layer_id.get_and_inc();
-        let matmult_layer = MatMult::new(matmult_layer_id, matrix_a, matrix_b);
-        circuit_description_map.add_node(
-            self.id,
-            (CircuitLocation::new(matmult_layer_id, vec![]), &self.data),
+        let matrix_b = CircuitMatrix::new(
+            circuit_mle_b,
+            self.num_rows_cols_b.0,
+            self.num_rows_cols_b.1,
         );
 
-        Ok(vec![matmult_layer.into()]);
-        todo!()
+        let matmult_layer_id = layer_id.get_and_inc();
+        let matmult_layer = CircuitMatMultLayer::new(matmult_layer_id, matrix_a, matrix_b);
+        circuit_description_map.add_node(
+            self.id,
+            (
+                CircuitLocation::new(matmult_layer_id, vec![]),
+                self.get_num_vars(),
+            ),
+        );
+
+        Ok(vec![CircuitLayerEnum::MatMult(matmult_layer)])
     }
 }
 
@@ -173,9 +167,9 @@ mod test {
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
-            let input_matrix_a = InputShred::new(ctx, mle_vec_a, &input_layer);
-            let input_matrix_b = InputShred::new(ctx, mle_vec_b, &input_layer);
-            let input_matrix_product = InputShred::new(ctx, exp_product, &input_layer);
+            let input_matrix_a = InputShred::new(ctx, mle_vec_a.num_vars(), &input_layer);
+            let input_matrix_b = InputShred::new(ctx, mle_vec_b.num_vars(), &input_layer);
+            let input_matrix_product = InputShred::new(ctx, exp_product.num_vars(), &input_layer);
 
             let matmult_sector =
                 MatMultNode::new(ctx, &input_matrix_a, (4, 2), &input_matrix_b, (2, 2));
@@ -247,17 +241,11 @@ mod test {
             let exp_product = MultilinearExtension::new(res_product);
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let input_matrix_a = InputShred::new(
-                ctx,
-                MultilinearExtension::new(matrix_a.mle.bookkeeping_table().to_vec()),
-                &input_layer,
-            );
-            let input_matrix_b = InputShred::new(
-                ctx,
-                MultilinearExtension::new(matrix_b.mle.bookkeeping_table().to_vec()),
-                &input_layer,
-            );
-            let input_matrix_product = InputShred::new(ctx, exp_product, &input_layer);
+            let input_matrix_a =
+                InputShred::new(ctx, matrix_a.mle.num_iterated_vars(), &input_layer);
+            let input_matrix_b =
+                InputShred::new(ctx, matrix_b.mle.num_iterated_vars(), &input_layer);
+            let input_matrix_product = InputShred::new(ctx, exp_product.num_vars(), &input_layer);
 
             // NOTE THE INPUT MLES MUST BE PADDED FOR THE CLAIMS TO HAVE THE CORRECT VALUE
             let matmult_sector = MatMultNode::new(

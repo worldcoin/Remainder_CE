@@ -144,8 +144,8 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
         .collect()
 }
 
-impl<F: FieldExt> InputLayerNode<F> {
-    pub fn generate_input_circuit_description<'a>(
+impl InputLayerNode {
+    pub fn generate_input_circuit_description<'a, F: FieldExt>(
         &'a self,
         layer_id: &mut LayerId,
         circuit_map: &mut CircuitDescriptionMap,
@@ -155,7 +155,6 @@ impl<F: FieldExt> InputLayerNode<F> {
             id: _,
             children,
             input_layer_type,
-            _marker,
         } = &self;
 
         let input_mle_num_vars = children

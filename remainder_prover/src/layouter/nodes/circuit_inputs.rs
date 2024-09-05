@@ -2,22 +2,17 @@
 
 mod compile_inputs;
 
-use std::marker::PhantomData;
-
-use remainder_shared_types::FieldExt;
-
 use super::{CircuitNode, Context, NodeId};
 
 /// A node that represents some Data that will eventually be added to an InputLayer
 #[derive(Debug, Clone)]
-pub struct InputShred<F> {
+pub struct InputShred {
     id: NodeId,
     parent: NodeId,
     num_vars: usize,
-    _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitNode for InputShred<F> {
+impl CircuitNode for InputShred {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -31,12 +26,12 @@ impl<F: FieldExt> CircuitNode for InputShred<F> {
     }
 }
 
-impl<F: FieldExt> InputShred<F> {
+impl InputShred {
     /// Creates a new InputShred from data
     ///
     /// Specifying a source indicates to the layouter that this
     /// InputShred should be appended to the source when laying out
-    pub fn new(ctx: &Context, num_vars: usize, source: &InputLayerNode<F>) -> Self {
+    pub fn new(ctx: &Context, num_vars: usize, source: &InputLayerNode) -> Self {
         let id = ctx.get_new_id();
         let parent = source.id();
 
@@ -44,7 +39,6 @@ impl<F: FieldExt> InputShred<F> {
             id,
             parent,
             num_vars,
-            _marker: PhantomData,
         }
     }
 
@@ -69,14 +63,13 @@ pub enum InputLayerType {
 ///
 /// TODO! probably split this up into more node types
 /// that indicate different things to the layouter
-pub struct InputLayerNode<F: FieldExt> {
+pub struct InputLayerNode {
     id: NodeId,
-    children: Vec<InputShred<F>>,
+    children: Vec<InputShred>,
     pub(in crate::layouter) input_layer_type: InputLayerType,
-    _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
+impl CircuitNode for InputLayerNode {
     fn id(&self) -> NodeId {
         self.id
     }
@@ -94,24 +87,23 @@ impl<F: FieldExt> CircuitNode for InputLayerNode<F> {
     }
 }
 
-impl<F: FieldExt> InputLayerNode<F> {
+impl InputLayerNode {
     /// A constructor for an InputLayerNode. Can either be initialized empty
     /// or with some children.
     pub fn new(
         ctx: &Context,
-        children: Option<Vec<InputShred<F>>>,
+        children: Option<Vec<InputShred>>,
         input_layer_type: InputLayerType,
     ) -> Self {
         InputLayerNode {
             id: ctx.get_new_id(),
             children: children.unwrap_or_default(),
             input_layer_type,
-            _marker: PhantomData,
         }
     }
 
     /// A method to add an InputShred to this InputLayerNode
-    pub fn add_shred(&mut self, new_shred: InputShred<F>) {
+    pub fn add_shred(&mut self, new_shred: InputShred) {
         self.children.push(new_shred);
     }
 }

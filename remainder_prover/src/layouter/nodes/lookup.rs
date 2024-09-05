@@ -3,17 +3,22 @@ use std::io::Cursor;
 use std::thread::current;
 
 use crate::expression::abstract_expr::{calculate_selector_values, AbstractExpr};
+use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
 use crate::expression::prover_expr::ProverExpr;
-use crate::input_layer::enum_input_layer::InputLayerEnum;
+use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
 use crate::input_layer::public_input_layer::PublicInputLayer;
 use crate::input_layer::random_input_layer::RandomInputLayer;
-use crate::layer::layer_enum::LayerEnum;
+use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
+use crate::layer::regular_layer::CircuitRegularLayer;
 use crate::layer::{Layer, LayerId};
+use crate::layouter::layouting::CircuitDescriptionMap;
 use crate::mle::zero::ZeroMle;
 use crate::mle::Mle;
 use crate::mle::{evals::Evaluations, MleIndex};
-use crate::output_layer::mle_output_layer::MleOutputLayer;
+use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
+use crate::utils::get_total_mle_indices;
 
+use itertools::{repeat_n, Itertools};
 use remainder_shared_types::FieldExt;
 
 use crate::{
@@ -105,7 +110,7 @@ impl LookupTable {
         ctx: &Context,
         table: &dyn CircuitNode,
         secret_constrained_values: bool,
-        random_input_node: VerifierChallengeNode<F>,
+        random_input_node: VerifierChallengeNode,
     ) -> Self {
         if secret_constrained_values {
             unimplemented!(
@@ -127,16 +132,16 @@ impl LookupTable {
         self.constraints.push(constraint);
     }
 
-    pub fn compile_lookup<'a, F: FieldExt>(
-        &'a self,
+    pub fn generate_lookup_circuit_description<F: FieldExt>(
+        &self,
         input_layer_id: &mut LayerId,
         intermediate_layer_id: &mut LayerId,
-        circuit_map: &mut crate::layouter::layouting::CircuitMap<'a, F>,
+        circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<
         (
-            Vec<InputLayerEnum<F>>,
-            Vec<LayerEnum<F>>,
-            Vec<MleOutputLayer<F>>,
+            Vec<CircuitInputLayerEnum<F>>,
+            Vec<CircuitLayerEnum<F>>,
+            Vec<CircuitMleOutputLayer<F>>,
         ),
         crate::layouter::layouting::DAGError,
     > {
@@ -155,26 +160,20 @@ impl LookupTable {
         // Ensure that the table length is a power of two (otherwise 0 will be added implicitly,
         // which is potentially unwanted and moreover the padding of the denominators with zeros
         // will cause failure)
-        let (_, table) = circuit_map.0[&self.table_node_id];
-        assert_eq!(
-            table.get_evals_vector().len().count_ones(),
-            1,
-            "Table length should be a power of two"
-        );
+        let (_, table_num_vars) = circuit_description_map.0[&self.table_node_id];
 
         // Build the LHS of the equation (defined by the constrained values)
         println!("Build the LHS of the equation (defined by the constrained values)");
 
-        // TODO (future) Draw a random value from the transcript
-        let r = F::from(11111111u64); // FIXME @Nick
-        let r_mle = MultilinearExtension::<F>::new(vec![r]);
-        let r_layer_id = input_layer_id.get_and_inc();
-        let mut input_layers = vec![PublicInputLayer::new(r_mle.clone(), r_layer_id).into()];
-
-        let r_densemle = DenseMle::new_with_prefix_bits(r_mle, r_layer_id, vec![]);
-        println!(
-            "Input layer for the would-be random value r has layer id: {:?}",
-            r_layer_id
+        let (verifier_challenge_location, verifier_challenge_node_vars) =
+            circuit_description_map.get_node(&self.random_node_id)?;
+        let verifier_challenge_mle_indices = get_total_mle_indices(
+            &verifier_challenge_location.prefix_bits,
+            *verifier_challenge_node_vars,
+        );
+        let verifier_challenge_mle = CircuitMle::new(
+            verifier_challenge_location.layer_id,
+            &verifier_challenge_mle_indices,
         );
 
         // Build the denominator r - constrained
@@ -185,48 +184,43 @@ impl LookupTable {
                 .map(|constraint| constraint.constrained_node_id.expr())
                 .collect(),
         );
-        let expr =
-            r_densemle.clone().expression() - constrained_expr.build_prover_expr(circuit_map)?;
+        let constrained_circuit_expr =
+            constrained_expr.build_circuit_expr(circuit_description_map)?;
+        let expr = CircuitExpr::Sum(
+            verifier_challenge_mle.expression(),
+            CircuitExpr::Negated(constrained_expr.build_circuit_expr(circuit_description_map)),
+        );
+        let expr_num_vars = expr.num_vars(circuit_description_map);
         let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        let mut intermediate_layers = vec![layer.into()];
+        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
+        let mut intermediate_layers = vec![CircuitLayerEnum::Regular(layer)];
         println!(
             "Layer that calcs r - constrained has layer id: {:?}",
             layer_id
         );
-        // Create the MLE for the denominator
-        let constrained_values = calculate_selector_values(
-            self.constraints
-                .iter()
-                .map(|constraint| {
-                    let (_, constrained_mle) = circuit_map.0[&constraint.constrained_node_id];
-                    constrained_mle.get_evals_vector().clone()
-                })
-                .collect(),
-        );
-        let mle =
-            MultilinearExtension::new(constrained_values.into_iter().map(|val| r - val).collect());
-        let denominator_length = mle.get_evals_vector().len();
-        let lhs_denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+
+        let lhs_denominator_vars = repeat_n(MleIndex::Iterated, expr_num_vars).collect_vec();
+        let lhs_denominator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
 
         // Build the numerator: is all ones (create explicitly since don't want to pad with zeros)
-        let expr = ExprBuilder::<F>::constant(F::from(1u64)).build_prover_expr(circuit_map)?;
+        let expr = ExprBuilder::<F>::constant(F::from(1u64))
+            .build_circuit_expr(circuit_description_map)?;
         let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = RegularLayer::new_raw(layer_id, expr);
+        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
         println!(
             "Layer that sets the numerators to 1 has layer id: {:?}",
             layer_id
         );
-        intermediate_layers.push(layer.into());
-        let mle = MultilinearExtension::new(vec![F::from(1u64); denominator_length]);
-        let lhs_numerator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
+        let lhs_numerator_desc = CircuitMle::new(layer_id, &lhs_denominator_vars);
 
         // Build the numerator and denominator of the sum of the fractions
         let (lhs_numerator, lhs_denominator) = build_fractional_sum(
-            lhs_numerator,
-            lhs_denominator,
+            lhs_numerator_desc,
+            lhs_denominator_desc,
             &mut intermediate_layers,
             intermediate_layer_id,
+            &circuit_description_map,
         );
 
         // Build the RHS of the equation (defined by the table values and multiplicities)
@@ -234,7 +228,7 @@ impl LookupTable {
 
         // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one constraint)
         let (multiplicities_location, multiplicities) =
-            &circuit_map.0[&self.constraints[0].multiplicities_node_id];
+            &circuit_description_map.0[&self.constraints[0].multiplicities_node_id];
         let mut rhs_numerator = DenseMle::new_with_prefix_bits(
             (*multiplicities).clone(),
             multiplicities_location.layer_id,
@@ -246,7 +240,7 @@ impl LookupTable {
                 rhs_numerator.expression(),
                 |acc, constraint| {
                     let (multiplicities_location, multiplicities) =
-                        &circuit_map.0[&constraint.multiplicities_node_id];
+                        &circuit_description_map.0[&constraint.multiplicities_node_id];
                     let mult_constraint_mle = DenseMle::new_with_prefix_bits(
                         (*multiplicities).clone(),
                         multiplicities_location.layer_id,
@@ -266,7 +260,8 @@ impl LookupTable {
                 .constraints
                 .iter()
                 .map(|constraint| {
-                    let (_, multiplicities) = circuit_map.0[&constraint.multiplicities_node_id];
+                    let (_, multiplicities) =
+                        circuit_description_map.0[&constraint.multiplicities_node_id];
                     multiplicities.get_evals_vector()
                 })
                 .collect();
@@ -283,8 +278,11 @@ impl LookupTable {
         }
 
         // Build the denominator r - table
-        let expr =
-            r_densemle.expression() - self.table_node_id.expr().build_prover_expr(circuit_map)?;
+        let expr = r_densemle.expression()
+            - self
+                .table_node_id
+                .expr()
+                .build_prover_expr(circuit_description_map)?;
         let layer_id = intermediate_layer_id.get_and_inc();
         let layer = RegularLayer::new_raw(layer_id, expr);
         intermediate_layers.push(layer.into());
@@ -404,116 +402,108 @@ impl CircuitNode for LookupTable {
 }
 
 /// Extract the prefix bits from a DenseMle.
-fn extract_prefix_bits<F: FieldExt>(mle: &DenseMle<F>) -> Vec<bool> {
-    mle.mle_indices()
+fn extract_prefix_num_iterated_bits<F: FieldExt>(mle: &CircuitMle<F>) -> (Vec<MleIndex<F>>, usize) {
+    let mut num_iterated_bits = 0;
+    let prefix_bits = mle
+        .mle_indices()
         .iter()
         .map(|mle_index| match mle_index {
-            MleIndex::Fixed(b) => Some(*b),
+            MleIndex::Fixed(b) => Some(*mle_index),
+            MleIndex::Iterated => {
+                num_iterated_bits += 1;
+                None
+            }
             _ => None,
         })
         .filter_map(|opt| opt)
-        .collect()
+        .collect();
+    (prefix_bits, num_iterated_bits)
 }
 
 /// Split a DenseMle into two DenseMles, with the left half containing the even-indexed elements and
 /// the right half containing the odd-indexed elements, setting the prefix bits accordingly.
-fn split_dense_mle<F: FieldExt>(mle: &DenseMle<F>) -> (DenseMle<F>, DenseMle<F>) {
-    let data = mle.current_mle.clone();
-    let prefix_bits = extract_prefix_bits(mle);
-    let left: Vec<F> = data.get_evals_vector().iter().step_by(2).cloned().collect();
-    let right: Vec<F> = data
-        .get_evals_vector()
-        .iter()
-        .skip(1)
-        .step_by(2)
-        .cloned()
-        .collect();
-    let left_dense = DenseMle::new_with_prefix_bits(
-        MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, left)),
-        mle.layer_id,
-        prefix_bits.iter().cloned().chain(vec![false]).collect(),
+fn split_circuit_mle<F: FieldExt>(mle_desc: &CircuitMle<F>) -> (CircuitMle<F>, CircuitMle<F>) {
+    let (prefix_bits, num_iterated_bits) = extract_prefix_num_iterated_bits(mle_desc);
+
+    let left_mle_desc = CircuitMle::new(
+        mle_desc.layer_id(),
+        &prefix_bits
+            .iter()
+            .cloned()
+            .chain(vec![MleIndex::Fixed(false)])
+            .chain(repeat_n(MleIndex::Iterated, num_iterated_bits - 1))
+            .collect_vec(),
     );
-    let right_dense = DenseMle::new_with_prefix_bits(
-        MultilinearExtension::new_from_evals(Evaluations::new(data.num_vars() - 1, right)),
-        mle.layer_id,
-        prefix_bits.iter().cloned().chain(vec![true]).collect(),
+    let right_mle_desc = CircuitMle::new(
+        mle_desc.layer_id(),
+        &prefix_bits
+            .iter()
+            .cloned()
+            .chain(vec![MleIndex::Fixed(true)])
+            .chain(repeat_n(MleIndex::Iterated, num_iterated_bits - 1))
+            .collect_vec(),
     );
-    (left_dense, right_dense)
+    (left_mle_desc, right_mle_desc)
 }
 
 /// Given two Mles of the same length representing the numerators and denominators of a sequence of
 /// fractions, add layers that perform a sum of the fractions, return a new pair of length-1 Mles
 /// representing the numerator and denominator of the sum.
 fn build_fractional_sum<F: FieldExt>(
-    numerator: DenseMle<F>,
-    denominator: DenseMle<F>,
-    layers: &mut Vec<LayerEnum<F>>,
+    numerator_desc: CircuitMle<F>,
+    denominator_desc: CircuitMle<F>,
+    layers: &mut Vec<CircuitLayerEnum<F>>,
     current_layer_id: &mut LayerId,
-) -> (DenseMle<F>, DenseMle<F>) {
-    type PE<F> = Expression<F, ProverExpr>;
+    circuit_description_map: &CircuitDescriptionMap,
+) -> (CircuitMle<F>, CircuitMle<F>) {
+    type CE<F> = Expression<F, CircuitExpr>;
     assert_eq!(
-        numerator.num_iterated_vars(),
-        denominator.num_iterated_vars()
+        numerator_desc.num_iterated_vars(),
+        denominator_desc.num_iterated_vars()
     );
-    let mut numerator = numerator;
-    let mut denominator = denominator;
+    let mut numerator_desc = numerator_desc;
+    let mut denominator_desc = denominator_desc;
 
-    for i in 0..numerator.num_iterated_vars() {
-        let numerators = split_dense_mle(&numerator);
-        let denominators = split_dense_mle(&denominator);
+    for i in 0..numerator_desc.num_iterated_vars() {
+        let numerators = split_circuit_mle(&numerator_desc);
+        let denominators = split_circuit_mle(&denominator_desc);
 
         // Calculate the new numerator
         let next_numerator_expr =
-            PE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()])
-                + PE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
-        let next_numerator_values = numerators
-            .0
-            .clone()
-            .into_iter()
-            .zip(numerators.1.clone().into_iter())
-            .zip(
-                denominators
-                    .0
-                    .clone()
-                    .into_iter()
-                    .zip(denominators.1.clone().into_iter()),
-            )
-            .map(|((num1, num2), (denom1, denom2))| num1 * denom2 + num2 * denom1)
-            .collect();
+            CE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()])
+                + CE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
 
         // Calculate the new denominator
         let next_denominator_expr =
-            PE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
-        let next_denominator_values = denominators
-            .0
-            .clone()
-            .into_iter()
-            .zip(denominators.1.clone().into_iter())
-            .map(|(denom1, denom2)| denom1 * denom2)
-            .collect();
+            CE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
         let layer_id = current_layer_id.get_and_inc();
-        let layer = RegularLayer::new_raw(
+        let layer = CircuitRegularLayer::new_raw(
             layer_id,
             next_numerator_expr.concat_expr(next_denominator_expr),
         );
-        layers.push(layer.into());
+        layers.push(CircuitLayerEnum::Regular(layer));
+
         println!(
             "Iteration {:?} of build_fractional_sumcheck has layer id: {:?}",
             i, current_layer_id
         );
 
-        denominator = DenseMle::new_with_prefix_bits(
-            MultilinearExtension::new(next_denominator_values),
+        let next_numerator_num_vars = next_numerator_expr.num_vars(circuit_description_map);
+        let next_denominator_num_vars = next_denominator_expr.num_vars(circuit_description_map);
+        denominator_desc = CircuitMle::new(
             layer_id,
-            vec![false],
+            &std::iter::once(MleIndex::Fixed(false))
+                .chain(repeat_n(MleIndex::Iterated, next_denominator_num_vars))
+                .collect_vec(),
         );
-        numerator = DenseMle::new_with_prefix_bits(
-            MultilinearExtension::new(next_numerator_values),
+        numerator_desc = CircuitMle::new(
             layer_id,
-            vec![true],
+            &std::iter::once(MleIndex::Fixed(true))
+                .chain(repeat_n(MleIndex::Iterated, next_numerator_num_vars))
+                .collect_vec(),
         );
     }
-    debug_assert_eq!(numerator.num_iterated_vars(), 0);
-    debug_assert_eq!(denominator.num_iterated_vars(), 0);
-    (numerator, denominator)
+    debug_assert_eq!(numerator_desc.num_iterated_vars(), 0);
+    debug_assert_eq!(denominator_desc.num_iterated_vars(), 0);
+    (numerator_desc, denominator_desc)
 }

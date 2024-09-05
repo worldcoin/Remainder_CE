@@ -27,7 +27,7 @@ use crate::{
 
 pub struct DifferenceBuilderComponent<F: FieldExt> {
     pub output_sector: Sector<F>,
-    pub output_node: OutputNode<F>,
+    pub output_node: OutputNode,
 }
 
 impl<F: FieldExt> DifferenceBuilderComponent<F> {
@@ -49,7 +49,7 @@ impl<F: FieldExt> DifferenceBuilderComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for DifferenceBuilderComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         vec![self.output_sector.into(), self.output_node.into()]
@@ -90,8 +90,10 @@ fn test_add_gate_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let mle_input_shred = InputShred::new(ctx, mle.current_mle.clone(), &input_layer);
-        let neg_mle_input_shred = InputShred::new(ctx, neg_mle.current_mle.clone(), &input_layer);
+        let mle_input_shred =
+            InputShred::new(ctx, mle.current_mle.clone().num_vars(), &input_layer);
+        let neg_mle_input_shred =
+            InputShred::new(ctx, neg_mle.current_mle.clone().num_vars(), &input_layer);
 
         let mut nonzero_gates = vec![];
         let total_num_elems = 1 << mle_input_shred.get_num_vars();
@@ -160,10 +162,16 @@ fn test_dataparallel_add_gate_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let dataparallel_mle_input_shred =
-            InputShred::new(ctx, mle_dataparallel.current_mle.clone(), &input_layer);
-        let dataparallel_neg_mle_input_shred =
-            InputShred::new(ctx, neg_mle_dataparallel.current_mle.clone(), &input_layer);
+        let dataparallel_mle_input_shred = InputShred::new(
+            ctx,
+            mle_dataparallel.current_mle.clone().num_vars(),
+            &input_layer,
+        );
+        let dataparallel_neg_mle_input_shred = InputShred::new(
+            ctx,
+            neg_mle_dataparallel.current_mle.clone().num_vars(),
+            &input_layer,
+        );
 
         let mut nonzero_gates = vec![];
         let table_size = 1 << (NUM_ITERATED_BITS);
@@ -221,8 +229,10 @@ fn test_uneven_add_gate_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let mle_input_shred = InputShred::new(ctx, mle.current_mle.clone(), &input_layer);
-        let neg_mle_input_shred = InputShred::new(ctx, neg_mle.current_mle.clone(), &input_layer);
+        let mle_input_shred =
+            InputShred::new(ctx, mle.current_mle.clone().num_vars(), &input_layer);
+        let neg_mle_input_shred =
+            InputShred::new(ctx, neg_mle.current_mle.clone().num_vars(), &input_layer);
 
         let nonzero_gates = vec![(0, 0, 0)];
         let gate_node = GateNode::new(
@@ -273,10 +283,12 @@ fn test_mul_add_gate_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let mle_1_input_shred = InputShred::new(ctx, mle_1.current_mle.clone(), &input_layer);
-        let mle_2_input_shred = InputShred::new(ctx, mle_2.current_mle.clone(), &input_layer);
+        let mle_1_input_shred =
+            InputShred::new(ctx, mle_1.current_mle.clone().num_vars(), &input_layer);
+        let mle_2_input_shred =
+            InputShred::new(ctx, mle_2.current_mle.clone().num_vars(), &input_layer);
         let neg_mle_2_input_shred =
-            InputShred::new(ctx, neg_mle_2.current_mle.clone(), &input_layer);
+            InputShred::new(ctx, neg_mle_2.current_mle.clone().num_vars(), &input_layer);
 
         let mut nonzero_gates = vec![];
         let table_size = 1 << NUM_ITERATED_BITS;
@@ -365,10 +377,16 @@ fn test_dataparallel_uneven_add_gate_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let dataparallel_mle_input_shred =
-            InputShred::new(ctx, mle_dataparallel.current_mle.clone(), &input_layer);
-        let dataparallel_neg_mle_input_shred =
-            InputShred::new(ctx, neg_mle_dataparallel.current_mle.clone(), &input_layer);
+        let dataparallel_mle_input_shred = InputShred::new(
+            ctx,
+            mle_dataparallel.current_mle.clone().num_vars(),
+            &input_layer,
+        );
+        let dataparallel_neg_mle_input_shred = InputShred::new(
+            ctx,
+            neg_mle_dataparallel.current_mle.clone().num_vars(),
+            &input_layer,
+        );
 
         let nonzero_gates = vec![(0, 0, 0)];
 
@@ -424,13 +442,19 @@ fn test_dataparallel_mul_add_gate_circuit_newmainder() {
 
     let circuit = LayouterCircuit::new(|ctx| {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-        let dataparallel_mle_1_input_shred =
-            InputShred::new(ctx, mle_1_dataparallel.current_mle.clone(), &input_layer);
-        let dataparallel_mle_2_input_shred =
-            InputShred::new(ctx, mle_2_dataparallel.current_mle.clone(), &input_layer);
+        let dataparallel_mle_1_input_shred = InputShred::new(
+            ctx,
+            mle_1_dataparallel.current_mle.clone().num_vars(),
+            &input_layer,
+        );
+        let dataparallel_mle_2_input_shred = InputShred::new(
+            ctx,
+            mle_2_dataparallel.current_mle.clone().num_vars(),
+            &input_layer,
+        );
         let dataparallel_neg_mle_2_input_shred = InputShred::new(
             ctx,
-            neg_mle_2_dataparallel.current_mle.clone(),
+            neg_mle_2_dataparallel.current_mle.clone().num_vars(),
             &input_layer,
         );
 

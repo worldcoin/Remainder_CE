@@ -38,7 +38,7 @@ use super::{
 /// The Circuit Description for an [IdentityGate].
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct IdentityGateCircuitLayer<F: FieldExt> {
+pub struct CircuitIdentityGateLayer<F: FieldExt> {
     /// The layer id associated with this gate layer.
     id: LayerId,
 
@@ -52,12 +52,22 @@ pub struct IdentityGateCircuitLayer<F: FieldExt> {
     source_mle: CircuitMle<F>,
 }
 
+impl<F: FieldExt> CircuitIdentityGateLayer<F> {
+    pub fn new(id: LayerId, wiring: Vec<(usize, usize)>, source_mle: CircuitMle<F>) -> Self {
+        Self {
+            id,
+            wiring,
+            source_mle,
+        }
+    }
+}
+
 /// Degree of independent variable is always quadratic!
 ///
 /// V_i(g_1) = \sum_{x} f_1(g_1, x) (V_{i + 1}(x))
 const NON_DATAPARALLEL_ROUND_ID_NUM_EVALS: usize = 3;
 
-impl<F: FieldExt> CircuitLayer<F> for IdentityGateCircuitLayer<F> {
+impl<F: FieldExt> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
     type VerifierLayer = VerifierIdentityGateLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -264,7 +274,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierIdentityGateLayer<F> {
 
 /// implement the layer trait for identitygate struct
 impl<F: FieldExt> Layer<F> for IdentityGate<F> {
-    type CircuitLayer = IdentityGateCircuitLayer<F>;
+    type CircuitLayer = CircuitIdentityGateLayer<F>;
 
     fn prove_rounds(
         &mut self,
@@ -320,7 +330,7 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
     fn into_circuit_layer(&self) -> Result<Self::CircuitLayer, LayerError> {
         let mut source_mle_indexed = self.mle_ref.clone();
         source_mle_indexed.index_mle_indices(0);
-        Ok(IdentityGateCircuitLayer {
+        Ok(CircuitIdentityGateLayer {
             id: self.layer_id,
             wiring: self.nonzero_gates.clone(),
             source_mle: CircuitMle::from_dense_mle(&source_mle_indexed).unwrap(),
