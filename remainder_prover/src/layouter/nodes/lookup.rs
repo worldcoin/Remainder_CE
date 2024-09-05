@@ -6,7 +6,7 @@ use crate::expression::abstract_expr::{calculate_selector_values, AbstractExpr};
 use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
 use crate::expression::prover_expr::ProverExpr;
 use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
-use crate::input_layer::public_input_layer::PublicInputLayer;
+use crate::input_layer::public_input_layer::{CircuitPublicInputLayer, PublicInputLayer};
 use crate::input_layer::random_input_layer::RandomInputLayer;
 use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use crate::layer::regular_layer::CircuitRegularLayer;
@@ -19,6 +19,7 @@ use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLaye
 use crate::utils::get_total_mle_indices;
 
 use itertools::{repeat_n, Itertools};
+use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::FieldExt;
 
 use crate::{
@@ -147,7 +148,9 @@ impl LookupTable {
     > {
         type AE<F> = Expression<F, AbstractExpr>;
         type CE<F> = Expression<F, CircuitExpr>;
-        // type PE<F> = Expression<F, ProverExpr>;
+
+        // --- LogUp adds a few circuit "inputs" in the flavor of the denominator inverses ---
+        let mut logup_additional_input_layers: Vec<CircuitInputLayerEnum<F>> = vec![];
 
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
@@ -185,8 +188,6 @@ impl LookupTable {
                 .map(|constraint| constraint.constrained_node_id.expr())
                 .collect(),
         );
-        let constrained_circuit_expr =
-            constrained_expr.build_circuit_expr(circuit_description_map)?;
         let expr = CE::sum(
             verifier_challenge_mle.expression(),
             CE::negated(constrained_expr.build_circuit_expr(circuit_description_map)?),
@@ -229,143 +230,178 @@ impl LookupTable {
         println!("Build the RHS of the equation (defined by the table values and multiplicities)");
 
         // Build the numerator (the multiplicities, which we aggregate with an extra layer if there is more than one constraint)
-        let (multiplicities_location, multiplicities) =
+        let (multiplicities_location, multiplicities_num_vars) =
             &circuit_description_map.0[&self.constraints[0].multiplicities_node_id];
-        let mut rhs_numerator = DenseMle::new_with_prefix_bits(
-            (*multiplicities).clone(),
+        let mut rhs_numerator_desc = CircuitMle::new(
             multiplicities_location.layer_id,
-            multiplicities_location.prefix_bits.clone(),
+            &multiplicities_location
+                .prefix_bits
+                .iter()
+                .map(|prefix_bit_bool| MleIndex::Fixed(*prefix_bit_bool))
+                .chain(repeat_n(MleIndex::Iterated, *multiplicities_num_vars))
+                .collect_vec(),
         );
+
         if self.constraints.len() > 1 {
             // Insert an extra layer that aggregates the multiplicities
             let expr = self.constraints.iter().skip(1).fold(
-                rhs_numerator.expression(),
+                rhs_numerator_desc.expression(),
                 |acc, constraint| {
-                    let (multiplicities_location, multiplicities) =
+                    let (multiplicities_location, multiplicities_num_vars) =
                         &circuit_description_map.0[&constraint.multiplicities_node_id];
-                    let mult_constraint_mle = DenseMle::new_with_prefix_bits(
-                        (*multiplicities).clone(),
+                    let mult_constraint_mle_desc = CircuitMle::new(
                         multiplicities_location.layer_id,
-                        multiplicities_location.prefix_bits.clone(),
+                        &multiplicities_location
+                            .prefix_bits
+                            .iter()
+                            .map(|prefix_bit_bool| MleIndex::Fixed(*prefix_bit_bool))
+                            .chain(repeat_n(MleIndex::Iterated, *multiplicities_num_vars))
+                            .collect_vec(),
                     );
-                    acc + mult_constraint_mle.expression()
+                    acc + mult_constraint_mle_desc.expression()
                 },
             );
             let layer_id = intermediate_layer_id.get_and_inc();
-            let layer = RegularLayer::new_raw(layer_id, expr);
-            intermediate_layers.push(layer.into());
+            let layer = CircuitRegularLayer::new_raw(layer_id, expr);
+            intermediate_layers.push(CircuitLayerEnum::Regular(layer));
             println!(
                 "Layer that aggs the multiplicities has layer id: {:?}",
                 layer_id
             );
-            let eval_vecs: Vec<_> = self
-                .constraints
-                .iter()
-                .map(|constraint| {
-                    let (_, multiplicities) =
-                        circuit_description_map.0[&constraint.multiplicities_node_id];
-                    multiplicities.get_evals_vector()
-                })
-                .collect();
-            let agg_evals = eval_vecs
-                .iter()
-                .fold(vec![F::from(0u64); eval_vecs[0].len()], |acc, evals| {
-                    acc.iter().zip(evals.iter()).map(|(a, b)| *a + *b).collect()
-                });
-            rhs_numerator = DenseMle::new_with_prefix_bits(
-                MultilinearExtension::new(agg_evals),
+
+            // Note that this is the aggregated version!
+            // It's just the element-wise sum of the elements within the bookkeeping tables
+            // However, because we're only dealing with the circuit description, we can
+            // just take the number of variables within the *first* constraint
+            let first_self_constraint_circuit_info =
+                circuit_description_map.0[&self.constraints[0].multiplicities_node_id].clone();
+            rhs_numerator_desc = CircuitMle::new(
                 layer_id,
-                vec![],
-            );
+                &repeat_n(MleIndex::Iterated, first_self_constraint_circuit_info.1).collect_vec(),
+            )
         }
 
         // Build the denominator r - table
-        let expr = r_densemle.expression()
-            - self
-                .table_node_id
-                .expr()
-                .build_prover_expr(circuit_description_map)?;
+
+        // --- First grab `r` as a `CircuitMle` from the `circuit_description_map` ---
+        let (verifier_challenge_loc, verifier_challenge_num_vars) =
+            circuit_description_map.0[&self.random_node_id].clone();
+        let verifier_challenge_circuit_mle = CircuitMle::new(
+            verifier_challenge_loc.layer_id,
+            &repeat_n(MleIndex::Iterated, verifier_challenge_num_vars).collect_vec(),
+        );
+
+        // --- Next grab `table` as a `CircuitMle` from the `circuit_description_map` ---
+        let (table_loc, table_num_vars) = circuit_description_map.0[&self.table_node_id].clone();
+        let table_circuit_mle = CircuitMle::new(
+            table_loc.layer_id,
+            &repeat_n(MleIndex::Iterated, table_num_vars).collect_vec(),
+        );
+
+        let expr = verifier_challenge_circuit_mle.expression() - table_circuit_mle.expression();
+        let r_minus_table_num_vars = expr.num_vars();
         let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        intermediate_layers.push(layer.into());
+        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
+        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
         println!(
             "Layer that calculates r - table has layer id: {:?}",
             layer_id
         );
-        let mle =
-            MultilinearExtension::new(table.get_evals_vector().iter().map(|val| r - val).collect());
-        let rhs_denominator = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+
+        let rhs_denominator_desc = CircuitMle::new(
+            layer_id,
+            &repeat_n(MleIndex::Iterated, r_minus_table_num_vars).collect_vec(),
+        );
 
         // Build the numerator and denominator of the sum of the fractions
         let (rhs_numerator, rhs_denominator) = build_fractional_sum(
-            rhs_numerator,
-            rhs_denominator,
+            rhs_numerator_desc,
+            rhs_denominator_desc,
             &mut intermediate_layers,
             intermediate_layer_id,
+            &circuit_description_map,
         );
 
         // Add an input layer for the inverse of the denominators of the LHS. This value holds
         // reveals some information about the constrained values, so we optionally use a
         // HyraxInputLayer.
-        let mle =
-            MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
-        let layer_id = input_layer_id.get_and_inc();
-        if self.secret_constrained_values {
+        // let mle =
+        //     MultilinearExtension::new(vec![lhs_denominator.current_mle.value().invert().unwrap()]);
+
+        // --- Grab the layer ID for the new "input layer" to be added ---
+        let lhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
+
+        logup_additional_input_layers.push(if self.secret_constrained_values {
             // TODO use HyraxInputLayer, once it's implemented
             unimplemented!();
         } else {
-            input_layers.push(PublicInputLayer::new(mle.clone(), layer_id).into());
-        }
-        let lhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+            let public_input_layer_description =
+                CircuitPublicInputLayer::<F>::new(lhs_denom_inverse_layer_id.to_owned(), 0);
+            CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
+        });
+
+        let lhs_inverse_mle_desc = CircuitMle::new(lhs_denom_inverse_layer_id, &vec![]);
         println!(
             "Input layer that for LHS denom prod inverse has layer id: {:?}",
-            layer_id
+            lhs_denom_inverse_layer_id
         );
+
         // Add an input layer for the inverse of the denominators of the RHS. This doesn't reveal
         // any information about the constrained values, so it's OK to use PublicInputLayer.
-        let mle =
-            MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
-        let layer_id = input_layer_id.get_and_inc();
-        input_layers.push(PublicInputLayer::new(mle.clone(), layer_id).into());
-        let rhs_inverse_densemle = DenseMle::new_with_prefix_bits(mle, layer_id, vec![]);
+        // let mle =
+        //     MultilinearExtension::new(vec![rhs_denominator.current_mle.value().invert().unwrap()]);
+
+        // --- Grab the layer ID for the new "input layer" to be added ---
+        let rhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
+        logup_additional_input_layers.push({
+            let public_input_layer_description =
+                CircuitPublicInputLayer::<F>::new(rhs_denom_inverse_layer_id.to_owned(), 0);
+            CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
+        });
+        let rhs_inverse_mle_desc = CircuitMle::new(rhs_denom_inverse_layer_id, &vec![]);
         println!(
             "Input layer that for RHS denom prod inverse has layer id: {:?}",
-            layer_id
+            rhs_denom_inverse_layer_id
         );
 
         // Add a layer that calculates the product of the denominator and the inverse and subtracts
         // 1 (for both LHS and RHS)
         let lhs_expr =
-            PE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_densemle.clone()]);
+            CE::<F>::products(vec![lhs_denominator.clone(), lhs_inverse_mle_desc.clone()]);
         let rhs_expr =
-            PE::<F>::products(vec![rhs_denominator.clone(), rhs_inverse_densemle.clone()]);
-        let expr = lhs_expr.concat_expr(rhs_expr) - PE::<F>::constant(F::from(1u64));
+            CE::<F>::products(vec![rhs_denominator.clone(), rhs_inverse_mle_desc.clone()]);
+        let expr = lhs_expr.concat_expr(rhs_expr) - CE::<F>::constant(F::from(1u64));
         let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        intermediate_layers.push(layer.into());
+        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
+        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
         println!(
             "Layer calcs product of (product of denoms) and their inverses has layer id: {:?}",
             layer_id
         );
         // Add an output layer that checks that the result is zero
-        let mle = ZeroMle::new(1, None, layer_id);
-        let mut output_layers = vec![mle.into()];
+        let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &vec![MleIndex::Iterated]);
+        let mut output_layers = vec![output_layer];
 
         // Add a layer that calculates the difference between the fractions on the LHS and RHS
-        let expr = PE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()])
-            - PE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()]);
+        let expr = CE::<F>::products(vec![lhs_numerator.clone(), rhs_denominator.clone()])
+            - CE::<F>::products(vec![rhs_numerator.clone(), lhs_denominator.clone()]);
         let layer_id = intermediate_layer_id.get_and_inc();
-        let layer = RegularLayer::new_raw(layer_id, expr);
-        intermediate_layers.push(layer.into());
+        let layer = CircuitRegularLayer::new_raw(layer_id, expr);
+        intermediate_layers.push(CircuitLayerEnum::Regular(layer));
         println!(
             "Layer that checks that fractions are equal has layer id: {:?}",
             layer_id
         );
-        // Add an output layer that checks that the result is zero
-        let mle = ZeroMle::new(0, None, layer_id);
-        output_layers.push(mle.into());
 
-        Ok((input_layers, intermediate_layers, output_layers))
+        // Add an output layer that checks that the result is zero
+        let output_layer = CircuitMleOutputLayer::new_zero(layer_id, &vec![]);
+        output_layers.push(output_layer);
+
+        Ok((
+            logup_additional_input_layers,
+            intermediate_layers,
+            output_layers,
+        ))
     }
 }
 

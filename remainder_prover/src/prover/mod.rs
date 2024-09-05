@@ -10,10 +10,13 @@ pub mod proof_system;
 pub mod layers;
 
 use self::{layers::Layers, proof_system::ProofSystem};
+use crate::claims::wlx_eval::WLXAggregator;
 use crate::expression::verifier_expr::VerifierMle;
+use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::CircuitInputLayer;
 use crate::layer::CircuitLayer;
 use crate::mle::Mle;
+use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use crate::output_layer::{CircuitOutputLayer, OutputLayer};
 use crate::{
     claims::ClaimAggregator,
@@ -99,7 +102,7 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
 impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
     /// Returns the circuit description associated with this Witness to be used
     /// by the verifier.
-    pub fn generate_verifier_key(&self) -> Result<GKRVerifierKey<F, Pf>, GKRError> {
+    pub fn generate_verifier_key(&self) -> Result<GKRCircuitDescription<F, Pf>, GKRError> {
         let input_layers: Vec<_> = self
             .input_layers
             .iter()
@@ -123,7 +126,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
             .map(|output_layer| output_layer.into_circuit_output_layer())
             .collect();
 
-        Ok(GKRVerifierKey::<F, Pf> {
+        Ok(GKRCircuitDescription::<F, Pf> {
             input_layers,
             intermediate_layers,
             output_layers,
@@ -139,8 +142,8 @@ pub type CircuitTranscript<F, C> =
     <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::Transcript;
 
 /// A helper type alias for easier reference to a circuits InputLayer
-pub type CircuitInputLayer<F, C> =
-    <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::InputLayer;
+// pub type CircuitInputLayer<F, C> =
+//     <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::InputLayer;
 
 /// A helper type alias for easier reference to a circuits ClaimAggregator
 pub type CircuitClaimAggregator<F, C> =
@@ -148,7 +151,7 @@ pub type CircuitClaimAggregator<F, C> =
 
 pub type WitnessAndCircuitDescription<F, C> = (
     Witness<F, <C as GKRCircuit<F>>::ProofSystem>,
-    GKRVerifierKey<F, <C as GKRCircuit<F>>::ProofSystem>,
+    GKRCircuitDescription<F, <C as GKRCircuit<F>>::ProofSystem>,
 );
 
 /// A GKRCircuit ready to be proven
@@ -165,12 +168,18 @@ pub trait GKRCircuit<F: FieldExt> {
         transcript: &mut impl ProverTranscript<F>,
     ) -> Result<WitnessAndCircuitDescription<F, Self>, GKRError>;
 
+    /// Creates the `GKRVerifierKey`, i.e. the circuit description, for the current
+    /// `GKRCircuit` instance
+    fn generate_circuit_description(
+        &mut self,
+    ) -> Result<GKRCircuitDescription<F, Self::ProofSystem>, GKRError>;
+
     /// The backwards pass, creating the GKRProof.
     #[instrument(skip_all, err)]
     fn prove(
         &mut self,
         mut transcript_writer: TranscriptWriter<F, CircuitTranscript<F, Self>>,
-    ) -> Result<(Transcript<F>, GKRVerifierKey<F, Self::ProofSystem>), GKRError>
+    ) -> Result<(Transcript<F>, GKRCircuitDescription<F, Self::ProofSystem>), GKRError>
     where
         CircuitTranscript<F, Self>: Sync,
     {
@@ -341,14 +350,29 @@ where {
 /// The Verifier Key associated with a GKR proof of a [ProofSystem].
 /// It consists of consice GKR Circuit description to be use by the Verifier.
 #[derive(Debug)]
-pub struct GKRVerifierKey<F: FieldExt, Pf: ProofSystem<F>> {
+pub struct GKRCircuitDescription<F: FieldExt, Pf: ProofSystem<F>> {
     pub input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::CircuitInputLayer>,
     pub intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
     pub output_layers:
         Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer>,
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
+impl<F: FieldExt, Pf: ProofSystem<F>> GKRCircuitDescription<F, Pf> {
+    /// Constructs a new `GKRCircuitDescription` via circuit description layers
+    pub fn new(
+        input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::CircuitInputLayer>,
+        intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
+        output_layers: Vec<
+            <<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer,
+        >,
+    ) -> Self {
+        Self {
+            input_layers,
+            intermediate_layers,
+            output_layers,
+        }
+    }
+
     /// Verifies a GKR proof produced by the `prove` method.
     /// # Arguments
     /// * `transcript_reader`: servers as the proof.
@@ -387,7 +411,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
         end_timer!(input_layer_commitments_timer);
 
         // Claim aggregator to keep track of GKR-style claims across all layers.
-        let mut aggregator = <<Pf as ProofSystem<F>>::ClaimAggregator as ClaimAggregator<F>>::new();
+        let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
 
         // --------- STAGE 1: Output Claim Generation ---------
         let claims_timer = start_timer!(|| "Output claims generation");
@@ -436,7 +460,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRVerifierKey<F, Pf> {
                 start_timer!(|| format!("Verify sumcheck message for layer {:?}", layer_id));
 
             // Performs the actual sumcheck verification step.
-            let verifier_layer =
+            let verifier_layer: <<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer as CircuitLayer<F>>::VerifierLayer =
                 layer
                     .verify_rounds(prev_claim, transcript_reader)
                     .map_err(|err| {

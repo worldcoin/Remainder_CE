@@ -6,6 +6,7 @@
 //! intermediate/input layer whose [LayerId] it inherits. The MLE it stores is a
 //! restriction of an MLE defining its associated layer.
 
+use itertools::Itertools;
 use num::Zero;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
@@ -14,7 +15,7 @@ use remainder_shared_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    claims::{wlx_eval::ClaimMle, ClaimError, YieldClaim},
+    claims::{wlx_eval::ClaimMle, Claim, ClaimError, YieldClaim},
     expression::{
         circuit_expr::CircuitMle,
         generic_expr::Expression,

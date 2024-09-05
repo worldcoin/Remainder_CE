@@ -26,11 +26,11 @@ use crate::{
 pub(crate) mod test_utils;
 
 /// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
-pub fn get_input_shred_from_num_vars<F: FieldExt>(
+pub fn get_input_shred_from_num_vars(
     num_vars: usize,
     ctx: &Context,
-    input_node: &InputLayerNode<F>,
-) -> InputShred<F> {
+    input_node: &InputLayerNode,
+) -> InputShred {
     InputShred::new(ctx, num_vars, input_node)
 }
 

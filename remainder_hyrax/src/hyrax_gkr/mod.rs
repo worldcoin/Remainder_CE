@@ -21,7 +21,7 @@ use remainder::layouter::nodes::node_enum::NodeEnum;
 use remainder::layouter::nodes::Context;
 use remainder::mle::Mle;
 use remainder::prover::proof_system::DefaultProofSystem;
-use remainder::prover::{GKRCircuit, GKRVerifierKey, Witness};
+use remainder::prover::{GKRCircuit, GKRCircuitDescription, Witness};
 use remainder::{
     claims::wlx_eval::ClaimMle, input_layer::enum_input_layer::InputLayerEnum, layer::LayerId,
 };
