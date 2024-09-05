@@ -12,54 +12,52 @@ use crate::utils::mle::get_input_shred_from_vec;
 use crate::utils::mle::pad_with;
 use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecomposition, BitsAreBinary, DigitsConcatenator};
 use crate::worldcoin::components::Thresholder;
-use crate::worldcoin::data::WorldcoinCircuitData;
+use crate::worldcoin::data::{WorldcoinCircuitData, CircuitData};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
 
 /// Builds the worldcoin circuit.
-pub fn build_circuit<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(
-    data: WorldcoinCircuitData<F, BASE, NUM_DIGITS>,
+pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>(
+    data: CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>,
 ) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
 {
     LayouterCircuit::new(move |ctx| {
-        let WorldcoinCircuitData {
-            image: image_matrix_mle,
-            reroutings: wirings,
-            num_placements,
-            kernel_values: kernel_matrix,
-            kernel_matrix_dims,
+        let CircuitData {
+            to_reroute,
+            reroutings,
+            rh_matmult_multiplicand,
             digits,
-            code: iris_code,
+            sign_bits,
             digit_multiplicities,
-            thresholds_matrix,
+            to_sub_from_matmult
         } = &data;
         let mut output_nodes = vec![];
 
+        // FIXME renamings!
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         println!("{:?} = Input layer", input_layer.id());
-        let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
+        // FIXME shouldn't have to clone here, but need to change library functions
+        let image = get_input_shred_from_vec(to_reroute.clone(), ctx, &input_layer);
         println!("{:?} = Image input", image.id());
         let thresholds = get_input_shred_from_vec(
-            pad_with(F::ZERO, &thresholds_matrix),
+            to_sub_from_matmult.clone(),
             ctx,
             &input_layer,
         );
         println!("{:?} = Thresholds input", thresholds.id());
-        let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
+        let rerouted_image = IdentityGateNode::new(ctx, &image, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
-        let (filter_num_values, _) = kernel_matrix_dims;
-        let matrix_a_num_rows_cols = (num_placements.next_power_of_two(), *filter_num_values);
-        let kernel_matrix = get_input_shred_from_vec(kernel_matrix.clone(), ctx, &input_layer);
+        let kernel_matrix = get_input_shred_from_vec(rh_matmult_multiplicand.clone(), ctx, &input_layer);
         println!("{:?} = Kernel values input", kernel_matrix.id());
 
         let matmult = MatMultNode::new(
             ctx,
             &rerouted_image,
-            matrix_a_num_rows_cols,
+            (MATMULT_NUM_ROWS, MATMULT_INTERNAL_DIM),
             &kernel_matrix,
-            *kernel_matrix_dims,
+            (MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS),
         );
         println!("{:?} = Matmult", matmult.id());
 
@@ -97,7 +95,7 @@ pub fn build_circuit<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE as u64);
 
         let iris_code = get_input_shred_from_vec(
-            pad_with(F::ZERO, &iris_code),
+            sign_bits.clone(),
             ctx,
             &input_layer,
         );

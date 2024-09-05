@@ -21,7 +21,8 @@ fn main() {
     let args = Args::parse();
     let path = Path::new("worldcoin/v2/").to_path_buf();
     let image_path = Path::new(&args.image_filepath).to_path_buf();
-    let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path, image_path, args.is_mask);
-    let circuit = build_circuit(data);
-    test_circuit(circuit, None);
+    // FIXME
+    // let data: WorldcoinCircuitData<Fr, WC_BASE, WC_NUM_DIGITS> = load_data(path, image_path, args.is_mask);
+    // let circuit = build_circuit(data);
+    // test_circuit(circuit, None);
 }
