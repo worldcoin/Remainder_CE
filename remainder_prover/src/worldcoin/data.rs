@@ -13,6 +13,28 @@ use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::mle::pad_with;
 
+pub fn trivial_wiring_1x1_circuit_data<F: FieldExt>() -> CircuitData<F, 1, 1, 1, 16, 1> {
+    CircuitData::build_worldcoin_circuit_data(
+        Array2::from_shape_vec((1, 1), vec![1]).unwrap(),
+        Array3::from_shape_vec((1, 1, 1), vec![1]).unwrap(),
+        Array2::from_shape_vec((1, 1), vec![0]).unwrap(),
+        Array2::from_shape_vec((1, 4), vec![0, 0, 0, 0]).unwrap(),
+    )
+} 
+
+/// Generate toy data for the worldcoin circuit.
+/// Image is 2x2, and there are two placements of two 2x1 kernels (1, 0).T and (6, -1).T
+/// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
+pub fn trivial_wiring_2x2_circuit_data<F: FieldExt>() -> CircuitData<F, 2, 2, 2, 16, 1> {
+    CircuitData::build_worldcoin_circuit_data(
+        Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
+        Array3::from_shape_vec((2, 2, 1), vec![1, 0, 6, -1]).unwrap(),
+        Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
+        // rewirings for the 2x2 identity matrix
+        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1]).unwrap(),
+    )
+} 
+
 // /// Generate toy data for the worldcoin circuit.
 // /// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
 // pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16u64, 2> {
@@ -258,6 +280,7 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
 }
 
 
+// FIXME remove
 #[derive(Debug, Clone)]
 /// Used for instantiating the Worldcoin circuit.
 /// Kernel placements are specified by the _product_ placements_row_idxs x placements_col_idxs.

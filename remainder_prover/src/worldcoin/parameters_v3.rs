@@ -6,7 +6,7 @@ pub const MATMULT_NUM_COLS: usize = 4;
 pub const MATMULT_INTERNAL_DIM: usize = 1 << 10;
 
 // Constants defining the digit decomposition of the WC circuit.
-const LOG_NUM_DIGITS: usize = 3;
+const LOG_NUM_DIGITS: usize = 2;
 /// The number of digits in the complementary decomposition of the thresholded responses.
 pub const NUM_DIGITS: usize = (1 << LOG_NUM_DIGITS) as usize;
 /// The base of the complementary decomposition of the thresholded responses.
