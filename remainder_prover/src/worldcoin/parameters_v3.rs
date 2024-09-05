@@ -14,7 +14,8 @@ pub const BASE: u64 = 256;
 
 /// Where to look for the thresholds and the kernel values, i.e. the data that is the same for every
 /// run of the circuit.
-/// Contains a file `wirings.npy` FIXME
+/// Contains a file `wirings.npy`, a 2d array of type u32 encoding the input `wirings` of
+/// [CircuitData::build_worldcoin_circuit_data].
 /// Contains two subfolders "iris" and "mask" each containing:
 /// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has shape (num_placements, num_kernels)).
 /// + `kernel_values.npy` - (i64) the padded kernel values (quantized)

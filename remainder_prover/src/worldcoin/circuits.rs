@@ -9,10 +9,9 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::mle::get_input_shred_from_vec;
-use crate::utils::mle::pad_with;
 use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecomposition, BitsAreBinary, DigitsConcatenator};
 use crate::worldcoin::components::Subtractor;
-use crate::worldcoin::data::{WorldcoinCircuitData, CircuitData};
+use crate::worldcoin::data::CircuitData;
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
@@ -34,10 +33,9 @@ pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_N
         } = &data;
         let mut output_nodes = vec![];
 
-        // FIXME renamings!
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         println!("{:?} = Input layer", input_layer.id());
-        // FIXME shouldn't have to clone here, but need to change library functions
+        // TODO shouldn't have to clone here, but need to change library functions
         let to_reroute = get_input_shred_from_vec(to_reroute.clone(), ctx, &input_layer);
         println!("{:?} = Image to_reroute input", to_reroute.id());
         let to_sub_from_matmult = get_input_shred_from_vec(
