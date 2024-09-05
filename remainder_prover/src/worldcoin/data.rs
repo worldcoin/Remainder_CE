@@ -23,7 +23,7 @@ pub fn trivial_wiring_1x1_circuit_data<F: FieldExt>() -> CircuitData<F, 1, 1, 1,
 } 
 
 /// Generate toy data for the worldcoin circuit.
-/// Image is 2x2, and there are two placements of two 2x1 kernels (1, 0).T and (6, -1).T
+/// Image is 2x2, and there are two 2x1 kernels (1, 0).T and (6, -1).T
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
 pub fn trivial_wiring_2x2_circuit_data<F: FieldExt>() -> CircuitData<F, 2, 2, 2, 16, 1> {
     CircuitData::build_worldcoin_circuit_data(
@@ -31,6 +31,18 @@ pub fn trivial_wiring_2x2_circuit_data<F: FieldExt>() -> CircuitData<F, 2, 2, 2,
         Array3::from_shape_vec((2, 2, 1), vec![1, 0, 6, -1]).unwrap(),
         Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
         // rewirings for the 2x2 identity matrix
+        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1]).unwrap(),
+    )
+} 
+
+/// Generate toy data for the worldcoin circuit.
+/// Image is 2x2, and there are two 3x1 kernels.
+/// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
+pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>() -> CircuitData<F, 2, 2, 4, 16, 1> {
+    CircuitData::build_worldcoin_circuit_data(
+        Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
+        Array3::from_shape_vec((2, 3, 1), vec![1, 0, -4, 6, -1, 3]).unwrap(),
+        Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
         Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1]).unwrap(),
     )
 } 
@@ -155,6 +167,9 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
     ) -> Self {
         assert!(BASE.is_power_of_two());
         assert!(NUM_DIGITS.is_power_of_two());
+        assert!(MATMULT_NUM_ROWS.is_power_of_two());
+        assert!(MATMULT_NUM_COLS.is_power_of_two());
+        assert!(MATMULT_INTERNAL_DIM.is_power_of_two());
         let (_, im_num_cols) = image.dim();
         let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
         let num_kernel_values = kernel_num_rows * kernel_num_cols;
