@@ -12,6 +12,7 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
+    ops::{Add, Mul, Neg, Sub},
 };
 
 use remainder_shared_types::{
@@ -531,6 +532,208 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
             ExpressionNode::Scaled(a, _) | ExpressionNode::Negated(a) => a.get_max_degree(mle_vec),
             ExpressionNode::Constant(_) => 1,
         }
+    }
+
+    /// Returns the total number of variables (i.e. number of rounds of sumcheck) within
+    /// the MLE representing the output "data" of this particular expression.
+    ///
+    /// Note that unlike within the `AbstractExpr` case, we don't need to return
+    /// a `Result` since all MLEs within a `CircuitExpr` are instantiated with their
+    /// appropriate number of variables.
+    fn get_num_vars(&self) -> usize {
+        match self {
+            ExpressionNode::Constant(_) => 0,
+            ExpressionNode::Selector(_, lhs, rhs) => {
+                max(lhs.get_num_vars() + 1, rhs.get_num_vars() + 1)
+            }
+            ExpressionNode::Mle(circuit_mle_desc) => circuit_mle_desc.num_iterated_vars(),
+            ExpressionNode::Negated(expr) => expr.get_num_vars(),
+            ExpressionNode::Sum(lhs, rhs) => max(lhs.get_num_vars(), rhs.get_num_vars()),
+            ExpressionNode::Product(nodes) => nodes.iter().fold(0, |cur_max, circuit_mle_desc| {
+                max(cur_max, circuit_mle_desc.num_iterated_vars())
+            }),
+            ExpressionNode::Scaled(expr, _) => expr.get_num_vars(),
+        }
+    }
+}
+
+impl<F: FieldExt> Expression<F, CircuitExpr> {
+    /// Computes the num_vars of this expression (how many rounds of sumcheck it would take to prove)
+    /// TODO(ryancao): Aight figure out either where this is or write it
+    // pub fn num_vars(&self, num_vars_map: &HashMap<NodeId, usize>) -> Result<usize, DAGError> {
+    //     self.expression_node.get_num_vars(num_vars_map)
+    // }
+
+    /// Builds the ProverExpression using the AbstractExpression as a template.
+    ///
+    /// Gets the information the prover needs by consulting the CircuitMap to get
+    /// the data and the prefix_bits
+    ///
+    /// TODO(ryancao): We'll do this during the data round!
+    // pub fn build_prover_expr(
+    //     self,
+    //     circuit_map: &CircuitMap<'_, F>,
+    // ) -> Result<Expression<F, ProverExpr>, DAGError> {
+    //     // First we get all the mles that this expression will need to store
+    //     let mut nodes = self.expression_node.get_node_ids(vec![]);
+    //     nodes.sort();
+    //     nodes.dedup();
+
+    //     let mut node_map = HashMap::<NodeId, usize>::new();
+
+    //     let mle_vec: Result<Vec<_>, _> = nodes
+    //         .into_iter()
+    //         .enumerate()
+    //         .map(|(idx, node_id)| {
+    //             let (location, data) = circuit_map.get_node(&node_id)?;
+
+    //             let data = (*data).clone();
+
+    //             let data = DenseMle::new_with_prefix_bits(
+    //                 data,
+    //                 location.layer_id,
+    //                 location.prefix_bits.clone(),
+    //             );
+
+    //             node_map.insert(node_id, idx);
+    //             Ok(data)
+    //         })
+    //         .collect();
+    //     let mle_vec = mle_vec?;
+
+    //     // Then we replace the NodeIds in the AbstractExpr w/ indices of our stored MLEs
+
+    //     let expression_node = self.expression_node.build_prover_node(&node_map)?;
+
+    //     Ok(Expression::<F, ProverExpr> {
+    //         expression_node,
+    //         mle_vec,
+    //     })
+    // }
+
+    /// Returns the total number of variables (i.e. number of rounds of sumcheck)
+    /// within the MLE representing the output "data" of this particular expression.
+    ///
+    /// Note that unlike within the AbstractExpr case, we don't need to return
+    /// a `Result` since all MLEs within a `CircuitExpr` are instantiated with their appropriate number of variables.
+    pub fn num_vars(&self) -> usize {
+        self.expression_node.get_num_vars()
+    }
+
+    /// Creates an `Expression<F, CircuitExpr>` which describes the polynomial relationship
+    ///
+    /// `circuit_mle_descs[0](x_1, ..., x_{n_0}) * circuit_mle_descs[1](x_1, ..., x_{n_1}) * ...`
+    pub fn products(circuit_mle_descs: Vec<CircuitMle<F>>) -> Self {
+        let product_node = ExpressionNode::Product(circuit_mle_descs);
+
+        Expression::new(product_node, ())
+    }
+
+    /// Creates an `Expression<F, CircuitExpr>` which describes the polynomial relationship
+    /// TODO(ryancao): Change this so that `Self` is the `lhs`, rather than the other way around!
+    ///
+    /// `(1 - x_0) * lhs(x_1, ..., x_{n_lhs}) + b_0 * Self(x_1, ..., x_{n_rhs})`
+    pub fn concat_expr(self, lhs: Expression<F, CircuitExpr>) -> Self {
+        let (lhs_node, _) = lhs.deconstruct();
+        let (rhs_node, _) = self.deconstruct();
+
+        let concat_node =
+            ExpressionNode::Selector(MleIndex::Iterated, Box::new(lhs_node), Box::new(rhs_node));
+
+        Expression::new(concat_node, ())
+    }
+
+    /// Create a nested selector Expression that selects between 2^k Expressions
+    /// by creating a binary tree of Selector Expressions.
+    /// The order of the leaves is the order of the input expressions.
+    /// (Note that this is very different from calling concat_expr consecutively.)
+    /// See also [calculate_selector_values].
+    pub fn selectors(expressions: Vec<Self>) -> Self {
+        // Ensure length is a power of two
+        assert!(expressions.len().is_power_of_two());
+        let mut expressions = expressions;
+        while expressions.len() > 1 {
+            // Iterate over consecutive pairs of expressions, creating a new expression that selects between them
+            expressions = expressions
+                .into_iter()
+                .tuples()
+                .map(|(lhs, rhs)| {
+                    let (lhs_node, _) = lhs.deconstruct();
+                    let (rhs_node, _) = rhs.deconstruct();
+
+                    let selector_node = ExpressionNode::Selector(
+                        MleIndex::Iterated,
+                        Box::new(lhs_node),
+                        Box::new(rhs_node),
+                    );
+
+                    Expression::new(selector_node, ())
+                })
+                .collect();
+        }
+        expressions[0].clone()
+    }
+
+    /// Literally just `constant` as a term, but as an "`Expression`"
+    pub fn constant(constant: F) -> Self {
+        let mle_node = ExpressionNode::Constant(constant);
+
+        Expression::new(mle_node, ())
+    }
+
+    /// Literally just `-expression`, as an "`Expression`"
+    pub fn negated(expression: Self) -> Self {
+        let (node, _) = expression.deconstruct();
+
+        let mle_node = ExpressionNode::Negated(Box::new(node));
+
+        Expression::new(mle_node, ())
+    }
+
+    /// Literally just `lhs` + `rhs`, as an "`Expression`"
+    pub fn sum(lhs: Self, rhs: Self) -> Self {
+        let (lhs_node, _) = lhs.deconstruct();
+        let (rhs_node, _) = rhs.deconstruct();
+
+        let sum_node = ExpressionNode::Sum(Box::new(lhs_node), Box::new(rhs_node));
+
+        Expression::new(sum_node, ())
+    }
+
+    /// scales an Expression by a field element
+    pub fn scaled(expression: Expression<F, CircuitExpr>, scale: F) -> Self {
+        let (node, _) = expression.deconstruct();
+
+        Expression::new(ExpressionNode::Scaled(Box::new(node), scale), ())
+    }
+}
+
+impl<F: FieldExt> Neg for Expression<F, CircuitExpr> {
+    type Output = Expression<F, CircuitExpr>;
+    fn neg(self) -> Self::Output {
+        Expression::<F, CircuitExpr>::negated(self)
+    }
+}
+
+/// implement the Add, Sub, and Mul traits for the Expression
+impl<F: FieldExt> Add for Expression<F, CircuitExpr> {
+    type Output = Expression<F, CircuitExpr>;
+    fn add(self, rhs: Expression<F, CircuitExpr>) -> Expression<F, CircuitExpr> {
+        Expression::<F, CircuitExpr>::sum(self, rhs)
+    }
+}
+
+impl<F: FieldExt> Sub for Expression<F, CircuitExpr> {
+    type Output = Expression<F, CircuitExpr>;
+    fn sub(self, rhs: Expression<F, CircuitExpr>) -> Expression<F, CircuitExpr> {
+        self.add(rhs.neg())
+    }
+}
+
+impl<F: FieldExt> Mul<F> for Expression<F, CircuitExpr> {
+    type Output = Expression<F, CircuitExpr>;
+    fn mul(self, rhs: F) -> Self::Output {
+        Expression::<F, CircuitExpr>::scaled(self, rhs)
     }
 }
 

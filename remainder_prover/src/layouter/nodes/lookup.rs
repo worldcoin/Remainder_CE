@@ -146,7 +146,8 @@ impl LookupTable {
         crate::layouter::layouting::DAGError,
     > {
         type AE<F> = Expression<F, AbstractExpr>;
-        type PE<F> = Expression<F, ProverExpr>;
+        type CE<F> = Expression<F, CircuitExpr>;
+        // type PE<F> = Expression<F, ProverExpr>;
 
         // Ensure that number of LookupConstraints is a power of two (otherwise when we concat the
         // constrained nodes, there will be padding, and the padding value is potentially not in the
@@ -186,11 +187,12 @@ impl LookupTable {
         );
         let constrained_circuit_expr =
             constrained_expr.build_circuit_expr(circuit_description_map)?;
-        let expr = CircuitExpr::Sum(
+        let expr = CE::sum(
             verifier_challenge_mle.expression(),
-            CircuitExpr::Negated(constrained_expr.build_circuit_expr(circuit_description_map)),
+            CE::negated(constrained_expr.build_circuit_expr(circuit_description_map)?),
         );
-        let expr_num_vars = expr.num_vars(circuit_description_map);
+        let expr_num_vars = expr.num_vars();
+
         let layer_id = intermediate_layer_id.get_and_inc();
         let layer = CircuitRegularLayer::new_raw(layer_id, expr);
         let mut intermediate_layers = vec![CircuitLayerEnum::Regular(layer)];
@@ -408,7 +410,7 @@ fn extract_prefix_num_iterated_bits<F: FieldExt>(mle: &CircuitMle<F>) -> (Vec<Ml
         .mle_indices()
         .iter()
         .map(|mle_index| match mle_index {
-            MleIndex::Fixed(b) => Some(*mle_index),
+            MleIndex::Fixed(_) => Some(mle_index.clone()),
             MleIndex::Iterated => {
                 num_iterated_bits += 1;
                 None
@@ -469,13 +471,18 @@ fn build_fractional_sum<F: FieldExt>(
         let denominators = split_circuit_mle(&denominator_desc);
 
         // Calculate the new numerator
-        let next_numerator_expr =
-            CE::<F>::products(vec![numerators.0.clone(), denominators.1.clone()])
-                + CE::<F>::products(vec![numerators.1.clone(), denominators.0.clone()]);
+        let next_numerator_expr = CE::products(vec![numerators.0.clone(), denominators.1.clone()])
+            + CE::products(vec![numerators.1.clone(), denominators.0.clone()]);
 
         // Calculate the new denominator
         let next_denominator_expr =
-            CE::<F>::products(vec![denominators.0.clone(), denominators.1.clone()]);
+            CE::products(vec![denominators.0.clone(), denominators.1.clone()]);
+
+        // Grab the size of each
+        let next_numerator_num_vars = next_numerator_expr.num_vars();
+        let next_denominator_num_vars = next_denominator_expr.num_vars();
+
+        // Create the circuit layer by combining the two
         let layer_id = current_layer_id.get_and_inc();
         let layer = CircuitRegularLayer::new_raw(
             layer_id,
@@ -488,8 +495,6 @@ fn build_fractional_sum<F: FieldExt>(
             i, current_layer_id
         );
 
-        let next_numerator_num_vars = next_numerator_expr.num_vars(circuit_description_map);
-        let next_denominator_num_vars = next_denominator_expr.num_vars(circuit_description_map);
         denominator_desc = CircuitMle::new(
             layer_id,
             &std::iter::once(MleIndex::Fixed(false))
