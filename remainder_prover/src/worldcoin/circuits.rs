@@ -11,7 +11,7 @@ use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::mle::get_input_shred_from_vec;
 use crate::utils::mle::pad_with;
 use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecomposition, BitsAreBinary, DigitsConcatenator};
-use crate::worldcoin::components::Thresholder;
+use crate::worldcoin::components::Subtractor;
 use crate::worldcoin::data::{WorldcoinCircuitData, CircuitData};
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
@@ -38,30 +38,30 @@ pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_N
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         println!("{:?} = Input layer", input_layer.id());
         // FIXME shouldn't have to clone here, but need to change library functions
-        let image = get_input_shred_from_vec(to_reroute.clone(), ctx, &input_layer);
-        println!("{:?} = Image input", image.id());
-        let thresholds = get_input_shred_from_vec(
+        let to_reroute = get_input_shred_from_vec(to_reroute.clone(), ctx, &input_layer);
+        println!("{:?} = Image to_reroute input", to_reroute.id());
+        let to_sub_from_matmult = get_input_shred_from_vec(
             to_sub_from_matmult.clone(),
             ctx,
             &input_layer,
         );
-        println!("{:?} = Thresholds input", thresholds.id());
-        let rerouted_image = IdentityGateNode::new(ctx, &image, reroutings.clone());
+        println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
+        let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
-        let kernel_matrix = get_input_shred_from_vec(rh_matmult_multiplicand.clone(), ctx, &input_layer);
-        println!("{:?} = Kernel values input", kernel_matrix.id());
+        let rh_matmult_multiplicand = get_input_shred_from_vec(rh_matmult_multiplicand.clone(), ctx, &input_layer);
+        println!("{:?} = Kernel values (RH multiplicand of matmult) input", rh_matmult_multiplicand.id());
 
         let matmult = MatMultNode::new(
             ctx,
             &rerouted_image,
             (MATMULT_NUM_ROWS, MATMULT_INTERNAL_DIM),
-            &kernel_matrix,
+            &rh_matmult_multiplicand,
             (MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS),
         );
         println!("{:?} = Matmult", matmult.id());
 
-        let thresholder = Thresholder::new(ctx, &matmult, &thresholds);
+        let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
@@ -94,32 +94,32 @@ pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_N
 
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE as u64);
 
-        let iris_code = get_input_shred_from_vec(
+        let sign_bits = get_input_shred_from_vec(
             sign_bits.clone(),
             ctx,
             &input_layer,
         );
-        println!("{:?} = Iris code input", iris_code.id());
+        println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
-            &thresholder.sector,
-            &iris_code,
+            &subtractor.sector,
+            &sign_bits,
             &unsigned_recomp.sector,
             BASE as u64,
             NUM_DIGITS,
         );
         output_nodes.push(OutputNode::new_zero(ctx, &complementary_checker.sector));
 
-        let bits_are_binary = BitsAreBinary::new(ctx, &iris_code);
+        let bits_are_binary = BitsAreBinary::new(ctx, &sign_bits);
         output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
 
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<F>> = vec![
             input_layer.into(),
-            image.into(),
-            kernel_matrix.into(),
-            iris_code.into(),
-            thresholds.into(),
+            to_reroute.into(),
+            rh_matmult_multiplicand.into(),
+            sign_bits.into(),
+            to_sub_from_matmult.into(),
             digit_multiplicities.into(),
             lookup_table_values.into(),
         ];
@@ -136,7 +136,7 @@ pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_N
         all_nodes.push(lookup_constraint.into());
 
         // Add nodes from components
-        all_nodes.extend(thresholder.yield_nodes().into_iter());
+        all_nodes.extend(subtractor.yield_nodes().into_iter());
         all_nodes.extend(digits_concatenator.yield_nodes().into_iter());
         all_nodes.extend(bits_are_binary.yield_nodes().into_iter());
         all_nodes.extend(unsigned_recomp.yield_nodes().into_iter());

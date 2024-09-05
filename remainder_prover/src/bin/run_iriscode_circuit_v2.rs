@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use clap::Parser;
-use remainder::{prover::helpers::test_circuit, worldcoin::{circuits::build_circuit, data::{load_data, WorldcoinCircuitData}, parameters_v2::{CONSTANT_DATA_FOLDER, WC_BASE, WC_NUM_DIGITS}}};
+use remainder::{prover::helpers::test_circuit, worldcoin::{circuits::build_circuit, data::{load_data, WorldcoinCircuitData}, parameters_v2::{CONSTANT_DATA_FOLDER, BASE, NUM_DIGITS}}};
 use remainder_shared_types::Fr;
 
 #[derive(Parser, Debug)]
