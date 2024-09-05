@@ -311,6 +311,16 @@ pub struct CircuitMatrix<F: FieldExt> {
     num_cols_vars: usize,
 }
 
+impl<F: FieldExt> CircuitMatrix<F> {
+    pub fn new(mle: CircuitMle<F>, num_rows_vars: usize, num_cols_vars: usize) -> Self {
+        Self {
+            mle,
+            num_rows_vars,
+            num_cols_vars,
+        }
+    }
+}
+
 impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
     fn from(matrix: Matrix<F>) -> Self {
         let mut indexed_mle = matrix.mle.clone();
@@ -343,6 +353,16 @@ impl<F: FieldExt> From<MatMult<F>> for CircuitMatMultLayer<F> {
             layer_id: matmult_layer.layer_id,
             matrix_a: matmult_layer.matrix_a.into(),
             matrix_b: matmult_layer.matrix_b.into(),
+        }
+    }
+}
+
+impl<F: FieldExt> CircuitMatMultLayer<F> {
+    pub fn new(layer_id: LayerId, matrix_a: CircuitMatrix<F>, matrix_b: CircuitMatrix<F>) -> Self {
+        Self {
+            layer_id,
+            matrix_a,
+            matrix_b,
         }
     }
 }

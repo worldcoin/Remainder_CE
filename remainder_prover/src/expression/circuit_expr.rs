@@ -38,20 +38,6 @@ pub struct CircuitMle<F: FieldExt> {
     var_indices: Vec<MleIndex<F>>,
 }
 
-impl<F: FieldExt> CircuitNode for CircuitMle<F> {
-    fn id(&self) -> crate::layouter::nodes::NodeId {
-        todo!()
-    }
-
-    fn sources(&self) -> Vec<crate::layouter::nodes::NodeId> {
-        todo!()
-    }
-
-    fn get_num_vars(&self) -> usize {
-        todo!()
-    }
-}
-
 impl<F: FieldExt> CircuitMle<F> {
     pub fn new(layer_id: LayerId, var_indices: &[MleIndex<F>]) -> Self {
         Self {
@@ -70,6 +56,10 @@ impl<F: FieldExt> CircuitMle<F> {
 
     pub fn mle_indices(&self) -> &[MleIndex<F>] {
         &self.var_indices
+    }
+
+    pub fn expression(self) -> Expression<F, CircuitExpr> {
+        Expression::new(ExpressionNode::<F, CircuitExpr>::Mle(self), ())
     }
 
     pub fn num_iterated_vars(&self) -> usize {
