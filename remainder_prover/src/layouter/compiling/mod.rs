@@ -3,99 +3,25 @@
 #[cfg(test)]
 mod tests;
 
-use std::iter;
 use std::marker::PhantomData;
 
-use crate::input_layer::enum_input_layer::InputLayerEnum;
-use crate::input_layer::InputLayer;
-use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
-use crate::layer::Layer;
-use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
-use crate::output_layer::CircuitOutputLayer;
-use crate::prover::{GKRCircuitDescription, GKRError, WitnessAndCircuitDescription};
+use crate::input_layer::enum_input_layer::CircuitInputLayerEnum;
+use crate::layer::layer_enum::CircuitLayerEnum;
+use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
+use crate::prover::{GKRCircuitDescription, GKRError};
 use crate::{
     layer::LayerId,
     layouter::layouting::layout,
-    prover::{
-        layers::Layers,
-        proof_system::{DefaultProofSystem, ProofSystem},
-        GKRCircuit, Witness,
-    },
+    prover::{proof_system::DefaultProofSystem, GKRCircuit},
 };
 use itertools::Itertools;
-use remainder_shared_types::transcript::ProverTranscript;
 use remainder_shared_types::FieldExt;
 
 use super::layouting::CircuitDescriptionMap;
-use super::nodes::circuit_inputs::InputLayerNode;
-use super::nodes::random::VerifierChallengeNode;
-use super::nodes::CompilableNode;
 use super::{
     component::Component,
-    layouting::CircuitMap,
     nodes::{node_enum::NodeEnum, Context},
 };
-
-/// An intermediate struct that allows a `Witness` to be built
-/// one layer at a time
-#[derive(Clone, Debug, Default)]
-pub struct WitnessBuilder<F: FieldExt, Pf: ProofSystem<F>> {
-    input_layers: Vec<Pf::InputLayer>,
-    layers: Layers<F, Pf::Layer>,
-    output_layers: Vec<Pf::OutputLayer>,
-}
-
-impl<F: FieldExt, Pf: ProofSystem<F>> WitnessBuilder<F, Pf> {
-    /// Creates an empty `WitnessBuilder`
-    pub fn new() -> Self {
-        Self {
-            input_layers: Vec::new(),
-            layers: Layers::new(),
-            output_layers: Vec::new(),
-        }
-    }
-
-    /// Gives the expected `LayerId` of the next InputLayer
-    pub fn next_input_layer(&self) -> LayerId {
-        self.input_layers
-            .last()
-            .map(|last| last.layer_id().next())
-            .unwrap_or(LayerId::Input(0))
-    }
-
-    /// Gives the expected `LayerId` of the next Layer
-    pub fn next_layer(&self) -> LayerId {
-        self.layers
-            .layers
-            .last()
-            .map(|last| last.layer_id().next())
-            .unwrap_or(LayerId::Layer(0))
-    }
-
-    /// Adds an InputLayer
-    pub fn add_input_layer(&mut self, input_layer: <Pf as ProofSystem<F>>::InputLayer) {
-        self.input_layers.push(input_layer);
-    }
-
-    /// Adds a Layer
-    pub fn add_layer(&mut self, layer: <Pf as ProofSystem<F>>::Layer) {
-        self.layers.layers.push(layer);
-    }
-
-    /// Adds an OutputLayer
-    pub fn add_output_layer(&mut self, output_layer: <Pf as ProofSystem<F>>::OutputLayer) {
-        self.output_layers.push(output_layer);
-    }
-
-    /// Builds a Witness that is ready to be proven
-    pub fn build(self) -> Witness<F, Pf> {
-        Witness {
-            layers: self.layers,
-            output_layers: self.output_layers,
-            input_layers: self.input_layers,
-        }
-    }
-}
 
 /// A basic circuit that uses the Layouter to construct the witness
 pub struct LayouterCircuit<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> {
@@ -118,29 +44,6 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
     for LayouterCircuit<F, C, Fn>
 {
     type ProofSystem = DefaultProofSystem;
-    // write random
-    // add the input node depednency into
-
-    // {
-    //     let mut witness = self.synthesize();
-
-    //     let verifier_key = witness.generate_verifier_key()?;
-
-    //     let commitments = witness
-    //         .input_layers
-    //         .iter_mut()
-    //         .map(|input_layer| {
-    //             let commitment = input_layer.commit().map_err(GKRError::InputLayerError)?;
-    //             CircuitInputLayer::<F, Self>::append_commitment_to_transcript(
-    //                 &commitment,
-    //                 transcript,
-    //             );
-    //             Ok(commitment)
-    //         })
-    //         .try_collect()?;
-
-    //     Ok((witness, commitments, verifier_key))
-    // }
 
     fn generate_circuit_description(
         &mut self,
@@ -148,13 +51,8 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
         let ctx = Context::new();
         let component = (self.witness_builder)(&ctx);
         let nodes = component.yield_nodes();
-        let (
-            input_nodes,
-            mut verifier_challenge_nodes,
-            intermediate_nodes,
-            lookup_nodes,
-            output_nodes,
-        ) = layout(ctx, nodes).unwrap();
+        let (input_nodes, verifier_challenge_nodes, intermediate_nodes, lookup_nodes, output_nodes) =
+            layout(ctx, nodes).unwrap();
 
         let mut input_layer_id = LayerId::Input(0);
         let mut intermediate_layer_id = LayerId::Layer(0);
@@ -177,15 +75,19 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
             })
             .collect_vec();
 
-        // TODO(vishady, ryancao): Put this back in after writing the `get_circuit_description()`
-        // function for the `VerifierChallengeNode`
-        // let verifier_challenge_layers = verifier_challenge_nodes
-        //     .iter_mut()
-        //     .map(|verifier_challenge_node| {
-        //         dbg!(&input_layer_id);
-        //         verifier_challenge_node.(&mut input_layer_id, &mut circuit_description_map)
-        //     })
-        //     .collect_vec();
+        verifier_challenge_nodes
+            .iter()
+            .map(|verifier_challenge_node| {
+                let verifier_challenge_layer = verifier_challenge_node
+                    .generate_circuit_description::<F>(
+                        &mut verifier_challenge_layer_id,
+                        &mut circuit_description_map,
+                    );
+                input_layers.push(CircuitInputLayerEnum::RandomInputLayer(
+                    verifier_challenge_layer,
+                ))
+            })
+            .collect_vec();
 
         for node in &intermediate_nodes {
             dbg!(&intermediate_layer_id);

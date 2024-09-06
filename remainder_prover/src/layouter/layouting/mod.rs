@@ -28,8 +28,8 @@ use super::nodes::{
     lookup::{LookupConstraint, LookupTable},
     matmult::MatMultNode,
     node_enum::{NodeEnum, NodeEnumGroup},
-    random::VerifierChallengeNode,
     split_node::SplitNode,
+    verifier_challenge::VerifierChallengeNode,
     CircuitNode, CompilableNode, Context, NodeGroup, NodeId, YieldNode,
 };
 

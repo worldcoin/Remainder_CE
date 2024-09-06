@@ -23,9 +23,9 @@ pub mod identity_gate;
 pub mod lookup;
 pub mod matmult;
 pub mod node_enum;
-pub mod random;
 pub mod sector;
 pub mod split_node;
+pub mod verifier_challenge;
 
 /// Container of global context for node creation
 ///

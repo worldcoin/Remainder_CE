@@ -1,36 +1,24 @@
 //! Nodes that implement LogUp.
-use std::io::Cursor;
-use std::thread::current;
 
-use crate::expression::abstract_expr::{calculate_selector_values, AbstractExpr};
+use crate::expression::abstract_expr::AbstractExpr;
 use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
-use crate::expression::prover_expr::ProverExpr;
-use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
-use crate::input_layer::public_input_layer::{CircuitPublicInputLayer, PublicInputLayer};
-use crate::input_layer::random_input_layer::RandomInputLayer;
-use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
+use crate::input_layer::enum_input_layer::CircuitInputLayerEnum;
+use crate::input_layer::public_input_layer::CircuitPublicInputLayer;
+use crate::layer::layer_enum::CircuitLayerEnum;
 use crate::layer::regular_layer::CircuitRegularLayer;
-use crate::layer::{Layer, LayerId};
+use crate::layer::LayerId;
 use crate::layouter::layouting::CircuitDescriptionMap;
-use crate::mle::zero::ZeroMle;
-use crate::mle::Mle;
-use crate::mle::{evals::Evaluations, MleIndex};
-use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
+use crate::mle::MleIndex;
+use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use crate::utils::get_total_mle_indices;
 
 use itertools::{repeat_n, Itertools};
-use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::FieldExt;
 
-use crate::{
-    expression::{abstract_expr::ExprBuilder, generic_expr::Expression},
-    layer::regular_layer::RegularLayer,
-    mle::{dense::DenseMle, evals::MultilinearExtension},
-    prover::proof_system::ProofSystem,
-};
+use crate::expression::{abstract_expr::ExprBuilder, generic_expr::Expression};
 
-use super::random::VerifierChallengeNode;
-use super::{CircuitNode, CompilableNode, Context, InputCompilableNode, NodeId};
+use super::verifier_challenge::VerifierChallengeNode;
+use super::{CircuitNode, Context, NodeId};
 
 /// Represents the use of a lookup into a particular table (represented by a LookupTable).
 #[derive(Clone, Debug)]
@@ -161,11 +149,6 @@ impl LookupTable {
             "Number of LookupConstraints should be a power of two"
         );
 
-        // Ensure that the table length is a power of two (otherwise 0 will be added implicitly,
-        // which is potentially unwanted and moreover the padding of the denominators with zeros
-        // will cause failure)
-        let (_, table_num_vars) = circuit_description_map.0[&self.table_node_id];
-
         // Build the LHS of the equation (defined by the constrained values)
         println!("Build the LHS of the equation (defined by the constrained values)");
 
@@ -223,7 +206,6 @@ impl LookupTable {
             lhs_denominator_desc,
             &mut intermediate_layers,
             intermediate_layer_id,
-            &circuit_description_map,
         );
 
         // Build the RHS of the equation (defined by the table values and multiplicities)
@@ -319,7 +301,6 @@ impl LookupTable {
             rhs_denominator_desc,
             &mut intermediate_layers,
             intermediate_layer_id,
-            &circuit_description_map,
         );
 
         // Add an input layer for the inverse of the denominators of the LHS. This value holds
@@ -492,7 +473,6 @@ fn build_fractional_sum<F: FieldExt>(
     denominator_desc: CircuitMle<F>,
     layers: &mut Vec<CircuitLayerEnum<F>>,
     current_layer_id: &mut LayerId,
-    circuit_description_map: &CircuitDescriptionMap,
 ) -> (CircuitMle<F>, CircuitMle<F>) {
     type CE<F> = Expression<F, CircuitExpr>;
     assert_eq!(

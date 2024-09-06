@@ -6,14 +6,14 @@ use crate::{claims::wlx_eval::YieldWLXEvals, input_layer_enum, layer::LayerId};
 
 use super::{
     ligero_input_layer::LigeroInputLayer, public_input_layer::PublicInputLayer,
-    random_input_layer::RandomInputLayer, InputLayer,
+    random_input_layer::VerifierChallengeInputLayer, InputLayer,
 };
 
 input_layer_enum!(
     InputLayerEnum,
     (LigeroInputLayer: LigeroInputLayer<F>),
     (PublicInputLayer: PublicInputLayer<F>),
-    (RandomInputLayer: RandomInputLayer<F>)
+    (RandomInputLayer: VerifierChallengeInputLayer<F>)
 );
 
 impl<F: FieldExt> InputLayerEnum<F> {

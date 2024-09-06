@@ -14,14 +14,14 @@ use crate::{
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, InputLayer, InputLayerError, CircuitInputLayer};
+use super::{get_wlx_evaluations_helper, CircuitInputLayer, InputLayer, InputLayerError};
 use crate::mle::Mle;
 
 /// Represents a random input layer, where we generate random constants in the
 /// form of coefficients of an MLE that we can use for packing constants.
 
 #[derive(Debug, Clone)]
-pub struct RandomInputLayer<F: FieldExt> {
+pub struct VerifierChallengeInputLayer<F: FieldExt> {
     mle: MultilinearExtension<F>,
     pub(crate) layer_id: LayerId,
 }
@@ -29,7 +29,7 @@ pub struct RandomInputLayer<F: FieldExt> {
 /// Verifier's description of a Random Input Layer.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(bound = "F: FieldExt")]
-pub struct VerifierRandomInputLayer<F: FieldExt> {
+pub struct CircuitVerifierChallengeInputLayer<F: FieldExt> {
     /// The ID of this Random Input Layer.
     layer_id: LayerId,
 
@@ -39,12 +39,8 @@ pub struct VerifierRandomInputLayer<F: FieldExt> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> VerifierRandomInputLayer<F> {
-    /// To be used only for internal testing!
-    /// Generates a [VerifierRandomInputLayer] with the give raw data.
-    /// Normally, a [VerifierRandomInputLayer] is generate through
-    /// the `RandomInputLayer::into_verifier_input_layer()` method.
-    pub(crate) fn new_raw(layer_id: LayerId, num_bits: usize) -> Self {
+impl<F: FieldExt> CircuitVerifierChallengeInputLayer<F> {
+    pub fn new(layer_id: LayerId, num_bits: usize) -> Self {
         Self {
             layer_id,
             num_bits,
@@ -53,11 +49,11 @@ impl<F: FieldExt> VerifierRandomInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
+impl<F: FieldExt> InputLayer<F> for VerifierChallengeInputLayer<F> {
     type ProverCommitment = Vec<F>;
     type VerifierCommitment = Vec<F>;
 
-    type CircuitInputLayer = VerifierRandomInputLayer<F>;
+    type CircuitInputLayer = CircuitVerifierChallengeInputLayer<F>;
 
     fn commit(&mut self) -> Result<Self::VerifierCommitment, super::InputLayerError> {
         // We do not need to commit to the randomness, so we simply send it in
@@ -102,7 +98,7 @@ impl<F: FieldExt> InputLayer<F> for RandomInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> CircuitInputLayer<F> for VerifierRandomInputLayer<F> {
+impl<F: FieldExt> CircuitInputLayer<F> for CircuitVerifierChallengeInputLayer<F> {
     type Commitment = Vec<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -148,7 +144,7 @@ impl<F: FieldExt> CircuitInputLayer<F> for VerifierRandomInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> RandomInputLayer<F> {
+impl<F: FieldExt> VerifierChallengeInputLayer<F> {
     pub fn new(mle: MultilinearExtension<F>, layer_id: LayerId) -> Self {
         Self { mle, layer_id }
     }
@@ -159,7 +155,7 @@ impl<F: FieldExt> RandomInputLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for RandomInputLayer<F> {
+impl<F: FieldExt> YieldWLXEvals<F> for VerifierChallengeInputLayer<F> {
     /// Computes the V_d(l(x)) evaluations for the input layer V_d.
     fn get_wlx_evaluations(
         &self,
@@ -204,11 +200,11 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
-        let random_input_layer = RandomInputLayer::new(mle, layer_id);
+        let random_input_layer = VerifierChallengeInputLayer::new(mle, layer_id);
         let verifier_random_input_layer = random_input_layer.into_verifier_input_layer();
 
         let expected_verifier_random_input_layer =
-            VerifierRandomInputLayer::new_raw(layer_id, num_vars);
+            CircuitVerifierChallengeInputLayer::new(layer_id, num_vars);
 
         assert_eq!(
             verifier_random_input_layer,
@@ -236,7 +232,7 @@ mod tests {
         let mle_vec = transcript_writer.get_challenges("random challenges for FS", num_evals);
         let mle = MultilinearExtension::new(mle_vec);
 
-        let mut random_input_layer = RandomInputLayer::new(mle, layer_id);
+        let mut random_input_layer = VerifierChallengeInputLayer::new(mle, layer_id);
         let verifier_random_input_layer = random_input_layer.into_verifier_input_layer();
 
         // Prover phase.
@@ -244,7 +240,7 @@ mod tests {
         let commitment = random_input_layer.commit().unwrap();
 
         // 2. Add commitment to transcript.
-        RandomInputLayer::<Fr>::append_commitment_to_transcript(
+        VerifierChallengeInputLayer::<Fr>::append_commitment_to_transcript(
             &commitment,
             &mut transcript_writer,
         );

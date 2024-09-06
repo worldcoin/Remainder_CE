@@ -12,9 +12,9 @@ use super::{
     identity_gate::IdentityGateNode,
     lookup::{LookupConstraint, LookupTable},
     matmult::MatMultNode,
-    random::VerifierChallengeNode,
     sector::{Sector, SectorGroup},
     split_node::SplitNode,
+    verifier_challenge::VerifierChallengeNode,
     NodeGroup, YieldNode,
 };
 

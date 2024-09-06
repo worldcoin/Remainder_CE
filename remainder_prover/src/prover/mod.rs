@@ -181,10 +181,7 @@ pub trait GKRCircuit<F: FieldExt> {
         let synthesize_commit_timer = start_timer!(|| "Circuit synthesize and commit");
         info!("Synethesizing circuit...");
 
-        // Add circuit hash to transcript, if exists.
-        if let Some(circuit_hash) = Self::get_circuit_hash() {
-            transcript_writer.append("Circuit Hash", circuit_hash);
-        }
+        // TODO(vishady): ADD CIRCUIT DESCRIPTION TO TRANSCRIPT (maybe not here...)
 
         // TODO(Makis): User getter syntax.
         let (
@@ -320,25 +317,6 @@ pub trait GKRCircuit<F: FieldExt> {
         input_layer_proving_span.exit();
 
         Ok((transcript_writer.get_transcript(), verifier_key))
-    }
-
-    /// Generate the circuit hash
-    fn gen_circuit_hash(&mut self) -> F
-    where
-        Self::ProofSystem: ProofSystem<F, Layer = LayerEnum<F>>,
-    {
-        let mut transcript_writer =
-            TranscriptWriter::<F, CircuitTranscript<F, Self>>::new("Circuit Hash");
-        let (Witness { layers, .. }, _) =
-            self.synthesize_and_commit(&mut transcript_writer).unwrap();
-
-        hash_layers(&layers)
-    }
-
-    /// Get the circuit hash
-    fn get_circuit_hash() -> Option<F>
-where {
-        Self::CIRCUIT_HASH.map(|bytes| F::from_repr(bytes).unwrap())
     }
 }
 

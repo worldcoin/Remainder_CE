@@ -30,6 +30,7 @@ use super::{
         gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
         index_mle_indices_gate, GateError,
     },
+    layer_enum::VerifierLayerEnum,
     product::{PostSumcheckLayer, Product},
     regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     CircuitLayer, Layer, LayerId, VerifierLayer,
@@ -81,7 +82,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         &self,
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierLayer, VerificationError> {
+    ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         let num_sumcheck_rounds = self.sumcheck_round_indices().len();
 
         // --- Store challenges for later claim generation ---
@@ -149,7 +150,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
             return Err(VerificationError::FinalSumcheckFailed);
         }
 
-        Ok(verifier_id_gate_layer)
+        Ok(VerifierLayerEnum::IdentityGate(verifier_id_gate_layer))
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
