@@ -14,9 +14,10 @@ use crate::claims::wlx_eval::WLXAggregator;
 use crate::expression::verifier_expr::VerifierMle;
 use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::CircuitInputLayer;
+use crate::layer::layer_enum::VerifierLayerEnum;
 use crate::layer::CircuitLayer;
 use crate::mle::Mle;
-use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
+use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
 use crate::output_layer::{CircuitOutputLayer, OutputLayer};
 use crate::{
     claims::ClaimAggregator,
@@ -94,7 +95,7 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
     /// The intermediate layers of the circuit, as defined by the ProofSystem
     pub layers: Layers<F, Pf::Layer>,
     /// The output layers of the circuit, as defined by the ProofSystem
-    pub output_layers: Vec<Pf::OutputLayer>,
+    pub output_layers: Vec<MleOutputLayer<F>>,
     /// The input layers of the circuit, as defined by the ProofSystem
     pub input_layers: Vec<Pf::InputLayer>,
 }
@@ -162,12 +163,6 @@ pub trait GKRCircuit<F: FieldExt> {
     /// The hash of the circuit, use to uniquely identify the circuit
     const CIRCUIT_HASH: Option<F::Repr> = None;
 
-    /// Calls `synthesize` and also generates commitments from each of the input layers
-    fn synthesize_and_commit(
-        &mut self,
-        transcript: &mut impl ProverTranscript<F>,
-    ) -> Result<WitnessAndCircuitDescription<F, Self>, GKRError>;
-
     /// Creates the `GKRVerifierKey`, i.e. the circuit description, for the current
     /// `GKRCircuit` instance
     fn generate_circuit_description(
@@ -205,7 +200,7 @@ pub trait GKRCircuit<F: FieldExt> {
         end_timer!(synthesize_commit_timer);
 
         // Claim aggregator to keep track of GKR-style claims across all layers.
-        let mut aggregator = <CircuitClaimAggregator<F, Self> as ClaimAggregator<F>>::new();
+        let mut aggregator = WLXAggregator::<F, LayerEnum<F>, InputLayerEnum<F>>::new();
 
         // --------- STAGE 1: Output Claim Generation ---------
         let claims_timer = start_timer!(|| "Output claims generation");
@@ -353,8 +348,7 @@ where {
 pub struct GKRCircuitDescription<F: FieldExt, Pf: ProofSystem<F>> {
     pub input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::CircuitInputLayer>,
     pub intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
-    pub output_layers:
-        Vec<<<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer>,
+    pub output_layers: Vec<CircuitMleOutputLayer<F>>,
 }
 
 impl<F: FieldExt, Pf: ProofSystem<F>> GKRCircuitDescription<F, Pf> {
@@ -362,9 +356,7 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRCircuitDescription<F, Pf> {
     pub fn new(
         input_layers: Vec<<<Pf as ProofSystem<F>>::InputLayer as InputLayer<F>>::CircuitInputLayer>,
         intermediate_layers: Vec<<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer>,
-        output_layers: Vec<
-            <<Pf as ProofSystem<F>>::OutputLayer as OutputLayer<F>>::CircuitOutputLayer,
-        >,
+        output_layers: Vec<CircuitMleOutputLayer<F>>,
     ) -> Self {
         Self {
             input_layers,
@@ -460,15 +452,11 @@ impl<F: FieldExt, Pf: ProofSystem<F>> GKRCircuitDescription<F, Pf> {
                 start_timer!(|| format!("Verify sumcheck message for layer {:?}", layer_id));
 
             // Performs the actual sumcheck verification step.
-            let verifier_layer: <<<Pf as ProofSystem<F>>::Layer as Layer<F>>::CircuitLayer as CircuitLayer<F>>::VerifierLayer =
-                layer
-                    .verify_rounds(prev_claim, transcript_reader)
-                    .map_err(|err| {
-                        GKRError::ErrorWhenVerifyingLayer(
-                            layer_id,
-                            LayerError::VerificationError(err),
-                        )
-                    })?;
+            let verifier_layer: VerifierLayerEnum<F> = layer
+                .verify_rounds(prev_claim, transcript_reader)
+                .map_err(|err| {
+                    GKRError::ErrorWhenVerifyingLayer(layer_id, LayerError::VerificationError(err))
+                })?;
 
             end_timer!(sumcheck_msg_timer);
 

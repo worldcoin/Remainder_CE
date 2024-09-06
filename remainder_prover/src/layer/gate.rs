@@ -34,7 +34,7 @@ pub use self::gate_helpers::{
     GateError,
 };
 
-use super::{CircuitLayer, VerifierLayer};
+use super::{layer_enum::VerifierLayerEnum, CircuitLayer, VerifierLayer};
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
@@ -285,7 +285,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
         &self,
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierLayer, VerificationError> {
+    ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         // --- Storing challenges for the sake of claim generation later ---
         let mut challenges = vec![];
 
@@ -387,7 +387,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
             return Err(VerificationError::FinalSumcheckFailed);
         }
 
-        Ok(verifier_gate_layer)
+        Ok(VerifierLayerEnum::Gate(verifier_gate_layer))
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {

@@ -10,6 +10,7 @@ pub mod regular_layer;
 
 use std::fmt::Debug;
 
+use layer_enum::VerifierLayerEnum;
 use product::PostSumcheckLayer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -164,7 +165,7 @@ pub trait CircuitLayer<F: FieldExt> {
         &self,
         claim: Claim<F>,
         transcript: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierLayer, VerificationError>;
+    ) -> Result<VerifierLayerEnum<F>, VerificationError>;
 
     /// The list of sumcheck rounds this layer will prove, by index.
     fn sumcheck_round_indices(&self) -> Vec<usize>;
