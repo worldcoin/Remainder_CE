@@ -103,7 +103,7 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
         let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
         assert_eq!(num_kernels, MATMULT_NUM_COLS);
         assert!(kernel_num_rows * kernel_num_cols <= MATMULT_INTERNAL_DIM);
-        assert!(thresholds_matrix.dim().0 < MATMULT_NUM_ROWS);
+        assert!(thresholds_matrix.dim().0 <= MATMULT_NUM_ROWS);
         assert_eq!(thresholds_matrix.dim().1, MATMULT_NUM_COLS);
         assert_eq!(wirings.dim().1, 4);
 
