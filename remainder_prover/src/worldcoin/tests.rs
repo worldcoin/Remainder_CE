@@ -65,3 +65,39 @@ fn test_worldcoin_circuit_mask_v3() {
     let circuit = build_circuit(data);
     test_circuit(circuit, None);
 }
+
+#[test]
+/// Simply checks that the test files for v2 are available (in both the iris and mask case) and that
+/// the CircuitData instance can be constructed.
+fn test_load_worldcoin_data_v2() {
+    use super::parameters_v2::{CONSTANT_DATA_FOLDER, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS};
+    use remainder_shared_types::Fr;
+    use std::path::Path;
+    // iris
+    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("iris/test_image.npy");
+    let data = load_worldcoin_data::<Fr, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>(path.clone(), image_path, false);
+    data.ensure_guarantees();
+    // mask
+    let image_path = path.join("mask/test_image.npy");
+    let data = load_worldcoin_data::<Fr, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>(path.clone(), image_path, true);
+    data.ensure_guarantees();
+}
+
+#[test]
+/// Simply checks that the test files for v3 are available (in both the iris and mask case) and that
+/// the CircuitData instance can be constructed.
+fn test_load_worldcoin_data_v3() {
+    use super::parameters_v3::{CONSTANT_DATA_FOLDER, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS};
+    use remainder_shared_types::Fr;
+    use std::path::Path;
+    // iris
+    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
+    let image_path = path.join("iris/test_image.npy");
+    let data = load_worldcoin_data::<Fr, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>(path.clone(), image_path, false);
+    data.ensure_guarantees();
+    // mask
+    let image_path = path.join("mask/test_image.npy");
+    let data = load_worldcoin_data::<Fr, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>(path.clone(), image_path, true);
+    data.ensure_guarantees();
+}

@@ -1,10 +1,9 @@
-use std::path::{Path, PathBuf};
-
+use std::path::PathBuf;
 use ark_std::log2;
 use itertools::Itertools;
-use ndarray::{Array, Array1, Array2, Array3};
+use ndarray::{Array, Array2, Array3};
 use ndarray_npy::read_npy;
-use remainder_shared_types::{FieldExt, Fr};
+use remainder_shared_types::FieldExt;
 
 use crate::layer::LayerId;
 use crate::mle::circuit_mle::{to_slice_of_vectors, CircuitMle, FlatMles};
@@ -13,16 +12,6 @@ use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::array::pad_with_rows;
 use crate::utils::mle::pad_with;
-use crate::worldcoin::parameters_v2::{MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS};
-
-pub fn trivial_wiring_1x1_circuit_data<F: FieldExt>() -> CircuitData<F, 1, 1, 1, 16, 1> {
-    CircuitData::build_worldcoin_circuit_data(
-        Array2::from_shape_vec((1, 1), vec![1]).unwrap(),
-        Array3::from_shape_vec((1, 1, 1), vec![1]).unwrap(),
-        Array2::from_shape_vec((1, 1), vec![0]).unwrap(),
-        Array2::from_shape_vec((1, 4), vec![0, 0, 0, 0]).unwrap(),
-    )
-} 
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 2x1 kernels (1, 0).T and (6, -1).T
@@ -48,69 +37,6 @@ pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>() -> Circuit
         Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1]).unwrap(),
     )
 } 
-
-// /// Generate toy data for the worldcoin circuit.
-// /// Image is 2x2, and there are two placements of two 2x1 kernels (1, 2).T and (3, 4).T
-// pub fn tiny_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16u64, 2> {
-//     let image_shape = (2, 2);
-//     let kernel_shape = (2, 2, 1);
-//     let response_shape = (2, 2);
-//     WorldcoinCircuitData::new(
-//         Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
-//         Array3::from_shape_vec(kernel_shape, vec![1, 2, 3, 4]).unwrap(),
-//         &vec![0],
-//         &vec![0, 1],
-//         Array2::from_shape_vec(response_shape, vec![0, 0, 0, 0]).unwrap(),
-//     )
-// }
-
-// /// Generate toy data for the worldcoin circuit in which the number of responses is not a power of
-// /// two (this is the case for the true v2 data, but that test case takes 90 seconds).
-// /// Image is 2x2, and there are three placements of one 2x1 kernel (1, 2).T
-// pub fn tiny_worldcoin_data_non_power_of_two<F: FieldExt>() -> WorldcoinCircuitData<F, 16u64, 2> {
-//     let image_shape = (2, 2);
-//     let kernel_shape = (1, 2, 1);
-//     let response_shape = (3, 1);
-//     WorldcoinCircuitData::new(
-//         Array2::from_shape_vec(image_shape, vec![3, 1, 4, 9]).unwrap(),
-//         Array3::from_shape_vec(kernel_shape, vec![1, 2]).unwrap(),
-//         &vec![0],
-//         &vec![0, 1, 1],
-//         Array2::from_shape_vec(response_shape, vec![0, 0, 0]).unwrap(),
-//     )
-// }
-
-// /// Generate toy data for the worldcoin circuit.
-// /// Image is 3x3:
-// ///  3 1 4
-// ///  1 5 9
-// ///  2 6 5
-// /// There are four 2x2 kernels
-// ///  1 2    2 7    2 3    3 -3
-// ///  3 4    1 8    5 7    -2 0
-// /// There are four placements of the kernels.
-// /// Threshold values are non-trivial.
-// pub fn medium_worldcoin_data<F: FieldExt>() -> WorldcoinCircuitData<F, 16u64, 2> {
-//     let image_shape = (3, 3);
-//     let kernel_shape = (4, 2, 2);
-//     let response_shape = (4, 4);
-//     WorldcoinCircuitData::new(
-//         Array2::from_shape_vec(image_shape, vec![3, 1, 4, 1, 5, 9, 2, 6, 5]).unwrap(),
-//         Array3::from_shape_vec(
-//             kernel_shape,
-//             vec![1, 2, 3, 4, 2, 7, 1, 8, 2, 3, 5, 7, 3, -3, -2, 0],
-//         )
-//         .unwrap(),
-//         &vec![0, 2],
-//         &vec![0, 2],
-//         Array2::from_shape_vec(response_shape, vec![
-//             5, 5, 5, 5,
-//             5, 5, 5, 5,
-//             -5, -5, -5, -5,
-//             -5, -5, -5, -5,
-//             ]).unwrap(),
-//     )
-// }
 
 #[derive(Debug, Clone)]
 /// Used for instantiating the circuit.
@@ -145,7 +71,8 @@ pub struct CircuitData<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT
     pub to_sub_from_matmult: Vec<F>,
 }
 
-impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize> CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS> {
+impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>
+    CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS> {
     /// Create a new instance.
     ///
     /// # Arguments:
@@ -324,36 +251,4 @@ pub fn load_worldcoin_data<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MAT
         thresholds,
         wirings
     )
-}
-
-#[test]
-/// Simply checks that the test files for v2 are available (in both the iris and mask case) and that
-/// the CircuitData instance can be constructed.
-fn test_load_worldcoin_data_v2() {
-    use super::parameters_v2::{CONSTANT_DATA_FOLDER, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS};
-    // iris
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
-    let image_path = path.join("iris/test_image.npy");
-    let data = load_worldcoin_data::<Fr, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>(path.clone(), image_path, false);
-    data.ensure_guarantees();
-    // mask
-    let image_path = path.join("mask/test_image.npy");
-    let data = load_worldcoin_data::<Fr, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>(path.clone(), image_path, true);
-    data.ensure_guarantees();
-}
-
-#[test]
-/// Simply checks that the test files for v3 are available (in both the iris and mask case) and that
-/// the CircuitData instance can be constructed.
-fn test_load_worldcoin_data_v3() {
-    use super::parameters_v3::{CONSTANT_DATA_FOLDER, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS};
-    // iris
-    let path = Path::new(CONSTANT_DATA_FOLDER).to_path_buf();
-    let image_path = path.join("iris/test_image.npy");
-    let data = load_worldcoin_data::<Fr, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>(path.clone(), image_path, false);
-    data.ensure_guarantees();
-    // mask
-    let image_path = path.join("mask/test_image.npy");
-    let data = load_worldcoin_data::<Fr, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>(path.clone(), image_path, true);
-    data.ensure_guarantees();
 }
