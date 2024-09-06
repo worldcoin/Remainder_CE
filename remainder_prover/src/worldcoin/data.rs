@@ -11,8 +11,9 @@ use crate::mle::circuit_mle::{to_slice_of_vectors, CircuitMle, FlatMles};
 use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
+use crate::utils::array::pad_with_rows;
 use crate::utils::mle::pad_with;
-use crate::worldcoin::parameters_v2::{MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS};
+use crate::worldcoin::parameters_v2::{MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS};
 
 pub fn trivial_wiring_1x1_circuit_data<F: FieldExt>() -> CircuitData<F, 1, 1, 1, 16, 1> {
     CircuitData::build_worldcoin_circuit_data(
@@ -154,7 +155,7 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
     /// + `thresholds_matrix` is the 2d array specifying the threshold to use for each kernel and
     ///   kernel placement; these will be all zeroes for the iris code, but non-zero values for the
     ///   mask.  Unpadded.
-    /// + `wirings` is a 2d array of u32s with 4 columns; each row maps a coordinate of image to a
+    /// + `wirings` is a 2d array of u16s with 4 columns; each row maps a coordinate of image to a
     ///   coordinate of the LH multiplicand of the matmult.
     ///
     /// # Requires:
@@ -164,7 +165,7 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
         image: Array2<u8>,
         kernel_values: Array3<i32>,
         thresholds_matrix: Array2<i64>,
-        wirings: Array2<u32>,
+        wirings: Array2<u16>,
     ) -> Self {
         assert!(BASE.is_power_of_two());
         assert!(NUM_DIGITS.is_power_of_two());
@@ -173,11 +174,10 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
         assert!(MATMULT_INTERNAL_DIM.is_power_of_two());
         let (_, im_num_cols) = image.dim();
         let (num_kernels, kernel_num_rows, kernel_num_cols) = kernel_values.dim();
-        // FIXME do we need num_kernel_values?
-        let num_kernel_values = kernel_num_rows * kernel_num_cols;
         assert_eq!(num_kernels, MATMULT_NUM_COLS);
-        assert!(num_kernel_values <= MATMULT_INTERNAL_DIM);
-        assert_eq!(thresholds_matrix.dim(), (MATMULT_NUM_ROWS, MATMULT_NUM_COLS));
+        assert!(kernel_num_rows * kernel_num_cols <= MATMULT_INTERNAL_DIM);
+        assert!(thresholds_matrix.dim().0 < MATMULT_NUM_ROWS);
+        assert_eq!(thresholds_matrix.dim().1, MATMULT_NUM_COLS);
         assert_eq!(wirings.dim().1, 4);
 
         // Derive the re-routings from the wirings (this is what is needed for identity gate)
@@ -195,23 +195,18 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
             });
 
 
-        // FIXME tidy this up
         // Reshape and pad kernel values to have dimensions (MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS).
         // This is the RH multiplicand of the matrix multiplication.
-        let rh_multiplicand: Array2<i64> = Array::from_shape_vec((MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM),
-            kernel_values
-                .mapv(|elem| elem as i64)
-                .outer_iter()
-                .flat_map(|row| {
-                    row.iter()
-                        .cloned()
-                        .chain(std::iter::repeat(0i64).take(MATMULT_INTERNAL_DIM - num_kernel_values))
-                        .collect::<Vec<_>>()
-                })
-                .collect()
-            ).unwrap()
-            .t()
-            .to_owned();
+        let rh_multiplicand: Array2<i64> = pad_with_rows(
+            kernel_values.into_shape((MATMULT_NUM_COLS, kernel_num_rows * kernel_num_cols)).unwrap()
+                .t()
+                .to_owned()
+                .mapv(|elem| elem as i64),
+            MATMULT_INTERNAL_DIM);
+
+        // Pad the thresholds matrix with extra rows of zeros so that it has dimensions
+        // (MATMULT_NUM_ROWS, MATMULT_NUM_COLS).
+        let thresholds_matrix = pad_with_rows(thresholds_matrix, MATMULT_NUM_ROWS);
 
         // Calculate the matrix product. Has dimensions (MATMULT_NUM_ROWS, MATMULT_NUM_COLS).
         let responses = rerouted_matrix.dot(&rh_multiplicand);
@@ -302,14 +297,17 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
     }
 }
 
-/// Loads the witnesses for a run of the iris code circuit from disk for either the iris or mask case.
+/// Loads circuit structure data and witnesses for a run of the iris code circuit from disk for either the iris or mask case.
+/// Works for both v2 and v3 of the iriscode circuit.
 /// 
 /// # Arguments:
 ///   `constant_data_path` is the path to the root folder (containing the wirings, and subfolders).
 ///   `image_path` is the path to an image file (could be the iris or the mask).
 ///   `is_mask` indicates whether to load the files for the mask or the iris.
-pub fn load_worldcoin_data<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>(constant_data_folder: PathBuf, image_path: PathBuf, is_mask: bool) -> CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS> {
-    let wirings: Array2<u32> = read_npy(&constant_data_folder.join("wirings.npy")).unwrap();
+pub fn load_worldcoin_data<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>
+        (constant_data_folder: PathBuf, image_path: PathBuf, is_mask: bool)
+        -> CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS> {
+    let wirings: Array2<u16> = read_npy(&constant_data_folder.join("wirings.npy")).unwrap();
     assert_eq!(wirings.dim().1, 4);
 
     let data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
