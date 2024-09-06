@@ -336,7 +336,7 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
 
     fn initialize_sumcheck(&mut self, claim_point: &[F]) -> Result<(), LayerError> {
         let beta_g = BetaValues::new_beta_equality_mle(claim_point.to_vec());
-        self.set_beta_g(beta_g.clone());
+        self.set_beta_g(beta_g);
 
         self.mle_ref.index_mle_indices(0);
         let num_vars = self.mle_ref.num_iterated_vars();
@@ -347,7 +347,13 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             .clone()
             .into_iter()
             .for_each(|(z_ind, x_ind)| {
-                let beta_g_at_z = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let beta_g_at_z = *self
+                    .beta_g
+                    .as_ref()
+                    .unwrap()
+                    .bookkeeping_table()
+                    .get(z_ind)
+                    .unwrap_or(&F::ZERO);
                 a_hg_mle_ref[x_ind] += beta_g_at_z;
             });
 
@@ -402,14 +408,19 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
     ) -> PostSumcheckLayer<F, F> {
         let [_, mle_ref] = self.phase_1_mles.as_ref().unwrap();
         let beta_u = BetaValues::new_beta_equality_mle(round_challenges.to_vec());
-        let beta_g = BetaValues::new_beta_equality_mle(claim_challenges.to_vec());
 
         let f_1_uv = self
             .nonzero_gates
             .clone()
             .into_iter()
             .fold(F::ZERO, |acc, (z_ind, x_ind)| {
-                let gz = *beta_g.bookkeeping_table().get(z_ind).unwrap_or(&F::ZERO);
+                let gz = *self
+                    .beta_g
+                    .as_ref()
+                    .unwrap()
+                    .bookkeeping_table()
+                    .get(z_ind)
+                    .unwrap_or(&F::ZERO);
                 let ux = *beta_u.bookkeeping_table().get(x_ind).unwrap_or(&F::ZERO);
 
                 acc + gz * ux
