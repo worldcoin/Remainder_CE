@@ -74,10 +74,10 @@ macro_rules! layer_enum {
                     &self,
                     claim: $crate::claims::Claim<F>,
                     transcript: &mut impl $crate::remainder_shared_types::transcript::VerifierTranscript<F>,
-                ) -> Result<Self::VerifierLayer, super::VerificationError> {
+                ) -> Result<VerifierLayerEnum<F>, super::VerificationError> {
                     match self {
                         $(
-                            Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.verify_rounds(claim, transcript)?)),
+                            Self::$var_name(layer) => Ok(layer.verify_rounds(claim, transcript)?),
                         )*
                     }
                 }

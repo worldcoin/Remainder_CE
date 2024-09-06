@@ -12,7 +12,7 @@ use remainder::{
         // hyrax_placeholder_input_layer::HyraxPlaceholderInputLayer,
         // hyrax_precommit_placeholder_input_layer::HyraxPrecommitPlaceholderInputLayer,
         public_input_layer::PublicInputLayer,
-        random_input_layer::RandomInputLayer,
+        random_input_layer::VerifierChallengeInputLayer,
         InputLayer,
     },
     layer::{regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION, LayerId},
@@ -44,7 +44,7 @@ pub enum InputProofEnum<C: PrimeOrderCurve> {
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
     RandomInputLayerProof(
-        RandomInputLayer<C::Scalar>,
+        VerifierChallengeInputLayer<C::Scalar>,
         Vec<HyraxClaim<C::Scalar, CommittedScalar<C>>>,
     ),
 }
@@ -55,7 +55,7 @@ pub enum InputProofEnum<C: PrimeOrderCurve> {
 pub enum HyraxCircuitInputLayerEnum<C: PrimeOrderCurve> {
     HyraxInputLayer(HyraxInputLayer<C>),
     PublicInputLayer(PublicInputLayer<C::Scalar>),
-    RandomInputLayer(RandomInputLayer<C::Scalar>),
+    RandomInputLayer(VerifierChallengeInputLayer<C::Scalar>),
 }
 
 impl<C: PrimeOrderCurve> HyraxCircuitInputLayerEnum<C> {

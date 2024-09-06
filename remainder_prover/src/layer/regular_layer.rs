@@ -28,7 +28,7 @@ use crate::{
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
-use super::product::PostSumcheckLayer;
+use super::{layer_enum::VerifierLayerEnum, product::PostSumcheckLayer};
 
 use super::{CircuitLayer, VerifierLayer};
 
@@ -250,7 +250,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
         &self,
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierLayer, VerificationError> {
+    ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         let nonlinear_rounds = self.expression.get_all_nonlinear_rounds();
 
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
@@ -366,7 +366,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
             return Err(VerificationError::SumcheckFailed);
         }
 
-        Ok(verifier_layer)
+        Ok(VerifierLayerEnum::Regular(verifier_layer))
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {

@@ -12,6 +12,7 @@ use remainder_shared_types::{
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::compute_sumcheck_message_no_beta_table,
+    layer_enum::VerifierLayerEnum,
     product::{PostSumcheckLayer, Product},
     regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     CircuitLayer, Layer, LayerError, LayerId, VerifierLayer,
@@ -379,7 +380,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         &self,
         claim: Claim<F>,
         transcript_reader: &mut impl VerifierTranscript<F>,
-    ) -> Result<Self::VerifierLayer, VerificationError> {
+    ) -> Result<VerifierLayerEnum<F>, VerificationError> {
         // Keeps track of challenges `r_1, ..., r_n` sent by the verifier.
         let mut challenges = vec![];
 
@@ -436,7 +437,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
             return Err(VerificationError::FinalSumcheckFailed);
         }
 
-        Ok(verifier_layer)
+        Ok(VerifierLayerEnum::MatMult(verifier_layer))
     }
 
     fn sumcheck_round_indices(&self) -> Vec<usize> {
