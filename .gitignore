@@ -29,3 +29,10 @@ scripts-noya/
 scripts-upshot/
 
 *.bin
+
+# Added by Makis
+flame-graphs/
+massif/
+output-dumps/
+remainder_hyrax/worldcoin_witness_data
+worldcoin/
