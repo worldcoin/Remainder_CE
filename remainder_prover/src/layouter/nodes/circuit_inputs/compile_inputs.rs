@@ -10,14 +10,14 @@ use crate::{
     },
     layer::LayerId,
     layouter::{
-        layouting::{CircuitDescriptionMap, CircuitLocation, DAGError},
+        layouting::{CircuitDescriptionMap, CircuitLocation, CircuitMap, DAGError},
         nodes::CircuitNode,
     },
     mle::evals::{Evaluations, MultilinearExtension},
     utils::{argsort, pad_to_nearest_power_of_two},
 };
 
-use super::{InputLayerNode, InputLayerType};
+use super::{InputData, InputLayerNode, InputLayerType};
 
 /// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.
@@ -145,10 +145,17 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
 }
 
 impl InputLayerNode {
-    pub fn generate_input_circuit_description<'a, F: FieldExt>(
+    pub fn populate_input_circuit_description<'a, F: FieldExt>(
         &'a self,
+        inputs: Vec<InputData<F>>,
+        circuit_description_map: &mut CircuitDescriptionMap,
+        circuit_map: &mut CircuitMap<'a, F>,
+    ) {
+    }
+    pub fn generate_input_circuit_description<F: FieldExt>(
+        &self,
         layer_id: &mut LayerId,
-        circuit_map: &mut CircuitDescriptionMap,
+        circuit_description_map: &mut CircuitDescriptionMap,
     ) -> Result<CircuitInputLayerEnum<F>, DAGError> {
         let input_layer_id = layer_id.get_and_inc();
         let Self {
@@ -194,7 +201,7 @@ impl InputLayerNode {
             .zip(prefix_bits)
             .for_each(|(input_shred_index, prefix_bits)| {
                 let input_shred = &children[*input_shred_index];
-                circuit_map.add_node(
+                circuit_description_map.add_node(
                     input_shred.id,
                     (
                         CircuitLocation::new(*layer_id, prefix_bits),

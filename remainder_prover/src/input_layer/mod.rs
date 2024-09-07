@@ -2,6 +2,8 @@
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
+use remainder_ligero::ligero_structs::LigeroCommit;
+use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 
 use crate::layer::regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION;
@@ -29,6 +31,12 @@ use crate::{
 };
 
 use ark_std::{end_timer, start_timer};
+
+#[derive(Debug, Clone)]
+pub enum CommitmentEnum<F: FieldExt> {
+    LigeroCommitment(LigeroCommit<PoseidonSpongeHasher<F>, F>),
+    PublicCommitment(Vec<F>),
+}
 
 #[derive(Error, Clone, Debug)]
 /// The errors which can be encountered when constructing an input layer.

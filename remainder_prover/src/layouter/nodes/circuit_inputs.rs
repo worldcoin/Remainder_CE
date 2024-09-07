@@ -2,9 +2,24 @@
 
 mod compile_inputs;
 
+use remainder_shared_types::FieldExt;
+
+use crate::{input_layer::CommitmentEnum, mle::dense::DenseMle};
+
 use super::{CircuitNode, Context, NodeId};
 
-/// A node that represents some Data that will eventually be added to an InputLayer
+/// A struct that represents input data that will be used to populate a
+/// [GKRCircuitDescription] in order to generate a full circuit.
+#[derive(Debug, Clone)]
+pub struct InputData<F: FieldExt> {
+    id: NodeId,
+    parent: NodeId,
+    data: DenseMle<F>,
+    precommit: Option<CommitmentEnum<F>>,
+}
+
+/// A struct that represents the description of the data (shape in terms of `num_vars`)
+/// that will be added to an [InputLayerNode].
 #[derive(Debug, Clone)]
 pub struct InputShred {
     id: NodeId,

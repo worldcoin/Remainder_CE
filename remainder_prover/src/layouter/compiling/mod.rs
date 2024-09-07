@@ -132,4 +132,8 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
 
         Ok(circuit_description)
     }
+
+    fn populate_circuit(&mut self) {
+        todo!()
+    }
 }

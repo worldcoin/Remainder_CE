@@ -91,7 +91,7 @@ impl<F: FieldExt> From<Vec<Vec<F>>> for SumcheckProof<F> {
 
 /// The witness of a GKR circuit, used to actually prove the circuit
 #[derive(Debug)]
-pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
+pub struct InstantiatedCircuit<F: FieldExt, Pf: ProofSystem<F>> {
     /// The intermediate layers of the circuit, as defined by the ProofSystem
     pub layers: Layers<F, Pf::Layer>,
     /// The output layers of the circuit, as defined by the ProofSystem
@@ -100,7 +100,7 @@ pub struct Witness<F: FieldExt, Pf: ProofSystem<F>> {
     pub input_layers: Vec<Pf::InputLayer>,
 }
 
-impl<F: FieldExt, Pf: ProofSystem<F>> Witness<F, Pf> {
+impl<F: FieldExt, Pf: ProofSystem<F>> InstantiatedCircuit<F, Pf> {
     /// Returns the circuit description associated with this Witness to be used
     /// by the verifier.
     pub fn generate_verifier_key(&self) -> Result<GKRCircuitDescription<F, Pf>, GKRError> {
@@ -151,7 +151,7 @@ pub type CircuitClaimAggregator<F, C> =
     <<C as GKRCircuit<F>>::ProofSystem as ProofSystem<F>>::ClaimAggregator;
 
 pub type WitnessAndCircuitDescription<F, C> = (
-    Witness<F, <C as GKRCircuit<F>>::ProofSystem>,
+    InstantiatedCircuit<F, <C as GKRCircuit<F>>::ProofSystem>,
     GKRCircuitDescription<F, <C as GKRCircuit<F>>::ProofSystem>,
 );
 
@@ -169,6 +169,11 @@ pub trait GKRCircuit<F: FieldExt> {
         &mut self,
     ) -> Result<GKRCircuitDescription<F, Self::ProofSystem>, GKRError>;
 
+    /// Populates a circuit description given input data, adding any necessary commitments
+    /// such as the commitment to the circuit description and commitments to inputs
+    /// into transcript.
+    fn populate_circuit(&mut self);
+
     /// The backwards pass, creating the GKRProof.
     #[instrument(skip_all, err)]
     fn prove(
@@ -185,7 +190,7 @@ pub trait GKRCircuit<F: FieldExt> {
 
         // TODO(Makis): User getter syntax.
         let (
-            Witness {
+            InstantiatedCircuit {
                 input_layers,
                 mut output_layers,
                 layers,
