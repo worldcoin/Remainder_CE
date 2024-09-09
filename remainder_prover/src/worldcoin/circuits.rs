@@ -9,61 +9,57 @@ use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::{CircuitNode, ClaimableNode, Context};
 use crate::mle::circuit_mle::CircuitMle;
 use crate::utils::mle::get_input_shred_from_vec;
-use crate::utils::mle::pad_with;
 use crate::digits::components::{ComplementaryRecompChecker, UnsignedRecomposition, BitsAreBinary, DigitsConcatenator};
-use crate::worldcoin::components::Thresholder;
-use crate::worldcoin::data::WorldcoinCircuitData;
+use crate::worldcoin::components::Subtractor;
+use crate::worldcoin::data::CircuitData;
 use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
 
 /// Builds the worldcoin circuit.
-pub fn build_circuit<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(
-    data: WorldcoinCircuitData<F, BASE, NUM_DIGITS>,
+pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>(
+    data: CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>,
 ) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
 {
     LayouterCircuit::new(move |ctx| {
-        let WorldcoinCircuitData {
-            image: image_matrix_mle,
-            reroutings: wirings,
-            num_placements,
-            kernel_values: kernel_matrix,
-            kernel_matrix_dims,
+        let CircuitData {
+            to_reroute,
+            reroutings,
+            rh_matmult_multiplicand,
             digits,
-            code: iris_code,
+            sign_bits,
             digit_multiplicities,
-            thresholds_matrix,
+            to_sub_from_matmult
         } = &data;
         let mut output_nodes = vec![];
 
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         println!("{:?} = Input layer", input_layer.id());
-        let image = get_input_shred_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
-        println!("{:?} = Image input", image.id());
-        let thresholds = get_input_shred_from_vec(
-            pad_with(F::ZERO, &thresholds_matrix),
+        // TODO shouldn't have to clone here, but need to change library functions
+        let to_reroute = get_input_shred_from_vec(to_reroute.clone(), ctx, &input_layer);
+        println!("{:?} = Image to_reroute input", to_reroute.id());
+        let to_sub_from_matmult = get_input_shred_from_vec(
+            to_sub_from_matmult.clone(),
             ctx,
             &input_layer,
         );
-        println!("{:?} = Thresholds input", thresholds.id());
-        let rerouted_image = IdentityGateNode::new(ctx, &image, wirings.clone());
+        println!("{:?} = input to sub from matmult", to_sub_from_matmult.id());
+        let rerouted_image = IdentityGateNode::new(ctx, &to_reroute, reroutings.clone());
         println!("{:?} = Identity gate", rerouted_image.id());
 
-        let (filter_num_values, _) = kernel_matrix_dims;
-        let matrix_a_num_rows_cols = (num_placements.next_power_of_two(), *filter_num_values);
-        let kernel_matrix = get_input_shred_from_vec(kernel_matrix.clone(), ctx, &input_layer);
-        println!("{:?} = Kernel values input", kernel_matrix.id());
+        let rh_matmult_multiplicand = get_input_shred_from_vec(rh_matmult_multiplicand.clone(), ctx, &input_layer);
+        println!("{:?} = Kernel values (RH multiplicand of matmult) input", rh_matmult_multiplicand.id());
 
         let matmult = MatMultNode::new(
             ctx,
             &rerouted_image,
-            matrix_a_num_rows_cols,
-            &kernel_matrix,
-            *kernel_matrix_dims,
+            (MATMULT_NUM_ROWS, MATMULT_INTERNAL_DIM),
+            &rh_matmult_multiplicand,
+            (MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS),
         );
         println!("{:?} = Matmult", matmult.id());
 
-        let thresholder = Thresholder::new(ctx, &matmult, &thresholds);
+        let subtractor = Subtractor::new(ctx, &matmult, &to_sub_from_matmult);
 
         let digits_input_shreds = digits.make_input_shreds(ctx, &input_layer);
         for (i, shred) in digits_input_shreds.iter().enumerate() {
@@ -96,32 +92,32 @@ pub fn build_circuit<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(
 
         let unsigned_recomp = UnsignedRecomposition::new(ctx, &digits_refs, BASE as u64);
 
-        let iris_code = get_input_shred_from_vec(
-            pad_with(F::ZERO, &iris_code),
+        let sign_bits = get_input_shred_from_vec(
+            sign_bits.clone(),
             ctx,
             &input_layer,
         );
-        println!("{:?} = Iris code input", iris_code.id());
+        println!("{:?} = Sign bits (iris code) input", sign_bits.id());
         let complementary_checker = ComplementaryRecompChecker::new(
             ctx,
-            &thresholder.sector,
-            &iris_code,
+            &subtractor.sector,
+            &sign_bits,
             &unsigned_recomp.sector,
             BASE as u64,
             NUM_DIGITS,
         );
         output_nodes.push(OutputNode::new_zero(ctx, &complementary_checker.sector));
 
-        let bits_are_binary = BitsAreBinary::new(ctx, &iris_code);
+        let bits_are_binary = BitsAreBinary::new(ctx, &sign_bits);
         output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
 
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<F>> = vec![
             input_layer.into(),
-            image.into(),
-            kernel_matrix.into(),
-            iris_code.into(),
-            thresholds.into(),
+            to_reroute.into(),
+            rh_matmult_multiplicand.into(),
+            sign_bits.into(),
+            to_sub_from_matmult.into(),
             digit_multiplicities.into(),
             lookup_table_values.into(),
         ];
@@ -138,7 +134,7 @@ pub fn build_circuit<F: FieldExt, const BASE: u64, const NUM_DIGITS: usize>(
         all_nodes.push(lookup_constraint.into());
 
         // Add nodes from components
-        all_nodes.extend(thresholder.yield_nodes().into_iter());
+        all_nodes.extend(subtractor.yield_nodes().into_iter());
         all_nodes.extend(digits_concatenator.yield_nodes().into_iter());
         all_nodes.extend(bits_are_binary.yield_nodes().into_iter());
         all_nodes.extend(unsigned_recomp.yield_nodes().into_iter());

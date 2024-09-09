@@ -52,5 +52,5 @@ pretty_assertions = "1.4.0"
 parallel = []
 
 [[bin]]
-name = "run_iriscode_circuit_v2"
-path = "src/bin/run_iriscode_circuit_v2.rs"
+name = "run_iriscode_circuit"
+path = "src/bin/run_iriscode_circuit.rs"

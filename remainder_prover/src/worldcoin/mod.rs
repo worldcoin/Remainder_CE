@@ -9,9 +9,6 @@ pub mod components;
 /// Data loading and witness generation
 pub mod data;
 
-/// Data loading and witness generation for v3
-pub mod data_v3;
-
 /// IO helpers
 pub mod io;
 

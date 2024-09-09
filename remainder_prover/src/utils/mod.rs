@@ -1,3 +1,5 @@
+/// Helpful functions for manipulating ndarray Array objects (e.g. padding)
+pub mod array;
 /// Helpful arithmetic functions.
 pub mod arithmetic;
 /// Helpful functions for manipulating MLEs (e.g. padding).
