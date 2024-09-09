@@ -35,4 +35,4 @@ flame-graphs/
 massif/
 output-dumps/
 remainder_hyrax/worldcoin_witness_data
-worldcoin/
+./worldcoin/
