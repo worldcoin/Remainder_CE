@@ -76,7 +76,7 @@ where
 
 /// Component that checks that the complementary decomposition of a signed integer.
 /// To be used in conjunction with [UnsignedRecomposition].
-/// See [digits::complementary_decomposition] and (Notion)[https://www.notion.so/Constraining-for-the-response-zero-case-using-the-complementary-representation-d77ddfe258a74a9ab949385cc6f7eda4].
+/// See [crate::digits::complementary_decomposition] and [Notion](https://www.notion.so/Constraining-for-the-response-zero-case-using-the-complementary-representation-d77ddfe258a74a9ab949385cc6f7eda4).
 /// Add self.sector to the circuit as an output layer to enforce this constraint.
 pub struct ComplementaryRecompChecker<F: FieldExt> {
     /// To be added to the circuit as an output layer by the caller.
