@@ -31,8 +31,8 @@ use remainder_shared_types::FieldExt;
 ///   using a lookup and the multiplicities `digit_multiplicities`.
 ///
 /// The structure of the circuit is determined by:
-/// + the `wirings`, which determine how to build the left-hand multiplicand of the matrix
-///   multiplicaion from an input;
+/// + the `reroutings`, which determine how to build the MLE of left-hand multiplicand of the matrix
+///   multiplication from the MLE of the input `to_reroute`;
 /// + the generics `BASE`, `NUM_DIGITS`, `MATMULT_NUM_ROWS`, `MATMULT_NUM_COLS`,
 ///   `MATMULT_INTERNAL_DIM`;
 /// + the length of the MLE `to_reroute`.
