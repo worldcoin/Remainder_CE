@@ -1,3 +1,4 @@
+//! Module for useful functions
 /// Helpful functions for manipulating ndarray Array objects (e.g. padding)
 pub mod array;
 /// Helpful arithmetic functions.

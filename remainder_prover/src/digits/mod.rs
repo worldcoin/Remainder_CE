@@ -1,3 +1,5 @@
+//! Module containing functions for deriving digital decompositions and building associated circuit
+//! components.
 use remainder_shared_types::FieldExt;
 
 /// Components for digital recomposition.

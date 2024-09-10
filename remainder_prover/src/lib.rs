@@ -50,8 +50,7 @@ pub mod prover;
 // for the verifier to check
 pub mod sumcheck;
 
-// module for generating and manipulating mles, also includes a function to
-// generate the description of circuits
+// module for useful functions
 pub mod utils;
 
 // module for tools to help circuit designers build circuits

@@ -16,7 +16,28 @@ use itertools::Itertools;
 use remainder_shared_types::FieldExt;
 
 
-/// Builds the worldcoin circuit.
+/// Builds the iriscode circuit.
+///
+/// This circuit is satisfied iff the (entry-wise) complementary decomposition of the result of the
+/// matrix multiplication, minus `to_sub_from_matmult`, has digits `digits` and sign bits
+/// `sign_bits`.  In more detail:
+/// + The matrix multiplication has two multiplicands.  The left-hand multiplicand is obtained by
+///   selecting the entries of `to_reroute` in the manner specified by `wirings`; the right-hand
+///   multiplicand is given by `rh_matmult_multiplicand`.  All matrix enumerations are row-major.
+/// + The complementary decomposition is the analog of 2's complement, base `BASE` and with
+///   `NUM_DIGITS` digits.  See [crate::digits::complementary_decomposition] and
+///   [Notion](https://www.notion.so/Constraining-for-the-response-zero-case-using-the-complementary-representation-d77ddfe258a74a9ab949385cc6f7eda4).
+/// + The sign bits are range checked using a degree two polynomial.  The digits are range-checked
+///   using a lookup and the multiplicities `digit_multiplicities`.
+///
+/// The structure of the circuit is determined by:
+/// + the `wirings`, which determine how to build the left-hand multiplicand of the matrix
+///   multiplicaion from an input;
+/// + the generics `BASE`, `NUM_DIGITS`, `MATMULT_NUM_ROWS`, `MATMULT_NUM_COLS`,
+///   `MATMULT_INTERNAL_DIM`;
+/// + the length of the MLE `to_reroute`.
+///
+/// See [CircuitData] for a detailed description of each generic and argument.
 pub fn build_circuit<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>(
     data: CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>,
 ) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
