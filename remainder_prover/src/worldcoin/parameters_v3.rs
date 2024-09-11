@@ -18,5 +18,5 @@ pub const BASE: u64 = 256;
 /// [CircuitData::build_worldcoin_circuit_data].
 /// Contains two subfolders "iris" and "mask" each containing:
 /// + `thresholds.npy` - (i64) the thresholds for each placement and kernel combination (so has shape (num_placements, num_kernels)).
-/// + `kernel_values.npy` - (i64) the padded kernel values (quantized)
-pub const CONSTANT_DATA_FOLDER: &str = "../worldcoin/v3/";
+/// + `padded_kernel_values.npy` - (i64) the padded kernel values (quantized)
+pub const CONSTANT_DATA_FOLDER: &str = "worldcoin/v3/";

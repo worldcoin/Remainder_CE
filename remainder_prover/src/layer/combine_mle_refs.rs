@@ -80,9 +80,15 @@ pub fn get_og_mle_refs<F: FieldExt>(mle_refs: Vec<MleEnum<F>>) -> Vec<MleEnum<F>
         zero => zero,
     });
 
-    let mut ret_mles: Vec<MleEnum<F>> = vec![];
-    mle_ref_fix.collect_into_vec(&mut ret_mles);
-    ret_mles
+    #[cfg(feature = "parallel")]
+    {
+        let mut ret_mles: Vec<MleEnum<F>> = vec![];
+        mle_ref_fix.collect_into_vec(&mut ret_mles);
+        ret_mles
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    mle_ref_fix.collect()
 }
 
 /// this function takes in a list of mle refs, a challenge point we want to combine them under, and returns

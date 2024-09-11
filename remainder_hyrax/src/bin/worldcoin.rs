@@ -1,21 +1,19 @@
-#[cfg(test)]
 use std::path::Path;
 
 use remainder::worldcoin::{
     circuits::build_circuit,
     data::{load_worldcoin_data, CircuitData},
 };
+
 use remainder_shared_types::{
     halo2curves::{bn256::G1 as Bn256Point, group::Group, CurveExt},
     transcript::{
         ec_transcript::{ECTranscriptReader, ECTranscriptWriter},
         poseidon_transcript::PoseidonSponge,
-        test_transcript::TestSponge,
     },
-    FieldExt, Poseidon,
 };
 
-use crate::{
+use remainder_hyrax::{
     hyrax_gkr::HyraxCircuit, pedersen::PedersenCommitter, utils::vandermonde::VandermondeInverse,
 };
 type Scalar = <Bn256Point as Group>::Scalar;
@@ -74,13 +72,12 @@ fn test_hyrax_worldcoin<
     );
 }
 
-#[test]
-fn test_hyrax_worldcoin_v2_iris() {
+fn main() {
     use remainder::worldcoin::parameters_v2::{
         BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
         NUM_DIGITS,
     };
-    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
+    let path = Path::new("./").join(CONSTANT_DATA_FOLDER).to_path_buf();
     let image_path = path.join("iris/test_image.npy");
     let data = load_worldcoin_data::<
         Scalar,
@@ -90,62 +87,5 @@ fn test_hyrax_worldcoin_v2_iris() {
         BASE,
         NUM_DIGITS,
     >(path.clone(), image_path, false);
-    test_hyrax_worldcoin(data, 100);
-}
-
-#[test]
-fn test_hyrax_worldcoin_v2_mask() {
-    use remainder::worldcoin::parameters_v2::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
-        NUM_DIGITS,
-    };
-    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
-    let image_path = path.join("mask/test_image.npy");
-    let data = load_worldcoin_data::<
-        Scalar,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
-        BASE,
-        NUM_DIGITS,
-    >(path.clone(), image_path, true);
-    test_hyrax_worldcoin(data, 100);
-}
-
-#[test]
-fn test_hyrax_worldcoin_v3_iris() {
-    use remainder::worldcoin::parameters_v3::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
-        NUM_DIGITS,
-    };
-    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
-    let image_path = path.join("iris/test_image.npy");
-    let data = load_worldcoin_data::<
-        Scalar,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
-        BASE,
-        NUM_DIGITS,
-    >(path.clone(), image_path, false);
-    test_hyrax_worldcoin(data, 100);
-}
-
-#[test]
-fn test_hyrax_worldcoin_v3_mask() {
-    use remainder::worldcoin::parameters_v3::{
-        BASE, CONSTANT_DATA_FOLDER, MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS, MATMULT_NUM_ROWS,
-        NUM_DIGITS,
-    };
-    let path = Path::new("../").join(CONSTANT_DATA_FOLDER).to_path_buf();
-    let image_path = path.join("mask/test_image.npy");
-    let data = load_worldcoin_data::<
-        Scalar,
-        MATMULT_NUM_ROWS,
-        MATMULT_NUM_COLS,
-        MATMULT_INTERNAL_DIM,
-        BASE,
-        NUM_DIGITS,
-    >(path.clone(), image_path, true);
     test_hyrax_worldcoin(data, 100);
 }

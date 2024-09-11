@@ -1,13 +1,14 @@
-use std::path::PathBuf;
+use ark_std::cfg_into_iter;
 use ark_std::log2;
 use itertools::Itertools;
 use ndarray::{Array, Array2, Array3};
 use ndarray_npy::read_npy;
 use remainder_shared_types::FieldExt;
+use std::path::PathBuf;
 
+use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::layer::LayerId;
 use crate::mle::circuit_mle::{to_slice_of_vectors, CircuitMle, FlatMles};
-use crate::digits::{complementary_decomposition, digits_to_field};
 use crate::mle::Mle;
 use crate::utils::arithmetic::i64_to_field;
 use crate::utils::array::pad_with_rows;
@@ -22,21 +23,24 @@ pub fn trivial_wiring_2x2_circuit_data<F: FieldExt>() -> CircuitData<F, 2, 2, 2,
         Array3::from_shape_vec((2, 2, 1), vec![1, 0, 6, -1]).unwrap(),
         Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
         // rewirings for the 2x2 identity matrix
-        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1]).unwrap(),
+        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1])
+            .unwrap(),
     )
-} 
+}
 
 /// Generate toy data for the worldcoin circuit.
 /// Image is 2x2, and there are two 3x1 kernels.
 /// The rewirings are trivial: the image _is_ the LH multiplicand of matmult.
-pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>() -> CircuitData<F, 2, 2, 4, 16, 1> {
+pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>(
+) -> CircuitData<F, 2, 2, 4, 16, 1> {
     CircuitData::build_worldcoin_circuit_data(
         Array2::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap(),
         Array3::from_shape_vec((2, 3, 1), vec![1, 0, -4, 6, -1, 3]).unwrap(),
         Array2::from_shape_vec((2, 2), vec![1, 0, 1, 0]).unwrap(),
-        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1]).unwrap(),
+        Array2::from_shape_vec((4, 4), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1])
+            .unwrap(),
     )
-} 
+}
 
 #[derive(Debug, Clone)]
 /// Used for instantiating the circuit.
@@ -44,7 +48,14 @@ pub fn trivial_wiring_2x2_odd_kernel_dims_circuit_data<F: FieldExt>() -> Circuit
 /// + `MATMULT_NUM_ROWS` is number of rows of the result of matmult.  A power of two.
 /// + `MATMULT_NUM_COLS` is number of columns of the result of matmult.  A power of two.
 /// + `MATMULT_INTERNAL_DIM` is the internal dimension size of matmult = number of cols of LH multiplicand = number of rows of RH multiplicand.  A power of two.
-pub struct CircuitData<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize> {
+pub struct CircuitData<
+    F: FieldExt,
+    const MATMULT_NUM_ROWS: usize,
+    const MATMULT_NUM_COLS: usize,
+    const MATMULT_INTERNAL_DIM: usize,
+    const BASE: u64,
+    const NUM_DIGITS: usize,
+> {
     /// The values to be re-routed to form the LH multiplicand of the matrix multiplication.
     /// Length is a power of two.
     pub to_reroute: Vec<F>,
@@ -71,12 +82,19 @@ pub struct CircuitData<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT
     pub to_sub_from_matmult: Vec<F>,
 }
 
-impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>
-    CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS> {
+impl<
+        F: FieldExt,
+        const MATMULT_NUM_ROWS: usize,
+        const MATMULT_NUM_COLS: usize,
+        const MATMULT_INTERNAL_DIM: usize,
+        const BASE: u64,
+        const NUM_DIGITS: usize,
+    > CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS>
+{
     /// Create a new instance.
     ///
     /// # Arguments:
-    /// + `image` is the input image as a 2d array of u8s (unpadded). 
+    /// + `image` is the input image as a 2d array of u8s (unpadded).
     /// + `kernel_values` is the 3d i16 array of kernel values arranged to have shape `(num_kernels,
     ///   kernel_num_rows, kernel_num_cols)` (kernel_num_rows, kernel_num_cols can be any values)
     /// + `thresholds_matrix` is the 2d array specifying the threshold to use for each kernel and
@@ -112,24 +130,30 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
         let mut reroutings = Vec::new();
         let mut rerouted_matrix: Array2<i64> =
             Array::zeros((MATMULT_NUM_ROWS, MATMULT_INTERNAL_DIM));
-        wirings.outer_iter()
-            .for_each(|row| {
-                let (im_row, im_col, a_row, a_col) = (row[0] as usize, row[1] as usize, row[2] as usize, row[3] as usize);
-                let a_gate_label = a_row * MATMULT_INTERNAL_DIM + a_col;
-                let im_gate_label = im_row * im_num_cols + im_col;
-                reroutings.push((a_gate_label, im_gate_label));
-                rerouted_matrix[[a_row, a_col]] = image[[im_row, im_col]] as i64;
-            });
-
+        wirings.outer_iter().for_each(|row| {
+            let (im_row, im_col, a_row, a_col) = (
+                row[0] as usize,
+                row[1] as usize,
+                row[2] as usize,
+                row[3] as usize,
+            );
+            let a_gate_label = a_row * MATMULT_INTERNAL_DIM + a_col;
+            let im_gate_label = im_row * im_num_cols + im_col;
+            reroutings.push((a_gate_label, im_gate_label));
+            rerouted_matrix[[a_row, a_col]] = image[[im_row, im_col]] as i64;
+        });
 
         // Reshape and pad kernel values to have dimensions (MATMULT_INTERNAL_DIM, MATMULT_NUM_COLS).
         // This is the RH multiplicand of the matrix multiplication.
         let rh_multiplicand: Array2<i64> = pad_with_rows(
-            kernel_values.into_shape((MATMULT_NUM_COLS, kernel_num_rows * kernel_num_cols)).unwrap()
+            kernel_values
+                .into_shape((MATMULT_NUM_COLS, kernel_num_rows * kernel_num_cols))
+                .unwrap()
                 .t()
                 .to_owned()
                 .mapv(|elem| elem as i64),
-            MATMULT_INTERNAL_DIM);
+            MATMULT_INTERNAL_DIM,
+        );
 
         // Pad the thresholds matrix with extra rows of zeros so that it has dimensions
         // (MATMULT_NUM_ROWS, MATMULT_NUM_COLS).
@@ -142,7 +166,10 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
         // the thresholded responses to the nearest power of two, since logup expects the number of
         // constrained values (which will be the digits of the decomps of the threshold responses)
         // to be a power of two.
-        let thres_resp = pad_with(0, &(responses - &thresholds_matrix).into_iter().collect_vec());
+        let thres_resp = pad_with(
+            0,
+            &(responses - &thresholds_matrix).into_iter().collect_vec(),
+        );
 
         // Calculate the complementary digital decompositions of the thresholded responses.
         // Both vectors have the same length as thres_resp.
@@ -153,13 +180,18 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
 
         // Count the number of times each digit occurs.
         let mut digit_multiplicities: Vec<usize> = vec![0; BASE as usize];
-        digits.iter().for_each(|decomp| decomp.iter().for_each(|&digit| {
-            digit_multiplicities[digit as usize] += 1;
-        }));
+        digits.iter().for_each(|decomp| {
+            decomp.iter().for_each(|&digit| {
+                digit_multiplicities[digit as usize] += 1;
+            })
+        });
 
         // Derive the padded image MLE.
         // Note that this padding has nothing to do with the padding of the thresholded responses.
-        let image_matrix_mle: Vec<F> = pad_with(0, &image.into_iter().collect_vec()).into_iter().map(|v| F::from(v as u64)).collect_vec();
+        let image_matrix_mle: Vec<F> = pad_with(0, &image.into_iter().collect_vec())
+            .into_iter()
+            .map(|v| F::from(v as u64))
+            .collect_vec();
 
         // Convert the iris code to field elements (this is already padded by construction).
         let code: Vec<F> = code
@@ -168,17 +200,15 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
             .collect_vec();
 
         // Flatten the kernel values, convert to field.  (Already padded)
-        let kernel_values: Vec<F> = rh_multiplicand
-            .into_iter()
-            .map(i64_to_field)
-            .collect_vec();
+        let kernel_values: Vec<F> = rh_multiplicand.into_iter().map(i64_to_field).collect_vec();
 
         // Flatten the thresholds matrix, convert to field and pad.
-        let thresholds_matrix: Vec<F> = pad_with(F::ZERO,
+        let thresholds_matrix: Vec<F> = pad_with(
+            F::ZERO,
             &thresholds_matrix
-            .into_iter()
-            .map(i64_to_field)
-            .collect_vec()
+                .into_iter()
+                .map(i64_to_field)
+                .collect_vec(),
         );
 
         // Convert the digit multiplicities to field elements.
@@ -212,43 +242,53 @@ impl<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, 
         assert!(MATMULT_NUM_COLS.is_power_of_two());
         assert!(MATMULT_INTERNAL_DIM.is_power_of_two());
         assert!(self.to_reroute.len().is_power_of_two());
-        assert_eq!(self.rh_matmult_multiplicand.len(), MATMULT_INTERNAL_DIM * MATMULT_NUM_COLS);
+        assert_eq!(
+            self.rh_matmult_multiplicand.len(),
+            MATMULT_INTERNAL_DIM * MATMULT_NUM_COLS
+        );
         self.digits.get_mle_refs().iter().for_each(|mle| {
-            assert_eq!(mle.original_num_vars(), log2(MATMULT_NUM_ROWS * MATMULT_NUM_COLS) as usize);
+            assert_eq!(
+                mle.original_num_vars(),
+                log2(MATMULT_NUM_ROWS * MATMULT_NUM_COLS) as usize
+            );
         });
         assert_eq!(self.sign_bits.len(), MATMULT_NUM_ROWS * MATMULT_NUM_COLS);
         assert_eq!(self.digit_multiplicities.len(), BASE as usize);
-        assert_eq!(self.to_sub_from_matmult.len(), MATMULT_NUM_ROWS * MATMULT_NUM_COLS);
-
-
+        assert_eq!(
+            self.to_sub_from_matmult.len(),
+            MATMULT_NUM_ROWS * MATMULT_NUM_COLS
+        );
     }
 }
 
 /// Loads circuit structure data and witnesses for a run of the iris code circuit from disk for either the iris or mask case.
 /// Works for both v2 and v3 of the iriscode circuit.
-/// 
+///
 /// # Arguments:
 ///   `constant_data_path` is the path to the root folder (containing the wirings, and subfolders).
 ///   `image_path` is the path to an image file (could be the iris or the mask).
 ///   `is_mask` indicates whether to load the files for the mask or the iris.
-pub fn load_worldcoin_data<F: FieldExt, const MATMULT_NUM_ROWS: usize, const MATMULT_NUM_COLS: usize, const MATMULT_INTERNAL_DIM: usize, const BASE: u64, const NUM_DIGITS: usize>
-        (constant_data_folder: PathBuf, image_path: PathBuf, is_mask: bool)
-        -> CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS> {
+pub fn load_worldcoin_data<
+    F: FieldExt,
+    const MATMULT_NUM_ROWS: usize,
+    const MATMULT_NUM_COLS: usize,
+    const MATMULT_INTERNAL_DIM: usize,
+    const BASE: u64,
+    const NUM_DIGITS: usize,
+>(
+    constant_data_folder: PathBuf,
+    image_path: PathBuf,
+    is_mask: bool,
+) -> CircuitData<F, MATMULT_NUM_ROWS, MATMULT_NUM_COLS, MATMULT_INTERNAL_DIM, BASE, NUM_DIGITS> {
     let wirings: Array2<u16> = read_npy(&constant_data_folder.join("wirings.npy")).unwrap();
     assert_eq!(wirings.dim().1, 4);
 
     let data_folder = constant_data_folder.join(if is_mask { "mask" } else { "iris" });
     let image: Array2<u8> = read_npy(image_path).unwrap();
 
-    let kernel_values: Array3<i32> =
-        read_npy(&data_folder.join("kernel_values.npy")).unwrap();
+    let kernel_values: Array3<i32> = read_npy(&data_folder.join("kernel_values.npy")).unwrap();
 
     let thresholds: Array2<i64> = read_npy(&data_folder.join("thresholds.npy")).unwrap();
 
-    CircuitData::build_worldcoin_circuit_data(
-        image,
-        kernel_values,
-        thresholds,
-        wirings
-    )
+    CircuitData::build_worldcoin_circuit_data(image, kernel_values, thresholds, wirings)
 }

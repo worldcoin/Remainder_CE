@@ -18,7 +18,7 @@ to the codebase.
 */
 
 use crate::utils::get_least_significant_bits_to_usize_little_endian;
-use ark_std::{end_timer, start_timer};
+use ark_std::{cfg_into_iter, end_timer, start_timer};
 use halo2_proofs::poly::commitment::Prover;
 use itertools::Itertools;
 use poseidon_ligero::poseidon_digest::FieldHashFnDigest;
@@ -855,11 +855,11 @@ where
 
     // step 4: evaluate and return
     // --- Computes dot product between inner_tensor (i.e. a) and proof.p_eval (i.e. b^T M) ---
-    Ok(inner_tensor
-        .par_iter()
+    Ok(cfg_into_iter!(inner_tensor)
         .zip(&p_eval[..])
-        .fold(|| F::ZERO, |a, (t, e)| a + *t * e)
-        .reduce(|| F::ZERO, |a, v| a + v))
+        .map(|(t, e)| *t * e)
+        .reduce(|a, v| a + v)
+        .unwrap_or(F::ZERO))
 }
 
 /// Check a column opening by
@@ -1014,9 +1014,7 @@ where
             .collect();
 
         // --- Send columns + Merkle paths to verifier ---
-        cols_to_open
-            // .par_iter()
-            .iter()
+        cfg_into_iter!(&cols_to_open)
             .map(|&col| open_column(tr, comm, col))
             .collect::<ProverResult<Vec<LcColumn<E, F>>, ErrT<E, F>>>()?
     };

@@ -11,6 +11,8 @@ use remainder_shared_types::transcript::ec_transcript::{ECProverTranscript, ECVe
 use remainder_shared_types::{curves::PrimeOrderCurve, halo2curves::group::ff::Field};
 use serde::{Deserialize, Serialize};
 
+use rayon::iter::IntoParallelIterator;
+
 pub mod tests;
 
 #[derive(Serialize, Deserialize)]

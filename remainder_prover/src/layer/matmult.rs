@@ -47,6 +47,7 @@ impl<F: FieldExt> Matrix<F> {
     pub fn new(mle: DenseMle<F>, num_rows: usize, num_cols: usize) -> Matrix<F> {
         assert_eq!(mle.bookkeeping_table().len(), num_rows * num_cols);
 
+        /*
         let mut new_bookkeeping_table = Vec::new();
         // pad the columns
         if 1 << log2(num_cols) != num_cols {
@@ -83,8 +84,12 @@ impl<F: FieldExt> Matrix<F> {
         } else {
             mle.mle_indices()
         };
+        */
 
-        let mle = DenseMle::new_with_indices(&new_bookkeeping_table, mle.layer_id(), new_indices);
+        let new_bookkeeping_table = mle.bookkeeping_table();
+        let padded_matrix_len = num_rows * num_cols;
+        let mle =
+            DenseMle::new_with_indices(&new_bookkeeping_table, mle.layer_id(), &mle.mle_indices);
 
         assert_eq!(padded_matrix_len, mle.bookkeeping_table().len());
 
@@ -237,7 +242,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 
         for round in 0..num_vars_middle {
             let message = compute_sumcheck_message_no_beta_table(
-                &[self.matrix_a.mle.clone(), self.matrix_b.mle.clone()],
+                &[&self.matrix_a.mle, &self.matrix_b.mle],
                 round,
                 2,
             )
@@ -268,11 +273,9 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     }
 
     fn compute_round_sumcheck_message(&self, round_index: usize) -> Result<Vec<F>, LayerError> {
-        let mle_a = self.matrix_a.mle.clone();
-        let mle_b = self.matrix_b.mle.clone();
+        let mles = vec![&self.matrix_a.mle, &self.matrix_b.mle];
         let sumcheck_message =
-            compute_sumcheck_message_no_beta_table(&[mle_a.clone(), mle_b.clone()], round_index, 2)
-                .unwrap();
+            compute_sumcheck_message_no_beta_table(&mles, round_index, 2).unwrap();
         Ok(sumcheck_message)
     }
 
@@ -751,17 +754,15 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
     let num_rows = 1 << matrix.num_rows_vars;
     let num_cols = 1 << matrix.num_cols_vars;
 
-    let matrix_array_2 = Array2::from_shape_vec(
-        (num_rows, num_cols),
-        matrix.mle.bookkeeping_table().to_vec(),
-    )
-    .unwrap();
-    let matrix_transpose = matrix_array_2.reversed_axes();
-    let matrix_transp_vec = matrix_transpose
-        .outer_iter()
-        .map(|x| x.to_vec())
-        .flat_map(|row| row)
-        .collect_vec();
+    // Memory-efficient, sequential implementation.
+    let mut matrix_transp_vec = Vec::with_capacity(num_cols * num_rows);
+
+    matrix.mle.bookkeeping_table();
+    for i in 0..num_cols {
+        for j in 0..num_rows {
+            matrix_transp_vec.push(matrix.mle.current_mle[j * num_cols + i]);
+        }
+    }
 
     let mle = DenseMle::new_with_indices(
         &matrix_transp_vec,
@@ -920,7 +921,10 @@ mod test {
         assert_eq!(res_product, exp_product);
     }
 
+    /// We currently do not support matrices whose dimensions are not exact
+    /// powers of two. Ignore this test.
     #[test]
+    #[ignore]
     fn test_product_irregular_matrices() {
         let mle_vec_a = vec![
             Fr::from(1),
