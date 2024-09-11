@@ -778,7 +778,6 @@ pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix
     let num_middle_ab = 1 << matrix_a.num_cols_vars;
 
     let matrix_b_transpose = gen_transpose_matrix(matrix_b);
-    println!("{:?}", matrix_b_transpose);
 
     let product_matrix = matrix_a
         .mle
