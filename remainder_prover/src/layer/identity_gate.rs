@@ -13,8 +13,11 @@ use crate::{
     },
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::{LayerError, VerificationError},
-    layouter::layouting::CircuitMap,
-    mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
+    layouter::layouting::{CircuitLocation, CircuitMap},
+    mle::{
+        betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum,
+        Mle, MleIndex,
+    },
     sumcheck::*,
 };
 use remainder_shared_types::{
@@ -226,7 +229,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         vec![&self.source_mle]
     }
 
-    fn into_prover_layer(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F> {
+    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let source_mle = self.source_mle.into_dense_mle(circuit_map);
         let id_gate_layer = IdentityGate::new(self.layer_id(), self.wiring.clone(), source_mle);
         id_gate_layer.into()
@@ -435,6 +438,36 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             });
 
         PostSumcheckLayer(vec![Product::<F, F>::new(&vec![mle_ref.clone()], f_1_uv)])
+    }
+
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &Vec<&CircuitMle<F>>,
+        circuit_map: &mut CircuitMap<F>,
+    ) {
+        assert_eq!(mle_outputs_necessary.len(), 1);
+        let mle_output_necessary = mle_outputs_necessary[0];
+
+        let max_gate_val = self
+            .nonzero_gates
+            .iter()
+            .fold(&0, |acc, (z, _)| std::cmp::max(acc, z));
+
+        let mut remap_table = vec![F::ZERO; (max_gate_val + 1).next_power_of_two()];
+
+        self.nonzero_gates.iter().for_each(|(z, x)| {
+            let zero = F::ZERO;
+            let id_val = self.mle_ref.bookkeeping_table().get(*x).unwrap_or(&zero);
+            remap_table[*z] = *id_val;
+        });
+
+        let output_data = MultilinearExtension::new(remap_table);
+        assert_eq!(
+            output_data.num_vars(),
+            mle_output_necessary.mle_indices().len()
+        );
+
+        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
     }
 }
 

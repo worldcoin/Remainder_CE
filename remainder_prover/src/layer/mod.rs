@@ -147,6 +147,14 @@ pub trait Layer<F: FieldExt> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F>;
+
+    /// Given the [CircuitMle]s of which outputs are expected of this layer, compute the data
+    /// that populates these bookkeeping tables and mutate the circuit map to reflect this.
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &Vec<&CircuitMle<F>>,
+        circuit_map: &mut CircuitMap<F>,
+    );
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.
@@ -193,7 +201,7 @@ pub trait CircuitLayer<F: FieldExt> {
     fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>>;
 
     /// Given a [CircuitMap], turn this [CircuitLayer] into a ProverLayer.
-    fn into_prover_layer(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F>;
+    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F>;
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.

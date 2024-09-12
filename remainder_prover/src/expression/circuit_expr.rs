@@ -86,19 +86,9 @@ impl<F: FieldExt> CircuitMle<F> {
             .collect()
     }
 
-    pub fn into_dense_mle<'a>(&self, circuit_map: &CircuitMap<'a, F>) -> DenseMle<F> {
-        let prefix_bits: Vec<bool> = self
-            .var_indices
-            .iter()
-            .filter_map(|idx| match idx {
-                MleIndex::Fixed(bit) => Some(*bit),
-                _ => None,
-            })
-            .collect();
-        let data = circuit_map
-            .get_data_from_location(&CircuitLocation::new(self.layer_id(), prefix_bits.clone()))
-            .unwrap();
-        DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), prefix_bits)
+    pub fn into_dense_mle<'a>(&self, circuit_map: &CircuitMap<F>) -> DenseMle<F> {
+        let data = circuit_map.get_data_from_circuit_mle(&self).unwrap();
+        DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), self.prefix_bits())
     }
 
     // Bind the variable with index `var_index` to `value`.
@@ -220,7 +210,7 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
     /// associated data in the [CircuitMap].
     pub fn into_prover_expression<'a>(
         &self,
-        circuit_map: &CircuitMap<'a, F>,
+        circuit_map: &CircuitMap<F>,
     ) -> Expression<F, ProverExpr> {
         let circuit_mles = self.get_circuit_mles();
         let dense_mles = circuit_mles
@@ -529,7 +519,7 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
     /// Get the [ExpressionNode<F, ProverExpr>] recursively, for this expression.
     pub fn into_prover_expression<'a>(
         &self,
-        circuit_map: &CircuitMap<'a, F>,
+        circuit_map: &CircuitMap<F>,
     ) -> Expression<F, ProverExpr> {
         match self {
             ExpressionNode::Selector(_mle_index, a, b) => b

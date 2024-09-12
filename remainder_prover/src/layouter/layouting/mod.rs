@@ -39,18 +39,20 @@ pub mod utils;
 #[derive(Debug)]
 pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 
-impl<F> CircuitMap<F> {
+impl<F: FieldExt> CircuitMap<F> {
     pub(crate) fn new() -> Self {
         Self(HashMap::new())
     }
 
     /// Gets the details of a Node in the CircuitMap
-    pub fn get_data_from_location(
+    pub fn get_data_from_circuit_mle(
         &self,
-        circuit_location: &CircuitLocation,
+        circuit_mle: &CircuitMle<F>,
     ) -> Result<&MultilinearExtension<F>, DAGError> {
+        let circuit_location =
+            CircuitLocation::new(circuit_mle.layer_id(), circuit_mle.prefix_bits());
         self.0
-            .get(circuit_location)
+            .get(&circuit_location)
             .ok_or(DAGError::NoCircuitLocation)
     }
 

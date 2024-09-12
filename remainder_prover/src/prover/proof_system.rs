@@ -113,9 +113,9 @@ macro_rules! layer_enum {
                     }
                 }
 
-                fn into_prover_layer<'a>(
+                fn into_prover_layer(
                     &self,
-                    circuit_map: &crate::layouter::layouting::CircuitMap<'a, F>
+                    circuit_map: &crate::layouter::layouting::CircuitMap<F>
                 ) -> LayerEnum<F> {
                     match self {
                         $(

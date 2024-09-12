@@ -24,8 +24,8 @@ use crate::{
         verifier_expr::VerifierExpr,
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
-    layouter::layouting::CircuitMap,
-    mle::{betavalues::BetaValues, dense::DenseMle},
+    layouter::layouting::{CircuitLocation, CircuitMap},
+    mle::{betavalues::BetaValues, dense::DenseMle, evals::MultilinearExtension},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
@@ -241,6 +241,34 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 
         self.expression.get_post_sumcheck_layer(fully_bound_beta)
     }
+
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &Vec<&CircuitMle<F>>,
+        circuit_map: &mut CircuitMap<F>,
+    ) {
+        mle_outputs_necessary.into_iter().for_each(
+            |mle_output_necessary| {
+                let prefix_bits = mle_output_necessary.prefix_bits();
+                let expression_node_to_compile = prefix_bits.iter().fold(
+                    self.expression.clone().deconstruct().0, |acc, bit| {
+                        match acc {
+                            ExpressionNode::Selector(_mle_index, lhs, rhs) => {
+                                if *bit {
+                                    *rhs
+                                } else {
+                                    *lhs
+                                }
+                            },
+                            _ => panic!("Exists a prefix bit for an expression node that does not contain any more selectors!")
+                        }
+                    }
+                );
+                let data: MultilinearExtension<F> = expression_node_to_compile.compute_bookkeeping_table(&self.expression.mle_vec);
+                circuit_map.add_node(CircuitLocation::new(self.layer_id(), prefix_bits), data);
+            }
+        );
+    }
 }
 
 impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
@@ -448,7 +476,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
         self.expression.get_circuit_mles()
     }
 
-    fn into_prover_layer(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F> {
+    fn into_prover_layer(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let prover_expr = self.expression.into_prover_expression(circuit_map);
         let regular_layer = RegularLayer::new_raw(self.layer_id(), prover_expr);
         regular_layer.into()

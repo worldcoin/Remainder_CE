@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 use crate::expression::circuit_expr::CircuitMle;
 use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
 use crate::input_layer::{CircuitInputLayer, InputLayer};
-use crate::layer::layer_enum::CircuitLayerEnum;
+use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
 use crate::layer::CircuitLayer;
 use crate::layouter::layouting::CircuitMap;
 use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
@@ -224,8 +224,8 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
         // we convert the circuit input layer into a prover input layer using this big bookkeeping table
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
-        input_layers.iter().map(|circuit_input_layer| {
-            let input_layer_id = circuit_input_layer.layer_id();
+        input_layers.iter().for_each(|input_layer_description| {
+            let input_layer_id = input_layer_description.layer_id();
             let input_node_id = input_node_to_layer_map.get_layer_id(&input_layer_id);
             if input_id_data_map.contains_key(input_node_id) {
                 let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
@@ -246,7 +246,7 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
                     });
 
                 let combined_mle = combine_input_mles(&input_mles.collect_vec());
-                let mut prover_input_layer = circuit_input_layer
+                let mut prover_input_layer = input_layer_description
                     .into_prover_input_layer(combined_mle, &corresponding_input_data.precommit);
                 let commitment = prover_input_layer.commit().unwrap();
                 InputLayerEnum::append_commitment_to_transcript(&commitment, transcript_writer);
@@ -254,7 +254,7 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
             } else {
                 if let CircuitInputLayerEnum::RandomInputLayer(
                     verifier_challenge_input_layer_description,
-                ) = circuit_input_layer
+                ) = input_layer_description
                 {
                     let verifier_challenge_mle =
                         MultilinearExtension::new(transcript_writer.get_challenges(
@@ -268,8 +268,8 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
                         ),
                         verifier_challenge_mle.clone(),
                     );
-                    let verifier_challenge_layer =
-                        circuit_input_layer.into_prover_input_layer(verifier_challenge_mle, &None);
+                    let verifier_challenge_layer = input_layer_description
+                        .into_prover_input_layer(verifier_challenge_mle, &None);
                     prover_input_layers.push(verifier_challenge_layer);
                 } else {
                     assert!(input_layer_hint_map.0.contains_key(&input_layer_id));
@@ -277,12 +277,22 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
             }
         });
 
-        // instantiate a circuit map
-        // go through input data and add it into the circuit map,
-        // and convert circuit input layers into prover input layers using combine mles
         // forward pass of the layers
         // convert the circuit layer into a prover layer using circuit map -> populate a GKRCircuit as you do this
         // prover layer ( mle_claim_map ) -> populates circuit map
+        let mut prover_intermediate_layers: Vec<LayerEnum<F>> = Vec::new();
+        intermediate_layers
+            .iter()
+            .for_each(|intermediate_layer_description| {
+                let prover_intermediate_layer =
+                    intermediate_layer_description.into_prover_layer(&circuit_map);
+                let mle_outputs_necessary = mle_claim_map
+                    .get(&intermediate_layer_description.layer_id())
+                    .unwrap();
+                prover_intermediate_layer
+                    .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
+                prover_intermediate_layers.push(prover_intermediate_layer);
+            });
 
         todo!()
     }
