@@ -159,6 +159,7 @@ impl<F: FieldExt> Mle<F> for ZeroMle<F> {
 impl<F: FieldExt> YieldClaim<ClaimMle<F>> for ZeroMle<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, crate::layer::LayerError> {
         if self.bookkeeping_table().len() != 1 {
+            dbg!("here?");
             return Err(LayerError::ClaimError(ClaimError::MleRefMleError));
         }
         let mle_indices: Result<Vec<F>, _> = self

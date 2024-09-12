@@ -1,5 +1,6 @@
 use crate::{
     layer::{
+        gate::BinaryOperation,
         product::{PostSumcheckLayer, Product},
         LayerId,
     },
@@ -7,8 +8,9 @@ use crate::{
         layouting::{CircuitLocation, CircuitMap},
         nodes::CircuitNode,
     },
-    mle::{dense::DenseMle, Mle, MleIndex},
+    mle::{dense::DenseMle, evals::MultilinearExtension, Mle, MleIndex},
 };
+use ark_std::log2;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -53,6 +55,21 @@ impl<F: FieldExt> CircuitMle<F> {
 
     pub fn set_mle_indices(&mut self, new_mle_indices: Vec<MleIndex<F>>) {
         self.var_indices = new_mle_indices;
+    }
+
+    pub fn index_mle_indices(&mut self, start_index: usize) {
+        let mut index_counter = start_index;
+        self.var_indices
+            .iter_mut()
+            .for_each(|mle_index| match mle_index {
+                MleIndex::Iterated => {
+                    let indexed_mle_index = MleIndex::IndexedBit(index_counter);
+                    index_counter += 1;
+                    *mle_index = indexed_mle_index;
+                }
+                MleIndex::Fixed(_bit) => {}
+                _ => panic!("We should not have indexed or bound bits at this point!"),
+            });
     }
 
     pub fn layer_id(&self) -> LayerId {
@@ -206,6 +223,10 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
         circuit_mles
     }
 
+    pub fn index_mle_indices(&mut self, start_index: usize) {
+        self.expression_node.index_mle_indices(start_index);
+    }
+
     /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, CircuitExpr>] using the
     /// associated data in the [CircuitMap].
     pub fn into_prover_expression<'a>(
@@ -213,9 +234,6 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
         circuit_map: &CircuitMap<F>,
     ) -> Expression<F, ProverExpr> {
         let circuit_mles = self.get_circuit_mles();
-        let dense_mles = circuit_mles
-            .iter()
-            .map(|circuit_mle| circuit_mle.into_dense_mle(&circuit_map));
 
         self.expression_node.into_prover_expression(&circuit_map)
     }
@@ -310,6 +328,84 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
                 *scalar,
             )),
         }
+    }
+
+    pub fn compute_bookkeeping_table(
+        &self,
+        circuit_map: &CircuitMap<F>,
+    ) -> MultilinearExtension<F> {
+        let output_data: MultilinearExtension<F> = match self {
+            ExpressionNode::Mle(circuit_mle) => {
+                let mle = circuit_map.get_data_from_circuit_mle(circuit_mle);
+                mle.unwrap().clone()
+            }
+            ExpressionNode::Product(circuit_mles) => {
+                let mle_bookkeeping_tables = circuit_mles
+                    .iter()
+                    .map(|circuit_mle| {
+                        circuit_map
+                            .get_data_from_circuit_mle(circuit_mle)
+                            .unwrap()
+                            .get_evals_vector()
+                            .as_slice()
+                    })
+                    .collect_vec();
+                evaluate_bookkeeping_tables_given_operation(
+                    &mle_bookkeeping_tables,
+                    BinaryOperation::Mul,
+                )
+            }
+            ExpressionNode::Sum(a, b) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map);
+                let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map);
+                evaluate_bookkeeping_tables_given_operation(
+                    &[
+                        &a_bookkeeping_table.get_evals_vector(),
+                        &b_bookkeeping_table.get_evals_vector(),
+                    ],
+                    BinaryOperation::Add,
+                )
+            }
+            ExpressionNode::Negated(a) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map);
+                MultilinearExtension::new(
+                    a_bookkeeping_table
+                        .get_evals_vector()
+                        .iter()
+                        .map(|elem| elem.neg())
+                        .collect_vec(),
+                )
+            }
+            ExpressionNode::Scaled(a, scale) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map);
+                MultilinearExtension::new(
+                    a_bookkeeping_table
+                        .get_evals_vector()
+                        .iter()
+                        .map(|elem| *elem * scale)
+                        .collect_vec(),
+                )
+            }
+            ExpressionNode::Selector(_mle_index, a, b) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(circuit_map);
+                let b_bookkeeping_table = b.compute_bookkeeping_table(circuit_map);
+                assert_eq!(
+                    a_bookkeeping_table.num_vars(),
+                    b_bookkeeping_table.num_vars()
+                );
+                MultilinearExtension::new(
+                    a_bookkeeping_table
+                        .get_evals_vector()
+                        .iter()
+                        .zip(b_bookkeeping_table.get_evals_vector())
+                        .flat_map(|(a, b)| vec![*a, *b])
+                        .collect_vec(),
+                )
+            }
+            ExpressionNode::Constant(value) => MultilinearExtension::new(vec![*value]),
+        };
+
+        output_data
     }
 
     /// Evaluate the polynomial using the provided closures to perform the
@@ -514,6 +610,38 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
             ExpressionNode::Constant(_constant) => {}
         }
         circuit_mles
+    }
+
+    pub fn index_mle_indices(&mut self, start_index: usize) {
+        match self {
+            ExpressionNode::Selector(mle_index, a, b) => {
+                match mle_index {
+                    MleIndex::Iterated => *mle_index = MleIndex::IndexedBit(start_index),
+                    MleIndex::Fixed(_bit) => {}
+                    _ => panic!("should not have indexed or bound bits at this point!"),
+                };
+                a.index_mle_indices(start_index + 1);
+                b.index_mle_indices(start_index + 1);
+            }
+            ExpressionNode::Sum(a, b) => {
+                a.index_mle_indices(start_index);
+                b.index_mle_indices(start_index);
+            }
+            ExpressionNode::Mle(mle) => {
+                mle.index_mle_indices(start_index);
+            }
+            ExpressionNode::Product(mles) => {
+                mles.iter_mut()
+                    .for_each(|mle| mle.index_mle_indices(start_index));
+            }
+            ExpressionNode::Scaled(a, scale_factor) => {
+                a.index_mle_indices(start_index);
+            }
+            ExpressionNode::Negated(a) => {
+                a.index_mle_indices(start_index);
+            }
+            ExpressionNode::Constant(_constant) => {}
+        }
     }
 
     /// Get the [ExpressionNode<F, ProverExpr>] recursively, for this expression.
@@ -805,6 +933,38 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
 
         Expression::new(ExpressionNode::Scaled(Box::new(node), scale), ())
     }
+}
+
+fn evaluate_bookkeeping_tables_given_operation<F: FieldExt>(
+    mle_bookkeeping_tables: &[&[F]],
+    binary_operation: BinaryOperation,
+) -> MultilinearExtension<F> {
+    let max_num_vars = mle_bookkeeping_tables
+        .iter()
+        .map(|bookkeeping_table| log2(bookkeeping_table.len()))
+        .max()
+        .unwrap();
+
+    let mut output_table = vec![F::ZERO; 1 << max_num_vars];
+    (0..1 << (max_num_vars)).for_each(|index| {
+        let evaluated_data_point = mle_bookkeeping_tables
+            .iter()
+            .map(|mle_bookkeeping_table| {
+                let zero = F::ZERO;
+                let index = if log2(mle_bookkeeping_table.len()) < max_num_vars {
+                    let max = 1 << log2(mle_bookkeeping_table.len());
+                    (index) % max
+                } else {
+                    index
+                };
+                let value = *mle_bookkeeping_table.get(index).unwrap_or(&zero);
+                value
+            })
+            .reduce(|acc, value| binary_operation.perform_operation(acc, value))
+            .unwrap();
+        output_table[index] = evaluated_data_point;
+    });
+    MultilinearExtension::new(output_table)
 }
 
 impl<F: FieldExt> Neg for Expression<F, CircuitExpr> {

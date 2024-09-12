@@ -1033,7 +1033,7 @@ where
 /// * `n_rows` - Height of M
 /// * `orig_num_cols` - Width of M
 /// * `offset` - Not used; this is always set to zero.
-fn collapse_columns<E, F>(
+pub fn collapse_columns<E, F>(
     coeffs: &[F],
     tensor: &[F],
     poly: &mut [F],

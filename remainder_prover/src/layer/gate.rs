@@ -221,53 +221,6 @@ impl<F: FieldExt> Layer<F> for GateLayer<F> {
     ) -> super::product::PostSumcheckLayer<F, F> {
         todo!()
     }
-
-    fn compute_data_outputs(
-        &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
-        circuit_map: &mut CircuitMap<F>,
-    ) {
-        assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary[0];
-
-        let max_gate_val = self
-            .nonzero_gates
-            .iter()
-            .fold(&0, |acc, (z, _, _)| std::cmp::max(acc, z));
-
-        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
-        // evaluating over all values in the boolean hypercube which includes dataparallel bits
-        let num_dataparallel_vals = 1 << (self.num_dataparallel_bits);
-        let res_table_num_entries =
-            ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
-
-        let mut res_table = vec![F::ZERO; res_table_num_entries];
-        (0..num_dataparallel_vals).for_each(|idx| {
-            self.nonzero_gates.iter().for_each(|(z_ind, x_ind, y_ind)| {
-                let zero = F::ZERO;
-                let f2_val = self
-                    .lhs
-                    .bookkeeping_table()
-                    .get(idx + (x_ind * num_dataparallel_vals))
-                    .unwrap_or(&zero);
-                let f3_val = self
-                    .lhs
-                    .bookkeeping_table()
-                    .get(idx + (y_ind * num_dataparallel_vals))
-                    .unwrap_or(&zero);
-                res_table[idx + (z_ind * num_dataparallel_vals)] =
-                    self.gate_operation.perform_operation(*f2_val, *f3_val);
-            });
-        });
-
-        let output_data = MultilinearExtension::new(res_table);
-        assert_eq!(
-            output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
-        );
-
-        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-    }
 }
 
 /// The circuit-description counterpart of a Gate layer description.
@@ -565,6 +518,65 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
             self.layer_id(),
         );
         gate_layer.into()
+    }
+
+    fn index_mle_indices(&mut self, start_index: usize) {
+        self.lhs_mle.index_mle_indices(start_index);
+        self.rhs_mle.index_mle_indices(start_index);
+    }
+
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &[&CircuitMle<F>],
+        circuit_map: &mut CircuitMap<F>,
+    ) {
+        // dbg!(&mle_outputs_necessary);
+        // assert_eq!(mle_outputs_necessary.len(), 1);
+        let mle_output_necessary = mle_outputs_necessary[0];
+
+        let max_gate_val = self
+            .wiring
+            .iter()
+            .fold(&0, |acc, (z, _, _)| std::cmp::max(acc, z));
+
+        // number of entries in the resulting table is the max gate z value * 2 to the power of the number of dataparallel bits, as we are
+        // evaluating over all values in the boolean hypercube which includes dataparallel bits
+        let num_dataparallel_vals = 1 << (self.num_dataparallel_bits);
+        let res_table_num_entries =
+            ((max_gate_val + 1) * num_dataparallel_vals).next_power_of_two();
+
+        let lhs_data = circuit_map
+            .get_data_from_circuit_mle(&self.lhs_mle)
+            .unwrap();
+        let rhs_data = circuit_map
+            .get_data_from_circuit_mle(&self.rhs_mle)
+            .unwrap();
+
+        let mut res_table = vec![F::ZERO; res_table_num_entries];
+        (0..num_dataparallel_vals).for_each(|idx| {
+            self.wiring.iter().for_each(|(z_ind, x_ind, y_ind)| {
+                let zero = F::ZERO;
+                let f2_val = lhs_data
+                    .get_evals_vector()
+                    .get(idx + (x_ind * num_dataparallel_vals))
+                    .unwrap_or(&zero);
+                let f3_val = rhs_data
+                    .get_evals_vector()
+                    .get(idx + (y_ind * num_dataparallel_vals))
+                    .unwrap_or(&zero);
+                res_table[idx + (z_ind * num_dataparallel_vals)] =
+                    self.gate_operation.perform_operation(*f2_val, *f3_val);
+            });
+        });
+
+        let output_data = MultilinearExtension::new(res_table);
+        assert_eq!(
+            output_data.num_vars(),
+            mle_output_necessary.mle_indices().len()
+        );
+        dbg!(&output_data);
+
+        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
     }
 }
 
