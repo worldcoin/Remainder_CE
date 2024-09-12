@@ -251,13 +251,13 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
             |mle_output_necessary| {
                 let prefix_bits = mle_output_necessary.prefix_bits();
                 let expression_node_to_compile = prefix_bits.iter().fold(
-                    self.expression.clone().deconstruct().0, |acc, bit| {
+                    &self.expression.expression_node, |acc, bit| {
                         match acc {
                             ExpressionNode::Selector(_mle_index, lhs, rhs) => {
                                 if *bit {
-                                    *rhs
+                                    rhs
                                 } else {
-                                    *lhs
+                                    lhs
                                 }
                             },
                             _ => panic!("Exists a prefix bit for an expression node that does not contain any more selectors!")
