@@ -5,7 +5,6 @@ mod tests;
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
 use std::collections::HashMap;
-use std::hint;
 use std::marker::PhantomData;
 use tracing::{instrument, span, Level};
 
@@ -24,9 +23,7 @@ use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLaye
 use crate::output_layer::{CircuitOutputLayer, OutputLayer};
 use crate::prover::layers::Layers;
 use crate::prover::{GKRCircuitDescription, GKRError, InstantiatedCircuit};
-use crate::{
-    layer::LayerId, layouter::layouting::layout, prover::proof_system::DefaultProofSystem,
-};
+use crate::{layer::LayerId, layouter::layouting::layout};
 use ark_std::{end_timer, start_timer};
 use itertools::Itertools;
 use log::info;
@@ -318,7 +315,7 @@ impl<
 
         while hint_input_layers.len() > 0 {
             let mut data_updated = false;
-            hint_input_layers
+            hint_input_layers = hint_input_layers
                 .iter()
                 .filter_map(|hint_input_layer_description| {
                     let (hint_circuit_location, hint_function) = input_layer_hint_map
@@ -343,9 +340,10 @@ impl<
                         data_updated = true;
                         None
                     } else {
-                        Some(hint_input_layer_description)
+                        Some(*hint_input_layer_description)
                     }
-                });
+                })
+                .collect_vec();
             assert!(data_updated);
         }
 
@@ -515,7 +513,7 @@ impl<
             let opening_proof_timer =
                 start_timer!(|| format!("opening proof for INPUT layer {:?}", layer_id));
 
-            let opening_proof = input_layer
+            let _opening_proof = input_layer
                 .open(&mut transcript_writer, layer_claim)
                 .map_err(GKRError::InputLayerError)?;
 
