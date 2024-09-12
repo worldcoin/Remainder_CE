@@ -2,6 +2,7 @@
 
 use std::marker::PhantomData;
 
+use itertools::Itertools;
 use remainder_ligero::{
     ligero_commit::{
         remainder_ligero_commit, remainder_ligero_eval_prove, remainder_ligero_verify,
@@ -18,11 +19,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     claims::wlx_eval::YieldWLXEvals,
+    input_layer::CommitmentEnum,
     layer::LayerId,
+    layouter::{
+        layouting::{CircuitDescriptionMap, CircuitMap},
+        nodes::circuit_inputs::{compile_inputs::combine_input_mles, InputLayerData},
+    },
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, CircuitInputLayer, InputLayer, InputLayerError};
+use super::{
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer, InputLayer,
+    InputLayerError,
+};
 
 /// An input layer in which `mle` will be committed to using the Ligero polynomial
 /// commitment scheme.
@@ -189,6 +198,39 @@ impl<F: FieldExt> CircuitInputLayer<F> for CircuitLigeroInputLayer<F> {
         );
         Ok(())
     }
+
+    fn into_prover_input_layer(
+        &self,
+        combined_mle: MultilinearExtension<F>,
+        precommit: &Option<CommitmentEnum<F>>,
+    ) -> InputLayerEnum<F> {
+        let prover_ligero_layer =
+            if let Some(CommitmentEnum::LigeroCommitment(ligero_commit)) = &precommit {
+                LigeroInputLayer::new(
+                    combined_mle,
+                    self.layer_id,
+                    Some(ligero_commit.clone()),
+                    self.aux.rho_inv,
+                    (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
+                )
+            } else {
+                if precommit.is_none() {
+                    LigeroInputLayer::new(
+                        combined_mle,
+                        self.layer_id,
+                        None,
+                        self.aux.rho_inv,
+                        (self.aux.orig_num_cols as f64) / (self.aux.num_rows as f64),
+                    )
+                } else {
+                    panic!(
+                    "The commitment type needs to be a LigeroCommitment for a Ligero Input Layer!"
+                )
+                }
+            };
+
+        prover_ligero_layer.into()
+    }
 }
 
 impl<F: FieldExt> LigeroInputLayer<F> {
@@ -257,7 +299,7 @@ mod tests {
 
         let aux = LigeroAuxInfo::new(evals.len().next_power_of_two(), rho_inv, ratio, None);
 
-        let (pre_commitment, root) = remainder_ligero_commit(&evals, &aux);
+        let (pre_commitment, _root) = remainder_ligero_commit(&evals, &aux);
 
         let ligero_input_layer = LigeroInputLayer::new(
             dense_mle.original_mle,
@@ -319,7 +361,7 @@ mod tests {
         let claim: Claim<Fr> = Claim::new(claim_point, claim_result);
 
         let aux = LigeroAuxInfo::new(evals.len().next_power_of_two(), rho_inv, ratio, None);
-        let (pre_commitment, root) = remainder_ligero_commit(&evals, &aux);
+        let (pre_commitment, _root) = remainder_ligero_commit(&evals, &aux);
 
         let mut ligero_input_layer = LigeroInputLayer::new(
             dense_mle.original_mle,

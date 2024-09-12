@@ -103,15 +103,6 @@ pub trait CompilableNode<F: FieldExt>: CircuitNode {
     ) -> Result<Vec<CircuitLayerEnum<F>>, DAGError>;
 }
 
-pub trait InputCompilableNode<F: FieldExt>: CircuitNode {
-    fn compile_input<'a>(
-        &'a self,
-        layer_id: &LayerId,
-        circuit_map: &mut CircuitMap<'a, F>,
-        transcript: impl ProverTranscript<F>,
-    ) -> Result<InputLayerEnum<F>, DAGError>;
-}
-
 /// An organized grouping of many node types
 pub trait NodeGroup {
     /// The set of nodes this `NodeGroup` supports

@@ -37,30 +37,26 @@ pub mod utils;
 
 /// A HashMap that records during circuit compilation where nodes live in the circuit and what data they yield
 #[derive(Debug)]
-pub struct CircuitMap<'a, F>(
-    pub(crate) HashMap<NodeId, (CircuitLocation, &'a MultilinearExtension<F>)>,
-);
+pub struct CircuitMap<F>(pub(crate) HashMap<CircuitLocation, MultilinearExtension<F>>);
 
-impl<'a, F> CircuitMap<'a, F> {
+impl<F> CircuitMap<F> {
     pub(crate) fn new() -> Self {
         Self(HashMap::new())
     }
 
     /// Gets the details of a Node in the CircuitMap
-    pub fn get_node(
+    pub fn get_data_from_location(
         &self,
-        node: &NodeId,
-    ) -> Result<&(CircuitLocation, &MultilinearExtension<F>), DAGError> {
-        self.0.get(node).ok_or(DAGError::DanglingNodeId(*node))
+        circuit_location: &CircuitLocation,
+    ) -> Result<&MultilinearExtension<F>, DAGError> {
+        self.0
+            .get(circuit_location)
+            .ok_or(DAGError::NoCircuitLocation)
     }
 
     /// Adds a new node to the CircuitMap
-    pub fn add_node(
-        &mut self,
-        node: NodeId,
-        value: (CircuitLocation, &'a MultilinearExtension<F>),
-    ) {
-        self.0.insert(node, value);
+    pub fn add_node(&mut self, circuit_location: CircuitLocation, value: MultilinearExtension<F>) {
+        self.0.insert(circuit_location, value);
     }
 }
 
@@ -81,8 +77,61 @@ impl CircuitDescriptionMap {
     }
 }
 
+pub struct InputNodeMap(pub(crate) HashMap<LayerId, NodeId>);
+
+impl InputNodeMap {
+    pub(crate) fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn get_layer_id(&self, layer_id: &LayerId) -> &NodeId {
+        self.0.get(layer_id).unwrap()
+    }
+
+    pub fn add_node(&mut self, layer_id: &LayerId, node_id: &NodeId) {
+        self.0.insert(*layer_id, *node_id);
+    }
+}
+
+pub struct InputLayerHintMap<F: FieldExt>(
+    pub(crate)  HashMap<
+        LayerId,
+        (
+            CircuitLocation,
+            fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
+        ),
+    >,
+);
+
+impl<F: FieldExt> InputLayerHintMap<F> {
+    pub(crate) fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn get_hint_function(
+        &self,
+        layer_id: &LayerId,
+    ) -> &(
+        CircuitLocation,
+        fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
+    ) {
+        self.0.get(layer_id).unwrap()
+    }
+
+    pub fn add_hint_function(
+        &mut self,
+        layer_id: &LayerId,
+        hint_function: (
+            CircuitLocation,
+            fn(&MultilinearExtension<F>) -> MultilinearExtension<F>,
+        ),
+    ) {
+        self.0.insert(*layer_id, hint_function);
+    }
+}
+
 /// The location of a Node in the circuit
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct CircuitLocation {
     /// The LayerId this node has been placed into
     pub layer_id: LayerId,
@@ -113,6 +162,9 @@ pub enum DAGError {
     /// A NodeId exists that references a node that is not present in the DAG.
     #[error("A NodeId exists that references a node that is not present in the DAG: Id = {0:?}")]
     DanglingNodeId(NodeId),
+    /// We have gotten to a layer whose parts of the expression have not been generatede..
+    #[error("This circuit location does not exist, or has not been compiled yet")]
+    NoCircuitLocation,
 }
 
 /// given a unsorted vector of NodeEnum, returns a topologically sorted vector of NodeEnum

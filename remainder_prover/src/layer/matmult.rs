@@ -1,7 +1,7 @@
 //! This module contains the implementation of the matrix multiplication layer
 
 use ::serde::{Deserialize, Serialize};
-use ark_std::{cfg_into_iter, end_timer, log2, start_timer};
+use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
 use ndarray::Array2;
 use remainder_shared_types::{
@@ -12,7 +12,7 @@ use remainder_shared_types::{
 use super::{
     combine_mle_refs::{combine_mle_refs_with_aggregate, pre_fix_mle_refs},
     gate::compute_sumcheck_message_no_beta_table,
-    layer_enum::VerifierLayerEnum,
+    layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     CircuitLayer, Layer, LayerError, LayerId, VerifierLayer,
@@ -24,6 +24,7 @@ use crate::{
     },
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::VerificationError,
+    layouter::layouting::CircuitMap,
     mle::{dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
@@ -320,6 +321,15 @@ impl<F: FieldExt> CircuitMatrix<F> {
             num_cols_vars,
         }
     }
+
+    pub fn into_matrix(&self, circuit_map: &CircuitMap<F>) -> Matrix<F> {
+        let dense_mle = self.mle.into_dense_mle(circuit_map);
+        Matrix {
+            mle: dense_mle,
+            num_cols_vars: self.num_cols_vars,
+            num_rows_vars: self.num_rows_vars,
+        }
+    }
 }
 
 impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
@@ -584,6 +594,17 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
 
     fn max_degree(&self) -> usize {
         2
+    }
+
+    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+        vec![&self.matrix_a.mle, &self.matrix_b.mle]
+    }
+
+    fn into_prover_layer<'a>(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F> {
+        let prover_matrix_a = self.matrix_a.into_matrix(circuit_map);
+        let prover_matrix_b = self.matrix_b.into_matrix(circuit_map);
+        let matmult_layer = MatMult::new(self.layer_id, prover_matrix_a, prover_matrix_b);
+        matmult_layer.into()
     }
 }
 

@@ -11,11 +11,15 @@ pub mod layers;
 
 use self::{layers::Layers, proof_system::ProofSystem};
 use crate::claims::wlx_eval::WLXAggregator;
+use crate::expression::circuit_expr::CircuitMle;
 use crate::expression::verifier_expr::VerifierMle;
 use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::CircuitInputLayer;
 use crate::layer::layer_enum::VerifierLayerEnum;
 use crate::layer::CircuitLayer;
+use crate::layouter::layouting::{CircuitDescriptionMap, InputLayerHintMap, InputNodeMap};
+use crate::layouter::nodes::circuit_inputs::InputLayerData;
+use crate::layouter::nodes::NodeId;
 use crate::mle::Mle;
 use crate::output_layer::mle_output_layer::{CircuitMleOutputLayer, MleOutputLayer};
 use crate::output_layer::{CircuitOutputLayer, OutputLayer};
@@ -35,6 +39,7 @@ use remainder_shared_types::transcript::{
 };
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use thiserror::Error;
 use tracing::{debug, info};
@@ -167,12 +172,28 @@ pub trait GKRCircuit<F: FieldExt> {
     /// `GKRCircuit` instance
     fn generate_circuit_description(
         &mut self,
-    ) -> Result<GKRCircuitDescription<F, Self::ProofSystem>, GKRError>;
+    ) -> Result<
+        (
+            GKRCircuitDescription<F, Self::ProofSystem>,
+            InputNodeMap,
+            InputLayerHintMap<F>,
+            CircuitDescriptionMap,
+        ),
+        GKRError,
+    >;
 
     /// Populates a circuit description given input data, adding any necessary commitments
     /// such as the commitment to the circuit description and commitments to inputs
     /// into transcript.
-    fn populate_circuit(&mut self);
+    fn populate_circuit(
+        &mut self,
+        gkr_circuit_description: GKRCircuitDescription<F, Self::ProofSystem>,
+        input_node_to_layer_map: InputNodeMap,
+        input_layer_hint_map: InputLayerHintMap<F>,
+        input_layer_data: Vec<InputLayerData<F>>,
+        circuit_description_map: &CircuitDescriptionMap,
+        transcript_writer: &mut impl ProverTranscript<F>,
+    );
 
     /// The backwards pass, creating the GKRProof.
     #[instrument(skip_all, err)]

@@ -1,21 +1,29 @@
 //! Nodes that represent inputs to a circuit in the circuit DAG\
 
-mod compile_inputs;
+pub mod compile_inputs;
 
 use remainder_shared_types::FieldExt;
 
-use crate::{input_layer::CommitmentEnum, mle::dense::DenseMle};
+use crate::{
+    input_layer::CommitmentEnum,
+    mle::{dense::DenseMle, evals::MultilinearExtension},
+};
 
 use super::{CircuitNode, Context, NodeId};
 
 /// A struct that represents input data that will be used to populate a
 /// [GKRCircuitDescription] in order to generate a full circuit.
 #[derive(Debug, Clone)]
-pub struct InputData<F: FieldExt> {
-    id: NodeId,
-    parent: NodeId,
-    data: DenseMle<F>,
-    precommit: Option<CommitmentEnum<F>>,
+pub struct InputLayerData<F: FieldExt> {
+    pub corresponding_input_node_id: NodeId,
+    pub data: Vec<InputShredData<F>>,
+    pub precommit: Option<CommitmentEnum<F>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct InputShredData<F: FieldExt> {
+    pub corresponding_input_shred_id: NodeId,
+    pub data: MultilinearExtension<F>,
 }
 
 /// A struct that represents the description of the data (shape in terms of `num_vars`)

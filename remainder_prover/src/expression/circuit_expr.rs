@@ -3,7 +3,10 @@ use crate::{
         product::{PostSumcheckLayer, Product},
         LayerId,
     },
-    layouter::nodes::CircuitNode,
+    layouter::{
+        layouting::{CircuitLocation, CircuitMap},
+        nodes::CircuitNode,
+    },
     mle::{dense::DenseMle, Mle, MleIndex},
 };
 use itertools::Itertools;
@@ -23,6 +26,7 @@ use remainder_shared_types::{
 use super::{
     expr_errors::ExpressionError,
     generic_expr::{Expression, ExpressionNode, ExpressionType},
+    prover_expr::ProverExpr,
     verifier_expr::{VerifierExpr, VerifierMle},
 };
 
@@ -70,6 +74,31 @@ impl<F: FieldExt> CircuitMle<F> {
                 _ => 0,
             }
         })
+    }
+
+    pub fn prefix_bits(&self) -> Vec<bool> {
+        self.var_indices
+            .iter()
+            .filter_map(|idx| match idx {
+                MleIndex::Fixed(bit) => Some(*bit),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn into_dense_mle<'a>(&self, circuit_map: &CircuitMap<'a, F>) -> DenseMle<F> {
+        let prefix_bits: Vec<bool> = self
+            .var_indices
+            .iter()
+            .filter_map(|idx| match idx {
+                MleIndex::Fixed(bit) => Some(*bit),
+                _ => None,
+            })
+            .collect();
+        let data = circuit_map
+            .get_data_from_location(&CircuitLocation::new(self.layer_id(), prefix_bits.clone()))
+            .unwrap();
+        DenseMle::new_with_prefix_bits((*data).clone(), self.layer_id(), prefix_bits)
     }
 
     // Bind the variable with index `var_index` to `value`.
@@ -179,6 +208,26 @@ impl<F: FieldExt> Expression<F, CircuitExpr> {
             .into_iter()
             .sorted()
             .collect()
+    }
+
+    /// Get the [CircuitMle]s for this expression, which are at the leaves of the expression.
+    pub fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+        let circuit_mles = self.expression_node.get_circuit_mles();
+        circuit_mles
+    }
+
+    /// Get the [Expression<F, ProverExpr>] corresponding to this [Expression<F, CircuitExpr>] using the
+    /// associated data in the [CircuitMap].
+    pub fn into_prover_expression<'a>(
+        &self,
+        circuit_map: &CircuitMap<'a, F>,
+    ) -> Expression<F, ProverExpr> {
+        let circuit_mles = self.get_circuit_mles();
+        let dense_mles = circuit_mles
+            .iter()
+            .map(|circuit_mle| circuit_mle.into_dense_mle(&circuit_map));
+
+        self.expression_node.into_prover_expression(&circuit_map)
     }
 
     /// Get the [PostSumcheckLayer] for this expression, which represents the fully bound values of the expression.
@@ -448,6 +497,66 @@ impl<F: FieldExt> ExpressionNode<F, CircuitExpr> {
             }
         });
         curr_nonlinear_indices.clone()
+    }
+
+    /// Get all the [CircuitMle]s, recursively, for this expression by adding the MLEs in the leaves into the vector of CircuitMles.
+    pub fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+        let mut circuit_mles: Vec<&CircuitMle<F>> = vec![];
+        match self {
+            ExpressionNode::Selector(_mle_index, a, b) => {
+                circuit_mles.extend(a.get_circuit_mles());
+                circuit_mles.extend(b.get_circuit_mles());
+            }
+            ExpressionNode::Sum(a, b) => {
+                circuit_mles.extend(a.get_circuit_mles());
+                circuit_mles.extend(b.get_circuit_mles());
+            }
+            ExpressionNode::Mle(mle) => {
+                circuit_mles.push(mle);
+            }
+            ExpressionNode::Product(mles) => mles.iter().for_each(|mle| circuit_mles.push(mle)),
+            ExpressionNode::Scaled(a, _scale_factor) => {
+                circuit_mles.extend(a.get_circuit_mles());
+            }
+            ExpressionNode::Negated(a) => {
+                circuit_mles.extend(a.get_circuit_mles());
+            }
+            ExpressionNode::Constant(_constant) => {}
+        }
+        circuit_mles
+    }
+
+    /// Get the [ExpressionNode<F, ProverExpr>] recursively, for this expression.
+    pub fn into_prover_expression<'a>(
+        &self,
+        circuit_map: &CircuitMap<'a, F>,
+    ) -> Expression<F, ProverExpr> {
+        match self {
+            ExpressionNode::Selector(_mle_index, a, b) => b
+                .into_prover_expression(&circuit_map)
+                .concat_expr(a.into_prover_expression(&circuit_map)),
+            ExpressionNode::Sum(a, b) => {
+                a.into_prover_expression(&circuit_map) + b.into_prover_expression(&circuit_map)
+            }
+            ExpressionNode::Mle(mle) => {
+                let prover_mle = mle.into_dense_mle(&circuit_map);
+                prover_mle.expression()
+            }
+            ExpressionNode::Product(mles) => {
+                let dense_mles = mles
+                    .iter()
+                    .map(|mle| mle.into_dense_mle(&circuit_map))
+                    .collect_vec();
+                Expression::<F, ProverExpr>::products(dense_mles)
+            }
+            ExpressionNode::Scaled(a, scale_factor) => {
+                a.into_prover_expression(&circuit_map) * *scale_factor
+            }
+            ExpressionNode::Negated(a) => {
+                Expression::<F, ProverExpr>::negated(a.into_prover_expression(&circuit_map))
+            }
+            ExpressionNode::Constant(constant) => Expression::<F, ProverExpr>::constant(*constant),
+        }
     }
 
     /// Recursively get the [PostSumcheckLayer] for an Expression node, which is the fully bound

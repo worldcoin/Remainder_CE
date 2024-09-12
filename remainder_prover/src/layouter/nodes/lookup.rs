@@ -1,5 +1,7 @@
 //! Nodes that implement LogUp.
 
+use std::collections::HashMap;
+
 use crate::expression::abstract_expr::AbstractExpr;
 use crate::expression::circuit_expr::{CircuitExpr, CircuitMle};
 use crate::input_layer::enum_input_layer::CircuitInputLayerEnum;
@@ -7,7 +9,8 @@ use crate::input_layer::public_input_layer::CircuitPublicInputLayer;
 use crate::layer::layer_enum::CircuitLayerEnum;
 use crate::layer::regular_layer::CircuitRegularLayer;
 use crate::layer::LayerId;
-use crate::layouter::layouting::CircuitDescriptionMap;
+use crate::layouter::layouting::{CircuitDescriptionMap, CircuitLocation, InputLayerHintMap};
+use crate::mle::evals::MultilinearExtension;
 use crate::mle::MleIndex;
 use crate::output_layer::mle_output_layer::CircuitMleOutputLayer;
 use crate::utils::get_total_mle_indices;
@@ -126,6 +129,7 @@ impl LookupTable {
         input_layer_id: &mut LayerId,
         intermediate_layer_id: &mut LayerId,
         circuit_description_map: &mut CircuitDescriptionMap,
+        input_hint_map: &mut InputLayerHintMap<F>,
     ) -> Result<
         (
             Vec<CircuitInputLayerEnum<F>>,
@@ -311,15 +315,25 @@ impl LookupTable {
 
         // --- Grab the layer ID for the new "input layer" to be added ---
         let lhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
-
-        logup_additional_input_layers.push(if self.secret_constrained_values {
+        let lhs_denom_circuit_location =
+            CircuitLocation::new(lhs_denominator.layer_id(), lhs_denominator.prefix_bits());
+        let inverse_function = |mle: &MultilinearExtension<F>| {
+            assert_eq!(mle.get_evals_vector().len(), 1);
+            MultilinearExtension::new(vec![mle.get_evals_vector()[0].invert().unwrap()])
+        };
+        input_hint_map.add_hint_function(
+            &lhs_denom_inverse_layer_id,
+            (lhs_denom_circuit_location, inverse_function),
+        );
+        let lhs_inverse_input_layer = if self.secret_constrained_values {
             // TODO use HyraxInputLayer, once it's implemented
             unimplemented!();
         } else {
             let public_input_layer_description =
                 CircuitPublicInputLayer::<F>::new(lhs_denom_inverse_layer_id.to_owned(), 0);
             CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
-        });
+        };
+        logup_additional_input_layers.push(lhs_inverse_input_layer);
 
         let lhs_inverse_mle_desc = CircuitMle::new(lhs_denom_inverse_layer_id, &vec![]);
         println!(
@@ -334,11 +348,17 @@ impl LookupTable {
 
         // --- Grab the layer ID for the new "input layer" to be added ---
         let rhs_denom_inverse_layer_id = input_layer_id.get_and_inc();
-        logup_additional_input_layers.push({
-            let public_input_layer_description =
-                CircuitPublicInputLayer::<F>::new(rhs_denom_inverse_layer_id.to_owned(), 0);
-            CircuitInputLayerEnum::PublicInputLayer(public_input_layer_description)
-        });
+        let rhs_denom_circuit_location =
+            CircuitLocation::new(rhs_denominator.layer_id(), rhs_denominator.prefix_bits());
+        input_hint_map.add_hint_function(
+            &rhs_denom_inverse_layer_id,
+            (rhs_denom_circuit_location, inverse_function),
+        );
+        let rhs_inverse_mle =
+            CircuitPublicInputLayer::<F>::new(rhs_denom_inverse_layer_id.to_owned(), 0);
+        let rhs_inverse_input_layer = CircuitInputLayerEnum::PublicInputLayer(rhs_inverse_mle);
+        logup_additional_input_layers.push(rhs_inverse_input_layer);
+
         let rhs_inverse_mle_desc = CircuitMle::new(rhs_denom_inverse_layer_id, &vec![]);
         println!(
             "Input layer that for RHS denom prod inverse has layer id: {:?}",

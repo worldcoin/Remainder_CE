@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use ark_std::log2;
 use itertools::Itertools;
 use remainder_ligero::ligero_structs::LigeroAuxInfo;
 use remainder_shared_types::FieldExt;
 
 use crate::{
+    expression::circuit_expr::CircuitMle,
     input_layer::{
         enum_input_layer::CircuitInputLayerEnum, ligero_input_layer::CircuitLigeroInputLayer,
         public_input_layer::CircuitPublicInputLayer,
@@ -11,13 +14,13 @@ use crate::{
     layer::LayerId,
     layouter::{
         layouting::{CircuitDescriptionMap, CircuitLocation, CircuitMap, DAGError},
-        nodes::CircuitNode,
+        nodes::{CircuitNode, NodeId},
     },
     mle::evals::{Evaluations, MultilinearExtension},
-    utils::{argsort, pad_to_nearest_power_of_two},
+    utils::{argsort, get_total_mle_indices, pad_to_nearest_power_of_two},
 };
 
-use super::{InputData, InputLayerNode, InputLayerType};
+use super::{InputLayerData, InputLayerNode, InputLayerType};
 
 /// Function which returns a vector of `MleIndex::Fixed` for prefix bits according to which
 /// position we are in the range from 0 to `total_num_bits` - `num_iterated_bits`.
@@ -67,7 +70,7 @@ fn index_input_mles(input_mle_num_vars: &[usize]) -> (Vec<Vec<bool>>, Vec<usize>
 
 /// Combines the list of input MLEs in the input layer into one giant MLE by interleaving them
 /// assuming that the indices of the bookkeeping table are stored in little endian.
-fn combine_input_mles<F: FieldExt>(
+pub fn combine_input_mles<F: FieldExt>(
     input_mles: &[&MultilinearExtension<F>],
 ) -> MultilinearExtension<F> {
     let mle_combine_indices = argsort(
@@ -145,13 +148,6 @@ fn invert_mle_bookkeeping_table<F: FieldExt>(bookkeeping_table: Vec<F>) -> Vec<F
 }
 
 impl InputLayerNode {
-    pub fn populate_input_circuit_description<'a, F: FieldExt>(
-        &'a self,
-        inputs: Vec<InputData<F>>,
-        circuit_description_map: &mut CircuitDescriptionMap,
-        circuit_map: &mut CircuitMap<'a, F>,
-    ) {
-    }
     pub fn generate_input_circuit_description<F: FieldExt>(
         &self,
         layer_id: &mut LayerId,

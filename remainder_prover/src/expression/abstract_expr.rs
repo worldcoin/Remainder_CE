@@ -64,51 +64,6 @@ impl<F: FieldExt> Expression<F, AbstractExpr> {
         self.expression_node.get_num_vars(num_vars_map)
     }
 
-    /// Builds the ProverExpression using the AbstractExpression as a template.
-    ///
-    /// Gets the information the prover needs by consulting the CircuitMap to get
-    /// the data and the prefix_bits
-    pub fn build_prover_expr(
-        self,
-        circuit_map: &CircuitMap<'_, F>,
-    ) -> Result<Expression<F, ProverExpr>, DAGError> {
-        // First we get all the mles that this expression will need to store
-        let mut nodes = self.expression_node.get_node_ids(vec![]);
-        nodes.sort();
-        nodes.dedup();
-
-        let mut node_map = HashMap::<NodeId, usize>::new();
-
-        let mle_vec: Result<Vec<_>, _> = nodes
-            .into_iter()
-            .enumerate()
-            .map(|(idx, node_id)| {
-                let (location, data) = circuit_map.get_node(&node_id)?;
-
-                let data = (*data).clone();
-
-                let data = DenseMle::new_with_prefix_bits(
-                    data,
-                    location.layer_id,
-                    location.prefix_bits.clone(),
-                );
-
-                node_map.insert(node_id, idx);
-                Ok(data)
-            })
-            .collect();
-        let mle_vec = mle_vec?;
-
-        // Then we replace the NodeIds in the AbstractExpr w/ indices of our stored MLEs
-
-        let expression_node = self.expression_node.build_prover_node(&node_map)?;
-
-        Ok(Expression::<F, ProverExpr> {
-            expression_node,
-            mle_vec,
-        })
-    }
-
     pub fn build_circuit_expr(
         self,
         circuit_description_map: &CircuitDescriptionMap,

@@ -5,7 +5,7 @@ use remainder_shared_types::FieldExt;
 use crate::{
     builders::layer_builder::LayerBuilder,
     layer::{
-        gate::{BinaryOperation, Gate},
+        gate::{BinaryOperation, GateLayer},
         regular_layer::RegularLayer,
         Layer, LayerId,
     },
@@ -62,11 +62,11 @@ impl<F: FieldExt, T: Layer<F>> Layers<F, T> {
         gate_operation: BinaryOperation,
     ) -> DenseMle<F>
     where
-        T: From<Gate<F>>,
+        T: From<GateLayer<F>>,
     {
         let id = LayerId::Layer(self.layers.len());
         // constructor for batched mul gate struct
-        let gate: Gate<F> = Gate::new(
+        let gate: GateLayer<F> = GateLayer::new(
             num_dataparallel_bits,
             nonzero_gates.clone(),
             lhs.clone(),

@@ -1,12 +1,14 @@
 //! Trait for dealing with InputLayer
 
 use ark_std::cfg_into_iter;
+use enum_input_layer::InputLayerEnum;
 use itertools::Itertools;
 use remainder_ligero::ligero_structs::LigeroCommit;
 use remainder_ligero::poseidon_ligero::PoseidonSpongeHasher;
 use remainder_shared_types::transcript::{ProverTranscript, VerifierTranscript};
 
 use crate::layer::regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION;
+use crate::layouter::layouting::{CircuitDescriptionMap, CircuitMap};
 use crate::mle::dense::DenseMle;
 use crate::mle::evals::MultilinearExtension;
 use rayon::prelude::*;
@@ -122,6 +124,13 @@ pub trait CircuitInputLayer<F: FieldExt> {
         &self,
         transcript_reader: &mut impl VerifierTranscript<F>,
     ) -> Result<Self::Commitment, InputLayerError>;
+
+    /// Convert a circuit input layer into a prover input layer.
+    fn into_prover_input_layer(
+        &self,
+        mle: MultilinearExtension<F>,
+        precommit: &Option<CommitmentEnum<F>>,
+    ) -> InputLayerEnum<F>;
 
     /// Verifies the evaluation at the point in the `Claim` relative to the
     /// polynomial commitment using the opening proof in the transcript.

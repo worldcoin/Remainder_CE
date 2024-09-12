@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use remainder_shared_types::{
-    transcript::{ProverTranscript, TranscriptSponge, TranscriptWriter, VerifierTranscript},
+    transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
@@ -11,10 +11,17 @@ use serde::{Deserialize, Serialize};
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
+    layouter::{
+        layouting::{CircuitDescriptionMap, CircuitLocation, CircuitMap},
+        nodes::circuit_inputs::InputLayerData,
+    },
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, CircuitInputLayer, InputLayer, InputLayerError};
+use super::{
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer,
+    CommitmentEnum, InputLayer, InputLayerError,
+};
 use crate::mle::Mle;
 
 /// Represents a random input layer, where we generate random constants in the
@@ -34,7 +41,7 @@ pub struct CircuitVerifierChallengeInputLayer<F: FieldExt> {
     layer_id: LayerId,
 
     /// The number of variables this Random Input Layer is on.
-    num_bits: usize,
+    pub num_bits: usize,
 
     _marker: PhantomData<F>,
 }
@@ -142,6 +149,20 @@ impl<F: FieldExt> CircuitInputLayer<F> for CircuitVerifierChallengeInputLayer<F>
             Err(InputLayerError::RandomInputVerificationFailed)
         }
     }
+
+    fn into_prover_input_layer(
+        &self,
+        combined_mle: MultilinearExtension<F>,
+        precommit: &Option<CommitmentEnum<F>>,
+    ) -> InputLayerEnum<F> {
+        assert!(
+            precommit.is_none(),
+            "Verifier challenge input layer does not support precommit!"
+        );
+        let verifier_challenge_input_layer =
+            VerifierChallengeInputLayer::new(combined_mle, self.layer_id);
+        verifier_challenge_input_layer.into()
+    }
 }
 
 impl<F: FieldExt> VerifierChallengeInputLayer<F> {
@@ -180,7 +201,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for VerifierChallengeInputLayer<F> {
 mod tests {
     use remainder_shared_types::{
         halo2curves::ff::Field,
-        transcript::{test_transcript::TestSponge, TranscriptReader},
+        transcript::{test_transcript::TestSponge, TranscriptReader, TranscriptWriter},
         Fr,
     };
 
@@ -191,7 +212,7 @@ mod tests {
         let layer_id = LayerId::Input(0);
 
         let num_vars = 2;
-        let num_evals = (1 << num_vars);
+        let num_evals = 1 << num_vars;
 
         // Transcript writer with test sponge that always returns `1`.
         let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =
@@ -219,7 +240,7 @@ mod tests {
 
         // MLE on 2 variables.
         let num_vars = 2;
-        let num_evals = (1 << num_vars);
+        let num_evals = 1 << num_vars;
 
         // Transcript writer with test sponge that always returns `1`.
         let mut transcript_writer: TranscriptWriter<Fr, TestSponge<Fr>> =

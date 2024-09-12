@@ -10,14 +10,15 @@ pub mod regular_layer;
 
 use std::fmt::Debug;
 
-use layer_enum::VerifierLayerEnum;
+use layer_enum::{LayerEnum, VerifierLayerEnum};
 use product::PostSumcheckLayer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     claims::{Claim, ClaimError},
-    expression::expr_errors::ExpressionError,
+    expression::{circuit_expr::CircuitMle, expr_errors::ExpressionError},
+    layouter::layouting::CircuitMap,
     sumcheck::InterpError,
 };
 use remainder_shared_types::{
@@ -187,6 +188,12 @@ pub trait CircuitLayer<F: FieldExt> {
 
     /// The maximum degree for any univariate in the sumcheck protocol.
     fn max_degree(&self) -> usize;
+
+    /// The Circuit MLEs that make up the leaves of the expression in this layer.
+    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>>;
+
+    /// Given a [CircuitMap], turn this [CircuitLayer] into a ProverLayer.
+    fn into_prover_layer(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F>;
 }
 
 /// A verifier counterpart of a GKR [Layer] trait.

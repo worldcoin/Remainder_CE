@@ -2,20 +2,27 @@
 
 use std::marker::PhantomData;
 
+use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
     FieldExt,
 };
 use serde::{Deserialize, Serialize};
-use tracing_subscriber::Layer;
 
 use crate::{
     claims::{wlx_eval::YieldWLXEvals, Claim},
     layer::LayerId,
+    layouter::{
+        layouting::{CircuitDescriptionMap, CircuitMap},
+        nodes::circuit_inputs::{compile_inputs::combine_input_mles, InputLayerData},
+    },
     mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum},
 };
 
-use super::{get_wlx_evaluations_helper, CircuitInputLayer, InputLayer, InputLayerError};
+use super::{
+    enum_input_layer::InputLayerEnum, get_wlx_evaluations_helper, CircuitInputLayer,
+    CommitmentEnum, InputLayer, InputLayerError,
+};
 use crate::mle::Mle;
 
 /// An Input Layer in which the data is sent to the verifier
@@ -142,6 +149,20 @@ impl<F: FieldExt> CircuitInputLayer<F> for CircuitPublicInputLayer<F> {
         } else {
             Err(InputLayerError::PublicInputVerificationFailed)
         }
+    }
+
+    fn into_prover_input_layer(
+        &self,
+        combined_mle: MultilinearExtension<F>,
+        precommit: &Option<CommitmentEnum<F>>,
+    ) -> InputLayerEnum<F> {
+        assert!(
+            precommit.is_none(),
+            "Public input layer does not support precommit!"
+        );
+
+        let prover_public_input_layer = PublicInputLayer::new(combined_mle, self.layer_id());
+        prover_public_input_layer.into()
     }
 }
 

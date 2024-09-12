@@ -13,6 +13,7 @@ use crate::{
     },
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::{LayerError, VerificationError},
+    layouter::layouting::CircuitMap,
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     sumcheck::*,
 };
@@ -30,7 +31,7 @@ use super::{
         gate_helpers::{compute_full_gate_identity, evaluate_mle_ref_product_no_beta_table},
         index_mle_indices_gate, GateError,
     },
-    layer_enum::VerifierLayerEnum,
+    layer_enum::{LayerEnum, VerifierLayerEnum},
     product::{PostSumcheckLayer, Product},
     regular_layer::claims::CLAIM_AGGREGATION_CONSTANT_COLUMN_OPTIMIZATION,
     CircuitLayer, Layer, LayerId, VerifierLayer,
@@ -219,6 +220,16 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
 
     fn max_degree(&self) -> usize {
         2
+    }
+
+    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+        vec![&self.source_mle]
+    }
+
+    fn into_prover_layer(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F> {
+        let source_mle = self.source_mle.into_dense_mle(circuit_map);
+        let id_gate_layer = IdentityGate::new(self.layer_id(), self.wiring.clone(), source_mle);
+        id_gate_layer.into()
     }
 }
 
