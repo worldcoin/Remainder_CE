@@ -28,7 +28,7 @@ use crate::{
     layer::{Layer, LayerError, LayerId, VerificationError},
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     prover::SumcheckProof,
-    sumcheck::{evaluate_at_a_point, Evals},
+    sumcheck::{evaluate_at_a_point, SumcheckEvals},
 };
 
 pub use self::gate_helpers::{
@@ -910,8 +910,10 @@ impl<F: FieldExt> Gate<F> {
             .clone()
             .into_iter()
             .skip(1)
-            .fold(Evals(evals_vec[0].clone()), |acc, elem| acc + Evals(elem));
-        let Evals(final_vec_evals) = final_evals;
+            .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                acc + SumcheckEvals(elem)
+            });
+        let SumcheckEvals(final_vec_evals) = final_evals;
         Ok(final_vec_evals)
     }
 
@@ -995,8 +997,10 @@ impl<F: FieldExt> Gate<F> {
             .clone()
             .into_iter()
             .skip(1)
-            .fold(Evals(evals_vec[0].clone()), |acc, elem| acc + Evals(elem));
-        let Evals(final_vec_evals) = final_evals;
+            .fold(SumcheckEvals(evals_vec[0].clone()), |acc, elem| {
+                acc + SumcheckEvals(elem)
+            });
+        let SumcheckEvals(final_vec_evals) = final_evals;
         Ok(final_vec_evals)
     }
 
