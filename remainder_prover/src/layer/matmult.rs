@@ -305,7 +305,7 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &Vec<&CircuitMle<F>>,
+        mle_outputs_necessary: &[&CircuitMle<F>],
         circuit_map: &mut CircuitMap<F>,
     ) {
         assert_eq!(mle_outputs_necessary.len(), 1);

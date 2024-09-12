@@ -152,7 +152,7 @@ pub trait Layer<F: FieldExt> {
     /// that populates these bookkeeping tables and mutate the circuit map to reflect this.
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &Vec<&CircuitMle<F>>,
+        mle_outputs_necessary: &[&CircuitMle<F>],
         circuit_map: &mut CircuitMap<F>,
     );
 }

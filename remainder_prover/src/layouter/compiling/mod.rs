@@ -10,7 +10,7 @@ use crate::expression::circuit_expr::CircuitMle;
 use crate::input_layer::enum_input_layer::{CircuitInputLayerEnum, InputLayerEnum};
 use crate::input_layer::{CircuitInputLayer, InputLayer};
 use crate::layer::layer_enum::{CircuitLayerEnum, LayerEnum};
-use crate::layer::CircuitLayer;
+use crate::layer::{CircuitLayer, Layer};
 use crate::layouter::layouting::CircuitMap;
 use crate::layouter::nodes::circuit_inputs::compile_inputs::combine_input_mles;
 use crate::layouter::nodes::CircuitNode;
