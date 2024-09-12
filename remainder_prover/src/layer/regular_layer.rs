@@ -244,7 +244,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 
     fn compute_data_outputs(
         &self,
-        mle_outputs_necessary: &Vec<&CircuitMle<F>>,
+        mle_outputs_necessary: &[&CircuitMle<F>],
         circuit_map: &mut CircuitMap<F>,
     ) {
         mle_outputs_necessary.into_iter().for_each(

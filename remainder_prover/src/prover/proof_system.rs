@@ -240,6 +240,18 @@ macro_rules! layer_enum {
                     )*
                 }
             }
+
+            fn compute_data_outputs(
+                &self,
+                mle_outputs_necessary: &[&crate::expression::circuit_expr::CircuitMle<F>],
+                circuit_map: &mut crate::layouter::layouting::CircuitMap<F>,
+            ) {
+                match self {
+                    $(
+                        Self::$var_name(layer) => layer.compute_data_outputs(mle_outputs_necessary, circuit_map),
+                    )*
+                }
+            }
         }
 
         $(
@@ -402,6 +414,20 @@ macro_rules! input_layer_enum {
                             Self::$var_name(layer) => {
                                 let commitment = layer.get_commitment_from_transcript(transcript_reader)?;
                                 Ok(Self::Commitment::$var_name(commitment))
+                            }
+                        )*
+                    }
+                }
+
+                fn into_prover_input_layer(
+                    &self,
+                    mle: crate::mle::evals::MultilinearExtension<F>,
+                    precommit: &Option<crate::input_layer::CommitmentEnum<F>>,
+                ) -> InputLayerEnum<F> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => {
+                                layer.into_prover_input_layer(mle, precommit)
                             }
                         )*
                     }
