@@ -5,7 +5,7 @@
 pub mod gate_helpers;
 mod new_interface_tests;
 
-use std::{cmp::max, fmt::Binary};
+use std::cmp::max;
 
 use ark_std::cfg_into_iter;
 use itertools::Itertools;
@@ -23,6 +23,7 @@ use crate::{
     },
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::{Layer, LayerError, LayerId, VerificationError},
+    layouter::layouting::CircuitMap,
     mle::{betavalues::BetaValues, dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
     prover::SumcheckProof,
     sumcheck::{evaluate_at_a_point, Evals},
@@ -34,7 +35,10 @@ pub use self::gate_helpers::{
     GateError,
 };
 
-use super::{layer_enum::VerifierLayerEnum, CircuitLayer, VerifierLayer};
+use super::{
+    layer_enum::{LayerEnum, VerifierLayerEnum},
+    CircuitLayer, VerifierLayer,
+};
 
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug, Copy)]
 
@@ -64,7 +68,7 @@ impl BinaryOperation {
 /// gates.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(bound = "F: FieldExt")]
-pub struct Gate<F: FieldExt> {
+pub struct GateLayer<F: FieldExt> {
     /// The layer id associated with this gate layer.
     pub layer_id: LayerId,
     /// The number of bits representing the number of "dataparallel" copies of the circuit.
@@ -87,7 +91,7 @@ pub struct Gate<F: FieldExt> {
     challenges: Vec<F>,
 }
 
-impl<F: FieldExt> Layer<F> for Gate<F> {
+impl<F: FieldExt> Layer<F> for GateLayer<F> {
     type CircuitLayer = CircuitGateLayer<F>;
 
     /// Gets this layer's id.
@@ -489,6 +493,29 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitGateLayer<F> {
     fn max_degree(&self) -> usize {
         todo!()
     }
+
+    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+        vec![&self.lhs_mle, &self.rhs_mle]
+    }
+
+    fn into_prover_layer(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F> {
+        let lhs_mle = self.lhs_mle.into_dense_mle(circuit_map);
+        let rhs_mle = self.rhs_mle.into_dense_mle(circuit_map);
+        let num_dataparallel_bits = if self.num_dataparallel_bits == 0 {
+            None
+        } else {
+            Some(self.num_dataparallel_bits)
+        };
+        let gate_layer = GateLayer::new(
+            num_dataparallel_bits,
+            self.wiring.clone(),
+            lhs_mle,
+            rhs_mle,
+            self.gate_operation,
+            self.layer_id(),
+        );
+        gate_layer.into()
+    }
 }
 
 impl<F: FieldExt> VerifierGateLayer<F> {
@@ -586,7 +613,7 @@ impl<F: FieldExt> VerifierLayer<F> for VerifierGateLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for Gate<F> {
+impl<F: FieldExt> YieldClaim<ClaimMle<F>> for GateLayer<F> {
     /// Get the claims that this layer makes on other layers.
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let lhs_reduced = self.phase_1_mles.clone().unwrap()[0][1].clone();
@@ -702,7 +729,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierGateLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
+impl<F: FieldExt> YieldWLXEvals<F> for GateLayer<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &[Vec<F>],
@@ -746,7 +773,7 @@ impl<F: FieldExt> YieldWLXEvals<F> for Gate<F> {
     }
 }
 
-impl<F: FieldExt> Gate<F> {
+impl<F: FieldExt> GateLayer<F> {
     /// Construct a new gate layer
     ///
     /// # Arguments
@@ -771,7 +798,7 @@ impl<F: FieldExt> Gate<F> {
         gate_operation: BinaryOperation,
         layer_id: LayerId,
     ) -> Self {
-        Gate {
+        GateLayer {
             num_dataparallel_bits: num_dataparallel_bits.unwrap_or(0),
             nonzero_gates,
             lhs,
@@ -1200,11 +1227,11 @@ impl<F: FieldExt> Gate<F> {
 }
 
 /// For circuit serialization to hash the circuit description into the transcript.
-impl<F: std::fmt::Debug + FieldExt> Gate<F> {
+impl<F: std::fmt::Debug + FieldExt> GateLayer<F> {
     pub(crate) fn circuit_description_fmt(&self) -> impl std::fmt::Display + '_ {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a Gate<F>);
+        struct GateCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a GateLayer<F>);
 
         impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for GateCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

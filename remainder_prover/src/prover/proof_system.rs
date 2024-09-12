@@ -1,7 +1,5 @@
 use remainder_shared_types::{
-    transcript::{
-        poseidon_transcript::PoseidonSponge, test_transcript::TestSponge, TranscriptSponge,
-    },
+    transcript::{poseidon_transcript::PoseidonSponge, TranscriptSponge},
     FieldExt,
 };
 
@@ -101,6 +99,27 @@ macro_rules! layer_enum {
                     match self {
                         $(
                             Self::$var_name(layer) => Ok(Self::VerifierLayer::$var_name(layer.into_verifier_layer(sumcheck_bindings, claim_point, transcript_reader)?)),
+                        )*
+                    }
+                }
+
+                fn get_circuit_mles(
+                    &self,
+                ) -> Vec<& $crate::expression::circuit_expr::CircuitMle<F>> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.get_circuit_mles(),
+                        )*
+                    }
+                }
+
+                fn into_prover_layer<'a>(
+                    &self,
+                    circuit_map: &crate::layouter::layouting::CircuitMap<'a, F>
+                ) -> LayerEnum<F> {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.into_prover_layer(circuit_map),
                         )*
                     }
                 }

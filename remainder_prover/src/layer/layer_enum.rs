@@ -7,7 +7,7 @@ use crate::claims::wlx_eval::{ClaimMle, YieldWLXEvals};
 use crate::claims::YieldClaim;
 use crate::layer_enum;
 
-use super::gate::Gate;
+use super::gate::GateLayer;
 use super::identity_gate::IdentityGate;
 use super::matmult::MatMult;
 use super::regular_layer::RegularLayer;
@@ -15,7 +15,7 @@ use crate::mle::mle_enum::MleEnum;
 
 use super::LayerError;
 
-layer_enum!(LayerEnum, (Regular: RegularLayer<F>), (Gate: Gate<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
+layer_enum!(LayerEnum, (Regular: RegularLayer<F>), (Gate: GateLayer<F>), (IdentityGate: IdentityGate<F>), (MatMult: MatMult<F>));
 
 impl<F: FieldExt> LayerEnum<F> {
     ///Gets the size of the Layer as a whole in terms of number of bits

@@ -18,17 +18,21 @@ use crate::{
     builders::layer_builder::LayerBuilder,
     claims::Claim,
     expression::{
-        circuit_expr::CircuitExpr,
+        circuit_expr::{CircuitExpr, CircuitMle},
         generic_expr::{Expression, ExpressionNode, ExpressionType},
         prover_expr::ProverExpr,
         verifier_expr::VerifierExpr,
     },
     layer::{Layer, LayerError, LayerId, VerificationError},
+    layouter::layouting::CircuitMap,
     mle::{betavalues::BetaValues, dense::DenseMle},
     sumcheck::{compute_sumcheck_message_beta_cascade, evaluate_at_a_point, get_round_degree},
 };
 
-use super::{layer_enum::VerifierLayerEnum, product::PostSumcheckLayer};
+use super::{
+    layer_enum::{LayerEnum, VerifierLayerEnum},
+    product::PostSumcheckLayer,
+};
 
 use super::{CircuitLayer, VerifierLayer};
 
@@ -438,6 +442,16 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
 
     fn max_degree(&self) -> usize {
         self.expression.get_max_degree() + 1
+    }
+
+    fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>> {
+        self.expression.get_circuit_mles()
+    }
+
+    fn into_prover_layer(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F> {
+        let prover_expr = self.expression.into_prover_expression(circuit_map);
+        let regular_layer = RegularLayer::new_raw(self.layer_id(), prover_expr);
+        regular_layer.into()
     }
 }
 
