@@ -1,4 +1,8 @@
-use crate::prover::GKRCircuit;
+use crate::layouter::compiling::LayouterCircuit;
+use crate::layouter::component::Component;
+use crate::layouter::nodes::circuit_inputs::InputLayerData;
+use crate::layouter::nodes::node_enum::NodeEnum;
+use crate::layouter::nodes::Context;
 use ark_std::{end_timer, start_timer};
 
 use remainder_shared_types::transcript::poseidon_transcript::PoseidonSponge;
@@ -12,13 +16,15 @@ use std::path::Path;
 use super::proof_system::ProofSystem;
 
 /// Boilerplate code for testing a circuit
-pub fn test_circuit<F: FieldExt, C: GKRCircuit<F, ProofSystem = PR>, PR>(
-    mut circuit: C,
+pub fn test_circuit<
+    F: FieldExt,
+    C: Component<NodeEnum<F>>,
+    Fn: FnMut(&Context) -> (C, Vec<InputLayerData<F>>),
+>(
+    mut circuit: LayouterCircuit<F, C, Fn>,
     path: Option<&Path>,
-) where
-    PR: ProofSystem<F>,
-{
-    let transcript_writer = TranscriptWriter::<F, PR::Transcript>::new("GKR Prover Transcript");
+) {
+    let transcript_writer = TranscriptWriter::<F, PoseidonSponge<F>>::new("GKR Prover Transcript");
     let prover_timer = start_timer!(|| "Proof generation");
 
     match circuit.prove(transcript_writer) {
@@ -43,7 +49,7 @@ pub fn test_circuit<F: FieldExt, C: GKRCircuit<F, ProofSystem = PR>, PR>(
                 transcript
             };
 
-            let mut transcript_reader = TranscriptReader::<_, PR::Transcript>::new(transcript);
+            let mut transcript_reader = TranscriptReader::<F, PoseidonSponge<F>>::new(transcript);
             let verifier_timer = start_timer!(|| "Proof verification");
 
             match gkr_circuit_description.verify(&mut transcript_reader) {
