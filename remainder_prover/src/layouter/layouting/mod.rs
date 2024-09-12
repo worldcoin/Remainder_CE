@@ -44,7 +44,13 @@ impl<F: FieldExt> CircuitMap<F> {
         Self(HashMap::new())
     }
 
-    /// Gets the details of a Node in the CircuitMap
+    pub fn get_data_from_location(
+        &self,
+        circuit_location: &CircuitLocation,
+    ) -> Option<&MultilinearExtension<F>> {
+        self.0.get(&circuit_location)
+    }
+
     pub fn get_data_from_circuit_mle(
         &self,
         circuit_mle: &CircuitMle<F>,

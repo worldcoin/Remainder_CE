@@ -4,6 +4,7 @@
 mod tests;
 
 use std::collections::HashMap;
+use std::hint;
 use std::marker::PhantomData;
 
 use crate::expression::circuit_expr::CircuitMle;
@@ -224,6 +225,7 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
         // we convert the circuit input layer into a prover input layer using this big bookkeeping table
         // we add the data in the input data corresopnding with the circuit location for each input data struct into the circuit map
         let mut prover_input_layers: Vec<InputLayerEnum<F>> = Vec::new();
+        let mut hint_input_layers: Vec<&CircuitInputLayerEnum<F>> = Vec::new();
         input_layers.iter().for_each(|input_layer_description| {
             let input_layer_id = input_layer_description.layer_id();
             let input_node_id = input_node_to_layer_map.get_layer_id(&input_layer_id);
@@ -272,6 +274,7 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
                         .into_prover_input_layer(verifier_challenge_mle, &None);
                     prover_input_layers.push(verifier_challenge_layer);
                 } else {
+                    hint_input_layers.push(input_layer_description);
                     assert!(input_layer_hint_map.0.contains_key(&input_layer_id));
                 }
             }
@@ -293,6 +296,39 @@ impl<F: FieldExt, C: Component<NodeEnum<F>>, Fn: FnMut(&Context) -> C> GKRCircui
                     .compute_data_outputs(mle_outputs_necessary, &mut circuit_map);
                 prover_intermediate_layers.push(prover_intermediate_layer);
             });
+
+        while hint_input_layers.len() > 0 {
+            let mut data_updated = false;
+            hint_input_layers
+                .iter()
+                .filter_map(|hint_input_layer_description| {
+                    let (hint_circuit_location, hint_function) = input_layer_hint_map
+                        .get_hint_function(&hint_input_layer_description.layer_id());
+                    if let Some(data) = circuit_map.get_data_from_location(hint_circuit_location) {
+                        let function_applied_to_data = hint_function(data);
+                        // also here @ryan do we actually need to add to circuit map? also there are several places (see: logup) where we never add to circuit
+                        // map, even before this refactor, actually... this means we won't make claims on these so that's actually fine? idk
+                        circuit_map.add_node(
+                            CircuitLocation::new(hint_input_layer_description.layer_id(), vec![]),
+                            function_applied_to_data.clone(),
+                        );
+                        let mut prover_input_layer = hint_input_layer_description
+                            .into_prover_input_layer(function_applied_to_data, &None);
+                        // LOL wait my brain can't think right now TODO (@ryan) do we really need to do this commitment part?
+                        let prover_input_commit = prover_input_layer.commit().unwrap();
+                        InputLayerEnum::append_commitment_to_transcript(
+                            &prover_input_commit,
+                            transcript_writer,
+                        );
+                        prover_input_layers.push(prover_input_layer);
+                        data_updated = true;
+                        None
+                    } else {
+                        Some(hint_input_layer_description)
+                    }
+                });
+            assert!(data_updated);
+        }
 
         todo!()
     }
