@@ -50,7 +50,7 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(bound = "F: FieldExt")]
 pub struct Expression<F: FieldExt, E: ExpressionType<F>> {
-    pub(super) expression_node: ExpressionNode<F, E>,
+    pub expression_node: ExpressionNode<F, E>,
     pub mle_vec: E::MleVec,
 }
 
