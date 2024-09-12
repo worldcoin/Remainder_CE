@@ -4,12 +4,17 @@ use super::{
     generic_expr::{Expression, ExpressionNode, ExpressionType},
     verifier_expr::{VerifierExpr, VerifierMle},
 };
-use crate::{layer::product::PostSumcheckLayer, mle::Mle};
 use crate::{
     layer::product::Product,
     mle::{betavalues::BetaValues, dense::DenseMle, MleIndex},
 };
+use crate::{
+    layer::{gate::BinaryOperation, product::PostSumcheckLayer},
+    mle::{evals::MultilinearExtension, Mle},
+};
+use ark_std::{cfg_into_iter, log2};
 use itertools::Itertools;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1100,6 +1105,78 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
         PostSumcheckLayer(products)
     }
 
+    pub fn compute_bookkeeping_table(
+        &self,
+        mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec,
+    ) -> MultilinearExtension<F> {
+        let output_data: MultilinearExtension<F> = match self {
+            ExpressionNode::Mle(mle_vec_idx) => {
+                let mle = mle_vec_idx.get_mle(mle_vec);
+                MultilinearExtension::new(mle.bookkeeping_table().to_vec())
+            }
+            ExpressionNode::Product(mle_vec_indices) => {
+                let mle_bookkeeping_tables = mle_vec_indices
+                    .iter()
+                    .map(|mle_vec_index| mle_vec_index.get_mle(mle_vec).bookkeeping_table())
+                    .collect_vec();
+                evaluate_bookkeeping_tables_given_operation(
+                    &mle_bookkeeping_tables,
+                    BinaryOperation::Mul,
+                )
+            }
+            ExpressionNode::Sum(a, b) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(mle_vec);
+                let b_bookkeeping_table = b.compute_bookkeeping_table(mle_vec);
+                evaluate_bookkeeping_tables_given_operation(
+                    &[
+                        &a_bookkeeping_table.get_evals_vector(),
+                        &b_bookkeeping_table.get_evals_vector(),
+                    ],
+                    BinaryOperation::Add,
+                )
+            }
+            ExpressionNode::Negated(a) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(mle_vec);
+                MultilinearExtension::new(
+                    a_bookkeeping_table
+                        .get_evals_vector()
+                        .iter()
+                        .map(|elem| elem.neg())
+                        .collect_vec(),
+                )
+            }
+            ExpressionNode::Scaled(a, scale) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(mle_vec);
+                MultilinearExtension::new(
+                    a_bookkeeping_table
+                        .get_evals_vector()
+                        .iter()
+                        .map(|elem| *elem * scale)
+                        .collect_vec(),
+                )
+            }
+            ExpressionNode::Selector(_mle_index, a, b) => {
+                let a_bookkeeping_table = a.compute_bookkeeping_table(mle_vec);
+                let b_bookkeeping_table = b.compute_bookkeeping_table(mle_vec);
+                assert_eq!(
+                    a_bookkeeping_table.num_vars(),
+                    b_bookkeeping_table.num_vars()
+                );
+                MultilinearExtension::new(
+                    a_bookkeeping_table
+                        .get_evals_vector()
+                        .iter()
+                        .zip(b_bookkeeping_table.get_evals_vector())
+                        .flat_map(|(a, b)| vec![*a, *b])
+                        .collect_vec(),
+                )
+            }
+            ExpressionNode::Constant(value) => MultilinearExtension::new(vec![*value]),
+        };
+
+        output_data
+    }
+
     /// Get the maximum degree of an ExpressionNode, recursively.
     fn get_max_degree(&self, mle_vec: &<ProverExpr as ExpressionType<F>>::MleVec) -> usize {
         match self {
@@ -1120,6 +1197,39 @@ impl<F: FieldExt> ExpressionNode<F, ProverExpr> {
             ExpressionNode::Constant(_) => 1,
         }
     }
+}
+
+fn evaluate_bookkeeping_tables_given_operation<F: FieldExt>(
+    mle_bookkeeping_tables: &[&[F]],
+    binary_operation: BinaryOperation,
+) -> MultilinearExtension<F> {
+    let max_num_vars = mle_bookkeeping_tables
+        .iter()
+        .map(|bookkeeping_table| log2(bookkeeping_table.len()))
+        .max()
+        .unwrap();
+
+    let mut output_table = vec![F::ZERO; 1 << max_num_vars];
+    (0..1 << (max_num_vars)).for_each(|index| {
+        //get the product of all evaluations over 0/1/..degree
+        let evaluated_data_point = mle_bookkeeping_tables
+            .iter()
+            .map(|mle_bookkeeping_table| {
+                let zero = F::ZERO;
+                let index = if log2(mle_bookkeeping_table.len()) < max_num_vars {
+                    let max = 1 << log2(mle_bookkeeping_table.len());
+                    (index) % max
+                } else {
+                    index
+                };
+                let value = *mle_bookkeeping_table.get(index).unwrap_or(&zero);
+                value
+            })
+            .reduce(|acc, value| binary_operation.perform_operation(acc, value))
+            .unwrap();
+        output_table[index] = evaluated_data_point;
+    });
+    MultilinearExtension::new(output_table)
 }
 
 impl<F: FieldExt> Neg for Expression<F, ProverExpr> {

@@ -24,8 +24,8 @@ use crate::{
     },
     expression::{circuit_expr::CircuitMle, verifier_expr::VerifierMle},
     layer::VerificationError,
-    layouter::layouting::CircuitMap,
-    mle::{dense::DenseMle, mle_enum::MleEnum, Mle, MleIndex},
+    layouter::layouting::{CircuitLocation, CircuitMap},
+    mle::{dense::DenseMle, evals::MultilinearExtension, mle_enum::MleEnum, Mle, MleIndex},
     sumcheck::evaluate_at_a_point,
 };
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -301,6 +301,24 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
     ) -> PostSumcheckLayer<F, F> {
         let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
         PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
+    }
+
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &Vec<&CircuitMle<F>>,
+        circuit_map: &mut CircuitMap<F>,
+    ) {
+        assert_eq!(mle_outputs_necessary.len(), 1);
+        let mle_output_necessary = mle_outputs_necessary[0];
+
+        let output_data =
+            MultilinearExtension::new(product_two_matrices(&self.matrix_a, &self.matrix_b));
+        assert_eq!(
+            output_data.num_vars(),
+            mle_output_necessary.mle_indices().len()
+        );
+
+        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
     }
 }
 
@@ -600,7 +618,7 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         vec![&self.matrix_a.mle, &self.matrix_b.mle]
     }
 
-    fn into_prover_layer<'a>(&self, circuit_map: &mut CircuitMap<F>) -> LayerEnum<F> {
+    fn into_prover_layer<'a>(&self, circuit_map: &CircuitMap<F>) -> LayerEnum<F> {
         let prover_matrix_a = self.matrix_a.into_matrix(circuit_map);
         let prover_matrix_b = self.matrix_b.into_matrix(circuit_map);
         let matmult_layer = MatMult::new(self.layer_id, prover_matrix_a, prover_matrix_b);

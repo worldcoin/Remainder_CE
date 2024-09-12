@@ -51,7 +51,7 @@ pub enum ExpressionNode<F: FieldExt, E: ExpressionType<F>> {
 #[serde(bound = "F: FieldExt")]
 pub struct Expression<F: FieldExt, E: ExpressionType<F>> {
     pub(super) expression_node: ExpressionNode<F, E>,
-    pub(super) mle_vec: E::MleVec,
+    pub mle_vec: E::MleVec,
 }
 
 /// generic methods shared across all types of expressions
