@@ -42,16 +42,6 @@ pub type LeafNodeMle<F> = FlatMles<F, 2>;
 
 #[derive(Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// Used for the attribute multiplicities
-pub struct BinDecomp4Bit<F> {
-    ///The 4 bits that make up this decomposition
-    ///
-    /// Should all be 1 or 0
-    pub bits: [F; 4],
-}
-pub type BinDecomp4BitMle<F> = FlatMles<F, 4>;
-
-#[derive(Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
-/// Used for the attribute multiplicities
 pub struct BinDecomp8Bit<F> {
     ///The 8 bits that make up this decomposition
     ///
@@ -91,19 +81,6 @@ impl<F: FieldExt> From<Vec<bool>> for BinDecomp16Bit<F> {
 impl<F: FieldExt> From<Vec<bool>> for BinDecomp8Bit<F> {
     fn from(bits: Vec<bool>) -> Self {
         BinDecomp8Bit::<F> {
-            bits: bits
-                .iter()
-                .map(|x| F::from(*x as u64))
-                .collect::<Vec<F>>()
-                .try_into()
-                .unwrap(),
-        }
-    }
-}
-
-impl<F: FieldExt> From<Vec<bool>> for BinDecomp4Bit<F> {
-    fn from(bits: Vec<bool>) -> Self {
-        BinDecomp4Bit::<F> {
             bits: bits
                 .iter()
                 .map(|x| F::from(*x as u64))

@@ -9,6 +9,9 @@ use remainder::{
     mle::evals::MultilinearExtension,
 };
 
+// TODO use [remainder::digits::components::ComplementaryRecompChecker] instead of BinRecompCheckerComponent.
+// (we need to use the complementary decomposition for soundness.)
+
 /// This builder computes the value
 ///     (1 - b_s)(`pos_recomp` - `diff`) + `b_s`(`pos_recomp` + `diff`)
 /// Note that this is equivalent to

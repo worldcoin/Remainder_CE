@@ -534,7 +534,6 @@ pub fn load_upshot_data_single_tree_batch<F: FieldExt>(
     debug_assert_eq!(caux.node_multiplicities.len(), 1);
     debug_assert_eq!(ctrees.decision_nodes.len(), 1);
     debug_assert_eq!(ctrees.leaf_nodes.len(), 1);
-    debug_assert_eq!(caux.attribute_multiplicities.len(), 1);
 
     let mut multiplicities_bin_decomp = caux.node_multiplicities[0].clone();
     let multiplicities_bin_decomp_leaf = multiplicities_bin_decomp.split_off(decision_len);
