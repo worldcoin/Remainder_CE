@@ -381,7 +381,7 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             .unwrap();
         let evals = evaluate_mle_ref_product_no_beta_table(&mles, independent_variable, mles.len())
             .unwrap();
-        let Evals(evaluations) = evals;
+        let SumcheckEvals(evaluations) = evals;
         Ok(evaluations)
     }
 
@@ -632,7 +632,7 @@ impl<F: FieldExt> IdentityGate<F> {
         )
         .unwrap();
 
-        let Evals(evaluations) = evals;
+        let SumcheckEvals(evaluations) = evals;
         Ok(evaluations)
     }
 }
