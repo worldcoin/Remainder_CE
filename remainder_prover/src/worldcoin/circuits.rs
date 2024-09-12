@@ -1,16 +1,16 @@
 use crate::layouter::compiling::LayouterCircuit;
 use crate::layouter::component::{Component, ComponentSet};
-use crate::layouter::nodes::circuit_inputs::{InputLayerNode, InputLayerType};
+use crate::layouter::nodes::circuit_inputs::{InputLayerData, InputLayerNode, InputLayerType};
 use crate::layouter::nodes::circuit_outputs::OutputNode;
 use crate::layouter::nodes::identity_gate::IdentityGateNode;
 use crate::layouter::nodes::lookup::{LookupConstraint, LookupTable};
 use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
-use crate::layouter::nodes::random::VerifierChallengeNode;
+use crate::layouter::nodes::verifier_challenge::VerifierChallengeNode;
 use crate::layouter::nodes::{CircuitNode, Context};
 use crate::mle::circuit_mle::BundledInputMle;
-use crate::utils::get_input_shred_from_num_vars;
 use crate::utils::pad_to_nearest_power_of_two;
+use crate::utils::{get_input_shred_and_data_from_vec, get_input_shred_from_num_vars};
 use crate::worldcoin::components::SignCheckerComponent;
 use crate::worldcoin::components::{DigitalRecompositionComponent, SubtractionComponent};
 use crate::worldcoin::data::WorldcoinCircuitData;
@@ -23,8 +23,11 @@ use super::components::{BitsAreBinary, DigitsConcatenator};
 /// Builds the worldcoin circuit with all public input layers.
 pub fn build_circuit_public_il<F: FieldExt>(
     data: WorldcoinCircuitData<F>,
-) -> LayouterCircuit<F, ComponentSet<NodeEnum<F>>, impl FnMut(&Context) -> ComponentSet<NodeEnum<F>>>
-{
+) -> LayouterCircuit<
+    F,
+    ComponentSet<NodeEnum<F>>,
+    impl FnMut(&Context) -> (ComponentSet<NodeEnum<F>>, Vec<InputLayerData<F>>),
+> {
     LayouterCircuit::new(move |ctx| {
         let WorldcoinCircuitData {
             image_matrix_mle,
@@ -41,9 +44,10 @@ pub fn build_circuit_public_il<F: FieldExt>(
 
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
         println!("Input layer = {:?}", input_layer.id());
-        let image = get_input_shred_from_num_vars(image_matrix_mle.clone(), ctx, &input_layer);
+        let (image, image_data) =
+            get_input_shred_and_data_from_vec(image_matrix_mle.clone(), ctx, &input_layer);
         println!("Image input = {:?}", image.id());
-        let thresholds = get_input_shred_from_num_vars(
+        let (thresholds, thresholds_data) = get_input_shred_and_data_from_vec(
             pad_to_nearest_power_of_two(thresholds_matrix.clone()),
             ctx,
             &input_layer,
@@ -54,7 +58,8 @@ pub fn build_circuit_public_il<F: FieldExt>(
 
         let (filter_num_values, _) = kernel_matrix_dims;
         let matrix_a_num_rows_cols = (num_placements.next_power_of_two(), *filter_num_values);
-        let kernel_matrix = get_input_shred_from_num_vars(kernel_matrix.clone(), ctx, &input_layer);
+        let (kernel_matrix, kernel_matrix_data) =
+            get_input_shred_and_data_from_vec(kernel_matrix.clone(), ctx, &input_layer);
         println!("Kernel values input = {:?}", kernel_matrix.id());
 
         let matmult = MatMultNode::new(
@@ -81,19 +86,19 @@ pub fn build_circuit_public_il<F: FieldExt>(
         let digits_concatenator = DigitsConcatenator::new(ctx, &digits_refs);
 
         // Use a lookup to range check the digits to the range 0..BASE
-        let lookup_table_values = get_input_shred_from_num_vars(
+        let (lookup_table_values, lookup_table_values_data) = get_input_shred_and_data_from_vec(
             (0..BASE as u64).map(F::from).collect(),
             ctx,
             &input_layer,
         );
         println!("Digit range check input = {:?}", lookup_table_values.id());
 
-        let verifier_challenge_node: VerifierChallengeNode<F> = VerifierChallengeNode::new(ctx, 1);
+        let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
         let lookup_table =
-            LookupTable::new(ctx, &lookup_table_values, false, verifier_challenge_node);
+            LookupTable::new::<F>(ctx, &lookup_table_values, false, verifier_challenge_node);
         println!("Lookup table = {:?}", lookup_table.id());
-        let digit_multiplicities =
-            get_input_shred_from_num_vars(digit_multiplicities.clone(), ctx, &input_layer);
+        let (digit_multiplicities, digit_multiplicities_data) =
+            get_input_shred_and_data_from_vec(digit_multiplicities.clone(), ctx, &input_layer);
         println!("Digit multiplicities = {:?}", digit_multiplicities.id());
         let lookup_constraint = LookupConstraint::new::<F>(
             ctx,
@@ -106,7 +111,7 @@ pub fn build_circuit_public_il<F: FieldExt>(
         let recomp_of_abs_value =
             DigitalRecompositionComponent::new(ctx, &digits_refs, BASE as u64);
 
-        let iris_code = get_input_shred_from_num_vars(
+        let (iris_code, iris_code_data) = get_input_shred_and_data_from_vec(
             pad_to_nearest_power_of_two(iris_code.clone()),
             ctx,
             &input_layer,
@@ -122,6 +127,19 @@ pub fn build_circuit_public_il<F: FieldExt>(
 
         let bits_are_binary = BitsAreBinary::new(ctx, &iris_code);
         output_nodes.push(OutputNode::new_zero(ctx, &bits_are_binary.sector));
+
+        let input_layer_data = InputLayerData::new(
+            input_layer.id(),
+            vec![
+                image_data,
+                thresholds_data,
+                kernel_matrix_data,
+                lookup_table_values_data,
+                digit_multiplicities_data,
+                iris_code_data,
+            ],
+            None,
+        );
 
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<F>> = vec![
@@ -155,6 +173,9 @@ pub fn build_circuit_public_il<F: FieldExt>(
         // Add output nodes
         all_nodes.extend(output_nodes.into_iter().map(|node| node.into()));
 
-        ComponentSet::<NodeEnum<F>>::new_raw(all_nodes)
+        (
+            ComponentSet::<NodeEnum<F>>::new_raw(all_nodes),
+            vec![input_layer_data],
+        )
     })
 }

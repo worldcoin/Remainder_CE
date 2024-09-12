@@ -13,7 +13,9 @@ use crate::claims::wlx_eval::helpers::{
 };
 
 use crate::claims::ClaimError;
+use crate::input_layer::enum_input_layer::InputLayerEnum;
 use crate::input_layer::InputLayer;
+use crate::layer::layer_enum::LayerEnum;
 use crate::mle::mle_enum::MleEnum;
 
 use crate::prover::GKRError;
@@ -88,7 +90,7 @@ impl<
 
     fn prover_aggregate_claims(
         &self,
-        layer: &Self::Layer,
+        layer: &LayerEnum<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
         let layer_id = layer.layer_id();
@@ -97,7 +99,7 @@ impl<
 
     fn prover_aggregate_claims_input(
         &self,
-        layer: &Self::InputLayer,
+        layer: &InputLayerEnum<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError> {
         let layer_id = layer.layer_id();

@@ -10,7 +10,8 @@ use remainder_shared_types::{
 use thiserror::Error;
 
 use crate::{
-    layer::{combine_mle_refs::CombineMleRefError, LayerError},
+    input_layer::enum_input_layer::InputLayerEnum,
+    layer::{combine_mle_refs::CombineMleRefError, layer_enum::LayerEnum, LayerError},
     prover::GKRError,
 };
 use serde::{Deserialize, Serialize};
@@ -136,7 +137,7 @@ pub trait ClaimAggregator<F: FieldExt> {
     /// Adds any communication to the F-S Transcript as needed.
     fn prover_aggregate_claims(
         &self,
-        layer: &Self::Layer,
+        layer: &LayerEnum<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;
 
@@ -151,7 +152,7 @@ pub trait ClaimAggregator<F: FieldExt> {
     /// Adds any communication to the F-S Transcript as needed.
     fn prover_aggregate_claims_input(
         &self,
-        layer: &Self::InputLayer,
+        layer: &InputLayerEnum<F>,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> Result<Claim<F>, GKRError>;
 

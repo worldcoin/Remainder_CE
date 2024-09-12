@@ -22,6 +22,7 @@ use crate::{
         verifier_expr::{VerifierExpr, VerifierMle},
     },
     layer::{LayerError, LayerId},
+    layouter::layouting::CircuitMap,
     mle::{dense::DenseMle, mle_enum::MleEnum, zero::ZeroMle, Mle, MleIndex},
 };
 
@@ -163,6 +164,28 @@ impl<F: FieldExt> CircuitMleOutputLayer<F> {
 
     pub fn is_zero(&self) -> bool {
         self.is_zero
+    }
+
+    pub fn into_prover_output_layer(&self, circuit_map: &CircuitMap<F>) -> MleOutputLayer<F> {
+        let output_mle = circuit_map.get_data_from_circuit_mle(&self.mle).unwrap();
+        let prefix_bits = self.mle.prefix_bits();
+        let prefix_bits_mle_index = prefix_bits
+            .iter()
+            .map(|bit| MleIndex::Fixed(*bit))
+            .collect();
+
+        let output_layer = if self.is_zero {
+            ZeroMle::new(
+                output_mle.num_vars(),
+                Some(prefix_bits_mle_index),
+                self.layer_id(),
+            )
+            .into()
+        } else {
+            DenseMle::new_with_prefix_bits(output_mle.clone(), self.layer_id(), prefix_bits).into()
+        };
+
+        output_layer
     }
 }
 

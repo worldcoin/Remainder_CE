@@ -11,8 +11,8 @@ use remainder_shared_types::{FieldExt, Fr, Poseidon};
 use crate::{
     layer::{layer_enum::LayerEnum, LayerId},
     layouter::nodes::{
-        circuit_inputs::{InputLayerNode, InputShred},
-        Context,
+        circuit_inputs::{InputLayerNode, InputShred, InputShredData},
+        CircuitNode, Context,
     },
     mle::{
         dense::DenseMle,
@@ -25,13 +25,24 @@ use crate::{
 #[cfg(test)]
 pub(crate) mod test_utils;
 
-/// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
 pub fn get_input_shred_from_num_vars(
     num_vars: usize,
     ctx: &Context,
     input_node: &InputLayerNode,
 ) -> InputShred {
     InputShred::new(ctx, num_vars, input_node)
+}
+
+pub fn get_input_shred_and_data_from_vec<F: FieldExt>(
+    mle_vec: Vec<F>,
+    ctx: &Context,
+    input_node: &InputLayerNode,
+) -> (InputShred, InputShredData<F>) {
+    assert!(mle_vec.len().is_power_of_two());
+    let data = MultilinearExtension::new(mle_vec);
+    let input_shred = InputShred::new(ctx, data.num_vars(), input_node);
+    let input_shred_data = InputShredData::new(input_shred.id(), data);
+    (input_shred, input_shred_data)
 }
 
 /// Returns a zero-padded version of `coeffs` with length padded

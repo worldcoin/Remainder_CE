@@ -5,7 +5,9 @@ use crate::{
     layouter::{
         component::ComponentSet,
         nodes::{
-            circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+            circuit_inputs::{
+                InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+            },
             circuit_outputs::OutputNode,
             node_enum::NodeEnum,
             sector::Sector,
@@ -24,8 +26,28 @@ fn test_basic_circuit() {
         let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
         let input_shred_1 = InputShred::new(ctx, 2, &input_layer);
+        let input_shred_1_data = InputShredData::new(
+            input_shred_1.id(),
+            MultilinearExtension::new_from_evals(Evaluations::new(
+                2,
+                vec![Fr::one(), Fr::one(), Fr::one(), Fr::one()],
+            )),
+        );
 
         let input_shred_2 = InputShred::new(ctx, 2, &input_layer);
+        let input_shred_2_data = InputShredData::new(
+            input_shred_2.id(),
+            MultilinearExtension::new_from_evals(Evaluations::new(
+                2,
+                vec![Fr::from(16), Fr::from(16), Fr::from(16), Fr::from(16)],
+            )),
+        );
+
+        let input_layer_data = InputLayerData::new(
+            input_layer.id(),
+            vec![input_shred_1_data, input_shred_2_data],
+            None,
+        );
 
         let sector_1 = Sector::new(ctx, &[&input_shred_1, &input_shred_2], |inputs| {
             Expression::<Fr, AbstractExpr>::mle(inputs[0])
@@ -49,17 +71,20 @@ fn test_basic_circuit() {
 
         let output = OutputNode::new_zero(ctx, &final_sector);
 
-        ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-            input_layer.into(),
-            input_shred_1.into(),
-            input_shred_2.into(),
-            sector_1.into(),
-            sector_2.into(),
-            output_input.into(),
-            out_sector.into(),
-            final_sector.into(),
-            output.into(),
-        ])
+        (
+            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                input_layer.into(),
+                input_shred_1.into(),
+                input_shred_2.into(),
+                sector_1.into(),
+                sector_2.into(),
+                output_input.into(),
+                out_sector.into(),
+                final_sector.into(),
+                output.into(),
+            ]),
+            vec![input_layer_data],
+        )
     });
 
     test_circuit(circuit, None);

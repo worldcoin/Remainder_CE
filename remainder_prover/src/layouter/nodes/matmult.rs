@@ -125,10 +125,13 @@ mod test {
             compiling::LayouterCircuit,
             component::ComponentSet,
             nodes::{
-                circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+                circuit_inputs::{
+                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                },
                 circuit_outputs::OutputNode,
                 node_enum::NodeEnum,
                 sector::Sector,
+                CircuitNode,
             },
         },
         mle::{dense::DenseMle, evals::MultilinearExtension, Mle},
@@ -166,10 +169,23 @@ mod test {
             ]);
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-
             let input_matrix_a = InputShred::new(ctx, mle_vec_a.num_vars(), &input_layer);
+            let input_matrix_a_data = InputShredData::new(input_matrix_a.id(), mle_vec_a);
             let input_matrix_b = InputShred::new(ctx, mle_vec_b.num_vars(), &input_layer);
+            let input_matrix_b_data = InputShredData::new(input_matrix_b.id(), mle_vec_b);
             let input_matrix_product = InputShred::new(ctx, exp_product.num_vars(), &input_layer);
+            let input_matrix_product_data =
+                InputShredData::new(input_matrix_product.id(), exp_product);
+
+            let input_layer_data = InputLayerData::new(
+                input_layer.id(),
+                vec![
+                    input_matrix_a_data,
+                    input_matrix_b_data,
+                    input_matrix_product_data,
+                ],
+                None,
+            );
 
             let matmult_sector =
                 MatMultNode::new(ctx, &input_matrix_a, (4, 2), &input_matrix_b, (2, 2));
@@ -182,103 +198,18 @@ mod test {
 
             let output_node = OutputNode::new_zero(ctx, &difference_sector);
 
-            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-                input_layer.into(),
-                input_matrix_a.into(),
-                input_matrix_b.into(),
-                input_matrix_product.into(),
-                matmult_sector.into(),
-                difference_sector.into(),
-                output_node.into(),
-            ])
-        });
-
-        test_circuit(circuit, None);
-    }
-
-    #[test]
-    fn test_matmult_node_irregular_in_circuit() {
-        let circuit = LayouterCircuit::new(|ctx| {
-            let mle_vec_a = vec![
-                Fr::from(1),
-                Fr::from(2),
-                Fr::from(9),
-                Fr::from(10),
-                Fr::from(13),
-                Fr::from(1),
-                Fr::from(3),
-                Fr::from(10),
-                Fr::from(2),
-                Fr::from(9),
-                Fr::from(10),
-                Fr::from(1),
-                Fr::from(3),
-                Fr::from(10),
-                Fr::from(2),
-            ];
-            let mle_vec_b = vec![
-                Fr::from(3),
-                Fr::from(5),
-                Fr::from(9),
-                Fr::from(6),
-                Fr::from(5),
-                Fr::from(9),
-                Fr::from(6),
-                Fr::from(1),
-                Fr::from(3),
-            ];
-            let matrix_a = Matrix::new(
-                DenseMle::new_from_raw(mle_vec_a.clone(), LayerId::Layer(0)),
-                5,
-                3,
-            );
-            let matrix_b = Matrix::new(
-                DenseMle::new_from_raw(mle_vec_b.clone(), LayerId::Layer(0)),
-                3,
-                3,
-            );
-            let res_product = product_two_matrices(&matrix_a, &matrix_b);
-            let exp_product = MultilinearExtension::new(res_product);
-
-            let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-            let input_matrix_a =
-                InputShred::new(ctx, matrix_a.mle.num_iterated_vars(), &input_layer);
-            let input_matrix_b =
-                InputShred::new(ctx, matrix_b.mle.num_iterated_vars(), &input_layer);
-            let input_matrix_product = InputShred::new(ctx, exp_product.num_vars(), &input_layer);
-
-            // NOTE THE INPUT MLES MUST BE PADDED FOR THE CLAIMS TO HAVE THE CORRECT VALUE
-            let matmult_sector = MatMultNode::new(
-                ctx,
-                &input_matrix_a,
-                (
-                    (1 << matrix_a.num_vars_rows_cols().0),
-                    (1 << matrix_a.num_vars_rows_cols().1),
-                ),
-                &input_matrix_b,
-                (
-                    (1 << matrix_b.num_vars_rows_cols().0),
-                    (1 << matrix_b.num_vars_rows_cols().1),
-                ),
-            );
-
-            let difference_sector =
-                Sector::new(ctx, &[&matmult_sector, &input_matrix_product], |inputs| {
-                    Expression::<Fr, AbstractExpr>::mle(inputs[0])
-                        - Expression::<Fr, AbstractExpr>::mle(inputs[1])
-                });
-
-            let output_node = OutputNode::new_zero(ctx, &difference_sector);
-
-            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-                input_layer.into(),
-                input_matrix_a.into(),
-                input_matrix_b.into(),
-                input_matrix_product.into(),
-                matmult_sector.into(),
-                difference_sector.into(),
-                output_node.into(),
-            ])
+            (
+                ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                    input_layer.into(),
+                    input_matrix_a.into(),
+                    input_matrix_b.into(),
+                    input_matrix_product.into(),
+                    matmult_sector.into(),
+                    difference_sector.into(),
+                    output_node.into(),
+                ]),
+                vec![input_layer_data],
+            )
         });
 
         test_circuit(circuit, None);

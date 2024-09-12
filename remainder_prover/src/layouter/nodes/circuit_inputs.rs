@@ -2,6 +2,7 @@
 
 pub mod compile_inputs;
 
+use log::MetadataBuilder;
 use remainder_shared_types::FieldExt;
 
 use crate::{
@@ -20,10 +21,33 @@ pub struct InputLayerData<F: FieldExt> {
     pub precommit: Option<CommitmentEnum<F>>,
 }
 
+impl<F: FieldExt> InputLayerData<F> {
+    pub fn new(
+        corresponding_input_node_id: NodeId,
+        data: Vec<InputShredData<F>>,
+        precommit: Option<CommitmentEnum<F>>,
+    ) -> Self {
+        Self {
+            corresponding_input_node_id,
+            data,
+            precommit,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InputShredData<F: FieldExt> {
     pub corresponding_input_shred_id: NodeId,
     pub data: MultilinearExtension<F>,
+}
+
+impl<F: FieldExt> InputShredData<F> {
+    pub fn new(corresponding_input_shred_id: NodeId, data: MultilinearExtension<F>) -> Self {
+        Self {
+            corresponding_input_shred_id,
+            data,
+        }
+    }
 }
 
 /// A struct that represents the description of the data (shape in terms of `num_vars`)

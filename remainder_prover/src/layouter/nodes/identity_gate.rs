@@ -103,11 +103,14 @@ mod test {
             compiling::LayouterCircuit,
             component::ComponentSet,
             nodes::{
-                circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+                circuit_inputs::{
+                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                },
                 circuit_outputs::OutputNode,
                 identity_gate::IdentityGateNode,
                 node_enum::NodeEnum,
                 sector::Sector,
+                CircuitNode,
             },
         },
         mle::evals::MultilinearExtension,
@@ -138,6 +141,14 @@ mod test {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
             let input_shred_pre_routed = InputShred::new(ctx, mle.num_vars(), &input_layer);
             let input_shred_expected = InputShred::new(ctx, shifted_mle.num_vars(), &input_layer);
+            let input_shred_pre_routed_data = InputShredData::new(input_shred_pre_routed.id(), mle);
+            let input_shred_expected_data =
+                InputShredData::new(input_shred_expected.id(), shifted_mle);
+            let input_data = InputLayerData::new(
+                input_layer.id(),
+                vec![input_shred_pre_routed_data, input_shred_expected_data],
+                None,
+            );
 
             let gate_sector = IdentityGateNode::new(ctx, &input_shred_pre_routed, nonzero_gates);
             let diff_sector =
@@ -151,14 +162,17 @@ mod test {
 
             let output = OutputNode::new_zero(ctx, &diff_sector);
 
-            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-                input_layer.into(),
-                input_shred_pre_routed.into(),
-                input_shred_expected.into(),
-                gate_sector.into(),
-                diff_sector.into(),
-                output.into(),
-            ])
+            (
+                ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                    input_layer.into(),
+                    input_shred_pre_routed.into(),
+                    input_shred_expected.into(),
+                    gate_sector.into(),
+                    diff_sector.into(),
+                    output.into(),
+                ]),
+                vec![input_data],
+            )
         });
 
         test_circuit(circuit, None);

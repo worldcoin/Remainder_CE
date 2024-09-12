@@ -136,10 +136,13 @@ mod test {
             compiling::LayouterCircuit,
             component::ComponentSet,
             nodes::{
-                circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+                circuit_inputs::{
+                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                },
                 circuit_outputs::OutputNode,
                 gate::GateNode,
                 node_enum::NodeEnum,
+                CircuitNode,
             },
         },
         mle::evals::MultilinearExtension,
@@ -174,7 +177,14 @@ mod test {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
             let input_shred_pos = InputShred::new(ctx, mle.num_vars(), &input_layer);
+            let input_shred_pos_data = InputShredData::new(input_shred_pos.id(), mle);
             let input_shred_neg = InputShred::new(ctx, neg_mle.num_vars(), &input_layer);
+            let input_shred_neg_data = InputShredData::new(input_shred_neg.id(), neg_mle);
+            let input_data = InputLayerData::new(
+                input_layer.id(),
+                vec![input_shred_pos_data, input_shred_neg_data],
+                None,
+            );
 
             let gate_sector = GateNode::new(
                 ctx,
@@ -187,13 +197,16 @@ mod test {
 
             let output = OutputNode::new_zero(ctx, &gate_sector);
 
-            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-                input_layer.into(),
-                input_shred_pos.into(),
-                input_shred_neg.into(),
-                gate_sector.into(),
-                output.into(),
-            ])
+            (
+                ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                    input_layer.into(),
+                    input_shred_pos.into(),
+                    input_shred_neg.into(),
+                    gate_sector.into(),
+                    output.into(),
+                ]),
+                vec![input_data],
+            )
         });
 
         test_circuit(circuit, None);
@@ -229,7 +242,14 @@ mod test {
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
 
             let input_shred_pos = InputShred::new(ctx, mle.num_vars(), &input_layer);
+            let input_shred_pos_data = InputShredData::new(input_shred_pos.id(), mle);
             let input_shred_neg = InputShred::new(ctx, neg_mle.num_vars(), &input_layer);
+            let input_shred_neg_data = InputShredData::new(input_shred_neg.id(), neg_mle);
+            let input_data = InputLayerData::new(
+                input_layer.id(),
+                vec![input_shred_pos_data, input_shred_neg_data],
+                None,
+            );
 
             let gate_sector = GateNode::new(
                 ctx,
@@ -242,13 +262,16 @@ mod test {
 
             let output = OutputNode::new_zero(ctx, &gate_sector);
 
-            ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
-                input_layer.into(),
-                input_shred_pos.into(),
-                input_shred_neg.into(),
-                gate_sector.into(),
-                output.into(),
-            ])
+            (
+                ComponentSet::<NodeEnum<Fr>>::new_raw(vec![
+                    input_layer.into(),
+                    input_shred_pos.into(),
+                    input_shred_neg.into(),
+                    gate_sector.into(),
+                    output.into(),
+                ]),
+                vec![input_data],
+            )
         });
 
         test_circuit(circuit, None);

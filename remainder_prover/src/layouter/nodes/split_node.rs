@@ -118,10 +118,13 @@ mod test {
             compiling::LayouterCircuit,
             component::ComponentSet,
             nodes::{
-                circuit_inputs::{InputLayerNode, InputLayerType, InputShred},
+                circuit_inputs::{
+                    InputLayerData, InputLayerNode, InputLayerType, InputShred, InputShredData,
+                },
                 circuit_outputs::OutputNode,
                 node_enum::NodeEnum,
                 sector::Sector,
+                CircuitNode,
             },
         },
         mle::evals::MultilinearExtension,
@@ -146,9 +149,15 @@ mod test {
             ]);
 
             let input_layer = InputLayerNode::new(ctx, None, InputLayerType::PublicInputLayer);
-
             let input_shred = InputShred::new(ctx, mle.num_vars(), &input_layer);
+            let input_shred_data = InputShredData::new(input_shred.id(), mle);
             let input_shred_out = InputShred::new(ctx, mle_out.num_vars(), &input_layer);
+            let input_shred_out_data = InputShredData::new(input_shred_out.id(), mle_out);
+            let input_layer_data = InputLayerData::new(
+                input_layer.id(),
+                vec![input_shred_data, input_shred_out_data],
+                None,
+            );
 
             let split_sectors = SplitNode::new(ctx, &input_shred, 1);
             let sector_prod = Sector::new(ctx, &[&split_sectors[0], &split_sectors[1]], |inputs| {
@@ -162,23 +171,26 @@ mod test {
 
             let output = OutputNode::new_zero(ctx, &final_sector);
 
-            ComponentSet::<NodeEnum<Fr>>::new_raw(
-                vec![
-                    input_layer.into(),
-                    input_shred.into(),
-                    input_shred_out.into(),
-                    sector_prod.into(),
-                    final_sector.into(),
-                    output.into(),
-                ]
-                .into_iter()
-                .chain(
-                    split_sectors
-                        .into_iter()
-                        .map(|split_node| split_node.into())
-                        .collect_vec(),
-                )
-                .collect_vec(),
+            (
+                ComponentSet::<NodeEnum<Fr>>::new_raw(
+                    vec![
+                        input_layer.into(),
+                        input_shred.into(),
+                        input_shred_out.into(),
+                        sector_prod.into(),
+                        final_sector.into(),
+                        output.into(),
+                    ]
+                    .into_iter()
+                    .chain(
+                        split_sectors
+                            .into_iter()
+                            .map(|split_node| split_node.into())
+                            .collect_vec(),
+                    )
+                    .collect_vec(),
+                ),
+                vec![input_layer_data],
             )
         });
 
