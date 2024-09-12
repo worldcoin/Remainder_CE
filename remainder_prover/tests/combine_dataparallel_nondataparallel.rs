@@ -69,7 +69,7 @@ impl<F: FieldExt> DataParallelComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for DataParallelComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component
@@ -125,7 +125,7 @@ impl<F: FieldExt> TripleNestedSelectorComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for TripleNestedSelectorComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component
@@ -171,7 +171,7 @@ impl<F: FieldExt> ScaledProductComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for ScaledProductComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component

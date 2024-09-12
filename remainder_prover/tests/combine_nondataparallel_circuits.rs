@@ -69,7 +69,7 @@ impl<F: FieldExt> ConstantScaledCircuitComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for ConstantScaledCircuitComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component
@@ -124,7 +124,7 @@ impl<F: FieldExt> SumConstantCircuitComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for SumConstantCircuitComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component
@@ -180,7 +180,7 @@ impl<F: FieldExt> ProductScaledSumCircuitComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for ProductScaledSumCircuitComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component

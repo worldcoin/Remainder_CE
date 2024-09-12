@@ -62,7 +62,7 @@ impl<F: FieldExt> NonSelectorDataparallelComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for NonSelectorDataparallelComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component

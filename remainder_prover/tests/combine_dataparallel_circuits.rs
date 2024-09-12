@@ -69,7 +69,7 @@ impl<F: FieldExt> DataParallelConstantScaledCircuitAltComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for DataParallelConstantScaledCircuitAltComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component
@@ -124,7 +124,7 @@ impl<F: FieldExt> DataParallelSumConstantCircuitAltComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for DataParallelSumConstantCircuitAltComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component
@@ -180,7 +180,7 @@ impl<F: FieldExt> DataParallelProductScaledSumCircuitAltComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for DataParallelProductScaledSumCircuitAltComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component

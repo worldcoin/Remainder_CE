@@ -56,7 +56,7 @@ impl<F: FieldExt> DataparallelTripleNestedSelectorComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for DataparallelTripleNestedSelectorComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         self.first_layer_component

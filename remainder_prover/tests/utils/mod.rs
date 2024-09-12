@@ -172,7 +172,7 @@ impl<F: FieldExt> DifferenceBuilderComponent<F> {
 
 impl<F: FieldExt, N> Component<N> for DifferenceBuilderComponent<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         vec![self.output_sector.into(), self.output_node.into()]

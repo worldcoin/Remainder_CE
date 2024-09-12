@@ -112,7 +112,7 @@ impl<F: FieldExt> DiffTwoInputsBuilder<F> {
 
 impl<F: FieldExt, N> Component<N> for DiffTwoInputsBuilder<F>
 where
-    N: CircuitNode + From<Sector<F>> + From<OutputNode<F>>,
+    N: CircuitNode + From<Sector<F>> + From<OutputNode>,
 {
     fn yield_nodes(self) -> Vec<N> {
         vec![self.first_layer_sector.into(), self.output_sector.into()]
