@@ -1,7 +1,7 @@
 //! Standardized expression representation for oracle query (GKR verifier) +
 //! determining necessary proof-of-products (Hyrax prover + verifier)
 
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 use super::LayerId;
 use crate::expression::circuit_expr::CircuitMle;
@@ -13,11 +13,11 @@ use crate::mle::Mle;
 /// Represents a normal form for a layer expression in which the layer is represented as a linear
 /// combination of products of other layer MLEs, the coefficients of which are public.
 #[derive(Debug)]
-pub struct PostSumcheckLayer<F: FieldExt, T>(pub Vec<Product<F, T>>);
+pub struct PostSumcheckLayer<F: Field, T>(pub Vec<Product<F, T>>);
 
 // FIXME can we implement all of these evaluate functions with a single function using trait bounds?
 // needs to have a zero() method (Default?).  need mulassign?
-impl<F: FieldExt> PostSumcheckLayer<F, F> {
+impl<F: Field> PostSumcheckLayer<F, F> {
     /// Evaluate the PostSumcheckLayer to a single scalar
     pub fn evaluate_scalar(&self) -> F {
         self.0.iter().fold(F::ZERO, |acc, product| {
@@ -30,7 +30,7 @@ impl<F: FieldExt> PostSumcheckLayer<F, F> {
 /// Data structure for extracting the values to be commited to, their "mxi" values (i.e. their
 /// public coefficients), and also the claims made on other layers.
 #[derive(Debug)]
-pub struct Product<F: FieldExt, T> {
+pub struct Product<F: Field, T> {
     /// the evaluated MLEs that are being multiplied and their intermediates
     /// in the order a, b, ab, c, abc, d, abcd, ...
     pub intermediates: Vec<Intermediate<F, T>>,
@@ -38,7 +38,7 @@ pub struct Product<F: FieldExt, T> {
     pub coefficient: F,
 }
 
-impl<F: FieldExt> Product<F, Option<F>> {
+impl<F: Field> Product<F, Option<F>> {
     /// Creates a new Product from a vector of [CircuitMles].
     pub fn new(mles: &[CircuitMle<F>], coefficient: F, bindings: &[F]) -> Self {
         if mles.len() == 0 {
@@ -71,7 +71,7 @@ impl<F: FieldExt> Product<F, Option<F>> {
     }
 }
 
-impl<F: FieldExt> Product<F, F> {
+impl<F: Field> Product<F, F> {
     /// Creates a new Product from a vector of fully bound MleRefs.
     /// Panics if any are not fully bound.
     pub fn new(mle_refs: &[DenseMle<F>], coefficient: F) -> Self {
@@ -149,7 +149,7 @@ impl<F: FieldExt> Product<F, F> {
 #[derive(Clone, Debug)]
 /// Represents either an atomic factor of a product (i.e. an evaluation of an MLE), or the result of
 /// an intermediate product of atoms.
-pub enum Intermediate<F: FieldExt, T> {
+pub enum Intermediate<F: Field, T> {
     /// A struct representing a single MLE and a commitment to its evaluation.
     Atom {
         /// the id of the layer upon which this is a claim
@@ -169,7 +169,7 @@ pub enum Intermediate<F: FieldExt, T> {
     },
 }
 
-impl<F: FieldExt, T: Copy> PostSumcheckLayer<F, T> {
+impl<F: Field, T: Copy> PostSumcheckLayer<F, T> {
     /// Returns a vector of the values of the intermediates (in an order compatible with [set_values]).
     pub fn get_values(&self) -> Vec<T> {
         self.0
@@ -196,7 +196,7 @@ impl<F: FieldExt, T: Copy> PostSumcheckLayer<F, T> {
 
 /// Set the values of the PostSumcheckLayer to the given values, panicking if the lengths do not match,
 /// returning a new instance. Counterpart to [get_values].
-pub fn new_with_values<F: FieldExt, S, T: Clone>(
+pub fn new_with_values<F: Field, S, T: Clone>(
     post_sumcheck_layer: &PostSumcheckLayer<F, S>,
     values: &Vec<T>,
 ) -> PostSumcheckLayer<F, T> {
@@ -223,7 +223,7 @@ pub fn new_with_values<F: FieldExt, S, T: Clone>(
 
 /// Helper for [new_with_values].
 /// Set the values of the Product to the given values, panicking if the lengths do not match.
-fn new_with_values_single<F: FieldExt, S, T>(
+fn new_with_values_single<F: Field, S, T>(
     product: &Product<F, S>,
     values: Vec<T>,
 ) -> Product<F, T> {
@@ -252,7 +252,7 @@ fn new_with_values_single<F: FieldExt, S, T>(
     }
 }
 
-impl<F: FieldExt, T: Clone> Product<F, T> {
+impl<F: Field, T: Clone> Product<F, T> {
     /// Return the resulting value of the product.
     /// Useful to build the commitment to the oracle evaluation.
     pub fn get_result(&self) -> T {

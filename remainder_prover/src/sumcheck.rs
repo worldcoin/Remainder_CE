@@ -58,7 +58,7 @@ use crate::{
     },
     mle::{betavalues::BetaValues, dense::DenseMle, Mle, MleIndex},
 };
-use remainder_shared_types::FieldExt;
+use remainder_shared_types::Field;
 
 /// Errors to do with the evaluation of MleRefs.
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -111,9 +111,9 @@ pub enum InterpError {
 /// which means this type just holds the evaluations:
 /// `[g_i(0), g_i(1), ..., g_i(d)]`, where `d` is the degree of `g_i`.
 #[derive(PartialEq, Debug, Clone)]
-pub struct SumcheckEvals<F: FieldExt>(pub Vec<F>);
+pub struct SumcheckEvals<F: Field>(pub Vec<F>);
 
-impl<F: FieldExt> Neg for SumcheckEvals<F> {
+impl<F: Field> Neg for SumcheckEvals<F> {
     type Output = Self;
     fn neg(self) -> Self::Output {
         // --- Negation for a bunch of eval points is just element-wise negation ---
@@ -121,7 +121,7 @@ impl<F: FieldExt> Neg for SumcheckEvals<F> {
     }
 }
 
-impl<F: FieldExt> Add for SumcheckEvals<F> {
+impl<F: Field> Add for SumcheckEvals<F> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self {
         SumcheckEvals(
@@ -134,7 +134,7 @@ impl<F: FieldExt> Add for SumcheckEvals<F> {
     }
 }
 
-impl<F: FieldExt> Mul<F> for SumcheckEvals<F> {
+impl<F: Field> Mul<F> for SumcheckEvals<F> {
     type Output = Self;
     fn mul(self, rhs: F) -> Self {
         SumcheckEvals(
@@ -147,7 +147,7 @@ impl<F: FieldExt> Mul<F> for SumcheckEvals<F> {
     }
 }
 
-impl<F: FieldExt> Mul<&F> for SumcheckEvals<F> {
+impl<F: Field> Mul<&F> for SumcheckEvals<F> {
     type Output = Self;
     fn mul(self, rhs: &F) -> Self {
         SumcheckEvals(
@@ -217,7 +217,7 @@ impl<F: FieldExt> Mul<&F> for SumcheckEvals<F> {
 /// utilize the fact that for each specific node in an expression tree, we only
 /// need exactly the beta values corresponding to the indices present in that
 /// node.
-pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
+pub fn compute_sumcheck_message_beta_cascade<F: Field>(
     expr: &Expression<F, ProverExpr>,
     round_index: usize,
     max_degree: usize,
@@ -409,7 +409,7 @@ pub fn compute_sumcheck_message_beta_cascade<F: FieldExt>(
 /// the resulting vector will always be size (degree + 1) * (2 ^ (max_num_vars - 1))
 ///
 /// this function assumes that the first variable is an independent variable.
-pub fn successors_from_mle_ref_product<F: FieldExt>(
+pub fn successors_from_mle_ref_product<F: Field>(
     mle_refs: &[&impl Mle<F>],
     degree: usize,
 ) -> Result<Vec<F>, MleError> {
@@ -482,7 +482,7 @@ pub fn successors_from_mle_ref_product<F: FieldExt>(
 /// this function performs the same funcionality as the above, except it is when the mle refs we
 /// are working with have no independent variable. therefore, we are actually just taking the
 /// sum over all of the variables and do not need evaluations.
-pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
+pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: Field>(
     mle_refs: &[&impl Mle<F>],
 ) -> Result<Vec<F>, MleError> {
     let max_num_vars = mle_refs
@@ -524,7 +524,7 @@ pub(crate) fn successors_from_mle_ref_product_no_ind_var<F: FieldExt>(
 
 /// this is one step of the beta cascade algorithm. essentially we are doing
 /// (1 - beta_val) * mle[index] + beta_val * mle[index + half_vec_len] (big-endian version of fix variable)
-pub(crate) fn beta_cascade_step<F: FieldExt>(mle_successor_vec: &mut [F], beta_val: F) -> Vec<F> {
+pub(crate) fn beta_cascade_step<F: Field>(mle_successor_vec: &mut [F], beta_val: F) -> Vec<F> {
     let (one_minus_beta_val, beta_val) = (F::ONE - beta_val, beta_val);
     let half_vec_len = mle_successor_vec.len() / 2;
     let new_successor = cfg_into_iter!((0..half_vec_len)).map(|idx| {
@@ -538,7 +538,7 @@ pub(crate) fn beta_cascade_step<F: FieldExt>(mle_successor_vec: &mut [F], beta_v
 /// This is the final step of beta cascade, where we take all the "bound" beta
 /// values and scale all of the evaluations by the product of all of these
 /// values.
-fn apply_updated_beta_values_to_evals<F: FieldExt>(
+fn apply_updated_beta_values_to_evals<F: Field>(
     evals: Vec<F>,
     beta_updated_vals: &[F],
 ) -> SumcheckEvals<F> {
@@ -558,7 +558,7 @@ fn apply_updated_beta_values_to_evals<F: FieldExt>(
 ///
 /// regardless of the degree, since there is no independent variable this evaluates to a constant,
 /// so we just repeat this (degree + 1) times.
-fn beta_cascade_no_independent_variable<F: FieldExt>(
+fn beta_cascade_no_independent_variable<F: Field>(
     mle_refs: &[&impl Mle<F>],
     beta_vals: &[F],
     degree: usize,
@@ -586,7 +586,7 @@ fn beta_cascade_no_independent_variable<F: FieldExt>(
 /// vectors (which are unbound beta values, and the bound beta values)
 /// there are (degree + 1) evaluations that are returned which are the evaluations of the univariate
 /// polynomial where the "round_index"-th bit is the independent variable.
-pub fn beta_cascade<F: FieldExt>(
+pub fn beta_cascade<F: Field>(
     mle_refs: &[&impl Mle<F>],
     degree: usize,
     round_index: usize,
@@ -638,7 +638,7 @@ pub fn beta_cascade<F: FieldExt>(
 
 /// Returns the maximum degree of b_{curr_round} within an expression
 /// (and therefore the number of prover messages we need to send)
-pub(crate) fn get_round_degree<F: FieldExt>(
+pub(crate) fn get_round_degree<F: Field>(
     expr: &Expression<F, ProverExpr>,
     curr_round: usize,
 ) -> usize {
@@ -677,7 +677,7 @@ pub(crate) fn get_round_degree<F: FieldExt>(
 }
 
 /// Use degree + 1 evaluations to figure out the evaluation at some arbitrary point
-pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &[F], point: F) -> Result<F, InterpError> {
+pub fn evaluate_at_a_point<F: Field>(given_evals: &[F], point: F) -> Result<F, InterpError> {
     // Special case for the constant polynomial.
     if given_evals.len() == 1 {
         return Ok(given_evals[0]);
@@ -726,7 +726,7 @@ pub fn evaluate_at_a_point<F: FieldExt>(given_evals: &[F], point: F) -> Result<F
 /// sum_{x_2, ..., x_n} V_1(X, x_2, ..., x_n) * V_2(X, x_2, ..., x_n) * V_2(X, x_2, x_3),
 /// evaluated at X = 0, 1, ..., degree
 /// note that when one of the mle_refs have less variables, there's a wrap around: % max
-pub fn evaluate_mle_ref_product<F: FieldExt>(
+pub fn evaluate_mle_ref_product<F: Field>(
     mle_refs: &[&impl Mle<F>],
     degree: usize,
 ) -> Result<SumcheckEvals<F>, MleError> {

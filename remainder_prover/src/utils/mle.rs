@@ -5,7 +5,7 @@ use std::{fs, iter::repeat_with};
 use ark_std::{log2, test_rng};
 use itertools::{repeat_n, Itertools};
 use rand::Rng;
-use remainder_shared_types::{FieldExt, Fr, Poseidon};
+use remainder_shared_types::{Field, Fr, Poseidon};
 
 use crate::{
     layer::{layer_enum::LayerEnum, LayerId},
@@ -21,9 +21,8 @@ use crate::{
     prover::layers::Layers,
 };
 
-
 /// Returns an [InputShred] with the appropriate [MultilinearExtension], but given as input an mle_vec
-pub fn get_input_shred_from_vec<F: FieldExt>(
+pub fn get_input_shred_from_vec<F: Field>(
     mle_vec: Vec<F>,
     ctx: &Context,
     input_node: &InputLayerNode<F>,
@@ -69,7 +68,7 @@ pub fn pad_with<F: Clone>(padding_value: F, data: &[F]) -> Vec<F> {
 ///
 /// * `padded_coeffs` - The coeffients, zero-padded to the nearest power of two
 ///   (in length)
-pub fn pad_to_nearest_power_of_two<F: FieldExt>(coeffs: &[F]) -> Vec<F> {
+pub fn pad_to_nearest_power_of_two<F: Field>(coeffs: &[F]) -> Vec<F> {
     pad_with(F::ZERO, coeffs)
 }
 
@@ -91,9 +90,9 @@ pub fn argsort<T: Ord>(slice: &[T], invert: bool) -> Vec<usize> {
 }
 
 /// Helper function to create random MLE with specific number of vars
-// pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) ->
+// pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) ->
 // DenseMle<F,> {
-pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
+pub fn get_random_mle<F: Field>(num_vars: usize, rng: &mut impl Rng) -> DenseMle<F> {
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
         .take(capacity as usize)
@@ -102,7 +101,7 @@ pub fn get_random_mle<F: FieldExt>(num_vars: usize, rng: &mut impl Rng) -> Dense
 }
 
 /// Helper function to create random MLE with specific number of vars
-pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F> {
+pub fn get_range_mle<F: Field>(num_vars: usize) -> DenseMle<F> {
     // let mut rng = test_rng();
     let capacity = 2_u32.pow(num_vars as u32);
     let bookkeeping_table = (0..capacity)
@@ -113,7 +112,7 @@ pub fn get_range_mle<F: FieldExt>(num_vars: usize) -> DenseMle<F> {
 }
 
 /// Helper function to create random MLE with specific length
-pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F> {
+pub fn get_random_mle_with_capacity<F: Field>(capacity: usize) -> DenseMle<F> {
     let mut rng = test_rng();
     let bookkeeping_table = repeat_with(|| F::from(rng.gen::<u64>()))
         .take(capacity)
@@ -123,7 +122,7 @@ pub fn get_random_mle_with_capacity<F: FieldExt>(capacity: usize) -> DenseMle<F>
 
 /// Returns a vector of MLEs for dataparallel testing according to the number of variables and
 /// number of dataparallel bits.
-pub fn get_dummy_random_mle_vec<F: FieldExt>(
+pub fn get_dummy_random_mle_vec<F: Field>(
     num_vars: usize,
     num_dataparallel_bits: usize,
     rng: &mut impl Rng,
@@ -142,7 +141,7 @@ pub fn get_dummy_random_mle_vec<F: FieldExt>(
 /// num_bits
 ///
 /// 0,0,0 -> 0,0,1 -> 0,1,0 -> 0,1,1 -> 1,0,0 -> 1,0,1 -> 1,1,0 -> 1,1,1
-pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {
+pub(crate) fn bits_iter<F: Field>(num_bits: usize) -> impl Iterator<Item = Vec<MleIndex<F>>> {
     std::iter::successors(
         Some(vec![MleIndex::<F>::Fixed(false); num_bits]),
         move |prev| {
@@ -173,7 +172,7 @@ pub(crate) fn bits_iter<F: FieldExt>(num_bits: usize) -> impl Iterator<Item = Ve
 /// Returns the specific bit decomp for a given index,
 /// using `num_bits` bits. Note that this returns the
 /// decomposition in BIG ENDIAN!
-pub fn get_mle_idx_decomp_for_idx<F: FieldExt>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
+pub fn get_mle_idx_decomp_for_idx<F: Field>(idx: usize, num_bits: usize) -> Vec<MleIndex<F>> {
     (0..(num_bits))
         .rev()
         .map(|cur_num_bits| {

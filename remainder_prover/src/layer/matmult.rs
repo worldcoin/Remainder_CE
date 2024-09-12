@@ -6,7 +6,7 @@ use itertools::Itertools;
 use ndarray::Array2;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 
 use super::{
@@ -33,15 +33,15 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 /// TODO(vishady): NEED TO PAD THIS BEFORE CALLING `::new` SO IT SHOULD ALWAYS TAKE IN LOG DIMENSIONS!
 /// ASSERT THAT THE BOOKKEEPING TABLE IS A POWER OF TWO WITH CORRECT DIMS
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub struct Matrix<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct Matrix<F: Field> {
     /// The underlying and padded MLE that represents this matrix.
     pub mle: DenseMle<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
 }
 
-impl<F: FieldExt> Matrix<F> {
+impl<F: Field> Matrix<F> {
     /// Create a new matrix, note that we require num_rows, and later converts this
     /// parameter to log(num_rows). This is necessary to check all dims are powers of 2
     pub fn new(mle: DenseMle<F>, num_rows: usize, num_cols: usize) -> Matrix<F> {
@@ -108,15 +108,15 @@ impl<F: FieldExt> Matrix<F> {
 
 /// Used to represent a matrix multiplication layer
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(bound = "F: FieldExt")]
-pub struct MatMult<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct MatMult<F: Field> {
     layer_id: LayerId,
     matrix_a: Matrix<F>,
     matrix_b: Matrix<F>,
     num_vars_middle_ab: Option<usize>,
 }
 
-impl<F: FieldExt> MatMult<F> {
+impl<F: Field> MatMult<F> {
     /// Create a new matrix multiplication layer
     pub fn new(layer_id: LayerId, matrix_a: Matrix<F>, matrix_b: Matrix<F>) -> MatMult<F> {
         MatMult {
@@ -224,7 +224,7 @@ impl<F: FieldExt> MatMult<F> {
     }
 }
 
-impl<F: FieldExt> Layer<F> for MatMult<F> {
+impl<F: Field> Layer<F> for MatMult<F> {
     // type Proof = Option<SumcheckProof<F>>;
     type CircuitLayer = CircuitMatMultLayer<F>;
 
@@ -307,14 +307,14 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
 
 /// The circuit description counterpart of a [Matrix].
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitMatrix<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitMatrix<F: Field> {
     mle: CircuitMle<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
 }
 
-impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
+impl<F: Field> From<Matrix<F>> for CircuitMatrix<F> {
     fn from(matrix: Matrix<F>) -> Self {
         let mut indexed_mle = matrix.mle.clone();
         indexed_mle.index_mle_indices(0);
@@ -327,8 +327,8 @@ impl<F: FieldExt> From<Matrix<F>> for CircuitMatrix<F> {
 }
 /// The circuit description counterpart of a [MatMult] layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitMatMultLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitMatMultLayer<F: Field> {
     /// The layer id associated with this matmult layer.
     layer_id: LayerId,
 
@@ -339,7 +339,7 @@ pub struct CircuitMatMultLayer<F: FieldExt> {
     matrix_b: CircuitMatrix<F>,
 }
 
-impl<F: FieldExt> From<MatMult<F>> for CircuitMatMultLayer<F> {
+impl<F: Field> From<MatMult<F>> for CircuitMatMultLayer<F> {
     /// Convert a [MatMult] to a [CircuitMatmultLayer].
     fn from(matmult_layer: MatMult<F>) -> Self {
         CircuitMatMultLayer {
@@ -350,7 +350,7 @@ impl<F: FieldExt> From<MatMult<F>> for CircuitMatMultLayer<F> {
     }
 }
 
-impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
+impl<F: Field> CircuitLayer<F> for CircuitMatMultLayer<F> {
     type VerifierLayer = VerifierMatMultLayer<F>;
 
     /// Gets this layer's id.
@@ -571,8 +571,8 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
 
 /// The verifier's counterpart of a [Matrix].
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierMatrix<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierMatrix<F: Field> {
     mle: VerifierMle<F>,
     num_rows_vars: usize,
     num_cols_vars: usize,
@@ -580,8 +580,8 @@ pub struct VerifierMatrix<F: FieldExt> {
 
 /// The verifier's counterpart of a [MatMult] layer.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierMatMultLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierMatMultLayer<F: Field> {
     /// The layer id associated with this gate layer.
     layer_id: LayerId,
 
@@ -592,19 +592,19 @@ pub struct VerifierMatMultLayer<F: FieldExt> {
     matrix_b: VerifierMatrix<F>,
 }
 
-impl<F: FieldExt> VerifierLayer<F> for VerifierMatMultLayer<F> {
+impl<F: Field> VerifierLayer<F> for VerifierMatMultLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.layer_id
     }
 }
 
-impl<F: FieldExt> VerifierMatMultLayer<F> {
+impl<F: Field> VerifierMatMultLayer<F> {
     fn evaluate(&self) -> F {
         self.matrix_a.mle.value() * self.matrix_b.mle.value()
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let claims = vec![&self.matrix_a, &self.matrix_b]
             .into_iter()
@@ -646,7 +646,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for VerifierMatMultLayer<F> {
     }
 }
 
-impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MatMult<F> {
+impl<F: Field> YieldClaim<ClaimMle<F>> for MatMult<F> {
     /// Get the claims that this layer makes on other layers
     fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
         let claims = vec![&self.matrix_a.mle, &self.matrix_b.mle]
@@ -679,7 +679,7 @@ impl<F: FieldExt> YieldClaim<ClaimMle<F>> for MatMult<F> {
     }
 }
 
-impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
+impl<F: Field> YieldWLXEvals<F> for MatMult<F> {
     fn get_wlx_evaluations(
         &self,
         claim_vecs: &[Vec<F>],
@@ -728,13 +728,13 @@ impl<F: FieldExt> YieldWLXEvals<F> for MatMult<F> {
     }
 }
 
-impl<F: std::fmt::Debug + FieldExt> MatMult<F> {
+impl<F: std::fmt::Debug + Field> MatMult<F> {
     pub(crate) fn circuit_description_fmt<'a>(&'a self) -> impl std::fmt::Display + 'a {
         // --- Dummy struct which simply exists to implement `std::fmt::Display` ---
         // --- so that it can be returned as an `impl std::fmt::Display` ---
-        struct MatMultCircuitDesc<'a, F: std::fmt::Debug + FieldExt>(&'a MatMult<F>);
+        struct MatMultCircuitDesc<'a, F: std::fmt::Debug + Field>(&'a MatMult<F>);
 
-        impl<'a, F: std::fmt::Debug + FieldExt> std::fmt::Display for MatMultCircuitDesc<'a, F> {
+        impl<'a, F: std::fmt::Debug + Field> std::fmt::Display for MatMultCircuitDesc<'a, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct("MatMult")
                     .field("matrix_a_layer_id", &self.0.matrix_a.mle.layer_id)
@@ -750,7 +750,7 @@ impl<F: std::fmt::Debug + FieldExt> MatMult<F> {
 }
 
 /// Generate the transpose of a matrix, uses Array2 from ndarray
-pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
+pub fn gen_transpose_matrix<F: Field>(matrix: &Matrix<F>) -> Matrix<F> {
     let num_rows = 1 << matrix.num_rows_vars;
     let num_cols = 1 << matrix.num_cols_vars;
 
@@ -774,7 +774,7 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
 }
 
 /// Multiply two matrices together, with a transposed matrix_b
-pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>) -> Vec<F> {
+pub fn product_two_matrices<F: Field>(matrix_a: &Matrix<F>, matrix_b: &Matrix<F>) -> Vec<F> {
     let num_middle_ab = 1 << matrix_a.num_cols_vars;
 
     let matrix_b_transpose = gen_transpose_matrix(matrix_b);

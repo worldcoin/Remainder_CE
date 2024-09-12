@@ -2,7 +2,7 @@ use remainder_shared_types::{
     transcript::{
         poseidon_transcript::PoseidonSponge, test_transcript::TestSponge, TranscriptSponge,
     },
-    FieldExt,
+    Field,
 };
 
 use serde::{Deserialize, Serialize};
@@ -28,9 +28,9 @@ use crate::input_layer::{enum_input_layer::InputLayerEnum, InputLayer};
 macro_rules! layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-        #[serde(bound = "F: FieldExt")]
+        #[serde(bound = "F: Field")]
         #[doc = r"Remainder generated trait enum"]
-        pub enum $type_name<F: FieldExt> {
+        pub enum $type_name<F: Field> {
             $(
                 #[doc = "Remainder generated layer variant"]
                 $var_name(Box<$variant>),
@@ -39,9 +39,9 @@ macro_rules! layer_enum {
 
         paste::paste! {
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]
+            #[serde(bound = "F: Field")]
             #[doc = r"Circuit layer description enum"]
-            pub enum [<Circuit $type_name>]<F: FieldExt> {
+            pub enum [<Circuit $type_name>]<F: Field> {
                 $(
                     #[doc = "Circuit layer description variant"]
                     $var_name(<$variant as crate::layer::Layer<F>>::CircuitLayer),
@@ -49,9 +49,9 @@ macro_rules! layer_enum {
             }
 
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]
+            #[serde(bound = "F: Field")]
             #[doc = r"Verfier layer description enum"]
-            pub enum [<Verifier $type_name>]<F: FieldExt> {
+            pub enum [<Verifier $type_name>]<F: Field> {
                 $(
                     #[doc = "Verifier layer description variant"]
                     $var_name(<<$variant as crate::layer::Layer<F>>::CircuitLayer as crate::layer::CircuitLayer<F>>::VerifierLayer),
@@ -59,7 +59,7 @@ macro_rules! layer_enum {
             }
 
 
-            impl<F: FieldExt> $crate::layer::CircuitLayer<F> for [<Circuit$type_name>]<F> {
+            impl<F: Field> $crate::layer::CircuitLayer<F> for [<Circuit$type_name>]<F> {
                 type VerifierLayer = [<Verifier $type_name>]<F>;
 
                 fn layer_id(&self) -> super::LayerId {
@@ -126,7 +126,7 @@ macro_rules! layer_enum {
                 }
             }
 
-            impl<F: FieldExt> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
+            impl<F: Field> $crate::layer::VerifierLayer<F> for [<Verifier$type_name>]<F> {
                 fn layer_id(&self) -> super::LayerId {
                     match self {
                         $(
@@ -137,7 +137,7 @@ macro_rules! layer_enum {
             }
         }
 
-        impl<F: FieldExt> $crate::layer::Layer<F> for $type_name<F> {
+        impl<F: Field> $crate::layer::Layer<F> for $type_name<F> {
             paste::paste! {
                 type CircuitLayer = [<Circuit $type_name>]<F>;
             }
@@ -224,7 +224,7 @@ macro_rules! layer_enum {
         }
 
         $(
-            impl<F: FieldExt> From<$variant> for $type_name<F> {
+            impl<F: Field> From<$variant> for $type_name<F> {
                 fn from(var: $variant) -> $type_name<F> {
                     Self::$var_name(Box::new(var))
                 }
@@ -232,7 +232,7 @@ macro_rules! layer_enum {
         )*
 
         paste::paste! {
-            impl<F: FieldExt> YieldClaim<ClaimMle<F>> for [<Verifier $type_name>]<F> {
+            impl<F: Field> YieldClaim<ClaimMle<F>> for [<Verifier $type_name>]<F> {
                 fn get_claims(&self) -> Result<Vec<ClaimMle<F>>, LayerError> {
                     match self {
                         $(
@@ -256,7 +256,7 @@ macro_rules! input_layer_enum {
     ($type_name:ident, $(($var_name:ident: $variant:ty)),+) => {
         #[derive(Debug)]
         #[doc = r"Remainder generated trait enum"]
-        pub enum $type_name<F: FieldExt> {
+        pub enum $type_name<F: Field> {
             $(
                 #[doc = "Remainder generated layer variant"]
                 $var_name(Box<$variant>),
@@ -265,9 +265,9 @@ macro_rules! input_layer_enum {
 
         paste::paste! {
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]
+            #[serde(bound = "F: Field")]
             #[doc = r"Remainder generated commitment enum"]
-            pub enum [<$type_name Commitment>]<F: FieldExt> {
+            pub enum [<$type_name Commitment>]<F: Field> {
                 $(
                     #[doc = "Remainder generated Commitment variant"]
                     $var_name(<$variant as InputLayer<F>>::Commitment),
@@ -275,9 +275,9 @@ macro_rules! input_layer_enum {
             }
 
             #[derive(serde::Serialize, serde::Deserialize, Debug)]
-            #[serde(bound = "F: FieldExt")]
+            #[serde(bound = "F: Field")]
             #[doc = r"Verifier layer description enum"]
-            pub enum [<Verifier $type_name>]<F: FieldExt> {
+            pub enum [<Verifier $type_name>]<F: Field> {
                 $(
                     #[doc = "Verifier layer description variant"]
                     $var_name(<$variant as InputLayer<F>>::VerifierInputLayer),
@@ -285,7 +285,7 @@ macro_rules! input_layer_enum {
             }
         }
 
-        impl<F: FieldExt> $crate::input_layer::InputLayer<F> for $type_name<F> {
+        impl<F: Field> $crate::input_layer::InputLayer<F> for $type_name<F> {
             paste::paste! {
                 type Commitment = [<$type_name Commitment>]<F>;
                 type VerifierInputLayer = [<Verifier $type_name>]<F>;
@@ -351,7 +351,7 @@ macro_rules! input_layer_enum {
         }
 
         paste::paste! {
-            impl<F: FieldExt> $crate::input_layer::VerifierInputLayer<F> for [<Verifier $type_name>]<F> {
+            impl<F: Field> $crate::input_layer::VerifierInputLayer<F> for [<Verifier $type_name>]<F> {
                 type Commitment = [<$type_name Commitment>]<F>;
 
                 fn layer_id(&self) -> $crate::layer::LayerId {
@@ -398,7 +398,7 @@ macro_rules! input_layer_enum {
         }
 
         $(
-            impl<F: FieldExt> From<$variant> for $type_name<F> {
+            impl<F: Field> From<$variant> for $type_name<F> {
                 fn from(var: $variant) -> $type_name<F> {
                     Self::$var_name(Box::new(var))
                 }
@@ -409,7 +409,7 @@ macro_rules! input_layer_enum {
 
 /// A trait for bundling a group of types that define the interfaces that go
 /// into a GKR Prover.
-pub trait ProofSystem<F: FieldExt> {
+pub trait ProofSystem<F: Field> {
     /// A trait that defines the allowed Layer for this ProofSystem.
     type Layer: Layer<
             F,
@@ -453,7 +453,7 @@ pub trait ProofSystem<F: FieldExt> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DefaultProofSystem;
 
-impl<F: FieldExt> ProofSystem<F> for DefaultProofSystem {
+impl<F: Field> ProofSystem<F> for DefaultProofSystem {
     type Layer = LayerEnum<F>;
 
     type InputLayer = InputLayerEnum<F>;

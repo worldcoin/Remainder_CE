@@ -9,7 +9,7 @@ mod tests;
 use itertools::Itertools;
 use remainder_shared_types::{
     transcript::{ProverTranscript, VerifierTranscript},
-    FieldExt,
+    Field,
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -39,8 +39,8 @@ use super::{CircuitLayer, VerifierLayer};
 ///
 /// Proofs are generated with the Sumcheck protocol.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct RegularLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct RegularLayer<F: Field> {
     /// This layer's ID.
     id: LayerId,
 
@@ -58,8 +58,8 @@ pub struct RegularLayer<F: FieldExt> {
 
 /// The circuit description counterpart of a [RegularLayer].
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct CircuitRegularLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct CircuitRegularLayer<F: Field> {
     /// This layer's ID.
     id: LayerId,
 
@@ -69,7 +69,7 @@ pub struct CircuitRegularLayer<F: FieldExt> {
     expression: Expression<F, CircuitExpr>,
 }
 
-impl<F: FieldExt> CircuitRegularLayer<F> {
+impl<F: Field> CircuitRegularLayer<F> {
     /// To be used internally only!
     /// Generates a new [CircuitRegularLayer] given raw data.
     pub(crate) fn new_raw(id: LayerId, expression: Expression<F, CircuitExpr>) -> Self {
@@ -79,8 +79,8 @@ impl<F: FieldExt> CircuitRegularLayer<F> {
 
 /// The verifier counterpart of a [RegularLayer].
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound = "F: FieldExt")]
-pub struct VerifierRegularLayer<F: FieldExt> {
+#[serde(bound = "F: Field")]
+pub struct VerifierRegularLayer<F: Field> {
     /// This layer's ID.
     id: LayerId,
 
@@ -88,7 +88,7 @@ pub struct VerifierRegularLayer<F: FieldExt> {
     expression: Expression<F, VerifierExpr>,
 }
 
-impl<F: FieldExt> VerifierRegularLayer<F> {
+impl<F: Field> VerifierRegularLayer<F> {
     /// To be used internally only!
     /// Generates a new [VerifierRegularLayer] given raw data.
     pub(crate) fn new_raw(id: LayerId, expression: Expression<F, VerifierExpr>) -> Self {
@@ -96,7 +96,7 @@ impl<F: FieldExt> VerifierRegularLayer<F> {
     }
 }
 
-impl<F: FieldExt> Layer<F> for RegularLayer<F> {
+impl<F: Field> Layer<F> for RegularLayer<F> {
     type CircuitLayer = CircuitRegularLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -239,7 +239,7 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
     }
 }
 
-impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
+impl<F: Field> CircuitLayer<F> for CircuitRegularLayer<F> {
     type VerifierLayer = VerifierRegularLayer<F>;
 
     fn layer_id(&self) -> LayerId {
@@ -441,13 +441,13 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
     }
 }
 
-impl<F: FieldExt> VerifierLayer<F> for VerifierRegularLayer<F> {
+impl<F: Field> VerifierLayer<F> for VerifierRegularLayer<F> {
     fn layer_id(&self) -> LayerId {
         self.id
     }
 }
 
-impl<F: FieldExt> RegularLayer<F> {
+impl<F: Field> RegularLayer<F> {
     /// Initialize all necessary information in order to start sumcheck within a
     /// layer of GKR. This includes pre-fixing all of the rounds within the
     /// layer which are linear, and then appropriately initializing the

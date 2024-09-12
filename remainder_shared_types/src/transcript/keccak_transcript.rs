@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use sha3::{Digest, Keccak512};
 
-use crate::FieldExt;
+use crate::Field;
 
 use super::TranscriptSponge;
 
@@ -12,7 +12,7 @@ pub struct KeccakTranscript {
 
 impl<F> TranscriptSponge<F> for KeccakTranscript
 where
-    F: FieldExt<Repr = [u8; 32]>,
+    F: Field<Repr = [u8; 32]>,
 {
     fn absorb(&mut self, elem: F) {
         self.hasher.update(elem.to_repr())
