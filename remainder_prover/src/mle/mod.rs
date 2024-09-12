@@ -29,7 +29,7 @@ pub mod betavalues;
 pub mod evals;
 
 /// Defines trait/struct relevant for Mles (as input) in circuit.
-pub mod circuit_mle;
+pub mod bundled_input_mle;
 
 // TODO!(Maybe this type needs PartialEq, could be easily implemented with a
 // random id...).

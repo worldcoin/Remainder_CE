@@ -69,6 +69,7 @@ impl<
     fn extract_claims(&mut self, layer: &impl YieldClaim<ClaimMle<F>>) -> Result<(), LayerError> {
         // Ask `layer` to generate claims for other layers.
         let claims = layer.get_claims()?;
+        dbg!(&claims);
 
         // Assign each claim to the appropriate layer based on the `to_layer_id`
         // field.

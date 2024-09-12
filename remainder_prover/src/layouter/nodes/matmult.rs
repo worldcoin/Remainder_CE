@@ -37,7 +37,7 @@ impl CircuitNode for MatMultNode {
     }
 
     fn get_num_vars(&self) -> usize {
-        todo!()
+        self.num_vars
     }
 }
 
@@ -51,7 +51,7 @@ impl MatMultNode {
         num_rows_cols_b: (usize, usize),
     ) -> Self {
         assert_eq!(num_rows_cols_a.1, num_rows_cols_b.0);
-        let num_product_vars = log2(num_rows_cols_a.1) as usize;
+        let num_product_vars = (log2(num_rows_cols_a.0) + log2(num_rows_cols_b.1)) as usize;
 
         Self {
             id: ctx.get_new_id(),
@@ -80,8 +80,8 @@ impl<F: FieldExt> CompilableNode<F> for MatMultNode {
         // Matrix A and matrix B are not padded because the data from the previous layer is only stored as the raw [MultilinearExtension].
         let matrix_a = CircuitMatrix::new(
             circuit_mle_a,
-            self.num_rows_cols_a.0,
-            self.num_rows_cols_a.1,
+            log2(self.num_rows_cols_a.0) as usize,
+            log2(self.num_rows_cols_a.1) as usize,
         );
         let (matrix_b_location, matrix_b_num_vars) =
             circuit_description_map.get_node(&self.matrix_b)?;
@@ -92,8 +92,8 @@ impl<F: FieldExt> CompilableNode<F> for MatMultNode {
         // should already been padded
         let matrix_b = CircuitMatrix::new(
             circuit_mle_b,
-            self.num_rows_cols_b.0,
-            self.num_rows_cols_b.1,
+            log2(self.num_rows_cols_b.0) as usize,
+            log2(self.num_rows_cols_b.1) as usize,
         );
 
         let matmult_layer_id = layer_id.get_and_inc();

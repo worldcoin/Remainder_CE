@@ -9,7 +9,7 @@ use remainder_shared_types::FieldExt;
 use crate::layer::LayerId;
 use crate::worldcoin::digit_decomposition::{BASE, NUM_DIGITS};
 use crate::{
-    mle::circuit_mle::{to_flat_mles, FlatMles},
+    mle::bundled_input_mle::{to_flat_mles, FlatMles},
     worldcoin::digit_decomposition::digital_decomposition,
 };
 
@@ -360,7 +360,7 @@ mod test {
     use std::path::Path;
 
     use crate::{
-        mle::{circuit_mle::BundledInputMle, Mle},
+        mle::{bundled_input_mle::BundledInputMle, Mle},
         worldcoin::data::next_power_of_two,
     };
 

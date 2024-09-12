@@ -241,6 +241,14 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
 
         self.expression.get_post_sumcheck_layer(fully_bound_beta)
     }
+}
+
+impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
+    type VerifierLayer = VerifierRegularLayer<F>;
+
+    fn layer_id(&self) -> LayerId {
+        self.id
+    }
 
     fn compute_data_outputs(
         &self,
@@ -250,6 +258,8 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
         mle_outputs_necessary.into_iter().for_each(
             |mle_output_necessary| {
                 let prefix_bits = mle_output_necessary.prefix_bits();
+                dbg!(&self.expression);
+                dbg!(&prefix_bits);
                 let expression_node_to_compile = prefix_bits.iter().fold(
                     &self.expression.expression_node, |acc, bit| {
                         match acc {
@@ -264,18 +274,10 @@ impl<F: FieldExt> Layer<F> for RegularLayer<F> {
                         }
                     }
                 );
-                let data: MultilinearExtension<F> = expression_node_to_compile.compute_bookkeeping_table(&self.expression.mle_vec);
+                let data: MultilinearExtension<F> = expression_node_to_compile.compute_bookkeeping_table(&circuit_map);
                 circuit_map.add_node(CircuitLocation::new(self.layer_id(), prefix_bits), data);
             }
         );
-    }
-}
-
-impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
-    type VerifierLayer = VerifierRegularLayer<F>;
-
-    fn layer_id(&self) -> LayerId {
-        self.id
     }
 
     fn verify_rounds(
@@ -480,6 +482,10 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitRegularLayer<F> {
         let prover_expr = self.expression.into_prover_expression(circuit_map);
         let regular_layer = RegularLayer::new_raw(self.layer_id(), prover_expr);
         regular_layer.into()
+    }
+
+    fn index_mle_indices(&mut self, start_index: usize) {
+        self.expression.index_mle_indices(start_index);
     }
 }
 

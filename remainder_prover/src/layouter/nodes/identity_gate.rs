@@ -73,16 +73,16 @@ impl<F: FieldExt> CompilableNode<F> for IdentityGateNode {
             get_total_mle_indices(&pre_routed_data_location.prefix_bits, *pre_routed_num_vars);
         let pre_routed_mle = CircuitMle::new(pre_routed_data_location.layer_id, &total_mle_indices);
 
-        let input_layer_id = layer_id.get_and_inc();
+        let id_gate_layer_id = layer_id.get_and_inc();
         let id_gate_layer = CircuitIdentityGateLayer::new(
-            input_layer_id,
+            id_gate_layer_id,
             self.nonzero_gates.clone(),
             pre_routed_mle,
         );
         circuit_description_map.0.insert(
             self.id,
             (
-                CircuitLocation::new(input_layer_id, vec![]),
+                CircuitLocation::new(id_gate_layer_id, vec![]),
                 self.get_num_vars(),
             ),
         );

@@ -147,14 +147,6 @@ pub trait Layer<F: FieldExt> {
         round_challenges: &[F],
         claim_challenges: &[F],
     ) -> PostSumcheckLayer<F, F>;
-
-    /// Given the [CircuitMle]s of which outputs are expected of this layer, compute the data
-    /// that populates these bookkeeping tables and mutate the circuit map to reflect this.
-    fn compute_data_outputs(
-        &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
-        circuit_map: &mut CircuitMap<F>,
-    );
 }
 
 /// A circuit-description counterpart of the GKR [Layer] trait.
@@ -196,6 +188,16 @@ pub trait CircuitLayer<F: FieldExt> {
 
     /// The maximum degree for any univariate in the sumcheck protocol.
     fn max_degree(&self) -> usize;
+
+    fn index_mle_indices(&mut self, start_index: usize);
+
+    /// Given the [CircuitMle]s of which outputs are expected of this layer, compute the data
+    /// that populates these bookkeeping tables and mutate the circuit map to reflect this.
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &[&CircuitMle<F>],
+        circuit_map: &mut CircuitMap<F>,
+    );
 
     /// The Circuit MLEs that make up the leaves of the expression in this layer.
     fn get_circuit_mles(&self) -> Vec<&CircuitMle<F>>;

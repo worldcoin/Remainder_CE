@@ -200,7 +200,7 @@ impl InputLayerNode {
                 circuit_description_map.add_node(
                     input_shred.id,
                     (
-                        CircuitLocation::new(*layer_id, prefix_bits),
+                        CircuitLocation::new(input_layer_id, prefix_bits),
                         input_shred.get_num_vars(),
                     ),
                 );

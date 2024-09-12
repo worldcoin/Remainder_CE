@@ -302,24 +302,6 @@ impl<F: FieldExt> Layer<F> for MatMult<F> {
         let mle_refs = vec![self.matrix_a.mle.clone(), self.matrix_b.mle.clone()];
         PostSumcheckLayer(vec![Product::<F, F>::new(&mle_refs, F::ONE)])
     }
-
-    fn compute_data_outputs(
-        &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
-        circuit_map: &mut CircuitMap<F>,
-    ) {
-        assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary[0];
-
-        let output_data =
-            MultilinearExtension::new(product_two_matrices(&self.matrix_a, &self.matrix_b));
-        assert_eq!(
-            output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
-        );
-
-        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
-    }
 }
 
 /// The circuit description counterpart of a [Matrix].
@@ -473,6 +455,39 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         (0..self.matrix_a.num_cols_vars).collect_vec()
     }
 
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &[&CircuitMle<F>],
+        circuit_map: &mut CircuitMap<F>,
+    ) {
+        assert_eq!(mle_outputs_necessary.len(), 1);
+        let mle_output_necessary = mle_outputs_necessary[0];
+        dbg!(&mle_output_necessary);
+
+        let matrix_a_data = circuit_map
+            .get_data_from_circuit_mle(&self.matrix_a.mle)
+            .unwrap();
+        let matrix_b_data = circuit_map
+            .get_data_from_circuit_mle(&self.matrix_b.mle)
+            .unwrap();
+        let product = product_two_matrices_from_flattened_vectors(
+            matrix_a_data.get_evals_vector(),
+            matrix_b_data.get_evals_vector(),
+            1 << self.matrix_a.num_rows_vars,
+            1 << self.matrix_a.num_cols_vars,
+            1 << self.matrix_b.num_rows_vars,
+            1 << self.matrix_b.num_cols_vars,
+        );
+
+        let output_data = MultilinearExtension::new(product);
+        assert_eq!(
+            output_data.num_vars(),
+            mle_output_necessary.mle_indices().len()
+        );
+
+        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
+    }
+
     fn into_verifier_layer(
         &self,
         sumcheck_bindings: &[F],
@@ -623,6 +638,11 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitMatMultLayer<F> {
         let prover_matrix_b = self.matrix_b.into_matrix(circuit_map);
         let matmult_layer = MatMult::new(self.layer_id, prover_matrix_a, prover_matrix_b);
         matmult_layer.into()
+    }
+
+    fn index_mle_indices(&mut self, start_index: usize) {
+        self.matrix_a.mle.index_mle_indices(start_index);
+        self.matrix_b.mle.index_mle_indices(start_index);
     }
 }
 
@@ -811,6 +831,8 @@ pub fn gen_transpose_matrix<F: FieldExt>(matrix: &Matrix<F>) -> Matrix<F> {
     let num_rows = 1 << matrix.num_rows_vars;
     let num_cols = 1 << matrix.num_cols_vars;
 
+    dbg!(&matrix.mle.bookkeeping_table());
+    dbg!(&num_rows, &num_cols);
     let matrix_array_2 = Array2::from_shape_vec(
         (num_rows, num_cols),
         matrix.mle.bookkeeping_table().to_vec(),
@@ -858,6 +880,33 @@ pub fn product_two_matrices<F: FieldExt>(matrix_a: &Matrix<F>, matrix_b: &Matrix
         .collect_vec();
 
     product_matrix
+}
+
+pub fn product_two_matrices_from_flattened_vectors<F: FieldExt>(
+    matrix_a_vec: &[F],
+    matrix_b_vec: &[F],
+    matrix_a_num_rows: usize,
+    matrix_a_num_cols: usize,
+    matrix_b_num_rows: usize,
+    matrix_b_num_cols: usize,
+) -> Vec<F> {
+    assert_eq!(
+        matrix_a_num_cols, matrix_b_num_rows,
+        "Matrix dimensions are not compatible for multiplication"
+    );
+
+    let mut result = vec![F::ZERO; matrix_a_num_rows * matrix_b_num_cols];
+
+    for i in 0..matrix_a_num_rows {
+        for j in 0..matrix_b_num_cols {
+            for k in 0..matrix_a_num_cols {
+                result[i * matrix_b_num_cols + j] += matrix_a_vec[i * matrix_a_num_cols + k]
+                    * matrix_b_vec[k * matrix_b_num_cols + j];
+            }
+        }
+    }
+
+    result
 }
 
 #[cfg(test)]

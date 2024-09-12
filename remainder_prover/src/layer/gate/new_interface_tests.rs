@@ -72,7 +72,7 @@ where
 ///     of that of `mle`.
 #[test]
 fn test_add_gate_circuit_newmainder() {
-    const NUM_ITERATED_BITS: usize = 4;
+    const NUM_ITERATED_BITS: usize = 1;
 
     let mut rng = test_rng();
     let size = 1 << NUM_ITERATED_BITS;

@@ -29,7 +29,7 @@ pub fn single_shred_test() {
             &input_layer,
         );
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, verifier_challenge_node);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &verifier_challenge_node);
         let (constrained, constrained_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(0u64),
@@ -55,6 +55,7 @@ pub fn single_shred_test() {
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
+            verifier_challenge_node.into(),
             table.into(),
             lookup_table.into(),
             constrained.into(),
@@ -80,7 +81,7 @@ pub fn multi_shred_test() {
             &input_layer,
         );
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, verifier_challenge_node);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &verifier_challenge_node);
 
         let (constrained_0, constrained_0_data) = get_input_shred_and_data_from_vec(
             vec![
@@ -172,6 +173,7 @@ pub fn multi_shred_test() {
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
+            verifier_challenge_node.into(),
             table.into(),
             lookup_table.into(),
             constrained_0.into(),
@@ -207,7 +209,7 @@ pub fn test_not_satisfied() {
             &input_layer,
         );
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
-        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, verifier_challenge_node);
+        let lookup_table = LookupTable::new::<Fr>(ctx, &table, false, &verifier_challenge_node);
         let (constrained, constrained_data) = get_input_shred_and_data_from_vec(
             vec![
                 Fr::from(3u64),
@@ -233,6 +235,7 @@ pub fn test_not_satisfied() {
 
         let nodes: Vec<NodeEnum<Fr>> = vec![
             input_layer.into(),
+            verifier_challenge_node.into(),
             table.into(),
             lookup_table.into(),
             constrained.into(),

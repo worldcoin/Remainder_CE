@@ -107,14 +107,15 @@ impl<
                         &mut circuit_description_map,
                     )
                     .unwrap();
-                input_node_to_layer_map.add_node(&input_layer_id, &input_node.id());
+                input_node_to_layer_map
+                    .add_node(&input_circuit_description.layer_id(), &input_node.id());
                 input_circuit_description
             })
             .collect_vec();
 
         verifier_challenge_nodes
             .iter()
-            .map(|verifier_challenge_node| {
+            .for_each(|verifier_challenge_node| {
                 let verifier_challenge_layer = verifier_challenge_node
                     .generate_circuit_description::<F>(
                         &mut verifier_challenge_layer_id,
@@ -123,8 +124,7 @@ impl<
                 input_layers.push(CircuitInputLayerEnum::RandomInputLayer(
                     verifier_challenge_layer,
                 ))
-            })
-            .collect_vec();
+            });
 
         for node in &intermediate_nodes {
             dbg!(&intermediate_layer_id);
@@ -179,12 +179,13 @@ impl<
     fn populate_circuit(
         &mut self,
         gkr_circuit_description: &GKRCircuitDescription<F>,
-        input_node_to_layer_map: InputNodeMap,
+        input_layer_to_node_map: InputNodeMap,
         input_layer_hint_map: InputLayerHintMap<F>,
         data_input_layers: Vec<InputLayerData<F>>,
         circuit_description_map: &CircuitDescriptionMap,
         transcript_writer: &mut impl ProverTranscript<F>,
     ) -> InstantiatedCircuit<F> {
+        dbg!(&input_layer_to_node_map);
         let GKRCircuitDescription {
             input_layers: input_layer_descriptions,
             intermediate_layers: intermediate_layer_descriptions,
@@ -207,6 +208,7 @@ impl<
             .iter()
             .for_each(|intermediate_layer| {
                 let layer_source_circuit_mles = intermediate_layer.get_circuit_mles();
+                dbg!(&layer_source_circuit_mles);
                 layer_source_circuit_mles
                     .into_iter()
                     .for_each(|circuit_mle| {
@@ -220,7 +222,8 @@ impl<
             });
 
         output_layer_descriptions.iter().for_each(|output_layer| {
-            let layer_id = output_layer.layer_id();
+            let layer_source_mle = &output_layer.mle;
+            let layer_id = layer_source_mle.layer_id();
             if mle_claim_map.get(&layer_id).is_none() {
                 mle_claim_map.insert(layer_id, vec![&output_layer.mle]);
             } else {
@@ -230,6 +233,8 @@ impl<
                     .push(&output_layer.mle);
             }
         });
+
+        dbg!(&mle_claim_map);
 
         let mut circuit_map = CircuitMap::new();
 
@@ -244,8 +249,10 @@ impl<
             .iter()
             .for_each(|input_layer_description| {
                 let input_layer_id = input_layer_description.layer_id();
-                let input_node_id = input_node_to_layer_map.get_layer_id(&input_layer_id);
-                if input_id_data_map.contains_key(input_node_id) {
+                dbg!(&input_layer_id);
+                let maybe_input_node_id = input_layer_to_node_map.get_layer_id(&input_layer_id);
+                if let Some(input_node_id) = maybe_input_node_id {
+                    assert!(input_id_data_map.contains_key(input_node_id));
                     let corresponding_input_data = *(input_id_data_map.get(input_node_id).unwrap());
                     let input_mles = corresponding_input_data
                         .data
@@ -361,6 +368,8 @@ impl<
             layers: Layers::new_with_layers(prover_intermediate_layers),
             output_layers: prover_output_layers,
         };
+
+        dbg!(&gkr_circuit);
 
         gkr_circuit
     }

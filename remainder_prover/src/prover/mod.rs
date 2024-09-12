@@ -170,6 +170,22 @@ impl<F: FieldExt> GKRCircuitDescription<F> {
         }
     }
 
+    pub fn index_mle_indices(&mut self, start_index: usize) {
+        let GKRCircuitDescription {
+            input_layers: _,
+            intermediate_layers,
+            output_layers,
+        } = self;
+        intermediate_layers
+            .iter_mut()
+            .for_each(|intermediate_layer| {
+                intermediate_layer.index_mle_indices(start_index);
+            });
+        output_layers.iter_mut().for_each(|output_layer| {
+            output_layer.index_mle_indices(start_index);
+        })
+    }
+
     /// Verifies a GKR proof produced by the `prove` method.
     /// # Arguments
     /// * `transcript_reader`: servers as the proof.
@@ -187,7 +203,7 @@ impl<F: FieldExt> GKRCircuitDescription<F> {
             assert_eq!(transcript_circuit_hash, circuit_hash);
         }
         */
-
+        self.index_mle_indices(0);
         let input_layer_commitments_timer = start_timer!(|| "Retrieve Input Layer Commitments");
 
         let input_layer_commitments: Vec<InputLayerEnumVerifierCommitment<F>> = self
@@ -218,10 +234,12 @@ impl<F: FieldExt> GKRCircuitDescription<F> {
             let verifier_output_layer = circuit_output_layer
                 .retrieve_mle_from_transcript_and_fix_layer(transcript_reader)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
+            dbg!("checkpoint_1");
 
             aggregator
                 .extract_claims(&verifier_output_layer)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;
+            dbg!("checkpoint_2");
         }
 
         // dbg!(&aggregator);
@@ -261,6 +279,7 @@ impl<F: FieldExt> GKRCircuitDescription<F> {
 
             end_timer!(sumcheck_msg_timer);
 
+            dbg!("ehllo");
             aggregator
                 .extract_claims(&verifier_layer)
                 .map_err(|_| GKRError::ErrorWhenVerifyingOutputLayer)?;

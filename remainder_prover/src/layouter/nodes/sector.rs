@@ -247,7 +247,7 @@ fn compile_layer<'a, F: FieldExt>(
         circuit_description_map.add_node(
             node_id,
             (
-                CircuitLocation::new(*layer_id, prefix_bits),
+                CircuitLocation::new(regular_layer_id, prefix_bits),
                 *num_vars_sector,
             ),
         );

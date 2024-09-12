@@ -102,7 +102,7 @@ impl LookupTable {
         ctx: &Context,
         table: &dyn CircuitNode,
         secret_constrained_values: bool,
-        random_input_node: VerifierChallengeNode,
+        random_input_node: &VerifierChallengeNode,
     ) -> Self {
         if secret_constrained_values {
             unimplemented!(
@@ -156,8 +156,11 @@ impl LookupTable {
         // Build the LHS of the equation (defined by the constrained values)
         println!("Build the LHS of the equation (defined by the constrained values)");
 
+        dbg!("checkpoint 1");
         let (verifier_challenge_location, verifier_challenge_node_vars) =
             circuit_description_map.get_node(&self.random_node_id)?;
+        dbg!("checkpoint 2");
+
         let verifier_challenge_mle_indices = get_total_mle_indices(
             &verifier_challenge_location.prefix_bits,
             *verifier_challenge_node_vars,

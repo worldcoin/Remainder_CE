@@ -85,6 +85,7 @@ impl CircuitDescriptionMap {
     }
 }
 
+#[derive(Debug)]
 pub struct InputNodeMap(pub(crate) HashMap<LayerId, NodeId>);
 
 impl InputNodeMap {
@@ -92,8 +93,8 @@ impl InputNodeMap {
         Self(HashMap::new())
     }
 
-    pub fn get_layer_id(&self, layer_id: &LayerId) -> &NodeId {
-        self.0.get(layer_id).unwrap()
+    pub fn get_layer_id(&self, layer_id: &LayerId) -> Option<&NodeId> {
+        self.0.get(layer_id)
     }
 
     pub fn add_node(&mut self, layer_id: &LayerId, node_id: &NodeId) {

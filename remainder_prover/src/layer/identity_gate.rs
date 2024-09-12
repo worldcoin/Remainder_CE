@@ -234,6 +234,43 @@ impl<F: FieldExt> CircuitLayer<F> for CircuitIdentityGateLayer<F> {
         let id_gate_layer = IdentityGate::new(self.layer_id(), self.wiring.clone(), source_mle);
         id_gate_layer.into()
     }
+
+    fn index_mle_indices(&mut self, start_index: usize) {
+        self.source_mle.index_mle_indices(start_index);
+    }
+
+    fn compute_data_outputs(
+        &self,
+        mle_outputs_necessary: &[&CircuitMle<F>],
+        circuit_map: &mut CircuitMap<F>,
+    ) {
+        assert_eq!(mle_outputs_necessary.len(), 1);
+        let mle_output_necessary = mle_outputs_necessary[0];
+        let source_mle_data = circuit_map
+            .get_data_from_circuit_mle(&self.source_mle)
+            .unwrap();
+
+        let max_gate_val = self
+            .wiring
+            .iter()
+            .fold(&0, |acc, (z, _)| std::cmp::max(acc, z));
+
+        let mut remap_table = vec![F::ZERO; (max_gate_val + 1).next_power_of_two()];
+
+        self.wiring.iter().for_each(|(z, x)| {
+            let zero = F::ZERO;
+            let id_val = source_mle_data.get_evals_vector().get(*x).unwrap_or(&zero);
+            remap_table[*z] = *id_val;
+        });
+
+        let output_data = MultilinearExtension::new(remap_table);
+        assert_eq!(
+            output_data.num_vars(),
+            mle_output_necessary.mle_indices().len()
+        );
+
+        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
+    }
 }
 
 impl<F: FieldExt> VerifierIdentityGateLayer<F> {
@@ -438,36 +475,6 @@ impl<F: FieldExt> Layer<F> for IdentityGate<F> {
             });
 
         PostSumcheckLayer(vec![Product::<F, F>::new(&vec![mle_ref.clone()], f_1_uv)])
-    }
-
-    fn compute_data_outputs(
-        &self,
-        mle_outputs_necessary: &[&CircuitMle<F>],
-        circuit_map: &mut CircuitMap<F>,
-    ) {
-        assert_eq!(mle_outputs_necessary.len(), 1);
-        let mle_output_necessary = mle_outputs_necessary[0];
-
-        let max_gate_val = self
-            .nonzero_gates
-            .iter()
-            .fold(&0, |acc, (z, _)| std::cmp::max(acc, z));
-
-        let mut remap_table = vec![F::ZERO; (max_gate_val + 1).next_power_of_two()];
-
-        self.nonzero_gates.iter().for_each(|(z, x)| {
-            let zero = F::ZERO;
-            let id_val = self.mle_ref.bookkeeping_table().get(*x).unwrap_or(&zero);
-            remap_table[*z] = *id_val;
-        });
-
-        let output_data = MultilinearExtension::new(remap_table);
-        assert_eq!(
-            output_data.num_vars(),
-            mle_output_necessary.mle_indices().len()
-        );
-
-        circuit_map.add_node(CircuitLocation::new(self.layer_id(), vec![]), output_data);
     }
 }
 

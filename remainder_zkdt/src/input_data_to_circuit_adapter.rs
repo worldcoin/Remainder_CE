@@ -20,7 +20,7 @@ use super::{
     },
     structs::{BinDecomp16Bit, BinDecomp8Bit, DecisionNode, InputAttribute, LeafNode},
 };
-use remainder::{layer::LayerId, mle::circuit_mle::to_flat_mles};
+use remainder::{layer::LayerId, mle::bundled_input_mle::to_flat_mles};
 
 #[derive(Clone)]
 pub struct BatchedZKDTCircuitMles<F: FieldExt> {

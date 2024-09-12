@@ -113,6 +113,16 @@ macro_rules! layer_enum {
                     }
                 }
 
+                fn index_mle_indices(
+                    &mut self, start_index: usize,
+                ) {
+                    match self {
+                        $(
+                            Self::$var_name(layer) => layer.index_mle_indices(start_index),
+                        )*
+                    }
+                }
+
                 fn into_prover_layer(
                     &self,
                     circuit_map: &crate::layouter::layouting::CircuitMap<F>

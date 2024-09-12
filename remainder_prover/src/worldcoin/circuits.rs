@@ -8,7 +8,7 @@ use crate::layouter::nodes::matmult::MatMultNode;
 use crate::layouter::nodes::node_enum::NodeEnum;
 use crate::layouter::nodes::verifier_challenge::VerifierChallengeNode;
 use crate::layouter::nodes::{CircuitNode, Context};
-use crate::mle::circuit_mle::BundledInputMle;
+use crate::mle::bundled_input_mle::BundledInputMle;
 use crate::utils::pad_to_nearest_power_of_two;
 use crate::utils::{get_input_shred_and_data_from_vec, get_input_shred_from_num_vars};
 use crate::worldcoin::components::SignCheckerComponent;
@@ -95,7 +95,7 @@ pub fn build_circuit_public_il<F: FieldExt>(
 
         let verifier_challenge_node = VerifierChallengeNode::new(ctx, 1);
         let lookup_table =
-            LookupTable::new::<F>(ctx, &lookup_table_values, false, verifier_challenge_node);
+            LookupTable::new::<F>(ctx, &lookup_table_values, false, &verifier_challenge_node);
         println!("Lookup table = {:?}", lookup_table.id());
         let (digit_multiplicities, digit_multiplicities_data) =
             get_input_shred_and_data_from_vec(digit_multiplicities.clone(), ctx, &input_layer);
@@ -144,6 +144,7 @@ pub fn build_circuit_public_il<F: FieldExt>(
         // Collect all the nodes, starting with the input nodes
         let mut all_nodes: Vec<NodeEnum<F>> = vec![
             input_layer.into(),
+            verifier_challenge_node.into(),
             image.into(),
             kernel_matrix.into(),
             iris_code.into(),

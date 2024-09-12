@@ -1,4 +1,4 @@
-use remainder::mle::circuit_mle::FlatMles;
+use remainder::mle::bundled_input_mle::FlatMles;
 use remainder_shared_types::FieldExt;
 use serde::{Deserialize, Serialize};
 
